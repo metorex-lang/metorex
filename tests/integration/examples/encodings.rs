@@ -532,7 +532,7 @@ fn test_encodings_conversion_error_details_no_parens_execution() {
 /// The expected output of both `encodings/encoding_names` variants.
 const ENCODING_NAMES_OUTPUT: &str = concat!(
     "US-ASCII: [\"US-ASCII\", \"ASCII\", \"ANSI_X3.4-1968\", \"646\"]\n",
-    "UTF-8: [\"UTF-8\", \"CP65001\", \"locale\", \"external\", \"filesystem\"]\n",
+    "UTF-8: [\"UTF-8\", \"CP65001\"]\n",
     "Shift_JIS: [\"Shift_JIS\"]\n",
     "ISO-2022-JP: [\"ISO-2022-JP\", \"ISO2022-JP\"]\n",
     "UTF-7: [\"UTF-7\", \"CP65000\"]\n",

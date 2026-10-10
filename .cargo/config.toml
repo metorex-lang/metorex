@@ -6,3 +6,10 @@ rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 
 [target.aarch64-unknown-linux-gnu]
 rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
+# The tests' expected output is what a program prints under a UTF-8 locale,
+# which decides Ruby's default external encoding. A container's environment
+# leaves the locale unset, which is the C locale and US-ASCII, so the tests
+# name one.
+[env]
+LC_ALL = { value = "C.UTF-8", force = true }
