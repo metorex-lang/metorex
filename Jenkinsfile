@@ -41,10 +41,83 @@ def buildPod(String node, String cpuRequest, String cpuLimit) {
   """
 }
 
+// BuildKit's rootless example for Kubernetes, with the Harbor robot's
+// credentials mounted as a Docker config so the build can push.
+def imageBuildPod = '''
+  apiVersion: v1
+  kind: Pod
+  spec:
+    securityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+    containers:
+      - name: buildkit
+        image: moby/buildkit:v0.33.1-rootless
+        command: ["sleep"]
+        args: ["infinity"]
+        env:
+          - name: BUILDKITD_FLAGS
+            value: --oci-worker-no-process-sandbox
+          - name: DOCKER_CONFIG
+            value: /home/user/.docker-harbor
+        securityContext:
+          seccompProfile:
+            type: Unconfined
+          appArmorProfile:
+            type: Unconfined
+        volumeMounts:
+          - name: buildkitd
+            mountPath: /home/user/.local/share/buildkit
+          - name: harbor
+            mountPath: /home/user/.docker-harbor
+            readOnly: true
+    volumes:
+      - name: buildkitd
+        emptyDir: {}
+      - name: harbor
+        secret:
+          secretName: harbor-metorex
+          items:
+            - key: .dockerconfigjson
+              path: config.json
+'''
+
 pipeline {
   agent none
 
+  parameters {
+    booleanParam(name: 'BUILD_CI_IMAGE', defaultValue: false, description: 'Rebuild and push harbor.home.gregdonald.com/metorex/ci:latest before the checks')
+  }
+
   stages {
+    stage('ci-image') {
+      when {
+        beforeAgent true
+        anyOf {
+          expression { params.BUILD_CI_IMAGE }
+          allOf {
+            branch 'main'
+            changeset 'docker/Dockerfile'
+          }
+        }
+      }
+      agent {
+        kubernetes {
+          defaultContainer 'buildkit'
+          yaml imageBuildPod
+        }
+      }
+      steps {
+        sh '''
+          buildctl-daemonless.sh build \
+            --frontend dockerfile.v0 \
+            --local context=docker \
+            --local dockerfile=docker \
+            --output type=image,name=harbor.home.gregdonald.com/metorex/ci:latest,push=true
+        '''
+      }
+    }
+
     stage('checks') {
       parallel {
         stage('test') {
