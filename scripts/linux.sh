@@ -70,9 +70,17 @@ fi
 
 # The image carries an account with the host's own ids, which the container
 # runs as. A test that asks what a file refuses reads differently for root.
+# LINUX_USER=root runs it as root instead, which is what the spec suite's
+# `as_superuser` blocks need:
+#
+#   LINUX_USER=root scripts/linux.sh scripts/run_ruby_spec.sh
+user=()
+if [ -n "${LINUX_USER:-}" ]; then
+  user=(--user "$LINUX_USER")
+fi
 # The C extensions the spec suite compiles are kept per architecture, as the
 # build is, since one built for the other architecture cannot be loaded.
-exec docker run --rm "${terminal[@]}" \
+exec docker run --rm "${terminal[@]}" "${user[@]}" \
   --platform "linux/$ARCH" \
   --volume "$ROOT:/work" \
   --volume "metorex-linux-target-$ARCH:/work/target" \

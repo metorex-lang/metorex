@@ -12,6 +12,9 @@ impl Parser {
             .expect(TokenKind::AttrReader, "Expected 'attr_reader'")?
             .position;
         self.skip_whitespace();
+        if self.attribute_call_is_parenthesized() || self.attribute_call_names_keywords() {
+            return self.attribute_method_call("attr_reader", start_pos);
+        }
 
         let attributes = self.parse_attribute_list()?;
 
@@ -27,6 +30,9 @@ impl Parser {
             .expect(TokenKind::AttrWriter, "Expected 'attr_writer'")?
             .position;
         self.skip_whitespace();
+        if self.attribute_call_is_parenthesized() || self.attribute_call_names_keywords() {
+            return self.attribute_method_call("attr_writer", start_pos);
+        }
 
         let attributes = self.parse_attribute_list()?;
 
@@ -42,12 +48,77 @@ impl Parser {
             .expect(TokenKind::AttrAccessor, "Expected 'attr_accessor'")?
             .position;
         self.skip_whitespace();
+        if self.attribute_call_is_parenthesized() || self.attribute_call_names_keywords() {
+            return self.attribute_method_call("attr_accessor", start_pos);
+        }
 
         let attributes = self.parse_attribute_list()?;
 
         Ok(Statement::AttrAccessor {
             attributes,
             position: start_pos,
+        })
+    }
+
+    /// Whether the names on this line come with keyword arguments, as
+    /// `attr_accessor :debug, type: :boolean` passes to a module that writes
+    /// its own `attr_accessor`.
+    fn attribute_call_names_keywords(&self) -> bool {
+        let mut offset = 0;
+        let mut depth = 0usize;
+        loop {
+            let token = self.peek_ahead(offset);
+            match &token.kind {
+                TokenKind::Newline | TokenKind::Semicolon | TokenKind::EOF => return false,
+                TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => depth += 1,
+                TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
+                    if depth == 0 {
+                        return false;
+                    }
+                    depth -= 1;
+                }
+                TokenKind::StarStar if depth == 0 => return true,
+                TokenKind::Ident(_) if depth == 0 => {
+                    let after = self.peek_ahead(offset + 1);
+                    if matches!(after.kind, TokenKind::Colon) && !after.had_leading_space {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+            offset += 1;
+        }
+    }
+
+    /// Whether the names are written in parentheses against the method's
+    /// name, `attr_reader(:a, :b)`, which reads as any call does.
+    fn attribute_call_is_parenthesized(&self) -> bool {
+        self.check(&[TokenKind::LParen]) && !self.peek().had_leading_space
+    }
+
+    /// The `attr_*` call written as the method call it is, for a module that
+    /// writes its own and takes keywords.
+    fn attribute_method_call(
+        &mut self,
+        name: &str,
+        position: crate::lexer::Position,
+    ) -> Result<Statement, MetorexError> {
+        let arguments = if self.match_token(&[TokenKind::LParen]) {
+            self.parse_arguments()?
+        } else {
+            self.parse_arguments_without_parens()?
+        };
+        self.wrap_with_modifier(Statement::Expression {
+            expression: Expression::Call {
+                callee: Box::new(Expression::Identifier {
+                    name: name.to_string(),
+                    position,
+                }),
+                arguments,
+                trailing_block: None,
+                position,
+            },
+            position,
         })
     }
 

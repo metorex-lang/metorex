@@ -98,6 +98,15 @@ const EMBEDDED_LIBRARIES: &[(&[&str], &str)] = &[
     (&["resolv"], include_str!("resolv.rb")),
     (&["rubygems"], include_str!("rubygems.rb")),
     (&["rubygems/text"], include_str!("rubygems/text.rb")),
+    (&["rubygems/version"], include_str!("rubygems/version.rb")),
+    (
+        &["rubygems/requirement"],
+        include_str!("rubygems/requirement.rb"),
+    ),
+    (
+        &["rubygems/path_support"],
+        include_str!("rubygems/path_support.rb"),
+    ),
     (
         &["rubygems/user_interaction"],
         include_str!("rubygems/user_interaction.rb"),
@@ -120,6 +129,16 @@ const EMBEDDED_LIBRARIES: &[(&[&str], &str)] = &[
         include_str!("rubygems/commands/owner_command.rb"),
     ),
     (&["optparse", "optionparser"], include_str!("optparse.rb")),
+    (&["optparse/ac"], include_str!("optparse/ac.rb")),
+    (&["optparse/date"], include_str!("optparse/date.rb")),
+    (&["optparse/kwargs"], include_str!("optparse/kwargs.rb")),
+    (
+        &["optparse/shellwords"],
+        include_str!("optparse/shellwords.rb"),
+    ),
+    (&["optparse/time"], include_str!("optparse/time.rb")),
+    (&["optparse/uri"], include_str!("optparse/uri.rb")),
+    (&["optparse/version"], include_str!("optparse/version.rb")),
     (&["random/formatter"], include_str!("random_formatter.rb")),
     (&["socket"], include_str!("socket.rb")),
     (&["erb"], include_str!("erb.rb")),

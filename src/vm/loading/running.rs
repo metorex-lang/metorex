@@ -142,15 +142,56 @@ impl VirtualMachine {
             );
         }
 
-        // Parse file with error context
-        let (statements, warnings) =
-            parse_file_with_warnings(&source, &canonical_path.to_string_lossy()).map_err(|e| {
-                crate::vm::errors::syntax_error(
-                    format!("Failed to parse file '{}': {}", canonical_path.display(), e),
-                    Some(&canonical_path.to_string_lossy()),
-                    crate::lexer::Position::new(0, 0, 0),
-                )
-            })?;
+        // A file that does not parse, or that MRI's parser refuses although
+        // this one reads it, raises the SyntaxError MRI raises, laid out by
+        // prism under the name the file was found by.
+        let parsed = parse_file_with_warnings(&source, &canonical_path.to_string_lossy());
+        let refused = parsed.is_err()
+            || crate::vm::native_functions::prism_refuses(
+                &source,
+                &crate::vm::native_functions::PrismReading {
+                    start_line: 1,
+                    command_line: "",
+                    main_script: false,
+                    partial_script: false,
+                    scopes: None,
+                },
+            );
+        if refused {
+            let named = named_path.display().to_string();
+            let message = match self.program_syntax_message(&source, &named, 1) {
+                Some(message) => message,
+                None => match &parsed {
+                    Err(error) => format!("Failed to parse file '{}': {}", named, error),
+                    Ok(_) => String::new(),
+                },
+            };
+            if !message.is_empty() {
+                // The error is raised where the load was asked for, and the
+                // file is no feature that was provided.
+                if record {
+                    self.unmark_file_loaded(&canonical_path);
+                    if let Some(Object::Array(features)) = self.globals().get("\"") {
+                        features.borrow_mut().retain(|feature| {
+                            !matches!(feature, Object::String(held) if *held.as_str() == *listed_str)
+                        });
+                    }
+                }
+                self.current_source_encoding = previous_source_encoding;
+                self.current_source_file = previous_source_file;
+                let asked_at = self
+                    .load_call_site
+                    .as_ref()
+                    .map(|(_, at)| *at)
+                    .unwrap_or_default();
+                return Err(crate::vm::errors::syntax_error(
+                    message,
+                    Some(&named),
+                    asked_at,
+                ));
+            }
+        }
+        let (statements, warnings) = parsed?;
 
         self.report_parse_warnings(&named_path.display().to_string(), &warnings);
 

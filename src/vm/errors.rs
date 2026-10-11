@@ -454,7 +454,7 @@ pub(super) fn binary_type_error(
         _ => None,
     };
     let numeric_instance = matches!(instance_class.as_deref(), Some("Rational" | "Complex"));
-    if (matches!(left, Object::Nil | Object::Bool(_))
+    if (matches!(left, Object::Nil | Object::Bool(_) | Object::Regex(..))
         || (bitwise && (matches!(left, Object::String(_) | Object::Float(_)) || numeric_instance)))
         && let Some(named) = crate::vm::eval::binary_op_method_name(&op)
     {

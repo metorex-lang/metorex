@@ -149,3 +149,21 @@ fn test_hash_methods_misses_compare_within_a_hash_no_parens_execution() {
     let output = run_example("hash_methods/misses_compare_within_a_hash_no_parens.rb");
     assert_eq!(output, MISSES_COMPARE_WITHIN_A_HASH);
 }
+
+/// The expected output of both `hash_methods/subclass_brackets` variants.
+const SUBCLASS_BRACKETS_OUTPUT: &str = concat!(
+    "{\"rates\" => [:reload, :audit], \"tariffs\" => [:refresh]}\n",
+    "[:refresh]\n",
+);
+
+#[test]
+fn test_hash_methods_subclass_brackets_execution() {
+    let output = run_example("hash_methods/subclass_brackets.rb");
+    assert_eq!(output, SUBCLASS_BRACKETS_OUTPUT);
+}
+
+#[test]
+fn test_hash_methods_subclass_brackets_no_parens_execution() {
+    let output = run_example("hash_methods/subclass_brackets_no_parens.rb");
+    assert_eq!(output, SUBCLASS_BRACKETS_OUTPUT);
+}

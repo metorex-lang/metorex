@@ -489,35 +489,40 @@ class File
     end
 
     def readable?
-      self.permitted?(0o400, 0o040, 0o004)
+      self.permitted?(0o400, 0o040, 0o004, Process.euid, Process.egid)
     end
 
     def writable?
-      self.permitted?(0o200, 0o020, 0o002)
+      self.permitted?(0o200, 0o020, 0o002, Process.euid, Process.egid)
     end
 
+    # Root may run a file only when somebody may, which one execute bit says.
     def executable?
-      self.permitted?(0o100, 0o010, 0o001)
+      return (@fields[:mode] & 0o111) != 0 if Process.euid == 0
+      self.permitted?(0o100, 0o010, 0o001, Process.euid, Process.egid)
     end
 
+    # The `_real` forms ask for the user and group the process was started
+    # as, where the others ask for the ones it acts as.
     def readable_real?
-      self.readable?
+      self.permitted?(0o400, 0o040, 0o004, Process.uid, Process.gid)
     end
 
     def writable_real?
-      self.writable?
+      self.permitted?(0o200, 0o020, 0o002, Process.uid, Process.gid)
     end
 
     def executable_real?
-      self.executable?
+      return (@fields[:mode] & 0o111) != 0 if Process.uid == 0
+      self.permitted?(0o100, 0o010, 0o001, Process.uid, Process.gid)
     end
 
-    # Whether this process may do the thing the three bits stand for, read
-    # against whichever of owner, group, and other it counts as.
-    def permitted?(owner, group, other)
-      return true if Process.uid == 0
-      return (@fields[:mode] & owner) != 0 if @fields[:uid] == Process.uid
-      return (@fields[:mode] & group) != 0 if @fields[:gid] == Process.gid
+    # Whether `user` in `group` may do the thing the three bits stand for,
+    # read against whichever of owner, group, and other it counts as.
+    def permitted?(owner, group, other, user, group_id)
+      return true if user == 0
+      return (@fields[:mode] & owner) != 0 if @fields[:uid] == user
+      return (@fields[:mode] & group) != 0 if @fields[:gid] == group_id
       (@fields[:mode] & other) != 0
     end
     private :permitted?
@@ -611,7 +616,7 @@ class File
   end
 
   def self.readable_real?(path)
-    self.readable?(path)
+    self.__stat_answer__(path, true, false) { |held| held.readable_real? }
   end
 
   def self.writable?(path)
@@ -619,11 +624,11 @@ class File
   end
 
   def self.writable_real?(path)
-    self.writable?(path)
+    self.__stat_answer__(path, true, false) { |held| held.writable_real? }
   end
 
   def self.executable_real?(path)
-    self.__stat_answer__(path, true, false) { |held| held.executable? }
+    self.__stat_answer__(path, true, false) { |held| held.executable_real? }
   end
 
   def self.owned?(path)

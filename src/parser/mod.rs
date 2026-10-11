@@ -415,6 +415,11 @@ impl Parser {
             .collect();
         nested.method_anonymous_block = self.method_anonymous_block.clone();
         nested.block_anonymous_params = self.block_anonymous_params.clone();
+        // A `yield`, a `return` or a `break` written in the `#{}` reaches the
+        // method and block the string is written in.
+        nested.def_body_depth = self.def_body_depth;
+        nested.block_body_depth = self.block_body_depth;
+        nested.jump_target_depth = self.jump_target_depth;
         nested
     }
 

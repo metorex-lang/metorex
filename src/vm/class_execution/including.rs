@@ -54,34 +54,31 @@ impl VirtualMachine {
     /// singleton methods of that object, the way `main.extend Mod` works.
     pub(crate) fn execute_extend(
         &mut self,
-        _module_name: &str,
+        module_name: &str,
         position: Position,
     ) -> Result<ControlFlow, MetorexError> {
-        if let Some(Object::Module(module_rc)) = self.globals().get(_module_name) {
-            // At the top level there is no `self` to extend, and metorex
-            // already installs top-level `def`s on Object, so the module's
-            // methods go there too.
-            let target = self
-                .environment()
-                .get("self")
-                .or_else(|| self.globals().get("Object"));
-            if let Some(target) = target {
-                let singleton = self.singleton_class_of(&target);
-                singleton.add_mixin(std::rc::Rc::clone(&module_rc));
-                if matches!(target, Object::Class(_)) {
-                    // Top-level extend makes the methods callable without a
-                    // receiver, which means Object's instances answer them.
-                    if let Some(Object::Class(object_class)) = self.globals().get("Object") {
-                        object_class.add_mixin(module_rc);
-                    }
-                }
-                return Ok(ControlFlow::Next);
-            }
-        }
-        Err(MetorexError::runtime_error(
-            "extend can only be used inside a class definition",
-            position_to_location(position),
-        ))
+        let module = self
+            .resolve_constant_with_autoload(module_name)?
+            .or_else(|| self.resolve_qualified_constant(module_name))
+            .or_else(|| self.environment().get(module_name))
+            .or_else(|| self.globals().get(module_name));
+        let Some(module) = module else {
+            let message = format!("uninitialized constant {}", module_name);
+            return Err(MetorexError::UncaughtException {
+                exception: self.constant_name_error(&message, module_name),
+                location: position_to_location(position),
+                message,
+            });
+        };
+        // The receiver is whatever `self` is here: `main` at the top level,
+        // and the class itself inside one of its class methods.
+        let target = self
+            .environment()
+            .get("self")
+            .or_else(|| self.globals().get("__main__"))
+            .unwrap_or(Object::Nil);
+        self.send_to_object(target, "extend", vec![module], position)?;
+        Ok(ControlFlow::Next)
     }
 
     /// Validate an argument to `include`/`prepend`. Ruby accepts a module

@@ -61,9 +61,7 @@ impl VirtualMachine {
                         let getter =
                             crate::object::Method::new(attr_name.clone(), vec![], getter_body);
                         class_rc.define_method(attr_name, Rc::new(getter));
-                        if visibility != "public" {
-                            class_rc.set_method_private(attr_name.clone());
-                        }
+                        mark_attribute_visibility(class_rc, attr_name, &visibility);
                         class_rc.declare_instance_var(attr_name);
                         defined.push(Object::symbol(attr_name.clone()));
                         newly_defined_names.push(attr_name.clone());
@@ -87,9 +85,7 @@ impl VirtualMachine {
                             setter_body,
                         );
                         class_rc.define_method(&setter_name, Rc::new(setter));
-                        if visibility != "public" {
-                            class_rc.set_method_private(setter_name.clone());
-                        }
+                        mark_attribute_visibility(class_rc, &setter_name, &visibility);
                         class_rc.declare_instance_var(attr_name);
                         defined.push(Object::symbol(setter_name.clone()));
                         newly_defined_names.push(setter_name);
@@ -262,5 +258,16 @@ impl VirtualMachine {
             _ => {}
         }
         Ok(Unclaimed)
+    }
+}
+
+/// Mark an attribute method the way the body's current visibility says:
+/// protected ones stay protected, and every other non-public setting makes it
+/// private.
+fn mark_attribute_visibility(class: &Rc<Class>, name: &str, visibility: &str) {
+    match visibility {
+        "public" => {}
+        "protected" => class.set_method_protected(name.to_string()),
+        _ => class.set_method_private(name.to_string()),
     }
 }

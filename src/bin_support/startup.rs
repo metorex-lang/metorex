@@ -157,6 +157,11 @@ pub(crate) fn apply_encoding_flags(vm: &mut VirtualMachine, cli: &Cli) {
         vm.set_default_encoding("__source__=", named);
         external.get_or_insert_with(|| named.to_string());
     }
+    // Without a flag naming one, the text a program reads and writes is in
+    // the locale's encoding, as Ruby takes it from the environment.
+    if external.is_none() {
+        external = metorex::vm::locale_encoding_name();
+    }
     for (named, wanted) in [
         ("default_external=", &external),
         ("default_internal=", &internal),

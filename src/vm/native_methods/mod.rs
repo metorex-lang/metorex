@@ -9,6 +9,7 @@ pub(crate) mod class_methods;
 pub(crate) use class_methods::MODULE_FUNCTION_VISIBILITY;
 pub(crate) use class_methods::is_native_kernel_method;
 pub(crate) use class_methods::native_module_method_stub;
+pub(crate) use file_methods::external_text;
 pub(crate) use hash_methods::remember_key_object;
 pub(crate) use method_object_methods::{block_parameter_list, method_parameter_list};
 pub(crate) use module_methods::{

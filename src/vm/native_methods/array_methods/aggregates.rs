@@ -139,34 +139,19 @@ impl VirtualMachine {
                     .unwrap_or(i64::MAX);
                 let length = array_rc.borrow().len() as i64;
                 let resolved = if index < 0 { index + length } else { index };
+                // A block wins over a default value, and Ruby says so whether
+                // or not the index names an element.
+                if block.is_some() && arguments.len() == 2 {
+                    let message = format!(
+                        "{}block supersedes default value argument\n",
+                        self.warning_prefix(0, position)
+                    );
+                    self.warn_through_warning_module(message, position)?;
+                }
                 if resolved >= 0 && resolved < length {
-                    if block.is_some() {
-                        self.pending_block = None;
-                        let file = self
-                            .current_source_file
-                            .clone()
-                            .unwrap_or_else(|| "-".to_string());
-                        let message = format!(
-                            "{}:{}: warning: given block not used\n",
-                            file, position.line
-                        );
-                        self.warn_through_warning_module(message, position)?;
-                    }
                     return Ok(Some(array_rc.borrow()[resolved as usize].clone()));
                 }
-                // A block wins over a default value, and Ruby says so.
                 if let Some(block) = block {
-                    if arguments.len() == 2 {
-                        let file = self
-                            .current_source_file
-                            .clone()
-                            .unwrap_or_else(|| "-".to_string());
-                        let message = format!(
-                            "{}:{}: warning: block supersedes default value argument\n",
-                            file, position.line
-                        );
-                        self.warn_through_warning_module(message, position)?;
-                    }
                     return self
                         .execute_block_callable(&block, vec![arguments[0].clone()], position)
                         .map(Some);

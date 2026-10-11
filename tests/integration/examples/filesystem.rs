@@ -497,3 +497,25 @@ fn test_filesystem_directory_for_descriptor_no_parens_execution() {
     let output = run_example("filesystem/directory_for_descriptor_no_parens.rb");
     assert_eq!(output, DIRECTORY_FOR_DESCRIPTOR);
 }
+
+/// The expected output of both `filesystem/permission_checks` variants.
+const PERMISSION_CHECKS: &str = concat!(
+    "[true, true]\n",
+    "[false, false]\n",
+    "[true, false]\n",
+    "[true, true, false, false]\n",
+    "true\n",
+    "Errno::EPERM\n",
+);
+
+#[test]
+fn test_filesystem_permission_checks_execution() {
+    let output = run_example("filesystem/permission_checks.rb");
+    assert_eq!(output, PERMISSION_CHECKS);
+}
+
+#[test]
+fn test_filesystem_permission_checks_no_parens_execution() {
+    let output = run_example("filesystem/permission_checks_no_parens.rb");
+    assert_eq!(output, PERMISSION_CHECKS);
+}

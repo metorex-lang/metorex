@@ -18,7 +18,7 @@ impl VirtualMachine {
             let cwd = std::env::current_dir()
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_default();
-            return Ok(Some(Object::string(cwd)));
+            return Ok(Some(self.filesystem_text(cwd)));
         }
         // `Dir.chdir(path)` changes the working directory. The block form
         // restores the previous one afterwards and answers the block's value.

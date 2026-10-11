@@ -265,6 +265,10 @@ impl VirtualMachine {
                                     format!("__ext__{}", method_name),
                                     Object::Method(method),
                                 );
+                                module.set_class_var(
+                                    format!("__ext_from__{}", method_name),
+                                    Object::Module(Rc::clone(&ext_module)),
+                                );
                             }
                         }
                         let target = Object::Module(Rc::clone(module));

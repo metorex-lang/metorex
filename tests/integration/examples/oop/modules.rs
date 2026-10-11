@@ -535,3 +535,24 @@ fn test_oop_autoload_reopening_no_parens_execution() {
     let output = run_example("oop/autoload_reopening_no_parens.rb");
     assert_eq!(output, AUTOLOAD_REOPENING_OUTPUT);
 }
+
+/// The expected output of both `oop/refined_operators` variants.
+const REFINED_OPERATORS_OUTPUT: &str = concat!(
+    "NoMethodError\n",
+    "/[[a-z]&&[^[aeiou]]]/n\n",
+    "\"r\"\n",
+    "\"30 minutes\"\n",
+    "45\n",
+);
+
+#[test]
+fn test_oop_refined_operators_execution() {
+    let output = run_example("oop/refined_operators.rb");
+    assert_eq!(output, REFINED_OPERATORS_OUTPUT);
+}
+
+#[test]
+fn test_oop_refined_operators_no_parens_execution() {
+    let output = run_example("oop/refined_operators_no_parens.rb");
+    assert_eq!(output, REFINED_OPERATORS_OUTPUT);
+}

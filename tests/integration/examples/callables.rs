@@ -343,3 +343,24 @@ fn test_callables_block_last_values_no_parens_execution() {
     let output = run_example("callables/block_last_values_no_parens.rb");
     assert_eq!(output, BLOCK_LAST_VALUES);
 }
+
+/// The expected output of both `callables/method_proc_blocks` variants.
+const METHOD_PROC_BLOCKS_OUTPUT: &str = concat!(
+    "[[\"shipping\", 4]]\n",
+    "[[\"tariff\", 9]]\n",
+    "30\n",
+    "\"wrong number of arguments (given 1, expected 2)\"\n",
+    "\"wrong number of arguments (given 0, expected 1)\"\n",
+);
+
+#[test]
+fn test_callables_method_proc_blocks_execution() {
+    let output = run_example("callables/method_proc_blocks.rb");
+    assert_eq!(output, METHOD_PROC_BLOCKS_OUTPUT);
+}
+
+#[test]
+fn test_callables_method_proc_blocks_no_parens_execution() {
+    let output = run_example("callables/method_proc_blocks_no_parens.rb");
+    assert_eq!(output, METHOD_PROC_BLOCKS_OUTPUT);
+}

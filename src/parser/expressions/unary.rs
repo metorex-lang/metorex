@@ -119,7 +119,9 @@ impl Parser {
         if self.check(&[TokenKind::StarStar]) {
             let op_token = self.advance();
             // Right-associative: recurse into parse_unary so `2**-3` works
-            // and `2**3**2` groups as `2**(3**2)`.
+            // and `2**3**2` groups as `2**(3**2)`. An operator at the end of
+            // a line carries the expression onto the next one.
+            self.skip_whitespace();
             let right = self.parse_unary()?;
             Ok(Expression::BinaryOp {
                 op: BinaryOp::Power,

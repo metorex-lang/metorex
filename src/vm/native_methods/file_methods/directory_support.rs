@@ -126,9 +126,7 @@ impl VirtualMachine {
                     _ => external.clone(),
                 },
             };
-            Object::String(Rc::new(crate::object::StringValue::with_encoding(
-                name, held,
-            )))
+            external_text(name, &held)
         };
         let mut names: Vec<Object> = Vec::new();
         if with_dots {
@@ -143,6 +141,16 @@ impl VirtualMachine {
 
     /// Where a user's files live: `$HOME` when no user is named, and the
     /// password database otherwise.
+    /// A name the file system gave, tagged in the encoding the program reads
+    /// file names in.
+    pub(crate) fn filesystem_text(&self, text: String) -> Object {
+        let encoding = match self.globals().get("__Encoding_default_external") {
+            Some(Object::Class(held)) => held.name().to_string(),
+            _ => crate::object::string_value::DEFAULT_ENCODING.to_string(),
+        };
+        external_text(text, &encoding)
+    }
+
     pub(crate) fn directory_home(
         &mut self,
         user: Option<String>,
@@ -152,16 +160,16 @@ impl VirtualMachine {
             if let Ok(held) = std::env::var("HOME")
                 && !held.is_empty()
             {
-                return Ok(Object::string(held));
+                return Ok(self.filesystem_text(held));
             }
             let found = self.passwd_home_for(None);
             return match found {
-                Some(home) => Ok(Object::string(home)),
-                None => Ok(Object::string("/".to_string())),
+                Some(home) => Ok(self.filesystem_text(home)),
+                None => Ok(self.filesystem_text("/".to_string())),
             };
         };
         match self.passwd_home_for(Some(&user)) {
-            Some(home) => Ok(Object::string(home)),
+            Some(home) => Ok(self.filesystem_text(home)),
             None => Err(crate::vm::errors::simple_exception(
                 "ArgumentError",
                 &format!("user {user} doesn't exist"),
@@ -263,4 +271,20 @@ pub(crate) fn directory_error(
     };
     let message = format!("No such file or directory @ {} - {}", operation, path);
     crate::vm::errors::simple_exception(named, &message, position)
+}
+
+/// Text that came from outside the program, such as a file name, tagged
+/// `encoding`. Text outside ASCII that US-ASCII is asked to hold is tagged
+/// binary instead, as Ruby tags it, since it spells nothing in US-ASCII.
+pub(crate) fn external_text(text: String, encoding: &str) -> Object {
+    if encoding == crate::object::string_value::DEFAULT_ENCODING {
+        return Object::string(text);
+    }
+    if encoding == "US-ASCII" && !text.is_ascii() {
+        return crate::vm::native_methods::pack_format::bytes_to_string(text.as_bytes());
+    }
+    Object::String(Rc::new(crate::object::StringValue::with_encoding(
+        text,
+        encoding.to_string(),
+    )))
 }

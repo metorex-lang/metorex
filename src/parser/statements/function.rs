@@ -131,8 +131,10 @@ impl Parser {
         let name = match self.advance().kind {
             TokenKind::Ident(name) => {
                 // Check for singleton method: def obj.method_name
-                if self.check(&[TokenKind::Dot]) {
-                    self.advance(); // consume .
+                // `def Named::method` is `def Named.method` written with `::`.
+                let colons_name_a_method = self.check(&[TokenKind::ColonColon]);
+                if self.check(&[TokenKind::Dot]) || colons_name_a_method {
+                    self.advance(); // consume . or ::
                     _singleton_receiver = Some(name);
                     self.parse_singleton_method_name()?
                 } else if self.writer_equal_follows(&name) {

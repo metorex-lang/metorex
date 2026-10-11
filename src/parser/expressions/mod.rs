@@ -261,6 +261,10 @@ impl Parser {
         let parsed = self.parse_expression();
         self.condition_depth -= 1;
         let expr = parsed?;
+        // `if value in Integer | Float` tests the value against a pattern.
+        if self.check(&[TokenKind::In]) {
+            return self.wrap_with_pattern_test(expr);
+        }
 
         // Check for inline assignment: ident = expr (in condition context)
         if matches!(
@@ -814,14 +818,26 @@ impl Parser {
             return declared;
         }
         let mut highest = 0;
-        for token in &self.stream.tokens()[opened_at..closed_at] {
-            if let TokenKind::Ident(name) = &token.kind
-                && let Some(digit) = name.strip_prefix('_')
+        let mut note = |name: &str| {
+            if let Some(digit) = name.strip_prefix('_')
                 && digit.len() == 1
                 && let Some(place) = digit.chars().next().and_then(|c| c.to_digit(10))
                 && place >= 1
             {
                 highest = highest.max(place as usize);
+            }
+        };
+        for token in &self.stream.tokens()[opened_at..closed_at] {
+            match &token.kind {
+                TokenKind::Ident(name) => note(name),
+                // `"#{_1}"` and `:"#{_1}="` read the parameter inside the
+                // string, which arrives here as the text of its `#{}`.
+                TokenKind::InterpolatedString(parts) | TokenKind::CommandString(parts) => {
+                    for name in interpolated_names(parts) {
+                        note(&name);
+                    }
+                }
+                _ => {}
             }
         }
         if highest > 0 {
@@ -858,6 +874,14 @@ impl Parser {
             })
             .map_or(closed_at, |(offset, _)| opened_at + offset);
         for (offset, token) in tokens[opened_at..first_assignment].iter().enumerate() {
+            // `"#{it}!"` reads the parameter inside the string.
+            if let TokenKind::InterpolatedString(parts) | TokenKind::CommandString(parts) =
+                &token.kind
+                && !self.inside_a_nested_block(opened_at + offset, opened_at, closed_at)
+                && interpolation_reads_it(parts)
+            {
+                return true;
+            }
             let TokenKind::Ident(name) = &token.kind else {
                 continue;
             };
@@ -987,4 +1011,53 @@ impl Parser {
             position: start_pos,
         })
     }
+}
+
+/// The names written inside the `#{}` parts of an interpolated literal.
+fn interpolated_names(parts: &[crate::lexer::InterpolationPart]) -> Vec<String> {
+    let mut names = Vec::new();
+    for part in parts {
+        let crate::lexer::InterpolationPart::Expression(code, _) = part else {
+            continue;
+        };
+        for token in crate::lexer::Lexer::new(code).tokenize() {
+            match token.kind {
+                TokenKind::Ident(name) => names.push(name),
+                TokenKind::InterpolatedString(inner) | TokenKind::CommandString(inner) => {
+                    names.extend(interpolated_names(&inner))
+                }
+                _ => {}
+            }
+        }
+    }
+    names
+}
+
+/// Whether a `#{}` part of an interpolated literal reads a bare `it` as a
+/// value, rather than calling a method of that name.
+fn interpolation_reads_it(parts: &[crate::lexer::InterpolationPart]) -> bool {
+    parts.iter().any(|part| {
+        let crate::lexer::InterpolationPart::Expression(code, _) = part else {
+            return false;
+        };
+        let tokens = crate::lexer::Lexer::new(code).tokenize();
+        tokens
+            .iter()
+            .enumerate()
+            .any(|(at, token)| match &token.kind {
+                TokenKind::Ident(name) if name == "it" => {
+                    let after_a_dot = at > 0
+                        && matches!(tokens[at - 1].kind, TokenKind::Dot | TokenKind::SafeDot);
+                    let called = matches!(
+                        tokens.get(at + 1).map(|held| &held.kind),
+                        Some(TokenKind::LParen | TokenKind::LBrace | TokenKind::Do)
+                    );
+                    !after_a_dot && !called
+                }
+                TokenKind::InterpolatedString(inner) | TokenKind::CommandString(inner) => {
+                    interpolation_reads_it(inner)
+                }
+                _ => false,
+            })
+    })
 }

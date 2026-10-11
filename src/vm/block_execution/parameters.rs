@@ -541,15 +541,15 @@ pub(crate) fn strict_arity_check(
         return Ok(());
     }
     let parameters = block.binding_parameters();
-    if parameters.iter().any(|name| name.starts_with('&')) {
-        return Ok(());
-    }
     // A keyword parameter and a `**rest` take their values from the keyword
-    // arguments, which the positional count leaves out on both sides.
+    // arguments, and a `&block` from the block, which the positional count
+    // leaves out on both sides.
     let positional: Vec<&String> = parameters
         .iter()
         .filter(|name| {
-            !name.starts_with("**") && !name.starts_with(crate::object::KEYWORD_PARAM_PREFIX)
+            !name.starts_with("**")
+                && !name.starts_with('&')
+                && !name.starts_with(crate::object::KEYWORD_PARAM_PREFIX)
         })
         .collect();
     let defaults = block

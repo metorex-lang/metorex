@@ -154,8 +154,21 @@ impl VirtualMachine {
         let stands_on_a_plain_object = matches!(&receiver, Object::Instance(held)
                 if held.borrow().class.ruby_name() == "Object")
             && written_by_the_program(&method);
+        // A method a class or module answers because it extended a module
+        // the program wrote runs its own body, as `extend Typed` puts a
+        // module's `attr_accessor` ahead of Module's own.
+        let stands_in_an_extended_module = match &receiver {
+            Object::Class(held) | Object::Module(held) => {
+                written_by_the_program(&method)
+                    && (class.is_module()
+                        || crate::vm::method_lookup::module_extended_method(held, &method_name)
+                            .is_some_and(|extended| Rc::ptr_eq(&extended, &method)))
+            }
+            _ => false,
+        };
         let overrides_builtin = !method.body.is_empty()
             && (backs_a_collection(&receiver)
+                || stands_in_an_extended_module
                 || stands_for_a_class_method
                 || stands_on_its_own_singleton
                 || stands_in_a_refinement
@@ -1009,6 +1022,23 @@ impl VirtualMachine {
         keyword_rest_parameter: Option<&str>,
         kwargs: IndexMap<String, Object>,
     ) -> Result<(), MetorexError> {
+        // A default that assigns a local, as `default: (unset = true)` does,
+        // names that local for the whole body whether or not the default is
+        // reached.
+        for (_, default_expr) in keyword_parameters {
+            let Some(default_expr) = default_expr else {
+                continue;
+            };
+            let written = Statement::Expression {
+                expression: default_expr.clone(),
+                position: default_expr.position(),
+            };
+            for name in crate::ast::collect_assigned_locals(std::slice::from_ref(&written)) {
+                if self.environment().get(&name).is_none() {
+                    self.environment_mut().define(name, Object::Nil);
+                }
+            }
+        }
         // Ruby names every keyword the call left out, all of them in one
         // message rather than one message for the first.
         let missing: Vec<&String> = keyword_parameters
@@ -1093,7 +1123,7 @@ fn backs_a_collection(receiver: &crate::object::Object) -> bool {
 /// Whether a method was written by the program rather than by the core
 /// library. A library `def self.name` stays behind the native table, where
 /// one a program writes stands in front of it.
-fn written_by_the_program(method: &std::rc::Rc<crate::object::Method>) -> bool {
+pub(crate) fn written_by_the_program(method: &std::rc::Rc<crate::object::Method>) -> bool {
     method
         .body
         .first()

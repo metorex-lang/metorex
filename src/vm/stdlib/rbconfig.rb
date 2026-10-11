@@ -53,6 +53,10 @@ module RbConfig
   # A library installed alongside metorex goes under the prefix the binary
   # sits in, which is where `$LOAD_PATH` looks for one.
   prefix = File.dirname(File.dirname(__interpreter_path__()))
+  # The directory the binary sits in, which a program that starts the
+  # interpreter again joins with `ruby_install_name`.
+  CONFIG["bindir"] = File.dirname(__interpreter_path__())
+  CONFIG["prefix"] = prefix
   CONFIG["sitelibdir"] = "#{prefix}/lib/metorex/#{RUBY_VERSION}"
   CONFIG["sitearchdir"] = "#{CONFIG["sitelibdir"]}/#{RUBY_PLATFORM}"
   CONFIG["rubyhdrdir"] = __header_directory__()

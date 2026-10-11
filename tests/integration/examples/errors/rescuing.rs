@@ -199,3 +199,21 @@ fn test_errors_rescue_lists_of_expressions_no_parens_execution() {
     let output = run_example("errors/rescue_lists_of_expressions_no_parens.rb");
     assert_eq!(output, RESCUE_LISTS_OF_EXPRESSIONS);
 }
+
+/// The expected output of both `errors/warning_warn_super` variants.
+const WARNING_WARN_SUPER_OUTPUT: &str = concat!(
+    "rewritten: maintenance window moves to 02:00\n",
+    "rewritten: rates reload at 03:00\n",
+);
+
+#[test]
+fn test_errors_warning_warn_super_execution() {
+    let output = run_example("errors/warning_warn_super.rb");
+    assert_eq!(output, WARNING_WARN_SUPER_OUTPUT);
+}
+
+#[test]
+fn test_errors_warning_warn_super_no_parens_execution() {
+    let output = run_example("errors/warning_warn_super_no_parens.rb");
+    assert_eq!(output, WARNING_WARN_SUPER_OUTPUT);
+}

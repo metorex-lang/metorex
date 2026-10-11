@@ -83,7 +83,20 @@ impl VirtualMachine {
                         )
                     }
                 })?;
-                Ok(Some(Object::string(target.to_string_lossy().to_string())))
+                {
+                    // Ruby tags the target in the file system's encoding as it
+                    // stands, whether or not its bytes spell text there.
+                    let encoding = match self.globals().get("__Encoding_default_external") {
+                        Some(Object::Class(held)) => held.name().to_string(),
+                        _ => crate::object::string_value::DEFAULT_ENCODING.to_string(),
+                    };
+                    Ok(Some(Object::String(std::rc::Rc::new(
+                        crate::object::StringValue::with_encoding(
+                            target.to_string_lossy().to_string(),
+                            encoding,
+                        ),
+                    ))))
+                }
             }
             "symlink?" => {
                 if arguments.len() != 1 {

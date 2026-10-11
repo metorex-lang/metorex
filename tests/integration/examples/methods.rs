@@ -459,3 +459,26 @@ fn test_methods_alias_of_a_setter_no_parens_execution() {
     let output = run_example("methods/alias_of_a_setter_no_parens.rb");
     assert_eq!(output, ALIAS_OF_A_SETTER);
 }
+
+/// The expected output of both `methods/forms_gems_write` variants.
+const FORMS_GEMS_WRITE: &str = concat!(
+    "[\"sku\", \"sku: not found\"]\n",
+    "\"4kg to north\"\n",
+    "[OvernightShipment, ExpressShipment, 2]\n",
+    "true\n",
+    "[[1, 2], {}, :signed]\n",
+    "[[3], {late: true}, nil]\n",
+    "[5, 9]\n",
+);
+
+#[test]
+fn test_methods_forms_gems_write_execution() {
+    let output = run_example("methods/forms_gems_write.rb");
+    assert_eq!(output, FORMS_GEMS_WRITE);
+}
+
+#[test]
+fn test_methods_forms_gems_write_no_parens_execution() {
+    let output = run_example("methods/forms_gems_write_no_parens.rb");
+    assert_eq!(output, FORMS_GEMS_WRITE);
+}

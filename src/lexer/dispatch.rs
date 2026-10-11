@@ -306,7 +306,35 @@ impl<'a> Lexer<'a> {
                 }
             }
             '?' => {
+                // Right after something that ends an expression, `?` asks a
+                // question: `include?('"')?"'":'"'` is a ternary. A name with a
+                // space before the `?` may be a call taking a character, as
+                // `p ?a` is, so it is left to the rule below.
+                let touches_previous = self.prev_significant_end == self.offset;
+                let ends_an_expression = match &self.prev_significant {
+                    Some(
+                        TokenKind::RParen
+                        | TokenKind::RBracket
+                        | TokenKind::RBrace
+                        | TokenKind::Int(_)
+                        | TokenKind::BigInt(_)
+                        | TokenKind::Float(_)
+                        | TokenKind::String(_)
+                        | TokenKind::InterpolatedString(_)
+                        | TokenKind::True
+                        | TokenKind::False
+                        | TokenKind::Nil
+                        | TokenKind::InstanceVar(_)
+                        | TokenKind::ClassVar(_)
+                        | TokenKind::GlobalVar(_),
+                    ) => true,
+                    Some(TokenKind::Ident(_)) => touches_previous,
+                    _ => false,
+                };
                 self.advance(); // consume ?
+                if ends_an_expression {
+                    return Token::new(TokenKind::Question, position);
+                }
                 match self.peek() {
                     // `?\n`, `?\001`, and `?\x41` name a character by an
                     // escape, the same escapes a string literal reads.

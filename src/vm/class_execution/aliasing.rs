@@ -51,10 +51,35 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Vec<String>, MetorexError> {
         let mut names = Vec::with_capacity(attributes.len());
-        for attr_expr in attributes {
-            let value = self.evaluate_expression(attr_expr)?;
+        for value in self.attribute_values(attributes, position)? {
             names.push(self.coerce_method_name(&value, "attr_accessor", position)?);
         }
         Ok(names)
+    }
+
+    /// The names an `attr_*` call is given, with each splat spread into the
+    /// names its list holds. Parentheses leave a splat inside a group.
+    pub(crate) fn attribute_values(
+        &mut self,
+        attributes: &[Expression],
+        position: Position,
+    ) -> Result<Vec<Object>, MetorexError> {
+        let mut values = Vec::with_capacity(attributes.len());
+        for attribute in attributes {
+            let mut attribute = attribute;
+            while let Expression::Grouped { expression, .. } = attribute {
+                attribute = expression;
+            }
+            if let Expression::Splat { expression, .. } = attribute {
+                let spread = self.evaluate_expression(expression)?;
+                match self.splat_through_to_a(spread, position)? {
+                    Ok(items) => values.extend(items),
+                    Err(held) => values.push(held),
+                }
+                continue;
+            }
+            values.push(self.evaluate_expression(attribute)?);
+        }
+        Ok(values)
     }
 }

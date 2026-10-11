@@ -1010,7 +1010,13 @@ impl VirtualMachine {
 
     /// Set the ARGV global with script arguments.
     pub fn set_argv(&mut self, args: Vec<String>) {
-        let elements: Vec<Object> = args.into_iter().map(Object::string).collect();
+        // The arguments come in the locale's encoding.
+        let locale = crate::vm::locale_encoding_name()
+            .unwrap_or_else(|| crate::object::string_value::DEFAULT_ENCODING.to_string());
+        let elements: Vec<Object> = args
+            .into_iter()
+            .map(|held| crate::vm::native_methods::external_text(held, &locale))
+            .collect();
         let argv = Object::Array(Rc::new(RefCell::new(elements)));
         self.globals.set("ARGV", argv.clone());
         // `$*` is the same list under the name Ruby's own punctuation gives

@@ -1274,14 +1274,20 @@ pub(crate) fn module_own_method(class_rc: &Rc<Class>, method_name: &str) -> Opti
 }
 
 /// A method the module answers to because it extended a module, its own
-/// instance methods included when it extended itself.
+/// instance methods included when it extended itself. The extended module is
+/// asked again, so a method it was given later answers in place of the one
+/// it held when it was extended.
 pub(crate) fn module_extended_method(
     class_rc: &Rc<Class>,
     method_name: &str,
 ) -> Option<Rc<Method>> {
-    match class_rc.get_class_var(&format!("__ext__{}", method_name)) {
-        Some(Object::Method(method)) => Some(method),
-        _ => None,
+    let copied = match class_rc.get_class_var(&format!("__ext__{}", method_name)) {
+        Some(Object::Method(method)) => method,
+        _ => return None,
+    };
+    match class_rc.get_class_var(&format!("__ext_from__{}", method_name)) {
+        Some(Object::Module(extended)) => extended.find_method(method_name).or(Some(copied)),
+        _ => Some(copied),
     }
 }
 

@@ -76,7 +76,15 @@ impl VirtualMachine {
                 let direct = parent_scope
                     .as_ref()
                     .and_then(|p| p.get_class_var(super_name))
-                    .or_else(|| self.resolve_constant_in_scope(super_name));
+                    .or_else(|| self.resolve_constant_in_scope(super_name))
+                    // The class the body opens in reaches what its ancestors
+                    // define, as `klass.class_eval("class A < Inherited")`
+                    // run from another module's method does.
+                    .or_else(|| {
+                        parent_scope
+                            .as_ref()
+                            .and_then(|p| inherited_constant(p, super_name))
+                    });
                 let autoloaded = if direct.is_some() {
                     direct
                 } else if let Some(parent) = parent_scope.as_ref() {
@@ -437,4 +445,22 @@ impl VirtualMachine {
 /// other than a class.
 fn not_a_class_error(name: &str, position: Position) -> MetorexError {
     crate::vm::errors::simple_exception("TypeError", &format!("{} is not a class", name), position)
+}
+
+/// A constant one of `class`'s ancestors defines: its superclasses and the
+/// modules each of them includes, nearest first.
+fn inherited_constant(class: &Rc<Class>, name: &str) -> Option<Object> {
+    let mut cursor = Some(Rc::clone(class));
+    while let Some(current) = cursor {
+        if let Some(found) = current.get_class_var(name) {
+            return Some(found);
+        }
+        for mixin in current.mixin_chain() {
+            if let Some(found) = mixin.get_class_var(name) {
+                return Some(found);
+            }
+        }
+        cursor = current.superclass();
+    }
+    None
 }

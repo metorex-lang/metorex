@@ -144,7 +144,27 @@ impl Parser {
     /// What a `when` or `else` clause of a `case` expression answers: its
     /// one expression, or the statements under it run as a `begin` body.
     fn parse_clause_value(&mut self, position: Position) -> Result<Expression, MetorexError> {
+        let resume = self.stream.current_position();
         let first = self.parse_expression_with_assignment()?;
+        // A modifier after the first line, as in `raise ArgumentError, "bad"
+        // unless value`, belongs to that line, so the clause is read again a
+        // statement at a time.
+        if self.check(&[
+            TokenKind::If,
+            TokenKind::Unless,
+            TokenKind::While,
+            TokenKind::Until,
+            TokenKind::Rescue,
+        ]) {
+            self.stream.restore_position(resume);
+            return Ok(Expression::BeginRescue {
+                body: self.parse_clause_body()?,
+                rescue_clauses: Vec::new(),
+                else_clause: None,
+                ensure_block: None,
+                position,
+            });
+        }
         self.skip_whitespace();
         if self.check(&[TokenKind::When, TokenKind::Else, TokenKind::End]) || self.is_at_end() {
             return Ok(first);

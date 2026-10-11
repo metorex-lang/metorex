@@ -282,9 +282,11 @@ impl VirtualMachine {
                 // else.
                 let answered = unsafe {
                     match method_name {
-                        "uid=" => libc::setuid(wanted as libc::uid_t),
+                        // Ruby sets the real id alone, which a process that
+                        // gave up root as its effective id may still do.
+                        "uid=" => libc::setreuid(wanted as libc::uid_t, libc::uid_t::MAX),
                         "euid=" => libc::seteuid(wanted as libc::uid_t),
-                        "gid=" => libc::setgid(wanted as libc::gid_t),
+                        "gid=" => libc::setregid(wanted as libc::gid_t, libc::gid_t::MAX),
                         _ => libc::setegid(wanted as libc::gid_t),
                     }
                 };
@@ -586,8 +588,10 @@ fn errno_constant(code: i32) -> &'static str {
 /// whether a file it does not own is still one of its group's.
 fn current_groups() -> Object {
     // The list the account belongs to, which is what `id -G` reports. The
-    // one the kernel caches for the process is cut off at sixteen entries on
-    // some systems, so the account database answers first.
+    // one macOS caches for the process is cut off at sixteen entries, so
+    // there the account database answers first. Linux keeps the process's
+    // own list, which `Process.groups=` changes.
+    #[cfg(target_os = "macos")]
     if let Some(named) = account_groups() {
         return Object::array(named.iter().map(|group| Object::Int(*group)).collect());
     }
@@ -606,6 +610,7 @@ fn current_groups() -> Object {
 
 /// Every group the account this process runs as belongs to, read from the
 /// account database rather than from the process's own cached list.
+#[cfg(target_os = "macos")]
 pub(crate) fn account_groups() -> Option<Vec<i64>> {
     // SAFETY: `getpwuid` answers a pointer into a static the library owns,
     // and `getgrouplist` fills the array it is handed up to the count it is

@@ -713,15 +713,6 @@ impl VirtualMachine {
                 Ok(())
             }
             Object::Instance(instance_rc) => {
-                // An instance of an Array or Hash subclass writes
-                // through the storage it is backed by.
-                let holder = Object::Instance(Rc::clone(&instance_rc));
-                if let Some(backing) = crate::vm::native_methods::array_subclass_value(&holder)
-                    .or_else(|| crate::vm::native_methods::hash_subclass_value(&holder))
-                {
-                    self.send_to_object(backing, "[]=", vec![idx, value], *position)?;
-                    return Ok(());
-                }
                 // A `[]=` written on this one object answers before the one
                 // its class carries.
                 let class = Rc::clone(&instance_rc.borrow().class);
@@ -746,6 +737,16 @@ impl VirtualMachine {
                         vec![idx, value],
                         *position,
                     )?;
+                    Ok(())
+                } else if let Some(backing) = {
+                    // An instance of an Array or Hash subclass that writes no
+                    // `[]=` of its own writes through the storage it is
+                    // backed by.
+                    let holder = Object::Instance(Rc::clone(&instance_rc));
+                    crate::vm::native_methods::array_subclass_value(&holder)
+                        .or_else(|| crate::vm::native_methods::hash_subclass_value(&holder))
+                } {
+                    self.send_to_object(backing, "[]=", vec![idx, value], *position)?;
                     Ok(())
                 } else if let Some(members) = crate::vm::native_methods::struct_members(&class) {
                     self.call_struct_instance_method(

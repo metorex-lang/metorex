@@ -378,3 +378,76 @@ fn test_file_loader_required_by_name_no_parens_execution() {
     let output = run_example("file_loader/required_by_name_no_parens.rb");
     assert_eq!(output, REQUIRED_BY_NAME_OUTPUT);
 }
+
+/// Run an example with GEM_HOME and GEM_PATH naming the fixture gem tree
+/// under `require/gem_home`.
+fn run_example_with_installed_gems(path: &str) -> String {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let gem_home = format!(
+        "{manifest_dir}/{}/require/gem_home",
+        crate::common::EXAMPLES_DIR
+    );
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_metorex"))
+        .current_dir(manifest_dir)
+        .arg(format!("{}/{}", crate::common::EXAMPLES_DIR, path))
+        .env("GEM_HOME", &gem_home)
+        .env("GEM_PATH", &gem_home)
+        .output()
+        .expect("failed to execute example");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).expect("stdout was not utf8")
+}
+
+/// The expected output of both `require/installed_gems_newest` variants.
+const INSTALLED_GEMS_NEWEST: &str = concat!(
+    "true\n",
+    "true\n",
+    "[\"shipping_rates-1.2.0\", \"shipping_rates-1.0.0\"]\n",
+    "\"1.2.0\"\n",
+    "15\n",
+    "[\"north\", \"south\"]\n",
+    "[\"shipping_rates\", \"tariff_table\"]\n",
+    "true\n",
+    "false\n",
+);
+
+#[test]
+fn test_require_installed_gems_newest_execution() {
+    let output = run_example_with_installed_gems("require/installed_gems_newest.rb");
+    assert_eq!(output, INSTALLED_GEMS_NEWEST);
+}
+
+#[test]
+fn test_require_installed_gems_newest_no_parens_execution() {
+    let output = run_example_with_installed_gems("require/installed_gems_newest_no_parens.rb");
+    assert_eq!(output, INSTALLED_GEMS_NEWEST);
+}
+
+/// The expected output of both `require/installed_gems_versions` variants.
+const INSTALLED_GEMS_VERSIONS: &str = concat!(
+    "true\n",
+    "false\n",
+    "\"1.0.0\"\n",
+    "\"shipping_rates-1.0.0\"\n",
+    "[Gem::LoadError, \"can't activate shipping_rates-1.2.0, already activated shipping_rates-1.0.0\"]\n",
+    "[Gem::MissingSpecVersionError, \"Could not find 'tariff_table' (> 9) - did find: [tariff_table-2.0.0]\"]\n",
+    "[Gem::MissingSpecError, \"Could not find 'parcel_labels' (>= 0) among N total gem(s)\"]\n",
+    "false\n",
+    "true\n",
+);
+
+#[test]
+fn test_require_installed_gems_versions_execution() {
+    let output = run_example_with_installed_gems("require/installed_gems_versions.rb");
+    assert_eq!(output, INSTALLED_GEMS_VERSIONS);
+}
+
+#[test]
+fn test_require_installed_gems_versions_no_parens_execution() {
+    let output = run_example_with_installed_gems("require/installed_gems_versions_no_parens.rb");
+    assert_eq!(output, INSTALLED_GEMS_VERSIONS);
+}

@@ -305,7 +305,16 @@ impl Parser {
         };
         self.advance();
         self.skip_whitespace();
-        let value = self.parse_expression()?;
+        // `Command[tag:, name: "IDLE"]` passes what `tag` names, the
+        // shorthand a call's own arguments take.
+        let value = if self.check(&[TokenKind::Comma, TokenKind::RBracket]) {
+            Expression::Identifier {
+                name: name.clone(),
+                position,
+            }
+        } else {
+            self.parse_expression()?
+        };
         Ok(Some((
             Expression::Symbol {
                 value: name,

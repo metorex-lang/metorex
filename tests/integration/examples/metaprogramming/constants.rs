@@ -158,3 +158,36 @@ fn test_metaprogramming_constant_lookup_no_parens_execution() {
     let output = run_example("metaprogramming/constant_lookup_no_parens.rb");
     assert_eq!(output, CONSTANT_LOOKUP_OUTPUT);
 }
+
+/// The expected output of both `metaprogramming/method_added_chain` variants.
+const METHOD_ADDED_CHAIN_OUTPUT: &str = concat!(
+    "[[:region=, :currency, :currency=, :load_rates, :store_rates], 5, :store_rates]\n",
+    "[:method_added, :seen, :count, :last, :singletons, :refresh]\n",
+);
+
+#[test]
+fn test_metaprogramming_method_added_chain_execution() {
+    let output = run_example("metaprogramming/method_added_chain.rb");
+    assert_eq!(output, METHOD_ADDED_CHAIN_OUTPUT);
+}
+
+#[test]
+fn test_metaprogramming_method_added_chain_no_parens_execution() {
+    let output = run_example("metaprogramming/method_added_chain_no_parens.rb");
+    assert_eq!(output, METHOD_ADDED_CHAIN_OUTPUT);
+}
+
+/// The expected output of both `metaprogramming/extend_sees_later_methods` variants.
+const EXTEND_SEES_LATER_METHODS_OUTPUT: &str = concat!(":second_version\n", ":second_version\n",);
+
+#[test]
+fn test_metaprogramming_extend_sees_later_methods_execution() {
+    let output = run_example("metaprogramming/extend_sees_later_methods.rb");
+    assert_eq!(output, EXTEND_SEES_LATER_METHODS_OUTPUT);
+}
+
+#[test]
+fn test_metaprogramming_extend_sees_later_methods_no_parens_execution() {
+    let output = run_example("metaprogramming/extend_sees_later_methods_no_parens.rb");
+    assert_eq!(output, EXTEND_SEES_LATER_METHODS_OUTPUT);
+}

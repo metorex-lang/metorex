@@ -81,23 +81,35 @@ impl Parser {
             TokenKind::ByteString(value) => Ok(literals::byte_string_literal(value, position)),
             // A literal in a source that asked outright for literals that
             // change carries no notice that it will be frozen.
-            TokenKind::MutableString(value) => Ok(Expression::MethodCall {
-                receiver: Box::new(Expression::StringLiteral { value, position }),
-                method: "__mutable_literal__".to_string(),
-                arguments: Vec::new(),
-                trailing_block: None,
-                position,
-            }),
+            TokenKind::MutableString(value) => {
+                let parts = self.adjacent_string_parts(vec![InterpolationPart::Text(value)]);
+                match only_text(&parts) {
+                    Some(value) => Ok(Expression::MethodCall {
+                        receiver: Box::new(Expression::StringLiteral { value, position }),
+                        method: "__mutable_literal__".to_string(),
+                        arguments: Vec::new(),
+                        trailing_block: None,
+                        position,
+                    }),
+                    None => self.primary_interpolated_string(parts, position),
+                }
+            }
             TokenKind::BinaryString(value) => Ok(literals::binary_string_literal(value, position)),
             // A literal in a source that asked for frozen literals stands for
             // the one frozen string every place writing it shares.
-            TokenKind::FrozenString(value) => Ok(Expression::MethodCall {
-                receiver: Box::new(Expression::StringLiteral { value, position }),
-                method: "__frozen_literal__".to_string(),
-                arguments: Vec::new(),
-                trailing_block: None,
-                position,
-            }),
+            TokenKind::FrozenString(value) => {
+                let parts = self.adjacent_string_parts(vec![InterpolationPart::Text(value)]);
+                match only_text(&parts) {
+                    Some(value) => Ok(Expression::MethodCall {
+                        receiver: Box::new(Expression::StringLiteral { value, position }),
+                        method: "__frozen_literal__".to_string(),
+                        arguments: Vec::new(),
+                        trailing_block: None,
+                        position,
+                    }),
+                    None => self.primary_interpolated_string(parts, position),
+                }
+            }
             TokenKind::Regex(pattern, flags) => self.regex_expression(pattern, flags, position),
             TokenKind::PercentW(value, filled) => {
                 Ok(self.primary_percent_w(value, filled, position))
@@ -350,11 +362,27 @@ impl Parser {
     ) -> Vec<InterpolationPart> {
         loop {
             match &self.peek().kind {
-                TokenKind::String(next) => parts.push(InterpolationPart::Text(next.clone())),
+                TokenKind::String(next)
+                | TokenKind::FrozenString(next)
+                | TokenKind::MutableString(next) => {
+                    parts.push(InterpolationPart::Text(next.clone()))
+                }
                 TokenKind::InterpolatedString(next) => parts.extend(next.iter().cloned()),
                 _ => return parts,
             }
             self.advance();
         }
     }
+}
+
+/// The text of a string written as plain pieces, or nothing when one of the
+/// pieces interpolates.
+fn only_text(parts: &[InterpolationPart]) -> Option<String> {
+    parts
+        .iter()
+        .map(|part| match part {
+            InterpolationPart::Text(text) => Some(text.as_str()),
+            InterpolationPart::Expression(..) => None,
+        })
+        .collect()
 }

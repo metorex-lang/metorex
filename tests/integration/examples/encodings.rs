@@ -594,3 +594,44 @@ fn test_encodings_symbol_and_regexp_inspect_no_parens_execution() {
     let output = run_example("encodings/symbol_and_regexp_inspect_no_parens.rb");
     assert_eq!(output, SYMBOL_AND_REGEXP_INSPECT_OUTPUT);
 }
+
+/// Run an example under the C locale, with `argument` as its one argument.
+fn run_example_in_the_c_locale(path: &str, argument: &str) -> String {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_metorex"))
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .arg(format!("{}/{}", crate::common::EXAMPLES_DIR, path))
+        .arg(argument)
+        .env("LC_ALL", "C")
+        .output()
+        .expect("failed to execute example");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).expect("stdout was not utf8")
+}
+
+/// The expected output of both `encodings/c_locale` variants.
+const C_LOCALE_OUTPUT: &str = concat!(
+    "#<Encoding:US-ASCII>\n",
+    "#<Encoding:US-ASCII>\n",
+    "#<Encoding:US-ASCII>\n",
+    "[#<Encoding:US-ASCII>]\n",
+    "[#<Encoding:BINARY (ASCII-8BIT)>, true]\n",
+    "\"\\\"\\\\xC2\\\\xA9\\\"\"\n",
+    "\":\\\"\\\\u00EA\\\"\"\n",
+    "#<Encoding:US-ASCII>\n",
+);
+
+#[test]
+fn test_encodings_c_locale_execution() {
+    let output = run_example_in_the_c_locale("encodings/c_locale.rb", "arg");
+    assert_eq!(output, C_LOCALE_OUTPUT);
+}
+
+#[test]
+fn test_encodings_c_locale_no_parens_execution() {
+    let output = run_example_in_the_c_locale("encodings/c_locale_no_parens.rb", "arg");
+    assert_eq!(output, C_LOCALE_OUTPUT);
+}

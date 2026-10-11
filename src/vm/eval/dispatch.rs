@@ -798,6 +798,14 @@ impl VirtualMachine {
         right_value: Object,
         position: &crate::lexer::Position,
     ) -> Result<Object, MetorexError> {
+        if self.refinement_scopes.iter().any(|scope| !scope.is_empty())
+            && let Some(op_name) = binary_op_method_name(op)
+            && let Some(method) =
+                crate::vm::method_lookup::find_refinement(&left_value, op_name, self)
+        {
+            let class = self.builtins().class_of(&left_value);
+            return self.invoke_method(class, method, left_value, vec![right_value], *position);
+        }
         // A reopened core class, or a module prepended to one,
         // holds the operator in a method table rather than in the
         // native one, so `1 + 2` consults it before the built-in

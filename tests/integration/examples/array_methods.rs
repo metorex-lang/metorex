@@ -258,3 +258,26 @@ fn test_array_methods_rfind_no_parens_execution() {
     let output = run_example("array_methods/rfind_no_parens.rb");
     assert_eq!(output, RFIND);
 }
+
+/// The expected output of both `array_methods/fetch_warnings` variants.
+const FETCH_WARNINGS_OUTPUT: &str = concat!(
+    "4\n",
+    "\"no rate at 5\"\n",
+    "warned: block supersedes default value argument\n",
+    "9\n",
+    "warned: block supersedes default value argument\n",
+    ":block\n",
+    ":fallback\n",
+);
+
+#[test]
+fn test_array_methods_fetch_warnings_execution() {
+    let output = run_example("array_methods/fetch_warnings.rb");
+    assert_eq!(output, FETCH_WARNINGS_OUTPUT);
+}
+
+#[test]
+fn test_array_methods_fetch_warnings_no_parens_execution() {
+    let output = run_example("array_methods/fetch_warnings_no_parens.rb");
+    assert_eq!(output, FETCH_WARNINGS_OUTPUT);
+}

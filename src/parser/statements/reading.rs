@@ -24,6 +24,13 @@ impl Parser {
             return parsed;
         };
         let expression = self.wrap_with_pattern_test(expression)?;
+        // `value in nil | Array or raise TypeError` joins the test to what
+        // follows the way any other value's `or` does.
+        let expression = if matches!(expression, Expression::PatternTest { .. }) {
+            self.fold_keyword_logic_onto(expression)?
+        } else {
+            expression
+        };
         self.wrap_with_modifier(Statement::Expression {
             expression,
             position,
@@ -151,8 +158,16 @@ impl Parser {
                 let definition = self.parse_module_def()?;
                 self.definition_chained_onto(definition, token.position)
             }
-            TokenKind::Include => self.parse_include(),
-            TokenKind::Extend => self.parse_extend(),
+            // `include Named if ready` and `extend Named unless done` take a
+            // modifier as any statement does.
+            TokenKind::Include => {
+                let included = self.parse_include()?;
+                self.wrap_with_modifier(included)
+            }
+            TokenKind::Extend => {
+                let extended = self.parse_extend()?;
+                self.wrap_with_modifier(extended)
+            }
             TokenKind::Alias => self.parse_alias(),
             TokenKind::Ident(name) if name == "undef" => self.parse_undef(),
             _ => {

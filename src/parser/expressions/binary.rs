@@ -376,6 +376,9 @@ impl Parser {
                 TokenKind::Percent => BinaryOp::Modulo,
                 _ => unreachable!(),
             };
+            // An operator at the end of a line carries the expression onto
+            // the next one: `"%d runs" %` followed by the values.
+            self.skip_whitespace();
             let right = self.parse_unary()?;
             expr = Expression::BinaryOp {
                 op,

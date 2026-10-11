@@ -459,9 +459,7 @@ impl VirtualMachine {
         position: crate::lexer::Position,
     ) -> Result<ControlFlow, MetorexError> {
         let mut arguments = vec![Object::symbol(method.to_string())];
-        for attribute in attributes {
-            arguments.push(self.evaluate_expression(attribute)?);
-        }
+        arguments.extend(self.attribute_values(attributes, position)?);
         let receiver = self.environment().get("self").unwrap_or(Object::Nil);
         let answer = self.send_to_object(receiver, "__send__", arguments, position)?;
         Ok(ControlFlow::Value(answer))

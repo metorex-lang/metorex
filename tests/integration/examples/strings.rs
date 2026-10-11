@@ -529,3 +529,41 @@ fn test_strings_getbyte_positions_no_parens_execution() {
     let output = run_example("strings/getbyte_positions_no_parens.rb");
     assert_eq!(output, GETBYTE_POSITIONS_OUTPUT);
 }
+
+/// The expected output of both `strings/frozen_adjacent_literals` variants.
+const FROZEN_ADJACENT_LITERALS_OUTPUT: &str = concat!(
+    "\"maintenance window moves to 02:00\"\n",
+    "true\n",
+    "[\"rates load from the cache\", :deprecated]\n",
+    "\"window at 2:00\"\n",
+    "false\n",
+    "\"at 2:00 sharp\"\n",
+);
+
+#[test]
+fn test_strings_frozen_adjacent_literals_execution() {
+    let output = run_example("strings/frozen_adjacent_literals.rb");
+    assert_eq!(output, FROZEN_ADJACENT_LITERALS_OUTPUT);
+}
+
+#[test]
+fn test_strings_frozen_adjacent_literals_no_parens_execution() {
+    let output = run_example("strings/frozen_adjacent_literals_no_parens.rb");
+    assert_eq!(output, FROZEN_ADJACENT_LITERALS_OUTPUT);
+}
+
+/// The expected output of both `strings/mutable_adjacent_literals` variants.
+const MUTABLE_ADJACENT_LITERALS_OUTPUT: &str =
+    "\"maintenance window moves to 02:00.\"\n\"window at 2:00\"\n";
+
+#[test]
+fn test_strings_mutable_adjacent_literals_execution() {
+    let output = run_example("strings/mutable_adjacent_literals.rb");
+    assert_eq!(output, MUTABLE_ADJACENT_LITERALS_OUTPUT);
+}
+
+#[test]
+fn test_strings_mutable_adjacent_literals_no_parens_execution() {
+    let output = run_example("strings/mutable_adjacent_literals_no_parens.rb");
+    assert_eq!(output, MUTABLE_ADJACENT_LITERALS_OUTPUT);
+}

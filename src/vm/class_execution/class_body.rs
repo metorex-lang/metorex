@@ -145,6 +145,13 @@ impl VirtualMachine {
                 class.freeze();
                 continue;
             }
+            // `include`, `extend` and the `attr_*` statements are calls of
+            // the methods of those names, so one the program wrote for this
+            // class, as a module it extended writes `attr_accessor`, runs.
+            if let Some(answered) = self.class_statement_as_call(class, statement)? {
+                last_value = answered;
+                continue;
+            }
             match statement {
                 Statement::FunctionDef {
                     name: method_name,
@@ -357,6 +364,7 @@ impl VirtualMachine {
                         apply_current_visibility(class, attr_name);
                         class.declare_instance_var(attr_name);
                     }
+                    self.announce_added_methods(class, names, position)?;
                 }
                 Statement::AttrWriter { attributes, .. } => {
                     let names = self.resolve_attribute_names(attributes, position)?;
@@ -382,6 +390,8 @@ impl VirtualMachine {
                         apply_current_visibility(class, &setter_name);
                         class.declare_instance_var(attr_name);
                     }
+                    let setters = names.iter().map(|name| format!("{name}=")).collect();
+                    self.announce_added_methods(class, setters, position)?;
                 }
                 Statement::AttrAccessor { attributes, .. } => {
                     let names = self.resolve_attribute_names(attributes, position)?;
@@ -422,6 +432,11 @@ impl VirtualMachine {
 
                         class.declare_instance_var(attr_name);
                     }
+                    let both = names
+                        .iter()
+                        .flat_map(|name| [name.clone(), format!("{name}=")])
+                        .collect();
+                    self.announce_added_methods(class, both, position)?;
                 }
                 Statement::Assignment {
                     target:
@@ -530,6 +545,10 @@ impl VirtualMachine {
                                     class.set_class_var(
                                         format!("__ext__{}", method_name),
                                         Object::Method(method),
+                                    );
+                                    class.set_class_var(
+                                        format!("__ext_from__{}", method_name),
+                                        Object::Module(Rc::clone(&module)),
                                     );
                                 }
                             }
@@ -806,5 +825,91 @@ impl VirtualMachine {
             }
         }
         Ok(last_value)
+    }
+}
+
+impl VirtualMachine {
+    /// Run an `include`, `extend` or `attr_*` statement as the call of the
+    /// method the program wrote for `class` under that name, or answer None
+    /// when the class answers it with the core library's own.
+    fn class_statement_as_call(
+        &mut self,
+        class: &Rc<Class>,
+        statement: &Statement,
+    ) -> Result<Option<Object>, MetorexError> {
+        let (name, position) = match statement {
+            Statement::AttrReader { position, .. } => ("attr_reader", *position),
+            Statement::AttrWriter { position, .. } => ("attr_writer", *position),
+            Statement::AttrAccessor { position, .. } => ("attr_accessor", *position),
+            Statement::Include { position, .. } => ("include", *position),
+            Statement::Extend { position, .. } => ("extend", *position),
+            _ => return Ok(None),
+        };
+        if !class_answers_with_program_method(class, name) {
+            return Ok(None);
+        }
+        let arguments = match statement {
+            Statement::AttrReader { attributes, .. }
+            | Statement::AttrWriter { attributes, .. }
+            | Statement::AttrAccessor { attributes, .. } => {
+                self.attribute_values(attributes, position)?
+            }
+            Statement::Include { module_name, .. } | Statement::Extend { module_name, .. } => {
+                let found = self
+                    .resolve_constant_with_autoload(module_name)?
+                    .or_else(|| self.resolve_constant_in_scope(module_name));
+                match found {
+                    Some(module) => vec![module],
+                    None => return Ok(None),
+                }
+            }
+            _ => return Ok(None),
+        };
+        let receiver = if class.is_module() {
+            Object::Module(Rc::clone(class))
+        } else {
+            Object::Class(Rc::clone(class))
+        };
+        self.send_to_object(receiver, name, arguments, position)
+            .map(Some)
+    }
+}
+
+/// Whether `class` answers `name` with a method the program wrote: one on its
+/// singleton class or a module it extended, or one written `def self.name`.
+fn class_answers_with_program_method(class: &Rc<Class>, name: &str) -> bool {
+    let written = |method: &Rc<crate::object::Method>| {
+        crate::vm::method_execution::written_by_the_program(method)
+    };
+    class
+        .singleton_class_slot()
+        .as_ref()
+        .and_then(|singleton| singleton.find_method(name))
+        .is_some_and(|method| written(&method))
+        || crate::vm::method_lookup::module_extended_method(class, name)
+            .is_some_and(|method| written(&method))
+        || crate::vm::method_lookup::module_own_method(class, name)
+            .is_some_and(|method| written(&method))
+}
+
+impl VirtualMachine {
+    /// Run the hook a class body's new methods are announced through:
+    /// `singleton_method_added` on the object a singleton class belongs to,
+    /// and `method_added` on any other class.
+    fn announce_added_methods(
+        &mut self,
+        class: &Rc<Class>,
+        names: Vec<String>,
+        position: crate::lexer::Position,
+    ) -> Result<(), MetorexError> {
+        let hook = if class.get_class_var("__singleton__").is_some() {
+            "singleton_method_added"
+        } else {
+            "method_added"
+        };
+        for name in &names {
+            self.invoke_class_hook(class, hook, name, position)?;
+        }
+        Ok(())
     }
 }

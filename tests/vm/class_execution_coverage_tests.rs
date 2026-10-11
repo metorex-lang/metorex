@@ -414,7 +414,7 @@ fn top_level_include_undefined_errors() {
 #[test]
 fn top_level_extend_errors() {
     let err = run_err(r#"extend SomeModule"#);
-    assert!(err.contains("extend") || err.contains("class definition"));
+    assert!(err.contains("uninitialized constant SomeModule"));
 }
 
 // ── Top-level `alias` (lines 1145-1163) ──────────────────────────────────────

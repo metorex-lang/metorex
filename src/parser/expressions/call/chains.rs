@@ -546,7 +546,7 @@ impl Parser {
         })
     }
 
-    /// A chain may be written with the dot leading the next line, so the
+    /// A chain may be written with the dot, or `&.`, leading the next line, so the
     /// newlines and comments between one call and that dot are stepped over.
     /// Anything else leaves the walk where it was.
     pub(crate) fn step_over_fluent_break(&mut self) {
@@ -559,7 +559,7 @@ impl Parser {
                 break;
             }
         }
-        if !self.check(&[TokenKind::Dot]) {
+        if !self.check(&[TokenKind::Dot, TokenKind::SafeDot]) {
             self.stream.restore_position(resume);
         }
     }

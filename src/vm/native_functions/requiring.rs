@@ -65,6 +65,28 @@ impl VirtualMachine {
         Ok(Object::Nil)
     }
 
+    /// Whether `Gem.try_activate` found an installed gem holding `feature`
+    /// and activated it. Without rubygems loaded there is nothing to ask.
+    fn gem_activated_for(
+        &mut self,
+        feature: &str,
+        position: Position,
+    ) -> Result<bool, MetorexError> {
+        let Some(gem) = self.globals().get("Gem") else {
+            return Ok(false);
+        };
+        if !self.responds_to(&gem, "try_activate") {
+            return Ok(false);
+        }
+        let activated = self.send_to_object(
+            gem,
+            "try_activate",
+            vec![Object::string(feature.to_string())],
+            position,
+        )?;
+        Ok(activated.is_truthy())
+    }
+
     pub(crate) fn require_feature(
         &mut self,
         arguments: Vec<Object>,
@@ -209,6 +231,12 @@ impl VirtualMachine {
                 if let Some(init) = crate::vm::capi::static_extension(&require_name) {
                     let first = self.run_static_extension(&require_name, init, position)?;
                     return Ok(Object::Bool(first));
+                }
+                // A gem installed under the gem path may hold the file, and
+                // activating it puts its directories on the load path for
+                // another look.
+                if !named_a_native_extension && self.gem_activated_for(&require_name, position)? {
+                    return self.require_feature(arguments, position);
                 }
                 // Raise a LoadError exception so Ruby-level rescue LoadError catches it.
                 let exc = if named_a_native_extension {

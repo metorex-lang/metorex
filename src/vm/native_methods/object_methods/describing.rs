@@ -43,8 +43,11 @@ impl VirtualMachine {
                     // answer is written in cannot be shown as it is, so it is
                     // quoted and escaped the way the String would be.
                     let named = s.encoding_name();
+                    let writes_otherwise =
+                        named == "UTF-8" && self.inspect_result_encoding() != "UTF-8";
                     if method_name != "to_s"
-                        && !matches!(named.as_str(), "UTF-8" | "US-ASCII" | "ASCII-8BIT")
+                        && (!matches!(named.as_str(), "UTF-8" | "US-ASCII" | "ASCII-8BIT")
+                            || writes_otherwise)
                         && crate::vm::native_methods::string_methods::encoding_is_ascii_compatible(
                             &named,
                         )
@@ -56,11 +59,18 @@ impl VirtualMachine {
                         }
                         let text = Object::String(std::rc::Rc::new(made));
                         let shown = self.send_to_object(text, "inspect", Vec::new(), position)?;
-                        let shown = match shown {
-                            Object::String(held) => held.as_str().to_string(),
-                            _ => String::new(),
+                        let (shown, written_in) = match shown {
+                            Object::String(held) => {
+                                (held.as_str().to_string(), held.encoding_name())
+                            }
+                            _ => (String::new(), self.inspect_result_encoding()),
                         };
-                        return Ok(Some(Object::string(format!(":{shown}"))));
+                        return Ok(Some(Object::String(std::rc::Rc::new(
+                            crate::object::StringValue::with_encoding(
+                                format!(":{shown}"),
+                                written_in,
+                            ),
+                        ))));
                     }
                     if method_name != "to_s" {
                         return Ok(Some(Object::string(

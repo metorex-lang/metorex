@@ -41,14 +41,20 @@ fn symbol_to_proc_block(sym: &str) -> BlockStatement {
     made
 }
 
-/// Build the block `&some_method` hands over: `{ |*args| target.call(*args) }`,
-/// where `target` is the Method itself. The call keeps the method's own arity,
+/// Build the block `&some_method` hands over:
+/// `{ |*args, &block| target.call(*args, &block) }`, where `target` is the
+/// Method itself. The call keeps the method's own arity,
 /// so a callable given the wrong number of arguments still says so.
 fn method_to_proc_block(target: &Object, position: Position) -> BlockStatement {
     let mut parameters = Vec::new();
     let mut parameter_defaults = Vec::new();
     let mut forwarded = Vec::new();
-    if let Object::Method(method) = target {
+    let written_in_ruby = |method: &crate::object::Method| {
+        method.source_location.is_some() || !method.body.is_empty()
+    };
+    if let Object::Method(method) = target
+        && written_in_ruby(method)
+    {
         let optional: std::collections::HashSet<usize> = method
             .default_parameters
             .iter()
@@ -76,7 +82,25 @@ fn method_to_proc_block(target: &Object, position: Position) -> BlockStatement {
                 position,
             });
         }
+    } else {
+        // A method the core library writes natively checks its own
+        // arguments, so the block hands it everything it is given.
+        let name = "__method_proc_rest".to_string();
+        parameters.push(format!("*{name}"));
+        forwarded.push(Expression::Splat {
+            expression: Box::new(Expression::Identifier { name, position }),
+            position,
+        });
     }
+    let handed = "__method_proc_block".to_string();
+    parameters.push(format!("&{handed}"));
+    forwarded.push(Expression::BlockArg {
+        expression: Box::new(Expression::Identifier {
+            name: handed,
+            position,
+        }),
+        position,
+    });
     let call = Expression::MethodCall {
         receiver: Box::new(Expression::Identifier {
             name: "__method_proc_target".to_string(),

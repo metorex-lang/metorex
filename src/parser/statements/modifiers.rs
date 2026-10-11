@@ -203,6 +203,10 @@ impl Parser {
     ) -> Result<crate::ast::Expression, crate::error::MetorexError> {
         use crate::lexer::TokenKind as Kind;
         let mut held = self.parse_expression()?;
+        // `close! if response in {code: "CLOSED"}` tests a pattern.
+        if self.check(&[Kind::In]) {
+            held = self.wrap_with_pattern_test(held)?;
+        }
         loop {
             let op = if self.check(&[Kind::KeywordAnd]) {
                 crate::ast::BinaryOp::And

@@ -21,7 +21,11 @@ PTY.open do |primary, terminal|
   terminal.goto(2, 4)
   terminal.erase_line(0)
   terminal.cursor_up(1)
-  p(primary.read_nonblock(100))
+  # What the terminal was sent arrives in its own time, so it is read
+  # until the last of it is there.
+  shown = +""
+  shown << primary.readpartial(100) until shown.end_with?("\e[1A")
+  p(shown)
   p((terminal.erase_screen(9) rescue $!))
   p(terminal.ttyname.start_with?("/dev/"))
 end

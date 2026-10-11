@@ -17,85 +17,97 @@ impl Parser {
         position: Position,
     ) -> Result<Expression, MetorexError> {
         let mut forward_args = false;
+        // `super &block`, `super *list`, `super **options` and `super -1`
+        // hand an argument on: the sign has a space before it and none
+        // after, where `super & mask` is the operator.
+        let opens_an_argument = self.check(&[
+            TokenKind::Ampersand,
+            TokenKind::Star,
+            TokenKind::StarStar,
+            TokenKind::Minus,
+        ]) && self.peek().had_leading_space
+            && !self.peek_ahead(1).had_leading_space;
         let arguments = if self.check(&[TokenKind::LParen]) {
             self.advance(); // consume (
             // The argument list reads the same as any other call's, so
             // keyword arguments, splats and a block argument all arrive the
             // way the enclosing method would have received them.
             self.parse_arguments()?
-        } else if self.check(&[
-            TokenKind::Newline,
-            TokenKind::Semicolon,
-            TokenKind::EOF,
-            TokenKind::End,
-            TokenKind::RBrace,
-            TokenKind::RParen,
-            TokenKind::RBracket,
-            TokenKind::Comma,
-            // A brace after `super` opens a block, so there is no argument
-            // list to read here and the enclosing method's own arguments
-            // travel on.
-            TokenKind::LBrace,
-            TokenKind::If,
-            TokenKind::Unless,
-            TokenKind::Do,
-            TokenKind::Then,
-            TokenKind::Else,
-            TokenKind::Elsif,
-            TokenKind::When,
-            TokenKind::Rescue,
-            TokenKind::Ensure,
-            // Binary operators after `super` apply to the result of the
-            // bare super call: `super + 1` is `super() + 1`, not `super(+1)`.
-            TokenKind::Plus,
-            TokenKind::Minus,
-            TokenKind::Star,
-            TokenKind::Slash,
-            TokenKind::Percent,
-            TokenKind::EqualEqual,
-            TokenKind::TripleEqual,
-            TokenKind::BangEqual,
-            TokenKind::Less,
-            TokenKind::Greater,
-            TokenKind::LessEqual,
-            TokenKind::GreaterEqual,
-            TokenKind::Spaceship,
-            TokenKind::LogicalAnd,
-            TokenKind::LogicalOr,
-            TokenKind::Pipe,
-            TokenKind::Ampersand,
-            TokenKind::Caret,
-            TokenKind::Shovel,
-            TokenKind::Match,
-            TokenKind::NotMatch,
-            TokenKind::Equal,
-            TokenKind::PlusEqual,
-            TokenKind::MinusEqual,
-            TokenKind::StarEqual,
-            TokenKind::SlashEqual,
-            TokenKind::PercentEqual,
-            TokenKind::StarStarEqual,
-            TokenKind::PipeEqual,
-            TokenKind::AmpersandEqual,
-            TokenKind::CaretEqual,
-            TokenKind::ShovelEqual,
-            TokenKind::RightShiftEqual,
-            TokenKind::LogicalOrAssign,
-            TokenKind::LogicalAndAssign,
-            TokenKind::Question,
-            TokenKind::Dot,
-            TokenKind::ColonColon,
-            TokenKind::DotDot,
-            TokenKind::DotDotDot,
-            TokenKind::FatArrow,
-            TokenKind::KeywordAnd,
-            TokenKind::KeywordOr,
-            TokenKind::While,
-            TokenKind::Until,
-            TokenKind::RightShift,
-            TokenKind::StarStar,
-            TokenKind::Comment(String::new()),
-        ]) || self.is_at_end()
+        } else if !opens_an_argument
+            && self.check(&[
+                TokenKind::Newline,
+                TokenKind::Semicolon,
+                TokenKind::EOF,
+                TokenKind::End,
+                TokenKind::RBrace,
+                TokenKind::RParen,
+                TokenKind::RBracket,
+                TokenKind::Comma,
+                // A brace after `super` opens a block, so there is no argument
+                // list to read here and the enclosing method's own arguments
+                // travel on.
+                TokenKind::LBrace,
+                TokenKind::If,
+                TokenKind::Unless,
+                TokenKind::Do,
+                TokenKind::Then,
+                TokenKind::Else,
+                TokenKind::Elsif,
+                TokenKind::When,
+                TokenKind::Rescue,
+                TokenKind::Ensure,
+                // Binary operators after `super` apply to the result of the
+                // bare super call: `super + 1` is `super() + 1`, not `super(+1)`.
+                TokenKind::Plus,
+                TokenKind::Minus,
+                TokenKind::Star,
+                TokenKind::Slash,
+                TokenKind::Percent,
+                TokenKind::EqualEqual,
+                TokenKind::TripleEqual,
+                TokenKind::BangEqual,
+                TokenKind::Less,
+                TokenKind::Greater,
+                TokenKind::LessEqual,
+                TokenKind::GreaterEqual,
+                TokenKind::Spaceship,
+                TokenKind::LogicalAnd,
+                TokenKind::LogicalOr,
+                TokenKind::Pipe,
+                TokenKind::Ampersand,
+                TokenKind::Caret,
+                TokenKind::Shovel,
+                TokenKind::Match,
+                TokenKind::NotMatch,
+                TokenKind::Equal,
+                TokenKind::PlusEqual,
+                TokenKind::MinusEqual,
+                TokenKind::StarEqual,
+                TokenKind::SlashEqual,
+                TokenKind::PercentEqual,
+                TokenKind::StarStarEqual,
+                TokenKind::PipeEqual,
+                TokenKind::AmpersandEqual,
+                TokenKind::CaretEqual,
+                TokenKind::ShovelEqual,
+                TokenKind::RightShiftEqual,
+                TokenKind::LogicalOrAssign,
+                TokenKind::LogicalAndAssign,
+                TokenKind::Question,
+                TokenKind::Dot,
+                TokenKind::ColonColon,
+                TokenKind::DotDot,
+                TokenKind::DotDotDot,
+                TokenKind::FatArrow,
+                TokenKind::KeywordAnd,
+                TokenKind::KeywordOr,
+                TokenKind::While,
+                TokenKind::Until,
+                TokenKind::RightShift,
+                TokenKind::StarStar,
+                TokenKind::Comment(String::new()),
+            ])
+            || self.is_at_end()
         {
             // Bare `super` with no arguments and no parens. Also covers
             // `super`-followed-by-binary-op which applies to the result.
@@ -103,13 +115,9 @@ impl Parser {
             forward_args = true;
             Vec::new()
         } else {
-            // Paren-less arg list: `super a, b, c`.
-            let mut args = vec![self.parse_expression()?];
-            while self.match_token(&[TokenKind::Comma]) {
-                self.skip_whitespace();
-                args.push(self.parse_expression()?);
-            }
-            args
+            // Paren-less arg list: `super a, b, &task`, read the way any
+            // other call's is.
+            self.parse_arguments_without_parens()?
         };
 
         let trailing_block = if self.check(&[TokenKind::Do]) {

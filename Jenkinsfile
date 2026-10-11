@@ -78,6 +78,9 @@ pipeline {
             JOBS = '10'
           }
           steps {
+            // run_ruby_spec.sh builds only when no binary exists, and the
+            // cached one may be from older sources or another checkout path.
+            sh 'cargo build'
             sh 'scripts/run_ruby_spec.sh'
           }
         }

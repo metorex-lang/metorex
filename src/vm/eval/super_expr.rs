@@ -97,8 +97,17 @@ impl VirtualMachine {
             // receiver's own module-level method in the singleton chain. The
             // copy's own `super` goes on past it, below.
             let running_owner = self.method_owner_stack.last().cloned().flatten();
-            if let Some(Object::Method(extended)) =
-                self_class.get_class_var(&format!("__ext__{}", method_name))
+            // Only the receiver's own `def self.name` reaches the copy this
+            // way. A method of an extended module goes on through the
+            // singleton ancestors below, past the modules extended before it.
+            let running_its_own_class_method =
+                self.method_running_stack.last().is_some_and(|running| {
+                    crate::vm::method_lookup::module_own_method(&self_class, &method_name)
+                        .is_some_and(|own| Rc::ptr_eq(&own, running))
+                });
+            if running_its_own_class_method
+                && let Some(Object::Method(extended)) =
+                    self_class.get_class_var(&format!("__ext__{}", method_name))
                 && !self
                     .method_running_stack
                     .last()
@@ -116,6 +125,10 @@ impl VirtualMachine {
             // class's singleton ancestors, and `super` there reaches the next
             // one of them that defines the method.
             let mut holder = Some(Rc::clone(&self_class));
+            // Whether the running method was found among those ancestors with
+            // nothing past it defining the name, which leaves the core
+            // library's method as the one `super` reaches.
+            let mut past_every_module = false;
             while let (Some(owner), Some(class)) = (&running_owner, holder.clone()) {
                 if let Some(singleton) = class.singleton_class_slot().clone() {
                     let chain = walk_ancestors(&singleton);
@@ -132,6 +145,7 @@ impl VirtualMachine {
                                 position,
                             );
                         }
+                        past_every_module = true;
                         break;
                     }
                 }
@@ -160,7 +174,11 @@ impl VirtualMachine {
                     probe = class.superclass();
                 }
             }
-            let mut current = defining.and_then(|class| class.superclass());
+            let mut current = if past_every_module {
+                None
+            } else {
+                defining.and_then(|class| class.superclass())
+            };
             while let Some(cls) = current {
                 let candidate = cls
                     .singleton_class_slot()
@@ -205,7 +223,17 @@ impl VirtualMachine {
             // class-method super is an error.
             if matches!(
                 method_name.as_str(),
-                "inherited" | "included" | "extended" | "prepended" | "const_added"
+                "inherited"
+                    | "included"
+                    | "extended"
+                    | "prepended"
+                    | "const_added"
+                    | "method_added"
+                    | "method_removed"
+                    | "method_undefined"
+                    | "singleton_method_added"
+                    | "singleton_method_removed"
+                    | "singleton_method_undefined"
             ) {
                 return Ok(Object::Nil);
             }
@@ -226,6 +254,14 @@ impl VirtualMachine {
             {
                 return Ok(result);
             }
+            // Past Module and Object a class object's ancestors end in
+            // Kernel, whose methods metorex writes natively.
+            if crate::vm::native_methods::is_native_kernel_method(&method_name) {
+                if method_name == "warn" {
+                    return self.kernel_warn_for(Some(&self_object), evaluated_args, position);
+                }
+                return self.call_native_function(&method_name, evaluated_args, position);
+            }
             return Err(MetorexError::runtime_error(
                 format!(
                     "super: no superclass method '{}' for {}",
@@ -239,21 +275,11 @@ impl VirtualMachine {
         // Get the current self (must be an instance)
         let instance = match self.environment().get("self") {
             Some(Object::Instance(instance_rc)) => instance_rc,
-            // `super` from an exception subclass's own `initialize` is what
-            // gives the exception its message, the way Exception#initialize
-            // does. `initialize_copy` has nothing left to reach.
-            Some(held @ Object::Exception(_))
-                if matches!(method_name.as_str(), "initialize" | "initialize_copy") =>
-            {
-                if method_name == "initialize_copy" {
-                    return Ok(Object::Nil);
-                }
-                let evaluated_args = if forward_args {
-                    self.implicit_super_arguments(position)?
-                } else {
-                    self.evaluate_arguments(arguments)?
-                };
-                return self.exception_initialize(&held, &evaluated_args, position);
+            // An exception's `initialize_copy` has nothing left to reach. Its
+            // `initialize` goes on to a parent's written in Ruby, and past
+            // those to Exception#initialize, as any other built-in does.
+            Some(Object::Exception(_)) if method_name == "initialize_copy" => {
+                return Ok(Object::Nil);
             }
             // `self` is a built-in value, so the running method was written
             // on a reopened core class or on a module prepended to one.

@@ -355,7 +355,13 @@ impl VirtualMachine {
                         '#' if matches!(letters.peek(), Some('$' | '@' | '{')) => {
                             out.push_str("\\#")
                         }
-                        c if (held == writing || c.is_ascii()) && !c.is_control() => out.push(c),
+                        // US-ASCII holds no character past ASCII, so one there
+                        // is a broken byte, named by its value below.
+                        c if (c.is_ascii() || (held == writing && held != "US-ASCII"))
+                            && !c.is_control() =>
+                        {
+                            out.push(c)
+                        }
                         // Text in an encoding that spells the whole of Unicode
                         // names the character itself; text in any other names
                         // the bytes it is spelled with.
