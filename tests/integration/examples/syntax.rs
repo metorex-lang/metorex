@@ -507,12 +507,17 @@ const LITERAL_CONDITION_WARNINGS_OUTPUT: &str = concat!(
     "literal_conditions_fixture.rb:2: warning: regex literal in condition\n",
     "literal_conditions_fixture.rb:3: warning: string literal in condition\n",
     "literal_conditions_fixture.rb:4: warning: regex literal in condition\n",
+    "literal_conditions_fixture.rb:6: warning: found '= literal' in conditional, should be ==\n",
+    "literal_conditions_fixture.rb:7: warning: found '= literal' in conditional, should be ==\n",
+    "literal_conditions_fixture.rb:8: warning: found '= literal' in conditional, should be ==\n",
     "nil\n",
+    "1\n",
     "evaluated.rb:7: warning: regex literal in condition\n",
     "(none):2: warning: integer literal in flip-flop\n",
     "(none):2: warning: integer literal in flip-flop\n",
     "(none):3: warning: regex literal in condition\n",
     "nil\n",
+    "1\n",
 );
 
 #[test]
@@ -525,4 +530,56 @@ fn test_syntax_literal_condition_warnings_execution() {
 fn test_syntax_literal_condition_warnings_no_parens_execution() {
     let output = run_example("syntax/literal_condition_warnings_no_parens.rb");
     assert_eq!(output, LITERAL_CONDITION_WARNINGS_OUTPUT);
+}
+
+/// The expected output of both `syntax/assignments_as_values` variants.
+const ASSIGNMENTS_AS_VALUES_OUTPUT: &str = concat!(
+    "8\n",
+    "5\n",
+    "[2, [1, 2]]\n",
+    "1.2\n",
+    "[[1], :west, nil]\n",
+    "[[], nil, :reloaded]\n",
+    "[[5, 6], nil, nil]\n",
+    "[7]\n",
+    "[\"shipped\", \"none\"]\n",
+    "[8, 9, {rates: [8, 9]}]\n",
+);
+
+#[test]
+fn test_syntax_assignments_as_values_execution() {
+    let output = run_example("syntax/assignments_as_values.rb");
+    assert_eq!(output, ASSIGNMENTS_AS_VALUES_OUTPUT);
+}
+
+#[test]
+fn test_syntax_assignments_as_values_no_parens_execution() {
+    let output = run_example("syntax/assignments_as_values_no_parens.rb");
+    assert_eq!(output, ASSIGNMENTS_AS_VALUES_OUTPUT);
+}
+
+/// The expected output of both `syntax/clause_bodies` variants.
+const CLAUSE_BODIES_OUTPUT: &str = concat!(
+    "[nil, 1]\n",
+    "\"Rates\"\n",
+    "[1, 2]\n",
+    "\"2 warehouse 2\"\n",
+    "[1]\n",
+    "[1, 3, \"rates\"]\n",
+    "[false, :marker]\n",
+    "{globals: [\"globals\", \"global_variables\"], ivars: [\"ivars\"]}\n",
+    "{\"a\" => :nil, \"b\" => :nil}\n",
+    "[2]\n",
+);
+
+#[test]
+fn test_syntax_clause_bodies_execution() {
+    let output = run_example("syntax/clause_bodies.rb");
+    assert_eq!(output, CLAUSE_BODIES_OUTPUT);
+}
+
+#[test]
+fn test_syntax_clause_bodies_no_parens_execution() {
+    let output = run_example("syntax/clause_bodies_no_parens.rb");
+    assert_eq!(output, CLAUSE_BODIES_OUTPUT);
 }

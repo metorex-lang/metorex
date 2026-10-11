@@ -256,10 +256,10 @@ impl Parser {
             && !self.is_at_end()
         {
             // yield expr, expr — paren-less arguments
-            let mut args = vec![self.parse_expression()?];
+            let mut args = vec![self.parse_expression_with_assignment()?];
             while self.match_token(&[TokenKind::Comma]) {
                 self.skip_whitespace();
-                args.push(self.parse_expression()?);
+                args.push(self.parse_expression_with_assignment()?);
             }
             args
         } else {

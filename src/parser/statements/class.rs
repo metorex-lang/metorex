@@ -520,29 +520,34 @@ impl Parser {
         self.skip_whitespace();
         let old_name = self.parse_alias_name_expression()?;
 
-        if let (Expression::Symbol { value: new, .. }, Expression::Symbol { value: old, .. }) =
-            (&new_name, &old_name)
-        {
-            return Ok(Statement::Alias {
-                new_name: new.clone(),
-                old_name: old.clone(),
-                position: start_pos,
-            });
-        }
-        // A name spelled out by an interpolated symbol is only known once the
-        // interpolation runs, which is what `alias_method` takes.
-        Ok(Statement::Expression {
-            expression: Expression::Call {
-                callee: Box::new(Expression::Identifier {
-                    name: "alias_method".to_string(),
+        let statement =
+            if let (Expression::Symbol { value: new, .. }, Expression::Symbol { value: old, .. }) =
+                (&new_name, &old_name)
+            {
+                Statement::Alias {
+                    new_name: new.clone(),
+                    old_name: old.clone(),
                     position: start_pos,
-                }),
-                arguments: vec![new_name, old_name],
-                trailing_block: None,
-                position: start_pos,
-            },
-            position: start_pos,
-        })
+                }
+            } else {
+                // A name spelled out by an interpolated symbol is only known once
+                // the interpolation runs, which is what `alias_method` takes.
+                Statement::Expression {
+                    expression: Expression::Call {
+                        callee: Box::new(Expression::Identifier {
+                            name: "alias_method".to_string(),
+                            position: start_pos,
+                        }),
+                        arguments: vec![new_name, old_name],
+                        trailing_block: None,
+                        position: start_pos,
+                    },
+                    position: start_pos,
+                }
+            };
+        // `alias bb debugger if ENV["DEBUG"]` aliases only when the condition
+        // holds.
+        self.wrap_with_modifier(statement)
     }
 
     /// One name given to `alias` or `undef`, as the expression that spells it

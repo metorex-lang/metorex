@@ -1069,3 +1069,29 @@ fn test_introspection_set_trace_func_events_no_parens_execution() {
         SET_TRACE_FUNC_EVENTS.replace("FILE", "set_trace_func_events_no_parens.rb")
     );
 }
+
+/// The expected output of both `introspection/tracepoint_attribute_methods` variants.
+const TRACEPOINT_ATTRIBUTE_METHODS_OUTPUT: &str = concat!(
+    "[:call, :total]\n",
+    "[:c_call, :amount]\n",
+    "[:c_return, :amount]\n",
+    "[:return, :total]\n",
+    "[:c_call, :region=]\n",
+    "[:c_return, :region=]\n",
+    "[:c_call, :currency=]\n",
+    "[:c_return, :currency=]\n",
+    "[:c_call, :currency]\n",
+    "[:c_return, :currency]\n",
+);
+
+#[test]
+fn test_introspection_tracepoint_attribute_methods_execution() {
+    let output = run_example("introspection/tracepoint_attribute_methods.rb");
+    assert_eq!(output, TRACEPOINT_ATTRIBUTE_METHODS_OUTPUT);
+}
+
+#[test]
+fn test_introspection_tracepoint_attribute_methods_no_parens_execution() {
+    let output = run_example("introspection/tracepoint_attribute_methods_no_parens.rb");
+    assert_eq!(output, TRACEPOINT_ATTRIBUTE_METHODS_OUTPUT);
+}

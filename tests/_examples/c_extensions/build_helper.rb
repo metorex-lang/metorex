@@ -8,6 +8,7 @@ MakeMakefile::Logging.quiet = true
 def build_extension(source, target, directory)
   FileUtils.cp(File.join(__dir__, source), File.join(directory, "#{target}.c"))
   Dir.chdir(directory) do
+    $srcdir = directory
     append_cflags("-Wall")
     create_makefile(target)
     system("make > /dev/null 2>&1") or raise "make failed for #{target}"

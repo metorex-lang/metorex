@@ -302,10 +302,13 @@ impl Parser {
             self.declare_target(target);
         }
         self.skip_whitespace();
-        let mut values = vec![self.parse_expression_with_lambda()?];
+        // A value may itself assign, as `out, err = _ = pair` does.
+        let first_value = self.parse_expression_with_lambda()?;
+        let mut values = vec![self.fold_assignment(first_value)?];
         while self.match_token(&[TokenKind::Comma]) {
             self.skip_whitespace();
-            values.push(self.parse_expression_with_lambda()?);
+            let value = self.parse_expression_with_lambda()?;
+            values.push(self.fold_assignment(value)?);
         }
         // `a, b = raise rescue [1, 2]` assigns what the rescue answered, so
         // the modifier belongs to the value rather than to the assignment.

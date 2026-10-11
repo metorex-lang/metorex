@@ -308,7 +308,8 @@ impl VirtualMachine {
         let written_in_core = method
             .body
             .first()
-            .is_some_and(|held| held.position().prelude);
+            .is_some_and(|held| held.position().prelude)
+            || made_by_an_attribute_call(method);
         let (event, position) = match (written_in_core, event) {
             (true, "call") => ("c_call", position),
             (true, _) => ("c_return", position),
@@ -373,5 +374,32 @@ impl VirtualMachine {
             extra.push(("binding", held));
         }
         self.fire_event(event, position, extra)
+    }
+}
+
+/// Whether `attr_reader`, `attr_writer` or `attr_accessor` made the method,
+/// which Ruby writes in C and so reports through `c_call` and `c_return`.
+/// Those methods have no source of their own and do nothing but read or
+/// write their instance variable.
+fn made_by_an_attribute_call(method: &crate::object::Method) -> bool {
+    use crate::ast::{Expression, Statement};
+    if method.source_location.is_some() {
+        return false;
+    }
+    match method.body.as_slice() {
+        [
+            Statement::Return {
+                value: Some(Expression::InstanceVariable { .. }),
+                ..
+            },
+        ] => method.parameters.is_empty(),
+        [
+            Statement::Assignment {
+                target: Expression::InstanceVariable { .. },
+                value: Expression::Identifier { name, .. },
+                ..
+            },
+        ] => name == crate::object::UNNAMED_PARAMETER,
+        _ => false,
     }
 }

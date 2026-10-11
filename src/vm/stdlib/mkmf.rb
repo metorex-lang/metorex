@@ -341,9 +341,14 @@ module MakeMakefile
   end
 
   def create_makefile(target, srcprefix = nil)
-    source_directory = srcprefix || "."
-    sources = Dir.glob(File.join(source_directory, "*.c")).sort
-    objects = sources.map { |source| File.basename(source, ".c") + ".o" }
+    # The sources sit under $(srcdir), the directory the extconf.rb was run
+    # from, unless the extconf.rb named them in $srcs. The objects and the
+    # library are built in the current directory. Each rule names its source
+    # by path, and no VPATH is written, so objects an earlier build left in
+    # the source directory are not taken for this build's.
+    source_directory = srcprefix ? File.join($srcdir, srcprefix) : $srcdir
+    sources = $srcs || Dir.glob(File.join(source_directory, "*.c")).sort
+    objects = $objs || sources.map { |source| File.basename(source, ".c") + ".o" }
     dlext = RbConfig::CONFIG["DLEXT"]
     link_flags = if RbConfig::CONFIG["host_os"].include?("darwin")
       "-bundle -undefined dynamic_lookup"
@@ -353,10 +358,18 @@ module MakeMakefile
     library_paths = $LIBPATH.map { |held| "-L#{held}" }.join(" ")
     libraries = [$libs, $LIBS].map(&:strip).reject(&:empty?).join(" ")
 
+    # `create_makefile "debug/debug"` builds debug.so, installed under debug/.
+    target_prefix, target = target.include?("/") ? ["/" + File.dirname(target), File.basename(target)] : ["", target]
     makefile = +""
+    makefile << "target_prefix = #{target_prefix}\n"
+    makefile << "srcdir = #{$srcdir}\n"
+    makefile << "hdrdir = #{RbConfig::CONFIG["rubyhdrdir"]}\n"
+    makefile << "arch_hdrdir = $(hdrdir)\n"
     makefile << "CC = #{RbConfig::CONFIG["CC"]}\n"
     makefile << "CFLAGS = -fPIC -g #{$CFLAGS}\n"
-    makefile << "CPPFLAGS = -I#{RbConfig::CONFIG["rubyhdrdir"]} -I#{source_directory} #{[*$defs, preprocessor_flags].join(" ")}".rstrip << "\n"
+    makefile << "INCFLAGS = -I. #{$INCFLAGS}\n"
+    prefix_include = srcprefix ? ["-I#{source_directory}"] : []
+    makefile << "CPPFLAGS = $(INCFLAGS) #{[*prefix_include, *$defs, preprocessor_flags].join(" ")}".rstrip << "\n"
     makefile << "DLDFLAGS = #{[link_flags, library_paths, $LDFLAGS].map(&:strip).reject(&:empty?).join(" ")}\n"
     makefile << "LIBS = #{libraries}\n"
     makefile << "DLLIB = #{target}.#{dlext}\n"
@@ -423,6 +436,14 @@ end
 
 $arg_config = []
 $config_dirs = {}
+$srcdir = $configure_args["--srcdir"] || File.dirname($0)
+$INCFLAGS = "-I$(hdrdir) -I$(srcdir)"
+$VPATH = %w[$(srcdir)]
+$srcs = nil
+$objs = nil
+$cleanfiles = []
+$distcleanfiles = []
+$headers = []
 $defs = []
 $libs = ""
 $LIBPATH = []

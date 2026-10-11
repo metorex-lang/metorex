@@ -32,7 +32,7 @@ impl VirtualMachine {
     /// The slot a key that answers `#hash` takes: the first slot under its
     /// hash number that is free or holds an `#eql?` key. `stored_at` gives
     /// the key held in a slot, or None for a free one.
-    fn hashed_slot(
+    pub(crate) fn hashed_slot(
         &mut self,
         key: &Object,
         position: Position,

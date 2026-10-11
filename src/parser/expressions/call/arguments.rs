@@ -64,7 +64,7 @@ impl Parser {
                         position: named_at,
                     }
                 } else {
-                    self.parse_expression()?
+                    self.parse_expression_with_assignment()?
                 };
                 pairs.push((symbol_key(&name, named_at), value));
             } else if matches!(self.peek().kind, TokenKind::Colon)
@@ -79,7 +79,7 @@ impl Parser {
                 };
                 self.advance(); // consume '=>'
                 self.skip_whitespace();
-                let value = self.parse_expression()?;
+                let value = self.parse_expression_with_assignment()?;
                 pairs.push((symbol_key(&name, named_at), value));
             } else if self.check(&[TokenKind::DotDotDot]) && self.dots_are_forwarding() {
                 // `foo(...)` passes on everything `def foo(...)` collected. A
@@ -117,7 +117,7 @@ impl Parser {
                         position,
                     }
                 } else {
-                    self.parse_expression()?
+                    self.parse_expression_with_assignment()?
                 };
                 arguments.push(Expression::Splat {
                     expression: Box::new(expr),
@@ -138,7 +138,7 @@ impl Parser {
                         position,
                     }
                 } else {
-                    self.parse_expression()?
+                    self.parse_expression_with_assignment()?
                 };
                 splat_slots.push((arguments.len(), pairs.len()));
                 arguments.push(Expression::KeywordSplat {
@@ -165,7 +165,7 @@ impl Parser {
                         position,
                     }
                 } else {
-                    self.parse_expression()?
+                    self.parse_expression_with_assignment()?
                 };
                 arguments.push(Expression::BlockArg {
                     expression: Box::new(expr),
@@ -178,7 +178,7 @@ impl Parser {
                 self.skip_whitespace();
                 if self.match_token(&[TokenKind::FatArrow]) {
                     self.skip_whitespace();
-                    let value = self.parse_expression()?;
+                    let value = self.parse_expression_with_assignment()?;
                     // A key that is not a literal symbol makes the pairs the
                     // implicit hash `struct_class.new(key => 1)` takes.
                     pairs.push((expression, value));

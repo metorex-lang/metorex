@@ -287,9 +287,10 @@ impl Parser {
             }
             // `when name` compares against what the name holds. A `when`
             // clause has no binding form, so a bare identifier there is an
-            // expression rather than a variable to bind.
+            // expression rather than a variable to bind, and `when found =
+            // value` an assignment answering what it assigned.
             TokenKind::Ident(_) if self.in_when_clause => {
-                let held = self.parse_expression()?;
+                let held = self.parse_expression_with_assignment()?;
                 Ok(MatchPattern::Expression(Box::new(held)))
             }
             // Variable binding pattern

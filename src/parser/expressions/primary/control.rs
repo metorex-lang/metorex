@@ -50,9 +50,10 @@ impl Parser {
                 position: start_pos,
             });
         }
-        // Parse the expression to match against
+        // Parse the expression to match against. A `case name = value`
+        // binds the name as it compares.
         self.refuse_pattern_test += 1;
-        let subject = self.parse_expression();
+        let subject = self.parse_expression_with_assignment();
         self.refuse_pattern_test -= 1;
         let expression = Box::new(subject?);
         self.skip_whitespace();
@@ -147,14 +148,18 @@ impl Parser {
         let resume = self.stream.current_position();
         let first = self.parse_expression_with_assignment()?;
         // A modifier after the first line, as in `raise ArgumentError, "bad"
-        // unless value`, belongs to that line, so the clause is read again a
-        // statement at a time.
+        // unless value`, belongs to that line, and so do the `or` of
+        // `entry = table[key] or raise` and the comma of `level, at = pair`,
+        // so the clause is read again a statement at a time.
         if self.check(&[
             TokenKind::If,
             TokenKind::Unless,
             TokenKind::While,
             TokenKind::Until,
             TokenKind::Rescue,
+            TokenKind::KeywordAnd,
+            TokenKind::KeywordOr,
+            TokenKind::Comma,
         ]) {
             self.stream.restore_position(resume);
             return Ok(Expression::BeginRescue {

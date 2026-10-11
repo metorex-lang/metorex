@@ -389,14 +389,14 @@ impl Parser {
             keyword_pairs.push((name, value));
         } else if self.match_token(&[TokenKind::Star]) {
             let position = self.previous().position;
-            let expr = self.parse_expression()?;
+            let expr = self.parse_expression_with_assignment()?;
             arguments.push(Expression::Splat {
                 expression: Box::new(expr),
                 position,
             });
         } else if self.match_token(&[TokenKind::StarStar]) {
             let position = self.previous().position;
-            let expr = self.parse_expression()?;
+            let expr = self.parse_expression_with_assignment()?;
             splat_slots.push((arguments.len(), keyword_pairs.len() + rocket_pairs.len()));
             arguments.push(Expression::KeywordSplat {
                 expression: Box::new(expr),
@@ -404,7 +404,7 @@ impl Parser {
             });
         } else if self.match_token(&[TokenKind::Ampersand]) {
             let position = self.previous().position;
-            let expr = self.parse_expression()?;
+            let expr = self.parse_expression_with_assignment()?;
             arguments.push(Expression::BlockArg {
                 expression: Box::new(expr),
                 position,
@@ -418,7 +418,7 @@ impl Parser {
             // passes.
             if self.match_token(&[TokenKind::FatArrow]) {
                 self.skip_whitespace();
-                let value = self.parse_expression()?;
+                let value = self.parse_expression_with_assignment()?;
                 rocket_pairs.push((first, value));
             } else {
                 arguments.push(first);
@@ -470,7 +470,7 @@ impl Parser {
                 keyword_pairs.push((name, value));
             } else if self.match_token(&[TokenKind::Star]) {
                 let position = self.previous().position;
-                let expr = self.parse_expression()?;
+                let expr = self.parse_expression_with_assignment()?;
                 arguments.push(Expression::Splat {
                     expression: Box::new(expr),
                     position,
@@ -486,7 +486,7 @@ impl Parser {
                             position,
                         }
                     } else {
-                        self.parse_expression()?
+                        self.parse_expression_with_assignment()?
                     };
                 splat_slots.push((arguments.len(), keyword_pairs.len() + rocket_pairs.len()));
                 arguments.push(Expression::KeywordSplat {
@@ -495,7 +495,7 @@ impl Parser {
                 });
             } else if self.match_token(&[TokenKind::Ampersand]) {
                 let position = self.previous().position;
-                let expr = self.parse_expression()?;
+                let expr = self.parse_expression_with_assignment()?;
                 arguments.push(Expression::BlockArg {
                     expression: Box::new(expr),
                     position,
@@ -504,7 +504,7 @@ impl Parser {
                 let held = self.parse_expression_with_assignment()?;
                 if self.match_token(&[TokenKind::FatArrow]) {
                     self.skip_whitespace();
-                    let value = self.parse_expression()?;
+                    let value = self.parse_expression_with_assignment()?;
                     rocket_pairs.push((held, value));
                 } else {
                     arguments.push(held);
@@ -598,6 +598,6 @@ impl Parser {
             });
         }
         self.skip_whitespace();
-        self.parse_expression()
+        self.parse_expression_with_assignment()
     }
 }

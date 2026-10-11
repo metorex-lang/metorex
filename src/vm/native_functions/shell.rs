@@ -508,6 +508,19 @@ impl VirtualMachine {
             rest.push(self.get_string_representation(arg, position)?);
         }
         let mut raises = false;
+        // A redirection to an IO, a descriptor or anything past a path, and
+        // any option other than `exception:`, is read the way `spawn` reads
+        // it.
+        if let Some(options) = &options
+            && options.iter().any(|(name, target)| {
+                !matches!(
+                    (name.trim_start_matches(':'), target),
+                    ("exception", _) | ("out" | "err", Object::String(_))
+                )
+            })
+        {
+            return self.system_through_spawn(arguments, options, &program, position);
+        }
         let mut redirects: Vec<(i32, String)> = Vec::new();
         if let Some(options) = &options {
             for (name, target) in options.iter() {
@@ -576,6 +589,57 @@ impl VirtualMachine {
         // rather than as a failure.
         if code == 127 {
             return Ok(Object::Nil);
+        }
+        Ok(Object::Bool(status.success()))
+    }
+
+    /// `system` with the options `spawn` reads: the command starts the way
+    /// `spawn` starts it, and is waited for.
+    fn system_through_spawn(
+        &mut self,
+        arguments: &[Object],
+        options: &indexmap::IndexMap<String, Object>,
+        program: &str,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
+        let raises = options
+            .iter()
+            .any(|(name, value)| name.trim_start_matches(':') == "exception" && value.is_truthy());
+        let settings: indexmap::IndexMap<String, Object> = options
+            .iter()
+            .filter(|(name, _)| name.trim_start_matches(':') != "exception")
+            .map(|(name, value)| (name.clone(), value.clone()))
+            .collect();
+        let mut handed = arguments[..arguments.len() - 1].to_vec();
+        handed.push(Object::Dict(std::rc::Rc::new(std::cell::RefCell::new(
+            settings,
+        ))));
+        let mut prepared = self.prepare_command(handed, position)?;
+        let started = prepared.command.spawn();
+        drop(prepared.held_open);
+        let child = match started {
+            Ok(child) => child,
+            Err(problem) if raises => {
+                return Err(start_error(&prepared.program, &problem, position));
+            }
+            Err(_) => return Ok(Object::Nil),
+        };
+        let pid = child.id() as libc::pid_t;
+        let mut held: libc::c_int = 0;
+        self.waitpid_handing_turns(pid, &mut held, 0, position)?;
+        use std::os::unix::process::ExitStatusExt as _;
+        let status = std::process::ExitStatus::from_raw(held);
+        self.record_last_status(&status, Some(i64::from(pid)));
+        if raises && !status.success() {
+            let message = format!(
+                "Command failed with exit {}: {program}",
+                status.code().unwrap_or(-1)
+            );
+            return Err(crate::vm::errors::simple_exception(
+                "RuntimeError",
+                &message,
+                position,
+            ));
         }
         Ok(Object::Bool(status.success()))
     }

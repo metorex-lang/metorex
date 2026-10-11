@@ -32,15 +32,17 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let hash = self.set_element(set_rc, &arguments[0]).ok_or_else(|| {
-                    MetorexError::runtime_error(
-                        format!(
-                            "Cannot add {} to set (not hashable)",
-                            arguments[0].type_name()
-                        ),
-                        position_to_location(position),
-                    )
-                })?;
+                let hash = self
+                    .set_element(set_rc, &arguments[0], position)?
+                    .ok_or_else(|| {
+                        MetorexError::runtime_error(
+                            format!(
+                                "Cannot add {} to set (not hashable)",
+                                arguments[0].type_name()
+                            ),
+                            position_to_location(position),
+                        )
+                    })?;
                 set_rc.borrow_mut().insert(hash);
                 Ok(Some(receiver.clone()))
             }
@@ -54,15 +56,17 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let hash = self.set_element(set_rc, &arguments[0]).ok_or_else(|| {
-                    MetorexError::runtime_error(
-                        format!(
-                            "Cannot remove {} from set (not hashable)",
-                            arguments[0].type_name()
-                        ),
-                        position_to_location(position),
-                    )
-                })?;
+                let hash = self
+                    .set_element(set_rc, &arguments[0], position)?
+                    .ok_or_else(|| {
+                        MetorexError::runtime_error(
+                            format!(
+                                "Cannot remove {} from set (not hashable)",
+                                arguments[0].type_name()
+                            ),
+                            position_to_location(position),
+                        )
+                    })?;
                 let removed = set_rc.borrow_mut().shift_remove(&hash);
                 // `delete` answers the set either way, while `delete?` says
                 // nil when there was nothing to remove. `remove` reports
@@ -267,7 +271,9 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let held = element_of(&arguments[0], position)?;
+                let held = self
+                    .set_element(set_rc, &arguments[0], position)?
+                    .ok_or_else(|| unhashable(&arguments[0], position))?;
                 let added = set_rc.borrow_mut().insert(held);
                 if method_name == "add?" && !added {
                     return Ok(Some(Object::Nil));
@@ -284,7 +290,7 @@ impl VirtualMachine {
                 for argument in arguments {
                     for element in self.enumerable_elements(argument, method_name, position)? {
                         let held = self
-                            .set_element(set_rc, &element)
+                            .set_element(set_rc, &element, position)?
                             .ok_or_else(|| unhashable(&element, position))?;
                         set_rc.borrow_mut().insert(held);
                     }
@@ -303,7 +309,7 @@ impl VirtualMachine {
                 }
                 for element in self.enumerable_elements(&arguments[0], method_name, position)? {
                     let held = self
-                        .set_element(set_rc, &element)
+                        .set_element(set_rc, &element, position)?
                         .ok_or_else(|| unhashable(&element, position))?;
                     set_rc.borrow_mut().shift_remove(&held);
                 }
@@ -483,16 +489,20 @@ impl VirtualMachine {
                         .map(Some);
                 };
                 let elements: Vec<ObjectHash> = set_rc.borrow().iter().cloned().collect();
-                let mut kept: indexmap::IndexSet<ObjectHash> = indexmap::IndexSet::new();
+                let kept_rc = Rc::new(RefCell::new(indexmap::IndexSet::<ObjectHash>::new()));
                 let mut changed = false;
                 for held in elements {
                     let answer =
                         self.execute_block_callable(&block, vec![held.value.clone()], position)?;
+                    let mut kept = kept_rc.borrow_mut();
                     match method_name {
                         "map!" | "collect!" => {
-                            let mapped = element_of(&answer, position)?;
+                            drop(kept);
+                            let mapped = self
+                                .placed_in_set(&kept_rc, &answer, position)?
+                                .ok_or_else(|| unhashable(&answer, position))?;
                             changed |= mapped != held;
-                            kept.insert(mapped);
+                            kept_rc.borrow_mut().insert(mapped);
                         }
                         "reject!" | "delete_if" => {
                             if answer.is_truthy() {
@@ -510,6 +520,7 @@ impl VirtualMachine {
                         }
                     }
                 }
+                let kept = kept_rc.borrow().clone();
                 *set_rc.borrow_mut() = kept;
                 // The bang forms answer nil when they changed nothing.
                 if matches!(method_name, "select!" | "filter!" | "reject!") && !changed {
@@ -604,39 +615,9 @@ impl VirtualMachine {
         wanted: &Object,
         position: Position,
     ) -> Result<bool, MetorexError> {
-        if let Some(rendered) = self.set_element(set_rc, wanted)
-            && set_rc.borrow().contains(&rendered)
-        {
-            return Ok(true);
-        }
-        // A set comparing by identity never asks an element what it hashes
-        // to, so a member is found by address alone.
-        if self.set_by_identity(set_rc) {
-            return Ok(false);
-        }
-        if !matches!(wanted, Object::Instance(_)) {
-            return Ok(false);
-        }
-        let wanted_hash = self.send_to_object(wanted.clone(), "hash", vec![], position)?;
-        let held: Vec<Object> = set_rc
-            .borrow()
-            .iter()
-            .filter(|held| matches!(held.value, Object::Instance(_)))
-            .map(|held| held.value.clone())
-            .collect();
-        for candidate in held {
-            let candidate_hash =
-                self.send_to_object(candidate.clone(), "hash", vec![], position)?;
-            if !candidate_hash.equals(&wanted_hash) {
-                continue;
-            }
-            let same =
-                self.send_to_object(wanted.clone(), "eql?", vec![candidate.clone()], position)?;
-            if same.is_truthy() {
-                return Ok(true);
-            }
-        }
-        Ok(false)
+        Ok(self
+            .set_element(set_rc, wanted, position)?
+            .is_some_and(|placed| set_rc.borrow().contains(&placed)))
     }
 
     /// The other operand of a set operation, which may be any Enumerable.
@@ -649,11 +630,8 @@ impl VirtualMachine {
         if let Object::Set(other) = argument {
             return Ok(Rc::clone(other));
         }
-        let mut collected = indexmap::IndexSet::new();
-        for element in self.enumerable_elements(argument, caller, position)? {
-            collected.insert(element_of(&element, position)?);
-        }
-        Ok(Rc::new(RefCell::new(collected)))
+        let elements = self.enumerable_elements(argument, caller, position)?;
+        self.placed_set(&elements, position)
     }
 
     /// The elements of an operand, which has to answer `to_a`.
@@ -691,12 +669,6 @@ impl VirtualMachine {
     }
 }
 
-/// The set element an object stands for, or an error when it has no stable
-/// rendering to be told apart by.
-fn element_of(object: &Object, position: Position) -> Result<ObjectHash, MetorexError> {
-    ObjectHash::from_object(object).ok_or_else(|| unhashable(object, position))
-}
-
 /// The error an object with nothing to be told apart by raises.
 fn unhashable(object: &Object, position: Position) -> MetorexError {
     MetorexError::runtime_error(
@@ -728,11 +700,9 @@ impl VirtualMachine {
         let Object::Array(elements) = listed else {
             return Ok(None);
         };
-        let mut collected = indexmap::IndexSet::new();
-        for element in elements.borrow().iter() {
-            collected.insert(element_of(element, position)?);
-        }
-        Ok(Some(collected))
+        let elements = elements.borrow().clone();
+        let collected = self.placed_set(&elements, position)?;
+        Ok(Some(collected.borrow().clone()))
     }
 }
 
@@ -749,13 +719,55 @@ impl VirtualMachine {
     /// The element an object stands for in a set, placed the way that set
     /// places its elements.
     fn set_element(
-        &self,
+        &mut self,
         set_rc: &Rc<RefCell<indexmap::IndexSet<ObjectHash>>>,
         object: &Object,
-    ) -> Option<ObjectHash> {
+        position: Position,
+    ) -> Result<Option<ObjectHash>, MetorexError> {
         if self.set_by_identity(set_rc) {
-            return ObjectHash::by_identity(object);
+            return Ok(ObjectHash::by_identity(object));
         }
-        ObjectHash::from_object(object)
+        self.placed_in_set(set_rc, object, position)
+    }
+
+    /// The element an object stands for in a set that compares by value. An
+    /// object of a class is placed by what its `#hash` answers and told apart
+    /// from others answering the same by `#eql?`, as Ruby's Set places it.
+    pub(crate) fn placed_in_set(
+        &mut self,
+        set_rc: &RefCell<indexmap::IndexSet<ObjectHash>>,
+        object: &Object,
+        position: Position,
+    ) -> Result<Option<ObjectHash>, MetorexError> {
+        if !matches!(object, Object::Instance(_)) {
+            return Ok(ObjectHash::from_object(object));
+        }
+        let slot = self.hashed_slot(object, position, |candidate| {
+            let probe = ObjectHash {
+                hash_value: candidate.to_string(),
+                value: Object::Nil,
+            };
+            set_rc.borrow().get(&probe).map(|held| held.value.clone())
+        })?;
+        Ok(Some(ObjectHash {
+            hash_value: slot,
+            value: object.clone(),
+        }))
+    }
+
+    /// A set of the given objects, each placed by value.
+    fn placed_set(
+        &mut self,
+        objects: &[Object],
+        position: Position,
+    ) -> Result<Rc<RefCell<indexmap::IndexSet<ObjectHash>>>, MetorexError> {
+        let collected = Rc::new(RefCell::new(indexmap::IndexSet::new()));
+        for object in objects {
+            let held = self
+                .placed_in_set(&collected, object, position)?
+                .ok_or_else(|| unhashable(object, position))?;
+            collected.borrow_mut().insert(held);
+        }
+        Ok(collected)
     }
 }

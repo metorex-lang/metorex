@@ -293,3 +293,28 @@ fn test_programs_program_arguments_no_parens_execution() {
     let output = run_example("programs/program_arguments_no_parens.rb");
     assert_eq!(output, PROGRAM_ARGUMENTS);
 }
+
+/// The expected output of both `programs/system_redirects` variants.
+const SYSTEM_REDIRECTS_OUTPUT: &str = concat!(
+    "compiling rates\n",
+    "linking rates\n",
+    "installed\n",
+    "true\n",
+    "\"piped\\n\"\n",
+    "false\n",
+    "1\n",
+    "true\n",
+    "RuntimeError\n",
+);
+
+#[test]
+fn test_programs_system_redirects_execution() {
+    let output = run_example("programs/system_redirects.rb");
+    assert_eq!(output, SYSTEM_REDIRECTS_OUTPUT);
+}
+
+#[test]
+fn test_programs_system_redirects_no_parens_execution() {
+    let output = run_example("programs/system_redirects_no_parens.rb");
+    assert_eq!(output, SYSTEM_REDIRECTS_OUTPUT);
+}

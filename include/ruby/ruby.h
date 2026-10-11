@@ -65,6 +65,8 @@ typedef intptr_t SIGNED_VALUE;
 #define Qundef ((VALUE)0x24)
 
 #define RTEST(v) (((VALUE)(v) & ~Qnil) != 0)
+#define RB_TEST(v) RTEST(v)
+#define RB_GC_GUARD(v) (*(volatile VALUE *)&(v))
 #define NIL_P(v) ((VALUE)(v) == Qnil)
 
 #define RUBY_FIXNUM_FLAG 0x01
@@ -545,6 +547,7 @@ VALUE rb_str_export_locale(VALUE string);
 long rb_rarray_len(VALUE array);
 const VALUE *rb_rarray_ptr(VALUE array);
 #define RARRAY_LEN(v) rb_rarray_len((VALUE)(v))
+#define rb_array_len(v) rb_rarray_len((VALUE)(v))
 #define RARRAY_PTR(v) ((VALUE *)rb_rarray_ptr((VALUE)(v)))
 VALUE rb_ary_new_from_values(long count, const VALUE *values);
 VALUE rb_ary_entry(VALUE array, long offset);
@@ -854,6 +857,46 @@ void rb_gc_mark(VALUE object);
 void rb_gc_mark_movable(VALUE object);
 void rb_gc_mark_maybe(VALUE object);
 void rb_gc_mark_locations(const VALUE *start, const VALUE *end);
+
+/* metorex keeps no write barrier, so storing a reference is a plain store. */
+#define RB_OBJ_WRITE(old, slot, young) (*(VALUE *)(slot) = (VALUE)(young))
+#define RB_OBJ_WRITTEN(old, previous, young) ((void)0)
+
+static inline void *ruby_xmalloc_checked(void *made) {
+  if (made == NULL) {
+    rb_exc_raise(rb_exc_new_str(rb_eNoMemError, rb_str_new_cstr("failed to allocate memory")));
+  }
+  return made;
+}
+static inline void *ruby_xmalloc(size_t size) { return ruby_xmalloc_checked(malloc(size ? size : 1)); }
+static inline void *ruby_xmalloc2(size_t count, size_t size) {
+  return ruby_xmalloc_checked(malloc(count * size ? count * size : 1));
+}
+static inline void *ruby_xcalloc(size_t count, size_t size) {
+  return ruby_xmalloc_checked(calloc(count ? count : 1, size ? size : 1));
+}
+static inline void *ruby_xrealloc(void *held, size_t size) {
+  return ruby_xmalloc_checked(realloc(held, size ? size : 1));
+}
+static inline void *ruby_xrealloc2(void *held, size_t count, size_t size) {
+  return ruby_xmalloc_checked(realloc(held, count * size ? count * size : 1));
+}
+static inline void ruby_xfree(void *held) { free(held); }
+#define xmalloc ruby_xmalloc
+#define xmalloc2 ruby_xmalloc2
+#define xcalloc ruby_xcalloc
+#define xrealloc ruby_xrealloc
+#define xrealloc2 ruby_xrealloc2
+#define xfree ruby_xfree
+#define ALLOC_N(type, count) ((type *)ruby_xmalloc2((count), sizeof(type)))
+#define ALLOC(type) ((type *)ruby_xmalloc(sizeof(type)))
+#define ZALLOC_N(type, count) ((type *)ruby_xcalloc((count), sizeof(type)))
+#define ZALLOC(type) ZALLOC_N(type, 1)
+#define REALLOC_N(var, type, count) ((var) = (type *)ruby_xrealloc2((void *)(var), (count), sizeof(type)))
+#define MEMZERO(pointer, type, count) memset((pointer), 0, sizeof(type) * (size_t)(count))
+#define MEMCPY(destination, source, type, count) memcpy((destination), (source), sizeof(type) * (size_t)(count))
+#define MEMMOVE(destination, source, type, count) memmove((destination), (source), sizeof(type) * (size_t)(count))
+#define MEMCMP(first, second, type, count) memcmp((first), (second), sizeof(type) * (size_t)(count))
 VALUE rb_gc_location(VALUE object);
 void rb_gc_unregister_address(VALUE *address);
 void rb_global_variable(VALUE *address);

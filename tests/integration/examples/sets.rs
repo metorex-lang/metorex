@@ -63,3 +63,28 @@ fn test_sets_identity_members_parens_execution() {
     let output = run_example("sets/identity_members_parens.rb");
     assert_eq!(output, IDENTITY_MEMBERS_OUTPUT);
 }
+
+/// The expected output of both `sets/eql_members` variants.
+const EQL_MEMBERS_OUTPUT: &str = concat!(
+    "2\n",
+    "true\n",
+    "2\n",
+    "nil\n",
+    "[\"9403\"]\n",
+    "1\n",
+    "[\"9403\"]\n",
+    "[\"0101\", \"9403\"]\n",
+    "true\n",
+);
+
+#[test]
+fn test_sets_eql_members_execution() {
+    let output = run_example("sets/eql_members.rb");
+    assert_eq!(output, EQL_MEMBERS_OUTPUT);
+}
+
+#[test]
+fn test_sets_eql_members_no_parens_execution() {
+    let output = run_example("sets/eql_members_no_parens.rb");
+    assert_eq!(output, EQL_MEMBERS_OUTPUT);
+}

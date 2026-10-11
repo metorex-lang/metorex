@@ -27,10 +27,10 @@ impl Parser {
             }
             let when_pos = self.previous().position;
             self.skip_whitespace();
-            let mut condition = when_truth_test(self.parse_expression()?);
+            let mut condition = when_truth_test(self.parse_expression_with_assignment()?);
             while self.match_token(&[TokenKind::Comma]) {
                 self.skip_whitespace();
-                let another = when_truth_test(self.parse_expression()?);
+                let another = when_truth_test(self.parse_expression_with_assignment()?);
                 condition = Expression::BinaryOp {
                     op: crate::ast::BinaryOp::Or,
                     left: Box::new(condition),
@@ -251,10 +251,10 @@ impl Parser {
                     "expected a delimiter after the patterns of an `in` clause",
                 ));
             }
-            self.skip_whitespace();
 
             // Parse optional guard clause, which may refuse a match as well
-            // as ask for one.
+            // as ask for one. A guard stands on the line of the pattern, so
+            // an `if` on the next line opens the clause's body instead.
             let guard = if self.match_token(&[TokenKind::If]) {
                 self.skip_whitespace();
                 Some(self.parse_expression()?)

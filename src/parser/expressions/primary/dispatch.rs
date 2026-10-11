@@ -265,7 +265,14 @@ impl Parser {
                     TokenKind::While,
                     TokenKind::Until,
                     TokenKind::Rescue,
-                ]) {
+                    // A comment, or the next argument of an outer call, ends
+                    // a `raise` written with nothing after it.
+                    TokenKind::Comment(String::new()),
+                    TokenKind::Comma,
+                    TokenKind::RBracket,
+                    TokenKind::Then,
+                ]) || (self.ternary_depth > 0 && self.check(&[TokenKind::Colon]))
+                {
                     Vec::new()
                 } else {
                     self.parse_arguments_without_parens()?

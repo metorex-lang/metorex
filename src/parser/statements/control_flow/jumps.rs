@@ -253,6 +253,7 @@ impl Parser {
             TokenKind::Ensure,
             // `defined?(return)` names the jump without giving it a value.
             TokenKind::RParen,
+            TokenKind::Comment(String::new()),
         ]) || self.is_at_end()
         {
             None

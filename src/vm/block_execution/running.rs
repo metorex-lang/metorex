@@ -464,6 +464,18 @@ impl VirtualMachine {
                 .and_then(|named| self.file_encodings.get(named).cloned()),
         );
 
+        // The body reads constants and class variables in the scopes it was
+        // written in, not those of the method that runs it, which a block
+        // handed on with `&block` to a native iterator would otherwise see.
+        self.class_var_cref_stack.push(
+            block
+                .captured_nesting
+                .first()
+                .cloned()
+                .or_else(|| block.captured_def_scope.last().cloned()),
+        );
+        self.method_nesting_stack
+            .push(block.captured_nesting.clone());
         self.running_block_breaks.push(running_break_flag(block));
         let result = match self.enter_block_body(block) {
             Err(error) => Err(error),
@@ -557,6 +569,8 @@ impl VirtualMachine {
             }
         };
         self.running_block_breaks.pop();
+        self.method_nesting_stack.pop();
+        self.class_var_cref_stack.pop();
 
         self.current_source_file = saved_source_file;
         self.current_source_encoding = saved_source_encoding;

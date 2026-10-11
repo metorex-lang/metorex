@@ -101,6 +101,17 @@ run_spec() {
   SPEC_COUNT=$((SPEC_COUNT + 1))
 }
 
+# Specs that load the same C extension run in one mspec process. The spec
+# helper builds an extension in a directory of its own and copies the library
+# over the shared one, so a second process building it at the same time
+# rewrites a file the first has loaded, which Linux reports as SIGBUS. The
+# paths are queued as one entry, a line each.
+run_specs_together() {
+  local joined
+  joined=$(printf '%s\n' "$@")
+  run_spec "${joined%$'\n'}"
+}
+
 # Passing specs - add new lines as specs reach a passing state
 
 # 4.1 - 4.3: Primitives and Singletons
@@ -3206,7 +3217,6 @@ run_spec "$SPEC_DIR/library/digest/sha512/reset_spec.rb"
 run_spec "$SPEC_DIR/library/digest/sha512/size_spec.rb"
 run_spec "$SPEC_DIR/library/digest/sha512/to_s_spec.rb"
 run_spec "$SPEC_DIR/library/digest/sha512/update_spec.rb"
-run_spec "$SPEC_DIR/optional/capi/data_spec.rb"
 run_spec "$SPEC_DIR/optional/capi/digest_spec.rb"
 run_spec "$SPEC_DIR/core/string/unpack/p_spec.rb"
 run_spec "$SPEC_DIR/core/enumerator/lazy/grep_spec.rb"
@@ -3342,8 +3352,11 @@ run_spec "$SPEC_DIR/optional/capi/class_spec.rb"
 run_spec "$SPEC_DIR/optional/capi/typed_data_spec.rb"
 run_spec "$SPEC_DIR/optional/capi/thread_spec.rb"
 run_spec "$SPEC_DIR/optional/capi/hash_spec.rb"
-run_spec "$SPEC_DIR/optional/capi/array_spec.rb"
-run_spec "$SPEC_DIR/optional/capi/rbasic_spec.rb"
+# rbasic_spec.rb loads the extensions data_spec.rb and array_spec.rb build.
+run_specs_together \
+  "$SPEC_DIR/optional/capi/data_spec.rb" \
+  "$SPEC_DIR/optional/capi/array_spec.rb" \
+  "$SPEC_DIR/optional/capi/rbasic_spec.rb"
 run_spec "$SPEC_DIR/optional/capi/debug_spec.rb"
 run_spec "$SPEC_DIR/optional/capi/kernel_spec.rb"
 run_spec "$SPEC_DIR/optional/capi/object_spec.rb"
@@ -3379,7 +3392,9 @@ spec=$2
 # cannot land on the same file name.
 export SPEC_TEMP_DIR="$SPEC_TEMP_ROOT/$idx"
 mkdir -p "$SPEC_TEMP_DIR"
-"$MSPEC" -t "$METOREX" "$spec" 2>&1 \
+# An entry from run_specs_together holds several paths, a line each.
+readarray -t specs <<< "$spec"
+"$MSPEC" -t "$METOREX" "${specs[@]}" 2>&1 \
   | tee "$WORK_DIR/$idx.out" \
   | grep --line-buffered -v -E '^$|^\$ |^metorex( [0-9][0-9.]*)? \(ruby-compatible\)( \[.*\])?$|^Finished in [0-9.]+ seconds$|^[0-9]+ files?, [0-9]+ examples?, [0-9]+ expectations?, [0-9]+ failures?, [0-9]+ errors?, [0-9]+ tagged$' \
   || true
@@ -3411,7 +3426,7 @@ run_one_pass() {
       code=$(cat "$code_file")
       if [ "$code" != "0" ]; then
         ANY_FAILED=1
-        printf 'mspec exited %s: %s\n' "$code" "${SPEC_PATHS[$i]}" >&2
+        printf 'mspec exited %s: %s\n' "$code" "${SPEC_PATHS[$i]//$'\n'/ }" >&2
       fi
     fi
     if [ -f "$out_file" ]; then

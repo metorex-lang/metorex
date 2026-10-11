@@ -387,11 +387,20 @@ fn run_example_with_installed_gems(path: &str) -> String {
         "{manifest_dir}/{}/require/gem_home",
         crate::common::EXAMPLES_DIR
     );
+    // A gem's C extension is built under the home directory, which each run
+    // gets afresh so the build is part of what the example does.
+    let home = std::env::temp_dir().join(format!(
+        "metorex_gem_home_{}_{}",
+        std::process::id(),
+        path.replace('/', "_")
+    ));
+    std::fs::create_dir_all(&home).expect("the temporary directory is writable");
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_metorex"))
         .current_dir(manifest_dir)
         .arg(format!("{}/{}", crate::common::EXAMPLES_DIR, path))
         .env("GEM_HOME", &gem_home)
         .env("GEM_PATH", &gem_home)
+        .env("HOME", &home)
         .output()
         .expect("failed to execute example");
     assert!(
@@ -450,4 +459,27 @@ fn test_require_installed_gems_versions_execution() {
 fn test_require_installed_gems_versions_no_parens_execution() {
     let output = run_example_with_installed_gems("require/installed_gems_versions_no_parens.rb");
     assert_eq!(output, INSTALLED_GEMS_VERSIONS);
+}
+
+/// The expected output of both `require/installed_gems_extensions` variants.
+const INSTALLED_GEMS_EXTENSIONS: &str = concat!(
+    "\"1.0.0\"\n",
+    "[10, 15]\n",
+    "true\n",
+    "\"pallet\"\n",
+    ":freight\n",
+    "[\"freight_meter\", \"tariff_table\"]\n",
+    "1\n",
+);
+
+#[test]
+fn test_require_installed_gems_extensions_execution() {
+    let output = run_example_with_installed_gems("require/installed_gems_extensions.rb");
+    assert_eq!(output, INSTALLED_GEMS_EXTENSIONS);
+}
+
+#[test]
+fn test_require_installed_gems_extensions_no_parens_execution() {
+    let output = run_example_with_installed_gems("require/installed_gems_extensions_no_parens.rb");
+    assert_eq!(output, INSTALLED_GEMS_EXTENSIONS);
 }

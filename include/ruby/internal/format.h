@@ -214,6 +214,15 @@ static inline void rb_raise(VALUE klass, const char *format, ...) {
   rb_exc_raise(rb_exc_new_str(klass, message));
 }
 
+NORETURN(static inline void rb_fatal(const char *format, ...));
+static inline void rb_fatal(const char *format, ...) {
+  va_list arguments;
+  va_start(arguments, format);
+  VALUE message = rb_vsprintf(format, arguments);
+  va_end(arguments);
+  rb_exc_raise(rb_exc_new_str(rb_eFatal, message));
+}
+
 static inline void rb_warn(const char *format, ...) {
   va_list arguments;
   va_start(arguments, format);

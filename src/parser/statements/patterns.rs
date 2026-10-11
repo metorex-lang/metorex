@@ -386,6 +386,9 @@ impl Parser {
         self.advance(); // consume '{'
         self.skip_whitespace();
         let held = self.parse_hash_pattern_body(constant, TokenKind::RBrace)?;
+        // Inside the braces a line break ends nothing, so the `}` may sit on
+        // a line of its own after the last value.
+        self.skip_whitespace();
         self.expect(TokenKind::RBrace, "Expected '}' after a hash pattern")?;
         Ok(held)
     }

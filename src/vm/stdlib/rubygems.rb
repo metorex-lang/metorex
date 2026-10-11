@@ -111,6 +111,14 @@ module Gem
     @loaded_specs ||= {}
   end
 
+  # Whether metorex carries the library a gem of this name provides, which
+  # it then loads in place of the installed gem's copy. A gem such as prism
+  # holds a C extension built for MRI that metorex cannot load.
+  def self.carried? name
+    library = name.tr("-", "/")
+    __embedded_library_names__().include?(library)
+  end
+
   # Activate the newest installed gem holding `path` among the files it
   # can be required by, answering whether one was found.
   def self.try_activate path
@@ -123,6 +131,14 @@ module Gem
 
   def self.ruby
     RbConfig.ruby
+  end
+
+  # A digest of the C headers metorex compiles extensions against.
+  def self.extension_abi
+    @extension_abi ||= begin
+      header = File.join(RbConfig::CONFIG["rubyhdrdir"], "ruby", "internal", "abi.h")
+      File.exist?(header) ? File.read(header)[/RUBY_ABI_VERSION 0x(\h+)/, 1].to_s : ""
+    end
   end
 
   # The settings a gem command reads. Metorex keeps no configuration file,
@@ -223,7 +239,60 @@ module Gem
     end
 
     def full_require_paths
-      require_paths.map { |held| File.expand_path(held, gem_dir) }
+      paths = require_paths.map { |held| File.expand_path(held, gem_dir) }
+      paths.unshift(metorex_extension_dir) if extensions_built?
+      paths
+    end
+
+    # Where metorex keeps this gem's C extensions, built against its own
+    # headers. The directory is named for a digest of those headers, so an
+    # extension built against other ones is never loaded.
+    def metorex_extension_dir
+      File.join(Gem.default_dir, "extensions", RbConfig::CONFIG["arch"], Gem.extension_abi, full_name)
+    end
+
+    def extensions_built?
+      File.exist?(File.join(metorex_extension_dir, "gem.build_complete"))
+    end
+
+    # Build each of the gem's C extensions against metorex's headers, the
+    # way `gem install` builds them against MRI's, unless that was done
+    # already. The extconf.rb runs in a directory of metorex's own, so the
+    # installed gem is left as it is.
+    def build_extensions
+      return if extensions.empty? || extensions_built?
+      require "fileutils"
+      target = metorex_extension_dir
+      FileUtils.mkdir_p(target)
+      log = File.join(target, "gem_make.out")
+      built = File.open(log, "w") do |output|
+        extensions.all? do |extconf|
+          build = File.join(target, "build", File.dirname(extconf))
+          FileUtils.mkdir_p(build)
+          made = Dir.chdir(build) do
+            system(Gem.ruby, File.join(gem_dir, extconf), out: output, err: output) &&
+              system("make", out: output, err: output)
+          end
+          made && install_built_libraries(build, target)
+        end
+      end
+      if built
+        File.write(File.join(target, "gem.build_complete"), "")
+      else
+        warn "Ignoring #{full_name} because its extensions could not be built for metorex. See #{log}"
+      end
+    end
+
+    # Copy the libraries a build made to where the extension's name puts
+    # them under the gem's extension directory.
+    def install_built_libraries(build, target)
+      makefile = File.read(File.join(build, "Makefile"))
+      prefix = makefile[/^target_prefix = (.*)$/, 1].to_s.delete_prefix("/")
+      destination = File.join(target, prefix)
+      FileUtils.mkdir_p(destination)
+      libraries = Dir[File.join(build, "*.#{RbConfig::CONFIG["DLEXT"]}")]
+      libraries.each { |library| FileUtils.cp(library, destination) }
+      !libraries.empty?
     end
 
     # A gem that came with Ruby, whose files metorex carries itself.
@@ -257,9 +326,10 @@ module Gem
       end
       Gem.loaded_specs[name] = self
       runtime_dependencies.each do |dependency|
-        next if Gem.loaded_specs[dependency.name]
+        next if Gem.loaded_specs[dependency.name] || Gem.carried?(dependency.name)
         dependency.to_spec.activate
       end
+      build_extensions
       at = Gem.load_path_insert_index
       full_require_paths.reverse_each { |directory| $LOAD_PATH.insert(at, directory) unless $LOAD_PATH.include?(directory) }
       true
@@ -275,6 +345,7 @@ module Gem
       @executables = loaded.executables
       @bindir = loaded.bindir
       @files = loaded.files
+      @extensions = loaded.extensions
       self
     end
 
@@ -283,6 +354,11 @@ module Gem
         full_spec
         instance_variable_get "@#{reader}"
       end
+    end
+
+    def extensions
+      full_spec
+      @extensions || []
     end
 
     # The spec a gemspec file builds.
@@ -331,7 +407,8 @@ module Gem
     end
 
     def self.find_all_by_name(name, *requirements)
-      requirement = Gem::Requirement.create(requirements.empty? ? Gem::Requirement.default : requirements)
+      requirements = requirements.first if requirements.length == 1
+      requirement = Gem::Requirement.create(requirements == [] ? Gem::Requirement.default : requirements)
       all.select { |spec| spec.name == name && requirement.satisfied_by?(spec.version) }
          .sort_by(&:version).reverse
     end
@@ -361,7 +438,9 @@ module Gem
 
     def initialize(name, *requirements)
       @name = name
-      @requirement = Gem::Requirement.create(requirements.empty? ? Gem::Requirement.default : requirements.flatten)
+      requirements = requirements.flatten
+      requirements = requirements.first if requirements.length == 1
+      @requirement = Gem::Requirement.create(requirements == [] ? Gem::Requirement.default : requirements)
     end
 
     # The spec that satisfies this, preferring the active one.

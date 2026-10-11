@@ -241,7 +241,13 @@ impl VirtualMachine {
                         Some(block) => self.execute_block_callable(block, vec![item], position)?,
                         None => item,
                     };
-                    if let Some(hash) = ObjectHash::from_object(&item) {
+                    let placed = {
+                        let held = std::cell::RefCell::new(std::mem::take(&mut set));
+                        let placed = self.placed_in_set(&held, &item, position);
+                        set = held.into_inner();
+                        placed?
+                    };
+                    if let Some(hash) = placed {
                         set.insert(hash);
                     } else {
                         return Err(MetorexError::runtime_error(

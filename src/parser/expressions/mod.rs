@@ -249,6 +249,15 @@ impl Parser {
                 self.warn_literal_condition(right);
             }
             Expression::Grouped { expression, .. } => self.warn_literal_condition(expression),
+            Expression::BinaryOp {
+                op: crate::ast::BinaryOp::Assign,
+                right,
+                position,
+                ..
+            } if is_static_literal(right) => self.default_warnings.push((
+                *position,
+                "found '= literal' in conditional, should be ==".to_string(),
+            )),
             _ => {}
         }
     }
@@ -257,6 +266,15 @@ impl Parser {
     /// Parse a condition expression that may contain an inline assignment.
     /// Used in if/unless/while conditions where `var = expr` is valid.
     pub(crate) fn parse_condition(&mut self) -> Result<Expression, MetorexError> {
+        // A condition ends at its own keyword, so `and` and `or` bind inside
+        // it even where the `if` holding it is the value of an assignment.
+        let enclosing_assignment_depth = std::mem::take(&mut self.assignment_rhs_depth);
+        let parsed = self.parse_condition_in_place();
+        self.assignment_rhs_depth = enclosing_assignment_depth;
+        parsed
+    }
+
+    fn parse_condition_in_place(&mut self) -> Result<Expression, MetorexError> {
         self.condition_depth += 1;
         let parsed = self.parse_expression();
         self.condition_depth -= 1;
@@ -827,7 +845,15 @@ impl Parser {
                 highest = highest.max(place as usize);
             }
         };
-        for token in &self.stream.tokens()[opened_at..closed_at] {
+        for (offset, token) in self.stream.tokens()[opened_at..closed_at]
+            .iter()
+            .enumerate()
+        {
+            // A block written inside this one reads its own numbered
+            // parameters.
+            if self.inside_a_nested_block(opened_at + offset, opened_at, closed_at) {
+                continue;
+            }
             match &token.kind {
                 TokenKind::Ident(name) => note(name),
                 // `"#{_1}"` and `:"#{_1}="` read the parameter inside the
@@ -1060,4 +1086,31 @@ fn interpolation_reads_it(parts: &[crate::lexer::InterpolationPart]) -> bool {
                 _ => false,
             })
     })
+}
+
+/// Whether an expression is a value written out in full, which an assignment
+/// in a condition then always tests the same way.
+fn is_static_literal(expression: &Expression) -> bool {
+    match expression {
+        Expression::IntLiteral { .. }
+        | Expression::BigIntLiteral { .. }
+        | Expression::FloatLiteral { .. }
+        | Expression::StringLiteral { .. }
+        | Expression::RegexLiteral { .. }
+        | Expression::BoolLiteral { .. }
+        | Expression::NilLiteral { .. }
+        | Expression::Symbol { .. }
+        | Expression::MagicFile { .. }
+        | Expression::MagicLine { .. } => true,
+        Expression::MethodCall {
+            receiver, method, ..
+        } if method == "__frozen_literal__" || method == "__mutable_literal__" => {
+            matches!(receiver.as_ref(), Expression::StringLiteral { .. })
+        }
+        Expression::Array { elements, .. } => elements.iter().all(is_static_literal),
+        Expression::Dictionary { entries, .. } => entries
+            .iter()
+            .all(|(key, value)| is_static_literal(key) && is_static_literal(value)),
+        _ => false,
+    }
 }

@@ -25,6 +25,7 @@ impl<'a> Lexer<'a> {
             self.prev_significant,
             Some(TokenKind::Colon) | Some(TokenKind::Dot) | Some(TokenKind::SafeDot)
         ) && !spaced_before
+            && !self.label_colon
         {
             return Token::new(TokenKind::Percent, position);
         }

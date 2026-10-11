@@ -71,6 +71,10 @@ pub struct Lexer<'a> {
     /// How many method names an `alias` has yet to be given, where a `/`
     /// names the division method rather than opening a pattern.
     pub(super) alias_names_left: u8,
+    /// Whether the last significant token was a colon written against the
+    /// name before it, which makes the pair a hash key such as `globals:`
+    /// rather than the start of a symbol.
+    pub(super) label_colon: bool,
 }
 
 impl<'a> Lexer<'a> {
@@ -143,6 +147,7 @@ impl<'a> Lexer<'a> {
             prev_significant_end: 0,
             local_names: std::collections::HashSet::new(),
             alias_names_left: 0,
+            label_colon: false,
             restore_line: None,
             prelude: false,
             binary_source,
@@ -163,6 +168,7 @@ impl<'a> Lexer<'a> {
         let saved_prev = self.prev_significant.clone();
         let saved_prev_end = self.prev_significant_end;
         let saved_restore_line = self.restore_line;
+        let saved_label_colon = self.label_colon;
 
         // Get the next token
         let token = self.next_token();
@@ -176,6 +182,7 @@ impl<'a> Lexer<'a> {
         self.prev_significant = saved_prev;
         self.prev_significant_end = saved_prev_end;
         self.restore_line = saved_restore_line;
+        self.label_colon = saved_label_colon;
 
         token
     }
@@ -216,6 +223,9 @@ impl<'a> Lexer<'a> {
                     TokenKind::Alias => 2,
                     _ => self.alias_names_left.saturating_sub(1),
                 };
+                self.label_colon = matches!(other, TokenKind::Colon)
+                    && matches!(self.prev_significant, Some(TokenKind::Ident(_)))
+                    && token.position.offset == self.prev_significant_end;
                 self.prev_significant = Some(other.clone());
                 self.prev_significant_end = self.offset;
             }

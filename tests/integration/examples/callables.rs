@@ -364,3 +364,18 @@ fn test_callables_method_proc_blocks_no_parens_execution() {
     let output = run_example("callables/method_proc_blocks_no_parens.rb");
     assert_eq!(output, METHOD_PROC_BLOCKS_OUTPUT);
 }
+
+/// The expected output of both `callables/forwarded_block_scope` variants.
+const FORWARDED_BLOCK_SCOPE_OUTPUT: &str = "[\"entry 4\", \"entry 8\", \"a 5\"]\n";
+
+#[test]
+fn test_callables_forwarded_block_scope_execution() {
+    let output = run_example("callables/forwarded_block_scope.rb");
+    assert_eq!(output, FORWARDED_BLOCK_SCOPE_OUTPUT);
+}
+
+#[test]
+fn test_callables_forwarded_block_scope_no_parens_execution() {
+    let output = run_example("callables/forwarded_block_scope_no_parens.rb");
+    assert_eq!(output, FORWARDED_BLOCK_SCOPE_OUTPUT);
+}
