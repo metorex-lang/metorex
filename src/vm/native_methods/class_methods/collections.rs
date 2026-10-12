@@ -198,6 +198,12 @@ impl VirtualMachine {
         if method_name == "new" && class_rc.name() == "Set" {
             use crate::object::ObjectHash;
             let mut set: indexmap::IndexSet<ObjectHash> = indexmap::IndexSet::new();
+            // The block is the one `Set.new` was given, taken before the seed
+            // is walked so the walk does not take it.
+            let block = match self.pending_block.take() {
+                Some(Object::Block(block)) => Some(block),
+                _ => None,
+            };
             if arguments.len() == 1 {
                 // An Array is taken as it is, and anything else that walks is
                 // asked for one.
@@ -229,10 +235,6 @@ impl VirtualMachine {
                             _ => Vec::new(),
                         }
                     }
-                };
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => Some(block),
-                    _ => None,
                 };
                 for item in items {
                     // `Set.new(list) { |item| ... }` stores what the block

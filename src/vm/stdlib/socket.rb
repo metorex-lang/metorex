@@ -487,6 +487,12 @@ end
 
 # A socket reached by an address rather than by a path.
 class IPSocket < BasicSocket
+  def inspect
+    return "#<#{self.class}:(closed)>" if closed?
+    family, port, _, address = addr(false)
+    "#<#{self.class}:fd #{fileno}, #{family}, #{address}, #{port}>"
+  end
+
   # The address a host name stands for, answered as the address itself when
   # one was written rather than a name.
   def self.getaddress(host)
@@ -584,7 +590,7 @@ class Socket < BasicSocket
     # What a message may carry alongside its bytes over a socket named by a
     # path, and what the address resolver reports when it cannot answer.
     SCM_RIGHTS = Socket.__number__("SCM_RIGHTS", 0x01)
-    SCM_TIMESTAMP = 0x02
+    SCM_TIMESTAMP = Socket.__number__("SCM_TIMESTAMP", 0x02)
     SCM_CREDS = 0x03
 
     EAI_ADDRFAMILY = 1
@@ -609,6 +615,18 @@ class Socket < BasicSocket
     IP_DEFAULT_MULTICAST_LOOP = 1
     IP_MAX_MEMBERSHIPS = 4095
     IPV6_V6ONLY = Socket.__number__("IPV6_V6ONLY", 27)
+    IP_RECVTTL = Socket.__number__("IP_RECVTTL", 24)
+    IP_PKTINFO = Socket.__number__("IP_PKTINFO", 26)
+    IPV6_PKTINFO = Socket.__number__("IPV6_PKTINFO", 46)
+    IPV6_RECVPKTINFO = Socket.__number__("IPV6_RECVPKTINFO", 61)
+    IPV6_CHECKSUM = Socket.__number__("IPV6_CHECKSUM", 26)
+    IPV6_HOPLIMIT = Socket.__number__("IPV6_HOPLIMIT", 47)
+
+    # Names only some platforms carry, defined only where the platform does.
+    %w[SOCK_PACKET UDP_CORK TCP_CORK TCP_INFO IP_MTU IPV6_NEXTHOP SCM_CREDENTIALS].each do |name|
+      found = Socket.__net__ "constant", 0, name, 0
+      const_set name, found unless found.nil?
+    end
 
     AI_PASSIVE = 1
     AI_CANONNAME = 2
@@ -1452,20 +1470,21 @@ end
 # One end of a connection someone made or accepted.
 class TCPSocket < IPSocket
   def initialize(host, port = nil, _local_host = nil, _local_port = nil,
-                 connect_timeout: nil, resolv_timeout: nil)
+                 connect_timeout: nil, resolv_timeout: nil, open_timeout: nil)
     # An accepted connection is already open, and arrives as the number the
     # interpreter holds it under rather than as a name and a port.
     return super(host) if port.nil?
     if block_given?
       warn "warning: TCPSocket::new() does not take block; use TCPSocket::open() instead"
     end
-    super TCPSocket.connected(host, Socket.port_number(port), connect_timeout)
+    Socket.refuse_open_timeout_with_others open_timeout, connect_timeout, resolv_timeout
+    super TCPSocket.connected(host, Socket.port_number(port), connect_timeout, open_timeout)
   end
 
   # A connection to the first address the host answers on. A host written as
   # nothing names this machine, which may answer on either family, so each
   # address is tried until one of them takes the connection.
-  def self.connected(host, port, connect_timeout = nil)
+  def self.connected(host, port, connect_timeout = nil, open_timeout = nil)
     named = if host.nil? || host.to_s.empty?
               ["127.0.0.1", "::1"]
             else
@@ -1477,7 +1496,14 @@ class TCPSocket < IPSocket
     named.each do |address|
       break unless handle.nil?
       begin
-        handle = Socket.__net__ "connect", 0, address, port
+        if open_timeout.nil?
+          handle = Socket.__net__ "connect", 0, address, port
+        else
+          handle = Socket.__net__ "connect_within", 0, address, port, open_timeout
+          if handle.nil?
+            raise IO::TimeoutError, "user specified timeout for #{host}:#{port}"
+          end
+        end
       rescue SystemCallError => problem
         refused = problem
       end
@@ -1493,9 +1519,10 @@ class TCPSocket < IPSocket
   end
 
   def self.open(host, port = nil, local_host = nil, local_port = nil,
-                connect_timeout: nil, resolv_timeout: nil)
+                connect_timeout: nil, resolv_timeout: nil, open_timeout: nil)
     held = new host, port, local_host, local_port,
-               connect_timeout: connect_timeout, resolv_timeout: resolv_timeout
+               connect_timeout: connect_timeout, resolv_timeout: resolv_timeout,
+               open_timeout: open_timeout
     return held unless block_given?
     begin
       yield held
@@ -2212,6 +2239,7 @@ class UDPSocket < IPSocket
   end
 
   def inspect
+    return "#<UDPSocket:(closed)>" if closed?
     named = Socket.__net__ "udp_address", @handle, "", 0
     kind = @family == Socket::AF_INET6 ? "AF_INET6" : "AF_INET"
     return "#<UDPSocket:fd #{fileno}, #{kind}>" if named.nil?
@@ -2231,6 +2259,183 @@ end
 class Socket
   # One setting on a socket, which names the level it belongs to and the
   # value it was given.
+  # A control message sent or received beside a socket's bytes, such as the
+  # descriptors a message over a UNIX socket hands on.
+  class AncillaryData
+    attr_reader :family, :level, :type, :data
+
+    def initialize(family, level, type, data)
+      @family = AncillaryData.family_number(family)
+      @level = AncillaryData.level_number(@family, level)
+      @type = AncillaryData.type_number(@family, @level, type)
+      @data = AncillaryData.text_of(data)
+    end
+
+    def self.family_number(held)
+      return held if held.is_a? Integer
+      named = Socket.named_part(held).to_s
+      case named.sub(/\A(AF|PF)_/, "")
+      when "INET" then Socket::AF_INET
+      when "INET6" then Socket::AF_INET6
+      when "UNIX", "LOCAL" then Socket::AF_UNIX
+      when "UNSPEC" then Socket::AF_UNSPEC
+      else raise SocketError, "unknown socket domain: #{named}"
+      end
+    end
+
+    # A level is named by its protocol, which only an internet family
+    # carries. Every family has the socket level itself.
+    def self.level_number(family, held)
+      return held if held.is_a? Integer
+      named = Socket.named_part(held).to_s
+      return Socket::SOL_SOCKET if %w[SOCKET SOL_SOCKET].include?(named)
+      bare = named.delete_prefix("IPPROTO_")
+      if internet?(family) && bare.match?(/\A[A-Z][A-Z0-9_]*\z/) &&
+         Socket.const_defined?("IPPROTO_#{bare}")
+        return Socket.const_get("IPPROTO_#{bare}")
+      end
+      raise SocketError, "unknown protocol level: #{named}"
+    end
+
+    # The prefix a type's name carries at a level, with the name the level
+    # goes by when one is not known.
+    def self.type_names(family, level)
+      return ["SCM_", "UNIX"] if level == Socket::SOL_SOCKET
+      return nil unless internet?(family)
+      case level
+      when Socket::IPPROTO_IP then ["IP_", "IP"]
+      when Socket::IPPROTO_IPV6 then ["IPV6_", "IPv6"]
+      when Socket::IPPROTO_TCP then ["TCP_", "TCP"]
+      when Socket::IPPROTO_UDP then ["UDP_", "UDP"]
+      end
+    end
+
+    # A type is named within its level, so `:RIGHTS` at the socket level is
+    # SCM_RIGHTS. At a level with no names only a number names a type.
+    def self.type_number(family, level, held)
+      return held if held.is_a? Integer
+      prefix, label = type_names(family, level)
+      return Socket.integer_part(held) if prefix.nil?
+      named = Socket.named_part(held).to_s
+      full = named.start_with?(prefix) ? named : "#{prefix}#{named}"
+      if full.match?(/\A[A-Z][A-Z0-9_]*\z/) && Socket.const_defined?(full)
+        return Socket.const_get(full)
+      end
+      raise SocketError, "unknown #{label} control message: #{named}"
+    end
+
+    def self.internet?(family)
+      family == Socket::AF_INET || family == Socket::AF_INET6
+    end
+
+    def self.text_of(held)
+      return held if held.is_a? String
+      unless held.respond_to? :to_str
+        raise TypeError, "no implicit conversion of #{held.class} into String"
+      end
+      held.to_str
+    end
+
+    # The address bytes of an Addrinfo, which both platforms write at the
+    # same place in an address struct.
+    def self.address_bytes(addrinfo, width)
+      at = width == 4 ? 4 : 8
+      addrinfo.to_sockaddr.byteslice(at, width)
+    end
+
+    def self.int(family, level, type, integer)
+      new family, level, type, [Socket.integer_part(integer)].pack("i")
+    end
+
+    def int
+      unless @data.bytesize == 4
+        raise TypeError, "size differ.  expected as sizeof(int)=4 but #{@data.bytesize}"
+      end
+      @data.unpack1("i")
+    end
+
+    def self.unix_rights(*streams)
+      held = streams.map do |stream|
+        raise TypeError, "IO expected" unless stream.is_a?(IO) || stream.respond_to?(:to_io)
+        stream.is_a?(IO) ? stream : stream.to_io
+      end
+      made = new :UNIX, :SOCKET, :RIGHTS, held.map(&:fileno).pack("i*")
+      made.instance_variable_set :@unix_rights, held
+      made
+    end
+
+    # The streams the message hands on, which only one built from streams
+    # carries.
+    def unix_rights
+      unless @level == Socket::SOL_SOCKET && @type == Socket::SCM_RIGHTS
+        raise TypeError, "SCM_RIGHTS ancillary data expected"
+      end
+      @unix_rights
+    end
+
+    def cmsg_is?(level, type)
+      wanted_level = AncillaryData.level_number(@family, level)
+      wanted_type = AncillaryData.type_number(@family, wanted_level, type)
+      @level == wanted_level && @type == wanted_type
+    end
+
+    def self.ip_pktinfo(addr, ifindex, spec_dst = addr)
+      packed = [Socket.integer_part(ifindex)].pack("I") +
+               address_bytes(spec_dst, 4) + address_bytes(addr, 4)
+      new :INET, :IP, :PKTINFO, packed
+    end
+
+    def ip_pktinfo
+      unless @level == Socket::IPPROTO_IP && @type == Socket::IP_PKTINFO && @data.bytesize == 12
+        raise TypeError, "IP_PKTINFO ancillary data expected"
+      end
+      ifindex = @data.unpack1("I")
+      spec_dst = Addrinfo.ip(@data.byteslice(4, 4).unpack("C4").join("."))
+      addr = Addrinfo.ip(@data.byteslice(8, 4).unpack("C4").join("."))
+      [addr, ifindex, spec_dst]
+    end
+
+    def self.ipv6_pktinfo(addr, ifindex)
+      packed = address_bytes(addr, 16) + [Socket.integer_part(ifindex)].pack("I")
+      new :INET6, :IPV6, :PKTINFO, packed
+    end
+
+    def ipv6_pktinfo
+      unless @level == Socket::IPPROTO_IPV6 && @type == Socket::IPV6_PKTINFO && @data.bytesize == 20
+        raise TypeError, "IPV6_PKTINFO ancillary data expected"
+      end
+      groups = @data.byteslice(0, 16).unpack("n8").map { |group| group.to_s(16) }
+      [Addrinfo.ip(groups.join(":")), @data.byteslice(16, 4).unpack1("I")]
+    end
+
+    def ipv6_pktinfo_addr
+      ipv6_pktinfo[0]
+    end
+
+    def ipv6_pktinfo_ifindex
+      ipv6_pktinfo[1]
+    end
+
+    def inspect
+      family = { Socket::AF_INET => "INET", Socket::AF_INET6 => "INET6", Socket::AF_UNIX => "UNIX" }
+      level = Socket.constants.map(&:to_s).find do |name|
+        (name == "SOL_SOCKET" || name.start_with?("IPPROTO_")) && Socket.const_get(name) == @level
+      end
+      prefix, = AncillaryData.type_names(@family, @level)
+      type = prefix && Socket.constants.map(&:to_s).find do |name|
+        name.start_with?(prefix) && Socket.const_get(name) == @type
+      end
+      shown = if @level == Socket::SOL_SOCKET && @type == Socket::SCM_RIGHTS
+                @data.unpack("i*").join(",")
+              else
+                @data.inspect
+              end
+      level_name = level.nil? ? @level.to_s : level.sub(/\A(SOL_|IPPROTO_)/, "")
+      type_name = type.nil? ? @type.to_s : type.delete_prefix(prefix)
+      "#<Socket::AncillaryData: #{family.fetch(@family, @family.to_s)} #{level_name} #{type_name} #{shown}>"
+    end
+  end
+
   class Option
     attr_reader :family
     attr_reader :level
@@ -3058,18 +3263,44 @@ class Socket
 
   # Reach a server over a connection, binding this end to a name of its own
   # when one is asked for.
-  def self.tcp(host, port, local_host = nil, local_port = nil, connect_timeout: nil)
+  def self.tcp(host, port, local_host = nil, local_port = nil, connect_timeout: nil,
+               resolv_timeout: nil, open_timeout: nil)
+    refuse_open_timeout_with_others open_timeout, connect_timeout, resolv_timeout
     # The socket is opened in the family of the address it reaches.
     remote = Socket.resolved(host).first
     held = Socket.new remote.include?(":") ? :INET6 : :INET, :STREAM
     held.bind Socket.sockaddr_in(local_port.to_i, local_host) unless local_host.nil?
-    held.connect Socket.sockaddr_in(port, remote)
+    limit = open_timeout || connect_timeout
+    if limit.nil?
+      held.connect Socket.sockaddr_in(port, remote)
+    else
+      begin
+        held.connect_nonblock Socket.sockaddr_in(port, remote)
+      rescue IO::WaitWritable
+        unless held.wait_writable(limit)
+          held.close
+          raise Errno::ETIMEDOUT, "user specified timeout for #{host}:#{port}"
+        end
+        begin
+          held.connect_nonblock Socket.sockaddr_in(port, remote)
+        rescue Errno::EISCONN
+        end
+      end
+    end
     return held unless block_given?
     begin
       yield held
     ensure
       held.close unless held.closed?
     end
+  end
+
+  # `open_timeout:` limits the whole connection, so it cannot be given
+  # beside a limit on one part of it.
+  def self.refuse_open_timeout_with_others(open_timeout, connect_timeout, resolv_timeout)
+    return if open_timeout.nil?
+    return if connect_timeout.nil? && resolv_timeout.nil?
+    raise ArgumentError, "Cannot specify open_timeout along with connect_timeout or resolv_timeout"
   end
 
   # The port a named service is reached on. The names are the ones the

@@ -667,6 +667,7 @@ impl VirtualMachine {
                         list.push(Object::symbol(hook.to_string()));
                     }
                     list.sort_by_key(|entry| entry.to_string());
+                    list.dedup_by_key(|entry| entry.to_string());
                 }
                 return Ok(Some(Object::Array(names)));
             }

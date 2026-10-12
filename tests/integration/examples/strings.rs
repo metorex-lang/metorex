@@ -582,3 +582,18 @@ fn test_strings_unicode_succ_no_parens_execution() {
     let output = run_example("strings/unicode_succ_no_parens.rb");
     assert_eq!(output, UNICODE_SUCC_OUTPUT);
 }
+
+/// The expected output of both `strings/stringio_ungetc` variants.
+const STRINGIO_UNGETC_OUTPUT: &str = "\"A1234\"\n[0, \"φ34\"]\n[0, \"foo34\"]\n3\n\"φ/\"\n3\n";
+
+#[test]
+fn test_strings_stringio_ungetc_execution() {
+    let output = run_example("strings/stringio_ungetc.rb");
+    assert_eq!(output, STRINGIO_UNGETC_OUTPUT);
+}
+
+#[test]
+fn test_strings_stringio_ungetc_no_parens_execution() {
+    let output = run_example("strings/stringio_ungetc_no_parens.rb");
+    assert_eq!(output, STRINGIO_UNGETC_OUTPUT);
+}

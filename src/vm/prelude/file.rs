@@ -8,8 +8,8 @@ class File
       raise ArgumentError,
             "wrong number of arguments (given #{1 + rest.size}, expected 1..3)"
     end
-    length = __read_count__ rest[0], "length"
     offset = __read_count__ rest[1], "offset"
+    length = __read_count__ rest[0], "length"
     mode, open_options = __read_opening__ options
     unless mode.start_with?("r") || mode.include?("+")
       raise IOError, "not opened for reading"
@@ -415,8 +415,12 @@ class File
       Time.at(@fields[:ctime])
     end
 
+    # Linux records a file's birth time where the filesystem keeps one.
     def birthtime
-      raise NotImplementedError, "birthtime() function is unimplemented" if @fields[:birthtime].nil?
+      if @fields[:birthtime].nil?
+        raise NotImplementedError, "birthtime is unimplemented on this filesystem" if RUBY_PLATFORM.include?("linux")
+        raise NotImplementedError, "birthtime() function is unimplemented"
+      end
       Time.at(@fields[:birthtime])
     end
 

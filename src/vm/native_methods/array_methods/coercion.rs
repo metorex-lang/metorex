@@ -34,7 +34,7 @@ impl VirtualMachine {
                 let Ok(index) = i64::try_from(&wide) else {
                     return Err(crate::vm::errors::simple_exception(
                         "RangeError",
-                        "bignum too big to convert into `long'",
+                        "bignum too big to convert into 'long'",
                         position,
                     ));
                 };

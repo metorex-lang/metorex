@@ -147,3 +147,18 @@ fn test_signals_child_status_no_parens_execution() {
     let output = run_example("signals/child_status_no_parens.rb");
     assert_eq!(output, CHILD_STATUS);
 }
+
+/// The expected output of both `signals/kill_from_thread` variants.
+const KILL_FROM_THREAD_OUTPUT: &str = "true\n\"negative signal name: -HUP\"\n";
+
+#[test]
+fn test_signals_kill_from_thread_execution() {
+    let output = run_example("signals/kill_from_thread.rb");
+    assert_eq!(output, KILL_FROM_THREAD_OUTPUT);
+}
+
+#[test]
+fn test_signals_kill_from_thread_no_parens_execution() {
+    let output = run_example("signals/kill_from_thread_no_parens.rb");
+    assert_eq!(output, KILL_FROM_THREAD_OUTPUT);
+}

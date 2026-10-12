@@ -200,8 +200,12 @@ impl Parser {
         }
         self.skip_whitespace();
 
-        // Parse the iterable expression
-        let iterable = self.parse_expression()?;
+        // A `do` after the collection opens the loop body rather than a
+        // block on the collection.
+        self.condition_depth += 1;
+        let read = self.parse_expression();
+        self.condition_depth -= 1;
+        let iterable = read?;
         self.skip_whitespace();
 
         // Optionally consume 'do'

@@ -104,7 +104,7 @@ class Enumerator
         end
       else
         @result = @generator.call(Yielder.new { |*yielded|
-          collected.push(yielded.size == 1 ? yielded[0] : yielded)
+          collected.push(yielded.empty? ? nil : (yielded.size == 1 ? yielded[0] : yielded))
           nil
         })
       end

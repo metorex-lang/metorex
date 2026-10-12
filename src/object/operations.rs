@@ -91,8 +91,11 @@ impl Object {
             (Object::Int(a), Object::Float(b)) | (Object::Float(b), Object::Int(a)) => {
                 *a as f64 == *b
             }
+            // A large Integer equals a Float only when the Float holds that
+            // exact whole number.
             (Object::BigInt(a), Object::Float(b)) | (Object::Float(b), Object::BigInt(a)) => {
-                a.to_string().parse::<f64>().is_ok_and(|value| value == *b)
+                use num_bigint::ToBigInt;
+                b.fract() == 0.0 && b.to_bigint().is_some_and(|whole| whole == **a)
             }
             (Object::String(a), Object::String(b)) => a == b,
             (Object::Symbol(a), Object::Symbol(b)) => a == b,

@@ -745,6 +745,7 @@ module Enumerable
       nil
     end
     return nil unless held.is_a?(Integer)
+    return 0 if held.zero?
     return Float::INFINITY if rounds.nil?
     return 0 if rounds <= 0
     held * rounds

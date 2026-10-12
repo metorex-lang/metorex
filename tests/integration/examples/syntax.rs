@@ -598,3 +598,18 @@ fn test_syntax_definition_errors_no_parens_execution() {
     let output = run_example("syntax/definition_errors_no_parens.rb");
     assert_eq!(output, DEFINITION_ERRORS_OUTPUT);
 }
+
+/// The expected output of both `syntax/subscript_block` variants.
+const SUBSCRIPT_BLOCK_OUTPUT: &str = "6\n4\n6\n3\n4\n2\n2\n";
+
+#[test]
+fn test_syntax_subscript_block_execution() {
+    let output = run_example("syntax/subscript_block.rb");
+    assert_eq!(output, SUBSCRIPT_BLOCK_OUTPUT);
+}
+
+#[test]
+fn test_syntax_subscript_block_no_parens_execution() {
+    let output = run_example("syntax/subscript_block_no_parens.rb");
+    assert_eq!(output, SUBSCRIPT_BLOCK_OUTPUT);
+}

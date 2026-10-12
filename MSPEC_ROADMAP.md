@@ -4210,25 +4210,25 @@ optional/capi/process_spec.
   - [x] 7.1.5. core/range/member_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.1.6. core/range/min_spec - 1 file, 30 examples, 59 expectations, 0 failures, 0 errors
   - [x] 7.1.7. core/range/step_spec - 1 file, 79 examples, 138 expectations, 0 failures, 0 errors
-- [ ] 7.2. command_line - 3 files, 0 passing
-  - [ ] 7.2.1. command_line/dash_upper_e_spec - 2 failing examples
-  - [ ] 7.2.2. command_line/dash_x_spec - 1 failing example
-  - [ ] 7.2.3. command_line/rubyopt_spec - 1 failing example
-- [ ] 7.3. core/argf - 8 files, 7 passing
+- [x] 7.2. command_line - 3 files, all passing
+  - [x] 7.2.1. command_line/dash_upper_e_spec - 1 file, 7 examples, 7 expectations, 0 failures, 0 errors
+  - [x] 7.2.2. command_line/dash_x_spec - 1 file, 4 examples, 4 expectations, 0 failures, 0 errors
+  - [x] 7.2.3. command_line/rubyopt_spec - 1 file, 35 examples, 35 expectations, 0 failures, 0 errors
+- [x] 7.3. core/argf - 8 files, all passing
   - [x] 7.3.1. core/argf/each_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.3.2. core/argf/eof_spec - 1 file, 3 examples, 3 expectations, 0 failures, 0 errors
   - [x] 7.3.3. core/argf/inspect_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.3.4. core/argf/path_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-  - [ ] 7.3.5. core/argf/read_nonblock_spec - 2 failing examples
+  - [x] 7.3.5. core/argf/read_nonblock_spec - 1 file, 15 examples, 20 expectations, 0 failures, 0 errors
   - [x] 7.3.6. core/argf/tell_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.3.7. core/argf/to_a_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.3.8. core/argf/to_i_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-- [ ] 7.4. core/array - 13 files, 11 passing
+- [x] 7.4. core/array - 13 files, all passing
   - [x] 7.4.1. core/array/append_spec - 1 file, 5 examples, 9 expectations, 0 failures, 0 errors
   - [x] 7.4.2. core/array/collect_spec - 1 file, 2 examples, 2 expectations, 0 failures, 0 errors
-  - [ ] 7.4.3. core/array/cycle_spec - 1 failing example
+  - [x] 7.4.3. core/array/cycle_spec - 1 file, 19 examples, 28 expectations, 0 failures, 0 errors
   - [x] 7.4.4. core/array/detect_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-  - [ ] 7.4.5. core/array/element_reference_spec - 3 failing examples
+  - [x] 7.4.5. core/array/element_reference_spec - 1 file, 69 examples, 469 expectations, 0 failures, 0 errors
   - [x] 7.4.6. core/array/filter_spec - 1 file, 2 examples, 2 expectations, 0 failures, 0 errors
   - [x] 7.4.7. core/array/find_spec - 1 file, 16 examples, 16 expectations, 0 failures, 0 errors
   - [x] 7.4.8. core/array/index_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
@@ -4243,18 +4243,18 @@ optional/capi/process_spec.
   - [x] 7.6.1. core/binding/implicit_parameter_defined_spec - 1 file, 13 examples, 19 expectations, 0 failures, 0 errors
   - [x] 7.6.2. core/binding/implicit_parameter_get_spec - 1 file, 14 examples, 16 expectations, 0 failures, 0 errors
   - [x] 7.6.3. core/binding/implicit_parameters_spec - 1 file, 10 examples, 11 expectations, 0 failures, 0 errors
-- [ ] 7.7. core/class - 1 file, 0 passing
-  - [ ] 7.7.1. core/class/initialize_spec - 1 failing example
-- [ ] 7.8. core/complex - 6 files, 5 passing
+- [x] 7.7. core/class - 1 file, all passing
+  - [x] 7.7.1. core/class/initialize_spec - 1 file, 4 examples, 5 expectations, 0 failures, 0 errors
+- [x] 7.8. core/complex - 6 files, all passing
   - [x] 7.8.1. core/complex/conj_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.8.2. core/complex/imag_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.8.3. core/complex/magnitude_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.8.4. core/complex/quo_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.8.5. core/complex/rect_spec - 1 file, 2 examples, 2 expectations, 0 failures, 0 errors
-  - [ ] 7.8.6. core/complex/rectangular_spec - 1 failing example
-- [ ] 7.9. core/data - 3 files, 1 passing
-  - [ ] 7.9.1. core/data/deconstruct_keys_spec - 10 failing examples
-  - [ ] 7.9.2. core/data/initialize_spec - fails
+  - [x] 7.8.6. core/complex/rectangular_spec - 1 file, 14 examples, 59 expectations, 0 failures, 0 errors
+- [x] 7.9. core/data - 3 files, all passing
+  - [x] 7.9.1. core/data/deconstruct_keys_spec - 1 file, 12 examples, 20 expectations, 0 failures, 0 errors
+  - [x] 7.9.2. core/data/initialize_spec - 1 file, 25 examples, 47 expectations, 0 failures, 0 errors
   - [x] 7.9.3. core/data/inspect_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
 - [x] 7.10. core/dir - 13 files, all passing
   - [x] 7.10.1. core/dir/chdir_spec - 1 file, 21 examples, 30 expectations, 0 failures, 0 errors
@@ -4274,16 +4274,16 @@ optional/capi/process_spec.
   - [x] 7.11.1. core/encoding/compatible_spec - 1 file, 385 examples, 388 expectations, 0 failures, 0 errors
   - [x] 7.11.2. core/encoding/find_spec - 1 file, 13 examples, 549 expectations, 0 failures, 0 errors
   - [x] 7.11.3. core/encoding/to_s_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-- [ ] 7.12. core/enumerable - 9 files, 7 passing
+- [x] 7.12. core/enumerable - 9 files, all passing
   - [x] 7.12.1. core/enumerable/collect_concat_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.12.2. core/enumerable/collect_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-  - [ ] 7.12.3. core/enumerable/cycle_spec - 2 failing examples
+  - [x] 7.12.3. core/enumerable/cycle_spec - 1 file, 17 examples, 29 expectations, 0 failures, 0 errors
   - [x] 7.12.4. core/enumerable/detect_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.12.5. core/enumerable/entries_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.12.6. core/enumerable/filter_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.12.7. core/enumerable/find_all_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.12.8. core/enumerable/member_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-  - [ ] 7.12.9. core/enumerable/uniq_spec - 2 failing examples
+  - [x] 7.12.9. core/enumerable/uniq_spec - 1 file, 9 examples, 20 expectations, 0 failures, 0 errors
 - [x] 7.13. core/enumerator - 17 files, all passing
   - [x] 7.13.1. core/enumerator/lazy/collect_concat_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.13.2. core/enumerator/lazy/collect_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
@@ -4312,9 +4312,9 @@ optional/capi/process_spec.
   - [x] 7.14.7. core/env/member_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.14.8. core/env/store_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.14.9. core/env/update_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-- [ ] 7.15. core/exception - 2 files, 0 passing
-  - [ ] 7.15.1. core/exception/detailed_message_spec - 1 failing example
-  - [ ] 7.15.2. core/exception/full_message_spec - 2 failing examples
+- [x] 7.15. core/exception - 2 files, all passing
+  - [x] 7.15.1. core/exception/detailed_message_spec - 1 file, 11 examples, 13 expectations, 0 failures, 0 errors
+  - [x] 7.15.2. core/exception/full_message_spec - 1 file, 21 examples, 59 expectations, 0 failures, 0 errors
 - [x] 7.16. core/false - 2 files, all passing
   - [x] 7.16.1. core/false/inspect_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.16.2. core/false/xor_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
@@ -4415,10 +4415,10 @@ optional/capi/process_spec.
   - [x] 7.19.4. core/float/modulo_spec - 1 file, 9 examples, 19 expectations, 0 failures, 0 errors
   - [x] 7.19.5. core/float/quo_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.19.6. core/float/to_int_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-- [ ] 7.20. core/hash - 12 files, 10 passing
-  - [ ] 7.20.1. core/hash/compare_by_identity_spec - 1 failing example
+- [x] 7.20. core/hash - 12 files, all passing
+  - [x] 7.20.1. core/hash/compare_by_identity_spec - 1 file, 20 examples, 34 expectations, 0 failures, 0 errors
   - [x] 7.20.2. core/hash/each_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-  - [ ] 7.20.3. core/hash/element_set_spec - 1 failing example
+  - [x] 7.20.3. core/hash/element_set_spec - 1 file, 13 examples, 21 expectations, 0 failures, 0 errors
   - [x] 7.20.4. core/hash/filter_spec - 1 file, 2 examples, 2 expectations, 0 failures, 0 errors
   - [x] 7.20.5. core/hash/has_key_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.20.6. core/hash/has_value_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
@@ -4428,33 +4428,33 @@ optional/capi/process_spec.
   - [x] 7.20.10. core/hash/store_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.20.11. core/hash/to_s_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.20.12. core/hash/update_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-- [ ] 7.21. core/integer - 6 files, 5 passing
+- [x] 7.21. core/integer - 6 files, all passing
   - [x] 7.21.1. core/integer/case_compare_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-  - [ ] 7.21.2. core/integer/equal_value_spec - 1 failing example
+  - [x] 7.21.2. core/integer/equal_value_spec - 1 file, 6 examples, 24 expectations, 0 failures, 0 errors
   - [x] 7.21.3. core/integer/inspect_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.21.4. core/integer/magnitude_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.21.5. core/integer/modulo_spec - 1 file, 9 examples, 56 expectations, 0 failures, 0 errors
   - [x] 7.21.6. core/integer/next_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-- [ ] 7.22. core/io - 19 files, 5 passing
-  - [ ] 7.22.1. core/io/advise_spec - 2 failing examples
+- [x] 7.22. core/io - 19 files, all passing
+  - [x] 7.22.1. core/io/advise_spec - 1 file, 13 examples, 13 expectations, 0 failures, 0 errors
   - [x] 7.22.2. core/io/binread_spec - 1 file, 9 examples, 9 expectations, 0 failures, 0 errors
   - [x] 7.22.3. core/io/binwrite_spec - 1 file, 13 examples, 19 expectations, 0 failures, 0 errors
-  - [ ] 7.22.4. core/io/buffer/write_spec - 4 failing examples
-  - [ ] 7.22.5. core/io/copy_stream_spec - 34 failing examples
-  - [ ] 7.22.6. core/io/external_encoding_spec - 2 failing examples
+  - [x] 7.22.4. core/io/buffer/write_spec - 1 file, 4 examples, 8 expectations, 0 failures, 0 errors
+  - [x] 7.22.5. core/io/copy_stream_spec - 1 file, 116 examples, 203 expectations, 0 failures, 0 errors
+  - [x] 7.22.6. core/io/external_encoding_spec - 1 file, 60 examples, 60 expectations, 0 failures, 0 errors
   - [x] 7.22.7. core/io/foreach_spec - 1 file, 39 examples, 56 expectations, 0 failures, 0 errors
-  - [ ] 7.22.8. core/io/inspect_spec - 6 failing examples
-  - [ ] 7.22.9. core/io/internal_encoding_spec - 12 failing examples
-  - [ ] 7.22.10. core/io/popen_spec - 2 failing examples
-  - [ ] 7.22.11. core/io/pread_spec - 2 failing examples
-  - [ ] 7.22.12. core/io/read_nonblock_spec - 2 failing examples
-  - [ ] 7.22.13. core/io/read_spec - 4 failing examples
+  - [x] 7.22.8. core/io/inspect_spec - 1 file, 4 examples, 6 expectations, 0 failures, 0 errors
+  - [x] 7.22.9. core/io/internal_encoding_spec - 1 file, 85 examples, 85 expectations, 0 failures, 0 errors
+  - [x] 7.22.10. core/io/popen_spec - 1 file, 41 examples, 47 expectations, 0 failures, 0 errors
+  - [x] 7.22.11. core/io/pread_spec - 1 file, 24 examples, 35 expectations, 0 failures, 0 errors
+  - [x] 7.22.12. core/io/read_nonblock_spec - 1 file, 20 examples, 29 expectations, 0 failures, 0 errors
+  - [x] 7.22.13. core/io/read_spec - 1 file, 111 examples, 161 expectations, 0 failures, 0 errors
   - [x] 7.22.14. core/io/readlines_spec - 1 file, 60 examples, 70 expectations, 0 failures, 0 errors
-  - [ ] 7.22.15. core/io/reopen_spec - 6 failing examples
-  - [ ] 7.22.16. core/io/set_encoding_spec - 20 failing examples
+  - [x] 7.22.15. core/io/reopen_spec - 1 file, 35 examples, 54 expectations, 0 failures, 0 errors
+  - [x] 7.22.16. core/io/set_encoding_spec - 1 file, 63 examples, 129 expectations, 0 failures, 0 errors
   - [x] 7.22.17. core/io/sysopen_spec - 1 file, 7 examples, 11 expectations, 0 failures, 0 errors
-  - [ ] 7.22.18. core/io/write_nonblock_spec - 2 failing examples
-  - [ ] 7.22.19. core/io/write_spec - 3 failing examples
+  - [x] 7.22.18. core/io/write_nonblock_spec - 1 file, 19 examples, 27 expectations, 0 failures, 0 errors
+  - [x] 7.22.19. core/io/write_spec - 1 file, 54 examples, 84 expectations, 0 failures, 0 errors
 - [x] 7.23. core/kernel - 60 files, all passing
   - [x] 7.23.1. core/kernel/Array_spec - 1 file, 14 examples, 24 expectations, 0 failures, 0 errors
   - [x] 7.23.2. core/kernel/Complex_spec - 1 file, 69 examples, 131 expectations, 0 failures, 0 errors
@@ -4516,8 +4516,8 @@ optional/capi/process_spec.
   - [x] 7.23.58. core/kernel/trap_spec - 1 file, 2 examples, 2 expectations, 0 failures, 0 errors
   - [x] 7.23.59. core/kernel/untrace_var_spec - 1 file, 2 examples, 2 expectations, 0 failures, 0 errors
   - [x] 7.23.60. core/kernel/warn_spec - 1 file, 34 examples, 52 expectations, 0 failures, 0 errors
-- [ ] 7.24. core/marshal - 2 files, 1 passing
-  - [ ] 7.24.1. core/marshal/load_spec - 7 failing examples
+- [x] 7.24. core/marshal - 2 files, all passing
+  - [x] 7.24.1. core/marshal/load_spec - 1 file, 269 examples, 466 expectations, 0 failures, 0 errors
   - [x] 7.24.2. core/marshal/restore_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
 - [x] 7.25. core/matchdata - 3 files, all passing
   - [x] 7.25.1. core/matchdata/deconstruct_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
@@ -4529,15 +4529,15 @@ optional/capi/process_spec.
   - [x] 7.26.3. core/method/eql_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.26.4. core/method/inspect_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.26.5. core/method/to_s_spec - 1 file, 16 examples, 26 expectations, 0 failures, 0 errors
-- [ ] 7.27. core/module - 8 files, 3 passing
-  - [ ] 7.27.1. core/module/alias_method_spec - 1 failing example
-  - [ ] 7.27.2. core/module/ancestors_spec - 3 failing examples
+- [x] 7.27. core/module - 8 files, all passing
+  - [x] 7.27.1. core/module/alias_method_spec - 1 file, 24 examples, 41 expectations, 0 failures, 0 errors
+  - [x] 7.27.2. core/module/ancestors_spec - 1 file, 9 examples, 14 expectations, 0 failures, 0 errors
   - [x] 7.27.3. core/module/class_eval_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.27.4. core/module/class_exec_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-  - [ ] 7.27.5. core/module/include_spec - 1 failing example
-  - [ ] 7.27.6. core/module/included_modules_spec - 1 failing example
+  - [x] 7.27.5. core/module/include_spec - 1 file, 36 examples, 86 expectations, 0 failures, 0 errors
+  - [x] 7.27.6. core/module/included_modules_spec - 1 file, 1 example, 6 expectations, 0 failures, 0 errors
   - [x] 7.27.7. core/module/inspect_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-  - [ ] 7.27.8. core/module/module_function_spec - 2 failing examples
+  - [x] 7.27.8. core/module/module_function_spec - 1 file, 35 examples, 90 expectations, 0 failures, 0 errors
 - [x] 7.28. core/nil - 1 file, all passing
   - [x] 7.28.1. core/nil/xor_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
 - [x] 7.29. core/numeric - 4 files, all passing
@@ -4550,17 +4550,17 @@ optional/capi/process_spec.
   - [x] 7.30.2. core/objectspace/weakmap/key_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.30.3. core/objectspace/weakmap/length_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.30.4. core/objectspace/weakmap/member_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-- [ ] 7.31. core/proc - 6 files, 5 passing
+- [x] 7.31. core/proc - 6 files, all passing
   - [x] 7.31.1. core/proc/case_compare_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-  - [ ] 7.31.2. core/proc/clone_spec - 1 failing example
+  - [x] 7.31.2. core/proc/clone_spec - 1 file, 7 examples, 14 expectations, 0 failures, 0 errors
   - [x] 7.31.3. core/proc/element_reference_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.31.4. core/proc/eql_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.31.5. core/proc/inspect_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.31.6. core/proc/yield_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-- [ ] 7.32. core/process - 5 files, 2 passing
-  - [ ] 7.32.1. core/process/exec_spec - 2 failing examples
-  - [ ] 7.32.2. core/process/kill_spec - 1 failing example
-  - [ ] 7.32.3. core/process/spawn_spec - 7 failing examples
+- [x] 7.32. core/process - 5 files, all passing
+  - [x] 7.32.1. core/process/exec_spec - 1 file, 24 examples, 31 expectations, 0 failures, 0 errors
+  - [x] 7.32.2. core/process/kill_spec - 1 file, 19 examples, 26 expectations, 0 failures, 0 errors
+  - [x] 7.32.3. core/process/spawn_spec - 1 file, 91 examples, 115 expectations, 0 failures, 0 errors
   - [x] 7.32.4. core/process/waitpid2_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.32.5. core/process/waitpid_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
 - [x] 7.33. core/queue - 5 files, all passing
@@ -4572,42 +4572,42 @@ optional/capi/process_spec.
 - [x] 7.34. core/rational - 2 files, all passing
   - [x] 7.34.1. core/rational/magnitude_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.34.2. core/rational/quo_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-- [ ] 7.35. core/regexp - 3 files, 2 passing
+- [x] 7.35. core/regexp - 3 files, all passing
   - [x] 7.35.1. core/regexp/eql_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.35.2. core/regexp/escape_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-  - [ ] 7.35.3. core/regexp/initialize_spec - 2 failing examples
-- [ ] 7.36. core/set - 22 files, 15 passing
+  - [x] 7.35.3. core/regexp/initialize_spec - 1 file, 4 examples, 4 expectations, 0 failures, 0 errors
+- [x] 7.36. core/set - 22 files, all passing
   - [x] 7.36.1. core/set/append_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.36.2. core/set/case_compare_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.36.3. core/set/collect_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.36.4. core/set/difference_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.36.5. core/set/eql_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-  - [ ] 7.36.6. core/set/exclusion_spec - 2 failing examples
+  - [x] 7.36.6. core/set/exclusion_spec - 1 file, 4 examples, 7 expectations, 0 failures, 0 errors
   - [x] 7.36.7. core/set/filter_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-  - [ ] 7.36.8. core/set/flatten_spec - 1 failing example
+  - [x] 7.36.8. core/set/flatten_spec - 1 file, 9 examples, 10 expectations, 0 failures, 0 errors
   - [x] 7.36.9. core/set/gt_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.36.10. core/set/gte_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-  - [ ] 7.36.11. core/set/initialize_spec - 1 failing example
+  - [x] 7.36.11. core/set/initialize_spec - 1 file, 12 examples, 32 expectations, 0 failures, 0 errors
   - [x] 7.36.12. core/set/inspect_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.36.13. core/set/intersection_spec - 1 file, 4 examples, 7 expectations, 0 failures, 0 errors
   - [x] 7.36.14. core/set/length_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.36.15. core/set/lt_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.36.16. core/set/lte_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-  - [ ] 7.36.17. core/set/map_spec - 1 failing example
+  - [x] 7.36.17. core/set/map_spec - 1 file, 4 examples, 4 expectations, 0 failures, 0 errors
   - [x] 7.36.18. core/set/member_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-  - [ ] 7.36.19. core/set/minus_spec - 1 failing example
+  - [x] 7.36.19. core/set/minus_spec - 1 file, 3 examples, 6 expectations, 0 failures, 0 errors
   - [x] 7.36.20. core/set/plus_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-  - [ ] 7.36.21. core/set/replace_spec - 1 failing example
-  - [ ] 7.36.22. core/set/union_spec - 2 failing examples
-- [ ] 7.37. core/signal - 1 file, 0 passing
-  - [ ] 7.37.1. core/signal/trap_spec - 1 failing example
+  - [x] 7.36.21. core/set/replace_spec - 1 file, 5 examples, 13 expectations, 0 failures, 0 errors
+  - [x] 7.36.22. core/set/union_spec - 1 file, 4 examples, 7 expectations, 0 failures, 0 errors
+- [x] 7.37. core/signal - 1 file, all passing
+  - [x] 7.37.1. core/signal/trap_spec - 1 file, 43 examples, 61 expectations, 0 failures, 0 errors
 - [x] 7.38. core/sizedqueue - 5 files, all passing
   - [x] 7.38.1. core/sizedqueue/deq_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.38.2. core/sizedqueue/enq_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.38.3. core/sizedqueue/length_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.38.4. core/sizedqueue/push_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.38.5. core/sizedqueue/shift_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-- [ ] 7.39. core/string - 19 files, 18 passing
+- [x] 7.39. core/string - 19 files, all passing
   - [x] 7.39.1. core/string/case_compare_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.39.2. core/string/count_spec - 1 file, 10 examples, 53 expectations, 0 failures, 0 errors
   - [x] 7.39.3. core/string/dedup_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
@@ -4616,7 +4616,7 @@ optional/capi/process_spec.
   - [x] 7.39.6. core/string/intern_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.39.7. core/string/lines_spec - 1 file, 23 examples, 73 expectations, 0 failures, 0 errors
   - [x] 7.39.8. core/string/lstrip_spec - 1 file, 23 examples, 57 expectations, 0 failures, 0 errors
-  - [ ] 7.39.9. core/string/match_spec - 2 failing examples
+  - [x] 7.39.9. core/string/match_spec - 1 file, 24 examples, 40 expectations, 0 failures, 0 errors
   - [x] 7.39.10. core/string/modulo_spec - 1 file, 274 examples, 1109 expectations, 0 failures, 0 errors
   - [x] 7.39.11. core/string/next_spec - 1 file, 2 examples, 2 expectations, 0 failures, 0 errors
   - [x] 7.39.12. core/string/rstrip_spec - 1 file, 24 examples, 57 expectations, 0 failures, 0 errors
@@ -4640,15 +4640,15 @@ optional/capi/process_spec.
   - [x] 7.41.4. core/symbol/next_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.41.5. core/symbol/size_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.41.6. core/symbol/slice_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-- [ ] 7.42. core/thread - 8 files, 6 passing
+- [x] 7.42. core/thread - 8 files, all passing
   - [x] 7.42.1. core/thread/backtrace_locations_spec - 1 file, 18 examples, 51 expectations, 0 failures, 0 errors
   - [x] 7.42.2. core/thread/backtrace_spec - 1 file, 13 examples, 18 expectations, 0 failures, 0 errors
   - [x] 7.42.3. core/thread/exit_spec - 1 file, 2 examples, 2 expectations, 0 failures, 0 errors
   - [x] 7.42.4. core/thread/fork_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.42.5. core/thread/inspect_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-  - [ ] 7.42.6. core/thread/raise_spec - 1 failing example
+  - [x] 7.42.6. core/thread/raise_spec - 1 file, 77 examples, 115 expectations, 0 failures, 0 errors
   - [x] 7.42.7. core/thread/terminate_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-  - [ ] 7.42.8. core/thread/to_s_spec - 2 failing examples
+  - [x] 7.42.8. core/thread/to_s_spec - 1 file, 14 examples, 15 expectations, 0 failures, 0 errors
 - [x] 7.43. core/time - 15 files, all passing
   - [x] 7.43.1. core/time/ctime_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.43.2. core/time/getgm_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
@@ -4715,29 +4715,29 @@ optional/capi/process_spec.
   - [x] 7.52.8. library/matrix/t_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.52.9. library/matrix/tr_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.52.10. library/matrix/unit_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-- [ ] 7.53. library/objectspace - 1 file, 0 passing
-  - [ ] 7.53.1. library/objectspace/reachable_objects_from_spec - 1 failing example
+- [x] 7.53. library/objectspace - 1 file, all passing
+  - [x] 7.53.1. library/objectspace/reachable_objects_from_spec - 1 file, 8 examples, 11 expectations, 0 failures, 0 errors
 - [x] 7.54. library/openstruct - 1 file, all passing
   - [x] 7.54.1. library/openstruct/inspect_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-- [ ] 7.55. library/socket - 5 files, 1 passing
+- [x] 7.55. library/socket - 5 files, all passing
   - [x] 7.55.1. library/socket/addrinfo/to_s_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-  - [ ] 7.55.2. library/socket/ipsocket/inspect_spec - 3 failing examples, new upstream
-  - [ ] 7.55.3. library/socket/socket/tcp_spec - 2 failing examples
-  - [ ] 7.55.4. library/socket/tcpsocket/initialize_spec - 3 failing examples
-  - [ ] 7.55.5. library/socket/tcpsocket/open_spec - 3 failing examples
-- [ ] 7.56. library/stringio - 7 files, 6 passing
+  - [x] 7.55.2. library/socket/ipsocket/inspect_spec - 1 file, 4 examples, 4 expectations, 0 failures, 0 errors
+  - [x] 7.55.3. library/socket/socket/tcp_spec - 1 file, 8 examples, 10 expectations, 0 failures, 0 errors
+  - [x] 7.55.4. library/socket/tcpsocket/initialize_spec - 1 file, 30 examples, 41 expectations, 0 failures, 0 errors
+  - [x] 7.55.5. library/socket/tcpsocket/open_spec - 1 file, 11 examples, 16 expectations, 0 failures, 0 errors
+- [x] 7.56. library/stringio - 7 files, all passing
   - [x] 7.56.1. library/stringio/each_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.56.2. library/stringio/eof_spec - 1 file, 3 examples, 6 expectations, 0 failures, 0 errors
   - [x] 7.56.3. library/stringio/isatty_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.56.4. library/stringio/printf_spec - 1 file, 173 examples, 542 expectations, 0 failures, 0 errors
   - [x] 7.56.5. library/stringio/size_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.56.6. library/stringio/tell_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
-  - [ ] 7.56.7. library/stringio/ungetc_spec - 4 failing examples
-- [ ] 7.57. library/stringscanner - 4 files, 3 passing
+  - [x] 7.56.7. library/stringio/ungetc_spec - 1 file, 12 examples, 18 expectations, 0 failures, 0 errors
+- [x] 7.57. library/stringscanner - 4 files, all passing
   - [x] 7.57.1. library/stringscanner/bol_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.57.2. library/stringscanner/concat_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.57.3. library/stringscanner/pointer_spec - 1 file, 2 examples, 2 expectations, 0 failures, 0 errors
-  - [ ] 7.57.4. library/stringscanner/rest_size_spec - 1 failing example
+  - [x] 7.57.4. library/stringscanner/rest_size_spec - 1 file, 2 examples, 8 expectations, 0 failures, 0 errors
 - [x] 7.58. library/time - 2 files, all passing
   - [x] 7.58.1. library/time/iso8601_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 7.58.2. library/time/rfc822_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
@@ -4749,22 +4749,22 @@ optional/capi/process_spec.
   - [x] 7.59.5. optional/capi/io_spec - 1 file, 85 examples, 108 expectations, 0 failures, 0 errors
   - [x] 7.59.6. optional/capi/module_spec - 1 file, 63 examples, 82 expectations, 0 failures, 0 errors
   - [x] 7.59.7. optional/capi/rbasic_spec - 1 file, 3 examples, 5 expectations, 0 failures, 0 errors
-- [ ] 7.60. Linux only - 15 files, 0 passing
-  - [ ] 7.60.1. core/file/birthtime_spec - fails on Linux, where the spec runs and macOS skips it
-  - [ ] 7.60.2. library/socket/addrinfo/initialize_spec - fails on Linux, where the spec runs and macOS skips it
-  - [ ] 7.60.3. library/socket/ancillarydata/cmsg_is_spec - fails on Linux, where the spec runs and macOS skips it
-  - [ ] 7.60.4. library/socket/ancillarydata/data_spec - fails on Linux, where the spec runs and macOS skips it
-  - [ ] 7.60.5. library/socket/ancillarydata/family_spec - fails on Linux, where the spec runs and macOS skips it
-  - [ ] 7.60.6. library/socket/ancillarydata/initialize_spec - fails on Linux, where the spec runs and macOS skips it
-  - [ ] 7.60.7. library/socket/ancillarydata/int_spec - fails on Linux, where the spec runs and macOS skips it
-  - [ ] 7.60.8. library/socket/ancillarydata/ip_pktinfo_spec - fails on Linux, where the spec runs and macOS skips it
-  - [ ] 7.60.9. library/socket/ancillarydata/ipv6_pktinfo_addr_spec - fails on Linux, where the spec runs and macOS skips it
-  - [ ] 7.60.10. library/socket/ancillarydata/ipv6_pktinfo_ifindex_spec - fails on Linux, where the spec runs and macOS skips it
-  - [ ] 7.60.11. library/socket/ancillarydata/ipv6_pktinfo_spec - fails on Linux, where the spec runs and macOS skips it
-  - [ ] 7.60.12. library/socket/ancillarydata/level_spec - fails on Linux, where the spec runs and macOS skips it
-  - [ ] 7.60.13. library/socket/ancillarydata/type_spec - fails on Linux, where the spec runs and macOS skips it
-  - [ ] 7.60.14. library/socket/ancillarydata/unix_rights_spec - fails on Linux, where the spec runs and macOS skips it
-  - [ ] 7.60.15. library/socket/basicsocket/getsockopt_spec - fails on Linux, where the spec runs and macOS skips it
+- [x] 7.60. Linux only - 15 files, all passing
+  - [x] 7.60.1. core/file/birthtime_spec - 1 file, 5 examples, 5 expectations, 0 failures, 0 errors
+  - [x] 7.60.2. library/socket/addrinfo/initialize_spec - 1 file, 204 examples, 211 expectations, 0 failures, 0 errors
+  - [x] 7.60.3. library/socket/ancillarydata/cmsg_is_spec - 1 file, 5 examples, 5 expectations, 0 failures, 0 errors
+  - [x] 7.60.4. library/socket/ancillarydata/data_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
+  - [x] 7.60.5. library/socket/ancillarydata/family_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
+  - [x] 7.60.6. library/socket/ancillarydata/initialize_spec - 1 file, 44 examples, 44 expectations, 0 failures, 0 errors
+  - [x] 7.60.7. library/socket/ancillarydata/int_spec - 1 file, 7 examples, 7 expectations, 0 failures, 0 errors
+  - [x] 7.60.8. library/socket/ancillarydata/ip_pktinfo_spec - 1 file, 19 examples, 19 expectations, 0 failures, 0 errors
+  - [x] 7.60.9. library/socket/ancillarydata/ipv6_pktinfo_addr_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
+  - [x] 7.60.10. library/socket/ancillarydata/ipv6_pktinfo_ifindex_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
+  - [x] 7.60.11. library/socket/ancillarydata/ipv6_pktinfo_spec - 1 file, 11 examples, 11 expectations, 0 failures, 0 errors
+  - [x] 7.60.12. library/socket/ancillarydata/level_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
+  - [x] 7.60.13. library/socket/ancillarydata/type_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
+  - [x] 7.60.14. library/socket/ancillarydata/unix_rights_spec - 1 file, 9 examples, 9 expectations, 0 failures, 0 errors
+  - [x] 7.60.15. library/socket/basicsocket/getsockopt_spec - 1 file, 23 examples, 57 expectations, 0 failures, 0 errors
 
 
 Fixes during Phase 4 work:

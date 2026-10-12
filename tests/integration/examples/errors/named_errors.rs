@@ -366,3 +366,18 @@ fn disabling_syntax_suggest_leaves_the_report_to_the_syntax_error() {
         );
     }
 }
+
+/// The expected output of both `errors/highlight_keyword` variants.
+const HIGHLIGHT_KEYWORD_OUTPUT: &str = "true\n\"meter offline (RuntimeError)\"\n\"expected true or false as highlight: \\\"yes\\\"\"\n\"expected true or false as highlight: 1\"\n[[\"meter.rb:4\"]]\n[\"meter.rb:4\"]\n";
+
+#[test]
+fn test_errors_highlight_keyword_execution() {
+    let output = run_example("errors/highlight_keyword.rb");
+    assert_eq!(output, HIGHLIGHT_KEYWORD_OUTPUT);
+}
+
+#[test]
+fn test_errors_highlight_keyword_no_parens_execution() {
+    let output = run_example("errors/highlight_keyword_no_parens.rb");
+    assert_eq!(output, HIGHLIGHT_KEYWORD_OUTPUT);
+}

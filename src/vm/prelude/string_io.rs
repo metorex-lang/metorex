@@ -515,15 +515,18 @@ class StringIO
     else
       raise TypeError, "no implicit conversion of #{letter.class} into String"
     end
-    landing = @position - text.length
-    landing = 0 if landing < 0
+    named = @string.encoding
+    held = @string.bytes
+    cursor = pos
     # A position past the end leaves a gap, which Ruby fills with zero bytes
     # so the character lands where the position said.
-    if landing > @string.length
-      @string = @string + "\000" * (landing - @string.length)
-    end
-    @string = @string[0, landing] + text + (@string[landing + text.length..-1] || "")
-    @position = landing
+    held += [0] * (cursor - held.size) if cursor > held.size
+    listed = text.bytes
+    landing = cursor - listed.size
+    landing = 0 if landing < 0
+    tail = held[cursor..-1] || []
+    @string = (held[0, landing] + listed + tail).pack("C*").force_encoding(named)
+    self.pos = landing
     nil
   end
 

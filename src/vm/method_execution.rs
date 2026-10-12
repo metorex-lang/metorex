@@ -167,7 +167,7 @@ impl VirtualMachine {
             _ => false,
         };
         let overrides_builtin = !method.body.is_empty()
-            && (backs_a_collection(&receiver)
+            && ((backs_a_core_value(&receiver) && written_by_the_program(&method))
                 || stands_in_an_extended_module
                 || stands_for_a_class_method
                 || stands_on_its_own_singleton
@@ -1126,17 +1126,11 @@ impl VirtualMachine {
     }
 }
 
-/// Whether an object is an instance of a String, Array, Set, or Hash subclass,
-/// which holds the collection it stands for in an instance variable.
-fn backs_a_collection(receiver: &crate::object::Object) -> bool {
-    use crate::vm::native_methods::{
-        array_subclass_value, hash_subclass_value, set_subclass_value, string_subclass_value,
-    };
+/// Whether an object is an instance of a String, Array, Set, Hash, or Regexp
+/// subclass, which holds the value it stands for in an instance variable.
+fn backs_a_core_value(receiver: &crate::object::Object) -> bool {
     matches!(receiver, crate::object::Object::Instance(_))
-        && (hash_subclass_value(receiver).is_some()
-            || array_subclass_value(receiver).is_some()
-            || set_subclass_value(receiver).is_some()
-            || string_subclass_value(receiver).is_some())
+        && crate::vm::native_methods::subclasses::subclass_backing(receiver).is_some()
 }
 
 /// Whether a method was written by the program rather than by the core

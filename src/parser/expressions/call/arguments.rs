@@ -228,15 +228,21 @@ impl Parser {
 
     /// Check if the next token can start an argument in a parentheses-less call
     /// Also checks if this looks like a dictionary context (value followed by colon)
-    /// Whether the sign at the cursor opens a signed numeric argument rather
-    /// than continuing an arithmetic expression.
+    /// Whether the sign at the cursor opens a signed argument, such as `-1`,
+    /// `+"text"` or `-offset`, rather than continuing an arithmetic
+    /// expression.
     pub(crate) fn signed_literal_argument(&mut self) -> bool {
         matches!(self.peek().kind, TokenKind::Minus | TokenKind::Plus)
             && self.peek().had_leading_space
             && !self.peek_ahead(1).had_leading_space
             && matches!(
                 self.peek_ahead(1).kind,
-                TokenKind::Int(_) | TokenKind::Float(_) | TokenKind::BigInt(_)
+                TokenKind::Int(_)
+                    | TokenKind::Float(_)
+                    | TokenKind::BigInt(_)
+                    | TokenKind::String(_)
+                    | TokenKind::InterpolatedString(_)
+                    | TokenKind::Ident(_)
             )
     }
 

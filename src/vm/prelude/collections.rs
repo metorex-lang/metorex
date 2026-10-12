@@ -782,20 +782,20 @@ class Data
     built = Class.new(self)
     built.define_singleton_method(:members) { members }
     built.class_eval do
-      def self.new(*args, **kwargs)
+      def self.new(*args, **kwargs, &block)
         made = allocate
-        made.send(:initialize, **Data.paired_members(members, args, kwargs))
+        made.send(:initialize, **Data.paired_members(members, args, kwargs), &block)
         made
       end
 
-      def self.[](*args, **kwargs)
+      def self.[](*args, **kwargs, &block)
         # `Measure[amount: 42, unit: "km"]` names its members the way `new`
         # does, so a lone hash whose keys are all members reads as those.
         if kwargs.empty? && args.size == 1 && args[0].is_a?(Hash) &&
            !members.empty? && args[0].keys.all? { |key| members.include?(key.to_sym) }
-          return new(**args[0])
+          return new(**args[0], &block)
         end
-        new(*args, **kwargs)
+        new(*args, **kwargs, &block)
       end
     end
     members.each do |named|
@@ -803,6 +803,19 @@ class Data
     end
     built.class_eval(&body) unless body.nil?
     built
+  end
+
+  # The name a key stands for: a Symbol or a String as it is, and anything
+  # else through `to_str`.
+  def self.member_key(key)
+    return key if key.is_a?(Symbol) || key.is_a?(String)
+    raise TypeError, "#{key.inspect} is not a symbol nor a string" unless key.respond_to?(:to_str)
+    spelled = key.to_str
+    unless spelled.is_a?(String)
+      raise TypeError,
+            "can't convert #{key.class} to String (#{key.class}#to_str gives #{spelled.class})"
+    end
+    spelled
   end
 
   # Positional arguments read as the members they line up with, so
@@ -825,8 +838,9 @@ class Data
     members = self.class.members
     given = {}
     kwargs.each do |key, value|
-      named = key.to_sym
-      raise ArgumentError, "unknown keyword: #{named.inspect}" unless members.include?(named)
+      spelled = Data.member_key(key)
+      named = spelled.to_sym
+      raise ArgumentError, "unknown keyword: #{spelled.inspect}" unless members.include?(named)
       given[named] = value
     end
     missing = members.reject { |named| given.key?(named) }
@@ -881,15 +895,10 @@ class Data
     return {} if keys.size > members.size
     collected = {}
     keys.each do |key|
-      if key.is_a?(Symbol) || key.is_a?(String)
-        named = key.to_sym
-        return collected unless members.include?(named)
-        collected[key] = instance_variable_get("@#{named}")
-      else
-        index = member_position(key)
-        return collected if index >= members.size || index < -members.size
-        collected[key] = instance_variable_get("@#{members[index]}")
-      end
+      spelled = Data.member_key(key)
+      named = spelled.to_sym
+      return collected unless members.include?(named)
+      collected[spelled] = instance_variable_get("@#{named}")
     end
     collected
   end

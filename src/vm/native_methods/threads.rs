@@ -300,10 +300,19 @@ impl VirtualMachine {
                     }
                     _ => None,
                 };
-                Ok(Some(Object::binary_string(match written_at {
-                    Some(place) => format!("#<Thread:0x{address:016x} {place} {doing}>"),
-                    None => format!("#<Thread:0x{address:016x} {doing}>"),
-                })))
+                let label = match inst.borrow().get_var("__thread_name") {
+                    Some(Object::String(name)) => format!("@{}", name.as_str()),
+                    _ => String::new(),
+                };
+                let described = match written_at {
+                    Some(place) => format!("#<Thread:0x{address:016x}{label} {place} {doing}>"),
+                    None => format!("#<Thread:0x{address:016x}{label} {doing}>"),
+                };
+                Ok(Some(if label.is_ascii() {
+                    Object::binary_string(described)
+                } else {
+                    Object::string(described)
+                }))
             }
             // `Thread#initialize` is what a subclass reaches through
             // `super`, and the block it is given is what the thread runs.

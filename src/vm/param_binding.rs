@@ -254,8 +254,8 @@ pub(crate) fn split_keyword_args_for(
                 arguments.push(Object::Dict(Rc::new(RefCell::new(cleaned))));
                 return (arguments, IndexMap::new());
             }
-            // The table of key objects is the hash's own bookkeeping rather
-            // than a keyword, so it is left behind with the markers.
+            // The table of key objects travels with the keys that are not
+            // Symbols, so a `**` parameter gives back the objects they were.
             let kwargs: IndexMap<String, Object> = dict
                 .iter()
                 .filter(|(k, _)| {
@@ -263,7 +263,6 @@ pub(crate) fn split_keyword_args_for(
                         k.as_str(),
                         "__MX_KWARGS__"
                             | crate::vm::native_methods::hash_methods::RUBY2_KEYWORDS_KEY
-                            | crate::vm::native_methods::hash_methods::KEY_OBJECTS_KEY
                     )
                 })
                 .map(|(k, v)| {

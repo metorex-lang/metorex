@@ -482,3 +482,18 @@ fn test_methods_forms_gems_write_no_parens_execution() {
     let output = run_example("methods/forms_gems_write_no_parens.rb");
     assert_eq!(output, FORMS_GEMS_WRITE);
 }
+
+/// The expected output of both `methods/warn_parameters` variants.
+const WARN_PARAMETERS_OUTPUT: &str = "[[:rest, :msgs], [:key, :uplevel], [:key, :category]]\n\"expected true or false as exception: nil\"\n\"expected true or false as exception: 0\"\n\"expected true or false as close_others: 1\"\n\"expected true or false as nochdir: \\\"true\\\"\"\n\"expected true or false as noclose: \\\"x\\\"\"\n";
+
+#[test]
+fn test_methods_warn_parameters_execution() {
+    let output = run_example("methods/warn_parameters.rb");
+    assert_eq!(output, WARN_PARAMETERS_OUTPUT);
+}
+
+#[test]
+fn test_methods_warn_parameters_no_parens_execution() {
+    let output = run_example("methods/warn_parameters_no_parens.rb");
+    assert_eq!(output, WARN_PARAMETERS_OUTPUT);
+}

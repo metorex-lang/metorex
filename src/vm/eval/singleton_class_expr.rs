@@ -34,6 +34,10 @@ fn primitive_singleton_key(receiver: &Object) -> Option<String> {
         // A Regexp is held by reference too, so each one carries its own
         // methods rather than sharing a table with every other pattern.
         Object::Regex(pattern, _) => Some(format!("__regex_{:p}", Rc::as_ptr(pattern))),
+        // A Proc, a Method and a Binding are each an object of their own.
+        Object::Block(held) => Some(format!("__block_{:p}", Rc::as_ptr(held))),
+        Object::Method(held) => Some(format!("__method_{:p}", Rc::as_ptr(held))),
+        Object::Binding(held) => Some(format!("__binding_{:p}", Rc::as_ptr(held))),
         _ => None,
     }
 }

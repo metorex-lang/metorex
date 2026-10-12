@@ -130,8 +130,21 @@ impl VirtualMachine {
                 position,
             ));
         }
-        let first = arguments[0].clone();
-        let second = arguments.get(1).cloned().unwrap_or(Object::Int(0));
+        // A Complex with nothing on the imaginary axis is the number its real
+        // part holds, and one with anything there is no real number.
+        let on_real_line = |value: Object| -> Result<Object, MetorexError> {
+            match complex_parts(&value) {
+                Some((real, imaginary)) if is_zero(&imaginary) => Ok(real),
+                Some(_) => Err(crate::vm::errors::simple_exception(
+                    "TypeError",
+                    "not a real",
+                    position,
+                )),
+                None => Ok(value),
+            }
+        };
+        let first = on_real_line(arguments[0].clone())?;
+        let second = on_real_line(arguments.get(1).cloned().unwrap_or(Object::Int(0)))?;
         // `rect` names the two axes directly, so both parts have to be real
         // numbers: a Numeric that reports itself as not real names no point on
         // either one.
@@ -147,25 +160,16 @@ impl VirtualMachine {
             }
             return self.make_complex(first, second, position).map(Some);
         }
-        // A polar pair is measured along the real line, and a Complex with
-        // nothing on the imaginary axis is the number its real part holds.
-        let flatten = |vm: &mut Self, value: Object| -> Result<Object, MetorexError> {
-            if let Some((real, imaginary)) = complex_parts(&value)
-                && is_zero(&imaginary)
-            {
-                return Ok(real);
-            }
-            if !vm.is_real_operand(&value) {
+        // A polar pair is measured along the real line.
+        for argument in [&first, &second] {
+            if !self.is_real_operand(argument) {
                 return Err(crate::vm::errors::simple_exception(
                     "TypeError",
                     "not a real",
                     position,
                 ));
             }
-            Ok(value)
-        };
-        let first = flatten(self, first)?;
-        let second = flatten(self, second)?;
+        }
         let (real, imaginary) = self.polar_parts(first, second, position)?;
         self.make_complex(real, imaginary, position).map(Some)
     }
@@ -391,6 +395,21 @@ impl VirtualMachine {
         argument: Object,
         position: Position,
     ) -> Result<(Object, Object), MetorexError> {
+        // A point with no length, or one along the positive real line, keeps
+        // its length as it was given. A half and a quarter turn are exact.
+        if is_zero(&modulus) || is_zero(&argument) {
+            return Ok((modulus, Object::Float(0.0)));
+        }
+        match argument {
+            Object::Float(turn) if turn == std::f64::consts::PI => {
+                let negated = self.send_to_object(modulus, "-@", Vec::new(), position)?;
+                return Ok((negated, Object::Float(0.0)));
+            }
+            Object::Float(turn) if turn == std::f64::consts::FRAC_PI_2 => {
+                return Ok((Object::Float(0.0), modulus));
+            }
+            _ => {}
+        }
         let modulus = self.numeric_to_float(&modulus, position)?;
         let argument = self.numeric_to_float(&argument, position)?;
         Ok((

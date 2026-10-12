@@ -54,6 +54,15 @@ impl ObjectHash {
             Object::Instance(instance) => {
                 format!("#<{:p}>", std::rc::Rc::as_ptr(instance))
             }
+            // A class, a module, an exception and a callable are each told
+            // apart by which object they are.
+            Object::Class(class) | Object::Module(class) => {
+                format!("#<{:p}>", std::rc::Rc::as_ptr(class))
+            }
+            Object::Exception(details) => format!("#<{:p}>", std::rc::Rc::as_ptr(details)),
+            Object::Block(block) => format!("#<{:p}>", std::rc::Rc::as_ptr(block)),
+            Object::Method(method) => format!("#<{:p}>", std::rc::Rc::as_ptr(method)),
+            Object::Binding(binding) => format!("#<{:p}>", std::rc::Rc::as_ptr(binding)),
             // A Set is told apart by what it holds, in an order-independent
             // way, so two sets with the same elements are one element.
             Object::Set(set) => {

@@ -1,0 +1,1 @@
+puts "required from RUBYOPT"

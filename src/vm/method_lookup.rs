@@ -612,11 +612,13 @@ impl VirtualMachine {
             }
             cursor = current.superclass();
         }
+        // What Class or Module, and their ancestors, define for their
+        // instances, unless it is private there, as Kernel's functions are.
         if self
             .builtins()
             .class_of(receiver)
-            .find_method(name)
-            .is_some()
+            .find_method_with_owner(name)
+            .is_some_and(|(owner, _)| !owner.is_method_private(name))
         {
             return true;
         }
@@ -827,6 +829,14 @@ impl VirtualMachine {
             }
             if defining_singleton.is_some() {
                 return defining_singleton;
+            }
+            // A module's own instance methods are its instances' business,
+            // so what decides it is Module and the classes above it.
+            if let Object::Module(_) = receiver
+                && let Some(Object::Class(module_class)) = self.globals().get("Module")
+                && let Some((owner, _)) = module_class.find_method_with_owner(name)
+            {
+                return Some(owner);
             }
         }
         // A value's lookup answers with its own class, so the class that

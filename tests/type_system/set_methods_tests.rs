@@ -338,33 +338,20 @@ fn set_holds_arrays_as_elements() {
 }
 
 #[test]
-fn set_add_element_without_a_stable_rendering_errors() {
-    let err = run_err("s = Set.new\ns.add(proc { 1 })");
-    assert!(
-        err.contains("not hashable") || err.contains("Cannot add"),
-        "{}",
-        err
+fn set_holds_a_proc_by_which_proc_it_is() {
+    let result = run(
+        "held = proc { 1 }\nset = Set.new\nset.add(held)\n[set.include?(held), set.include?(proc { 1 })]",
+    );
+    assert_eq!(
+        result,
+        Some(Object::array(vec![Object::Bool(true), Object::Bool(false)]))
     );
 }
 
 #[test]
-fn set_remove_element_without_a_stable_rendering_errors() {
-    let err = run_err("s = Set.new([1])\ns.remove(proc { 1 })");
-    assert!(
-        err.contains("not hashable") || err.contains("Cannot remove"),
-        "{}",
-        err
-    );
-}
-
-#[test]
-fn set_new_with_an_element_without_a_stable_rendering_errors() {
-    let err = run_err("Set.new([proc { 1 }])");
-    assert!(
-        err.contains("not hashable") || err.contains("Cannot add"),
-        "{}",
-        err
-    );
+fn set_deletes_a_proc_it_holds() {
+    let result = run("held = proc { 1 }\nset = Set.new([held])\nset.delete(held)\nset.size");
+    assert_eq!(result, Some(Object::Int(0)));
 }
 
 #[test]

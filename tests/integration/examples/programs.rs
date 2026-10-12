@@ -318,3 +318,18 @@ fn test_programs_system_redirects_no_parens_execution() {
     let output = run_example("programs/system_redirects_no_parens.rb");
     assert_eq!(output, SYSTEM_REDIRECTS_OUTPUT);
 }
+
+/// The expected output of both `programs/spawn_failures` variants.
+const SPAWN_FAILURES_OUTPUT: &str = "\"No such file or directory - no-such-meter-tool\"\n127\n\"No such file or directory - no-such-directory\"\n\"unset\\n\"\n\"unset\\n\"\n6\n";
+
+#[test]
+fn test_programs_spawn_failures_execution() {
+    let output = run_example("programs/spawn_failures.rb");
+    assert_eq!(output, SPAWN_FAILURES_OUTPUT);
+}
+
+#[test]
+fn test_programs_spawn_failures_no_parens_execution() {
+    let output = run_example("programs/spawn_failures_no_parens.rb");
+    assert_eq!(output, SPAWN_FAILURES_OUTPUT);
+}

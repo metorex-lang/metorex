@@ -41,7 +41,7 @@ impl VirtualMachine {
             .checked_neg()
             .and_then(|digits| u32::try_from(digits).ok())
         else {
-            let message = format!("integer {} too small to convert to `int'", precision);
+            let message = format!("integer {} too small to convert to 'int'", precision);
             return Err(MetorexError::UncaughtException {
                 exception: Object::exception("RangeError", message.clone()),
                 location: crate::vm::utils::position_to_location(position),

@@ -133,6 +133,53 @@ impl VirtualMachine {
         Ok(Object::Int(named as i64))
     }
 
+    /// A connection to `text` on `port` that gives up after `seconds`,
+    /// answering nil when the time runs out.
+    pub(crate) fn socket_connect_within(
+        &mut self,
+        text: String,
+        port: i64,
+        seconds: f64,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
+        use std::net::ToSocketAddrs;
+        let host = text.clone();
+        // A limit of zero is already spent, which the operating system's
+        // connect takes as no limit at all.
+        let limit = std::time::Duration::from_secs_f64(seconds.max(0.000_001));
+        let held = self.run_beside_threads(
+            move || {
+                let mut last = std::io::Error::from(std::io::ErrorKind::AddrNotAvailable);
+                for address in (host.as_str(), port as u16).to_socket_addrs()? {
+                    match std::net::TcpStream::connect_timeout(&address, limit) {
+                        Ok(stream) => return Ok(stream),
+                        Err(problem) => last = problem,
+                    }
+                }
+                Err(last)
+            },
+            position,
+        );
+        let held = match held {
+            Ok(held) => held,
+            Err(problem) if problem.kind() == std::io::ErrorKind::TimedOut => {
+                return Ok(Object::Nil);
+            }
+            Err(problem) => {
+                return Err(refused(
+                    position,
+                    format!("connect({text}:{port}): {problem}"),
+                ));
+            }
+        };
+        let _ = held.set_read_timeout(Some(POLL_LIMIT));
+        let named = self.open_sockets.next;
+        self.open_sockets.next += 1;
+        let _ = held.set_nonblocking(true);
+        self.open_sockets.streams.insert(named, held);
+        Ok(Object::Int(named as i64))
+    }
+
     /// Where a listener or a connection sits.
     pub(crate) fn socket_own_address(&mut self, handle: u64) -> Result<Object, MetorexError> {
         let found = self

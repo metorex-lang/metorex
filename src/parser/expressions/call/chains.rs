@@ -216,11 +216,12 @@ impl Parser {
                 if self.match_token(&[TokenKind::RBracket]) {
                     // Empty brackets: obj[] — call with no args
                     let position = expr.position();
+                    let trailing_block = self.subscript_block()?;
                     expr = Expression::MethodCall {
                         receiver: Box::new(expr),
                         method: "[]".to_string(),
                         arguments: vec![],
-                        trailing_block: None,
+                        trailing_block,
                         position,
                     };
                 } else {
@@ -305,20 +306,32 @@ impl Parser {
                             }
                         }
                         let position = expr.position();
+                        let trailing_block = self.subscript_block()?;
                         expr = Expression::MethodCall {
                             receiver: Box::new(expr),
                             method: "[]".to_string(),
                             arguments: args,
-                            trailing_block: None,
+                            trailing_block,
                             position,
                         };
                     } else {
                         self.expect(TokenKind::RBracket, "Expected ']' after array index")?;
                         let position = expr.position();
-                        expr = Expression::Index {
-                            array: Box::new(expr),
-                            index: Box::new(first_arg.expect("an index was parsed")),
-                            position,
+                        let index = first_arg.expect("an index was parsed");
+                        expr = match self.subscript_block()? {
+                            // `klass[1] { ... }` hands `[]` the block.
+                            Some(block) => Expression::MethodCall {
+                                receiver: Box::new(expr),
+                                method: "[]".to_string(),
+                                arguments: vec![index],
+                                trailing_block: Some(block),
+                                position,
+                            },
+                            None => Expression::Index {
+                                array: Box::new(expr),
+                                index: Box::new(index),
+                                position,
+                            },
                         };
                     }
                 }
@@ -456,6 +469,18 @@ impl Parser {
 
     pub(crate) fn starts_do_block(&self) -> bool {
         self.check(&[TokenKind::Do]) && self.condition_depth == 0
+    }
+
+    /// The block a `{` written right after a subscript hands `[]`, as in
+    /// `klass[1] { |value| value * 2 }`.
+    fn subscript_block(&mut self) -> Result<Option<Box<Expression>>, MetorexError> {
+        if self.starts_do_block() && self.paren_less_arg_depth == 0 {
+            return Ok(Some(Box::new(self.parse_block()?)));
+        }
+        if !self.check(&[TokenKind::LBrace]) {
+            return Ok(None);
+        }
+        Ok(Some(Box::new(self.parse_brace_block()?)))
     }
 
     pub(crate) fn parse_postfix_calls(

@@ -568,6 +568,9 @@ class ArgfStream
     if length.nil?
       raise ArgumentError, "wrong number of arguments (given 0, expected 1..2)"
     end
+    unless exception == true || exception == false
+      raise ArgumentError, "expected true or false as exception: #{exception.inspect}"
+    end
     buffer.replace "" unless buffer.nil?
     self.__open_current__
     raise EOFError, "end of file reached" if @current.nil?

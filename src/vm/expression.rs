@@ -522,12 +522,17 @@ impl VirtualMachine {
                 // `ary[range]` answers the slice the range covers. A negative
                 // bound counts from the end, and a start past the end answers
                 // nil the way Ruby's does.
+                // A range over Integers is read here, and one over anything
+                // else is left to the method, which converts its ends.
                 Object::Range {
                     ref start,
                     ref end,
                     exclusive,
                     ..
-                } => {
+                } if [start.as_ref(), end.as_ref()]
+                    .iter()
+                    .all(|bound| matches!(bound, Object::Int(_) | Object::Nil)) =>
+                {
                     let elements = elements_rc.borrow();
                     let length = elements.len() as i64;
                     let resolve = |bound: &Object| match bound {
@@ -696,7 +701,7 @@ impl VirtualMachine {
                     // place in the string.
                     Object::BigInt(_) => Err(crate::vm::errors::simple_exception(
                         "RangeError",
-                        "bignum too big to convert into `long'",
+                        "bignum too big to convert into 'long'",
                         position,
                     )),
                     // An instance of a String subclass carries its characters

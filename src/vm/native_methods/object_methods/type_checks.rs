@@ -103,9 +103,17 @@ impl VirtualMachine {
                         )));
                     }
                 }
-                Ok(Some(Object::Bool(
-                    self.builtins().is_instance_of(receiver, target_class),
-                )))
+                if self.builtins().is_instance_of(receiver, target_class) {
+                    return Ok(Some(Object::Bool(true)));
+                }
+                // A value such as an Array or a String keeps the modules it
+                // was extended with on a singleton class held apart from it.
+                let extended = self
+                    .existing_singleton_class(receiver)
+                    .is_some_and(|singleton| {
+                        self.builtins().is_subclass_of(&singleton, target_class)
+                    });
+                Ok(Some(Object::Bool(extended)))
             }
             _ => Ok(None),
         }

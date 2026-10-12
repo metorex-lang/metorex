@@ -67,7 +67,12 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<String, MetorexError> {
         match arg {
-            Object::String(s) => Ok(name_text(s)),
+            // A name spelled with bytes that are no characters names no
+            // method, as no Symbol could be made of it.
+            Object::String(s) => {
+                self.interned_symbol(s, position)?;
+                Ok(name_text(s))
+            }
             Object::Symbol(s) => Ok(s.as_str().to_string()),
             _ => {
                 if let Some((cls, m)) = self.lookup_method(arg, "to_str")
@@ -75,6 +80,7 @@ impl VirtualMachine {
                 {
                     let result = self.invoke_method(cls, m, arg.clone(), vec![], position)?;
                     if let Object::String(s) = result {
+                        self.interned_symbol(&s, position)?;
                         return Ok(s.as_str().to_string());
                     }
                     let source_class = self.builtins().class_of(arg).name().to_string();

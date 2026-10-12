@@ -191,3 +191,18 @@ fn test_enumerable_lazy_value_packing_no_parens_execution() {
     let output = run_example("enumerable/lazy_value_packing_no_parens.rb");
     assert_eq!(output, LAZY_VALUE_PACKING_OUTPUT);
 }
+
+/// The expected output of both `enumerable/empty_cycles` variants.
+const EMPTY_CYCLES_OUTPUT: &str = "0\n0\nInfinity\n[nil, [1, 2]]\n[1, 2]\n";
+
+#[test]
+fn test_enumerable_empty_cycles_execution() {
+    let output = run_example("enumerable/empty_cycles.rb");
+    assert_eq!(output, EMPTY_CYCLES_OUTPUT);
+}
+
+#[test]
+fn test_enumerable_empty_cycles_no_parens_execution() {
+    let output = run_example("enumerable/empty_cycles_no_parens.rb");
+    assert_eq!(output, EMPTY_CYCLES_OUTPUT);
+}

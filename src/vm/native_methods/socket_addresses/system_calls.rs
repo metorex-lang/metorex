@@ -151,6 +151,31 @@ pub(crate) fn socket_constant(name: &str) -> Option<i64> {
         "IP_ADD_MEMBERSHIP" => libc::IP_ADD_MEMBERSHIP,
         "IP_DROP_MEMBERSHIP" => libc::IP_DROP_MEMBERSHIP,
         "IPV6_V6ONLY" => libc::IPV6_V6ONLY,
+        "IP_RECVTTL" => libc::IP_RECVTTL,
+        "IP_PKTINFO" => libc::IP_PKTINFO,
+        "IPV6_PKTINFO" => libc::IPV6_PKTINFO,
+        "IPV6_RECVPKTINFO" => libc::IPV6_RECVPKTINFO,
+        "IPV6_CHECKSUM" => libc::IPV6_CHECKSUM,
+        "IPV6_HOPLIMIT" => libc::IPV6_HOPLIMIT,
+        "SCM_TIMESTAMP" => libc::SCM_TIMESTAMP,
+        // Names only Linux carries, which Ruby defines only there.
+        // The C library crate marks it deprecated in favor of AF_PACKET,
+        // but Ruby still defines it.
+        #[cfg(target_os = "linux")]
+        #[allow(deprecated)]
+        "SOCK_PACKET" => libc::SOCK_PACKET,
+        #[cfg(target_os = "linux")]
+        "UDP_CORK" => libc::UDP_CORK,
+        #[cfg(target_os = "linux")]
+        "TCP_CORK" => libc::TCP_CORK,
+        #[cfg(target_os = "linux")]
+        "TCP_INFO" => libc::TCP_INFO,
+        #[cfg(target_os = "linux")]
+        "IP_MTU" => libc::IP_MTU,
+        #[cfg(target_os = "linux")]
+        "IPV6_NEXTHOP" => libc::IPV6_NEXTHOP,
+        #[cfg(target_os = "linux")]
+        "SCM_CREDENTIALS" => libc::SCM_CREDENTIALS,
         // How an address named by a path is laid out, which is not a
         // constant the C library names but a shape it settles.
         "SOCKADDR_UN_SIZE" => {
