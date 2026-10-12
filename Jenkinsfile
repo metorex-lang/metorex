@@ -85,6 +85,10 @@ def imageBuildPod = '''
 pipeline {
   agent none
 
+  options {
+    disableConcurrentBuilds(abortPrevious: true)
+  }
+
   parameters {
     booleanParam(name: 'BUILD_CI_IMAGE', defaultValue: false, description: 'Rebuild and push harbor.home.gregdonald.com/metorex/ci:latest before the checks')
   }
