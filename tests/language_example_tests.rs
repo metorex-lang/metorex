@@ -18,5 +18,6 @@ mod integration {
         mod dsl;
         mod enumerable;
         mod eval;
+        mod site;
     }
 }
