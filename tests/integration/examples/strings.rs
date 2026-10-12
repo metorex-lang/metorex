@@ -567,3 +567,18 @@ fn test_strings_mutable_adjacent_literals_no_parens_execution() {
     let output = run_example("strings/mutable_adjacent_literals_no_parens.rb");
     assert_eq!(output, MUTABLE_ADJACENT_LITERALS_OUTPUT);
 }
+
+/// The expected output of both `strings/unicode_succ` variants.
+const UNICODE_SUCC_OUTPUT: &str = "\"চ\"\n\"শশ\"\n\"١٠\"\n\"ぃ\"\n\"aaa00\"\n\")\\x00\"\n\"\\x01\\x00\"\n\"\"\n31\n[\"aa\"]\n[\"1\", \"2\", \"3\"]\n[\"9\", \"10\", \"11\"]\n[]\n[\"aa\", \"ab\"]\n";
+
+#[test]
+fn test_strings_unicode_succ_execution() {
+    let output = run_example("strings/unicode_succ.rb");
+    assert_eq!(output, UNICODE_SUCC_OUTPUT);
+}
+
+#[test]
+fn test_strings_unicode_succ_no_parens_execution() {
+    let output = run_example("strings/unicode_succ_no_parens.rb");
+    assert_eq!(output, UNICODE_SUCC_OUTPUT);
+}

@@ -552,3 +552,18 @@ fn test_require_autoload_and_require_no_parens_execution() {
     let output = run_example("require/autoload_and_require_no_parens.rb");
     assert_eq!(output, AUTOLOAD_AND_REQUIRE_OUTPUT);
 }
+
+/// The expected output of both `require/kernel_autoload_receiver` variants.
+const KERNEL_AUTOLOAD_RECEIVER_OUTPUT: &str = "true\ntrue\nfalse\n";
+
+#[test]
+fn test_require_kernel_autoload_receiver_execution() {
+    let output = run_example("require/kernel_autoload_receiver.rb");
+    assert_eq!(output, KERNEL_AUTOLOAD_RECEIVER_OUTPUT);
+}
+
+#[test]
+fn test_require_kernel_autoload_receiver_no_parens_execution() {
+    let output = run_example("require/kernel_autoload_receiver_no_parens.rb");
+    assert_eq!(output, KERNEL_AUTOLOAD_RECEIVER_OUTPUT);
+}

@@ -31,7 +31,7 @@ impl VirtualMachine {
                         position,
                     ));
                 };
-                if std::path::Path::new(&*path.as_str()).is_dir() {
+                if std::path::Path::new(&path_text(path)).is_dir() {
                     return Err(crate::vm::errors::simple_exception(
                         "Errno::EISDIR",
                         &format!("Is a directory @ io_fread - {path}"),
@@ -63,7 +63,7 @@ impl VirtualMachine {
                     Some(Object::Int(held)) => *held as usize,
                     _ => 0,
                 };
-                let held = std::fs::read(&*path.as_str()).map_err(|problem| {
+                let held = std::fs::read(path_text(path)).map_err(|problem| {
                     crate::vm::errors::simple_exception(
                         "Errno::ENOENT",
                         &format!("No such file or directory @ rb_sysopen - {path}: {problem}"),
@@ -104,7 +104,7 @@ impl VirtualMachine {
                 };
                 // A directory opens but reads as the wrong kind of thing,
                 // which Ruby reports separately from a missing name.
-                if std::path::Path::new(&*path.as_str()).is_dir() {
+                if std::path::Path::new(&path_text(path)).is_dir() {
                     return Err(crate::vm::errors::simple_exception(
                         "Errno::EISDIR",
                         &format!("Is a directory @ io_fread - {path}"),
@@ -122,7 +122,7 @@ impl VirtualMachine {
                     _ => 0,
                 };
                 if counted.is_none() && from == 0 {
-                    let held = std::fs::read_to_string(&*path.as_str()).map_err(|problem| {
+                    let held = std::fs::read_to_string(path_text(path)).map_err(|problem| {
                         crate::vm::errors::simple_exception(
                             "Errno::ENOENT",
                             &format!("No such file or directory @ rb_sysopen - {path}: {problem}"),
@@ -131,7 +131,7 @@ impl VirtualMachine {
                     })?;
                     return Ok(Some(Object::string(held)));
                 }
-                let bytes = std::fs::read(&*path.as_str()).map_err(|problem| {
+                let bytes = std::fs::read(path_text(path)).map_err(|problem| {
                     crate::vm::errors::simple_exception(
                         "Errno::ENOENT",
                         &format!("No such file or directory @ rb_sysopen - {path}: {problem}"),
@@ -184,9 +184,9 @@ impl VirtualMachine {
                         std::mem::ManuallyDrop::new(unsafe { std::fs::File::from_raw_fd(number) });
                     open.metadata()
                 } else if follow {
-                    std::fs::metadata(&*path.as_str())
+                    std::fs::metadata(path_text(path))
                 } else {
-                    std::fs::symlink_metadata(&*path.as_str())
+                    std::fs::symlink_metadata(path_text(path))
                 };
                 let held = held.map_err(|problem| {
                     crate::vm::errors::simple_exception(

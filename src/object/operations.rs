@@ -196,27 +196,33 @@ impl Object {
             }
             (Object::Method(a), Object::Method(b)) => {
                 // Two Method objects are equal when they wrap the same
-                // underlying definition bound to the same receiver. We use
-                // pointer equality first (cheap) and structural body+name+
-                // receiver equality second so freshly bound copies of the
-                // same source method (e.g. from `obj.method(:x)` called
-                // twice, or via aliases sharing the source method) compare
-                // as equal — matching MRI's `Method#==`.
+                // definition bound to the same receiver, as two calls of
+                // `obj.method(:x)` do.
                 let defined_name = |method: &Method| {
                     method
                         .original_name
                         .clone()
                         .unwrap_or_else(|| method.name.clone())
                 };
+                let same_receiver = match (&a.receiver, &b.receiver) {
+                    (Some(ra), Some(rb)) => ra.equals(rb),
+                    (None, None) => true,
+                    _ => false,
+                };
+                // A core method Ruby defines under two names is the same
+                // method under either.
+                // A method written in Ruby is the one written at its source
+                // location, and one written in C the function it names.
+                let same_written_method = defined_name(a) == defined_name(b)
+                    && a.body == b.body
+                    && a.source_location.is_some()
+                    && a.source_location == b.source_location;
+                let same_c_function = a.c_function.is_some() && a.c_function == b.c_function;
                 Rc::ptr_eq(a, b)
-                    || (defined_name(a) == defined_name(b)
-                        && a.body.len() == b.body.len()
-                        && match (&a.receiver, &b.receiver) {
-                            (Some(ra), Some(rb)) => ra.equals(rb),
-                            (None, None) => true,
-                            _ => false,
-                        }
-                        && a.body == b.body)
+                    || (same_receiver
+                        && (same_written_method
+                            || same_c_function
+                            || super::core_aliases::same_core_method(a, b)))
             }
             // Two blocks written apart are never equal, which the positions
             // their bodies carry settle. A copy of one is equal to it: it was

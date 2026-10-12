@@ -341,14 +341,14 @@ impl VirtualMachine {
                 return Ok(Object::Bool(answer.is_truthy()));
             }
         }
-        // A Range covers a value the way `cover?` reports, which is
-        // what `case` uses to pick a branch.
+        // A Range answers `===` the way `cover?` does for a single value,
+        // which is what `case` uses to pick a branch.
         if matches!(left, Object::Range { .. }) {
             let class = self.builtins().class_of(&left);
             if let Some(answer) = self.call_native_method(
                 &class,
                 &left,
-                "cover?",
+                "===",
                 std::slice::from_ref(&right),
                 position,
             )? {

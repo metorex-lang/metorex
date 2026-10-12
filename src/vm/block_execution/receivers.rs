@@ -195,6 +195,27 @@ impl VirtualMachine {
         arguments: Vec<Object>,
         position: Position,
     ) -> Result<Object, MetorexError> {
+        let defines_on_receiver = block.body().iter().any(|statement| {
+            matches!(
+                statement,
+                Statement::MethodDef { .. }
+                    | Statement::FunctionDef { .. }
+                    | Statement::Alias { .. }
+            )
+        });
+        // A value the program cannot hold one copy of has no singleton class
+        // to write the method on, which is refused before anything is set up
+        // to run the body.
+        if defines_on_receiver
+            && crate::vm::native_methods::object_methods::refuses_a_singleton(&receiver)
+        {
+            let message = "can't define singleton".to_string();
+            return Err(MetorexError::UncaughtException {
+                exception: Object::exception("TypeError", message.clone()),
+                location: position_to_location(position),
+                message,
+            });
+        }
         let frame = self.block_frame_at(block, position);
         let body_source_file = block
             .source_file
@@ -253,30 +274,7 @@ impl VirtualMachine {
         // A `def` or an `alias` written at the top of the body belongs to the
         // receiver alone. Anything the body calls out to keeps its own
         // definee, so this reaches only the statements written here.
-        let definee = block
-            .body()
-            .iter()
-            .any(|statement| {
-                matches!(
-                    statement,
-                    Statement::MethodDef { .. }
-                        | Statement::FunctionDef { .. }
-                        | Statement::Alias { .. }
-                )
-            })
-            .then(|| self.singleton_class_of(&receiver));
-        // A value the program cannot hold one copy of has no singleton class
-        // to write the method on.
-        if definee.is_some()
-            && crate::vm::native_methods::object_methods::refuses_a_singleton(&receiver)
-        {
-            let message = "can't define singleton".to_string();
-            return Err(MetorexError::UncaughtException {
-                exception: Object::exception("TypeError", message.clone()),
-                location: position_to_location(position),
-                message,
-            });
-        }
+        let definee = defines_on_receiver.then(|| self.singleton_class_of(&receiver));
         self.enter_running_code(
             std::rc::Rc::clone(&block.written_within),
             block.opened_at.unwrap_or(position.line),

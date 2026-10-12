@@ -20,6 +20,29 @@ pub(crate) fn is_kernel_conversion(name: &str) -> bool {
     KERNEL_CONVERSION_FUNCTIONS.contains(&name)
 }
 
+impl VirtualMachine {
+    /// Whether a conversion raises when it cannot convert, which the
+    /// `exception:` keyword says with true or false and nothing else.
+    pub(crate) fn exception_keyword(
+        &mut self,
+        given: Option<&Object>,
+        position: Position,
+    ) -> Result<bool, MetorexError> {
+        match given {
+            None => Ok(true),
+            Some(Object::Bool(raises)) => Ok(*raises),
+            Some(other) => {
+                let shown = self.get_inspect_representation(other, position)?;
+                Err(crate::vm::errors::simple_exception(
+                    "ArgumentError",
+                    &format!("expected true or false as exception: {shown}"),
+                    position,
+                ))
+            }
+        }
+    }
+}
+
 /// Split the parser-marked keyword hash off the end of an argument list.
 pub(crate) fn split_conversion_keywords(
     arguments: &[Object],
@@ -244,7 +267,7 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         let (positional, keywords) = split_conversion_keywords(arguments);
-        let raise = !matches!(keywords.get("exception"), Some(Object::Bool(false)));
+        let raise = self.exception_keyword(keywords.get("exception"), position)?;
         if positional.is_empty() || positional.len() > 2 {
             return Err(super::super::errors::method_argument_error(
                 "Rational",
@@ -432,7 +455,7 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         let (positional, keywords) = split_conversion_keywords(arguments);
-        let raise = !matches!(keywords.get("exception"), Some(Object::Bool(false)));
+        let raise = self.exception_keyword(keywords.get("exception"), position)?;
         if positional.is_empty() || positional.len() > 2 {
             return Err(super::super::errors::method_argument_error(
                 "Integer",
@@ -469,11 +492,8 @@ impl VirtualMachine {
                     position,
                 )),
             },
-            other if base.is_some() => Err(argument_error(
-                format!(
-                    "base specified for non string value ({})",
-                    self.conversion_class_name(other, position)
-                ),
+            _ if base.is_some() => Err(argument_error(
+                "base specified for non string value".to_string(),
                 position,
             )),
             Object::Int(_) | Object::BigInt(_) => Ok(positional[0].clone()),
@@ -502,19 +522,28 @@ impl VirtualMachine {
         }
     }
 
-    /// `to_int` first, then `to_i`. A non-Integer answer from `to_int` is not
-    /// fatal on its own: Ruby falls through to `to_i` and only gives up if
-    /// that answer is not an Integer either.
+    /// `to_int` first, then `to_str`, read as a String would be, then
+    /// `to_i`. A non-Integer answer from `to_int` is not fatal on its own:
+    /// Ruby falls through to the others and only gives up if none answers.
     fn integer_via_coercion(
         &mut self,
         value: &Object,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        for name in ["to_int", "to_i"] {
-            match self.try_conversion_call(value, name, position)? {
-                Some(converted @ (Object::Int(_) | Object::BigInt(_))) => return Ok(converted),
-                _ => continue,
-            }
+        if let Some(converted @ (Object::Int(_) | Object::BigInt(_))) =
+            self.try_conversion_call(value, "to_int", position)?
+        {
+            return Ok(converted);
+        }
+        if let Some(text @ Object::String(_)) =
+            self.try_conversion_call(value, "to_str", position)?
+        {
+            return self.integer_conversion(&[text], position);
+        }
+        if let Some(converted @ (Object::Int(_) | Object::BigInt(_))) =
+            self.try_conversion_call(value, "to_i", position)?
+        {
+            return Ok(converted);
         }
         Err(type_error(
             format!(
@@ -647,10 +676,7 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         let (positional, keywords) = split_conversion_keywords(arguments);
-        let raise = keywords
-            .get("exception")
-            .map(|value| value.is_truthy())
-            .unwrap_or(true);
+        let raise = self.exception_keyword(keywords.get("exception"), position)?;
         if positional.len() != 1 {
             return Err(super::super::errors::method_argument_error(
                 "Float",

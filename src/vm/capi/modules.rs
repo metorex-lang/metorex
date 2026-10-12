@@ -418,3 +418,17 @@ pub extern "C-unwind" fn rb_include_module(klass: Value, module: Value) {
     let arguments = vec![Object::symbol("include"), to_object(module)];
     call(to_object(klass), "__send__", arguments);
 }
+
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_prepend_module(klass: Value, module: Value) {
+    let arguments = vec![Object::symbol("prepend"), to_object(module)];
+    call(to_object(klass), "__send__", arguments);
+}
+
+/// Marks the constant `name` of `module` deprecated, so a reference to it
+/// warns.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_deprecate_constant(module: Value, name: *const c_char) {
+    let arguments = vec![Object::symbol(text(name))];
+    call(to_object(module), "deprecate_constant", arguments);
+}

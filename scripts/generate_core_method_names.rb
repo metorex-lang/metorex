@@ -42,6 +42,15 @@ main = TOPLEVEL_BINDING.receiver.singleton_class
 rows.unshift("    CoreMethods {\n        owner: \"main\",\n        public: #{listed.(main.public_instance_methods(false))},\n" \
   "        private: #{listed.(main.private_instance_methods(false))},\n        protected: #{listed.(main.protected_instance_methods(false))},\n    },\n")
 
+# The methods each core class or module answers on itself, such as Dir.pwd,
+# which only the public ones are listed for.
+singleton_rows = seen.keys.select(&:name).reject { |mod| FROM_RUBY_SOURCE.include?(mod.name) }.sort_by(&:name).map do |mod|
+  names = mod.singleton_methods(false)
+  next if names.empty?
+
+  "    CoreSingletonMethods {\n        owner: #{mod.name.inspect},\n        public: #{listed.(names)},\n    },\n"
+end.compact
+
 File.write(output, <<~RUST)
   // Written by scripts/generate_core_method_names.rb from Ruby #{RUBY_VERSION}.
 
@@ -56,6 +65,17 @@ File.write(output, <<~RUST)
 
   pub(crate) const CORE_METHODS: &[CoreMethods] = &[
   #{rows.join.chomp}
+  ];
+
+  /// The public methods a core class or module answers on itself, such as
+  /// `Dir.pwd`.
+  pub(crate) struct CoreSingletonMethods {
+      pub(crate) owner: &'static str,
+      pub(crate) public: &'static [&'static str],
+  }
+
+  pub(crate) const CORE_SINGLETON_METHODS: &[CoreSingletonMethods] = &[
+  #{singleton_rows.join.chomp}
   ];
 RUST
 puts "#{rows.size} classes and modules written to #{output}"

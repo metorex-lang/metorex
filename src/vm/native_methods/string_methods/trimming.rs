@@ -96,12 +96,9 @@ impl VirtualMachine {
             }
             "lstrip" => {
                 if !arguments.is_empty() {
-                    return Err(method_argument_error(
-                        method_name,
-                        0,
-                        arguments.len(),
-                        position,
-                    ));
+                    return self
+                        .strip_selected(string_value, method_name, arguments, position)
+                        .map(Some);
                 }
                 Ok(Some(Object::string(
                     string_value
@@ -112,12 +109,9 @@ impl VirtualMachine {
             }
             "rstrip" => {
                 if !arguments.is_empty() {
-                    return Err(method_argument_error(
-                        method_name,
-                        0,
-                        arguments.len(),
-                        position,
-                    ));
+                    return self
+                        .strip_selected(string_value, method_name, arguments, position)
+                        .map(Some);
                 }
                 Ok(Some(Object::string(
                     string_value

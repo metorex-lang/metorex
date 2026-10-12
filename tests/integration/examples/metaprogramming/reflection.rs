@@ -237,3 +237,18 @@ fn test_metaprogramming_kernel_method_objects_no_parens_execution() {
     let output = run_example("metaprogramming/kernel_method_objects_no_parens.rb");
     assert_eq!(output, KERNEL_METHOD_OBJECTS_OUTPUT);
 }
+
+/// The expected output of both `metaprogramming/core_method_aliases` variants.
+const CORE_METHOD_ALIASES_OUTPUT: &str = "true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\nfalse\nfalse\ntrue\ntrue\ntrue\ntrue\ntrue\n:balance\nfalse\ntrue\n";
+
+#[test]
+fn test_metaprogramming_core_method_aliases_execution() {
+    let output = run_example("metaprogramming/core_method_aliases.rb");
+    assert_eq!(output, CORE_METHOD_ALIASES_OUTPUT);
+}
+
+#[test]
+fn test_metaprogramming_core_method_aliases_no_parens_execution() {
+    let output = run_example("metaprogramming/core_method_aliases_no_parens.rb");
+    assert_eq!(output, CORE_METHOD_ALIASES_OUTPUT);
+}

@@ -194,11 +194,18 @@ impl VirtualMachine {
                     };
                     let shape = method_parameter_shape(method_obj);
                     let where_written = self.method_source_label(method_obj);
+                    // An alias names the method it copies after its own name.
+                    let named = match &method_obj.original_name {
+                        Some(original) if *original != method_obj.name => {
+                            format!("{}({original})", method_obj.name)
+                        }
+                        _ => method_obj.name.clone(),
+                    };
                     let rendered = match &method_obj.receiver {
                         None => {
                             format!(
                                 "#<UnboundMethod: {}#{}{}{}>",
-                                owner, method_obj.name, shape, where_written
+                                owner, named, shape, where_written
                             )
                         }
                         Some(bound) => {
@@ -237,10 +244,7 @@ impl VirtualMachine {
                                 _ => String::new(),
                             };
                             if on_singleton {
-                                format!(
-                                    "#<Method: {}.{}{}{}>",
-                                    shown, method_obj.name, shape, where_written
-                                )
+                                format!("#<Method: {}.{}{}{}>", shown, named, shape, where_written)
                             } else {
                                 // A class or module is reached through its own
                                 // singleton class, which is what a method
@@ -258,7 +262,7 @@ impl VirtualMachine {
                                 };
                                 format!(
                                     "#<Method: {}{}#{}{}{}>",
-                                    from, defining, method_obj.name, shape, where_written
+                                    from, defining, named, shape, where_written
                                 )
                             }
                         }

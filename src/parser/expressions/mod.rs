@@ -768,12 +768,7 @@ impl Parser {
             }
             // `:_1` names a symbol and `held._1` a method, neither of which
             // is the numbered parameter.
-            if at > 0
-                && matches!(
-                    tokens[at - 1].kind,
-                    TokenKind::Colon | TokenKind::Dot | TokenKind::SafeDot | TokenKind::Def
-                )
-            {
+            if self.names_method_or_symbol(at) {
                 continue;
             }
             if self.inside_a_nested_block(at, opened_at, closed_at) {
@@ -810,6 +805,24 @@ impl Parser {
             }
         }
         false
+    }
+
+    /// Whether the name at `at` is written right after a dot, a `def` or a
+    /// colon that touches it, so it names a method or a Symbol rather than
+    /// a block's implicit parameter. A colon set apart, as in `c ? a : it`,
+    /// leaves the name a value.
+    fn names_method_or_symbol(&self, at: usize) -> bool {
+        let tokens = self.stream.tokens();
+        at.checked_sub(1)
+            .map(|earlier| &tokens[earlier])
+            .is_some_and(|before| match before.kind {
+                TokenKind::Dot | TokenKind::SafeDot | TokenKind::Def => true,
+                TokenKind::Colon => {
+                    before.position.line == tokens[at].position.line
+                        && before.position.column + 1 == tokens[at].position.column
+                }
+                _ => false,
+            })
     }
 
     /// Whether the token at `at` sits inside a block written within the
@@ -856,7 +869,9 @@ impl Parser {
                 continue;
             }
             match &token.kind {
-                TokenKind::Ident(name) => note(name),
+                TokenKind::Ident(name) if !self.names_method_or_symbol(opened_at + offset) => {
+                    note(name)
+                }
                 // `"#{_1}"` and `:"#{_1}="` read the parameter inside the
                 // string, which arrives here as the text of its `#{}`.
                 TokenKind::InterpolatedString(parts) | TokenKind::CommandString(parts) => {
@@ -921,12 +936,7 @@ impl Parser {
             if self.inside_a_nested_block(at, opened_at, closed_at) {
                 continue;
             }
-            if at > 0
-                && matches!(
-                    tokens[at - 1].kind,
-                    TokenKind::Dot | TokenKind::SafeDot | TokenKind::Def
-                )
-            {
+            if self.names_method_or_symbol(at) {
                 continue;
             }
             // `it` stands for the argument only where a value stands. A name

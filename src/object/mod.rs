@@ -6,6 +6,7 @@ mod binding;
 mod block;
 mod compiled_function;
 mod constructors;
+mod core_aliases;
 mod display;
 pub mod string_value;
 pub(crate) use display::{

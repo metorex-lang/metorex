@@ -1300,6 +1300,8 @@ const C_SEQUENCES_OUTPUT: &str = concat!(
     "[[\"<class:Ledger>\", 8], [\"<main>\", 0], [\"block in <main>\", 28], [\"block in <main>\", 32], [\"nested\", 14], [\"total\", 9]]\n",
     "RubyVM::InstructionSequence\n",
     "true\n",
+    "false\n",
+    "true\n",
     "3\n",
     "1\n",
     "3\n",
@@ -1824,4 +1826,19 @@ fn test_c_extensions_c_marking_execution() {
 fn test_c_extensions_c_marking_no_parens_execution() {
     let output = run_example("c_extensions/c_marking_no_parens.rb");
     assert_eq!(output, C_MARKING_OUTPUT);
+}
+
+/// The expected output of both `c_extensions/c_iteration` variants.
+const C_ITERATION_OUTPUT: &str = "[3, 5, 8]\n[[\"rate\", 2]]\n50\n100\n[:audited, 4]\n[Audited, Ledger]\ntrue\ntrue\nfalse\ntrue\n12157665459056928801\nIO::TimeoutError\n[:lookup, [1], {rate: 2}]\n:given\n[:create, :trunc]\n[:append, :create]\n[]\n";
+
+#[test]
+fn test_c_extensions_c_iteration_execution() {
+    let output = run_example("c_extensions/c_iteration.rb");
+    assert_eq!(output, C_ITERATION_OUTPUT);
+}
+
+#[test]
+fn test_c_extensions_c_iteration_no_parens_execution() {
+    let output = run_example("c_extensions/c_iteration_no_parens.rb");
+    assert_eq!(output, C_ITERATION_OUTPUT);
 }

@@ -43,7 +43,7 @@ fn class_with_non_ident_parent_runtime_error() {
     let stmts = Parser::new(tokens).parse().expect("parse failed");
     let mut vm = VirtualMachine::new();
     let err = vm.execute_program(&stmts).unwrap_err().to_string();
-    assert!(err.contains("superclass must be a Class"));
+    assert!(err.contains("superclass must be an instance of Class (given an instance of Integer)"));
 }
 
 #[test]

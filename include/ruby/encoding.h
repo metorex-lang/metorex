@@ -21,6 +21,7 @@ rb_encoding *rb_ascii8bit_encoding(void);
 VALUE rb_enc_from_encoding(rb_encoding *encoding);
 #define rb_enc_name(encoding) ((encoding)->name)
 rb_encoding *rb_to_encoding(VALUE encoding);
+int rb_enc_dummy_p(rb_encoding *encoding);
 #define ECONV_UNIVERSAL_NEWLINE_DECORATOR 0x00000100
 
 #define ENC_CODERANGE_UNKNOWN 0

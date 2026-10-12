@@ -81,6 +81,11 @@ impl VirtualMachine {
         self.globals_mut().set_variable(".", Object::Int(counted));
     }
 
+    /// Say that `-n` or `-p` wraps the program in a loop over its input.
+    pub fn begin_line_loop(&mut self) {
+        self.reads_lines = true;
+    }
+
     pub fn set_current_line(&mut self, line: String) {
         self.globals_mut().set_variable("_", Object::string(line));
     }

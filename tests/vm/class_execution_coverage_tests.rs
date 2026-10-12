@@ -256,18 +256,16 @@ MRUser.new.a + MRUser.new.b
 }
 
 #[test]
-fn module_reopen_with_existing_class_compatibility() {
-    let result = run(r#"
+fn module_keyword_refuses_a_name_bound_to_a_class() {
+    let err = run_err(
+        r#"
 class CompatClass
 end
 module CompatClass
-  def shared
-    "mixed"
-  end
 end
-:ok
-"#);
-    assert_eq!(result, Some(Object::symbol("ok".to_string())));
+"#,
+    );
+    assert!(err.contains("CompatClass is not a module"));
 }
 
 // ── Nested module inside module (lines 963-984) ──────────────────────────────

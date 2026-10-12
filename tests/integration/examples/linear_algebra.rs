@@ -65,3 +65,18 @@ fn test_linear_algebra_eigenvectors_no_parens_execution() {
     let output = run_example("linear_algebra/eigenvectors_no_parens.rb");
     assert_eq!(output, EIGENVECTORS_OUTPUT);
 }
+
+/// The expected output of both `linear_algebra/matrix_aliases` variants.
+const MATRIX_ALIASES_OUTPUT: &str = ":collect\ntrue\ntrue\ntrue\nMatrix[[1, 3], [2, 4]]\n-2\ntrue\ntrue\n\"Thu, 01 Jan 1970 00:00:00 -0000\"\ntrue\n";
+
+#[test]
+fn test_linear_algebra_matrix_aliases_execution() {
+    let output = run_example("linear_algebra/matrix_aliases.rb");
+    assert_eq!(output, MATRIX_ALIASES_OUTPUT);
+}
+
+#[test]
+fn test_linear_algebra_matrix_aliases_no_parens_execution() {
+    let output = run_example("linear_algebra/matrix_aliases_no_parens.rb");
+    assert_eq!(output, MATRIX_ALIASES_OUTPUT);
+}

@@ -185,6 +185,13 @@ impl Parser {
         }
 
         self.skip_whitespace();
+        // `for (i, j) in` names one group, which reads the same as `for i, j in`.
+        if let [Expression::Array { elements, .. }] = targets.as_slice()
+            && !destructures
+        {
+            targets = elements.clone();
+            destructures = true;
+        }
 
         // Expect 'in' keyword
         self.expect(TokenKind::In, "Expected 'in' after loop variable")?;
@@ -255,6 +262,11 @@ impl Parser {
                 expression: Box::new(expression),
                 position: star.position,
             });
+        }
+        // A parenthesized group takes an element apart into the names it
+        // lists.
+        if self.check(&[TokenKind::LParen]) {
+            return self.parse_assignment_target();
         }
         let target = self.parse_expression_with_lambda()?;
         // Only a form a value can be stored in names a loop variable.

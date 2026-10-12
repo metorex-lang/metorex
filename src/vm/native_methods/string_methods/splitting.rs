@@ -2,27 +2,34 @@
 
 use super::*;
 
-/// The paragraphs a string holds: each one runs up to a break of two or more
-/// newlines, keeps two of them, and the rest of the break is dropped.
+/// The paragraphs a string holds: each one runs through the first two line
+/// ends in a row, a line end being `\n` or `\r\n`, and the line ends after
+/// those are dropped.
 pub(crate) fn paragraphs_of(text: &str) -> Vec<String> {
     let bytes = text.as_bytes();
+    let line_end_at = |at: usize| match bytes.get(at..) {
+        Some([b'\n', ..]) => Some(1),
+        Some([b'\r', b'\n', ..]) => Some(2),
+        _ => None,
+    };
     let mut collected = Vec::new();
     let mut start = 0;
     let mut at = 0;
     while at < bytes.len() {
-        if bytes[at] != b'\n' {
+        let Some(first) = line_end_at(at) else {
             at += 1;
             continue;
-        }
-        let mut run = at;
-        while run < bytes.len() && bytes[run] == b'\n' {
-            run += 1;
-        }
-        if run - at < 2 {
-            at = run;
+        };
+        let Some(second) = line_end_at(at + first) else {
+            at += first;
             continue;
+        };
+        let end = at + first + second;
+        collected.push(text[start..end].to_string());
+        let mut run = end;
+        while let Some(more) = line_end_at(run) {
+            run += more;
         }
-        collected.push(text[start..at + 2].to_string());
         start = run;
         at = run;
     }
@@ -41,6 +48,17 @@ pub(crate) fn chomped_line(piece: String, separator: Option<&str>) -> String {
             .map(|line| line.strip_suffix('\r').unwrap_or(line))
             .unwrap_or(&piece)
             .to_string(),
+        // A paragraph loses every line end it closes with.
+        Some("") => {
+            let mut kept = piece.as_str();
+            while let Some(shorter) = kept
+                .strip_suffix("\r\n")
+                .or_else(|| kept.strip_suffix('\n'))
+            {
+                kept = shorter;
+            }
+            kept.to_string()
+        }
         Some(separator) => piece.strip_suffix(separator).unwrap_or(&piece).to_string(),
     }
 }

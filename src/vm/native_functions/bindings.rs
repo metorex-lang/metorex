@@ -54,6 +54,7 @@ impl VirtualMachine {
             .unwrap_or(Object::Nil);
         let held = crate::object::Binding::with_receiver(variables, receiver);
         held.set_order(order);
+        *held.implicit_parameters.borrow_mut() = self.environment().implicit_parameters();
         // The method the call sits in, which code run through the
         // binding names as its own.
         *held.method.borrow_mut() = self.enclosing_method_names();

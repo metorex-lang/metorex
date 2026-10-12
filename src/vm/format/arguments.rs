@@ -101,7 +101,10 @@ impl VirtualMachine {
             }
             at += 1;
             if at >= letters.len() {
-                return Err(argument_error("incomplete format specifier", position));
+                return Err(argument_error(
+                    "incomplete format specifier; use %% (double %) instead",
+                    position,
+                ));
             }
             if letters[at] == '%' {
                 answer.add("%", &format_encoding, position)?;
@@ -147,7 +150,11 @@ impl VirtualMachine {
             ));
         }
         if unused && matches!(self.globals().get("VERBOSE"), Some(Object::Bool(true))) {
-            eprintln!("warning: too many arguments for format string");
+            let text = format!(
+                "{}too many arguments for format string\n",
+                self.warning_prefix(0, position)
+            );
+            self.warn_through_warning_module(text, position)?;
         }
         let encoding = answer.encoding();
         let made = crate::object::StringValue::with_encoding(answer.text(), encoding);
@@ -255,7 +262,8 @@ impl VirtualMachine {
                 }
             }
         }
-        Err(argument_error("incomplete format specifier", position))
+        // The format ended inside a directive that had begun.
+        Err(argument_error("malformed format string", position))
     }
 
     /// A width or a precision written as `*`, taken from a value beside the

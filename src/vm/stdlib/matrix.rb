@@ -81,10 +81,6 @@ class Vector
     @elements[index]
   end
 
-  def element(index)
-    @elements[index]
-  end
-
   def each(&block)
     return to_enum(:each) if block.nil?
     @elements.each(&block)
@@ -119,10 +115,6 @@ class Vector
   def collect(&block)
     return to_enum(:collect) if block.nil?
     Vector[*@elements.map(&block)]
-  end
-
-  def map(&block)
-    collect(&block)
   end
 
   def +(other)
@@ -175,10 +167,6 @@ class Vector
     total
   end
 
-  def dot(other)
-    inner_product(other)
-  end
-
   def cross_product(*others)
     unless size >= 2
       raise ExceptionForMatrix::ErrOperationNotDefined
@@ -198,20 +186,8 @@ class Vector
     raise ExceptionForMatrix::ErrDimensionMismatch
   end
 
-  def cross(*others)
-    cross_product(*others)
-  end
-
   def magnitude
     Math.sqrt(@elements.inject(0) { |total, value| total + value * value })
-  end
-
-  def norm
-    magnitude
-  end
-
-  def r
-    magnitude
   end
 
   def normalize
@@ -251,6 +227,12 @@ class Vector
 
   class ZeroVectorError < StandardError
   end
+  alias element []
+  alias_method :map, :collect
+  alias_method :dot, :inner_product
+  alias_method :cross, :cross_product
+  alias_method :r, :magnitude
+  alias_method :norm, :magnitude
 end
 
 class Matrix
@@ -337,14 +319,6 @@ class Matrix
     scalar(count, 1)
   end
 
-  def self.unit(count)
-    identity(count)
-  end
-
-  def self.I(count)
-    identity(count)
-  end
-
   def self.zero(row_count, column_count = row_count)
     rows((0...row_count).map { Array.new(column_count, 0) })
   end
@@ -385,16 +359,8 @@ class Matrix
 
   # ── Shape ────────────────────────────────────────────────────────────────
 
-  def row_size
-    @rows.size
-  end
-
   def row_count
     @rows.size
-  end
-
-  def column_size
-    @column_count
   end
 
   def column_count
@@ -410,10 +376,6 @@ class Matrix
     return nil if held.nil?
     return nil if column >= @column_count || column < -@column_count
     held[column]
-  end
-
-  def element(row, column)
-    self[row, column]
   end
 
   def row(index, &block)
@@ -482,10 +444,6 @@ class Matrix
     return to_enum(:collect, which) if block.nil?
     made = @rows.map { |row| row.map(&block) }
     new_matrix(made, @column_count)
-  end
-
-  def map(which = :all, &block)
-    collect(which, &block)
   end
 
   def find_index(*args)
@@ -584,10 +542,6 @@ class Matrix
       @rows.map { |row| row[column] }
     end
     new_matrix(made)
-  end
-
-  def t
-    transpose
   end
 
   # ── Arithmetic ───────────────────────────────────────────────────────────
@@ -700,10 +654,6 @@ class Matrix
     end
   end
 
-  def skew_symmetric?
-    antisymmetric?
-  end
-
   def diagonal?
     raise ExceptionForMatrix::ErrDimensionMismatch unless square?
     (0...row_size).all? do |row|
@@ -781,10 +731,6 @@ class Matrix
     (0...row_size).inject(0) { |total, index| total + self[index, index] }
   end
 
-  def tr
-    trace
-  end
-
   def determinant
     raise ExceptionForMatrix::ErrDimensionMismatch unless square?
     count = row_size
@@ -797,10 +743,6 @@ class Matrix
       total += sign * self[0, column] * first_minor(0, column).determinant
     end
     total
-  end
-
-  def det
-    determinant
   end
 
   def rank
@@ -880,10 +822,6 @@ class Matrix
     self
   end
 
-  def inv
-    inverse
-  end
-
   def cofactor(row, column)
     sign = (row + column).even? ? 1 : -1
     sign * first_minor(row, column).determinant
@@ -891,10 +829,6 @@ class Matrix
 
   def conjugate
     collect { |value| value.conjugate }
-  end
-
-  def conj
-    conjugate
   end
 
   def real
@@ -905,16 +839,8 @@ class Matrix
     collect { |value| value.imaginary }
   end
 
-  def imag
-    imaginary
-  end
-
-  def rectangular
-    [real, imaginary]
-  end
-
   def rect
-    rectangular
+    [real, imaginary]
   end
 
   def round(digits = 0)
@@ -1886,17 +1812,29 @@ class Matrix
     EigenvalueDecomposition.new(self)
   end
 
-  def eigen
-    eigensystem
-  end
-
   # The LU decomposition of this matrix, with the row swaps that keep the
   # arithmetic stable recorded alongside.
   def lup
     LUPDecomposition.new(self)
   end
 
-  def lup_decomposition
-    lup
+  class << self
+    alias_method :unit, :identity
+    alias_method :I, :identity
   end
+
+  alias element []
+  alias_method :row_size, :row_count
+  alias_method :column_size, :column_count
+  alias_method :map, :collect
+  alias_method :skew_symmetric?, :antisymmetric?
+  alias_method :inv, :inverse
+  alias_method :det, :determinant
+  alias_method :tr, :trace
+  alias_method :t, :transpose
+  alias_method :eigen, :eigensystem
+  alias_method :lup_decomposition, :lup
+  alias_method :conj, :conjugate
+  alias_method :imag, :imaginary
+  alias_method :rectangular, :rect
 end

@@ -34,6 +34,11 @@ p written_here.sort.uniq
 p CSequences.first_iseq.class
 
 p CSequences.memsize("ledger").positive?
+# A C method is the C function it names.
+same = CSequences.method(:describe) == CSequences.method(:memsize)
+p same
+same = CSequences.method(:memsize) == CSequences.method(:memsize)
+p same
 outer = nested 0
 inner = nested 3
 p inner[0] - outer[0]

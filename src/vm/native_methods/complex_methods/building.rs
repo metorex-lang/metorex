@@ -15,10 +15,7 @@ impl VirtualMachine {
     ) -> Result<Object, MetorexError> {
         let (positional, keywords) =
             crate::vm::native_methods::kernel_conversion::split_conversion_keywords(arguments);
-        let raise = keywords
-            .get("exception")
-            .map(|value| value.is_truthy())
-            .unwrap_or(true);
+        let raise = self.exception_keyword(keywords.get("exception"), position)?;
         if positional.is_empty() || positional.len() > 2 {
             return Err(argument_count_error(
                 crate::vm::errors::Arity::Range(1, 2),

@@ -397,7 +397,8 @@ impl VirtualMachine {
                     return Ok(Some(Object::Nil));
                 }
                 let places = self.caller_location_objects(position);
-                let Some((skip, length)) = self.caller_slice_bounds(arguments, places.len(), 0)
+                let Some((skip, length)) =
+                    self.caller_slice_bounds(arguments, places.len(), 0, position)?
                 else {
                     return Ok(Some(Object::Nil));
                 };
@@ -421,7 +422,8 @@ impl VirtualMachine {
                 } else {
                     self.thread_backtrace_lines(receiver).unwrap_or_default()
                 };
-                let Some((skip, length)) = self.caller_slice_bounds(arguments, lines.len(), 0)
+                let Some((skip, length)) =
+                    self.caller_slice_bounds(arguments, lines.len(), 0, position)?
                 else {
                     return Ok(Some(Object::Nil));
                 };

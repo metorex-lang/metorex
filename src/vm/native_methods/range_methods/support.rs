@@ -111,6 +111,17 @@ impl VirtualMachine {
                 })
                 .collect());
         }
+        // A String range walks as String#upto does, which ends on length as
+        // well as order: ("a".."ab") reaches "b" through "z" though each sorts
+        // after "ab".
+        if let (Object::String(first), Object::String(last)) = (start, end) {
+            let walked = crate::vm::native_methods::string_sets::upto_sequence(
+                &first.as_str(),
+                &last.as_str(),
+                exclusive,
+            );
+            return Ok(walked.into_iter().map(Object::string).collect());
+        }
         let end_length = name_of(end).map(|text| text.as_str().chars().count());
         let mut walked = Vec::new();
         let mut current = start.clone();

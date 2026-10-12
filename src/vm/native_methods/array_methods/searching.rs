@@ -131,10 +131,11 @@ impl VirtualMachine {
             // `min`, `max`, and `minmax` order with `<=>`, or with the block
             // when one is given.
             "min" | "max" | "minmax" => {
-                if !arguments.is_empty() {
+                let takes_count = method_name != "minmax";
+                if arguments.len() > usize::from(takes_count) {
                     return Err(method_argument_error(
                         method_name,
-                        0,
+                        usize::from(takes_count),
                         arguments.len(),
                         position,
                     ));
@@ -144,6 +145,18 @@ impl VirtualMachine {
                     _ => None,
                 };
                 let elements = array_rc.borrow().clone();
+                if let Some(count) = arguments
+                    .first()
+                    .filter(|held| !matches!(held, Object::Nil))
+                {
+                    let count = self.element_count_argument(count, position)?;
+                    let mut ordered = self.sort_elements(elements, block, position)?;
+                    if method_name == "max" {
+                        ordered.reverse();
+                    }
+                    ordered.truncate(count);
+                    return Ok(Some(Object::array(ordered)));
+                }
                 if elements.is_empty() {
                     return Ok(Some(match method_name {
                         "minmax" => Object::array(vec![Object::Nil, Object::Nil]),
@@ -172,5 +185,22 @@ impl VirtualMachine {
             }
             _ => Ok(None),
         }
+    }
+
+    /// How many elements `min(n)` or `max(n)` answers, read through `to_int`.
+    pub(crate) fn element_count_argument(
+        &mut self,
+        count: &Object,
+        position: Position,
+    ) -> Result<usize, MetorexError> {
+        let count = self.coerce_integer_argument(count, position)?;
+        if count < num_bigint::BigInt::from(0) {
+            return Err(crate::vm::errors::simple_exception(
+                "ArgumentError",
+                &format!("negative size ({count})"),
+                position,
+            ));
+        }
+        Ok(usize::try_from(count).unwrap_or(usize::MAX))
     }
 }

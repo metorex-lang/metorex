@@ -105,6 +105,55 @@ impl VirtualMachine {
         Ok(sets)
     }
 
+    /// `strip`, `lstrip` or `rstrip` given character selectors: the
+    /// characters every selector holds come off the ends the method trims.
+    pub(crate) fn strip_selected(
+        &mut self,
+        string_value: &std::rc::Rc<crate::object::StringValue>,
+        method_name: &str,
+        arguments: &[Object],
+        position: Position,
+    ) -> Result<Object, MetorexError> {
+        let mut selectors = Vec::with_capacity(arguments.len());
+        for argument in arguments {
+            let selector = match argument {
+                held @ Object::String(_) => held.clone(),
+                other => Object::string(self.string_argument(method_name, other, position)?),
+            };
+            if let Object::String(given) = &selector
+                && !crate::vm::native_methods::string_methods::strings_comparable(
+                    string_value,
+                    given,
+                )
+            {
+                return Err(
+                    crate::vm::native_methods::string_methods::clashing_encodings_error(
+                        string_value,
+                        given,
+                        position,
+                    ),
+                );
+            }
+            selectors.push(selector);
+        }
+        let sets = self.character_sets(method_name, &selectors, position)?;
+        let text = string_value.to_text();
+        let selected = |character: char| all_hold(&sets, character);
+        let kept = match method_name {
+            "lstrip" => text.trim_start_matches(selected),
+            "rstrip" => text.trim_end_matches(selected),
+            _ => text.trim_matches(selected),
+        };
+        let made = crate::object::StringValue::with_encoding(
+            kept.to_string(),
+            string_value.encoding_name(),
+        );
+        if string_value.holds_bytes() {
+            made.mark_bytes();
+        }
+        Ok(Object::String(std::rc::Rc::new(made)))
+    }
+
     /// The String methods that read character sets, split apart, or measure
     /// the string without changing it.
     pub(crate) fn call_string_set_method(
@@ -118,6 +167,35 @@ impl VirtualMachine {
             return Ok(None);
         };
         let text = string_value.as_str().to_string();
+        // A set written in an encoding that does not go with the string's
+        // cannot be read against it.
+        if matches!(method_name, "count" | "delete" | "squeeze" | "tr" | "tr_s") {
+            // Nor can a string whose bytes spell nothing in its encoding.
+            if !crate::vm::native_methods::string_methods::holds_valid_text(string_value) {
+                return Err(
+                    crate::vm::native_methods::string_methods::broken_text_error(
+                        string_value,
+                        position,
+                    ),
+                );
+            }
+            for argument in arguments {
+                if let Object::String(given) = argument
+                    && !crate::vm::native_methods::string_methods::strings_comparable(
+                        string_value,
+                        given,
+                    )
+                {
+                    return Err(
+                        crate::vm::native_methods::string_methods::clashing_encodings_error(
+                            string_value,
+                            given,
+                            position,
+                        ),
+                    );
+                }
+            }
+        }
         match method_name {
             "count" | "delete" | "squeeze" => {
                 if method_name != "squeeze" && arguments.is_empty() {

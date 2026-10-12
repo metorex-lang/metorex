@@ -96,6 +96,8 @@ class Enumerator::Lazy < Enumerator
     grouping = false
     group_key = nil
     previous = nil
+    # Each walk of a zip starts the other sources over.
+    alongside_walks = @count.map { |other| other.to_enum(:each) } if @kind == :zip
     walk_source(*args) do |values|
       case @kind
       when nil
@@ -103,9 +105,9 @@ class Enumerator::Lazy < Enumerator
       when :map
         yield @callable.call(*values)
       when :select
-        yield(*values) if @callable.call(packed(values))
+        yield packed(values) if @callable.call(packed(values))
       when :reject
-        yield(*values) unless @callable.call(packed(values))
+        yield packed(values) unless @callable.call(packed(values))
       when :filter_map
         answered = @callable.call(*values)
         yield answered if answered
@@ -119,7 +121,7 @@ class Enumerator::Lazy < Enumerator
           yield answered
         end
       when :compact
-        yield(*values) unless packed(values).nil?
+        yield packed(values) unless packed(values).nil?
       when :grep
         # The block is handed the element the source yielded, which is the
         # values gathered into one where it yielded several.
@@ -132,16 +134,16 @@ class Enumerator::Lazy < Enumerator
         key = @callable.nil? ? packed(values) : @callable.call(*values)
         unless kept.include?(key)
           kept.push(key)
-          yield(*values)
+          yield packed(values)
         end
       when :with_index
         subject = packed(values)
         @callable.call(subject, seen + @count) unless @callable.nil?
-        yield subject, seen + @count
+        yield [subject, seen + @count]
         seen += 1
       when :zip
         subject = packed(values)
-        alongside = @count.map do |other|
+        alongside = alongside_walks.map do |other|
           begin
             other.next
           rescue StopIteration
@@ -198,20 +200,20 @@ class Enumerator::Lazy < Enumerator
       when :take
         break if taken >= @count
         taken += 1
-        yield(*values)
+        yield packed(values)
         break if taken >= @count
       when :take_while
         break unless @callable.call(*values)
-        yield(*values)
+        yield packed(values)
       when :drop
         if seen < @count
           seen += 1
         else
-          yield(*values)
+          yield packed(values)
         end
       when :drop_while
         dropping = false if dropping && !@callable.call(*values)
-        yield(*values) unless dropping
+        yield packed(values) unless dropping
       end
     end
     if grouping && !grouped.empty?

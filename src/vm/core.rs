@@ -292,6 +292,9 @@ pub struct VirtualMachine {
     /// The libraries held in the binary that are running now, by the file
     /// each names itself.
     pub(crate) embedded_libraries_loading: Vec<String>,
+    /// Whether `-n` or `-p` wraps the program in a loop over its input,
+    /// which gives Kernel `chop`, `chomp`, `sub` and `gsub` of its own.
+    pub(crate) reads_lines: bool,
     /// Autoloads currently being loaded, with the thread that initiated
     /// the load. Stored as `(class, name, loading_thread)` triples.
     /// `effective_autoload` consults this list to differentiate the
@@ -628,6 +631,7 @@ impl VirtualMachine {
             source_line_shift: 0,
             loading_paths: Vec::new(),
             embedded_libraries_loading: Vec::new(),
+            reads_lines: false,
             autoload_loading: Vec::new(),
             pending_block: None,
             pending_block_from_ampersand: false,

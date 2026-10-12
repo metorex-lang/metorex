@@ -15,6 +15,9 @@ const FMODE_READABLE: i32 = 0x01;
 const FMODE_WRITABLE: i32 = 0x02;
 const FMODE_BINMODE: i32 = 0x04;
 const FMODE_SYNC: i32 = 0x08;
+const FMODE_APPEND: i32 = 0x40;
+const FMODE_CREATE: i32 = 0x80;
+const FMODE_TRUNC: i32 = 0x800;
 
 const IO_READABLE: i32 = 1;
 const IO_PRIORITY: i32 = 2;
@@ -96,7 +99,45 @@ pub extern "C-unwind" fn rb_io_mode(io: Value) -> i32 {
     if call(to_object(io), "sync", Vec::new()).is_truthy() {
         mode |= FMODE_SYNC;
     }
-    mode
+    mode | opening_flags(&to_object(io))
+}
+
+/// What a file was opened to do beyond reading and writing, from the flags
+/// or the mode string it was opened with: add to its end, bring it into
+/// being, or cut it down.
+fn opening_flags(io: &Object) -> i32 {
+    let Object::Instance(held) = io else {
+        return 0;
+    };
+    let held = held.borrow();
+    let (appends, creates, truncates) =
+        match (held.get_var("__file_flags"), held.get_var("__file_mode")) {
+            (Some(Object::Int(bits)), _) => {
+                let bits = *bits as libc::c_int;
+                (
+                    bits & libc::O_APPEND != 0,
+                    bits & libc::O_CREAT != 0,
+                    bits & libc::O_TRUNC != 0,
+                )
+            }
+            (_, Some(Object::String(mode))) => {
+                let access = mode.as_str().chars().next();
+                (
+                    access == Some('a'),
+                    matches!(access, Some('a' | 'w')),
+                    access == Some('w'),
+                )
+            }
+            _ => (false, false, false),
+        };
+    [
+        (appends, FMODE_APPEND),
+        (creates, FMODE_CREATE),
+        (truncates, FMODE_TRUNC),
+    ]
+    .into_iter()
+    .filter(|(set, _)| *set)
+    .fold(0, |flags, (_, flag)| flags | flag)
 }
 
 /// The `rb_io_t` for `io`, filled from it as it stands. A closed IO gets
@@ -216,6 +257,15 @@ pub extern "C-unwind" fn rb_io_check_io(io: Value) -> Value {
     let type_name = c"IO";
     let method = c"to_io";
     super::objects::rb_check_convert_type(io, T_FILE, type_name.as_ptr(), method.as_ptr())
+}
+
+/// The IO an object stands for, through `to_io`, or a TypeError.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_io_get_io(io: Value) -> Value {
+    const T_FILE: i32 = 0x0b;
+    let type_name = c"IO";
+    let method = c"to_io";
+    super::objects::rb_convert_type(io, T_FILE, type_name.as_ptr(), method.as_ptr())
 }
 
 #[unsafe(no_mangle)]

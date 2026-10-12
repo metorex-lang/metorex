@@ -222,14 +222,32 @@ fn array_max_empty() {
 }
 
 #[test]
-fn array_min_error_with_args() {
-    let err = run_err("[1].min(1)");
-    assert!(err.contains("argument"));
+fn array_min_with_a_count_answers_the_smallest_values() {
+    let result = run("[3, 1, 2].min(2)");
+    assert_eq!(
+        result,
+        Some(Object::array(vec![Object::Int(1), Object::Int(2)]))
+    );
 }
 
 #[test]
-fn array_max_error_with_args() {
-    let err = run_err("[1].max(1)");
+fn array_max_with_a_count_answers_the_largest_values() {
+    let result = run("[3, 1, 2].max(2)");
+    assert_eq!(
+        result,
+        Some(Object::array(vec![Object::Int(3), Object::Int(2)]))
+    );
+}
+
+#[test]
+fn array_min_refuses_a_negative_count() {
+    let err = run_err("[1].min(-1)");
+    assert!(err.contains("negative size (-1)"));
+}
+
+#[test]
+fn array_minmax_refuses_a_count() {
+    let err = run_err("[1].minmax(1)");
     assert!(err.contains("argument"));
 }
 

@@ -465,11 +465,10 @@ impl VirtualMachine {
             "autoload" => {
                 // `Kernel.autoload` registers where the caller sits, the same
                 // way the bare form does, rather than on Kernel itself.
-                if module_rc.name() == "Kernel"
-                    && let Some(definee) = self.autoload_definee()
-                    && !Rc::ptr_eq(&definee, module_rc)
-                {
-                    return self.call_class_methods(&definee, method_name, arguments, position);
+                if self.redirects_kernel_autoload(module_rc) {
+                    return self
+                        .register_autoload(method_name, arguments.to_vec(), position)
+                        .map(Some);
                 }
                 let const_name = match arguments.first() {
                     Some(Object::Symbol(s)) => s.as_str().to_string(),
@@ -565,6 +564,11 @@ impl VirtualMachine {
                 return Ok(Some(Object::Nil));
             }
             "autoload?" => {
+                if self.redirects_kernel_autoload(module_rc) {
+                    return self
+                        .register_autoload(method_name, arguments.to_vec(), position)
+                        .map(Some);
+                }
                 let const_name = match arguments.first() {
                     Some(Object::Symbol(s)) => s.as_str().to_string(),
                     Some(Object::String(s)) => s.as_str().to_string(),

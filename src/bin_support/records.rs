@@ -13,6 +13,7 @@ pub(crate) fn run_program(
         vm.execute_program(program)?;
         return Ok(());
     }
+    vm.begin_line_loop();
     // `BEGIN` runs before the loop starts, so a separator it names is in
     // force for the first record too.
     let opening: Vec<metorex::ast::Statement> = program

@@ -124,6 +124,8 @@ pub static mut rb_eRangeError: Value = QNIL;
 #[unsafe(no_mangle)]
 pub static mut rb_eIOError: Value = QNIL;
 #[unsafe(no_mangle)]
+pub static mut rb_eIOTimeoutError: Value = QNIL;
+#[unsafe(no_mangle)]
 pub static mut rb_eRuntimeError: Value = QNIL;
 #[unsafe(no_mangle)]
 pub static mut rb_eFrozenError: Value = QNIL;
@@ -178,7 +180,7 @@ impl VirtualMachine {
         };
         // SAFETY: the interpreter runs C extensions on one thread, and these
         // are written before any C code that reads them runs.
-        let globals: [(*mut Value, &str); 79] = [
+        let globals: [(*mut Value, &str); 80] = [
             (&raw mut rb_mKernel, "Kernel"),
             (&raw mut rb_mComparable, "Comparable"),
             (&raw mut rb_mEnumerable, "Enumerable"),
@@ -235,6 +237,7 @@ impl VirtualMachine {
             (&raw mut rb_eKeyError, "KeyError"),
             (&raw mut rb_eRangeError, "RangeError"),
             (&raw mut rb_eIOError, "IOError"),
+            (&raw mut rb_eIOTimeoutError, "IO::TimeoutError"),
             (&raw mut rb_eRuntimeError, "RuntimeError"),
             (&raw mut rb_eFrozenError, "FrozenError"),
             (&raw mut rb_eSecurityError, "SecurityError"),

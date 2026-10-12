@@ -9,13 +9,13 @@ end
 begin
   module Holder::Named; end
 rescue TypeError => problem
-  puts problem.message
+  puts problem.message.lines.first
 end
 
 begin
   module Holder::Inner; end
 rescue TypeError => problem
-  puts problem.message
+  puts problem.message.lines.first
 end
 
 module Mixed

@@ -41,7 +41,7 @@ impl VirtualMachine {
                 let has_block = matches!(self.pending_block, Some(Object::Block(_)));
                 // A beginless range has no value to start a comparison from,
                 // so a custom order cannot pick a largest value.
-                if matches!(start.as_ref(), Object::Nil) && (has_block || !arguments.is_empty()) {
+                if matches!(start.as_ref(), Object::Nil) && has_block {
                     return Err(crate::vm::errors::simple_exception(
                         "RangeError",
                         "cannot get the maximum of beginless range with custom comparison method",
@@ -52,6 +52,22 @@ impl VirtualMachine {
                 // own, which Range does in the core library.
                 if method_name == "minmax" && arguments.is_empty() {
                     return Ok(None);
+                }
+                if let Some(count) = arguments
+                    .first()
+                    .filter(|held| !matches!(held, Object::Nil))
+                    && !has_block
+                    && method_name != "minmax"
+                    && let Some(counted) = self.counted_range_bounds(
+                        method_name,
+                        start,
+                        end,
+                        *exclusive,
+                        count,
+                        position,
+                    )?
+                {
+                    return Ok(Some(counted));
                 }
                 // Without a block or a count, the ends answer directly, which
                 // works for a range too large to walk.
@@ -137,45 +153,21 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                if let Object::Range {
-                    start: other_start,
-                    end: other_end,
-                    exclusive: other_exclusive,
-                    ..
-                } = &arguments[0]
+                if method_name == "cover?"
+                    && let Object::Range {
+                        start: other_start,
+                        end: other_end,
+                        exclusive: other_exclusive,
+                        ..
+                    } = &arguments[0]
                 {
-                    let starts_within = match (start.as_ref(), other_start.as_ref()) {
-                        // A range with no start of its own covers one that
-                        // has none either, and a range that starts somewhere
-                        // covers no beginless range at all.
-                        (Object::Nil, _) => true,
-                        (_, Object::Nil) => false,
-                        _ => self.range_covers(start, end, *exclusive, other_start, position)?,
-                    };
-                    let ends_within = if *other_exclusive {
-                        match (end.as_ref(), other_end.as_ref()) {
-                            (Object::Nil, _) => true,
-                            (_, Object::Nil) => false,
-                            // An exclusive end over whole numbers stops one
-                            // short, so the range reaches that number instead.
-                            (_, Object::Int(last)) => {
-                                let reached = Object::Int(last - 1);
-                                self.range_covers(start, end, *exclusive, &reached, position)?
-                            }
-                            _ => {
-                                let order = self.evaluate_binary_operation(
-                                    &crate::ast::BinaryOp::Spaceship,
-                                    (**other_end).clone(),
-                                    (**end).clone(),
-                                    position,
-                                )?;
-                                matches!(order, Object::Int(value) if value <= 0)
-                            }
-                        }
-                    } else {
-                        self.range_covers(start, end, *exclusive, other_end, position)?
-                    };
-                    return Ok(Some(Object::Bool(starts_within && ends_within)));
+                    let covered = self.range_covers_range(
+                        (start, end, *exclusive),
+                        &arguments[0],
+                        (other_start, other_end, other_exclusive),
+                        position,
+                    )?;
+                    return Ok(Some(Object::Bool(covered)));
                 }
                 let covered = self.range_covers(start, end, *exclusive, &arguments[0], position)?;
                 Ok(Some(Object::Bool(covered)))
@@ -238,5 +230,132 @@ impl VirtualMachine {
             }
             _ => Ok(None),
         }
+    }
+
+    /// `min(n)` or `max(n)` over a range of Integers, counted from the end
+    /// asked for without walking the range, which may be too large to walk.
+    /// None leaves any other range to be walked.
+    fn counted_range_bounds(
+        &mut self,
+        method_name: &str,
+        start: &Object,
+        end: &Object,
+        exclusive: bool,
+        count: &Object,
+        position: Position,
+    ) -> Result<Option<Object>, MetorexError> {
+        let count = self.coerce_integer_argument(count, position)?;
+        if count < num_bigint::BigInt::from(0) {
+            return Err(crate::vm::errors::simple_exception(
+                "ArgumentError",
+                "negative array size (or size too big)",
+                position,
+            ));
+        }
+        let count = usize::try_from(count).unwrap_or(usize::MAX);
+        let first = start.as_big_integer();
+        let last = end.as_big_integer();
+        let open_end = if method_name == "max" { start } else { end };
+        let counted_from = if method_name == "max" { end } else { start };
+        if matches!(open_end, Object::Nil) && counted_from.as_big_integer().is_none() {
+            let class_name = match start {
+                Object::Nil => "NilClass".to_string(),
+                other => self.builtins().class_of(other).ruby_name(),
+            };
+            let message = format!("can't iterate from {class_name}");
+            return Err(crate::vm::errors::simple_exception(
+                "TypeError",
+                &message,
+                position,
+            ));
+        }
+        let last = last.map(|value| if exclusive { value - 1 } else { value });
+        let mut values = Vec::new();
+        match (method_name, first, last) {
+            ("max", first, Some(mut at)) if first.is_some() || matches!(start, Object::Nil) => {
+                while values.len() < count && first.as_ref().is_none_or(|first| at >= *first) {
+                    values.push(Object::integer(at.clone()));
+                    at -= 1;
+                }
+            }
+            ("min", Some(mut at), last) if last.is_some() || matches!(end, Object::Nil) => {
+                while values.len() < count && last.as_ref().is_none_or(|last| at <= *last) {
+                    values.push(Object::integer(at.clone()));
+                    at += 1;
+                }
+            }
+            _ => return Ok(None),
+        }
+        Ok(Some(Object::array(values)))
+    }
+    /// Whether every value of the range `other` falls within this one, as
+    /// Ruby's `r_cover_range_p` decides it. A range holding nothing, such as
+    /// a backward one, is covered by none.
+    fn range_covers_range(
+        &mut self,
+        (start, end, exclusive): (&Object, &Object, bool),
+        other: &Object,
+        (other_start, other_end, other_exclusive): (&Object, &Object, &bool),
+        position: Position,
+    ) -> Result<bool, MetorexError> {
+        let open = |held: &Object| matches!(held, Object::Nil);
+        if (!open(end) && open(other_end)) || (!open(start) && open(other_start)) {
+            return Ok(false);
+        }
+        if !open(other_start) && !open(other_end) {
+            let order = self.order_of(other_start, other_end, position)?;
+            if order > if *other_exclusive { -1 } else { 0 } {
+                return Ok(false);
+            }
+        }
+        if !open(other_start) && !self.range_covers(start, end, exclusive, other_start, position)? {
+            return Ok(false);
+        }
+        let end_order = self.order_of(end, other_end, position)?;
+        if exclusive == *other_exclusive {
+            return Ok(end_order >= 0);
+        }
+        if exclusive {
+            return Ok(end_order > 0);
+        }
+        if end_order >= 0 {
+            return Ok(true);
+        }
+        // An inclusive range covers an exclusive one ending past it when the
+        // largest value the other holds is still within it.
+        // A range whose largest value cannot be named, as one ending on a
+        // Float it leaves out, is not covered.
+        let largest = match self.send_to_object(other.clone(), "max", Vec::new(), position) {
+            Err(MetorexError::UncaughtException { exception, .. })
+                if self.exception_matches(&exception, &["TypeError".to_string()])? =>
+            {
+                Object::Nil
+            }
+            answered => answered?,
+        };
+        if open(&largest) {
+            return Ok(false);
+        }
+        Ok(self.order_of(end, &largest, position)? >= 0)
+    }
+
+    /// Where `left` stands against `right` by `<=>`, with values that do
+    /// not compare counted as greater, as Ruby's `r_less` counts them.
+    fn order_of(
+        &mut self,
+        left: &Object,
+        right: &Object,
+        position: Position,
+    ) -> Result<i64, MetorexError> {
+        let order = self.evaluate_binary_operation(
+            &crate::ast::BinaryOp::Spaceship,
+            left.clone(),
+            right.clone(),
+            position,
+        )?;
+        Ok(match order {
+            Object::Int(value) => value.signum(),
+            _ => i64::MAX,
+        })
     }
 }

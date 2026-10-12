@@ -583,3 +583,18 @@ fn test_syntax_clause_bodies_no_parens_execution() {
     let output = run_example("syntax/clause_bodies_no_parens.rb");
     assert_eq!(output, CLAUSE_BODIES_OUTPUT);
 }
+
+/// The expected output of both `syntax/definition_errors` variants.
+const DEFINITION_ERRORS_OUTPUT: &str = "[2, 3]\n[:a, 1, 9]\nfalse\n\"17\"\n\"LedgerRate is not a class\"\ntrue\n\"LedgerBook is not a module\"\n\"superclass mismatch for class LedgerEntry\"\n\"superclass must be an instance of Class (given an instance of Integer)\"\n\"nil is not a class/module\"\n\"can't define singleton\"\nTypeError\n\"numbered parameter '_1' is not a local variable\"\n";
+
+#[test]
+fn test_syntax_definition_errors_execution() {
+    let output = run_example("syntax/definition_errors.rb");
+    assert_eq!(output, DEFINITION_ERRORS_OUTPUT);
+}
+
+#[test]
+fn test_syntax_definition_errors_no_parens_execution() {
+    let output = run_example("syntax/definition_errors_no_parens.rb");
+    assert_eq!(output, DEFINITION_ERRORS_OUTPUT);
+}

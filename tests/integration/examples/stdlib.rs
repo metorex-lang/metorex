@@ -713,7 +713,10 @@ fn test_stdlib_string_format_verbose_warning_execution() {
     let stderr = String::from_utf8(output.stderr).expect("stderr was not utf8");
 
     assert_eq!(stdout, "no placeholders\nstill quiet\n");
-    assert_eq!(stderr, "warning: too many arguments for format string\n");
+    assert_eq!(
+        stderr,
+        format!("{full_path}:2: warning: too many arguments for format string\n")
+    );
 }
 
 #[test]

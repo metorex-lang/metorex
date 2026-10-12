@@ -107,7 +107,9 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let next = successor_of(&string_value.as_ref().as_str());
+                let unicode = string_value.encoding_name().starts_with("UTF-")
+                    && holds_valid_text(string_value);
+                let next = successor_in(&string_value.as_ref().as_str(), unicode);
                 Ok(Some(Object::string(next)))
             }
             "downcase" => {

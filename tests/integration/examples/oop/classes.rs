@@ -212,23 +212,7 @@ fn test_oop_definition_values_no_parens_execution() {
 }
 
 /// The expected output of both `oop/class_definition_rules` variants.
-const CLASS_DEFINITION_RULES_OUTPUT: &str = concat!(
-    "PORT_NUMBER is not a class\n",
-    "Settings is not a class\n",
-    "can't make subclass of singleton class\n",
-    "Object: superclass mismatch for class AuditRecord\n",
-    "BasicObject: superclass mismatch for class AuditRecord\n",
-    "Record\n",
-    "[:@count]\n",
-    "[]\n",
-    ":body_value\n",
-    ":singleton_value\n",
-    ":module_value\n",
-    "\"ScopedLog\"\n",
-    ":info\n",
-    "false\n",
-    ":from_singleton_body\n",
-);
+const CLASS_DEFINITION_RULES_OUTPUT: &str = "PORT_NUMBER is not a class\nSettings is not a class\ncan't make subclass of singleton class\nObject: superclass mismatch for class AuditRecord\nBasicObject: superclass mismatch for class AuditRecord\nRecord\n[:@count]\n[]\n:body_value\n:singleton_value\n:module_value\n\"ScopedLog\"\n:info\nfalse\n:from_singleton_body\n";
 
 #[test]
 fn test_oop_class_definition_rules_execution() {

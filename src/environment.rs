@@ -127,6 +127,12 @@ impl Environment {
         self.current_scope().borrow_mut().define_hidden(name, value);
     }
 
+    /// The implicit parameters the block running here took, leaving out
+    /// those of any block around it.
+    pub fn implicit_parameters(&self) -> Vec<(String, Rc<RefCell<Object>>)> {
+        self.current_scope().borrow().implicit_parameters()
+    }
+
     /// Say that the assignment a hoisted name was reserved for has begun,
     /// so a block written in its value closes over the name.
     pub fn unhoist(&mut self, name: &str) {

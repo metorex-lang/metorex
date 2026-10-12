@@ -11,19 +11,39 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let mut patterns: Vec<String> = Vec::new();
+        // Each pattern with the argument it was written as, whose encoding
+        // the paths it names are answered in.
+        let mut patterns: Vec<(String, Object)> = Vec::new();
         let mut flags = 0i64;
         let mut base: Option<String> = None;
         let mut sorted = true;
         // One String is a pattern of its own, where a list hands over each
         // pattern as a path, and the two refuse a NUL byte differently.
         let mut listed = false;
+        // A `flags:` keyword decides the flags, and a positional one beside
+        // it is not read.
+        let flags_keyword = arguments.iter().any(|argument| {
+            matches!(argument, Object::Dict(held) if held.borrow().contains_key(":flags"))
+        });
         for (index, argument) in arguments.iter().enumerate() {
+            match argument {
+                Object::Dict(_) => {}
+                _ if method_name == "glob" && index == 1 && flags_keyword => continue,
+                Object::Int(_) | Object::Array(_) => {}
+                // A second argument to `glob` is its flags, which only a
+                // whole number names.
+                other if method_name == "glob" && index == 1 => {
+                    flags =
+                        i64::try_from(self.coerce_integer_argument(other, position)?).unwrap_or(0);
+                    continue;
+                }
+                _ => {}
+            }
             match argument {
                 Object::Array(held) => {
                     listed = true;
                     for one in held.borrow().iter().cloned().collect::<Vec<Object>>() {
-                        patterns.push(self.glob_pattern_text(&one, position)?);
+                        patterns.push((self.glob_pattern_text(&one, position)?, one));
                     }
                 }
                 Object::Int(held) if index > 0 => flags = *held,
@@ -75,7 +95,7 @@ impl VirtualMachine {
                         ));
                     }
                 }
-                other => patterns.push(self.glob_pattern_text(other, position)?),
+                other => patterns.push((self.glob_pattern_text(other, position)?, other.clone())),
             }
         }
         let options = crate::vm::native_methods::glob::Options {
@@ -102,7 +122,7 @@ impl VirtualMachine {
         let against_base = base.as_ref().is_some_and(|held| !held.is_empty());
         let mut found: Vec<Object> = Vec::new();
         let several = listed || patterns.len() > 1;
-        for pattern in patterns {
+        for (pattern, written) in patterns {
             if pattern.contains('\0') {
                 let message = if several {
                     "path name contains null byte"
@@ -127,7 +147,9 @@ impl VirtualMachine {
                 if sorted {
                     held.sort();
                 }
-                found.extend(held.into_iter().map(Object::string));
+                for path in held {
+                    found.push(self.path_in_encoding_of(path, &written, true, position)?);
+                }
             }
         }
         // A block is handed each path and the call answers nothing.

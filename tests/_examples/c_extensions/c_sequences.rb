@@ -34,6 +34,9 @@ p(written_here.sort.uniq)
 p(CSequences.first_iseq.class)
 
 p(CSequences.memsize("ledger").positive?)
+# A C method is the C function it names.
+p(CSequences.method(:describe) == CSequences.method(:memsize))
+p(CSequences.method(:memsize) == CSequences.method(:memsize))
 outer = nested(0)
 inner = nested(3)
 p(inner[0] - outer[0])

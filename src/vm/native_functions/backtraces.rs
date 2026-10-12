@@ -156,7 +156,8 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Option<Vec<Object>>, MetorexError> {
         let all = self.caller_location_objects(position);
-        let Some((skip, length)) = self.caller_slice_bounds(arguments, all.len(), 1) else {
+        let Some((skip, length)) = self.caller_slice_bounds(arguments, all.len(), 1, position)?
+        else {
             return Ok(None);
         };
         let mut kept: Vec<Object> = all.into_iter().skip(skip).collect();
@@ -174,29 +175,69 @@ impl VirtualMachine {
         arguments: &[Object],
         total: usize,
         default_skip: usize,
-    ) -> Option<(usize, Option<usize>)> {
+        position: Position,
+    ) -> Result<Option<(usize, Option<usize>)>, MetorexError> {
+        let refuse = |message: String| {
+            crate::vm::errors::simple_exception("ArgumentError", &message, position)
+        };
         let (skip, length) = match arguments.first() {
-            Some(Object::Range { .. }) if arguments.len() == 1 => {
-                self.range_bounds_for(&arguments[0], total)?
+            None => (default_skip, None),
+            Some(range @ Object::Range { .. }) if arguments.len() == 1 => {
+                match self.range_bounds_for(range, total, position)? {
+                    Some(bounds) => bounds,
+                    None => return Ok(None),
+                }
             }
-            Some(Object::Int(number)) => (
-                (*number).max(0) as usize,
-                match arguments.get(1) {
-                    Some(Object::Int(limit)) => Some((*limit).max(0) as usize),
-                    _ => None,
-                },
-            ),
-            _ => (default_skip, None),
+            Some(start) => {
+                let start = self.backtrace_number(start, position)?;
+                if start < 0 {
+                    return Err(refuse(format!("negative level ({start})")));
+                }
+                let length = match arguments.get(1) {
+                    None | Some(Object::Nil) => None,
+                    Some(limit) => {
+                        let limit = self.backtrace_number(limit, position)?;
+                        if limit < 0 {
+                            return Err(refuse(format!("negative size ({limit})")));
+                        }
+                        Some(limit as usize)
+                    }
+                };
+                (start as usize, length)
+            }
         };
         if skip > total {
-            return None;
+            return Ok(None);
         }
-        Some((skip, length))
+        Ok(Some((skip, length)))
+    }
+
+    /// A whole number a backtrace slice is named with: an Integer as it
+    /// stands, a Float cut to its whole part, and anything else through
+    /// `to_int`.
+    fn backtrace_number(
+        &mut self,
+        value: &Object,
+        position: Position,
+    ) -> Result<i64, MetorexError> {
+        match value {
+            Object::Int(number) => Ok(*number),
+            Object::Float(number) => Ok(number.trunc() as i64),
+            other => {
+                let number = self.coerce_integer_argument(other, position)?;
+                Ok(i64::try_from(number).unwrap_or(i64::MAX))
+            }
+        }
     }
 
     /// The (skip, length) a Range argument names over `total` frames, or None
     /// when it starts past the end.
-    fn range_bounds_for(&mut self, value: &Object, total: usize) -> Option<(usize, Option<usize>)> {
+    fn range_bounds_for(
+        &mut self,
+        value: &Object,
+        total: usize,
+        position: Position,
+    ) -> Result<Option<(usize, Option<usize>)>, MetorexError> {
         let Object::Range {
             start,
             end,
@@ -204,33 +245,30 @@ impl VirtualMachine {
             ..
         } = value
         else {
-            return None;
+            return Ok(None);
         };
-        let resolve = |bound: &Object, default: i64| -> i64 {
-            match bound {
-                Object::Int(number) => *number,
-                _ => default,
-            }
+        let first = match start.as_ref() {
+            Object::Nil => 0,
+            bound => self.backtrace_number(bound, position)?,
         };
-        let first = resolve(start, 0);
         let first = if first < 0 {
             (total as i64 + first).max(0)
         } else {
             first
         } as usize;
         if first > total {
-            return None;
+            return Ok(None);
         }
         let last = match end.as_ref() {
             Object::Nil => total as i64 - 1,
             bound => {
-                let last = resolve(bound, total as i64 - 1);
+                let last = self.backtrace_number(bound, position)?;
                 let last = if last < 0 { total as i64 + last } else { last };
                 if *exclusive { last - 1 } else { last }
             }
         };
         let length = (last - first as i64 + 1).max(0) as usize;
-        Some((first, Some(length)))
+        Ok(Some((first, Some(length))))
     }
 }
 

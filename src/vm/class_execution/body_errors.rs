@@ -19,9 +19,19 @@ pub(crate) fn class_body_label(class: &Rc<Class>) -> String {
 
 /// The TypeError `module X` raises when X already names something that is not
 /// a module.
-pub(crate) fn not_a_module(named: &str, held: &Object, position: Position) -> MetorexError {
-    let message = format!("{} is not a module", named);
-    let _ = held;
+pub(crate) fn not_a_module(
+    named: &str,
+    defined_at: Option<(String, i64)>,
+    position: Position,
+) -> MetorexError {
+    let message = match defined_at {
+        Some((file, line)) => {
+            format!(
+                "{named} is not a module\n{file}:{line}: previous definition of {named} was here"
+            )
+        }
+        None => format!("{named} is not a module"),
+    };
     crate::vm::errors::simple_exception("TypeError", &message, position)
 }
 

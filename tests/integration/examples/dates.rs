@@ -130,3 +130,18 @@ fn test_dates_zone_readings_parens_execution() {
     let output = run_example("dates/zone_readings_parens.rb");
     assert_eq!(output, ZONE_READINGS_OUTPUT);
 }
+
+/// The expected output of both `dates/time_zone_parsing` variants.
+const TIME_ZONE_PARSING_OUTPUT: &str = "true\nfalse\ntrue\ntrue\ntrue\n\"Thu, 01 Jan 1970 00:00:00 -0000\"\n\"Thu, 01 Jan 1970 05:30:00 +0530\"\n";
+
+#[test]
+fn test_dates_time_zone_parsing_execution() {
+    let output = run_example("dates/time_zone_parsing.rb");
+    assert_eq!(output, TIME_ZONE_PARSING_OUTPUT);
+}
+
+#[test]
+fn test_dates_time_zone_parsing_no_parens_execution() {
+    let output = run_example("dates/time_zone_parsing_no_parens.rb");
+    assert_eq!(output, TIME_ZONE_PARSING_OUTPUT);
+}

@@ -41,7 +41,7 @@ m = ME.module_eval {
 #[test]
 fn refine_with_class_works() {
     let result = run(r#"
-module Refinement
+module ShoutRefinement
   refine String do
     def shouted
       "loud"

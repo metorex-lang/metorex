@@ -297,3 +297,18 @@ fn test_array_methods_sort_by_enumerator_no_parens_execution() {
     let output = run_example("array_methods/sort_by_enumerator_no_parens.rb");
     assert_eq!(output, SORT_BY_ENUMERATOR_OUTPUT);
 }
+
+/// The expected output of both `array_methods/counted_min_max` variants.
+const COUNTED_MIN_MAX_OUTPUT: &str = "[2, 4]\n[9, 7]\n[2, 4]\n[]\n3\n\"negative size (-1)\"\n[10, 9, 8]\n[18446744073709551615, 18446744073709551614]\n[1, 2]\n[5, 4]\n[\"l\", \"k\"]\n[]\n[3, 2]\n[1, 2]\n\"can't iterate from Float\"\n\"can't iterate from NilClass\"\n\"can't iterate from Float\"\n\"negative array size (or size too big)\"\n:none\nEnumerator\n2\n[4]\n";
+
+#[test]
+fn test_array_methods_counted_min_max_execution() {
+    let output = run_example("array_methods/counted_min_max.rb");
+    assert_eq!(output, COUNTED_MIN_MAX_OUTPUT);
+}
+
+#[test]
+fn test_array_methods_counted_min_max_no_parens_execution() {
+    let output = run_example("array_methods/counted_min_max_no_parens.rb");
+    assert_eq!(output, COUNTED_MIN_MAX_OUTPUT);
+}

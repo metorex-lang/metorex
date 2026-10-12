@@ -140,6 +140,21 @@ impl Scope {
         self.variables.insert(name, Rc::new(RefCell::new(value)));
     }
 
+    /// The implicit parameters this scope's block took, `it` or `_1` to
+    /// `_9`, in the order they were bound, with their cells.
+    pub fn implicit_parameters(&self) -> Vec<(String, Rc<RefCell<Object>>)> {
+        self.order
+            .iter()
+            .filter(|name| self.hidden_names.contains(*name))
+            .filter(|name| name.as_str() == "it" || crate::parser::names_a_numbered_parameter(name))
+            .filter_map(|name| {
+                self.variables
+                    .get(name)
+                    .map(|cell| (name.clone(), Rc::clone(cell)))
+            })
+            .collect()
+    }
+
     /// Reserves `name` for the rest of this scope, the way Ruby's parser
     /// does at the assignment that introduces a local. Reading it answers
     /// nil, and a block written before the assignment does not close over it.

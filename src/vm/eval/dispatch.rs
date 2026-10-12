@@ -982,11 +982,14 @@ impl VirtualMachine {
             }
             // Only a class or module holds constants, so reading one
             // out of anything else is refused by its type.
-            held => Err(crate::vm::errors::simple_exception(
-                "TypeError",
-                &format!("{} is not a class/module", held.type_name()),
-                *position,
-            )),
+            held => {
+                let shown = self.get_inspect_representation(&held, *position)?;
+                Err(crate::vm::errors::simple_exception(
+                    "TypeError",
+                    &format!("{shown} is not a class/module"),
+                    *position,
+                ))
+            }
         }
     }
 }

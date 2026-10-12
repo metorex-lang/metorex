@@ -29,6 +29,16 @@ impl VirtualMachine {
             .map(Rc::clone)
     }
 
+    /// Whether `Kernel.autoload` or `Kernel.autoload?` sent to `module`
+    /// acts where the caller sits, as the bare form does, rather than on
+    /// Kernel itself, which it does only in Kernel's own body.
+    pub(crate) fn redirects_kernel_autoload(&self, module: &Rc<crate::class::Class>) -> bool {
+        module.name() == "Kernel"
+            && self
+                .autoload_definee()
+                .is_none_or(|definee| !Rc::ptr_eq(&definee, module))
+    }
+
     /// Search `class_rc` for constant `name` the way `const_defined?` does:
     /// its own constant table and autoload registry, plus — when `inherit` —
     /// its mixins (transitively) and superclass chain with their mixins.

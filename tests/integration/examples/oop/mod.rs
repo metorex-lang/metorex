@@ -45,36 +45,15 @@ pub(super) const CLASS_VARIABLE_HOME_OUTPUT: &str = concat!(
 );
 
 /// The expected output of both `oop/class_body_clauses` variants.
-pub(super) const CLASS_BODY_CLAUSES_OUTPUT: &str = concat!(
-    "body\n",
-    "stopped\n",
-    "module ensured\n",
-    "singleton stopped\n",
-    "TrueClass\n",
-    "NilClass\n",
-    "can't define singleton for Int\n"
-);
+pub(super) const CLASS_BODY_CLAUSES_OUTPUT: &str = "body\nstopped\nmodule ensured\nsingleton stopped\nTrueClass\nNilClass\ncan't define singleton\n";
 
 /// The expected output of both `oop/definition_values` variants.
-pub(super) const DEFINITION_VALUES_OUTPUT: &str = concat!(
-    "20\n",
-    "held\n",
-    "nil\n",
-    "[:@tally]\n",
-    "[:@@shared]\n",
-    "superclass must be a Class (String given)\n",
-    "inner\n"
-);
+pub(super) const DEFINITION_VALUES_OUTPUT: &str = "20\nheld\nnil\n[:@tally]\n[:@@shared]\nsuperclass must be an instance of Class (given an instance of String)\ninner\n";
 
 /// The expected output of both `oop/module_reopening` variants, which differ
 /// only in whether the calls are written with parentheses.
-pub(super) const MODULE_REOPENING_OUTPUT: &str = concat!(
-    "Holder::Named is not a module\n",
-    "Holder::Inner is not a module\n",
-    "false\n",
-    "\"NamedRoot\"\n",
-    "\"NamedRoot::Second\"\n"
-);
+pub(super) const MODULE_REOPENING_OUTPUT: &str =
+    "Named is not a module\nInner is not a module\nfalse\n\"NamedRoot\"\n\"NamedRoot::Second\"\n";
 
 pub(super) const CASE_EQUALITY_OF_CLASSES_OUTPUT: &str = concat!(
     "Module === String -> true\n",

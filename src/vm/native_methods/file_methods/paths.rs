@@ -98,7 +98,14 @@ impl VirtualMachine {
                     other => other,
                 };
                 match resolved {
-                    Ok(p) => Ok(Some(Object::string(p.to_string_lossy().to_string()))),
+                    Ok(p) => self
+                        .path_in_encoding_of(
+                            p.to_string_lossy().to_string(),
+                            &arguments[0],
+                            method_name == "realpath",
+                            position,
+                        )
+                        .map(Some),
                     Err(e) => {
                         let exc = match e.raw_os_error() {
                             Some(libc::ELOOP) => Object::exception(

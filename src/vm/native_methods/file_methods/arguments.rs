@@ -60,6 +60,41 @@ impl VirtualMachine {
         ))
     }
 
+    /// A path the system answered, written in the encoding of the path
+    /// argument it came from. Where that encoding cannot spell its
+    /// characters, `relabel` keeps the bytes labeled with that encoding, and
+    /// otherwise the path keeps its own.
+    pub(crate) fn path_in_encoding_of(
+        &mut self,
+        text: String,
+        argument: &Object,
+        relabel: bool,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
+        let made = Object::string(text);
+        let Object::String(given) = argument else {
+            return Ok(made);
+        };
+        let named = given.encoding_name();
+        if matches!(named.as_str(), "UTF-8" | "US-ASCII") {
+            return Ok(made);
+        }
+        let wanted = vec![Object::string(named)];
+        match self.send_to_object(made.clone(), "encode", wanted.clone(), position) {
+            Ok(encoded) => Ok(encoded),
+            Err(MetorexError::UncaughtException { exception, .. })
+                if self.exception_matches(&exception, &["EncodingError".to_string()])? =>
+            {
+                if relabel {
+                    self.send_to_object(made, "force_encoding", wanted, position)
+                } else {
+                    Ok(made)
+                }
+            }
+            Err(problem) => Err(problem),
+        }
+    }
+
     /// The String an object names itself as, asking `to_path` first and
     /// `to_str` after, or None when it names neither.
     pub(crate) fn path_naming_answer(
@@ -167,6 +202,11 @@ pub(crate) fn path_text(held: &Rc<crate::object::StringValue>) -> String {
     let bytes = crate::vm::native_methods::string_methods::binary_bytes(held);
     match String::from_utf8(bytes) {
         Ok(text) => text,
+        // macOS names files in UTF-8, so Ruby there hands the system the
+        // characters a path in another encoding spells rather than its bytes.
+        Err(_) if cfg!(target_os = "macos") && !binary => {
+            crate::vm::native_methods::text_in_encoding_of(held)
+        }
         Err(_) => held.as_str().to_string(),
     }
 }

@@ -130,8 +130,6 @@ pub(crate) fn native_alias_target<'a>(class_name: &str, method_name: &'a str) ->
         // Integer answers these natively, so they are its own rather than
         // the Numeric versions the prelude also declares.
         ("Integer", "zero?") => Some("zero?"),
-        // A String counts its characters under either name.
-        ("String", "size") => Some("length"),
         // An Array renders itself the same way whichever of the two names
         // the call is written with.
         ("Array", "to_s") => Some("inspect"),
@@ -139,8 +137,6 @@ pub(crate) fn native_alias_target<'a>(class_name: &str, method_name: &'a str) ->
         ("Set", "to_s") => Some("inspect"),
         ("Set", "===") | ("Set", "member?") => Some("include?"),
         ("Set", "length") => Some("size"),
-        ("Set", "filter") => Some("select"),
-        ("Set", "collect") => Some("map"),
         _ => None,
     }
 }

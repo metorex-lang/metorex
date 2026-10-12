@@ -202,6 +202,19 @@ impl VirtualMachine {
         }
         if class_rc.name() == "Encoding" && matches!(method_name, "find" | "[]") {
             let wanted = match arguments.first() {
+                // A name written in an encoding that does not spell ASCII,
+                // such as UTF-16, names nothing.
+                Some(Object::String(held))
+                    if !crate::vm::native_methods::string_methods::encoding_is_ascii_compatible(
+                        &held.encoding_name(),
+                    ) =>
+                {
+                    return Err(crate::vm::errors::simple_exception(
+                        "ArgumentError",
+                        "invalid encoding name (non ASCII)",
+                        position,
+                    ));
+                }
                 Some(Object::String(held)) => held.as_str().to_string(),
                 Some(Object::Class(held)) if held.name().contains('-') => {
                     return Ok(Answered(arguments[0].clone()));

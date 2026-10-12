@@ -196,7 +196,12 @@ fn test_equals_method() {
         owner: None,
         owner_class: None,
         origin_class: None,
-        source_location: None,
+        source_location: Some(metorex::error::SourceLocation {
+            line: 3,
+            column: 1,
+            offset: 0,
+            filename: Some("ledger.rb".to_string()),
+        }),
         end_line: None,
         captured_vars: None,
         is_undefined: false,
@@ -227,7 +232,12 @@ fn test_equals_method() {
         owner: None,
         owner_class: None,
         origin_class: None,
-        source_location: None,
+        source_location: Some(metorex::error::SourceLocation {
+            line: 3,
+            column: 1,
+            offset: 0,
+            filename: Some("ledger.rb".to_string()),
+        }),
         end_line: None,
         captured_vars: None,
         is_undefined: false,
@@ -247,9 +257,8 @@ fn test_equals_method() {
     let obj3 = Object::Method(method3);
 
     assert!(obj1.equals(&obj2)); // Same reference (Rc::ptr_eq)
-    // Per Ruby Method#==, structurally identical methods compare equal even
-    // when allocated separately, so two methods with the same name/body/no
-    // receiver are equal.
+    // Per Ruby Method#==, two copies of the method written at one place
+    // compare equal even when allocated separately.
     assert!(obj1.equals(&obj3));
 }
 

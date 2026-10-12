@@ -206,6 +206,13 @@ pub(crate) fn strings_comparable(
     if left.encoding_name() == right.encoding_name() {
         return true;
     }
+    // An encoding that does not spell ASCII one byte to a letter, such as
+    // UTF-16, goes with no other.
+    if !encoding_is_ascii_compatible(&left.encoding_name())
+        || !encoding_is_ascii_compatible(&right.encoding_name())
+    {
+        return false;
+    }
     // Text tagged as raw bytes says nothing about the characters behind it,
     // so it compares against anything rather than against its own tag alone.
     let reads_as_bytes =

@@ -62,6 +62,16 @@ pub(crate) fn text_in_encoding(
     if !held.holds_bytes() || held.encoding_name() == named {
         return name_text(held);
     }
+    decoded_in(held, named)
+}
+
+/// The characters a string's bytes spell in the encoding it carries.
+pub(crate) fn text_in_encoding_of(held: &std::rc::Rc<crate::object::StringValue>) -> String {
+    decoded_in(held, &held.encoding_name())
+}
+
+/// The characters a string's bytes spell read in the named encoding.
+fn decoded_in(held: &std::rc::Rc<crate::object::StringValue>, named: &str) -> String {
     let bytes = string_methods::binary_bytes(held);
     if named == "EUC-JP" {
         return euc_jp_table::euc_jp_text(&bytes);

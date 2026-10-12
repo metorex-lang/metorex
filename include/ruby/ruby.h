@@ -177,6 +177,7 @@ RUBY_EXTERN VALUE rb_eStopIteration;
 RUBY_EXTERN VALUE rb_eKeyError;
 RUBY_EXTERN VALUE rb_eRangeError;
 RUBY_EXTERN VALUE rb_eIOError;
+RUBY_EXTERN VALUE rb_eIOTimeoutError;
 RUBY_EXTERN VALUE rb_eRuntimeError;
 RUBY_EXTERN VALUE rb_eFrozenError;
 RUBY_EXTERN VALUE rb_eSecurityError;
@@ -213,6 +214,7 @@ VALUE rb_define_module(const char *name);
 VALUE rb_define_module_under(VALUE outer, const char *name);
 void rb_define_method(VALUE klass, const char *name, VALUE (*func)(ANYARGS), int arity);
 void rb_define_const(VALUE module, const char *name, VALUE value);
+void rb_deprecate_constant(VALUE module, const char *name);
 
 VALUE rb_funcallv(VALUE receiver, ID name, int count, const VALUE *arguments);
 VALUE rb_const_get(VALUE module, ID name);
@@ -247,6 +249,7 @@ VALUE rb_class_real(VALUE klass);
 VALUE rb_class_superclass(VALUE klass);
 VALUE rb_class_get_superclass(VALUE klass);
 VALUE rb_call_super(int count, const VALUE *arguments);
+VALUE rb_call_super_kw(int count, const VALUE *arguments, int keywords);
 VALUE rb_cvar_defined(VALUE klass, ID name);
 VALUE rb_cvar_get(VALUE klass, ID name);
 void rb_cvar_set(VALUE klass, ID name, VALUE value);
@@ -255,6 +258,7 @@ void rb_cv_set(VALUE klass, const char *name, VALUE value);
 void rb_define_class_variable(VALUE klass, const char *name, VALUE value);
 void rb_define_attr(VALUE klass, const char *name, int read, int write);
 void rb_include_module(VALUE klass, VALUE module);
+void rb_prepend_module(VALUE klass, VALUE module);
 
 enum ruby_value_type {
   RUBY_T_NONE = 0x00,
@@ -635,6 +639,9 @@ VALUE rb_rational_den(VALUE rational);
 typedef VALUE rb_block_call_func(RB_BLOCK_CALL_FUNC_ARGLIST(yielded_arg, callback_arg));
 typedef rb_block_call_func *rb_block_call_func_t;
 VALUE rb_block_call(VALUE receiver, ID name, int count, const VALUE *values, rb_block_call_func_t function, VALUE data);
+VALUE rb_iterate(VALUE (*walk)(VALUE), VALUE data, rb_block_call_func_t function, VALUE block_data);
+VALUE rb_each(VALUE object);
+VALUE rb_int_positive_pow(long base, unsigned long exponent);
 VALUE rb_block_lambda(void);
 void rb_need_block(void);
 ID rb_frame_this_func(void);

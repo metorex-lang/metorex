@@ -99,9 +99,7 @@ class OpenStruct
     render([])
   end
 
-  def to_s
-    render([])
-  end
+  alias :to_s :inspect
 
   # What a rendering shows: the class name and every field, where a field
   # that reaches back to this object is written as the class alone.

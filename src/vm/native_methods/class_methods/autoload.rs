@@ -16,13 +16,10 @@ impl VirtualMachine {
         if method_name == "autoload" {
             // `Kernel.autoload` registers where the caller sits, the same way
             // the bare form does, rather than on Kernel itself.
-            if class_rc.name() == "Kernel"
-                && let Some(definee) = self.autoload_definee()
-                && !Rc::ptr_eq(&definee, class_rc)
-            {
+            if self.redirects_kernel_autoload(class_rc) {
                 return self
-                    .call_class_methods(&definee, method_name, arguments, position)
-                    .map(nested_answer);
+                    .register_autoload(method_name, arguments.to_vec(), position)
+                    .map(Answered);
             }
             let const_name = match arguments.first() {
                 Some(Object::Symbol(s)) => s.as_str().to_string(),

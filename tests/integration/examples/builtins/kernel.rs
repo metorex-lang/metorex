@@ -69,7 +69,7 @@ fn test_kernel_hash_execution() {
 
 #[test]
 fn test_kernel_integer_execution() {
-    let expected = "42\n3\n-3\n42\n42\n1000\n7\n-7\n31\n10\n15\n15\n99\n255\n5\n14929\n4\nnil\nnil\nnil\n12\n5\ninvalid value for Integer(): \"1__2\"\ncan't convert nil into Integer\nbase specified for non string value (Integer)\nNaN\n10\ntrue\n";
+    let expected = "42\n3\n-3\n42\n42\n1000\n7\n-7\n31\n10\n15\n15\n99\n255\n5\n14929\n4\nnil\nnil\nnil\n12\n5\ninvalid value for Integer(): \"1__2\"\ncan't convert nil into Integer\nbase specified for non string value\nNaN\n10\ntrue\n";
     let output = run_example("builtins/kernel_integer.rb");
     assert_eq!(output, expected);
 }
@@ -522,4 +522,19 @@ fn test_builtins_process_hash_seed_execution() {
 fn test_builtins_process_hash_seed_no_parens_execution() {
     let output = run_example("builtins/process_hash_seed_no_parens.rb");
     assert_eq!(output, PROCESS_HASH_SEED_OUTPUT);
+}
+
+/// The expected output of both `builtins/kernel_argument_checks` variants.
+const KERNEL_ARGUMENT_CHECKS_OUTPUT: &str = "\"expected true or false as exception: 1\"\n\"expected true or false as exception: nil\"\n\"expected true or false as exception: :no\"\n\"expected true or false as exception: \\\"yes\\\"\"\nnil\n42\n\"base specified for non string value\"\n\"negative level (-1)\"\n\"negative size (-1)\"\n1\n1\n1\n1\nnil\nnil\n\"incomplete format specifier; use %% (double %) instead\"\n\"malformed format string\"\n\"malformed format string\"\nwarned: too many arguments for format string\n\"1\"\n";
+
+#[test]
+fn test_builtins_kernel_argument_checks_execution() {
+    let output = run_example("builtins/kernel_argument_checks.rb");
+    assert_eq!(output, KERNEL_ARGUMENT_CHECKS_OUTPUT);
+}
+
+#[test]
+fn test_builtins_kernel_argument_checks_no_parens_execution() {
+    let output = run_example("builtins/kernel_argument_checks_no_parens.rb");
+    assert_eq!(output, KERNEL_ARGUMENT_CHECKS_OUTPUT);
 }

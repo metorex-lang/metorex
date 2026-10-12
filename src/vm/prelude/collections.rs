@@ -155,6 +155,12 @@ class Range
   private :numeric_ends?
 
   def numeric_stepped(first, last, by, written_as, &block)
+    if first.nil?
+      raise ArgumentError, "#step iteration for beginless ranges is meaningless" unless block.nil?
+      unless by.nil? || by.is_a?(Numeric)
+        raise ArgumentError, "#step for non-numeric beginless ranges is meaningless"
+      end
+    end
     unless by.nil? || by.is_a?(Numeric)
       # A step of some other kind is read through `coerce`, and only where the
       # walk is about to run, so asking for the walk alone refuses nothing.
@@ -236,8 +242,30 @@ end
 class Array
   # The last element the block answers true for, read from the end, or what
   # `if_none` answers when none does.
+  # The first element the block accepts, reading the size again at each
+  # step. When none does, `if_none` is called for the answer.
+  def find(if_none = nil, &block)
+    first_accepted(:find, if_none, &block)
+  end
+
+  def detect(if_none = nil, &block)
+    first_accepted(:detect, if_none, &block)
+  end
+
+  def first_accepted(name, if_none)
+    return to_enum(name, if_none) unless block_given?
+    index = 0
+    while index < size
+      held = self[index]
+      return held if yield(held)
+      index += 1
+    end
+    if_none&.call
+  end
+  private :first_accepted
+
   def rfind(if_none = nil)
-    return to_enum(:rfind) unless block_given?
+    return to_enum(:rfind, if_none) unless block_given?
     index = size - 1
     while index >= 0
       held = self[index]

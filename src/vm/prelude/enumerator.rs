@@ -244,14 +244,18 @@ class Enumerator
 
   # An endless walk built from a value and the block that answers the next
   # one. Without a starting value the block is handed nil the first time.
-  def self.produce(*first, &step)
+  def self.produce(*first, size: Float::INFINITY, **unknown, &step)
     raise ArgumentError, "no block given" if step.nil?
     if first.size > 1
       raise ArgumentError, "wrong number of arguments (given #{first.size}, expected 0..1)"
     end
+    unless unknown.empty?
+      named = unknown.keys.map(&:inspect).join(", ")
+      raise ArgumentError, "unknown keyword#{"s" if unknown.size > 1}: #{named}"
+    end
     starts_empty = first.empty?
     opening = first[0]
-    new do |yielder|
+    new(size) do |yielder|
       held = starts_empty ? step.call(nil) : opening
       loop do
         yielder << held

@@ -138,39 +138,55 @@ pub(crate) const NOT_ASCII_COMPATIBLE: &[&str] = &[
     "UTF-32LE",
 ];
 
-/// Every string `upto` yields, from `first` up to `last`.
+/// Every string `upto` yields, from `first` up to `last`, as Ruby's
+/// `rb_str_upto_each` walks them.
 pub(crate) fn upto_sequence(first: &str, last: &str, exclusive: bool) -> Vec<String> {
-    let held = first.chars().count();
-    let target = last.chars().count();
-    if held > target || (held == target && first > last) {
-        return Vec::new();
-    }
-    // Two single characters step by code point, so `"9".upto("A")` walks the
-    // punctuation between them rather than counting.
-    if held == 1 && target == 1 {
-        let from = first.chars().next().expect("one character");
-        let to = last.chars().next().expect("one character");
-        let stop = if exclusive { to as u32 } else { to as u32 + 1 };
-        return (from as u32..stop)
-            .filter_map(char::from_u32)
-            .map(String::from)
+    // Two single ASCII characters step by code point, so `"9".upto("A")`
+    // walks the punctuation between them rather than counting.
+    if first.len() == 1 && last.len() == 1 && first.is_ascii() && last.is_ascii() {
+        let from = first.as_bytes()[0];
+        let to = last.as_bytes()[0];
+        if from > to || (exclusive && from == to) {
+            return Vec::new();
+        }
+        let stop = if exclusive { to - 1 } else { to };
+        return (from..=stop)
+            .map(|byte| char::from(byte).to_string())
             .collect();
     }
+    // Two runs of digits count as numbers, padded to the first one's width.
+    let all_digits =
+        |text: &str| !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit());
+    if all_digits(first)
+        && all_digits(last)
+        && let (Ok(from), Ok(to)) = (first.parse::<u128>(), last.parse::<u128>())
+    {
+        let width = first.len();
+        let stop = if exclusive { to } else { to + 1 };
+        return (from..stop.max(from))
+            .map(|number| format!("{number:0width$}"))
+            .collect();
+    }
+    if first > last || (exclusive && first == last) {
+        return Vec::new();
+    }
+    let after_last = crate::vm::native_methods::string_methods::successor_of(last);
     let mut steps = Vec::new();
     let mut current = first.to_string();
-    loop {
+    while current != after_last {
+        let next = (exclusive || current != last)
+            .then(|| crate::vm::native_methods::string_methods::successor_of(&current));
+        steps.push(current);
+        let Some(next) = next else {
+            break;
+        };
+        current = next;
         if exclusive && current == last {
             break;
         }
-        steps.push(current.clone());
-        if current == last {
+        if current.len() > last.len() || current.is_empty() {
             break;
         }
-        let next = crate::vm::native_methods::string_methods::successor_of(&current);
-        if next.chars().count() > target {
-            break;
-        }
-        current = next;
     }
     steps
 }

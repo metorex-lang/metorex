@@ -65,6 +65,43 @@ impl VirtualMachine {
                 }
                 Ok(Some(value))
             }
+            // The implicit parameters, `it` or `_1` to `_9`, of the block
+            // the binding was taken in, and not of a block around it.
+            "implicit_parameters" => Ok(Some(Object::array(
+                binding
+                    .implicit_parameters
+                    .borrow()
+                    .iter()
+                    .map(|(name, _)| Object::symbol(name.clone()))
+                    .collect(),
+            ))),
+            "implicit_parameter_defined?" | "implicit_parameter_get" => {
+                let name = self.binding_name_argument(arguments, method_name, position)?;
+                if name != "it" && !crate::parser::names_a_numbered_parameter(&name) {
+                    return Err(crate::vm::errors::simple_exception(
+                        "NameError",
+                        &format!("'{name}' is not an implicit parameter"),
+                        position,
+                    ));
+                }
+                let found = binding
+                    .implicit_parameters
+                    .borrow()
+                    .iter()
+                    .find(|(held, _)| *held == name)
+                    .map(|(_, cell)| cell.borrow().clone());
+                match (method_name, found) {
+                    ("implicit_parameter_defined?", found) => {
+                        Ok(Some(Object::Bool(found.is_some())))
+                    }
+                    (_, Some(value)) => Ok(Some(value)),
+                    (_, None) => Err(crate::vm::errors::simple_exception(
+                        "NameError",
+                        &format!("implicit parameter '{name}' is not defined for {binding:p}"),
+                        position,
+                    )),
+                }
+            }
             // `b.eval(src)` is `eval(src, b)`, so it runs where the binding
             // was captured and leaves what it binds behind.
             "eval" => {
@@ -88,8 +125,27 @@ impl VirtualMachine {
         }
     }
 
-    /// The local a Binding method was asked about, named by Symbol or String.
+    /// The local a Binding method was asked about, which a numbered
+    /// parameter never is.
     fn binding_local_name(
+        &mut self,
+        arguments: &[Object],
+        method_name: &str,
+        position: Position,
+    ) -> Result<String, MetorexError> {
+        let name = self.binding_name_argument(arguments, method_name, position)?;
+        if crate::parser::names_a_numbered_parameter(&name) {
+            return Err(crate::vm::errors::simple_exception(
+                "NameError",
+                &format!("numbered parameter '{name}' is not a local variable"),
+                position,
+            ));
+        }
+        Ok(name)
+    }
+
+    /// The local a Binding method was asked about, named by Symbol or String.
+    fn binding_name_argument(
         &mut self,
         arguments: &[Object],
         method_name: &str,

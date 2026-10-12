@@ -423,9 +423,9 @@ fn string_size_error_with_args() {
 }
 
 #[test]
-fn string_strip_error_with_args() {
+fn string_strip_refuses_a_selector_that_is_not_text() {
     let err = run_err(r#""hello".strip(1)"#);
-    assert!(err.contains("argument"));
+    assert!(err.contains("no implicit conversion of Integer into String"));
 }
 
 #[test]

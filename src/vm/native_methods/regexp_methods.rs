@@ -533,7 +533,10 @@ impl VirtualMachine {
                             position,
                         )?,
                     };
-                    self.environment_mut().define(name, value);
+                    // A local the scope around already holds is the one set.
+                    if !self.environment_mut().set(&name, value.clone()) {
+                        self.environment_mut().define(name, value);
+                    }
                 }
                 Ok(answer)
             }

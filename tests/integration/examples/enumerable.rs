@@ -176,3 +176,18 @@ fn test_enumerable_pairs_through_enumerators_no_parens_execution() {
     let output = run_example("enumerable/pairs_through_enumerators_no_parens.rb");
     assert_eq!(output, PAIRS_THROUGH_ENUMERATORS);
 }
+
+/// The expected output of both `enumerable/lazy_value_packing` variants.
+const LAZY_VALUE_PACKING_OUTPUT: &str = "[:select, [[[1, 2]]]]\n[:reject, [[[1, 2]]]]\n[:take_while, [[[1, 2]]]]\n[:uniq, [[[1, 2]]]]\n[[nil]]\n[[[[1, 2], 0]]]\n[[0, 2], [1, 3]]\n[[0, 2], [1, 3]]\nInfinity\n25\n[0, 1]\n\"unknown keywords: :width, :depth\"\n";
+
+#[test]
+fn test_enumerable_lazy_value_packing_execution() {
+    let output = run_example("enumerable/lazy_value_packing.rb");
+    assert_eq!(output, LAZY_VALUE_PACKING_OUTPUT);
+}
+
+#[test]
+fn test_enumerable_lazy_value_packing_no_parens_execution() {
+    let output = run_example("enumerable/lazy_value_packing_no_parens.rb");
+    assert_eq!(output, LAZY_VALUE_PACKING_OUTPUT);
+}

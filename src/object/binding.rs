@@ -38,6 +38,9 @@ pub struct Binding {
     /// for one captured outside every method. A `def` run through the
     /// binding installs where a `def` written there would.
     pub home_frame: RefCell<Option<Option<u64>>>,
+    /// The implicit parameters, `it` or `_1` to `_9`, the block the binding
+    /// was captured in took, with their cells.
+    pub implicit_parameters: RefCell<Vec<(String, Rc<RefCell<Object>>)>>,
 }
 
 impl PartialEq for Binding {
@@ -63,6 +66,7 @@ impl Binding {
             nesting: RefCell::new(Vec::new()),
             frame: RefCell::new(None),
             home_frame: RefCell::new(None),
+            implicit_parameters: RefCell::new(Vec::new()),
         }
     }
 
@@ -81,6 +85,7 @@ impl Binding {
             nesting: RefCell::new(Vec::new()),
             frame: RefCell::new(None),
             home_frame: RefCell::new(None),
+            implicit_parameters: RefCell::new(Vec::new()),
         }
     }
 
@@ -155,6 +160,7 @@ impl Binding {
             nesting: RefCell::new(self.nesting.borrow().clone()),
             frame: RefCell::new(self.frame.borrow().clone()),
             home_frame: RefCell::new(*self.home_frame.borrow()),
+            implicit_parameters: RefCell::new(self.implicit_parameters.borrow().clone()),
         }
     }
 }

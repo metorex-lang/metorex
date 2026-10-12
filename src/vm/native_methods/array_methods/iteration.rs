@@ -204,54 +204,6 @@ impl VirtualMachine {
                 }
                 Ok(Some(Object::Array(Rc::new(RefCell::new(results)))))
             }
-            // The first element the block accepts. When nothing matches, the
-            // ifnone argument is called for the answer, and a missing one
-            // makes it nil.
-            "find" | "detect" => {
-                if arguments.len() > 1 {
-                    return Err(method_argument_error(
-                        method_name,
-                        1,
-                        arguments.len(),
-                        position,
-                    ));
-                }
-                let ifnone = match arguments.first() {
-                    Some(Object::Nil) | None => None,
-                    Some(other) => Some(other.clone()),
-                };
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(b)) => b,
-                    Some(other) => {
-                        return Err(method_argument_type_error(
-                            method_name,
-                            "Block",
-                            &other,
-                            position,
-                        ));
-                    }
-                    None => {
-                        return Err(MetorexError::runtime_error(
-                            format!("{} requires a block", method_name),
-                            position_to_location(position),
-                        ));
-                    }
-                };
-                let elements = array_rc.borrow().clone();
-                for element in elements {
-                    let value =
-                        self.execute_block_callable(&block, vec![element.clone()], position)?;
-                    if !matches!(value, Object::Bool(false) | Object::Nil) {
-                        return Ok(Some(element));
-                    }
-                }
-                match ifnone {
-                    Some(ifnone) => self
-                        .send_to_object(ifnone, "call", vec![], position)
-                        .map(Some),
-                    None => Ok(Some(Object::Nil)),
-                }
-            }
             _ => Ok(None),
         }
     }

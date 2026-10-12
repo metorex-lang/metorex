@@ -48,12 +48,7 @@ impl VirtualMachine {
                     }
                     Some(Rc::clone(c))
                 }
-                Some(other) => {
-                    return Err(MetorexError::type_error(
-                        format!("superclass must be a Class (given {})", other.type_name()),
-                        position_to_location(position),
-                    ));
-                }
+                Some(other) => return Err(self.superclass_not_a_class(other, position)),
                 None => self.globals().get("Object").and_then(|o| {
                     if let Object::Class(c) = o {
                         Some(c)

@@ -508,6 +508,15 @@ impl VirtualMachine {
             rest.push(self.get_string_representation(arg, position)?);
         }
         let mut raises = false;
+        // `exception:` takes true, false or nil, and nothing else.
+        if let Some(options) = &options
+            && let Some((_, given)) = options
+                .iter()
+                .find(|(name, _)| name.trim_start_matches(':') == "exception")
+            && !matches!(given, Object::Nil)
+        {
+            raises = self.exception_keyword(Some(given), position)?;
+        }
         // A redirection to an IO, a descriptor or anything past a path, and
         // any option other than `exception:`, is read the way `spawn` reads
         // it.
@@ -525,7 +534,7 @@ impl VirtualMachine {
         if let Some(options) = &options {
             for (name, target) in options.iter() {
                 match name.trim_start_matches(':') {
-                    "exception" => raises = target.is_truthy(),
+                    "exception" => {}
                     "out" => {
                         if let Object::String(path) = target {
                             redirects.push((1, path.as_str().to_string()));

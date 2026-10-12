@@ -29,9 +29,10 @@ impl VirtualMachine {
                     Some(c)
                 }
                 held => {
+                    let shown = self.get_inspect_representation(&held, position)?;
                     return Err(crate::vm::errors::simple_exception(
                         "TypeError",
-                        &format!("{} is not a class/module", held.type_name()),
+                        &format!("{shown} is not a class/module"),
                         position,
                     ));
                 }
@@ -51,15 +52,7 @@ impl VirtualMachine {
         let evaluated_parent = match superclass_expression {
             Some(expression) => match self.evaluate_expression(expression)? {
                 Object::Class(class) => Some(class),
-                other => {
-                    let message =
-                        format!("superclass must be a Class ({} given)", other.type_name());
-                    return Err(crate::vm::errors::simple_exception(
-                        "TypeError",
-                        &message,
-                        position,
-                    ));
-                }
+                other => return Err(self.superclass_not_a_class(&other, position)),
             },
             None => None,
         };
@@ -106,13 +99,7 @@ impl VirtualMachine {
             };
             match resolved {
                 Some(Object::Class(class)) => Some(class),
-                Some(held) => {
-                    return Err(crate::vm::errors::simple_exception(
-                        "TypeError",
-                        &format!("superclass must be a Class ({} given)", held.type_name()),
-                        position,
-                    ));
-                }
+                Some(held) => return Err(self.superclass_not_a_class(&held, position)),
                 None => {
                     return Err(MetorexError::runtime_error(
                         format!("Undefined superclass '{}'", super_name),
@@ -164,13 +151,13 @@ impl VirtualMachine {
             };
             match resolved {
                 Some(Object::Class(c)) => Some(c),
-                Some(_) => return Err(not_a_class_error(name, position)),
+                Some(_) => return Err(self.not_a_class_error(Some(parent), name, position)),
                 None => None,
             }
         } else if let Some(held) = self.globals().get(name) {
             match held {
                 Object::Class(c) => Some(c),
-                _ => return Err(not_a_class_error(name, position)),
+                _ => return Err(self.not_a_class_error(None, name, position)),
             }
         } else if let Some(Object::Class(c)) = self.environment().get(name) {
             Some(c)
@@ -179,7 +166,7 @@ impl VirtualMachine {
             // so the body reopens the class the file defines.
             match self.try_autoload_constant(&object_class, name)? {
                 Some(Object::Class(c)) => Some(c),
-                Some(_) => return Err(not_a_class_error(name, position)),
+                Some(_) => return Err(self.not_a_class_error(Some(&object_class), name, position)),
                 None => None,
             }
         } else {
@@ -195,7 +182,7 @@ impl VirtualMachine {
                 .superclass()
                 .is_some_and(|held| Rc::ptr_eq(&held, expected));
             if !compatible {
-                let msg = format!("superclass mismatch for class {}", existing.ruby_name());
+                let msg = format!("superclass mismatch for class {name}");
                 let exc = Object::exception("TypeError", msg.clone());
                 return Err(MetorexError::UncaughtException {
                     exception: exc,
@@ -441,12 +428,6 @@ impl VirtualMachine {
     }
 }
 
-/// The TypeError for `class Name` where the constant already holds something
-/// other than a class.
-fn not_a_class_error(name: &str, position: Position) -> MetorexError {
-    crate::vm::errors::simple_exception("TypeError", &format!("{} is not a class", name), position)
-}
-
 /// A constant one of `class`'s ancestors defines: its superclasses and the
 /// modules each of them includes, nearest first.
 fn inherited_constant(class: &Rc<Class>, name: &str) -> Option<Object> {
@@ -463,4 +444,50 @@ fn inherited_constant(class: &Rc<Class>, name: &str) -> Option<Object> {
         cursor = current.superclass();
     }
     None
+}
+
+impl VirtualMachine {
+    /// The TypeError for `class Name` where the constant already holds
+    /// something other than a class, naming where it was defined when that
+    /// is known.
+    fn not_a_class_error(
+        &self,
+        home: Option<&Rc<Class>>,
+        name: &str,
+        position: Position,
+    ) -> MetorexError {
+        let defined_at = home
+            .and_then(|held| held.get_const_location(name))
+            .or_else(|| self.top_level_constant_location(name));
+        let message = match defined_at {
+            Some((file, line)) => {
+                format!(
+                    "{name} is not a class\n{file}:{line}: previous definition of {name} was here"
+                )
+            }
+            None => format!("{name} is not a class"),
+        };
+        crate::vm::errors::simple_exception("TypeError", &message, position)
+    }
+
+    /// Where a top-level constant was defined, when that is known.
+    pub(crate) fn top_level_constant_location(&self, name: &str) -> Option<(String, i64)> {
+        match self.globals().get("Object") {
+            Some(Object::Class(object)) => object.get_const_location(name),
+            _ => None,
+        }
+    }
+
+    /// The TypeError for a superclass that is not a class.
+    pub(crate) fn superclass_not_a_class(
+        &self,
+        given: &Object,
+        position: Position,
+    ) -> MetorexError {
+        let message = format!(
+            "superclass must be an instance of Class (given an instance of {})",
+            self.builtins().class_of(given).ruby_name()
+        );
+        crate::vm::errors::simple_exception("TypeError", &message, position)
+    }
 }

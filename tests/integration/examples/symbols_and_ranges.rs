@@ -134,3 +134,18 @@ fn test_symbols_and_ranges_literal_range_ends_no_parens_execution() {
     let output = run_example("symbols_and_ranges/literal_range_ends_no_parens.rb");
     assert_eq!(output, LITERAL_RANGE_ENDS_OUTPUT);
 }
+
+/// The expected output of both `symbols_and_ranges/range_cover_and_include` variants.
+const RANGE_COVER_AND_INCLUDE_OUTPUT: &str = "true\nfalse\ntrue\nfalse\nfalse\ntrue\nfalse\nfalse\ntrue\nfalse\ntrue\nfalse\nfalse\ntrue\n\"can't convert Object to String (Object#to_str gives Integer)\"\ntrue\n[:aa, :ab, :ac]\ntrue\nfalse\n\"cannot determine inclusion in beginless/endless ranges\"\n\"cannot determine inclusion in beginless/endless ranges\"\n\"#step iteration for beginless ranges is meaningless\"\n\"#step for non-numeric beginless ranges is meaningless\"\n";
+
+#[test]
+fn test_symbols_and_ranges_range_cover_and_include_execution() {
+    let output = run_example("symbols_and_ranges/range_cover_and_include.rb");
+    assert_eq!(output, RANGE_COVER_AND_INCLUDE_OUTPUT);
+}
+
+#[test]
+fn test_symbols_and_ranges_range_cover_and_include_no_parens_execution() {
+    let output = run_example("symbols_and_ranges/range_cover_and_include_no_parens.rb");
+    assert_eq!(output, RANGE_COVER_AND_INCLUDE_OUTPUT);
+}

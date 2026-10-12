@@ -152,7 +152,7 @@ impl VirtualMachine {
                         position,
                     ));
                 };
-                std::fs::hard_link(&*existing.as_str(), &*added.as_str()).map_err(|problem| {
+                std::fs::hard_link(path_text(existing), path_text(added)).map_err(|problem| {
                     crate::vm::init::two_path_error(
                         &problem,
                         "rb_file_s_link",

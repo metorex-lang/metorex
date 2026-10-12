@@ -278,9 +278,10 @@ impl VirtualMachine {
                 };
                 Ok(Some(Object::Int((last - first + 1).max(0))))
             }
-            // A numeric range answers by comparing the ends, and any other
-            // walks its values, which is how a String range refuses one that
-            // falls between its endpoints but is not among them.
+            // A range over numbers or times answers by comparing against its
+            // ends, a range of Strings by walking them as `upto` does, and
+            // any other by walking its values, which a range missing an end
+            // cannot do.
             "member?" | "include?" => {
                 if arguments.len() != 1 {
                     return Err(method_argument_error(
@@ -290,42 +291,87 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                // Only a range of names is walked; every other kind answers
-                // by comparing against the ends, which is what an object with
-                // no `succ` of its own needs.
-                // A range of numbers answers by comparing against its ends,
-                // which is what lets a value coerce itself into the
-                // comparison rather than being looked for one step at a time.
-                let counts = matches!(
-                    start.as_ref(),
-                    Object::Int(_) | Object::Float(_) | Object::BigInt(_)
-                );
-                let walks = !counts
-                    && (matches!(start.as_ref(), Object::String(_) | Object::Symbol(_))
-                        || self.responds_to(start, "succ"));
-                if !walks {
-                    let covered =
-                        self.range_covers(start, end, *exclusive, &arguments[0], position)?;
+                let value = &arguments[0];
+                let open = |held: &Object| matches!(held, Object::Nil);
+                let linear = self.ordered_linearly(start)
+                    || self.ordered_linearly(end)
+                    || (open(start) && open(end) && self.ordered_linearly(value))
+                    || self.responds_to(start, "to_int")
+                    || self.responds_to(end, "to_int");
+                if linear {
+                    let covered = self.range_covers(start, end, *exclusive, value, position)?;
                     return Ok(Some(Object::Bool(covered)));
                 }
-                // A range of names the same length as the value reads like an
-                // odometer: each place must stand between the two ends.
-                if let (Object::String(low), Object::String(high), Object::String(held)) =
-                    (start.as_ref(), end.as_ref(), &arguments[0])
-                    && let Some(answer) =
-                        place_by_place(&low.as_str(), &high.as_str(), &held.as_str(), *exclusive)
+                if let (Object::String(low), Object::String(high)) = (start.as_ref(), end.as_ref())
                 {
-                    return Ok(Some(Object::Bool(answer)));
+                    let held = match value {
+                        Object::String(held) => Some(Rc::clone(held)),
+                        Object::Nil => None,
+                        other if self.responds_to(other, "to_str") => {
+                            match self.send_to_object(
+                                other.clone(),
+                                "to_str",
+                                Vec::new(),
+                                position,
+                            )? {
+                                Object::String(held) => Some(held),
+                                converted => {
+                                    let source = self.builtins().class_of(other).ruby_name();
+                                    let message = format!(
+                                        "can't convert {source} to String ({source}#to_str gives {})",
+                                        self.builtins().class_of(&converted).ruby_name()
+                                    );
+                                    return Err(crate::vm::errors::simple_exception(
+                                        "TypeError",
+                                        &message,
+                                        position,
+                                    ));
+                                }
+                            }
+                        }
+                        _ => None,
+                    };
+                    let Some(held) = held else {
+                        return Ok(Some(Object::Bool(false)));
+                    };
+                    let found = crate::vm::native_methods::string_sets::upto_sequence(
+                        &low.as_str(),
+                        &high.as_str(),
+                        *exclusive,
+                    )
+                    .into_iter()
+                    .any(|step| *step == *held.as_str());
+                    return Ok(Some(Object::Bool(found)));
+                }
+                if open(start) || open(end) {
+                    return Err(crate::vm::errors::simple_exception(
+                        "TypeError",
+                        "cannot determine inclusion in beginless/endless ranges",
+                        position,
+                    ));
                 }
                 let elements = self.range_elements(start, end, *exclusive, position)?;
                 for element in elements {
-                    if self.elements_equal(&element, &arguments[0], position)? {
+                    if self.elements_equal(&element, value, position)? {
                         return Ok(Some(Object::Bool(true)));
                     }
                 }
                 Ok(Some(Object::Bool(false)))
             }
             _ => Ok(None),
+        }
+    }
+    /// Whether a value orders along a line, as a number or a Time does,
+    /// which Ruby's `linear_object_p` decides.
+    fn ordered_linearly(&self, value: &Object) -> bool {
+        match value {
+            Object::Int(_) | Object::BigInt(_) | Object::Float(_) => true,
+            Object::Nil | Object::String(_) | Object::Symbol(_) => false,
+            other => {
+                let class = self.builtins().class_of(other);
+                crate::vm::method_invocation::descends_from(&class, "Numeric")
+                    || crate::vm::method_invocation::descends_from(&class, "Time")
+            }
         }
     }
 }

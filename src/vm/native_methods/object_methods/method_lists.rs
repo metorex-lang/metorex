@@ -97,6 +97,30 @@ impl VirtualMachine {
                         self.lookup_method(receiver, name)
                             .is_some_and(|(_, method)| written_by_program(&method))
                     });
+                } else if method_name == "public_methods"
+                    && let Object::Class(held) | Object::Module(held) = receiver
+                {
+                    // A core class or module answers the methods it defines
+                    // on itself, and those its own class, Class or Module,
+                    // defines.
+                    use crate::vm::native_methods::core_method_names::{
+                        CORE_METHODS, CORE_SINGLETON_METHODS,
+                    };
+                    let own = held.ruby_name();
+                    if let Some(row) = CORE_SINGLETON_METHODS.iter().find(|row| row.owner == own) {
+                        names.extend(row.public.iter().map(|name| name.to_string()));
+                    }
+                    if self.reads_lines && own == "Kernel" {
+                        names.extend(
+                            crate::vm::native_methods::class_methods::LINE_LOOP_METHODS
+                                .iter()
+                                .map(|name| name.to_string()),
+                        );
+                    }
+                    let kind = if held.is_module() { "Module" } else { "Class" };
+                    if let Some(row) = CORE_METHODS.iter().find(|row| row.owner == kind) {
+                        names.extend(row.public.iter().map(|name| name.to_string()));
+                    }
                 }
                 names.sort();
                 names.dedup();

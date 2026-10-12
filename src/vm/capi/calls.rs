@@ -46,7 +46,62 @@ pub extern "C-unwind" fn rb_funcallv(
     arguments: *const Value,
 ) -> Value {
     let arguments = objects_from(i64::from(count), arguments);
+    // A call made while `rb_iterate` runs its walk is handed the block.
+    if let Some(block) = ITERATE_BLOCK.with(|held| held.borrow_mut().take()) {
+        interpreter().pending_block = Some(block);
+    }
     to_value(&call(to_object(receiver), &symbol_name(name), arguments))
+}
+
+thread_local! {
+    /// The block `rb_iterate` hands the next method its walk calls.
+    static ITERATE_BLOCK: std::cell::RefCell<Option<Object>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Puts back the block an `rb_iterate` around this one was handing on,
+/// when this one ends, returning or raising.
+struct IterateEnded(Option<Object>);
+
+impl Drop for IterateEnded {
+    fn drop(&mut self) {
+        let outer = self.0.take();
+        ITERATE_BLOCK.with(|held| *held.borrow_mut() = outer);
+    }
+}
+
+/// Runs the C `walk` with `data`, handing the next method it calls a block
+/// that runs the C `function`, handed `block_data`, for each value yielded.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_iterate(
+    walk: extern "C-unwind" fn(Value) -> Value,
+    data: Value,
+    function: *const (),
+    block_data: Value,
+) -> Value {
+    let c_function = super::fibers::block_function(function, block_data);
+    let method = super::fibers::method_for_block_function(c_function);
+    BLOCK_CALLS.with(|calls| {
+        calls
+            .borrow_mut()
+            .push((c_function, super::called_with_block()))
+    });
+    let _ended = BlockCallEnded;
+    let block = crate::vm::program::block_for_method(method, super::called_from());
+    let _restored = IterateEnded(ITERATE_BLOCK.with(|held| held.replace(Some(block))));
+    walk(data)
+}
+
+/// Calls `each` on `object` with the block `rb_iterate` is handing on.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_each(object: Value) -> Value {
+    let name = c"each";
+    rb_funcallv(
+        object,
+        super::symbols::rb_intern(name.as_ptr()),
+        0,
+        std::ptr::null(),
+    )
 }
 
 thread_local! {
@@ -119,7 +174,11 @@ pub(super) fn kernel_function(name: &str, arguments: Vec<Object>) -> Object {
 
 /// The arguments C handed over, the last marked as the keyword Hash when
 /// `keywords` says so. An empty keyword Hash passes no keywords at all.
-fn arguments_with_keywords(count: i32, arguments: *const Value, keywords: i32) -> Vec<Object> {
+pub(super) fn arguments_with_keywords(
+    count: i32,
+    arguments: *const Value,
+    keywords: i32,
+) -> Vec<Object> {
     let mut arguments = objects_from(i64::from(count), arguments);
     if keywords != super::procs::PASS_KEYWORDS {
         return arguments;

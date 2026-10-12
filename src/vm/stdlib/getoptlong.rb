@@ -270,9 +270,7 @@ class GetoptLong
   end
   private :read_short
 
-  def get_option
-    self.get
-  end
+  alias get_option get
 
   def each(&block)
     walked = self.get
@@ -283,7 +281,5 @@ class GetoptLong
     self
   end
 
-  def each_option(&block)
-    self.each(&block)
-  end
+  alias each_option each
 end

@@ -92,15 +92,19 @@ impl VirtualMachine {
             };
             match resolved {
                 Some(Object::Module(existing)) => (existing, false, false),
-                Some(held @ (Object::Class(_) | Object::Instance(_)))
-                | Some(held @ (Object::String(_) | Object::Int(_) | Object::Float(_))) => {
-                    return Err(not_a_module(&full_name, &held, position));
-                }
-                Some(held @ (Object::Bool(_) | Object::Symbol(_) | Object::Array(_))) => {
-                    return Err(not_a_module(&full_name, &held, position));
-                }
-                Some(Object::Nil) => {
-                    return Err(not_a_module(&full_name, &Object::Nil, position));
+                Some(
+                    Object::Class(_)
+                    | Object::Instance(_)
+                    | Object::String(_)
+                    | Object::Int(_)
+                    | Object::Float(_)
+                    | Object::Bool(_)
+                    | Object::Symbol(_)
+                    | Object::Array(_)
+                    | Object::Nil,
+                ) => {
+                    let defined_at = parent.get_const_location(name);
+                    return Err(not_a_module(name, defined_at, position));
                 }
                 _ => (new_module(), false, true),
             }
@@ -115,8 +119,12 @@ impl VirtualMachine {
             && existing.ruby_name() == full_name
         {
             (existing, false, false)
-        } else if let Some(Object::Class(existing)) = self.globals().get(name) {
-            (existing, true, false)
+        } else if let Some(Object::Class(_)) = self.globals().get(name) {
+            return Err(not_a_module(
+                &full_name,
+                self.top_level_constant_location(name),
+                position,
+            ));
         } else if let Some(Object::Class(existing)) = self.environment().get(name) {
             (existing, true, false)
         } else {
@@ -130,8 +138,9 @@ impl VirtualMachine {
             };
             match autoloaded {
                 Some(Object::Module(existing)) => (existing, false, false),
-                Some(held @ Object::Class(_)) => {
-                    return Err(not_a_module(&full_name, &held, position));
+                Some(Object::Class(_)) => {
+                    let defined_at = self.top_level_constant_location(name);
+                    return Err(not_a_module(name, defined_at, position));
                 }
                 _ => (new_module(), false, true),
             }

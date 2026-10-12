@@ -594,7 +594,7 @@ fn test_error_when_superclass_not_a_class() {
     let result = vm.execute_program(&program);
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
-    assert!(err_msg.contains("superclass must be a Class"));
+    assert!(err_msg.contains("superclass must be an instance of Class"));
 }
 
 #[test]

@@ -131,8 +131,14 @@ impl VirtualMachine {
                 return Some(left_encoding);
             }
         }
+        // Ruby trades the two objects so the String comes first, but not
+        // their encodings, so the answer is the one written second.
         if left_ascii {
-            return Some(right_encoding);
+            return Some(if first_is_string {
+                right_encoding
+            } else {
+                left_encoding
+            });
         }
         None
     }

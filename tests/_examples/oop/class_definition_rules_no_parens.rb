@@ -10,7 +10,7 @@ end
   begin
     attempt.call
   rescue TypeError => error
-    puts error.message
+    puts error.message.lines.first
   end
 end
 

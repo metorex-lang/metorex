@@ -313,28 +313,6 @@ pub(crate) fn end_is_whole(value: &Object) -> bool {
     }
 }
 
-/// Whether a name stands inside a range of names of the same length, read one
-/// place at a time. Ruby reads the places as bytes, so a character spelled
-/// with several of them is read one byte at a time. Answers None where the
-/// three do not line up that way.
-pub(crate) fn place_by_place(low: &str, high: &str, held: &str, exclusive: bool) -> Option<bool> {
-    let low: Vec<u8> = low.bytes().collect();
-    let high: Vec<u8> = high.bytes().collect();
-    let held: Vec<u8> = held.bytes().collect();
-    if low.len() != high.len() || low.len() != held.len() {
-        return None;
-    }
-    for ((low, high), held) in low.iter().zip(high.iter()).zip(held.iter()) {
-        if held < low || held > high {
-            return Some(false);
-        }
-    }
-    if exclusive && held == high {
-        return Some(false);
-    }
-    Some(true)
-}
-
 /// Ruby treats a range end as numeric when it is an Integer, a Float, or one
 /// of the Numeric classes the prelude defines as instances.
 pub(crate) fn counts_as_a_number(held: &Object) -> bool {

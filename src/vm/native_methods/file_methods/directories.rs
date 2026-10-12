@@ -123,13 +123,12 @@ impl VirtualMachine {
                 Some(Object::Int(mode)) => *mode as libc::mode_t,
                 _ => 0o666,
             };
-            let named =
-                std::ffi::CString::new(path.as_str().as_bytes().to_vec()).map_err(|_| {
-                    MetorexError::runtime_error(
-                        format!("Invalid path - {}", path.as_str()),
-                        position_to_location(position),
-                    )
-                })?;
+            let named = std::ffi::CString::new(path_text(&path).into_bytes()).map_err(|_| {
+                MetorexError::runtime_error(
+                    format!("Invalid path - {}", path.as_str()),
+                    position_to_location(position),
+                )
+            })?;
             // SAFETY: `mkfifo` reads the name and the mode and touches
             // nothing else.
             let made = unsafe { libc::mkfifo(named.as_ptr(), mode) };
@@ -170,13 +169,12 @@ impl VirtualMachine {
                         position,
                     ));
                 };
-                let named =
-                    std::ffi::CString::new(path.as_str().as_bytes().to_vec()).map_err(|_| {
-                        MetorexError::runtime_error(
-                            format!("Invalid path - {}", path.as_str()),
-                            position_to_location(position),
-                        )
-                    })?;
+                let named = std::ffi::CString::new(path_text(path).into_bytes()).map_err(|_| {
+                    MetorexError::runtime_error(
+                        format!("Invalid path - {}", path.as_str()),
+                        position_to_location(position),
+                    )
+                })?;
                 // SAFETY: `fchmodat` reads the name and the mode and touches
                 // nothing else. AT_SYMLINK_NOFOLLOW is what makes it change
                 // the link rather than what the link points at.

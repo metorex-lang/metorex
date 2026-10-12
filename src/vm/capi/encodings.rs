@@ -288,3 +288,9 @@ pub extern "C-unwind" fn rb_define_dummy_encoding(name: *const c_char) -> i32 {
     }
     listed.len() as i32
 }
+
+/// Whether `encoding` is a dummy, which names text it cannot read.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_enc_dummy_p(encoding: *const RbEncoding) -> i32 {
+    i32::from(call(encoding_object(encoding), "dummy?", Vec::new()).is_truthy())
+}

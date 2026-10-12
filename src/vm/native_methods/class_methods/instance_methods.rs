@@ -149,10 +149,17 @@ impl VirtualMachine {
                 let answered_natively = match sample_of_class(class_rc.name()) {
                     Some(probe) => self.responds_to(&probe, &name_str),
                     None => {
+                        // A core class below Object, such as Queue under
+                        // SizedQueue, hands its native methods down.
+                        let core_ancestors: Vec<String> = self
+                            .ancestor_names(Object::Class(Rc::clone(class_rc)), position)?
+                            .into_iter()
+                            .take_while(|name| !matches!(name.as_str(), "Object" | "Kernel"))
+                            .collect();
                         crate::vm::native_methods::class_answers_natively(
                             class_rc, &name_str, false,
                         ) || crate::vm::native_methods::object_methods::nearest_core_owner(
-                            &[class_rc.ruby_name()],
+                            &core_ancestors,
                             &name_str,
                         )
                         .is_some()
@@ -182,6 +189,7 @@ impl VirtualMachine {
                     .to_string();
                     stub.native_alias = Some(named.clone());
                     stub.original_name = Some(named);
+                    stub.origin_class = Some(Rc::clone(class_rc));
                     return Ok(Answered(Object::Method(Rc::new(stub))));
                 }
                 // An exception class takes its message, and whatever else a
@@ -454,6 +462,14 @@ impl VirtualMachine {
                         }
                     }
                 });
+                // `-n` and `-p` give Kernel these as private methods.
+                if self.reads_lines && class_rc.ruby_name() == "Kernel" {
+                    method_list.retain(|held| !LINE_LOOP_METHODS.contains(&held.as_str()));
+                    for name in LINE_LOOP_METHODS {
+                        method_list.push(name.to_string());
+                        priv_set.insert(name.to_string());
+                    }
+                }
                 let filtered: Vec<Object> = method_list
                     .into_iter()
                     .filter(|n| !is_internal_method_key(n))
@@ -479,3 +495,6 @@ impl VirtualMachine {
         Ok(Unclaimed)
     }
 }
+
+/// The methods `-n` and `-p` give Kernel, private and as module functions.
+pub(crate) const LINE_LOOP_METHODS: [&str; 4] = ["chomp", "chop", "gsub", "sub"];

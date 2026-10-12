@@ -34,23 +34,20 @@ pub extern "C-unwind" fn rb_obj_is_proc(value: Value) -> Value {
 
 /// Marks the last argument as the keyword Hash, refusing one that is not a
 /// Hash.
-pub(super) fn pass_last_as_keywords(arguments: &mut [Object]) {
-    let Some(last) = arguments.last_mut() else {
+pub(super) fn pass_last_as_keywords(arguments: &mut Vec<Object>) {
+    let Some(last) = arguments.pop() else {
         return;
     };
-    let Object::Dict(pairs) = &*last else {
-        raise(crate::vm::errors::simple_exception(
-            "TypeError",
-            &format!(
-                "no implicit conversion of {} into Hash",
-                interpreter().conversion_name(last)
-            ),
-            called_from(),
-        ))
-    };
-    let mut marked = pairs.borrow().clone();
-    marked.insert("__MX_KWARGS__".to_string(), Object::Bool(true));
-    *last = Object::Dict(std::rc::Rc::new(std::cell::RefCell::new(marked)));
+    // A Hash is taken as it is, and anything else is asked for one through
+    // `to_hash`. Nil passes no keywords at all.
+    let spread = super::or_raise(interpreter().hash_for_splat(last, called_from()));
+    if let Some(pairs) = spread {
+        let mut marked = pairs.borrow().clone();
+        marked.insert("__MX_KWARGS__".to_string(), Object::Bool(true));
+        arguments.push(Object::Dict(std::rc::Rc::new(std::cell::RefCell::new(
+            marked,
+        ))));
+    }
 }
 
 /// Calls the Proc with `arguments`, the last as keywords when `keywords`

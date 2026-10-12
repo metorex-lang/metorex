@@ -24,8 +24,11 @@ fn define_block_param(
         return Ok(());
     }
     // A numbered parameter binds its name without declaring it, the same
-    // way the implicit `it` does.
-    if crate::parser::names_a_numbered_parameter(param) {
+    // way the implicit `it` does, and so does the value a `for` loop hands
+    // its targets.
+    if crate::parser::names_a_numbered_parameter(param)
+        || param == crate::ast::for_loop::FOR_LOOP_VALUE
+    {
         vm.environment_mut().define_hidden(param.to_string(), value);
         return Ok(());
     }

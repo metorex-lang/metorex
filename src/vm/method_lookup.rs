@@ -607,6 +607,9 @@ impl VirtualMachine {
             {
                 return true;
             }
+            if core_singleton_method(&current.ruby_name(), name) {
+                return true;
+            }
             cursor = current.superclass();
         }
         if self
@@ -1309,6 +1312,15 @@ pub(crate) fn class_public_method(name: &str) -> bool {
     crate::vm::native_methods::core_method_names::CORE_METHODS
         .iter()
         .find(|row| row.owner == "Class")
+        .is_some_and(|row| row.public.contains(&name))
+}
+
+/// Whether the core class or module named `owner` answers `name` on
+/// itself, as Dir answers `pwd`.
+pub(crate) fn core_singleton_method(owner: &str, name: &str) -> bool {
+    crate::vm::native_methods::core_method_names::CORE_SINGLETON_METHODS
+        .iter()
+        .find(|row| row.owner == owner)
         .is_some_and(|row| row.public.contains(&name))
 }
 

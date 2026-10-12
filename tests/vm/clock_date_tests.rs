@@ -435,6 +435,6 @@ fn the_time_library_reads_and_writes_a_time_as_text() {
     );
     assert_eq!(
         quoted("require 'time'\nTime.utc(2012, 11, 8, 15, 43, 59).rfc2822"),
-        "Thu, 8 Nov 2012 15:43:59 +0000"
+        "Thu, 08 Nov 2012 15:43:59 -0000"
     );
 }

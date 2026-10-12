@@ -1116,3 +1116,18 @@ fn test_introspection_tracepoint_attribute_methods_no_parens_execution() {
     let output = run_example("introspection/tracepoint_attribute_methods_no_parens.rb");
     assert_eq!(output, TRACEPOINT_ATTRIBUTE_METHODS_OUTPUT);
 }
+
+/// The expected output of both `introspection/binding_implicit_parameters` variants.
+const BINDING_IMPLICIT_PARAMETERS_OUTPUT: &str = "[:_1, :_2]\n:east\ntrue\nfalse\n[]\ntrue\n\"'total' is not an implicit parameter\"\n0\n[3, 4]\n";
+
+#[test]
+fn test_introspection_binding_implicit_parameters_execution() {
+    let output = run_example("introspection/binding_implicit_parameters.rb");
+    assert_eq!(output, BINDING_IMPLICIT_PARAMETERS_OUTPUT);
+}
+
+#[test]
+fn test_introspection_binding_implicit_parameters_no_parens_execution() {
+    let output = run_example("introspection/binding_implicit_parameters_no_parens.rb");
+    assert_eq!(output, BINDING_IMPLICIT_PARAMETERS_OUTPUT);
+}

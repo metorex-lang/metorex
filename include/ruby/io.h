@@ -56,6 +56,7 @@ int rb_io_mode(VALUE io);
 VALUE rb_io_path(VALUE io);
 VALUE rb_io_closed_p(VALUE io);
 VALUE rb_io_check_io(VALUE io);
+VALUE rb_io_get_io(VALUE io);
 VALUE rb_io_addstr(VALUE io, VALUE string);
 VALUE rb_io_printf(int count, const VALUE *values, VALUE io);
 VALUE rb_io_print(int count, const VALUE *values, VALUE io);

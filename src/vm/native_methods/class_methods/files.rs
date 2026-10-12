@@ -129,16 +129,7 @@ impl VirtualMachine {
                             name.truncate(name.len() - suffix.len());
                         }
                     }
-                    // The piece is written in the same encoding the whole
-                    // name was.
-                    let made = Object::string(name);
-                    if let (Object::String(held), Object::String(piece)) = (&arguments[0], &made) {
-                        piece.set_encoding(held.encoding_name());
-                        if held.holds_bytes() {
-                            piece.mark_bytes();
-                        }
-                    }
-                    return Ok(Answered(made));
+                    return Ok(Answered(path_piece(name, &arguments[0])));
                 }
                 // The extension a name carries, and the empty string for a
                 // name that carries none.
@@ -164,7 +155,7 @@ impl VirtualMachine {
                         Some(dot) => &held[leading + dot..],
                         None => "",
                     };
-                    return Ok(Answered(Object::string(found.to_string())));
+                    return Ok(Answered(path_piece(found.to_string(), &arguments[0])));
                 }
                 // The directory and the name a path is made of, as a pair.
                 "split" => {
@@ -177,7 +168,12 @@ impl VirtualMachine {
                         ));
                     }
                     let path = self.path_name_argument("split", &arguments[0], position)?;
-                    let arguments = &[Object::string(path)];
+                    // The pieces keep the encoding the whole path was in.
+                    let whole = match &arguments[0] {
+                        held @ Object::String(_) => held.clone(),
+                        _ => Object::string(path),
+                    };
+                    let arguments = &[whole];
                     let directory = self
                         .call_class_methods(class_rc, "dirname", arguments, position)?
                         .unwrap_or(Object::Nil);
@@ -219,4 +215,16 @@ impl VirtualMachine {
         }
         Ok(Unclaimed)
     }
+}
+
+/// A piece of a path, written in the same encoding the whole path was.
+fn path_piece(piece: String, whole: &Object) -> Object {
+    let made = Object::string(piece);
+    if let (Object::String(held), Object::String(written)) = (whole, &made) {
+        written.set_encoding(held.encoding_name());
+        if held.holds_bytes() {
+            written.mark_bytes();
+        }
+    }
+    made
 }

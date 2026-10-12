@@ -11,6 +11,10 @@ use crate::lexer::Position;
 /// as the `each` call it stands for. The value each round hands over is
 /// assigned to the targets before the body runs, so the names it binds
 /// outlive the loop the way Ruby's do.
+/// The parameter the `each` block a `for` loop stands for takes each value
+/// under, which is no local of the program's.
+pub const FOR_LOOP_VALUE: &str = "__for_value";
+
 pub fn for_over_each(
     targets: Vec<Expression>,
     destructures: bool,
@@ -18,7 +22,7 @@ pub fn for_over_each(
     body: Vec<Statement>,
     position: Position,
 ) -> Statement {
-    const HANDED_OVER: &str = "__for_value";
+    const HANDED_OVER: &str = FOR_LOOP_VALUE;
     let mut plain_names = Vec::new();
     for target in &targets {
         let named = match target {

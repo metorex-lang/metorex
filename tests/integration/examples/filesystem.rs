@@ -539,3 +539,37 @@ fn test_filesystem_opening_encodings_and_paths_no_parens_execution() {
     let output = run_example("filesystem/opening_encodings_and_paths_no_parens.rb");
     assert_eq!(output, OPENING_ENCODINGS_AND_PATHS_OUTPUT);
 }
+
+/// The expected output of both `filesystem/path_encodings` variants.
+const PATH_ENCODINGS_OUTPUT: &str = "#<Encoding:EUC-JP>\n[#<Encoding:EUC-JP>, #<Encoding:EUC-JP>]\n#<Encoding:EUC-JP>\n[#<Encoding:EUC-JP>]\n#<Encoding:ISO-8859-1>\n#<Encoding:UTF-8>\n[]\n\"no implicit conversion of Symbol into Integer\"\n";
+
+#[test]
+fn test_filesystem_path_encodings_execution() {
+    let output = run_example("filesystem/path_encodings.rb");
+    assert_eq!(output, PATH_ENCODINGS_OUTPUT);
+}
+
+#[test]
+fn test_filesystem_path_encodings_no_parens_execution() {
+    let output = run_example("filesystem/path_encodings_no_parens.rb");
+    assert_eq!(output, PATH_ENCODINGS_OUTPUT);
+}
+
+/// The expected output of both `filesystem/shift_jis_paths` variants, which
+/// only macOS answers this way: Linux hands a path's bytes to the system.
+#[cfg(target_os = "macos")]
+const SHIFT_JIS_PATHS_OUTPUT: &str = "true\n2\n\"12\"\nfalse\n#<Encoding:Windows-31J>\n";
+
+#[cfg(target_os = "macos")]
+#[test]
+fn test_filesystem_shift_jis_paths_execution() {
+    let output = run_example("filesystem/shift_jis_paths.rb");
+    assert_eq!(output, SHIFT_JIS_PATHS_OUTPUT);
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn test_filesystem_shift_jis_paths_no_parens_execution() {
+    let output = run_example("filesystem/shift_jis_paths_no_parens.rb");
+    assert_eq!(output, SHIFT_JIS_PATHS_OUTPUT);
+}

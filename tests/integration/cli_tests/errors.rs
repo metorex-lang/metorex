@@ -232,6 +232,40 @@ fn cli_i_flag_edits_the_files_in_place_and_keeps_a_backup() {
 }
 
 // ============================================================================
+// -n flag (the methods the line loop gives Kernel)
+// ============================================================================
+
+#[test]
+fn cli_n_flag_gives_kernel_the_line_loop_methods() {
+    use std::io::Write;
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    for script in [
+        "tests/_examples/cli_flags/line_loop_methods.rb",
+        "tests/_examples/cli_flags/line_loop_methods_no_parens.rb",
+    ] {
+        for (flags, expected) in [(vec!["-n"], "true true\n"), (vec![], "false false\n")] {
+            let mut child = metorex_cmd()
+                .current_dir(manifest_dir)
+                .args(&flags)
+                .arg(script)
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .spawn()
+                .expect("failed to execute");
+            child
+                .stdin
+                .take()
+                .expect("stdin is piped")
+                .write_all(b"one line\n")
+                .expect("failed to write the input");
+            let output = child.wait_with_output().expect("failed to wait");
+            assert!(output.status.success(), "{script} {flags:?}");
+            assert_eq!(String::from_utf8(output.stdout).unwrap(), expected);
+        }
+    }
+}
+
+// ============================================================================
 // -s flag (switches among the program's arguments become globals)
 // ============================================================================
 

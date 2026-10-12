@@ -195,7 +195,7 @@ impl VirtualMachine {
             Object::Int(_) | Object::BigInt(_) | Object::Float(_) | Object::Symbol(_) => {
                 return Err(crate::vm::errors::simple_exception(
                     "TypeError",
-                    &format!("can't define singleton for {}", target_obj.type_name()),
+                    "can't define singleton",
                     position,
                 ));
             }

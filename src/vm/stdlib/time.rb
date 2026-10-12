@@ -3,48 +3,39 @@ require 'date'
 
 class Time
   def self.parse(text, now = Time.now)
-    DateTime.parse(text).to_time
-  end
-
-  def self.iso8601(text)
-    DateTime.iso8601(text).to_time
+    in_zone(DateTime.parse(text).to_time, text[/([A-Za-z]+|[-+]\d\d:?\d\d)\s*\z/, 1])
   end
 
   def self.xmlschema(text)
-    DateTime.iso8601(text).to_time
+    in_zone(DateTime.iso8601(text).to_time, text[/(Z|[-+]\d\d:?\d\d)\s*\z/i, 1])
   end
 
   def self.rfc2822(text)
-    DateTime.rfc2822(text).to_time
+    in_zone(DateTime.rfc2822(text).to_time, text.split.last)
   end
 
-  def self.rfc822(text)
-    DateTime.rfc2822(text).to_time
+  class << self
+    alias rfc822 rfc2822
+    alias iso8601 xmlschema
   end
 
   def self.httpdate(text)
-    DateTime.httpdate(text).to_time
+    DateTime.httpdate(text).to_time.utc
   end
 
-  def iso8601(places = 0)
-    written = self.strftime("%Y-%m-%dT%H:%M:%S")
-    if places > 0
-      written = written + "." + (self.subsec * 10 ** places).floor.to_s.rjust(places, "0")
-    end
-    written + (self.utc? ? "Z" : self.to_datetime.zone)
+  # A zone of -0000, -00:00, UTC, UT or Z says the time is in UTC, where an
+  # offset such as +0000 names a local zone that happens to sit at UTC.
+  def self.in_zone(time, zone)
+    return time if zone.nil?
+    zone.match?(/\A(?:-00:00|-0000|-00|UTC|Z|UT)\z/i) ? time.utc : time
   end
-
-  def xmlschema(places = 0)
-    self.iso8601(places)
-  end
+  private_class_method :in_zone
 
   def rfc2822
-    self.strftime("%a, %-d %b %Y %H:%M:%S %z")
+    strftime("%a, %d %b %Y %T ") << (utc? ? "-0000" : strftime("%z"))
   end
 
-  def rfc822
-    self.rfc2822
-  end
+  alias rfc822 rfc2822
 
   def httpdate
     self.getutc.strftime("%a, %d %b %Y %H:%M:%S GMT")

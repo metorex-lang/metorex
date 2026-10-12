@@ -152,6 +152,25 @@ fn ancestor_chain(receiver: &Object) -> Vec<Rc<Class>> {
 /// receiver, with `arguments`.
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_call_super(count: i32, arguments: *const Value) -> Value {
+    super_with(objects_from(i64::from(count), arguments))
+}
+
+/// `rb_call_super` with the last argument passed as keywords when
+/// `keywords` says so.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_call_super_kw(
+    count: i32,
+    arguments: *const Value,
+    keywords: i32,
+) -> Value {
+    super_with(super::calls::arguments_with_keywords(
+        count, arguments, keywords,
+    ))
+}
+
+/// Calls the method the C method running now overrides, on the same
+/// receiver, with `arguments`.
+fn super_with(arguments: Vec<Object>) -> Value {
     let Some(running) = running_method() else {
         raise(crate::vm::errors::simple_exception(
             "RuntimeError",
@@ -159,7 +178,6 @@ pub extern "C-unwind" fn rb_call_super(count: i32, arguments: *const Value) -> V
             called_from(),
         ))
     };
-    let arguments = objects_from(i64::from(count), arguments);
     let chain = ancestor_chain(&running.receiver);
     let after_owner = chain
         .iter()
@@ -172,24 +190,41 @@ pub extern "C-unwind" fn rb_call_super(count: i32, arguments: *const Value) -> V
     });
     let machine = interpreter();
     let position = called_from();
-    let Some((owner, method)) = next.filter(|(_, method)| !method.is_undefined) else {
-        let wording = machine.receiver_wording_for(&running.receiver, position);
-        raise(crate::vm::errors::simple_exception(
-            "NoMethodError",
-            &format!(
-                "super: no superclass method '{}' for {}",
-                running.name, wording
-            ),
+    // The method reached is handed the block the C method was.
+    machine.pending_block = super::called_with_block();
+    if let Some((owner, method)) = next.filter(|(_, method)| !method.is_undefined) {
+        return to_value(&or_raise(machine.invoke_method(
+            owner,
+            method,
+            running.receiver,
+            arguments,
             position,
-        ))
-    };
-    to_value(&or_raise(machine.invoke_method(
-        owner,
-        method,
-        running.receiver,
-        arguments,
+        )));
+    }
+    // With nothing above it, the call goes to a `method_missing` the
+    // program wrote.
+    if let Some((owner, handler)) = machine.lookup_method(&running.receiver, "method_missing")
+        && !handler.is_undefined
+    {
+        let mut passed = vec![Object::symbol(running.name.clone())];
+        passed.extend(arguments);
+        return to_value(&or_raise(machine.invoke_method(
+            owner,
+            handler,
+            running.receiver,
+            passed,
+            position,
+        )));
+    }
+    let wording = machine.receiver_wording_for(&running.receiver, position);
+    raise(crate::vm::errors::simple_exception(
+        "NoMethodError",
+        &format!(
+            "super: no superclass method '{}' for {}",
+            running.name, wording
+        ),
         position,
-    )))
+    ))
 }
 
 const T_OBJECT: i32 = 0x01;

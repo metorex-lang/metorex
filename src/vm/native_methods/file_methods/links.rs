@@ -66,7 +66,7 @@ impl VirtualMachine {
                 // A name nothing stands for is reported as missing, and a
                 // name that stands for something other than a link is
                 // reported as the wrong kind of argument.
-                let target = std::fs::read_link(&*path.as_str()).map_err(|problem| {
+                let target = std::fs::read_link(path_text(path)).map_err(|problem| {
                     if problem.kind() == std::io::ErrorKind::NotFound {
                         crate::vm::errors::simple_exception(
                             "Errno::ENOENT",
@@ -117,7 +117,7 @@ impl VirtualMachine {
                 };
                 // A symbolic link is what `symlink_metadata` reports without
                 // following it, so a link to a missing file is still one.
-                let answer = std::fs::symlink_metadata(&*path.as_str())
+                let answer = std::fs::symlink_metadata(path_text(path))
                     .map(|held| held.file_type().is_symlink())
                     .unwrap_or(false);
                 Ok(Some(Object::Bool(answer)))
@@ -142,7 +142,7 @@ impl VirtualMachine {
                         position,
                     ));
                 };
-                std::fs::rename(&*from.as_str(), &*to.as_str()).map_err(|problem| {
+                std::fs::rename(path_text(from), path_text(to)).map_err(|problem| {
                     crate::vm::errors::simple_exception(
                         "Errno::ENOENT",
                         &format!("No such file or directory @ rb_file_s_rename - ({from}, {to}): {problem}"),
