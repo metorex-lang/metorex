@@ -64,7 +64,7 @@ class IO
     def self.whole_number(held)
       raise TypeError, "not an Integer" unless held.is_a? Integer
       if held > 9223372036854775807 || held < -9223372036854775808
-        raise RangeError, "bignum too big to convert into `long'"
+        raise RangeError, "bignum too big to convert into 'long'"
       end
       held
     end
@@ -80,6 +80,7 @@ class IO
     # Without flags the buffer picks where its bytes live by how many there
     # are. Flags that name neither place leave it nowhere to put them.
     def initialize(size = DEFAULT_SIZE, flags = nil)
+      IO::Buffer.__experimental__ 1
       size = IO::Buffer.whole_number size
       flags = IO::Buffer.whole_number(flags) unless flags.nil?
       raise ArgumentError, "Size can't be negative!" if size < 0
@@ -106,10 +107,21 @@ class IO
       @flags = kind | ((flags || 0) & (SHARED | PRIVATE | READONLY))
     end
 
+    # The first buffer a program makes says the interface may change, where
+    # `Warning[:experimental]` asks for that. `uplevel` names the frame
+    # that made the buffer.
+    def self.__experimental__(uplevel)
+      return if @__warned
+      @__warned = true
+      warn "IO::Buffer is experimental and both the Ruby and C interface may change in the future!",
+           uplevel: uplevel, category: :experimental
+    end
+
     # A buffer over a String. Without a block the bytes are copied and the
     # copy is read only, and with one the String itself is written through
     # and left alone until the block ends.
     def self.for(string)
+      IO::Buffer.__experimental__ 1
       unless block_given?
         made = IO::Buffer.new 0
         made.send :adopt_string, string.bytes.pack("C*"), EXTERNAL | READONLY
@@ -129,6 +141,7 @@ class IO
     # A buffer over a String of the size asked for, which is answered once the
     # block is done with it.
     def self.string(length)
+      IO::Buffer.__experimental__ 1
       raise LocalJumpError, "no block given" unless block_given?
       length = IO::Buffer.whole_number length
       raise ArgumentError, "negative string size (or size too big)" if length < 0
@@ -145,6 +158,7 @@ class IO
 
     # A buffer over what a file holds.
     def self.map(file, size = nil, offset = 0, flags = 0)
+      IO::Buffer.__experimental__ 1
       offset = IO::Buffer.implicit_integer offset
       flags = IO::Buffer.whole_number flags
       raise ArgumentError, "Offset can't be negative!" if offset < 0
@@ -298,6 +312,16 @@ class IO
       length = length.nil? ? @size - at : IO::Buffer.whole_number(length)
       taken = byte_view[at, length] || []
       IO::Buffer.text_of taken
+    end
+
+    # Write the bytes from `offset` on to a stream, `length` of them, where
+    # a length of zero writes everything from the offset to the end.
+    def write(io, length = 0, offset = 0)
+      ensure_valid
+      offset = IO::Buffer.whole_number offset
+      length = IO::Buffer.whole_number length
+      length = @size - offset if length == 0
+      io.write get_string(offset, length)
     end
 
     def set_string(text, at = 0, length = nil, source_offset = 0)

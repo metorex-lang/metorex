@@ -2,8 +2,12 @@ pub(super) const SOURCE: &str = r##"
   # The encoding read text is carried into. A stream carries text nowhere
   # when the two encodings are the same, or when it reads bytes.
   def internal_encoding
-    named = __named_encodings__[1]
-    return Encoding.find(named) unless named.nil? || named.empty?
+    outer_named, named = __named_encodings__
+    unless named.nil? || named.empty?
+      # A stream reading bytes carries them into no other encoding.
+      return nil if !outer_named.nil? && !outer_named.empty? && Encoding.find(outer_named) == Encoding::BINARY
+      return Encoding.find(named)
+    end
     return nil if @__made_internal.nil?
     outer = external_encoding
     return nil if outer.nil? || outer == Encoding::BINARY
@@ -14,6 +18,34 @@ pub(super) const SOURCE: &str = r##"
   # The encodings the stream reads text as, named either as two arguments or
   # as one `"ext:int"` string.
   def set_encoding(external, internal = nil, **options)
+    if external.nil? && !internal.nil?
+      raise TypeError, "no implicit conversion of nil into String"
+    end
+    __check_newline_options__ options
+    pair_given = !external.nil? && !internal.nil?
+    [external, internal].each do |named|
+      next unless named.is_a?(String)
+      raise ArgumentError, "invalid encoding name (non ASCII)" unless named.encoding.ascii_compatible?
+      raise ArgumentError, "invalid encoding name (NUL byte)" if pair_given && named.include?("\0")
+    end
+    # Text in an encoding that is not a superset of ASCII is read as bytes
+    # or carried into another encoding, and a stream that reads does
+    # neither on its own.
+    reads_bytes = @binmode || @__file_mode.to_s.split(":", 2)[0].to_s.include?("b")
+    if internal.nil? && !reads_bytes && __readable__
+      outer = external.nil? ? Encoding.default_external : external
+      unless outer.is_a?(Encoding)
+        outer = begin
+          Encoding.find(outer.to_s.split(":", 2)[0])
+        rescue ArgumentError
+          nil
+        end
+      end
+      if outer.is_a?(Encoding) && !outer.ascii_compatible? &&
+         !(external.is_a?(String) && external.include?(":"))
+        raise ArgumentError, "ASCII incompatible encoding needs binmode"
+      end
+    end
     # A stream told to read every line ending the same way carries text
     # rather than bytes, which is what refuses a byte-wise read afterwards.
     @__newline_conversion = options[:universal_newline] ? true : false
@@ -30,12 +62,34 @@ pub(super) const SOURCE: &str = r##"
       return self
     end
     @__encodings_reset = nil
+    # One encoding named on its own is read into the program's internal one.
+    if internal.nil? && !(external.is_a?(String) && external.include?(":"))
+      internal = Encoding.default_internal
+    end
     @__file_encoding = IO.__encoding_pair__(
       *(internal.nil? && external.is_a?(String) && external.include?(":") ? external.split(":", 2) : [external, internal]),
       ""
     )
     self
   end
+
+  # The newline options a stream takes, which a stream reading bytes takes
+  # none of.
+  def __check_newline_options__(options)
+    if options.key?(:newline)
+      named = options[:newline]
+      unless named.nil? || [:universal, :crlf, :cr, :lf].include?(named)
+        raise ArgumentError, "unexpected value for newline option: #{named}" if named.is_a?(Symbol)
+        raise ArgumentError, "unexpected value for newline option"
+      end
+    end
+    return unless @binmode
+    decorated = [:newline, :universal_newline, :crlf_newline, :cr_newline, :lf_newline].any? do |name|
+      options[name]
+    end
+    raise ArgumentError, "newline decorator with binary mode" if decorated
+  end
+  private :__check_newline_options__
 
   # Text read from the stream is tagged with the encoding the stream reads
   # as, and carried into the internal one where the stream names one.
@@ -130,7 +184,10 @@ pub(super) const SOURCE: &str = r##"
     self.pos = at
     read_back = read wanted
     self.pos = held
-    raise EOFError, "end of file reached" if read_back.nil? || read_back.empty?
+    if read_back.nil? || read_back.empty?
+      target.clear unless target.nil?
+      raise EOFError, "end of file reached"
+    end
     return read_back if buffer.nil?
     named = target.encoding
     target.replace read_back
@@ -165,7 +222,7 @@ pub(super) const SOURCE: &str = r##"
     raise IOError, "closed stream" if closed?
     raise TypeError, "advice must be a Symbol" unless kind.is_a? Symbol
     allowed = [:normal, :sequential, :random, :willneed, :dontneed, :noreuse]
-    raise NotImplementedError, "Unsupported advice: #{kind}" unless allowed.include? kind
+    raise NotImplementedError, "Unsupported advice: #{kind.inspect}" unless allowed.include? kind
     [offset, length].each do |held|
       unless held.is_a? Integer
         raise TypeError, "no implicit conversion of #{held.class} into Integer"
@@ -268,7 +325,7 @@ pub(super) const SOURCE: &str = r##"
     # The line count is one the operating system holds, which is as wide as
     # a C int and no wider.
     if counted.bit_length > 31
-      raise RangeError, "integer #{counted} too big to convert to `int'"
+      raise RangeError, "integer #{counted} too big to convert to 'int'"
     end
     @lineno = counted
   end
@@ -436,8 +493,9 @@ pub(super) const SOURCE: &str = r##"
     # A closed stream may be opened again over a file named by path, which is
     # what reopening one is for. Pointed at another stream it stays closed.
     named = target.is_a?(String) || (!target.is_a?(IO) && target.respond_to?(:to_path))
-    raise IOError, "closed stream" if closed? && !named
+    raise IOError, "closed stream" if closed? && target.is_a?(IO)
     other = __reopen_target__ target, mode
+    raise IOError, "closed stream" if closed? && !named
     raise IOError, "closed stream" if other.closed?
     # A closed stream is opened again over what it was pointed at, which is
     # what reopening one is for. A stream still open keeps its descriptor,
@@ -670,9 +728,11 @@ pub(super) const SOURCE: &str = r##"
   end
 
   def inspect
-    return "#<IO: (closed)>" if closed?
-    return "#<IO:#{path}>" if path
-    "#<IO:fd #{fileno}>"
+    named = path
+    if closed?
+      return named ? "#<#{self.class}:#{named} (closed)>" : "#<#{self.class}:(closed)>"
+    end
+    "#<#{self.class}:#{named || "fd #{fileno}"}>"
   end
 end
 

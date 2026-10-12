@@ -9,6 +9,29 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 impl VirtualMachine {
+    /// What `highlight:` asks for: true or false, or None where it is left
+    /// out or nil. Anything else is refused.
+    fn highlight_keyword(
+        &mut self,
+        arguments: &[Object],
+        position: Position,
+    ) -> Result<Option<bool>, MetorexError> {
+        match keyword_argument(arguments, "highlight") {
+            Some(Object::Bool(asked)) => Ok(Some(asked)),
+            Some(Object::Nil) | None => Ok(None),
+            Some(other) => {
+                let shown = self.get_inspect_representation(&other, position)?;
+                Err(crate::vm::errors::simple_exception(
+                    "ArgumentError",
+                    &format!("expected true or false as highlight: {shown}"),
+                    position,
+                ))
+            }
+        }
+    }
+}
+
+impl VirtualMachine {
     /// What Ruby prints for an exception nothing rescued: the place it was
     /// raised, its message and class, and the frames under it.
     pub fn uncaught_report(&mut self, exception: &Object) -> Option<String> {
@@ -467,10 +490,9 @@ impl VirtualMachine {
             "full_message" => {
                 // Ruby paints the report only when it is going to a
                 // terminal, which is what `Exception.to_tty?` reports.
-                let highlight = match keyword_argument(arguments, "highlight") {
-                    Some(Object::Bool(asked)) => asked,
-                    Some(Object::Nil) | None => unsafe { libc::isatty(2) == 1 },
-                    Some(_) => true,
+                let highlight = match self.highlight_keyword(arguments, position)? {
+                    Some(asked) => asked,
+                    None => unsafe { libc::isatty(2) == 1 },
                 };
                 let bottom_first = matches!(
                     keyword_argument(arguments, "order"),
@@ -596,10 +618,7 @@ impl VirtualMachine {
             // name, or stands in for an empty message. `highlight: true` wraps
             // it in the escape sequences a terminal shows in bold.
             "detailed_message" => {
-                let highlight = matches!(
-                    keyword_argument(arguments, "highlight"),
-                    Some(Object::Bool(true))
-                );
+                let highlight = self.highlight_keyword(arguments, position)? == Some(true);
                 let (message, class_name, given) = {
                     let details = exception.borrow();
                     let class_name = match &details.class {

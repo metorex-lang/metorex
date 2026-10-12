@@ -140,6 +140,12 @@ impl VirtualMachine {
         let status = self.build_process_status(raw_wait_status(status), pid.unwrap_or(-1));
         self.globals_mut().set(LAST_STATUS_GLOBAL, status);
     }
+
+    /// Record a child's `waitpid` status as `$?` from its raw form.
+    pub(crate) fn record_raw_status(&mut self, raw: libc::c_int, pid: i64) {
+        let status = self.build_process_status(raw, pid);
+        self.globals_mut().set(LAST_STATUS_GLOBAL, status);
+    }
 }
 
 /// The status `waitpid` reported for a child the standard library waited

@@ -45,4 +45,5 @@ pub(crate) use generator::*;
 pub(crate) use math::*;
 pub(crate) use output_support::*;
 pub(crate) use processes::*;
+pub(crate) use support::numeric_value;
 pub(crate) use support::*;

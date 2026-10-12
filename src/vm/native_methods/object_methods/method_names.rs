@@ -200,7 +200,7 @@ impl VirtualMachine {
         let singleton = match receiver {
             Object::Class(c) | Object::Module(c) => c.singleton_class_slot().clone(),
             Object::Instance(inst) => inst.borrow().singleton_class.borrow().clone(),
-            _ => None,
+            other => self.existing_singleton_class(other),
         };
         let Some(singleton_class) = singleton else {
             return names;

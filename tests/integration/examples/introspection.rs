@@ -1131,3 +1131,19 @@ fn test_introspection_binding_implicit_parameters_no_parens_execution() {
     let output = run_example("introspection/binding_implicit_parameters_no_parens.rb");
     assert_eq!(output, BINDING_IMPLICIT_PARAMETERS_OUTPUT);
 }
+
+/// The expected output of both `introspection/private_methods_own_chain` variants.
+const PRIVATE_METHODS_OWN_CHAIN_OUTPUT: &str =
+    "[:calibrate_all, :flush_all]\n[:shown]\n[:hidden]\nfalse\n";
+
+#[test]
+fn test_introspection_private_methods_own_chain_execution() {
+    let output = run_example("introspection/private_methods_own_chain.rb");
+    assert_eq!(output, PRIVATE_METHODS_OWN_CHAIN_OUTPUT);
+}
+
+#[test]
+fn test_introspection_private_methods_own_chain_no_parens_execution() {
+    let output = run_example("introspection/private_methods_own_chain_no_parens.rb");
+    assert_eq!(output, PRIVATE_METHODS_OWN_CHAIN_OUTPUT);
+}

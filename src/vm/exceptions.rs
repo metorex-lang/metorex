@@ -226,6 +226,22 @@ impl VirtualMachine {
         }
         let written_trace = arguments.get(2).cloned();
         let exception = self.add_stack_trace_to_exception(exception, position);
+        // A program's own `set_backtrace` is handed the backtrace named in
+        // the call.
+        let mut written_trace = written_trace;
+        if let Some(trace @ Object::Array(_)) = &written_trace
+            && matches!(exception, Object::Exception(_))
+            && let Some((_, method)) = self.lookup_method(&exception, "set_backtrace")
+            && crate::vm::method_execution::written_by_the_program(&method)
+        {
+            self.send_to_object(
+                exception.clone(),
+                "set_backtrace",
+                vec![trace.clone()],
+                position,
+            )?;
+            written_trace = None;
+        }
         // A third argument names the backtrace the exception carries, in
         // place of the one the call stack would give it.
         if let Some(Object::Array(entries)) = written_trace

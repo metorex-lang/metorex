@@ -705,6 +705,10 @@ impl VirtualMachine {
                     self.call_hash_method(&environment, "[]=", &given, *position)?;
                     return Ok(());
                 }
+                let held = Object::Dict(Rc::clone(&dict_rc));
+                if self.object_is_frozen(&held) {
+                    return Err(self.frozen_modification_error(&held, *position));
+                }
                 // Hash/Dict index assignment. Ruby allows any object
                 // as a key, and a key carrying its own `#hash` takes
                 // the slot that number and `#eql?` place it in.

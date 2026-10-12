@@ -269,3 +269,18 @@ fn test_builtins_numeric_coerce_no_parens_execution() {
     let output = run_example("builtins/numeric_coerce_no_parens.rb");
     assert_eq!(output, NUMERIC_COERCE);
 }
+
+/// The expected output of both `builtins/numeric_edges` variants.
+const NUMERIC_EDGES_OUTPUT: &str = "true\nfalse\n\"not a real\"\n(0+0.0i)\n(-2+0.0i)\n\"bignum too big to convert into 'long'\"\n\"bignum too big to convert into 'long'\"\ntrue\nfalse\nFrozenError\n";
+
+#[test]
+fn test_builtins_numeric_edges_execution() {
+    let output = run_example("builtins/numeric_edges.rb");
+    assert_eq!(output, NUMERIC_EDGES_OUTPUT);
+}
+
+#[test]
+fn test_builtins_numeric_edges_no_parens_execution() {
+    let output = run_example("builtins/numeric_edges_no_parens.rb");
+    assert_eq!(output, NUMERIC_EDGES_OUTPUT);
+}

@@ -89,6 +89,7 @@ class IO
       if !named.nil? && !named.is_a?(Encoding) && !named.is_a?(String) && named.respond_to?(:to_str)
         named = named.to_str
       end
+      named = Encoding.default_external if named.nil? && !internal.nil?
       pair[0].set_encoding named, internal, **options
     end
     return pair unless block_given?
@@ -411,6 +412,8 @@ class IO
   # opened for the copy and closed after it, and an object that reads or
   # writes is used as it is.
   def self.copy_stream(source, destination, length = nil, offset = nil)
+    length = __copy_count__ length
+    offset = __copy_count__ offset
     opened_source = nil
     opened_target = nil
     begin
@@ -420,6 +423,7 @@ class IO
         opened_source = File.open(File.path(source), "rb")
       end
       writer = destination.respond_to?(:write) ? destination : (opened_target = File.open(File.path(destination), "wb"))
+      return 0 if length == 0
       # A whole stream is passed on as it arrives, so a copy between two
       # pipes carries each piece over without waiting for the end.
       if length.nil? && offset.nil? && reader.is_a?(IO)
@@ -444,6 +448,18 @@ class IO
       opened_source.close unless opened_source.nil?
       opened_target.close unless opened_target.nil?
     end
+  end
+
+  # A length or an offset handed to `copy_stream`, read as an Integer.
+  def self.__copy_count__(held)
+    return held if held.nil? || held.is_a?(Integer)
+    unless held.respond_to? :to_int
+      raise TypeError, "no implicit conversion of #{held.class} into Integer"
+    end
+    converted = held.to_int
+    return converted if converted.is_a? Integer
+    raise TypeError,
+      "can't convert #{held.class} to Integer (#{held.class}#to_int gives #{converted.class})"
   end
 
   # Everything left in the stream. One read hands over what the operating
@@ -689,7 +705,8 @@ class IO
     stream = __over__ joined.__stream_handle__, nil, mode
     stream.__send__ :__popen_forked__, pid, (reads && writes ? to_child[1] : nil), mode
     unless stream_options[:external_encoding].nil? && stream_options[:internal_encoding].nil?
-      stream.set_encoding stream_options[:external_encoding], stream_options[:internal_encoding]
+      stream.set_encoding stream_options[:external_encoding] || Encoding.default_external,
+                          stream_options[:internal_encoding]
     end
     stream.set_encoding stream_options[:encoding] unless stream_options[:encoding].nil?
     stream.binmode if stream_options[:binmode]

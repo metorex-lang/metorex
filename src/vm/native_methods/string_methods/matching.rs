@@ -32,6 +32,13 @@ impl VirtualMachine {
                         .invoke_method(class, method, arguments[0].clone(), passed, position)
                         .map(Some);
                 }
+                if crate::vm::native_methods::regexp_subclass_value(&arguments[0]).is_some() {
+                    let mut passed = vec![receiver.clone()];
+                    passed.extend(arguments[1..].iter().cloned());
+                    return self
+                        .send_to_object(arguments[0].clone(), "match", passed, position)
+                        .map(Some);
+                }
                 let (pattern, flags) = match &arguments[0] {
                     Object::Regex(pattern, flags) => {
                         (pattern.as_str().to_string(), flags.as_str().to_string())

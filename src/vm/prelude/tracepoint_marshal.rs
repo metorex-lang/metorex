@@ -1235,8 +1235,10 @@ module Marshal
         raise TypeError, "instance of #{named} needs to have method 'marshal_load'"
       end
       at = remember made
+      # `marshal_load` runs on an object already extended.
+      extensions.reverse_each { |held| made.extend held }
       made.__send__ :marshal_load, read
-      finish made, at, extensions, partial, true
+      finish made, at, [], partial, true
     end
 
     # An object whose class keeps it in a form of its own, put back by

@@ -16,8 +16,12 @@ PTY.open do |primary, terminal|
   terminal.console_mode = mode
   p(terminal.noecho { terminal.echo? })
   p(terminal.echo?)
+  # The key is typed with echo off, since whether the terminal echoes it
+  # depends on whether `getch` turns raw mode on before the key is read.
+  terminal.echo = false
   primary.write("q")
   p(terminal.getch)
+  terminal.echo = true
   terminal.goto(2, 4)
   terminal.erase_line(0)
   terminal.cursor_up(1)

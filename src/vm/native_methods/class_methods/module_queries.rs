@@ -198,6 +198,40 @@ impl VirtualMachine {
                     arguments.first(),
                     Some(Object::Bool(false)) | Some(Object::Nil)
                 );
+                // Without its ancestors, a class or module answers the private
+                // methods its own singleton class holds and those Class or
+                // Module, its own class, defines.
+                if !include_super {
+                    let mut names: Vec<String> = class_rc
+                        .singleton_class_slot()
+                        .as_ref()
+                        .map(|singleton| singleton.private_method_names())
+                        .unwrap_or_default();
+                    // A class's singleton class inherits from its superclass's,
+                    // and every singleton class on that chain counts as its own.
+                    let mut current = class_rc.superclass();
+                    while let Some(parent) = current {
+                        if let Some(singleton) = parent.singleton_class_slot().as_ref() {
+                            names.extend(singleton.private_method_names());
+                        }
+                        current = parent.superclass();
+                    }
+                    let kind = if class_rc.is_module() {
+                        "Module"
+                    } else {
+                        "Class"
+                    };
+                    if let Some(row) = crate::vm::native_methods::core_method_names::CORE_METHODS
+                        .iter()
+                        .find(|row| row.owner == kind)
+                    {
+                        names.extend(row.private.iter().map(|name| name.to_string()));
+                    }
+                    names.sort();
+                    names.dedup();
+                    let syms: Vec<Object> = names.into_iter().map(Object::symbol).collect();
+                    return Ok(Answered(Object::array(syms)));
+                }
                 // What is private *on the class object* lives in its
                 // singleton chain. Its own private instance methods are its
                 // instances' business, so they only surface once ancestors do.

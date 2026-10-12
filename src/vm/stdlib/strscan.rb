@@ -108,7 +108,7 @@ class StringScanner
   end
 
   def rest_size
-    rest.length
+    rest.bytesize
   end
 
   def restsize
@@ -379,7 +379,7 @@ class StringScanner
   def peek(length)
     raise ArgumentError, "negative string size (or size too big)" if length < 0
     if length > 9223372036854775807
-      raise RangeError, "bignum too big to convert into `long'"
+      raise RangeError, "bignum too big to convert into 'long'"
     end
     taken = ""
     at = @position

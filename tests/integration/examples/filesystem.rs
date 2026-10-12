@@ -573,3 +573,33 @@ fn test_filesystem_shift_jis_paths_no_parens_execution() {
     let output = run_example("filesystem/shift_jis_paths_no_parens.rb");
     assert_eq!(output, SHIFT_JIS_PATHS_OUTPUT);
 }
+
+/// The expected output of both `filesystem/io_encoding_rules` variants.
+const IO_ENCODING_RULES_OUTPUT: &str = "#<Encoding:BINARY (ASCII-8BIT)>\nnil\n\"no implicit conversion of nil into String\"\n\"invalid encoding name (non ASCII)\"\n\"invalid encoding name (NUL byte)\"\n\"ASCII incompatible encoding needs binmode\"\n\"unexpected value for newline option: sideways\"\n\"newline decorator with binary mode\"\ntrue\ntrue\n\"#<IO:(closed)>\"\n";
+
+#[test]
+fn test_filesystem_io_encoding_rules_execution() {
+    let output = run_example("filesystem/io_encoding_rules.rb");
+    assert_eq!(output, IO_ENCODING_RULES_OUTPUT);
+}
+
+#[test]
+fn test_filesystem_io_encoding_rules_no_parens_execution() {
+    let output = run_example("filesystem/io_encoding_rules_no_parens.rb");
+    assert_eq!(output, IO_ENCODING_RULES_OUTPUT);
+}
+
+/// The expected output of both `filesystem/io_writing_edges` variants.
+const IO_WRITING_EDGES_OUTPUT: &str = "\"start\\r\\na\\r\\nb\\r\\n\"\n\"\"\n\"negative offset -1 given\"\n2\n\"ab\"\n0\n\"can't convert Object to Integer (Object#to_int gives String)\"\n4\n\"ello\"\n";
+
+#[test]
+fn test_filesystem_io_writing_edges_execution() {
+    let output = run_example("filesystem/io_writing_edges.rb");
+    assert_eq!(output, IO_WRITING_EDGES_OUTPUT);
+}
+
+#[test]
+fn test_filesystem_io_writing_edges_no_parens_execution() {
+    let output = run_example("filesystem/io_writing_edges_no_parens.rb");
+    assert_eq!(output, IO_WRITING_EDGES_OUTPUT);
+}

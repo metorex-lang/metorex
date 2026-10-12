@@ -330,3 +330,18 @@ fn test_threads_killing_a_blocked_reader_no_parens_execution() {
     let output = run_example("threads/killing_a_blocked_reader_no_parens.rb");
     assert_eq!(output, THREADS_KILLING_A_BLOCKED_READER);
 }
+
+/// The expected output of both `threads/thread_names_and_backtraces` variants.
+const THREAD_NAMES_AND_BACKTRACES_OUTPUT: &str = "true\n#<Encoding:BINARY (ASCII-8BIT)>\n#<Encoding:UTF-8>\n[\"pump.rb:9\"]\n[[true, [\"pump.rb:9\"]]]\n";
+
+#[test]
+fn test_threads_thread_names_and_backtraces_execution() {
+    let output = run_example("threads/thread_names_and_backtraces.rb");
+    assert_eq!(output, THREAD_NAMES_AND_BACKTRACES_OUTPUT);
+}
+
+#[test]
+fn test_threads_thread_names_and_backtraces_no_parens_execution() {
+    let output = run_example("threads/thread_names_and_backtraces_no_parens.rb");
+    assert_eq!(output, THREAD_NAMES_AND_BACKTRACES_OUTPUT);
+}

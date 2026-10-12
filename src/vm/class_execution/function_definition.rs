@@ -184,7 +184,10 @@ impl VirtualMachine {
                     | Object::Dict(_)
                     | Object::Set(_)
                     | Object::String(_)
-                    | Object::Regex(_, _)),
+                    | Object::Regex(_, _)
+                    | Object::Block(_)
+                    | Object::Method(_)
+                    | Object::Binding(_)),
                 ) => {
                     if self.object_is_frozen(&receiver) {
                         return Err(self.frozen_modification_error(&receiver, position));

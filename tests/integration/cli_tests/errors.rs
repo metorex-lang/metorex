@@ -162,7 +162,101 @@ fn cli_upper_u_flag_conflicts_with_an_internal_encoding() {
         .expect("failed to execute");
     assert_eq!(output.status.code(), Some(1));
     let stderr = String::from_utf8(output.stderr).unwrap();
-    assert!(stderr.contains("RuntimeError"), "stderr: {}", stderr);
+    assert!(
+        stderr.contains("default_internal already set to ascii (RuntimeError)"),
+        "stderr: {}",
+        stderr
+    );
+}
+
+#[test]
+fn cli_upper_e_flag_conflicts_with_an_earlier_upper_u() {
+    let output = metorex_cmd()
+        .args(["-U", "-Eascii:ascii", "-e", "p 1"])
+        .output()
+        .expect("failed to execute");
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        stderr.contains("default_internal already set to UTF-8 (RuntimeError)"),
+        "stderr: {}",
+        stderr
+    );
+}
+
+#[test]
+fn cli_long_encoding_flag_conflicts_with_upper_u() {
+    for written in [
+        vec!["--encoding=ascii:ascii"],
+        vec!["--encoding", "ascii:ascii"],
+    ] {
+        let output = metorex_cmd()
+            .args(&written)
+            .args(["-U", "-e", "p 1"])
+            .output()
+            .expect("failed to execute");
+        assert_eq!(output.status.code(), Some(1));
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(
+            stderr.contains("default_internal already set to ascii (RuntimeError)"),
+            "stderr: {}",
+            stderr
+        );
+    }
+}
+
+#[test]
+fn cli_upper_u_flag_agrees_with_an_internal_encoding_of_utf8() {
+    let output = metorex_cmd()
+        .args(["-Eutf-8:utf-8", "-U", "-e", "p Encoding.default_internal"])
+        .output()
+        .expect("failed to execute");
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        "#<Encoding:UTF-8>\n"
+    );
+}
+
+#[test]
+fn cli_upper_u_flag_in_rubyopt_gives_way_to_upper_e() {
+    for script in ["show_encodings.rb", "show_encodings_no_parens.rb"] {
+        assert_eq!(
+            cli_flags_example_with_env(&["-E", "ascii:ascii"], &[("RUBYOPT", "-U")], script),
+            "source UTF-8\nexternal US-ASCII\ninternal US-ASCII\n"
+        );
+    }
+}
+
+#[test]
+fn cli_libraries_named_on_the_command_line_load_before_rubyopt_ones() {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let library = |name: &str| format!("{manifest_dir}/tests/_examples/cli_flags/lib/{name}");
+    let output = metorex_cmd()
+        .env("RUBYOPT", format!("-r{}", library("announce_rubyopt.rb")))
+        .arg(format!("-r{}", library("announce_cli.rb")))
+        .args(["-e", "p 1"])
+        .output()
+        .expect("failed to execute");
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        "required from the command line\nrequired from RUBYOPT\n1\n"
+    );
+}
+
+#[test]
+fn cli_x_flag_with_a_directory_runs_from_that_directory() {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let directory = format!("{manifest_dir}/tests/_examples/cli_flags/embedded");
+    let output = metorex_cmd()
+        .current_dir(manifest_dir)
+        .arg(format!("-x{directory}"))
+        .arg("leading_text.txt")
+        .output()
+        .expect("failed to execute");
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        format!("{directory}\n")
+    );
 }
 
 #[test]

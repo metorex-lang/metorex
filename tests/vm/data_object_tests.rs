@@ -211,9 +211,21 @@ fn data_deconstruct_keys_answers_only_what_was_asked_for() {
     );
     assert_eq!(
         run(&format!(
-            "{MEASURE}Measure.new(1, \"m\").deconstruct_keys([0, -1]).inspect"
+            "{MEASURE}Measure.new(1, \"m\").deconstruct_keys([\"amount\"]).inspect"
         )),
-        Some(Object::string("{0 => 1, -1 => \"m\"}"))
+        Some(Object::string("{\"amount\" => 1}"))
+    );
+}
+
+#[test]
+fn data_deconstruct_keys_refuses_a_key_that_is_not_a_symbol_or_a_string() {
+    let err = run_err(&format!(
+        "{MEASURE}Measure.new(1, \"m\").deconstruct_keys([0, -1])"
+    ));
+    assert!(
+        err.contains("0 is not a symbol nor a string"),
+        "Error was: {}",
+        err
     );
 }
 
@@ -242,7 +254,11 @@ fn data_deconstruct_keys_refuses_anything_but_a_list_or_nil() {
     let err = run_err(&format!(
         "{MEASURE}Measure.new(1, \"m\").deconstruct_keys([[]])"
     ));
-    assert!(err.contains("into Integer"), "Error was: {}", err);
+    assert!(
+        err.contains("[] is not a symbol nor a string"),
+        "Error was: {}",
+        err
+    );
 }
 
 #[test]

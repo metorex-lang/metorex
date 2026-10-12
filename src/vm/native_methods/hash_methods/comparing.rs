@@ -54,6 +54,21 @@ impl VirtualMachine {
                 if Rc::ptr_eq(dict_rc, other_rc) {
                     return Ok(Some(Object::Bool(true)));
                 }
+                // A hash comparing keys by identity is not equal to one that
+                // compares them by value, unless neither holds a key.
+                let by_identity = |held: &Rc<RefCell<_>>| {
+                    let held: &RefCell<indexmap::IndexMap<String, Object>> = held;
+                    held.borrow().contains_key(super::BY_IDENTITY_KEY)
+                };
+                let holds_keys = |held: &Rc<RefCell<_>>| {
+                    let held: &RefCell<indexmap::IndexMap<String, Object>> = held;
+                    held.borrow().keys().any(|key| !super::is_internal_key(key))
+                };
+                if by_identity(dict_rc) != by_identity(other_rc)
+                    && (holds_keys(dict_rc) || holds_keys(other_rc))
+                {
+                    return Ok(Some(Object::Bool(false)));
+                }
                 let pair = (Rc::as_ptr(dict_rc) as usize, Rc::as_ptr(other_rc) as usize);
                 if self.hash_comparisons.contains(&pair) {
                     return Ok(Some(Object::Bool(true)));

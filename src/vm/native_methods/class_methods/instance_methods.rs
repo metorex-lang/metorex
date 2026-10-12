@@ -121,6 +121,20 @@ impl VirtualMachine {
                         "Kernel".to_string(),
                     );
                     stub.variadic_param = Some((0, "args".to_string()));
+                    // `warn` names its keywords, which is how a library tells
+                    // whether it takes `category:`.
+                    if name_str == "warn" {
+                        stub.parameters = vec!["msgs".to_string()];
+                        stub.variadic_param = Some((0, "msgs".to_string()));
+                        stub.keyword_parameters = ["uplevel", "category"]
+                            .map(|keyword| {
+                                (
+                                    keyword.to_string(),
+                                    Some(crate::ast::Expression::NilLiteral { position }),
+                                )
+                            })
+                            .to_vec();
+                    }
                     return Ok(Answered(Object::Method(Rc::new(stub))));
                 }
                 // BasicObject answers its own handful natively rather than

@@ -72,6 +72,9 @@ impl VirtualMachine {
             }
             if let Some(Object::Block(block)) = pending {
                 self.apply_block_as_class_body(&anon, &block, position)?;
+                // A `private` or `module_function` toggle in the block ends
+                // with the block, as it does with a class body.
+                anon.set_current_visibility("public");
             }
             return Ok(Answered(Object::Class(anon)));
         }
@@ -84,6 +87,7 @@ impl VirtualMachine {
                     position,
                     Object::Module(Rc::clone(&anon)),
                 )?;
+                anon.set_current_visibility("public");
             }
             return Ok(Answered(Object::Module(anon)));
         }

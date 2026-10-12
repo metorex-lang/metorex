@@ -82,3 +82,33 @@ fn test_addresses_streams_over_a_path_no_parens_execution() {
     let output = run_example("addresses/streams_over_a_path_no_parens.rb");
     assert_eq!(output, STREAMS_OVER_A_PATH_OUTPUT);
 }
+
+/// The expected output of both `addresses/socket_open_timeout` variants.
+const SOCKET_OPEN_TIMEOUT_OUTPUT: &str = "TCPSocket\ntrue\n\"#<TCPSocket:(closed)>\"\nSocket\n\"Cannot specify open_timeout along with connect_timeout or resolv_timeout\"\n\"#<UDPSocket:(closed)>\"\nErrno::ECONNREFUSED\n\"user specified timeout for 192.0.2.1:80\"\n";
+
+#[test]
+fn test_addresses_socket_open_timeout_execution() {
+    let output = run_example("addresses/socket_open_timeout.rb");
+    assert_eq!(output, SOCKET_OPEN_TIMEOUT_OUTPUT);
+}
+
+#[test]
+fn test_addresses_socket_open_timeout_no_parens_execution() {
+    let output = run_example("addresses/socket_open_timeout_no_parens.rb");
+    assert_eq!(output, SOCKET_OPEN_TIMEOUT_OUTPUT);
+}
+
+/// The expected output of both `addresses/ancillary_data` variants.
+const ANCILLARY_DATA_OUTPUT: &str = "[true, true]\ntrue\ntrue\n#<Socket::AncillaryData: INET IP TTL \"x\">\n\"unknown UNIX control message: MOO\"\n\"unknown protocol level: IP\"\n64\n#<Socket::AncillaryData: INET IP TTL \"@\\x00\\x00\\x00\">\ntrue\ntrue\n\"SCM_RIGHTS ancillary data expected\"\n[\"127.0.0.1\", 0, 4, \"127.0.0.5\"]\n[\"::1\", 3]\n";
+
+#[test]
+fn test_addresses_ancillary_data_execution() {
+    let output = run_example("addresses/ancillary_data.rb");
+    assert_eq!(output, ANCILLARY_DATA_OUTPUT);
+}
+
+#[test]
+fn test_addresses_ancillary_data_no_parens_execution() {
+    let output = run_example("addresses/ancillary_data_no_parens.rb");
+    assert_eq!(output, ANCILLARY_DATA_OUTPUT);
+}

@@ -139,11 +139,10 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let other = self.set_operand(&arguments[0], method_name, position)?;
-                let other = &other;
+                let other = self.operand_placed_like(set_rc, &arguments[0], position)?;
                 let result: indexmap::IndexSet<ObjectHash> =
-                    set_rc.borrow().union(&other.borrow()).cloned().collect();
-                Ok(Some(Object::Set(Rc::new(RefCell::new(result)))))
+                    set_rc.borrow().union(&other).cloned().collect();
+                Ok(Some(self.set_placed_like(set_rc, result)))
             }
             "intersection" => {
                 if arguments.len() != 1 {
@@ -154,7 +153,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let other = self.set_operand(&arguments[0], method_name, position)?;
+                let other = self.set_operand(&arguments[0], position)?;
                 let other = &other;
                 let result: indexmap::IndexSet<ObjectHash> = set_rc
                     .borrow()
@@ -172,14 +171,10 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let other = self.set_operand(&arguments[0], method_name, position)?;
-                let other = &other;
-                let result: indexmap::IndexSet<ObjectHash> = set_rc
-                    .borrow()
-                    .difference(&other.borrow())
-                    .cloned()
-                    .collect();
-                Ok(Some(Object::Set(Rc::new(RefCell::new(result)))))
+                let other = self.operand_placed_like(set_rc, &arguments[0], position)?;
+                let result: indexmap::IndexSet<ObjectHash> =
+                    set_rc.borrow().difference(&other).cloned().collect();
+                Ok(Some(self.set_placed_like(set_rc, result)))
             }
             "each" => {
                 if !arguments.is_empty() {
@@ -288,7 +283,7 @@ impl VirtualMachine {
             "merge" => {
                 self.refuse_mutation_during_iteration(set_rc, method_name, position)?;
                 for argument in arguments {
-                    for element in self.enumerable_elements(argument, method_name, position)? {
+                    for element in self.enumerable_elements(argument, position)? {
                         let held = self
                             .set_element(set_rc, &element, position)?
                             .ok_or_else(|| unhashable(&element, position))?;
@@ -307,7 +302,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                for element in self.enumerable_elements(&arguments[0], method_name, position)? {
+                for element in self.enumerable_elements(&arguments[0], position)? {
                     let held = self
                         .set_element(set_rc, &element, position)?
                         .ok_or_else(|| unhashable(&element, position))?;
@@ -328,13 +323,12 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let other = self.set_operand(&arguments[0], method_name, position)?;
+                let other = self.operand_placed_like(set_rc, &arguments[0], position)?;
                 let result: indexmap::IndexSet<ObjectHash> = other
-                    .borrow()
                     .symmetric_difference(&set_rc.borrow())
                     .cloned()
                     .collect();
-                Ok(Some(Object::Set(Rc::new(RefCell::new(result)))))
+                Ok(Some(self.set_placed_like(set_rc, result)))
             }
             "subset?" | "<=" | "superset?" | ">=" | "proper_subset?" | "<" | "proper_superset?"
             | ">" => {
@@ -400,7 +394,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let other = self.set_operand(&arguments[0], method_name, position)?;
+                let other = self.set_operand(&arguments[0], position)?;
                 let shares = set_rc
                     .borrow()
                     .iter()
@@ -522,6 +516,10 @@ impl VirtualMachine {
                 }
                 let kept = kept_rc.borrow().clone();
                 *set_rc.borrow_mut() = kept;
+                // The values a block maps to are placed by what they hold.
+                if matches!(method_name, "map!" | "collect!") {
+                    self.identity_sets.remove(&(Rc::as_ptr(set_rc) as usize));
+                }
                 // The bang forms answer nil when they changed nothing.
                 if matches!(method_name, "select!" | "filter!" | "reject!") && !changed {
                     return Ok(Some(Object::Nil));
@@ -551,9 +549,18 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let replacement = self.set_operand(&arguments[0], method_name, position)?;
+                let replacement = self.set_operand(&arguments[0], position)?;
                 let elements = replacement.borrow().clone();
                 *set_rc.borrow_mut() = elements;
+                // A Set handed over brings the way it places its elements.
+                if matches!(arguments[0], Object::Set(_)) {
+                    let key = Rc::as_ptr(set_rc) as usize;
+                    if self.set_by_identity(&replacement) {
+                        self.identity_sets.insert(key, receiver.clone());
+                    } else {
+                        self.identity_sets.remove(&key);
+                    }
+                }
                 Ok(Some(receiver.clone()))
             }
             "inspect" | "to_s" => {
@@ -620,17 +627,50 @@ impl VirtualMachine {
             .is_some_and(|placed| set_rc.borrow().contains(&placed)))
     }
 
+    /// The other operand of a set operation, placed the way `set_rc` places
+    /// its elements.
+    fn operand_placed_like(
+        &mut self,
+        set_rc: &Rc<RefCell<indexmap::IndexSet<ObjectHash>>>,
+        argument: &Object,
+        position: Position,
+    ) -> Result<indexmap::IndexSet<ObjectHash>, MetorexError> {
+        if !self.set_by_identity(set_rc) {
+            return Ok(self.set_operand(argument, position)?.borrow().clone());
+        }
+        let elements = self.enumerable_elements(argument, position)?;
+        Ok(elements
+            .iter()
+            .filter_map(ObjectHash::by_identity)
+            .collect())
+    }
+
+    /// A set an operation on `set_rc` answers, placing its elements the way
+    /// `set_rc` does.
+    fn set_placed_like(
+        &mut self,
+        set_rc: &Rc<RefCell<indexmap::IndexSet<ObjectHash>>>,
+        result: indexmap::IndexSet<ObjectHash>,
+    ) -> Object {
+        let made = Rc::new(RefCell::new(result));
+        let answer = Object::Set(Rc::clone(&made));
+        if self.set_by_identity(set_rc) {
+            self.identity_sets
+                .insert(Rc::as_ptr(&made) as usize, answer.clone());
+        }
+        answer
+    }
+
     /// The other operand of a set operation, which may be any Enumerable.
     fn set_operand(
         &mut self,
         argument: &Object,
-        caller: &str,
         position: Position,
     ) -> Result<Rc<RefCell<indexmap::IndexSet<ObjectHash>>>, MetorexError> {
         if let Object::Set(other) = argument {
             return Ok(Rc::clone(other));
         }
-        let elements = self.enumerable_elements(argument, caller, position)?;
+        let elements = self.enumerable_elements(argument, position)?;
         self.placed_set(&elements, position)
     }
 
@@ -638,7 +678,6 @@ impl VirtualMachine {
     fn enumerable_elements(
         &mut self,
         argument: &Object,
-        caller: &str,
         position: Position,
     ) -> Result<Vec<Object>, MetorexError> {
         let walked = match argument {
@@ -654,7 +693,7 @@ impl VirtualMachine {
                 self.send_to_object(other.clone(), "to_a", vec![], position)?
             }
             _ => {
-                let message = format!("value must be enumerable ({})", caller);
+                let message = "value must be enumerable".to_string();
                 return Err(MetorexError::UncaughtException {
                     exception: Object::exception("ArgumentError", message.clone()),
                     location: position_to_location(position),

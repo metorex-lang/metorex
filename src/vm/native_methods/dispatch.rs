@@ -398,7 +398,7 @@ impl VirtualMachine {
         // An instance of a Regexp subclass answers Regexp's methods, backed
         // by the pattern it was built with.
         if let Some(Object::Regex(pattern, flags)) = regexp_subclass_value(receiver) {
-            if matches!(method_name, "clone" | "dup") {
+            if matches!(method_name, "clone" | "dup" | "frozen?") {
                 return self.call_object_method(receiver, method_name, arguments, position);
             }
             if method_name == "fixed_encoding?" {

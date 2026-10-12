@@ -134,18 +134,10 @@ pub(crate) fn apply_encoding_flags(vm: &mut VirtualMachine, cli: &Cli) {
             process::exit(1);
         }
         if !after.is_empty() {
-            if cli.utf8_internal > 0 {
-                eprintln!(
-                    "{}: -U and -E option ({}) conflicts (RuntimeError)",
-                    program_name(),
-                    after
-                );
-                process::exit(1);
-            }
             internal = Some(after.to_string());
         }
     }
-    if cli.utf8_internal > 0 {
+    if cli.utf8_internal > 0 && internal.is_none() {
         internal = Some("UTF-8".to_string());
     }
     // `-K` names the source encoding by a single letter rather than by name,

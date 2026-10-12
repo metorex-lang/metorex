@@ -45,6 +45,13 @@ impl VirtualMachine {
             "connect_now" => self.socket_connect_now(handle, text, port, position),
             "listen_on" => self.socket_listen_on(handle, port, position),
             "connect" => self.socket_connect(text, port, position),
+            "connect_within" => {
+                let seconds = arguments
+                    .get(4)
+                    .and_then(crate::vm::native_functions::numeric_value)
+                    .unwrap_or(0.0);
+                self.socket_connect_within(text, port, seconds, position)
+            }
             "address" => self.socket_own_address(handle),
             "peer" => self.socket_peer_address(handle),
             "accept" => self.socket_accept(handle, position),

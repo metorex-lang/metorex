@@ -108,7 +108,17 @@ impl VirtualMachine {
         drop(prepared.held_open);
         match started {
             Ok(child) => Ok(Object::Int(i64::from(child.id()))),
-            Err(problem) => Err(start_error(&prepared.program, &problem, position)),
+            Err(problem) => {
+                // The child that could not run the command ends with 127,
+                // which is what `$?` reports.
+                self.record_raw_status(COMMAND_NOT_RUN_STATUS << 8, -1);
+                match &prepared.chdir {
+                    Some(directory) if !std::path::Path::new(directory).is_dir() => {
+                        Err(start_error(directory, &problem, position))
+                    }
+                    _ => Err(start_error(&prepared.program, &problem, position)),
+                }
+            }
         }
     }
 
@@ -253,6 +263,7 @@ impl VirtualMachine {
         if let Some(directory) = &settings.chdir {
             running.current_dir(directory);
         }
+        let chdir = settings.chdir.clone();
         let SpawnSettings {
             mut moves,
             held_open,
@@ -358,6 +369,7 @@ impl VirtualMachine {
             command: running,
             held_open,
             program,
+            chdir,
         })
     }
 
@@ -791,13 +803,20 @@ struct PreparedCommand {
     command: std::process::Command,
     held_open: Vec<std::fs::File>,
     program: String,
+    chdir: Option<String>,
 }
+
+/// The status a child that could not run its command exits with.
+const COMMAND_NOT_RUN_STATUS: libc::c_int = 127;
 
 /// The error a command that could not be started raises, named the way the
 /// operating system named what stopped it.
 fn start_error(program: &str, problem: &std::io::Error, position: Position) -> MetorexError {
+    // A name looked up in PATH passes over a file that cannot be run, so
+    // finding only such files is finding nothing.
+    let searched = !program.contains('/');
     let (named, reason) = match problem.raw_os_error() {
-        Some(code) if code == libc::EACCES => ("Errno::EACCES", "Permission denied"),
+        Some(code) if code == libc::EACCES && !searched => ("Errno::EACCES", "Permission denied"),
         Some(code) if code == libc::ENOEXEC => ("Errno::ENOEXEC", "Exec format error"),
         _ => ("Errno::ENOENT", "No such file or directory"),
     };
@@ -897,12 +916,18 @@ impl VirtualMachine {
                         settings.chdir = Some(self.get_string_representation(&named, position)?);
                         continue;
                     }
-                    "unsetenv_others" => {
-                        settings.unsetenv_others = value.is_truthy();
-                        continue;
-                    }
-                    "close_others" => {
-                        settings.close_others = value.is_truthy();
+                    "unsetenv_others" | "close_others" => {
+                        if !matches!(value, Object::Bool(_) | Object::Nil) {
+                            let shown = self.get_inspect_representation(value, position)?;
+                            return Err(refuse(format!(
+                                "expected true or false as {name}: {shown}"
+                            )));
+                        }
+                        if &*name.as_str() == "unsetenv_others" {
+                            settings.unsetenv_others = value.is_truthy();
+                        } else {
+                            settings.close_others = value.is_truthy();
+                        }
                         continue;
                     }
                     "umask" => {

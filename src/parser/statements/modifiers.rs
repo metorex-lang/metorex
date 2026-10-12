@@ -52,6 +52,11 @@ impl Parser {
         if matches!(self.peek().kind, TokenKind::Newline | TokenKind::Comment(_)) {
             return Ok(stmt);
         }
+        // A semicolon ends the statement, so a keyword after it opens a
+        // statement of its own.
+        if matches!(self.previous().kind, TokenKind::Semicolon) {
+            return Ok(stmt);
+        }
         // `stmt rescue fallback` runs the fallback when the statement raises a
         // StandardError. A modifier binds to the statement it follows, so
         // nothing may come between them: a `rescue` on its own line opens a

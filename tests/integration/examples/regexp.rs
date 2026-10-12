@@ -259,3 +259,18 @@ fn test_regexp_pattern_unions_parens_execution() {
     let output = run_example("regexp/pattern_unions_parens.rb");
     assert_eq!(output, PATTERN_UNIONS_OUTPUT);
 }
+
+/// The expected output of both `regexp/regexp_subclass_dispatch` variants.
+const REGEXP_SUBCLASS_DISPATCH_OUTPUT: &str = "match [\"meter\"]\n\"me\"\n\"logged:m.\"\nmatch [\"meter\"]\n\"me\"\nfalse\n\"already initialized regexp\"\n";
+
+#[test]
+fn test_regexp_regexp_subclass_dispatch_execution() {
+    let output = run_example("regexp/regexp_subclass_dispatch.rb");
+    assert_eq!(output, REGEXP_SUBCLASS_DISPATCH_OUTPUT);
+}
+
+#[test]
+fn test_regexp_regexp_subclass_dispatch_no_parens_execution() {
+    let output = run_example("regexp/regexp_subclass_dispatch_no_parens.rb");
+    assert_eq!(output, REGEXP_SUBCLASS_DISPATCH_OUTPUT);
+}

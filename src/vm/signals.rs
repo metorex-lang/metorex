@@ -149,6 +149,18 @@ fn any_signal_waiting() -> bool {
         .any(|slot| slot.load(std::sync::atomic::Ordering::SeqCst))
 }
 
+/// Clear the flag saying a signal is pending once no slot is left. A slot
+/// set while the flag is being cleared is caught by reading the slots once
+/// more.
+fn settle_pending_flag() {
+    if !any_signal_waiting() {
+        ANY_PENDING.store(false, std::sync::atomic::Ordering::SeqCst);
+        if any_signal_waiting() {
+            ANY_PENDING.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+}
+
 /// What the operating system runs when a caught signal arrives. It only notes
 /// the signal, since nothing else is safe to do inside a signal handler.
 extern "C" fn note_signal(number: libc::c_int) {
@@ -214,6 +226,15 @@ impl crate::vm::VirtualMachine {
         if !ANY_PENDING.load(std::sync::atomic::Ordering::SeqCst) {
             return Ok(());
         }
+        if !self.signals_for_main_thread.is_empty() && self.thread_current_stack.is_empty() {
+            let waiting = std::mem::take(&mut self.signals_for_main_thread);
+            settle_pending_flag();
+            for number in waiting {
+                if let Some(name) = name_for_number(number) {
+                    self.run_signal_handler(name, number, position)?;
+                }
+            }
+        }
         let own = CATCHER.with(|own| *own);
         let mut mine = Vec::new();
         for (number, slot) in PENDING.iter().enumerate() {
@@ -223,16 +244,11 @@ impl crate::vm::VirtualMachine {
                 mine.push(number as i32);
             }
         }
-        // Only a thread that took a signal clears the flag, and only once no
-        // slot is left. A thread clearing it while a signal waits for its own
-        // catcher would leave that catcher reading nothing pending. A slot
-        // set while the flag is being cleared is caught by reading the slots
-        // once more.
-        if !mine.is_empty() && !any_signal_waiting() {
-            ANY_PENDING.store(false, std::sync::atomic::Ordering::SeqCst);
-            if any_signal_waiting() {
-                ANY_PENDING.store(true, std::sync::atomic::Ordering::SeqCst);
-            }
+        // Only a thread that took a signal clears the flag. A thread clearing
+        // it while a signal waits for its own catcher would leave that
+        // catcher reading nothing pending.
+        if !mine.is_empty() {
+            settle_pending_flag();
         }
         for number in mine {
             if let Some(name) = name_for_number(number) {
@@ -394,6 +410,18 @@ impl crate::vm::VirtualMachine {
                 && number != 0
                 && !matches!(name.as_str(), "KILL" | "STOP")
             {
+                // Handlers run on the main thread, so one sent from another
+                // thread waits for the main thread to run again.
+                if !self.thread_current_stack.is_empty()
+                    && matches!(
+                        self.signal_handlers.get(&name),
+                        Some(held) if !matches!(held, Object::String(_) | Object::Nil)
+                    )
+                {
+                    self.signals_for_main_thread.push(number);
+                    ANY_PENDING.store(true, std::sync::atomic::Ordering::SeqCst);
+                    continue;
+                }
                 // A signal a program sends itself arrives inside the call
                 // that sent it, which is what a report of it names.
                 let frame = crate::vm::CallFrame::method(
@@ -579,7 +607,12 @@ impl crate::vm::VirtualMachine {
             }
             other => other.to_string(),
         };
-        let message = format!("unsupported signal '{}'", named);
+        let message = match given {
+            Object::Symbol(name) | Object::String(name) if name.as_str().starts_with('-') => {
+                format!("negative signal name: {}", name.as_str())
+            }
+            _ => format!("unsupported signal '{}'", named),
+        };
         crate::error::MetorexError::UncaughtException {
             exception: Object::exception("ArgumentError", message.clone()),
             location: crate::vm::utils::position_to_location(position),

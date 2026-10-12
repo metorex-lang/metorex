@@ -70,12 +70,17 @@ fn real_main() {
     // Ruby lets `-r`, `-I`, and `-W` carry their value attached (`-rfoo`),
     // which the argument parser only understands as two words.
     let mut arguments = interpreter_words(std::env::args_os().map(argument_text).collect());
+    refuse_a_second_internal_encoding(&arguments);
     // RUBYOPT is read as though its words had been written on the command
     // line, ahead of what was, so a flag written there is overridden by the
     // same flag on the line itself.
     let from_rubyopt = rubyopt_arguments(&arguments);
+    let required_by_rubyopt = from_rubyopt.iter().filter(|word| *word == "-r").count();
     arguments.splice(1..1, from_rubyopt);
-    let cli = Cli::parse_from(arguments);
+    let mut cli = Cli::parse_from(arguments);
+    // The libraries the command line names are required before those
+    // RUBYOPT names.
+    cli.require_libs.rotate_left(required_by_rubyopt);
     let features = Features::read(&cli);
 
     // Without a magic comment of its own, a source takes the setting the
@@ -467,6 +472,48 @@ fn err_exception(err: &metorex::error::MetorexError) -> Option<metorex::object::
     }
 }
 
+/// End the run when the command line names the internal encoding twice,
+/// through `-U` and `-E`, as two different encodings. RUBYOPT is read apart
+/// from this, so a `-U` written there gives way to `-E`.
+fn refuse_a_second_internal_encoding(arguments: &[String]) {
+    let mut internal: Option<String> = None;
+    let mut words = arguments.iter().skip(1);
+    while let Some(word) = words.next() {
+        if word == "--" || word == "-" || !word.starts_with('-') {
+            break;
+        }
+        let named = if word == "-U" {
+            Some("UTF-8".to_string())
+        } else if word == "-E" || word == "--encoding" {
+            words
+                .next()
+                .and_then(|pair| pair.split_once(':'))
+                .map(|(_, after)| after.to_string())
+        } else if let Some(pair) = word.strip_prefix("--encoding=") {
+            pair.split_once(':').map(|(_, after)| after.to_string())
+        } else {
+            if FLAGS_TAKING_A_VALUE.contains(&word.as_str()) {
+                words.next();
+            }
+            None
+        };
+        let Some(named) = named.filter(|named| !named.is_empty()) else {
+            continue;
+        };
+        if let Some(set) = &internal
+            && !set.eq_ignore_ascii_case(&named)
+        {
+            eprintln!(
+                "{}: default_internal already set to {} (RuntimeError)",
+                program_name(),
+                set
+            );
+            process::exit(1);
+        }
+        internal = Some(named);
+    }
+}
+
 /// A command-line argument as text. One that is not UTF-8, such as code in
 /// an encoding of its own passed to `-e`, holds its other bytes escaped.
 fn argument_text(argument: std::ffi::OsString) -> String {
@@ -518,6 +565,13 @@ fn interpreter_words(raw: Vec<String>) -> Vec<String> {
             written.push(word);
             written.extend(words);
             break;
+        }
+        // `-x` written with a directory attached works from that directory.
+        if let Some(directory) = word.strip_prefix("-x")
+            && !directory.is_empty()
+        {
+            written.extend(["-x".to_string(), "-X".to_string(), directory.to_string()]);
+            continue;
         }
         for piece in spelled_out_flag(word)
             .into_iter()

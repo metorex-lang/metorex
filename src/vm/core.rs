@@ -435,6 +435,9 @@ pub struct VirtualMachine {
     /// `SIG` prefix. A String value names a built-in disposition; anything
     /// else is a callable `Process.kill` runs in place of raising.
     pub(crate) signal_handlers: HashMap<String, Object>,
+    /// Signals a thread other than the main one sent this process, waiting
+    /// for the main thread to run their handlers.
+    pub(crate) signals_for_main_thread: Vec<i32>,
     /// Hooks `trace_var` registered, keyed by global name without its `$`.
     /// Each runs with the new value whenever that global is assigned.
     pub(crate) traced_globals: HashMap<String, Vec<Object>>,
@@ -678,6 +681,7 @@ impl VirtualMachine {
                 // rather than the end of it.
                 ("PIPE".to_string(), Object::Nil),
             ]),
+            signals_for_main_thread: Vec::new(),
             traced_globals: HashMap::new(),
             seeded_global_names,
             load_wrap_depth: 0,

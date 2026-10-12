@@ -115,7 +115,7 @@ impl VirtualMachine {
             Object::Float(number) => Ok(*number as i64),
             Object::BigInt(_) => Err(crate::vm::errors::simple_exception(
                 "RangeError",
-                "bignum too big to convert into `long'",
+                "bignum too big to convert into 'long'",
                 position,
             )),
             other if !self.responds_to(other, "to_int") => {
@@ -125,7 +125,7 @@ impl VirtualMachine {
                 Object::Int(number) => Ok(number),
                 Object::BigInt(_) => Err(crate::vm::errors::simple_exception(
                     "RangeError",
-                    "bignum too big to convert into `long'",
+                    "bignum too big to convert into 'long'",
                     position,
                 )),
                 converted => Err(crate::vm::errors::simple_exception(

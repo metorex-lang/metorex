@@ -36,7 +36,7 @@ impl VirtualMachine {
                     Object::BigInt(_) => {
                         return Err(crate::vm::errors::simple_exception(
                             "RangeError",
-                            "bignum too big to convert into `long'",
+                            "bignum too big to convert into 'long'",
                             position,
                         ));
                     }

@@ -78,6 +78,7 @@ pub(super) const SOURCE: &str = r##"
   # Text carried into the encoding the stream was told to write in. A stream
   # told none, or told to write bytes, writes the text as it stands.
   def __written_text__(text)
+    text = __newlines_written__(text)
     named = __named_encodings__[0]
     return text if named.nil? || named.empty?
     target = Encoding.find named
@@ -87,6 +88,16 @@ pub(super) const SOURCE: &str = r##"
     text.encode(Encoding::UTF_8).encode target
   end
   private :__written_text__
+
+  # Text with each newline written the way `newline:` named when the stream
+  # was opened.
+  def __newlines_written__(text)
+    ending = { crlf: "\r\n", cr: "\r" }[@__file_newline]
+    return text if ending.nil? || !text.include?("\n")
+    named = text.encoding
+    text.b.gsub("\n", ending).force_encoding(named)
+  end
+  private :__newlines_written__
 
   # Everything held back by a stream that does not sync, written through now.
   def __drain__
@@ -126,24 +137,15 @@ pub(super) const SOURCE: &str = r##"
   end
 
   def puts(*lines)
-    return write(__line_ending__) && nil if lines.empty?
+    return write("\n") && nil if lines.empty?
     __write_lines__ lines, []
     nil
   end
 
-  # What ends a line this stream writes. A stream opened with `newline:` ends
-  # them the way that named, and every other stream ends them with a newline.
-  def __line_ending__
-    return "\r\n" if @__file_newline == :crlf
-    return "\r" if @__file_newline == :cr
-    "\n"
-  end
-  private :__line_ending__
-
   # One line per value, where an array is written out element by element. An
   # array that reaches itself is written as `[...]` rather than followed.
   def __write_lines__(values, walking)
-    ending = __line_ending__
+    ending = "\n"
     values.each do |value|
       spread = value.is_a?(Array) ? value : __as_array__(value)
       if spread.nil?
@@ -432,7 +434,15 @@ pub(super) const SOURCE: &str = r##"
   # As much as is there right now. A stream with nothing waiting says so
   # rather than holding the program up, either by raising or, when asked not
   # to, by answering what it would have waited for.
+  # `exception:` takes true or false and nothing else.
+  def __exception_flag__(exception)
+    return if exception == true || exception == false
+    raise ArgumentError, "expected true or false as exception: #{exception.inspect}"
+  end
+  private :__exception_flag__
+
   def read_nonblock(length, buffer = nil, exception: true)
+    __exception_flag__ exception
     raise IOError, "closed stream" if closed?
     raise IOError, "not opened for reading" unless __readable__
     wanted = __as_integer__ length
@@ -487,6 +497,7 @@ pub(super) const SOURCE: &str = r##"
   # As much as the descriptor will take right now. A descriptor with no room
   # says so rather than holding the program up.
   def write_nonblock(text, exception: true)
+    __exception_flag__ exception
     buffered_before = @wrote_through_buffer
     begin
       __write_texts__ [text.to_s], false, WRITE_ONCE
@@ -617,7 +628,8 @@ pub(super) const SOURCE: &str = r##"
     return self if @__noted_encodings
     @__noted_encodings = true
     @__made_external = Encoding.default_external
-    @__made_internal = Encoding.default_internal
+    # Bytes read as BINARY are carried into no other encoding.
+    @__made_internal = @__made_external == Encoding::BINARY ? nil : Encoding.default_internal
     self
   end
 
@@ -677,6 +689,10 @@ pub(super) const SOURCE: &str = r##"
       return Encoding::BINARY if @binmode
       return Encoding::BINARY if @__file_mode.to_s.split(":", 2)[0].to_s.include?("b")
     end
+    # A stream naming only an internal encoding reads as the external one
+    # the program had when the stream was opened.
+    inner = __named_encodings__[1]
+    return @__made_external || Encoding.default_external unless inner.nil? || inner.empty?
     return nil if __writing_mode__ && @__made_internal.nil?
     return @__made_external unless @__made_internal.nil?
     Encoding.default_external

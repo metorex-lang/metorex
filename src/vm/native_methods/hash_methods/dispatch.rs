@@ -53,8 +53,23 @@ impl VirtualMachine {
         {
             return Ok(Some(result));
         }
+        // A name a method takes out of ENV leaves the process environment
+        // too, so a child process started later does not see it.
+        let named_before: Option<Vec<String>> = self
+            .dict_is_environment(dict_rc)
+            .then(|| dict_rc.borrow().keys().cloned().collect());
         for step in STEPS {
             if let Some(result) = step(self, receiver, dict_rc, method_name, arguments, position)? {
+                if let Some(named_before) = named_before {
+                    let removed: Vec<String> = named_before
+                        .into_iter()
+                        .filter(|name| !dict_rc.borrow().contains_key(name))
+                        .collect();
+                    for name in removed {
+                        let key = crate::vm::utils::dict_key_to_object(&name);
+                        self.record_environment_change(dict_rc, &key, &Object::Nil);
+                    }
+                }
                 return Ok(Some(result));
             }
         }

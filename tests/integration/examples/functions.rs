@@ -465,3 +465,19 @@ fn test_procs_symbol_blocks_no_parens_execution() {
     let output = run_example("procs/symbol_blocks_no_parens.rb");
     assert_eq!(output, SYMBOL_BLOCKS_OUTPUT);
 }
+
+/// The expected output of both `procs/primitive_singleton_methods` variants.
+const PRIMITIVE_SINGLETON_METHODS_OUTPUT: &str =
+    "\"first\"\nfalse\n[:label]\n\"succ\"\n\"binding\"\n";
+
+#[test]
+fn test_procs_primitive_singleton_methods_execution() {
+    let output = run_example("procs/primitive_singleton_methods.rb");
+    assert_eq!(output, PRIMITIVE_SINGLETON_METHODS_OUTPUT);
+}
+
+#[test]
+fn test_procs_primitive_singleton_methods_no_parens_execution() {
+    let output = run_example("procs/primitive_singleton_methods_no_parens.rb");
+    assert_eq!(output, PRIMITIVE_SINGLETON_METHODS_OUTPUT);
+}

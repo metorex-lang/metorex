@@ -1382,7 +1382,7 @@ const CONSOLE_PP_AND_PATHNAME_OUTPUT: &str = concat!(
     "false\n",
     "true\n",
     "\"q\"\n",
-    "\"q\\e[3;5H\\e[0K\\e[1A\"\n",
+    "\"\\e[3;5H\\e[0K\\e[1A\"\n",
     "#<ArgumentError: wrong screen erase mode: 9>\n",
     "true\n",
     "true\n",
@@ -1685,4 +1685,19 @@ fn test_stdlib_rbconfig_cross_compiling_execution() {
 fn test_stdlib_rbconfig_cross_compiling_no_parens_execution() {
     let output = run_example("stdlib/rbconfig_cross_compiling_no_parens.rb");
     assert_eq!(output, RBCONFIG_CROSS_COMPILING_OUTPUT);
+}
+
+/// The expected output of both `stdlib/marshal_extended_values` variants.
+const MARSHAL_EXTENDED_VALUES_OUTPUT: &str = "true\ntrue\nfalse\ntrue\nfalse\n";
+
+#[test]
+fn test_stdlib_marshal_extended_values_execution() {
+    let output = run_example("stdlib/marshal_extended_values.rb");
+    assert_eq!(output, MARSHAL_EXTENDED_VALUES_OUTPUT);
+}
+
+#[test]
+fn test_stdlib_marshal_extended_values_no_parens_execution() {
+    let output = run_example("stdlib/marshal_extended_values_no_parens.rb");
+    assert_eq!(output, MARSHAL_EXTENDED_VALUES_OUTPUT);
 }

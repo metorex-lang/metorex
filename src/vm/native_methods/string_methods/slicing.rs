@@ -39,7 +39,7 @@ impl VirtualMachine {
                         i32::try_from(&counted).map(i64::from).map_err(|_| {
                             crate::vm::errors::simple_exception(
                                 "RangeError",
-                                &format!("integer {counted} too big to convert to `int'"),
+                                &format!("integer {counted} too big to convert to 'int'"),
                                 position,
                             )
                         })?

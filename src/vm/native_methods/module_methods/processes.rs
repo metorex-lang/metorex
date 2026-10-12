@@ -263,6 +263,16 @@ impl VirtualMachine {
             // Carry on as a process of its own, detached from the terminal
             // and from the one that started it, which leaves at once.
             "daemon" => {
+                for (given, named) in arguments.iter().zip(["nochdir", "noclose"]) {
+                    if !matches!(given, Object::Bool(_) | Object::Nil) {
+                        let shown = self.get_inspect_representation(given, position)?;
+                        return Err(crate::vm::errors::simple_exception(
+                            "ArgumentError",
+                            &format!("expected true or false as {named}: {shown}"),
+                            position,
+                        ));
+                    }
+                }
                 let stays_put = arguments.first().is_some_and(Object::is_truthy);
                 let keeps_streams = arguments.get(1).is_some_and(Object::is_truthy);
                 return self
