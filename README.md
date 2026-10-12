@@ -2,7 +2,7 @@
 
 **METOREX** (**M**eta **O**bject **R**untime **E**xecution) is a programming language that combines the expressiveness of Ruby with the performance and safety of Rust. It features a unique **Code-as-Object** meta-programming system that exposes the AST as first-class runtime objects, enabling powerful DSL construction and runtime code manipulation.
 
-⚠️ &nbsp;It's still very early in development.
+✅ &nbsp;Passes the [ruby/spec](https://github.com/ruby/spec) suite: core, library, language, command_line, optional, and security.
 
 🙂 &nbsp;[PRs](https://github.com/metorex-lang/metorex/pulls) and [new](https://github.com/metorex-lang/metorex/issues/new) [issues](https://github.com/metorex-lang/metorex/issues) are welcome.
 
