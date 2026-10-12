@@ -4,11 +4,11 @@
 
 ⚠️ &nbsp;It's still very early in development.
 
-🙂 &nbsp;[PRs](https://github.com/gdonald/metorex/pulls) and [new](https://github.com/gdonald/metorex/issues/new) [issues](https://github.com/gdonald/metorex/issues) are welcome.
+🙂 &nbsp;[PRs](https://github.com/metorex-lang/metorex/pulls) and [new](https://github.com/metorex-lang/metorex/issues/new) [issues](https://github.com/metorex-lang/metorex/issues) are welcome.
 
 ###
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/gdonald/metorex/blob/main/LICENSE) [![CI](https://github.com/gdonald/metorex/workflows/CI/badge.svg)](https://github.com/gdonald/metorex/actions) [![codecov](https://codecov.io/gh/gdonald/metorex/graph/badge.svg?token=GQ4LA1VMRE)](https://codecov.io/gh/gdonald/metorex)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/metorex-lang/metorex/blob/main/LICENSE) [![CI](https://github.com/metorex-lang/metorex/workflows/CI/badge.svg)](https://github.com/metorex-lang/metorex/actions) [![codecov](https://codecov.io/gh/metorex-lang/metorex/graph/badge.svg?token=HPAHMB4RAK)](https://codecov.io/gh/metorex-lang/metorex)
 
 ## Project Status
 
@@ -1195,7 +1195,7 @@ METOREX is in active development. We welcome contributions! Please see [CONTRIBU
 
 ```bash
 # Clone the repository (including Ruby spec submodules)
-git clone https://github.com/gdonald/metorex.git
+git clone https://github.com/metorex-lang/metorex.git
 cd metorex
 git submodule update --init
 
