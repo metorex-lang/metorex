@@ -105,6 +105,14 @@ impl VirtualMachine {
                         .collect(),
                 )))
             }
+            // The outline of the methods, classes and blocks a program
+            // holds, which the heap walk builds instruction sequences from.
+            "__sequence_outline__" if arguments.len() == 1 => {
+                let source = arguments[0].to_string();
+                Ok(Some(
+                    crate::vm::sequence_outline::outline_of_source(&source).unwrap_or(Object::Nil),
+                ))
+            }
             // Run a block with tracing switched off, so an event the block
             // causes reaches the tracepoints again. `TracePoint.allow_reentry`
             // is what asks for this.

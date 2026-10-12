@@ -192,9 +192,36 @@ impl VirtualMachine {
                 continue;
             }
             let details = self.event_details(event, position, extra);
-            self.send_to_object(tracepoint.clone(), "__handle__", vec![details], position)?;
+            let accepted = self.send_to_object(
+                tracepoint.clone(),
+                "__accepts__",
+                vec![details.clone()],
+                position,
+            )?;
+            if accepted.is_truthy() {
+                self.run_trace_handler(&tracepoint, details, position)?;
+            }
         }
         Ok(())
+    }
+
+    /// Runs a tracepoint's block with `details` as the event it reads. The
+    /// block is called from here rather than from the core library, so no
+    /// frame stands between it and the code that fired the event.
+    fn run_trace_handler(
+        &mut self,
+        tracepoint: &Object,
+        details: Object,
+        position: Position,
+    ) -> Result<(), MetorexError> {
+        let held = self.read_instance_var(tracepoint, "handling");
+        write_instance_var(tracepoint, "handling", details);
+        let block = self
+            .read_instance_var(tracepoint, "block")
+            .unwrap_or(Object::Nil);
+        let outcome = self.send_to_object(block, "call", vec![tracepoint.clone()], position);
+        write_instance_var(tracepoint, "handling", held.unwrap_or(Object::Nil));
+        outcome.map(|_| ())
     }
 
     /// What the event says about itself, as the Hash a tracepoint reads its
@@ -276,6 +303,13 @@ impl VirtualMachine {
             return None;
         };
         instance.borrow().get_var(name).cloned()
+    }
+}
+
+/// Sets an instance variable of a tracepoint, which is always an instance.
+fn write_instance_var(holder: &Object, name: &str, value: Object) {
+    if let Object::Instance(instance) = holder {
+        instance.borrow_mut().set_var(name.to_string(), value);
     }
 }
 

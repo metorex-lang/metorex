@@ -241,6 +241,7 @@ pub(crate) const NATIVE_KERNEL_METHODS: &[(&str, &[&str], bool)] = &[
     ("method", &["name"], false),
     ("public_method", &["name"], false),
     ("remove_instance_variable", &["name"], false),
+    ("singleton_class", &[], false),
     ("singleton_methods", &["all"], true),
     ("methods", &["regular"], true),
     ("nil?", &[], false),

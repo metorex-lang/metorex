@@ -177,6 +177,7 @@ impl Parser {
         let refused = self.refuse_unlooped_jumps_after(redo_scope_start);
         let body = body?;
 
+        self.note_closing_line(start_pos);
         self.expect(TokenKind::End, "Expected 'end' after class body")?;
         refused?;
 
@@ -232,6 +233,7 @@ impl Parser {
         // way a method body does.
         self.skip_whitespace();
         let body = self.parse_block_body_with_optional_rescue_ensure(self.peek().position)?;
+        self.note_closing_line(start_pos);
         self.expect(TokenKind::End, "Expected 'end' after 'class << ...' body")?;
 
         // With an assignment the value is what gets a singleton class, and
@@ -334,6 +336,7 @@ impl Parser {
         self.jump_target_depth = enclosing_jump_targets;
         let refused = self.refuse_unlooped_jumps_after(redo_scope_start);
         let body = body?;
+        self.note_closing_line(start_pos);
         self.expect(TokenKind::End, "Expected 'end' after module body")?;
         refused?;
 

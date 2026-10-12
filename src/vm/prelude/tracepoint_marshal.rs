@@ -114,6 +114,10 @@ class TracePoint
   # Where the code a trace is aimed at was written, as the file and the line
   # it opened on.
   def __target_place__(target)
+    if target.is_a?(RubyVM::InstructionSequence)
+      top = target.instance_variable_get(:@type) == :top
+      return [target.path, top ? nil : target.first_lineno]
+    end
     unless target.is_a?(Method) || target.is_a?(UnboundMethod) || target.is_a?(Proc)
       raise ArgumentError, "specified target is not supported"
     end
@@ -126,8 +130,14 @@ class TracePoint
   # The one line a trace aimed at `target` reports `:line` events for, or
   # nil for every line. Refused where the target has nothing to report.
   def __target_line__(target, target_line)
-    lines = __code_lines__(target)
-    available = target.is_a?(Proc) ? BLOCK_EVENTS : METHOD_EVENTS
+    sequence = target.is_a?(RubyVM::InstructionSequence)
+    lines = if sequence
+              target.trace_points.filter_map { |line, event| line if event == :line }
+            else
+              __code_lines__(target)
+            end
+    block = sequence ? target.instance_variable_get(:@type) == :block : target.is_a?(Proc)
+    available = block ? BLOCK_EVENTS : METHOD_EVENTS
     available -= STATEMENT_EVENTS if lines.empty?
     unless target_line.nil?
       unless @events.include?(:line)
@@ -198,6 +208,11 @@ class TracePoint
     __reading__(:eval_script)
   end
 
+  # The sequence a `script_compiled` event compiled.
+  def instruction_sequence
+    RubyVM::InstructionSequence.__send__(:__compiled__, eval_script, __reading__(:eval_path), __reading__(:eval_line))
+  end
+
   # The exception a `raise` or a `rescue` event is about.
   def raised_exception
     __reading__(:raised_exception)
@@ -230,18 +245,23 @@ class TracePoint
   end
   private :__reading__
 
-  def __handle__(details)
-    return unless @target_thread.nil? || Thread.current.equal?(@target_thread)
-    return unless @target_place.nil? || details["__within__"].include?(@target_place)
-    return if !@target_line.nil? && (details["event"] != :line || details["lineno"] != @target_line)
-    held = @handling
-    @handling = details
-    begin
-      @block.call(self)
-    ensure
-      @handling = held
-    end
+  # Whether the event belongs to the thread, the code and the line the
+  # trace is aimed at.
+  def __accepts__(details)
+    return false unless @target_thread.nil? || Thread.current.equal?(@target_thread)
+    return false unless @target_place.nil? || __aimed_at__?(details)
+
+    @target_line.nil? || (details["event"] == :line && details["lineno"] == @target_line)
   end
+
+  # Whether the event comes from the code the trace is aimed at. A place
+  # with no line stands for the top level of its file.
+  def __aimed_at__?(details)
+    return details["__within__"].include?(@target_place) unless @target_place[1].nil?
+
+    details["__within__"].empty? && details["path"] == @target_place[0]
+  end
+  private :__aimed_at__?
 
   def __wants__(event)
     @events.include?(event)

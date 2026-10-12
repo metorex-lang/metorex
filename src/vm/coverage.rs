@@ -310,7 +310,7 @@ fn collect(body: &[Statement], found: &mut Vec<usize>) {
 }
 
 /// The statement bodies a statement holds, which carry lines of their own.
-fn nested_bodies(statement: &Statement) -> Vec<&[Statement]> {
+pub(crate) fn nested_bodies(statement: &Statement) -> Vec<&[Statement]> {
     match statement {
         Statement::ClassDef { body, .. }
         | Statement::ModuleDef { body, .. }
@@ -382,7 +382,7 @@ fn nested_blocks(statement: &Statement) -> Vec<&[Statement]> {
     found
 }
 
-fn own_expressions(statement: &Statement) -> Vec<&Expression> {
+pub(crate) fn own_expressions(statement: &Statement) -> Vec<&Expression> {
     match statement {
         Statement::Expression { expression, .. } | Statement::Match { expression, .. } => {
             vec![expression]

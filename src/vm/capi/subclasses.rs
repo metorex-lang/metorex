@@ -220,6 +220,9 @@ pub extern "C-unwind" fn rb_type(object: Value) -> i32 {
     if object == QNIL {
         return T_NIL;
     }
+    if super::sequences::is_walked_sequence(object) {
+        return super::sequences::T_IMEMO;
+    }
     let held = to_object(object);
     if super::data::is_data(&held) {
         return T_DATA;

@@ -1291,6 +1291,78 @@ fn test_c_extensions_c_debug_no_parens_execution() {
     assert_eq!(output, C_DEBUG_OUTPUT);
 }
 
+/// The expected output of both `c_extensions/c_sequences` variants.
+const C_SEQUENCES_OUTPUT: &str = concat!(
+    ":method\n",
+    "true\n",
+    "[[[:req, :rates], [:opt, :scale], [:rest, :rest], [:keyreq, :tax], [:key, :fee], [:keyrest, :options], [:block, :block]], [[:opt, :rates], [:opt, :scale], [:rest, :rest], [:keyreq, :tax], [:key, :fee], [:keyrest, :options], [:block, :block]], 9, 11]\n",
+    "[:block, [[:req, :left], [:req, :right]], [[:opt, :left], [:opt, :right]], 28, 28]\n",
+    "[[\"<class:Ledger>\", 8], [\"<main>\", 0], [\"block in <main>\", 28], [\"block in <main>\", 32], [\"nested\", 14], [\"total\", 9]]\n",
+    "RubyVM::InstructionSequence\n",
+    "true\n",
+    "3\n",
+    "1\n",
+    "3\n",
+);
+
+#[test]
+fn test_c_extensions_c_sequences_execution() {
+    let output = run_example("c_extensions/c_sequences.rb");
+    assert_eq!(output, C_SEQUENCES_OUTPUT);
+}
+
+#[test]
+fn test_c_extensions_c_sequences_no_parens_execution() {
+    let output = run_example("c_extensions/c_sequences_no_parens.rb");
+    assert_eq!(output, C_SEQUENCES_OUTPUT);
+}
+
+/// The expected output of both `c_extensions/c_sequence_outlines` variants.
+const C_SEQUENCE_OUTLINES_OUTPUT: &str = concat!(
+    "[\"<compiled>\", :eval, 1, 36, []]\n",
+    "  [\"<module:Accounts>\", :class, 1, 9, []]\n",
+    "    [\"<class:Ledger>\", :class, 2, 8, []]\n",
+    "      [\"total\", :method, 3, 5, [[:req, :rates], [:opt, :scale], [:rest, :rest], [:keyreq, :tax], [:key, :fee], [:keyrest, :options], [:block, :block]]]\n",
+    "        [\"block in total\", :block, 4, 4, [[:req, :rate]]]\n",
+    "      [\"open\", :method, 7, 7, [[:req, :name]]]\n",
+    "  [\"singleton class\", :class, 11, 13, []]\n",
+    "    [\"label\", :method, 12, 12, []]\n",
+    "  [\"summary\", :method, 15, 36, [[:req, :entries]]]\n",
+    "    [\"block in summary\", :block, 16, 18, [[:req, :pair], [:req, :lines]]]\n",
+    "      [\"block (2 levels) in summary\", :block, 17, 17, [[:req, :held]]]\n",
+    "    [\"block in summary\", :block, 19, 19, [[:req, :held]]]\n",
+    "    [\"block in summary\", :block, 19, 19, [[:req, :held]]]\n",
+    "    [\"block in summary\", :block, 20, 20, [[:req, :entry]]]\n",
+    "    [\"block in summary\", :block, 21, 21, [[:req, :entry]]]\n",
+    "    [\"block in summary\", :block, 22, 22, [[:req, :entry]]]\n",
+    "    [\"block in summary\", :block, 23, 23, [[:req, :held]]]\n",
+    "    [\"block in summary\", :block, 25, 25, [[:req, :entry]]]\n",
+    "    [\"block in summary\", :block, 25, 25, [[:req, :held]]]\n",
+    "    [\"block in summary\", :block, 25, 25, [[:req, :held]]]\n",
+    "    [\"block in summary\", :block, 26, 26, [[:req, :entry]]]\n",
+    "    [\"block in summary\", :block, 27, 27, [[:req, :held]]]\n",
+    "    [\"block in summary\", :block, 28, 28, [[:req, :held]]]\n",
+    "    [\"block in summary\", :block, 29, 29, [[:req, :entry]]]\n",
+    "    [\"block in summary\", :block, 30, 30, [[:req, :entry]]]\n",
+    "    [\"block in summary\", :block, 31, 31, [[:req, :entry]]]\n",
+    "    [\"block in summary\", :block, 32, 32, [[:req, :held]]]\n",
+    "    [\"block in summary\", :block, 33, 33, [[:req, :entry]]]\n",
+    "    [\"block in summary\", :block, 34, 34, [[:req, :entry]]]\n",
+    "    [\"block in summary\", :block, 35, 35, [[:req, :first], [:opt, :second], [:rest, :more], [:keyreq, :key], [:key, :other], [:keyrest, :opts], [:block, :blk]]]\n",
+);
+
+#[test]
+fn test_c_extensions_c_sequence_outlines_execution() {
+    let output = run_example("c_extensions/c_sequence_outlines.rb");
+    assert_eq!(output, C_SEQUENCE_OUTLINES_OUTPUT);
+}
+
+#[test]
+fn test_c_extensions_c_sequence_outlines_no_parens_execution() {
+    let output = run_example("c_extensions/c_sequence_outlines_no_parens.rb");
+    assert_eq!(output, C_SEQUENCE_OUTLINES_OUTPUT);
+}
+
 /// The expected output of both `c_extensions/c_kernel` variants.
 const C_KERNEL_OUTPUT: &str = concat!(
     "[2, 0, nil]\n",

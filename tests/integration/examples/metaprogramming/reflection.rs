@@ -216,3 +216,24 @@ fn test_metaprogramming_caller_entries_parens_execution() {
     let output = run_example("metaprogramming/caller_entries_parens.rb");
     assert_eq!(output, expected);
 }
+
+/// The expected output of both `metaprogramming/kernel_method_objects` variants.
+const KERNEL_METHOD_OBJECTS_OUTPUT: &str = concat!(
+    "#<UnboundMethod: Kernel#singleton_class()>\n",
+    "#<Class:Ledger>\n",
+    "String\n",
+    "Kernel\n",
+    "#<Class:Ledger>\n",
+);
+
+#[test]
+fn test_metaprogramming_kernel_method_objects_execution() {
+    let output = run_example("metaprogramming/kernel_method_objects.rb");
+    assert_eq!(output, KERNEL_METHOD_OBJECTS_OUTPUT);
+}
+
+#[test]
+fn test_metaprogramming_kernel_method_objects_no_parens_execution() {
+    let output = run_example("metaprogramming/kernel_method_objects_no_parens.rb");
+    assert_eq!(output, KERNEL_METHOD_OBJECTS_OUTPUT);
+}

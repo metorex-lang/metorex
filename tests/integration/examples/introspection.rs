@@ -1070,6 +1070,27 @@ fn test_introspection_set_trace_func_events_no_parens_execution() {
     );
 }
 
+/// The expected output of both `introspection/tracepoint_sequences` variants.
+const TRACEPOINT_SEQUENCES_OUTPUT: &str = concat!(
+    "[7, 8]\n",
+    "[8]\n",
+    "[\"(eval at here:28)\", nil, \"<compiled>\", 1, [[\"doubled\", 1]]]\n",
+    "[\"ledger_report.rb\", nil, \"<compiled>\", 4, []]\n",
+    "[\"block in <main>\", \"Ledger#total\", \"block in <main>\"]\n",
+);
+
+#[test]
+fn test_introspection_tracepoint_sequences_execution() {
+    let output = run_example("introspection/tracepoint_sequences.rb");
+    assert_eq!(output, TRACEPOINT_SEQUENCES_OUTPUT);
+}
+
+#[test]
+fn test_introspection_tracepoint_sequences_no_parens_execution() {
+    let output = run_example("introspection/tracepoint_sequences_no_parens.rb");
+    assert_eq!(output, TRACEPOINT_SEQUENCES_OUTPUT);
+}
+
 /// The expected output of both `introspection/tracepoint_attribute_methods` variants.
 const TRACEPOINT_ATTRIBUTE_METHODS_OUTPUT: &str = concat!(
     "[:call, :total]\n",

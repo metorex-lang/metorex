@@ -278,7 +278,8 @@ enum ruby_value_type {
   RUBY_T_FALSE = 0x13,
   RUBY_T_SYMBOL = 0x14,
   RUBY_T_FIXNUM = 0x15,
-  RUBY_T_UNDEF = 0x16
+  RUBY_T_UNDEF = 0x16,
+  RUBY_T_IMEMO = 0x1a
 };
 #define T_NONE RUBY_T_NONE
 #define T_OBJECT RUBY_T_OBJECT
@@ -290,6 +291,7 @@ enum ruby_value_type {
 #define T_ARRAY RUBY_T_ARRAY
 #define T_HASH RUBY_T_HASH
 #define T_STRUCT RUBY_T_STRUCT
+#define T_IMEMO RUBY_T_IMEMO
 #define T_BIGNUM RUBY_T_BIGNUM
 #define T_FILE RUBY_T_FILE
 #define T_DATA RUBY_T_DATA

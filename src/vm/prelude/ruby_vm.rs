@@ -221,7 +221,17 @@ class RubyVM
         __load_instruction_sequence__
         __frame_sequence__(location)
       end
-      private :__frame__
+
+      def __heap__
+        __load_instruction_sequence__
+        __loaded__
+      end
+
+      def __compiled__(source, path, line)
+        __load_instruction_sequence__
+        __script__(source, path, line)
+      end
+      private :__frame__, :__heap__, :__compiled__
     end
   end
   __undefine_allocator__ InstructionSequence

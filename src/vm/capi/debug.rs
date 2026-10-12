@@ -198,6 +198,19 @@ pub extern "C-unwind" fn rb_debug_inspector_frame_iseq_get(
     to_value(&call(sequences, "__frame__", vec![location]))
 }
 
+/// How many frames the call stack holds from the outermost to the frame
+/// `index` frames in from the innermost, that frame included.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_debug_inspector_frame_depth(
+    inspector: *const Inspector,
+    index: i64,
+) -> Value {
+    frame(inspector, index);
+    // SAFETY: as for `frame`.
+    let held = unsafe { (*inspector).frames.len() } as i64;
+    to_value(&Object::Int(held - index))
+}
+
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_debug_inspector_backtrace_locations(
     inspector: *const Inspector,

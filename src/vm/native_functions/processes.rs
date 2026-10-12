@@ -116,6 +116,17 @@ pub(crate) fn require_candidates(named: &str) -> Vec<std::path::PathBuf> {
             named, PLATFORM_EXTENSION
         )));
     }
+    // Ruby reads a `.so` or `.o` ending as naming the C extension built for
+    // this platform, so `foo.so` loads `foo.bundle` on macOS.
+    if let Some(stem) = [".so", ".o"]
+        .iter()
+        .find_map(|ending| named.strip_suffix(ending))
+    {
+        let built = format!("{}.{}", stem, PLATFORM_EXTENSION);
+        if built != named {
+            candidates.push(std::path::PathBuf::from(built));
+        }
+    }
     candidates.push(std::path::PathBuf::from(named));
     candidates
 }

@@ -595,6 +595,7 @@ impl Parser {
         self.jump_target_depth -= 1;
         let body = body?;
         let body_closed_at = self.stream.current_position();
+        self.note_closing_line(start_pos);
         self.expect(TokenKind::End, "Expected 'end' to close block")?;
         let outer_locals = self.close_block_scope(block_opened_at, &parameters);
         let parameters = self.block_parameters_or_refuse(
@@ -1018,6 +1019,7 @@ impl Parser {
         collected?;
         let body_closed_at = self.stream.current_position();
 
+        self.note_closing_line(start_pos);
         self.expect(TokenKind::RBrace, "Expected '}' to close block")?;
         let outer_locals = self.close_block_scope(block_opened_at, &parameters);
         let parameters = self.block_parameters_or_refuse(

@@ -28,9 +28,7 @@ impl VirtualMachine {
         let here = if position.prelude {
             "<internal:prelude>".to_string()
         } else {
-            self.reported_current_file()
-                .map(|path| path.display().to_string())
-                .unwrap_or_default()
+            self.file_for_frames().unwrap_or_default()
         };
         let (sites, columns) =
             crate::vm::exceptions::backtrace_sites(merged, &native_flags, here, position);
@@ -85,10 +83,7 @@ impl VirtualMachine {
         use crate::object::Instance;
         use std::rc::Rc;
         let loc_class = self.backtrace_location_class();
-        let current_file = self
-            .reported_current_file()
-            .map(|path| path.display().to_string())
-            .unwrap_or_default();
+        let current_file = self.file_for_frames().unwrap_or_default();
         let stack = self.call_stack();
         let mut locations = Vec::with_capacity(stack.len() + 1);
         // The call stack records where each frame was entered from, so the

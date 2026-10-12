@@ -173,6 +173,10 @@ pub struct Parser {
     /// declares no parameters but did write the list, which is enough to
     /// rule out the implicit `it`.
     pub(crate) wrote_block_parameter_list: bool,
+
+    /// The line each class, module and block closes on, by the line and
+    /// column of the position its node records.
+    pub(crate) closing_lines: std::collections::HashMap<(usize, usize), usize>,
 }
 
 /// The anonymous parameters one block declared.
@@ -465,7 +469,22 @@ impl Parser {
             call_argument_depth: 0,
             numbered_parameter_ranges: Vec::new(),
             wrote_block_parameter_list: false,
+            closing_lines: std::collections::HashMap::new(),
         }
+    }
+
+    /// The line each class, module and block read so far closes on, by the
+    /// line and column of the position its node records.
+    pub fn closing_lines(&self) -> &std::collections::HashMap<(usize, usize), usize> {
+        &self.closing_lines
+    }
+
+    /// Notes that the scope opened at `opened` closes on the line of the
+    /// token at hand.
+    pub(crate) fn note_closing_line(&mut self, opened: Position) {
+        let line = self.peek().position.line;
+        self.closing_lines
+            .insert((opened.line, opened.column), line);
     }
 
     /// Whether a `{` here opens a block for the call just read. Inside a

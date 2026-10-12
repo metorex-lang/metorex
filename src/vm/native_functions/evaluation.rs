@@ -267,11 +267,24 @@ impl VirtualMachine {
             );
         }
         // Ruby reports every string it compiles, which is what a
-        // trace reads the source back out of.
+        // trace reads the source back out of, with the file the code is
+        // named for.
+        let compiled_path = filename.clone().unwrap_or_else(|| {
+            let written_in = self
+                .current_file
+                .as_ref()
+                .map(|file| self.reported_spelling(file).display().to_string())
+                .unwrap_or_default();
+            format!("(eval at {}:{})", written_in, position.line)
+        });
         self.fire_event(
             "script_compiled",
             position,
-            vec![("eval_script", Object::string(code.clone()))],
+            vec![
+                ("eval_script", Object::string(code.clone())),
+                ("eval_path", Object::string(compiled_path)),
+                ("eval_line", Object::Int(named_lineno)),
+            ],
         )?;
         // A Binding argument re-establishes the frame it captured:
         // its locals (shared cells, so assignment through the eval is

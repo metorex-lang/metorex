@@ -42,6 +42,7 @@ mod pattern_matching;
 mod prelude;
 mod program;
 mod ractors;
+mod sequence_outline;
 pub mod signals;
 pub(crate) mod stdlib;
 mod warn;

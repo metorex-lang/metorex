@@ -49,6 +49,7 @@ mod objects;
 mod procs;
 mod ranges;
 mod regexps;
+mod sequences;
 mod sets;
 mod string_functions;
 mod strings;

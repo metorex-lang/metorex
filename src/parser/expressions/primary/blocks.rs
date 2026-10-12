@@ -72,6 +72,7 @@ impl Parser {
         let body = self.parse_block_body_with_optional_rescue_ensure(token_position);
         self.leave_block_parameters();
         let body = body?;
+        self.note_closing_line(token_position);
         self.expect(TokenKind::End, "Expected 'end' after block body")?;
 
         Ok(Expression::Lambda {

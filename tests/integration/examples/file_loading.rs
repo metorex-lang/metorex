@@ -186,6 +186,39 @@ fn test_require_source_file_no_parens_execution() {
     assert_eq!(output, SOURCE_FILE_OUTPUT);
 }
 
+/// The expected output of `require/caller_in_required_file`, whose two
+/// variants differ only in the file name the outermost frame reports.
+fn caller_in_required_file_output(main: &str) -> String {
+    format!(
+        concat!(
+            "[\"caller_sites.rb\", 3, \"Ledger#own_site\"]\n",
+            "\"caller_sites.rb:7:in 'Ledger#own_entry'\"\n",
+            "[\"caller_sites.rb\", 13, \"Kernel#kernel_site\"]\n",
+            "[\"caller_sites.rb\", 13, \"Kernel#kernel_site\"]\n",
+            "[\"{}\", 14, \"<main>\"]\n",
+        ),
+        main
+    )
+}
+
+#[test]
+fn test_require_caller_in_required_file_execution() {
+    let output = run_example("require/caller_in_required_file.rb");
+    assert_eq!(
+        output,
+        caller_in_required_file_output("caller_in_required_file.rb")
+    );
+}
+
+#[test]
+fn test_require_caller_in_required_file_no_parens_execution() {
+    let output = run_example("require/caller_in_required_file_no_parens.rb");
+    assert_eq!(
+        output,
+        caller_in_required_file_output("caller_in_required_file_no_parens.rb")
+    );
+}
+
 #[test]
 fn test_require_kernel_autoload_execution() {
     let expected = concat!(

@@ -28,6 +28,50 @@ class RubyVM
                   first_lineno: line, type: :top, node: node)
       end
 
+      # The sequences MRI's heap holds for the Ruby files loaded so far: the
+      # top level of each and every method, class and block written in it.
+      def __loaded__
+        files = [$PROGRAM_NAME, *$LOADED_FEATURES].select { |file| file.end_with?(".rb") && File.file?(file) }
+        found = []
+        files.uniq.each do |file|
+          outline = file_outline(file)
+          outlined(file, File.expand_path(file), outline, found) if outline
+        end
+        found
+      end
+
+      # The sequence a `script_compiled` event reports for `source`, compiled
+      # as an eval at `path` from `line`, which names no file on disk.
+      def __script__(source, path, line)
+        outline = __sequence_outline__(source)
+        return __compile__(source, path, nil, line) if outline.nil?
+
+        sequence = outlined(path, nil, outline, [])
+        sequence.instance_variable_set(:@first_lineno, line)
+        sequence.instance_variable_set(:@type, :eval)
+        sequence.instance_variable_set(:@label, "<compiled>")
+        sequence.instance_variable_set(:@base_label, "<compiled>")
+        sequence
+      end
+
+      # The sequence an outline of `file` describes, after adding it and
+      # those of the scopes written in it to `found`.
+      def outlined(file, absolute_path, outline, found)
+        type, label, first_lineno = outline
+        # The top level of a file starts on line 0, and only the program's
+        # own is `<main>`.
+        if type == :top
+          first_lineno = 0
+          label = "<top (required)>" unless file == $PROGRAM_NAME
+        end
+        base = label.sub(/\Ablock (\(\d+ levels\) )?in /, "")
+        sequence = __build__(source: nil, path: file, absolute_path: absolute_path, label: label,
+                             base_label: base, first_lineno: first_lineno, type: type, node: nil, outline: outline)
+        found << sequence
+        sequence.instance_variable_set(:@children, outline[6].map { |child| outlined(file, absolute_path, child, found) })
+        sequence
+      end
+
       # The line a parse error names, counted from the line the source
       # starts on.
       def error_line(error, line)
@@ -77,29 +121,49 @@ class RubyVM
         base = owner.start_with?("<") ? owner : owner.split(/[#.]/).last
         label = block ? "#{prefix} in #{base}" : base
         type = block ? :block : (base == "<main>" ? :top : :method)
-        line = base == "<main>" && !block ? 0 : frame_start(path, location.lineno, block ? nil : base)
+        holder = base == "<main>" && !block ? nil : frame_holder(path, location.lineno, block ? nil : base)
+        if holder
+          sequence = outlined(path, location.absolute_path, holder, [])
+          sequence.instance_variable_set(:@label, label)
+          sequence.instance_variable_set(:@base_label, base)
+          return sequence
+        end
+        line = base == "<main>" && !block ? 0 : location.lineno
         __build__(source: nil, path: path, absolute_path: location.absolute_path, label: label, base_label: base,
                   first_lineno: line, type: type, node: nil)
       end
 
-      # The line the method named `name`, or the innermost block, holding
-      # line `line` of the file at `path` starts on.
-      def frame_start(path, line, name)
-        return line unless path && File.file?(path)
+      # The outline of the method named `name`, or of the innermost block,
+      # holding line `line` of the file at `path`, or nil where the file
+      # holds none.
+      def frame_holder(path, line, name)
+        outline = file_outline(path)
+        return nil if outline.nil?
 
         holders = []
-        collect = lambda do |node|
-          return unless node.is_a?(RubyVM::AbstractSyntaxTree::Node)
-
-          holds = node.first_lineno <= line && line <= node.last_lineno
-          named = node.type == :DEFN ? node.children[0] : node.type == :DEFS && node.children[1]
-          holders << node if holds && (name ? named.to_s == name : %i[ITER LAMBDA].include?(node.type))
-          node.children.each { |child| (child.is_a?(Array) ? child : [child]).each { |item| collect.call(item) } }
+        collect = lambda do |scope|
+          type, label, first, last, = scope
+          holds = first <= line && line <= last
+          holders << scope if holds && (name ? type == :method && label == name : type == :block)
+          scope[6].each { |child| collect.call(child) }
         end
-        collect.call(RubyVM::AbstractSyntaxTree.parse(File.read(path)))
-        holders.empty? ? line : holders.last.first_lineno
-      rescue SyntaxError
-        line
+        collect.call(outline)
+        holders.last
+      end
+
+      # The outline of the file at `path`, read again only once the file
+      # changes.
+      def file_outline(path)
+        return nil unless path && File.file?(path)
+
+        @file_outlines ||= {}
+        stamp = File.mtime(path)
+        held = @file_outlines[path]
+        return held[1] if held && held[0] == stamp
+
+        outline = __sequence_outline__(File.read(path))
+        @file_outlines[path] = [stamp, outline]
+        outline
       end
 
       def __build__(**fields)
@@ -164,7 +228,7 @@ class RubyVM
           node.last_lineno == other.last_lineno && node.last_column == other.last_column
       end
 
-      private :__compile__, :__compile_file__, :__of__, :__frame_sequence__, :__build__, :error_line, :frame_start,
+      private :__compile__, :__compile_file__, :__loaded__, :__script__, :outlined, :__of__, :__frame_sequence__, :__build__, :error_line, :frame_holder, :file_outline,
               :method_sequence, :block_sequence, :enclosing_label, :search, :constant_name, :same_place?
     end
 
@@ -185,6 +249,7 @@ class RubyVM
     # The line each statement starts on, which MRI reports as a line event,
     # with the call and return of a method or block around them.
     def trace_points
+      return outlined_trace_points if @outline
       return [] if @node.nil?
 
       points = statement_lines(body_node).map { |line| [line, :line] }
@@ -200,7 +265,7 @@ class RubyVM
     def each_child
       raise LocalJumpError, "no block given" unless block_given?
 
-      children_of(body_node).each { |child| yield child }
+      (@children || children_of(body_node)).each { |child| yield child }
       self
     end
 
@@ -284,6 +349,54 @@ class RubyVM
       described
     end
 
+    # The parameters as `Method#parameters` lists them, with a Proc's
+    # required ones optional.
+    def __parameter_list__(proc)
+      return @outline[5].map { |kind, name| [proc && kind == :req ? :opt : kind, name] } if @outline
+
+      scope = scope_node
+      arguments = scope&.children&.at(1)
+      return [] unless arguments.is_a?(RubyVM::AbstractSyntaxTree::Node)
+
+      table = scope.children[0]
+      lead, _, optional, first_post, post, _, rest, keywords, keyword_rest, block = arguments.children
+      required = proc ? :opt : :req
+      listed = table.first(lead).map { |name| [required, name] }
+      while optional.is_a?(RubyVM::AbstractSyntaxTree::Node)
+        listed << [:opt, optional.children[0].children[0]]
+        optional = optional.children[1]
+      end
+      listed << [:rest, rest] if rest.is_a?(Symbol) && rest != :NODE_SPECIAL_EXCESSIVE_COMMA
+      listed.concat(table[table.index(first_post), post].map { |name| [required, name] }) if post.positive?
+      while keywords.is_a?(RubyVM::AbstractSyntaxTree::Node)
+        name, value = keywords.children[0].children
+        listed << [value == :NODE_SPECIAL_REQUIRED_KEYWORD ? :keyreq : :key, name]
+        keywords = keywords.children[1]
+      end
+      listed << [:keyrest, keyword_rest.children[0]] if keyword_rest.is_a?(RubyVM::AbstractSyntaxTree::Node)
+      listed << [:block, block] if block
+      listed
+    end
+
+    # The events an outlined sequence reports: a line for each statement, with
+    # the call and return of a method or block, or the class and end of a
+    # class body, around them.
+    def outlined_trace_points
+      type, _, first, last, lines = @outline
+      points = lines.map { |line| [line, :line] }
+      # A method or block is entered on the line its first statement starts,
+      # after that line's own event.
+      opening = points.first(1)
+      rest = points.drop(1)
+      entered = lines.first || first
+      case type
+      when :method then [*opening, [entered, :call], *rest, [last, :return]]
+      when :block then [*opening, [entered, :b_call], *rest, [last, :b_return]]
+      when :class then [[first, :class], *points, [last, :end]]
+      else points
+      end
+    end
+
     def keyword_names(chain)
       names = []
       while chain.is_a?(RubyVM::AbstractSyntaxTree::Node)
@@ -294,6 +407,7 @@ class RubyVM
     end
 
     def code_location
+      return [@outline[2], 0, @outline[3], 0] if @outline
       return [@first_lineno, 0, @first_lineno, 0] if @node.nil?
 
       [@node.first_lineno, @node.first_column, @node.last_lineno, @node.last_column]
@@ -303,6 +417,10 @@ class RubyVM
     # statement, then each node before the nodes it holds, as [type,
     # values...].
     def instructions
+      if @outline
+        return trace_points.flat_map { |line, event| [line, :"RUBY_EVENT_#{event.upcase}"] } << [:leave]
+      end
+
       listed = []
       statements(body_node).each do |statement|
         listed << statement.first_lineno << :RUBY_EVENT_LINE

@@ -341,10 +341,13 @@ impl VirtualMachine {
 
         // Prefer the method's original owner class (if recorded) over the
         // class we dispatched through. For aliased/mixed-in methods this
-        // lets `super` walk from the method's true defining class.
+        // lets `super` walk from the method's true defining class. An alias
+        // is named for the module the method it copies was written in.
         let owning_class_name = method
-            .owner
-            .clone()
+            .alias_origin
+            .as_ref()
+            .map(|origin| origin.ruby_name())
+            .or_else(|| method.owner.clone())
             .unwrap_or_else(|| class.name().to_string());
         // `super` follows the definition, so the frame is named for the
         // method as defined even when it was reached through an alias.
@@ -449,27 +452,35 @@ impl VirtualMachine {
         let opened_on = written.as_ref().map_or(position.line, |(_, line)| *line);
         self.enter_running_code(Rc::new(written.into_iter().collect()), opened_on);
         self.warn_block_the_method_ignores(&method, &class, position)?;
-        let execution_result =
-            match self.fire_method_event("call", &method_name, &method, &class, None, position) {
-                Ok(()) => self.with_call_frame(
-                    CallFrame::method(
-                        frame_name.clone(),
-                        frame_location_string,
-                        method_name.clone(),
-                        defined_name.clone(),
-                    )
-                    .owned_by(allocation_owner)
-                    .with_source_file(self.file_for_frames()),
-                    move |vm| {
-                        vm.execute_method_body(
-                            method_for_body.as_ref(),
-                            self_for_body.clone(),
-                            arguments_for_body.clone(),
-                        )
-                    },
-                ),
-                Err(error) => Err(error),
-            };
+        // The call event fires inside the method's frame, which is what a
+        // trace's block sees on the stack.
+        let called_name = method_name.clone();
+        let called_class = Rc::clone(&class);
+        let execution_result = self.with_call_frame(
+            CallFrame::method(
+                frame_name.clone(),
+                frame_location_string,
+                method_name.clone(),
+                defined_name.clone(),
+            )
+            .owned_by(allocation_owner)
+            .with_source_file(self.file_for_frames()),
+            move |vm| {
+                vm.fire_method_event(
+                    "call",
+                    &called_name,
+                    &method_for_body,
+                    &called_class,
+                    None,
+                    position,
+                )?;
+                vm.execute_method_body(
+                    method_for_body.as_ref(),
+                    self_for_body.clone(),
+                    arguments_for_body.clone(),
+                )
+            },
+        );
         self.method_nesting_stack.pop();
         self.class_var_cref_stack.pop();
         self.method_owner_stack.pop();

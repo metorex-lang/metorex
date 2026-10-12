@@ -812,15 +812,32 @@ pub(crate) fn block_parameter_list(block_obj: &crate::object::BlockStatement) ->
         return Object::array(vec![Object::array(vec![Object::symbol(kind.to_string())])]);
     }
     let required_kind = if block_obj.is_lambda { "req" } else { "opt" };
+    let defaulted: Vec<usize> = block_obj
+        .parameter_defaults
+        .iter()
+        .map(|(position, _)| *position)
+        .collect();
+    Object::array(block_parameter_pairs(
+        &block_obj.parameters,
+        &defaulted,
+        required_kind,
+    ))
+}
+
+/// The `[kind, name]` pairs of a block's parameters as written, where
+/// `defaulted` names the positions given a default and `required_kind` is
+/// what a positional one without a default reports.
+pub(crate) fn block_parameter_pairs(
+    parameters: &[String],
+    defaulted: &[usize],
+    required_kind: &str,
+) -> Vec<Object> {
     let mut listed = Vec::new();
-    for (index, name) in block_obj.parameters.iter().enumerate() {
+    for (index, name) in parameters.iter().enumerate() {
         let Some((kind, declared)) = block_parameter_parts(name) else {
             continue;
         };
-        let defaulted = block_obj
-            .parameter_defaults
-            .iter()
-            .any(|(position, _)| *position == index);
+        let defaulted = defaulted.contains(&index);
         let label = match kind {
             BlockParameterKind::Positional if defaulted => "opt",
             BlockParameterKind::Positional => required_kind,
@@ -849,7 +866,7 @@ pub(crate) fn block_parameter_list(block_obj: &crate::object::BlockStatement) ->
         }
         listed.push(Object::array(pair));
     }
-    Object::array(listed)
+    listed
 }
 
 /// A Proc's arity, counted the same way a method's is.

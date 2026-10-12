@@ -42,6 +42,9 @@ VALUE rb_debug_inspector_frame_class_get(const rb_debug_inspector_t *inspector, 
 VALUE rb_debug_inspector_frame_binding_get(const rb_debug_inspector_t *inspector, long index);
 VALUE rb_debug_inspector_frame_iseq_get(const rb_debug_inspector_t *inspector, long index);
 VALUE rb_debug_inspector_backtrace_locations(const rb_debug_inspector_t *inspector);
+#define RB_DEBUG_INSPECTOR_FRAME_DEPTH(dc, index) rb_debug_inspector_frame_depth(dc, index)
+VALUE rb_debug_inspector_frame_depth(const rb_debug_inspector_t *inspector, long index);
+VALUE rb_debug_inspector_current_depth(void);
 
 #ifdef __cplusplus
 }

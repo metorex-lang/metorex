@@ -65,7 +65,10 @@ pub extern "C-unwind" fn rb_metorex_rbasic(object: Value) -> *mut RBasic {
     HANDED.with(|handed| {
         let mut handed = handed.borrow_mut();
         let held = handed.entry(object).or_insert_with(|| Handed {
-            basic: Box::new(RBasic { flags: 0, klass }),
+            basic: Box::new(RBasic {
+                flags: super::sequences::initial_flags(object),
+                klass,
+            }),
             flags: 0,
         });
         let kept = held.basic.flags & !FREEZE_FLAG;
