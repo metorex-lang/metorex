@@ -3,8 +3,10 @@
 
 mod gem_libraries;
 mod prism_libraries;
+mod rubygems_libraries;
 use gem_libraries::GEM_LIBRARIES;
 use prism_libraries::PRISM_LIBRARIES;
+use rubygems_libraries::RUBYGEMS_LIBRARIES;
 
 /// The file a library metorex carries says its code was written in.
 pub(crate) fn embedded_library_file(name: &str) -> String {
@@ -96,37 +98,9 @@ const EMBEDDED_LIBRARIES: &[(&[&str], &str)] = &[
     (&["rbconfig/sizeof"], include_str!("rbconfig_sizeof.rb")),
     (&["yaml", "psych"], include_str!("yaml.rb")),
     (&["resolv"], include_str!("resolv.rb")),
-    (&["rubygems"], include_str!("rubygems.rb")),
-    (&["rubygems/text"], include_str!("rubygems/text.rb")),
-    (&["rubygems/version"], include_str!("rubygems/version.rb")),
     (
-        &["rubygems/requirement"],
-        include_str!("rubygems/requirement.rb"),
-    ),
-    (
-        &["rubygems/path_support"],
-        include_str!("rubygems/path_support.rb"),
-    ),
-    (
-        &["rubygems/user_interaction"],
-        include_str!("rubygems/user_interaction.rb"),
-    ),
-    (
-        &["rubygems/gemcutter_utilities"],
-        include_str!("rubygems/gemcutter_utilities.rb"),
-    ),
-    (
-        &["rubygems/command_manager"],
-        include_str!("rubygems/command_manager.rb"),
-    ),
-    (&["rubygems/command"], include_str!("rubygems/command.rb")),
-    (
-        &["rubygems/safe_yaml"],
-        include_str!("rubygems/safe_yaml.rb"),
-    ),
-    (
-        &["rubygems/commands/owner_command"],
-        include_str!("rubygems/commands/owner_command.rb"),
+        &["rubygems/defaults/operating_system"],
+        include_str!("rubygems/defaults/operating_system.rb"),
     ),
     (&["optparse", "optionparser"], include_str!("optparse.rb")),
     (&["optparse/ac"], include_str!("optparse/ac.rb")),
@@ -337,6 +311,7 @@ pub(crate) fn embedded_library(name: &str) -> Option<&'static str> {
             PRISM_LIBRARIES
                 .iter()
                 .chain(GEM_LIBRARIES)
+                .chain(RUBYGEMS_LIBRARIES)
                 .find(|(named, _)| *named == trimmed)
                 .map(|(_, source)| *source)
         })
@@ -351,6 +326,7 @@ pub(crate) fn embedded_library_names() -> impl Iterator<Item = &'static str> {
             PRISM_LIBRARIES
                 .iter()
                 .chain(GEM_LIBRARIES)
+                .chain(RUBYGEMS_LIBRARIES)
                 .map(|(named, _)| *named),
         )
 }

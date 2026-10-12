@@ -519,3 +519,23 @@ fn test_filesystem_permission_checks_no_parens_execution() {
     let output = run_example("filesystem/permission_checks_no_parens.rb");
     assert_eq!(output, PERMISSION_CHECKS);
 }
+
+/// The expected output of both `filesystem/opening_encodings_and_paths` variants.
+const OPENING_ENCODINGS_AND_PATHS_OUTPUT: &str = concat!(
+    "[#<Encoding:UTF-8>, nil, \"# -*- coding: utf-8 -*-\\n\"]\n",
+    "[#<Encoding:UTF-8>, nil]\n",
+    "\"# -*- coding: utf-8 -*-\\nnorth 12\\n\"\n",
+    "2\n",
+);
+
+#[test]
+fn test_filesystem_opening_encodings_and_paths_execution() {
+    let output = run_example("filesystem/opening_encodings_and_paths.rb");
+    assert_eq!(output, OPENING_ENCODINGS_AND_PATHS_OUTPUT);
+}
+
+#[test]
+fn test_filesystem_opening_encodings_and_paths_no_parens_execution() {
+    let output = run_example("filesystem/opening_encodings_and_paths_no_parens.rb");
+    assert_eq!(output, OPENING_ENCODINGS_AND_PATHS_OUTPUT);
+}

@@ -109,11 +109,17 @@ impl VirtualMachine {
             // with no entry to copy. A stub carrying the name keeps
             // the alias reaching the native one.
             // A class below one, such as a Hash of the program's own, reaches
-            // the same native method.
+            // the same native method, and so does one below an exception
+            // class, as `SystemExit#status` is.
+            let ancestors = self.ancestor_names(Object::Class(Rc::clone(class_rc)), position)?;
             if !found
                 && (sample_of_class(class_rc.name())
                     .is_some_and(|probe| self.responds_to(&probe, &old_name))
-                    || crate::vm::native_methods::class_answers_natively(class_rc, &old_name, true))
+                    || crate::vm::native_methods::class_answers_natively(class_rc, &old_name, true)
+                    || crate::vm::native_methods::object_methods::nearest_core_owner(
+                        &ancestors, &old_name,
+                    )
+                    .is_some())
             {
                 let mut stub = Method::with_owner(
                     new_name.clone(),

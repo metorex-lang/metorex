@@ -31,16 +31,12 @@ fn sort_by_with_positional_args_errors() {
     );
 }
 
-// ── sort_by without block errors ───────────────────────────────────────────
+// ── sort_by without block answers an Enumerator ────────────────────────────
 
 #[test]
-fn sort_by_without_block_errors() {
-    let err = run_err("[3, 1, 2].sort_by");
-    assert!(
-        err.contains("block") || err.contains("sort_by"),
-        "unexpected: {}",
-        err
-    );
+fn sort_by_without_block_answers_an_enumerator() {
+    let class_name = run("[3, 1, 2].sort_by.class.to_s");
+    assert_eq!(class_name, Some(Object::string("Enumerator")));
 }
 
 // ── each without block answers an Enumerator ───────────────────────────────

@@ -1,0 +1,16 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    shipping_rates (1.0.0)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  shipping_rates (= 1.0.0)
+
+CHECKSUMS
+  shipping_rates (1.0.0)
+
+BUNDLED WITH
+  4.0.19

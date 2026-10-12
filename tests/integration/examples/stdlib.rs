@@ -1266,7 +1266,7 @@ fn test_stdlib_rubygems_interaction_no_parens_execution() {
 }
 
 /// The expected output of both `stdlib/rubygems_owner` variants.
-const RUBYGEMS_OWNER_OUTPUT: &str = "[\"owner\", \"Manage gem owners of a gem on the push server\", {}]\n[\"Owners for gem: rake\", \"- .]2;title.\", \"- maintainer\", \"- 7\"]\n[\"runtime\"]\n";
+const RUBYGEMS_OWNER_OUTPUT: &str = "[\"owner\", \"Manage gem owners of a gem on the push server\", {}]\n[\"Owners for gem: rake\", \"- .]2;title. ()\", \"- maintainer ()\", \"- 7 ()\"]\n[\"runtime\"]\n";
 
 #[test]
 fn test_stdlib_rubygems_owner_execution() {
@@ -1667,4 +1667,19 @@ fn test_runtime_release_named_execution() {
 fn test_runtime_release_named_no_parens_execution() {
     let output = run_example("runtime/release_named_no_parens.rb");
     assert_eq!(output, RELEASE_NAMED);
+}
+
+/// The expected output of both `stdlib/rbconfig_cross_compiling` variants.
+const RBCONFIG_CROSS_COMPILING_OUTPUT: &str = "nil\n\"no\"\ntrue\n";
+
+#[test]
+fn test_stdlib_rbconfig_cross_compiling_execution() {
+    let output = run_example("stdlib/rbconfig_cross_compiling.rb");
+    assert_eq!(output, RBCONFIG_CROSS_COMPILING_OUTPUT);
+}
+
+#[test]
+fn test_stdlib_rbconfig_cross_compiling_no_parens_execution() {
+    let output = run_example("stdlib/rbconfig_cross_compiling_no_parens.rb");
+    assert_eq!(output, RBCONFIG_CROSS_COMPILING_OUTPUT);
 }

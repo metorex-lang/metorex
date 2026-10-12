@@ -4006,7 +4006,7 @@ different reported release would open, without committing metorex to it.
   - [x] 5.3.30. command_line/frozen_strings_spec - 1 file, 13 examples, 17 expectations, 0 failures, 0 errors
   - [x] 5.3.31. command_line/feature_spec - 1 file, 7 examples, 26 expectations, 0 failures, 0 errors
   - [x] 5.3.32. command_line/rubyopt_spec - 1 file, 33 examples, 33 expectations, 0 failures, 0 errors
-- [x] 5.4. security - 14 files, all passing
+- [ ] 5.4. security - 14 files, 13 passing
   - [x] 5.4.1. security/cve_2018_16396_spec - 1 file, 0 examples, 0 expectations, 0 failures, 0 errors
   - [x] 5.4.2. security/cve_2020_10663_spec - 1 file, 0 examples, 0 expectations, 0 failures, 0 errors
   - [x] 5.4.3. security/cve_2024_49761_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
@@ -4020,7 +4020,7 @@ different reported release would open, without committing metorex to it.
   - [x] 5.4.11. security/cve_2019_8321_spec - 1 file, 1 example, 1 expectation, 0 failures, 0 errors
   - [x] 5.4.12. security/cve_2019_8323_spec - 1 file, 2 examples, 2 expectations, 0 failures, 0 errors
   - [x] 5.4.13. security/cve_2019_8325_spec - 1 file, 3 examples, 3 expectations, 0 failures, 0 errors
-  - [x] 5.4.14. security/cve_2019_8322_spec - 1 file, 1 example, 2 expectations, 0 failures, 0 errors
+  - [ ] 5.4.14. security/cve_2019_8322_spec - fails under MRI 4.0.6 as well: RubyGems 4.0.16 lists an owner as `- name ()`, which the spec's expected line predates
 - [x] 5.5. optional - 47 files, all passing
   - [x] 5.5.1. optional/capi/data_spec - 1 file, 0 examples, 0 expectations, 0 failures, 0 errors (all examples guarded under ruby_version_is ""..."3.4")
   - [x] 5.5.2. optional/thread_safety/hash_spec - 1 file, 4 examples, 63008 expectations, 0 failures, 0 errors

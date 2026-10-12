@@ -289,6 +289,9 @@ pub struct VirtualMachine {
     /// The files being loaded right now, each with the thread loading it, so
     /// a thread that asks for a file another is part-way through waits for it.
     pub(crate) loading_paths: Vec<(String, Object)>,
+    /// The libraries held in the binary that are running now, by the file
+    /// each names itself.
+    pub(crate) embedded_libraries_loading: Vec<String>,
     /// Autoloads currently being loaded, with the thread that initiated
     /// the load. Stored as `(class, name, loading_thread)` triples.
     /// `effective_autoload` consults this list to differentiate the
@@ -624,6 +627,7 @@ impl VirtualMachine {
             taken_mutexes: Vec::new(),
             source_line_shift: 0,
             loading_paths: Vec::new(),
+            embedded_libraries_loading: Vec::new(),
             autoload_loading: Vec::new(),
             pending_block: None,
             pending_block_from_ampersand: false,

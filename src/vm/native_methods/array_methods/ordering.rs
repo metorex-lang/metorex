@@ -63,11 +63,12 @@ impl VirtualMachine {
                 }
                 let block = match self.pending_block.take() {
                     Some(Object::Block(b)) => b,
+                    // Without a block the sort is an Enumerator, which
+                    // `sort_by.with_index` hands the index to.
                     None => {
-                        return Err(MetorexError::runtime_error(
-                            "sort_by requires a block",
-                            position_to_location(position),
-                        ));
+                        return self
+                            .make_enumerator(receiver, method_name, arguments, position)
+                            .map(Some);
                     }
                     Some(other) => {
                         return Err(method_argument_type_error(

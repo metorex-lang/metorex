@@ -96,11 +96,24 @@ impl VirtualMachine {
     /// Whether `path` (after canonicalization) is currently listed in
     /// `$LOADED_FEATURES`. Used by `effective_autoload` and by the
     /// `autoload?` natives.
-    pub(crate) fn path_in_loaded_features(&self, path: &str) -> bool {
+    pub(crate) fn path_in_loaded_features(&mut self, path: &str) -> bool {
         let abs = std::path::Path::new(path);
         let canonical = match abs.canonicalize() {
             Ok(p) => p.to_string_lossy().into_owned(),
-            Err(_) => return false,
+            // A feature name rather than a path names the file a `require`
+            // of it finds, and a library held in the binary is loaded once
+            // it has finished running.
+            Err(_) => match self.feature_file(path) {
+                Some(file) if file.starts_with("<metorex>/") => {
+                    return self.is_file_loaded(&PathBuf::from(&file))
+                        && !self.embedded_libraries_loading.contains(&file);
+                }
+                Some(file) => match std::path::Path::new(&file).canonicalize() {
+                    Ok(found) => found.to_string_lossy().into_owned(),
+                    Err(_) => return false,
+                },
+                None => return false,
+            },
         };
         if let Some(Object::Array(arr)) = self.globals().get("\"") {
             arr.borrow()
@@ -279,6 +292,12 @@ impl VirtualMachine {
             }
             return Ok(class_rc.get_class_var(name));
         }
+        // The file may be loading already through a `require` of its own,
+        // as RubyGems requires a file it also autoloads from. Until that
+        // load finishes the constant is not defined yet.
+        if self.feature_is_loading(&path) {
+            return Ok(None);
+        }
         // If the registered file has already been loaded *and* it
         // deposited a value for this constant, the autoload is
         // satisfied: drop the entry and return the stored value.
@@ -456,6 +475,45 @@ impl VirtualMachine {
             self.emit_warning_to_stderr(&msg, crate::lexer::Position::new(0, 0, 0));
         }
         Ok(value)
+    }
+}
+
+impl VirtualMachine {
+    /// Whether `module` holds a constant `name` already, which an `autoload`
+    /// of that name leaves alone. Top-level constants live in the globals.
+    /// The file a `require` of `feature` finds, or None for one it does not.
+    pub(crate) fn feature_file(&mut self, feature: &str) -> Option<String> {
+        let resolved = self.resolve_feature_path(
+            vec![Object::string(feature.to_string())],
+            crate::lexer::Position::default(),
+        );
+        let Ok(Object::Array(found)) = resolved else {
+            return None;
+        };
+        found.borrow().get(1).map(|held| held.to_string())
+    }
+
+    pub(crate) fn feature_is_loading(&mut self, feature: &str) -> bool {
+        let Some(file) = self.feature_file(feature) else {
+            return false;
+        };
+        let canonical = std::path::Path::new(&file)
+            .canonicalize()
+            .map(|held| held.to_string_lossy().into_owned())
+            .unwrap_or_else(|_| file.clone());
+        self.loading_paths
+            .iter()
+            .any(|(held, _)| *held == canonical || *held == file)
+            || self.embedded_libraries_loading.contains(&file)
+    }
+
+    pub(crate) fn holds_constant_already(
+        &self,
+        module: &Rc<crate::class::Class>,
+        name: &str,
+    ) -> bool {
+        module.get_class_var(name).is_some()
+            || (module.name() == "Object" && self.globals().get(name).is_some())
     }
 }
 

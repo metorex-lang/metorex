@@ -281,3 +281,19 @@ fn test_array_methods_fetch_warnings_no_parens_execution() {
     let output = run_example("array_methods/fetch_warnings_no_parens.rb");
     assert_eq!(output, FETCH_WARNINGS_OUTPUT);
 }
+
+/// The expected output of both `array_methods/sort_by_enumerator` variants.
+const SORT_BY_ENUMERATOR_OUTPUT: &str =
+    "Enumerator\n[\"east\", \"south\", \"north\"]\n[[:north, 1], [:south, 2]]\n";
+
+#[test]
+fn test_array_methods_sort_by_enumerator_execution() {
+    let output = run_example("array_methods/sort_by_enumerator.rb");
+    assert_eq!(output, SORT_BY_ENUMERATOR_OUTPUT);
+}
+
+#[test]
+fn test_array_methods_sort_by_enumerator_no_parens_execution() {
+    let output = run_example("array_methods/sort_by_enumerator_no_parens.rb");
+    assert_eq!(output, SORT_BY_ENUMERATOR_OUTPUT);
+}

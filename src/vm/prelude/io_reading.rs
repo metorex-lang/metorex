@@ -602,6 +602,10 @@ pub(super) const SOURCE: &str = r##"
     # with no mark of its own.
     first = held[0] || ""
     held[0] = first[4..-1] if first.length > 4 && first[0, 4].casecmp("BOM|").zero?
+    # An internal encoding named `-`, or the same as the external one, is no
+    # internal encoding at all.
+    inner = held[1]
+    held = held.first(1) if inner == "-" || (inner && held[0] && inner.casecmp?(held[0]))
     held
   end
   private :__named_encodings__

@@ -1208,8 +1208,9 @@ impl VirtualMachine {
                     && let Some(class) = details.borrow().class.clone()
                     && let Some(method) = class.find_method(method_name)
                     // A body-less stub stands in for a native method, so it
-                    // must not shadow the implementation.
-                    && !method.body.is_empty()
+                    // must not shadow the implementation, unless it is an
+                    // alias reaching one under a name of its own.
+                    && (!method.body.is_empty() || aliases_another_name(&method, method_name))
                     && !self.object_method_hides_native(receiver, method_name, &method)
                 {
                     return Some((class, method));
@@ -1318,4 +1319,13 @@ pub(crate) fn main_object_method(name: &str) -> bool {
         .iter()
         .find(|row| row.owner == "main")
         .is_some_and(|row| row.public.contains(&name) || row.private.contains(&name))
+}
+
+/// Whether a body-less stub is an alias reaching a native method under a
+/// name other than its own.
+fn aliases_another_name(method: &Method, name: &str) -> bool {
+    method
+        .native_alias
+        .as_deref()
+        .is_some_and(|target| target != name)
 }

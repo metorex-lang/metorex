@@ -351,7 +351,9 @@ impl VirtualMachine {
             .current_source_file
             .replace(crate::vm::stdlib::embedded_library_file(name));
         let caller_method_nesting = std::mem::take(&mut self.user_def_nesting);
+        self.embedded_libraries_loading.push(feature);
         let result = self.execute_program(&statements);
+        self.embedded_libraries_loading.pop();
         self.user_def_nesting = caller_method_nesting;
         self.current_source_file = caller_source;
         self.loading_embedded_library = caller_library;

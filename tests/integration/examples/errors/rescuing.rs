@@ -217,3 +217,18 @@ fn test_errors_warning_warn_super_no_parens_execution() {
     let output = run_example("errors/warning_warn_super_no_parens.rb");
     assert_eq!(output, WARNING_WARN_SUPER_OUTPUT);
 }
+
+/// The expected output of both `errors/exception_method_aliases` variants.
+const EXCEPTION_METHOD_ALIASES_OUTPUT: &str = "[3, false, true]\ntrue\n:exit_code\n";
+
+#[test]
+fn test_errors_exception_method_aliases_execution() {
+    let output = run_example("errors/exception_method_aliases.rb");
+    assert_eq!(output, EXCEPTION_METHOD_ALIASES_OUTPUT);
+}
+
+#[test]
+fn test_errors_exception_method_aliases_no_parens_execution() {
+    let output = run_example("errors/exception_method_aliases_no_parens.rb");
+    assert_eq!(output, EXCEPTION_METHOD_ALIASES_OUTPUT);
+}

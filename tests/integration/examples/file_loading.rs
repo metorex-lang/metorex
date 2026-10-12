@@ -457,6 +457,27 @@ const INSTALLED_GEMS_NEWEST: &str = concat!(
     "false\n",
 );
 
+/// The expected output of both `require/bundler_setup` variants.
+const BUNDLER_SETUP: &str = concat!(
+    "\"1.0.0\"\n",
+    "[\"bundler-4.0.19\", \"shipping_rates-1.0.0\"]\n",
+    "[\"shipping_rates-1.0.0/lib\"]\n",
+    "can't activate shipping_rates (= 1.2.0), already activated shipping_rates-1.0.0. \
+Make sure all dependencies are added to Gemfile.\n",
+);
+
+#[test]
+fn test_require_bundler_setup_execution() {
+    let output = run_example_with_installed_gems("require/bundler_setup.rb");
+    assert_eq!(output, BUNDLER_SETUP);
+}
+
+#[test]
+fn test_require_bundler_setup_no_parens_execution() {
+    let output = run_example_with_installed_gems("require/bundler_setup_no_parens.rb");
+    assert_eq!(output, BUNDLER_SETUP);
+}
+
 #[test]
 fn test_require_installed_gems_newest_execution() {
     let output = run_example_with_installed_gems("require/installed_gems_newest.rb");
@@ -515,4 +536,19 @@ fn test_require_installed_gems_extensions_execution() {
 fn test_require_installed_gems_extensions_no_parens_execution() {
     let output = run_example_with_installed_gems("require/installed_gems_extensions_no_parens.rb");
     assert_eq!(output, INSTALLED_GEMS_EXTENSIONS);
+}
+
+/// The expected output of both `require/autoload_and_require` variants.
+const AUTOLOAD_AND_REQUIRE_OUTPUT: &str = "nil\n:north\nnil\n12.35\nnil\nnil\n";
+
+#[test]
+fn test_require_autoload_and_require_execution() {
+    let output = run_example("require/autoload_and_require.rb");
+    assert_eq!(output, AUTOLOAD_AND_REQUIRE_OUTPUT);
+}
+
+#[test]
+fn test_require_autoload_and_require_no_parens_execution() {
+    let output = run_example("require/autoload_and_require_no_parens.rb");
+    assert_eq!(output, AUTOLOAD_AND_REQUIRE_OUTPUT);
 }

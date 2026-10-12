@@ -112,7 +112,24 @@ impl VirtualMachine {
             }
             return Ok(Some(current));
         }
-        Ok(self.resolve_constant_in_scope(name))
+        if let Some(found) = self.resolve_constant_in_scope(name) {
+            return Ok(Some(found));
+        }
+        // A name one of the modules around the code autoloads, or Object
+        // does, is loaded now, innermost module first.
+        let mut scopes: Vec<Rc<crate::class::Class>> =
+            self.def_scope_stack.iter().rev().cloned().collect();
+        if let Some(Object::Class(object)) = self.globals().get("Object") {
+            scopes.push(object);
+        }
+        for scope in scopes {
+            if scope.lookup_autoload(name).is_some()
+                && let Some(loaded) = self.try_autoload_constant(&scope, name)?
+            {
+                return Ok(Some(loaded));
+            }
+        }
+        Ok(None)
     }
 
     /// Resolve a `Foo::Bar::Baz` qualified constant by walking from the

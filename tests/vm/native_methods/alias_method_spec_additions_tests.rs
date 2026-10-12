@@ -196,9 +196,12 @@ fn array_sort_by_orders_by_key() {
 }
 
 #[test]
-fn array_sort_by_without_block_raises() {
-    let err = run_err("[1, 2].sort_by");
-    assert!(err.to_lowercase().contains("block"));
+fn array_sort_by_without_block_sorts_through_with_index() {
+    let sorted = run("[1, 2].sort_by.with_index { |_, index| -index }");
+    assert_eq!(
+        sorted,
+        Some(Object::array(vec![Object::Int(2), Object::Int(1)]))
+    );
 }
 
 // ── Integer#times no block ───────────────────────────────────────────────

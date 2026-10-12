@@ -213,6 +213,14 @@ impl VirtualMachine {
             {
                 return result;
             }
+            // An exception's own methods, such as `SystemExit#status`, are
+            // answered by the exception's dispatch.
+            if matches!(receiver, Object::Exception(_))
+                && let Some(result) =
+                    self.call_exception_method(&receiver, &target, &arguments, position)?
+            {
+                return Ok(result);
+            }
             // `new` on a class is the constructor rather than an entry in any
             // native table, so it is reached through the class itself.
             if target == "new"

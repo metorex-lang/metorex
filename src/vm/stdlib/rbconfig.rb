@@ -27,6 +27,7 @@ module RbConfig
     "build_cpu" => cpu,
     "build_os" => os,
     "EXEEXT" => "",
+    "CROSS_COMPILING" => "no",
     "DLEXT" => os.include?("darwin") ? "bundle" : "so",
     # The extensions metorex carries are built into the binary, and none is
     # loaded from a file of its own.
@@ -75,3 +76,6 @@ module RbConfig
     __interpreter_path__()
   end
 end
+
+# Whether Ruby was built for another platform than the one building it.
+CROSS_COMPILING = nil unless defined? CROSS_COMPILING

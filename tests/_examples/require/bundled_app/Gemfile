@@ -1,0 +1,3 @@
+source "https://rubygems.org"
+
+gem "shipping_rates", "1.0.0"

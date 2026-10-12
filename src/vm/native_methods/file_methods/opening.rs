@@ -60,7 +60,12 @@ impl VirtualMachine {
                         _ => Ok(Some(opened)),
                     };
                 }
-                let path = self.directory_path_argument("open", &held, position)?;
+                // Asking a Pathname for its path is a call of its own, which
+                // must not take the block meant for the file.
+                let block_for_file = self.pending_block.take();
+                let path = self.directory_path_argument("open", &held, position);
+                self.pending_block = block_for_file;
+                let path = path?;
                 // The options may name the mode instead of a second argument
                 // naming it, which is what `mode:` is for.
                 let named_mode = match arguments.last() {

@@ -543,6 +543,10 @@ impl VirtualMachine {
                         message: msg,
                     });
                 }
+                // A constant the module already holds is left as it is.
+                if self.holds_constant_already(module_rc, &const_name) {
+                    return Ok(Some(Object::Nil));
+                }
                 let caller_file = self
                     .get_current_file()
                     .map(|p| p.display().to_string())
