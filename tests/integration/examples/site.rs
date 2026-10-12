@@ -8,3 +8,10 @@ fn test_site_home_snippet_execution() {
     let output = run_example("site/home.rb");
     assert_eq!(output, expected);
 }
+
+#[test]
+fn test_site_install_hello_execution() {
+    let expected = "Hello, world!\n[2, 4, 6]\n";
+    let output = run_example("site/install_hello.rb");
+    assert_eq!(output, expected);
+}
