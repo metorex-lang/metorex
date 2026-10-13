@@ -133,8 +133,8 @@ pub(crate) struct Cli {
     #[arg(short = 'E', long = "encoding", hide = true)]
     pub(crate) encoding_pair: Option<String>,
 
-    /// Ruby -K (the source encoding, which metorex reads as UTF-8 whatever
-    /// this names)
+    /// Ruby -K (the encoding the main script's literals are in, when it has
+    /// no magic comment naming one)
     #[arg(short = 'K', hide = true)]
     pub(crate) source_encoding: Option<String>,
 

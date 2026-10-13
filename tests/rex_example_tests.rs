@@ -19,7 +19,9 @@ mod rex {
     mod ordering;
     mod parallel;
     mod performance;
+    mod primitives;
     mod runner;
+    mod site;
 
     pub(crate) use crate::common::EXAMPLES_DIR;
     use std::process::Command;

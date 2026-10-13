@@ -297,6 +297,14 @@ pub fn set_default_source_encoding(named: &str) {
     }
 }
 
+/// The encoding `-K` named for the main script, when it named one.
+pub fn command_line_source_encoding() -> Option<String> {
+    DEFAULT_SOURCE_ENCODING
+        .read()
+        .ok()
+        .and_then(|held| held.clone())
+}
+
 fn default_source_encoding() -> String {
     DEFAULT_SOURCE_ENCODING
         .read()

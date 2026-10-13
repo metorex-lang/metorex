@@ -108,6 +108,23 @@ impl VirtualMachine {
             // nothing.
             || unsafe { init() },
         )?;
+        // `$LOADED_FEATURES` lists it, once it has loaded, under the
+        // platform's ending for a C extension, as MRI lists the one it built.
+        let ending = if cfg!(target_os = "macos") {
+            "bundle"
+        } else {
+            "so"
+        };
+        if self.lists_carried_features
+            && let Some(crate::object::Object::Array(features)) = self.globals().get("\"")
+        {
+            features
+                .borrow_mut()
+                .push(crate::object::Object::string(format!(
+                    "<metorex>/{stem}.{ending}"
+                )));
+        }
+
         Ok(true)
     }
 }

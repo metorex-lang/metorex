@@ -333,6 +333,7 @@ impl VirtualMachine {
         if !self.embedded_sources_run.insert(source.as_ptr() as usize) {
             return Ok(false);
         }
+
         let tokens = crate::lexer::Lexer::for_embedded_library(source).tokenize();
         let statements = crate::parser::Parser::new(tokens)
             .parse()
@@ -372,6 +373,16 @@ impl VirtualMachine {
         self.def_scope_stack = caller_def_scope;
         self.constant_homes = caller_constant_homes;
         result?;
+        // `$LOADED_FEATURES` lists it once it has loaded, under the name a
+        // backtrace gives its lines, so a program asking for a feature by
+        // its file name finds it as it would under MRI.
+        if self.lists_carried_features
+            && let Some(Object::Array(features)) = self.globals().get("\"")
+        {
+            features
+                .borrow_mut()
+                .push(Object::string(format!("<metorex>/{}.rb", name)));
+        }
         Ok(true)
     }
 

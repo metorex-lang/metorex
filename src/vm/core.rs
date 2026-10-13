@@ -326,8 +326,15 @@ pub struct VirtualMachine {
     /// stack when it started. A `def` written in the method's body installs
     /// there, unless a class body opened since is deeper.
     pub(crate) method_definees: HashMap<u64, (usize, Definee)>,
+    /// For a frame `instance_exec` gave a receiver to, how many frames were
+    /// borrowed when it did, so the receiver stands while no file has been
+    /// loaded since.
+    pub(crate) exec_definee_borrows: HashMap<u64, usize>,
     /// Whether Rex's native fast paths run, which `config.fast_paths` sets.
     pub(crate) fast_paths_enabled: bool,
+    /// Whether a library metorex carries is listed in `$LOADED_FEATURES` as
+    /// it loads, which the libraries loaded at startup are not.
+    pub(crate) lists_carried_features: bool,
     /// By method name, the methods Rex's fast paths stand in for, as Rex
     /// defined them.
     pub(crate) fast_path_originals: HashMap<String, Vec<Rc<crate::object::Method>>>,
@@ -670,7 +677,9 @@ impl VirtualMachine {
             toplevel_public: false,
             toplevel_frame: Some(TOP_LEVEL_FRAME),
             method_definees: HashMap::new(),
+            exec_definee_borrows: HashMap::new(),
             fast_paths_enabled: true,
+            lists_carried_features: true,
             fast_path_originals: HashMap::new(),
             fast_path_checks: HashMap::new(),
             fast_path_class_originals: Vec::new(),

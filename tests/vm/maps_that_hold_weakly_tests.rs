@@ -241,8 +241,8 @@ fn the_object_space_reports_the_size_of_an_object() {
         ),
         yes()
     );
-    // A name the object space keeps no account of still answers nil.
-    assert_eq!(run("ObjectSpace.count_objects"), Some(Object::Nil));
+    // The count of live objects is keyed as MRI keys it.
+    assert_eq!(run("ObjectSpace.count_objects.key?(:TOTAL)"), yes());
 }
 
 // ── A singleton is reached through instance alone ──────────────────────────

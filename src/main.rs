@@ -164,8 +164,10 @@ fn run_inline(cli: &Cli, code: &str, named: &str) -> ! {
         // A magic comment names the encoding the code's literals are
         // written in. Without one, code typed at the terminal is taken to be
         // in the locale's encoding.
-        let source_encoding =
-            metorex::lexer::named_source_encoding(code).or_else(metorex::vm::locale_encoding_name);
+        // `-K` names one too, ahead of the locale's.
+        let source_encoding = metorex::lexer::named_source_encoding(code)
+            .or_else(metorex::lexer::command_line_source_encoding)
+            .or_else(metorex::vm::locale_encoding_name);
         let lexer = Lexer::new(code).with_source_encoding(source_encoding.clone());
         let tokens = lexer.tokenize();
         let mut parser = Parser::new(tokens);
@@ -180,6 +182,13 @@ fn run_inline(cli: &Cli, code: &str, named: &str) -> ! {
             process::exit(vm.run_at_exit_handlers(1, None));
         }
         let program = parsed.unwrap_or_default();
+        // `--ast` dumps code given with `-e` the way it dumps a file.
+        if cli.ast {
+            for statement in &program {
+                println!("{:#?}", statement);
+            }
+            process::exit(0);
+        }
         // Code given on the command line is named `-e`, and code read from
         // standard input `-`, which is what a report and `__FILE__` say of it.
         vm.set_current_file(std::path::PathBuf::from(named));
@@ -352,7 +361,12 @@ fn real_main_after_inline(cli: Cli) {
 
     // Set the current file path and mark it as loaded
     vm.set_current_file(absolute_path.clone());
-    vm.set_source_encoding(metorex::lexer::named_source_encoding(&source));
+    // The main script's literals are in the encoding its magic comment names,
+    // or else the one `-K` names.
+    vm.set_source_encoding(
+        metorex::lexer::named_source_encoding(&source)
+            .or_else(metorex::lexer::command_line_source_encoding),
+    );
     // `__FILE__` reports the path the script was named by on the command
     // line, while everything that resolves a path uses the canonical one.
     vm.set_script_path(absolute_path.clone(), std::path::PathBuf::from(filename));

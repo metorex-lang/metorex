@@ -52,6 +52,23 @@ fn cli_ast_flag_dumps_ast() {
     assert!(stdout.contains("Expression"));
 }
 
+#[test]
+fn cli_ast_flag_dumps_code_given_with_e_without_running_it() {
+    let output = metorex_cmd()
+        .args(["--ast", "-e", "puts 1 + 2"])
+        .output()
+        .expect("failed to execute");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(
+        (
+            output.status.success(),
+            stdout.contains("BinaryOp"),
+            stdout.contains("\n3\n")
+        ),
+        (true, true, false)
+    );
+}
+
 // ============================================================================
 // --debug
 // ============================================================================
@@ -412,4 +429,29 @@ fn cli_i_flag_no_parens_multiple_libs() {
     );
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert_eq!(stdout.trim(), "hello world\n42");
+}
+
+#[test]
+fn cli_k_flag_names_the_encoding_of_a_script_s_literals() {
+    let output = metorex_cmd()
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .args(["-Ke", "tests/_examples/cli_flags/source_encoding.rb"])
+        .output()
+        .expect("failed to execute");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "#<Encoding:EUC-JP>\n#<Encoding:EUC-JP>\n"
+    );
+}
+
+#[test]
+fn cli_k_flag_names_the_encoding_of_code_given_with_e() {
+    let output = metorex_cmd()
+        .args(["-Ks", "-e", "p \"a\".encoding, __ENCODING__"])
+        .output()
+        .expect("failed to execute");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "#<Encoding:Windows-31J>\n#<Encoding:Windows-31J>\n"
+    );
 }

@@ -122,7 +122,7 @@ impl VirtualMachine {
                     // Ruby's fixnum object_id. Wrapping keeps the far ends of
                     // the range from overflowing.
                     Object::Int(n) => n.wrapping_mul(2).wrapping_add(1),
-                    Object::Bool(true) => 2,
+                    Object::Bool(true) => 20,
                     Object::Bool(false) => 0,
                     Object::Nil => 4,
                     Object::Symbol(name) => value_object_id("symbol", &name.as_str()),

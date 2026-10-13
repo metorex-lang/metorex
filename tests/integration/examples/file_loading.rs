@@ -567,3 +567,9 @@ fn test_require_kernel_autoload_receiver_no_parens_execution() {
     let output = run_example("require/kernel_autoload_receiver_no_parens.rb");
     assert_eq!(output, KERNEL_AUTOLOAD_RECEIVER_OUTPUT);
 }
+
+#[test]
+fn test_a_carried_library_is_listed_in_loaded_features() {
+    let output = run_example("loading/carried_library_features.rb");
+    assert_eq!(output, "true\nfalse\n[\"nkf\", \"nkf\", \"json\"]\ntrue\n");
+}

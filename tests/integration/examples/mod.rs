@@ -63,5 +63,6 @@ fn run_example(path: &str) -> String {
         String::from_utf8_lossy(&output.stderr)
     );
 
+    crate::common::record_example_output(path, &output.stdout);
     String::from_utf8(output.stdout).expect("stdout was not utf8")
 }

@@ -571,7 +571,9 @@ impl VirtualMachine {
         // A file loaded from inside a method runs its top level in that
         // method's frame, and a block run by `class_exec` runs in the
         // caller's. Neither is written in that method.
-        if self.borrowed_frames.contains(&Some(frame)) {
+        if self.borrowed_frames.contains(&Some(frame))
+            && self.exec_definee_borrows.get(&frame) != Some(&self.borrowed_frames.len())
+        {
             return None;
         }
         self.method_definees.get(&frame).cloned()

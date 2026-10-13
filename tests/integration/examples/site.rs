@@ -79,3 +79,119 @@ fn test_site_language_exceptions_execution() {
     let output = run_example("site/language_exceptions.rb");
     assert_eq!(output, expected);
 }
+
+#[test]
+fn test_site_differences_description_names_metorex_and_the_followed_release() {
+    let output = run_example("site/differences_description.rb");
+    assert!(
+        output.starts_with("metorex 4.0.6 (ruby-compatible) [")
+            && output.ends_with("]\n[\"ruby\", \"4.0.6\", \"4.0.6\"]\n"),
+        "{output}"
+    );
+}
+
+#[test]
+fn test_site_differences_disasm_lists_syntax_tree_nodes() {
+    let expected = "== disasm: #<ISeq:<compiled>@<compiled>:1 (1,0)-(1,13)>\n0000 lasgn :total                          \n0001 opcall :+                             \n0002 integer 2                             \n0003 list nil                              \n0004 integer 3                             \n0005 leave                                 \n";
+    let output = run_example("site/differences_disasm.rb");
+    assert_eq!(output, expected);
+}
+
+#[test]
+fn test_site_differences_vm_stat_is_all_zero() {
+    let output = run_example("site/differences_stat.rb");
+    assert_eq!(output, "true\n");
+}
+
+#[test]
+fn test_site_differences_gc_config_names_metorex() {
+    let output = run_example("site/differences_gc_config.rb");
+    assert_eq!(output, "\"metorex\"\n");
+}
+
+#[test]
+fn test_site_differences_a_waiting_thread_has_no_native_id() {
+    let output = run_example("site/differences_native_thread.rb");
+    assert_eq!(output, "true\nNilClass\n");
+}
+
+#[test]
+fn test_site_c_extensions_nkf_converts_shift_jis() {
+    let expected = "16\n#<Encoding:Shift_JIS>\n\"こんにちは、世界\"\n\"かたかな\"\n";
+    let output = run_example("site/c_extensions_nkf.rb");
+    assert_eq!(output, expected);
+}
+
+#[test]
+fn test_site_differences_disable_gems_keeps_error_highlight_and_did_you_mean() {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_metorex"))
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .args([
+            "--disable-gems",
+            &format!(
+                "{}/site/differences_disable_gems.rb",
+                crate::common::EXAMPLES_DIR
+            ),
+        ])
+        .output()
+        .expect("run metorex");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "\"constant\"\n\"constant\"\n"
+    );
+}
+
+#[test]
+fn test_site_beyond_assertions_execution() {
+    let output = run_example("site/beyond_assertions.rb");
+    assert_eq!(output, "Expected 5, got 4\n");
+}
+
+#[test]
+fn test_site_beyond_parse_execution() {
+    let output = run_example("site/beyond_parse.rb");
+    assert_eq!(output, "((rate * hours) + 40)\n(rate * (hours + 40))\n");
+}
+
+#[test]
+fn test_site_versions_execution() {
+    let output = run_example("site/versions.rb");
+    assert_eq!(
+        output,
+        format!(
+            "[\"ruby\", \"{0}\", \"{0}\"]\n3.13.6\n",
+            metorex::DEFAULT_RUBY_VERSION
+        )
+    );
+}
+
+#[test]
+fn test_site_versions_reports_the_release_metorex_ruby_version_names() {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_metorex"))
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .arg(format!("{}/site/versions.rb", crate::common::EXAMPLES_DIR))
+        .env("METOREX_RUBY_VERSION", "3.4.5")
+        .output()
+        .expect("failed to execute example");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "[\"ruby\", \"3.4.5\", \"3.4.5\"]\n3.13.6\n"
+    );
+}
+
+#[test]
+fn test_site_docs_nodes_execution() {
+    let output = run_example("site/docs_nodes.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"If\"\n",
+            "{\"type\" => \"Identifier\", \"name\" => \"ready\"}\n",
+            "\"total\"\n",
+            "\"sum\"\n",
+            "[{\"type\" => \"Symbol\", \"value\" => \"price\"}]\n",
+            "nil\n",
+            "{\"type\" => \"Unknown\"}\n"
+        )
+    );
+}

@@ -318,7 +318,7 @@ fn test_introspection_object_id() {
     let expected = concat!(
         "true\ntrue\nfalse\nfalse\n",
         "true\nfalse\ntrue\nfalse\ntrue\ntrue\ntrue\ntrue\n",
-        "4\n2\n0\n3\nfalse\nfalse\n"
+        "4\n20\n0\n3\nfalse\nfalse\n"
     );
     let output = run_example("introspection/object_id.rb");
     assert_eq!(output, expected);
@@ -329,7 +329,7 @@ fn test_introspection_object_id_no_parens() {
     let expected = concat!(
         "true\ntrue\nfalse\nfalse\n",
         "true\nfalse\ntrue\nfalse\ntrue\ntrue\ntrue\ntrue\n",
-        "4\n2\n0\n3\nfalse\nfalse\n"
+        "4\n20\n0\n3\nfalse\nfalse\n"
     );
     let output = run_example("introspection/object_id_no_parens.rb");
     assert_eq!(output, expected);
@@ -1160,5 +1160,14 @@ fn test_instance_variables_named_with_two_underscores_are_listed() {
     assert_eq!(
         output,
         "[:@__hidden, :@shown]\n\"#<Ledger: @__hidden=1>\"\n[:@__hidden]\n1\n[:@__hidden, :@__set]\n"
+    );
+}
+
+#[test]
+fn test_count_objects_answers_mri_s_keys_and_true_has_mri_s_id() {
+    let output = run_example("introspection/count_objects.rb");
+    assert_eq!(
+        output,
+        "[:TOTAL, :FREE, :T_OBJECT, :T_CLASS, :T_MODULE]\ntrue\ntrue\ntrue\ntrue\ntrue\n[0, 20, 4]\n"
     );
 }

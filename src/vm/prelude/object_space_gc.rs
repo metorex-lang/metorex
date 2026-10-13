@@ -92,13 +92,37 @@ module ObjectSpace
     found.size
   end
 
+  # How many objects of each kind are alive, keyed as MRI keys them. Metorex
+  # tracks the objects `each_object` can reach, which are instances,
+  # classes, and modules, and frees the rest as soon as the last reference
+  # goes, so nothing is ever counted free.
+  def self.count_objects(result = nil)
+    unless result.nil? || result.is_a?(Hash)
+      raise TypeError, "non-hash given"
+    end
+    counted = { T_OBJECT: 0, T_CLASS: 0, T_MODULE: 0 }
+    __each_object__(nil).each do |one|
+      # Asking the class rather than the object, which may answer `is_a?`
+      # in a way of its own.
+      kind = if Class === one then :T_CLASS
+             elsif Module === one then :T_MODULE
+             else :T_OBJECT
+             end
+      counted[kind] += 1
+    end
+    answer = result.nil? ? {} : result
+    answer[:TOTAL] = counted.values.sum
+    answer[:FREE] = 0
+    answer.update(counted)
+  end
+
   # Ruby 4.0 deprecated reading an object back from its id. Metorex keeps no
   # table of every live object, so only the values whose id is derived from
   # the value itself can be answered at all.
   def self._id2ref(id)
     warn "ObjectSpace._id2ref is deprecated", uplevel: 1, category: :deprecated
     return nil if id == 4
-    return true if id == 2
+    return true if id == 20
     return false if id == 0
     return (id - 1) / 2 if id.odd? || id < 0
     raise RangeError, "#{id} is not an id value"

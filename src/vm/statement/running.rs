@@ -18,7 +18,9 @@ impl VirtualMachine {
         self.statements_run = self.statements_run.wrapping_add(1);
         // Reading the clock costs more than a statement does, so the time
         // slice is checked every so many statements rather than at each.
-        if self.statements_run.is_multiple_of(STATEMENTS_BETWEEN_CLOCK_READS)
+        if self
+            .statements_run
+            .is_multiple_of(STATEMENTS_BETWEEN_CLOCK_READS)
             && self.turn_started.elapsed() >= TIME_SLICE
         {
             self.turn_started = std::time::Instant::now();

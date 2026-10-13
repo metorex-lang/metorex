@@ -1,0 +1,27 @@
+
+Ledger
+  starts at zero
+  refuses an entry of zero
+  rounds a balance (FAILED - 1)
+  with two entries
+    sums them
+    is not overdrawn
+
+Failures:
+
+  1) Ledger rounds a balance
+     Failure/Error: expect(ledger.balance).to eq(6)
+
+       expected: 6
+            got: 7
+
+       (compared using ==)
+     # ./spec/ledger_spec.rb:28:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+5 examples, 1 failure
+
+Failed examples:
+
+rspec ./spec/ledger_spec.rb:26 # Ledger rounds a balance
+exit 1

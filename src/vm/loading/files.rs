@@ -101,7 +101,11 @@ impl VirtualMachine {
     /// binds is not one the script or TOPLEVEL_BINDING goes on to see.
     pub fn require_startup_library(&mut self, name: &str) -> Result<(), MetorexError> {
         self.environment_mut().push_isolated_scope();
+        // MRI loads these through RubyGems, and lists them under paths of
+        // their own, so they are left out of `$LOADED_FEATURES` here.
+        let listing = std::mem::replace(&mut self.lists_carried_features, false);
         let answer = self.require_library(name);
+        self.lists_carried_features = listing;
         self.environment_mut().pop_scope();
         answer
     }

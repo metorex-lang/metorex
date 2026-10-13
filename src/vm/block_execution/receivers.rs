@@ -296,12 +296,21 @@ impl VirtualMachine {
             Some(running)
                 if !crate::vm::native_methods::object_methods::refuses_a_singleton(&receiver) =>
             {
-                Some(self.method_definees.insert(
-                    running,
-                    (
-                        self.def_scope_stack.len(),
-                        crate::vm::core::Definee::SingletonOf(receiver.clone()),
+                // A frame the main script or a loaded file runs in counts as
+                // borrowed, and the receiver still stands for code the block
+                // runs until another file is loaded inside it.
+                let replaced_borrows = self
+                    .exec_definee_borrows
+                    .insert(running, self.borrowed_frames.len());
+                Some((
+                    self.method_definees.insert(
+                        running,
+                        (
+                            self.def_scope_stack.len(),
+                            crate::vm::core::Definee::SingletonOf(receiver.clone()),
+                        ),
                     ),
+                    replaced_borrows,
                 ))
             }
             _ => None,
@@ -432,13 +441,23 @@ impl VirtualMachine {
         }
         self.current_source_file = saved_source_file;
         self.current_source_encoding = saved_source_encoding;
-        if let (Some(running), Some(previous)) = (running_frame, replaced_definee) {
+        if let (Some(running), Some((previous, previous_borrows))) =
+            (running_frame, replaced_definee)
+        {
             match previous {
                 Some(entry) => {
                     self.method_definees.insert(running, entry);
                 }
                 None => {
                     self.method_definees.remove(&running);
+                }
+            }
+            match previous_borrows {
+                Some(count) => {
+                    self.exec_definee_borrows.insert(running, count);
+                }
+                None => {
+                    self.exec_definee_borrows.remove(&running);
                 }
             }
         }

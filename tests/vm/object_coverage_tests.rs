@@ -408,7 +408,7 @@ fn int_object_id() {
 
 #[test]
 fn true_object_id() {
-    assert_eq!(run("true.object_id"), Some(Object::Int(2)));
+    assert_eq!(run("true.object_id"), Some(Object::Int(20)));
 }
 
 #[test]

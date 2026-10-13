@@ -729,3 +729,28 @@ fn test_a_keyword_value_may_stand_on_the_line_after_its_label() {
         "[:level, [:fatal, :warn], :info]\n[:mode, :plain, 1]\n[:short, :held, 2]\n{level: 2}\n{level: 1}\n"
     );
 }
+
+#[test]
+fn test_an_evaluated_def_in_a_top_level_instance_exec_lands_on_the_receiver() {
+    let output = run_example("methods/instance_exec_definee/top_level.rb");
+    assert_eq!(output, "[:balance]\nfalse\n[:balance]\ntrue\n");
+}
+
+#[test]
+fn test_parse_answers_a_node_for_each_kind_of_statement_and_expression() {
+    let output = run_example("parser/node_shapes.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "{\"type\" => \"InterpolatedString\"}\n",
+            "{\"type\" => \"Unknown\"}\n",
+            "{\"type\" => \"While\", \"condition\" => {\"type\" => \"Identifier\", \"name\" => \"x\"}, \"body\" => [{\"type\" => \"Identifier\", \"name\" => \"y\"}]}\n",
+            "{\"type\" => \"For\", \"variable\" => \"i\", \"iterable\" => {\"type\" => \"Identifier\", \"name\" => \"list\"}, \"body\" => [{\"type\" => \"Identifier\", \"name\" => \"i\"}]}\n",
+            "{\"type\" => \"Raise\", \"exception\" => {\"type\" => \"Identifier\", \"name\" => \"Error\"}}\n",
+            "[{\"type\" => \"Continue\"}, {\"type\" => \"Break\"}]\n",
+            "{\"type\" => \"Index\", \"array\" => {\"type\" => \"Identifier\", \"name\" => \"list\"}, \"index\" => {\"type\" => \"IntLiteral\", \"value\" => 0}}\n",
+            "{\"type\" => \"UnaryOp\", \"op\" => \"-\", \"operand\" => {\"type\" => \"Identifier\", \"name\" => \"x\"}}\n",
+            "{\"type\" => \"UnaryOp\", \"op\" => \"!\", \"operand\" => {\"type\" => \"Identifier\", \"name\" => \"x\"}}\n"
+        )
+    );
+}

@@ -166,7 +166,7 @@ fn object_id_on_integer_follows_fixnum_formula() {
 #[test]
 fn object_id_on_true_is_two() {
     let result = run("true.object_id");
-    assert_eq!(result, Some(Object::Int(2)));
+    assert_eq!(result, Some(Object::Int(20)));
 }
 
 #[test]

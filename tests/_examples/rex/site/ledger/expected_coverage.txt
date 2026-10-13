@@ -1,0 +1,24 @@
+..F..
+
+Failures:
+
+  1) Ledger rounds a balance
+     Failure/Error: expect(ledger.balance).to eq(6)
+
+       expected: 6
+            got: 7
+
+       (compared using ==)
+     # ./spec/ledger_spec.rb:28:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+5 examples, 1 failure
+
+Failed examples:
+
+rspec ./spec/ledger_spec.rb:26 # Ledger rounds a balance
+
+
+Coverage: 100.00% of lines (9 of 9) and 100.00% of branches (2 of 2) in 1 file
+  lib/ledger.rb  100.00% of lines  100.00% of branches
+exit 1
