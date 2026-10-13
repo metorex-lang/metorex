@@ -635,3 +635,30 @@ fn test_encodings_c_locale_no_parens_execution() {
     let output = run_example_in_the_c_locale("encodings/c_locale_no_parens.rb", "arg");
     assert_eq!(output, C_LOCALE_OUTPUT);
 }
+
+#[test]
+fn test_utf16_strings_are_built_and_sliced_a_character_at_a_time() {
+    let output = run_example("encodings/utf16_string_building.rb");
+    assert_eq!(
+        output,
+        "[#<Encoding:UTF-16LE>, \" carté\"]\n[#<Encoding:UTF-16LE>, \" carté\"]\n\"-carté\"\n[\" a\", \"+carté\", \" b\"]\n[#<Encoding:UTF-16LE>, \" a\\n+carté\\n b\"]\n\"@@ -1 +1 @@\\n a\\n+carté\\n b\"\n[#<Encoding:UTF-16LE>, \"  carté\"]\n[\"c\", \"ar\", \"é\"]\n"
+    );
+}
+
+#[test]
+fn test_interpolating_utf16_text_keeps_utf16_even_for_ascii_text() {
+    let output = run_example("encodings/utf16_interpolation.rb");
+    assert_eq!(
+        output,
+        "#<Encoding:UTF-16LE>\n#<Encoding:UTF-16LE>\n#<Encoding:UTF-16LE>\n#<Encoding:UTF-16LE>\n"
+    );
+}
+
+#[test]
+fn test_utf16_lines_join_and_append_in_utf16() {
+    let output = run_example("encodings/utf16_join.rb");
+    assert_eq!(
+        output,
+        "[#<Encoding:UTF-16LE>, \"! carté\"]\n[#<Encoding:UTF-16LE>, \"! carté\\ncarté\"]\n\"--- 1 ----\\n! carté\"\n"
+    );
+}

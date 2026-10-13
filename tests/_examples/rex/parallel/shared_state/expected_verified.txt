@@ -1,0 +1,23 @@
+.F
+
+Failures:
+
+  1) a settings reader sees the theme the writer set
+     Failure/Error: expect($theme).to eq(:dark)
+
+       expected: :dark
+            got: nil
+
+       (compared using ==)
+     # ./spec/state_spec.rb:9:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+2 examples, 1 failure
+
+Failed examples:
+
+rspec ./spec/state_spec.rb:8 # a settings reader sees the theme the writer set
+
+WARNING: These examples had a different outcome when the suite ran serially in the same order, which points at state they share with a group another worker ran:
+  ./spec/state_spec.rb[2:1] failed in parallel and passed serially
+exit 1

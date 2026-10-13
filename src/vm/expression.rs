@@ -163,8 +163,14 @@ impl VirtualMachine {
                         }
                         _ => buffer.push_str(&value.to_string()),
                     }
+                    // A UTF-16 or UTF-32 piece spells even ASCII text in bytes
+                    // of its own, so its encoding carries whatever it holds.
                     if let Object::String(spelled) = &value
-                        && !spelled.as_str().is_ascii()
+                        && (!spelled.as_str().is_ascii()
+                            || crate::vm::native_methods::string_methods::wide_encoding(
+                                &spelled.encoding_name(),
+                            )
+                            .is_some())
                     {
                         // Two pieces that each hold something outside ASCII
                         // have to be written in the same encoding, since the
@@ -900,17 +906,25 @@ impl VirtualMachine {
         then_branch: &[Statement],
         elsif_branches: &[ElsifBranch],
         else_branch: &Option<Vec<Statement>>,
+        position: Position,
     ) -> Result<Object, MetorexError> {
         if is_truthy(&self.evaluate_condition(condition)?) {
-            return self.evaluate_branch_value(then_branch);
+            self.coverage_branch(position, 0);
+            return self.evaluate_branch_value(then_branch, condition.position().line);
         }
-        for elsif in elsif_branches {
+        for (index, elsif) in elsif_branches.iter().enumerate() {
+            // Ruby counts an `elsif` line each time its condition is tested.
+            if self.coverage.is_some() {
+                self.coverage_count(elsif.position.line);
+            }
             if is_truthy(&self.evaluate_condition(&elsif.condition)?) {
-                return self.evaluate_branch_value(&elsif.body);
+                self.coverage_branch(position, index + 1);
+                return self.evaluate_branch_value(&elsif.body, elsif.position.line);
             }
         }
+        self.coverage_branch(position, elsif_branches.len() + 1);
         if let Some(else_stmts) = else_branch {
-            return self.evaluate_branch_value(else_stmts);
+            return self.evaluate_branch_value(else_stmts, condition.position().line);
         }
         Ok(Object::Nil)
     }
@@ -921,24 +935,32 @@ impl VirtualMachine {
         condition: &Expression,
         then_branch: &[Statement],
         else_branch: &Option<Vec<Statement>>,
+        position: Position,
     ) -> Result<Object, MetorexError> {
         if !is_truthy(&self.evaluate_condition(condition)?) {
-            return self.evaluate_branch_value(then_branch);
+            self.coverage_branch(position, 0);
+            return self.evaluate_branch_value(then_branch, condition.position().line);
         }
+        self.coverage_branch(position, 1);
         if let Some(else_stmts) = else_branch {
-            return self.evaluate_branch_value(else_stmts);
+            return self.evaluate_branch_value(else_stmts, condition.position().line);
         }
         Ok(Object::Nil)
     }
 
     /// Execute a list of statements and return the value of the last expression statement.
-    fn evaluate_branch_value(&mut self, stmts: &[Statement]) -> Result<Object, MetorexError> {
+    fn evaluate_branch_value(
+        &mut self,
+        stmts: &[Statement],
+        enclosing_line: usize,
+    ) -> Result<Object, MetorexError> {
         use super::ControlFlow;
         self.environment_mut().push_scope();
         let result = (|| -> Result<Object, MetorexError> {
             let mut last_value = Object::Nil;
             for stmt in stmts {
                 if let Statement::Expression { expression, .. } = stmt {
+                    self.coverage_count_inline(stmt, enclosing_line);
                     last_value = self.evaluate_expression(expression)?;
                     continue;
                 }

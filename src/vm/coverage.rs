@@ -30,6 +30,9 @@ pub(crate) struct CoverageRun {
     /// Every method defined in a measured file while the run was on, with the
     /// span it was written across and how often it has been called.
     methods: Vec<MethodSpan>,
+    /// The branch sites of each file measured, by the path it was loaded
+    /// under.
+    branches: Vec<(String, FileBranches)>,
 }
 
 /// A method as the `methods` mode reports it: where it sits, and how often it
@@ -54,6 +57,7 @@ impl VirtualMachine {
             eval_too,
             files: Vec::new(),
             methods: Vec::new(),
+            branches: Vec::new(),
         });
     }
 
@@ -75,9 +79,13 @@ impl VirtualMachine {
         let counted = source.lines().count().max(1);
         let mut lines = vec![None; counted];
         mark(body, &mut lines);
+        let mut sites = FileBranches::default();
+        register_branches(body, &mut sites);
         if let Some(run) = self.coverage.as_mut() {
             run.files.retain(|(held, _)| held != path);
             run.files.push((path.to_string(), lines));
+            run.branches.retain(|(held, _)| held != path);
+            run.branches.push((path.to_string(), sites));
         }
     }
 
@@ -129,6 +137,88 @@ impl VirtualMachine {
         if let Some(Some(held)) = lines.get_mut(line - 1) {
             *held += 1;
         }
+    }
+
+    /// Count a statement evaluated in place rather than through
+    /// `execute_statement`, unless it sits on the line of the `if` or `case`
+    /// holding it, which Ruby counts once.
+    pub(crate) fn coverage_count_inline(&mut self, statement: &Statement, enclosing_line: usize) {
+        let line = statement.position().line;
+        if self.coverage.is_some() && line != enclosing_line {
+            self.coverage_count(line);
+        }
+    }
+
+    /// Count the line of a `case` arm written as one expression, which runs
+    /// without passing through a statement of its own. An arm of several
+    /// statements counts them as they run.
+    pub(crate) fn coverage_count_arm(&mut self, body: &Expression) {
+        if self.coverage.is_none() || matches!(body, Expression::BeginRescue { .. }) {
+            return;
+        }
+        self.coverage_count(body.position().line);
+    }
+
+    /// Count one run of arm `arm` of the branch site written at `position` in
+    /// the file being run now.
+    pub(crate) fn coverage_branch(&mut self, position: Position, arm: usize) {
+        if self.coverage.is_none() {
+            return;
+        }
+        let Some(path) = self.current_source_file.clone() else {
+            return;
+        };
+        let Some(run) = self.coverage.as_mut() else {
+            return;
+        };
+        let Some((_, file)) = run.branches.iter_mut().find(|(held, _)| *held == path) else {
+            return;
+        };
+        let Some(&at) = file.by_offset.get(&(position.offset, position.line)) else {
+            return;
+        };
+        if let Some(held) = file.sites[at].arms.get_mut(arm) {
+            held.count += 1;
+        }
+    }
+
+    /// Every branch site counted so far: for each file, each site's kind
+    /// and line with each arm's kind, line, and count. Rex reads this to
+    /// report branch coverage.
+    pub(crate) fn coverage_branch_report(&self) -> Object {
+        let Some(run) = self.coverage.as_ref() else {
+            return Object::array(Vec::new());
+        };
+        Object::array(
+            run.branches
+                .iter()
+                .map(|(path, file)| {
+                    let sites = file
+                        .sites
+                        .iter()
+                        .map(|site| {
+                            let arms = site
+                                .arms
+                                .iter()
+                                .map(|arm| {
+                                    Object::array(vec![
+                                        Object::symbol(arm.kind.to_string()),
+                                        Object::Int(arm.line as i64),
+                                        Object::Int(arm.count as i64),
+                                    ])
+                                })
+                                .collect();
+                            Object::array(vec![
+                                Object::symbol(site.kind.to_string()),
+                                Object::Int(site.line as i64),
+                                Object::array(arms),
+                            ])
+                        })
+                        .collect();
+                    Object::array(vec![Object::string(path.clone()), Object::array(sites)])
+                })
+                .collect(),
+        )
     }
 
     /// Record a method written in a measured file, which the `methods` mode
@@ -213,6 +303,13 @@ impl VirtualMachine {
             }
             for held in run.methods.iter_mut() {
                 held.calls = 0;
+            }
+            for (_, file) in run.branches.iter_mut() {
+                for site in file.sites.iter_mut() {
+                    for arm in site.arms.iter_mut() {
+                        arm.count = 0;
+                    }
+                }
             }
         }
 
@@ -299,6 +396,10 @@ fn collect(body: &[Statement], found: &mut Vec<usize>) {
         // the body inside it.
         if !matches!(statement, Statement::Begin { .. } | Statement::Block { .. }) {
             found.push(statement.position().line);
+        }
+        // An `elsif` line counts as its condition is tested.
+        if let Statement::If { elsif_branches, .. } = statement {
+            found.extend(elsif_branches.iter().map(|branch| branch.position.line));
         }
         for inner in nested_bodies(statement) {
             collect(inner, found);
@@ -420,6 +521,469 @@ fn gather_blocks<'a>(expression: &'a Expression, found: &mut Vec<&'a [Statement]
             }
             if let Some(block) = trailing_block {
                 gather_blocks(block, found);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// One place a run can go more than one way: an `if`, `unless`, `case`,
+/// `while`, or `&.`, with how often each of its arms ran.
+#[derive(Clone)]
+pub(crate) struct BranchSite {
+    pub(crate) kind: &'static str,
+    pub(crate) line: usize,
+    pub(crate) arms: Vec<BranchArm>,
+}
+
+#[derive(Clone)]
+pub(crate) struct BranchArm {
+    pub(crate) kind: &'static str,
+    pub(crate) line: usize,
+    pub(crate) count: u64,
+}
+
+/// The branch sites written in one file, keyed by where each starts.
+#[derive(Default, Clone)]
+pub(crate) struct FileBranches {
+    pub(crate) sites: Vec<BranchSite>,
+    pub(crate) by_offset: std::collections::HashMap<(usize, usize), usize>,
+}
+
+impl FileBranches {
+    fn add(&mut self, kind: &'static str, position: Position, arms: Vec<(&'static str, usize)>) {
+        let key = (position.offset, position.line);
+        if self.by_offset.contains_key(&key) {
+            return;
+        }
+        self.by_offset.insert(key, self.sites.len());
+        self.sites.push(BranchSite {
+            kind,
+            line: position.line,
+            arms: arms
+                .into_iter()
+                .map(|(kind, line)| BranchArm {
+                    kind,
+                    line,
+                    count: 0,
+                })
+                .collect(),
+        });
+    }
+}
+
+/// The line an arm's first statement is written on, or `fallback` for an
+/// arm with nothing in it.
+fn first_line(body: &[Statement], fallback: usize) -> usize {
+    body.first()
+        .map(|statement| statement.position().line)
+        .unwrap_or(fallback)
+}
+
+fn if_arms(
+    then_branch: &[Statement],
+    elsif_branches: &[crate::ast::ElsifBranch],
+    else_branch: &Option<Vec<Statement>>,
+    line: usize,
+) -> Vec<(&'static str, usize)> {
+    let mut arms = vec![("then", first_line(then_branch, line))];
+    for branch in elsif_branches {
+        arms.push(("elsif", first_line(&branch.body, branch.position.line)));
+    }
+    arms.push((
+        "else",
+        else_branch
+            .as_deref()
+            .map_or(line, |body| first_line(body, line)),
+    ));
+    arms
+}
+
+/// Every branch site in `body`, at any depth.
+pub(crate) fn register_branches(body: &[Statement], found: &mut FileBranches) {
+    for statement in body {
+        branch_statement(statement, found);
+    }
+}
+
+fn branch_statement(statement: &Statement, found: &mut FileBranches) {
+    match statement {
+        Statement::Expression { expression, .. } => branch_expression(expression, found),
+        Statement::Assignment { target, value, .. } => {
+            branch_expression(target, found);
+            branch_expression(value, found);
+        }
+        Statement::MultipleAssignment {
+            targets, values, ..
+        } => {
+            for held in targets.iter().chain(values) {
+                branch_expression(held, found);
+            }
+        }
+        Statement::While {
+            condition,
+            body,
+            position,
+        }
+        | Statement::DoWhile {
+            condition,
+            body,
+            position,
+        } => {
+            found.add(
+                "while",
+                *position,
+                vec![("body", first_line(body, position.line))],
+            );
+            branch_expression(condition, found);
+            register_branches(body, found);
+        }
+        Statement::For { iterable, body, .. } => {
+            branch_expression(iterable, found);
+            register_branches(body, found);
+        }
+        Statement::BeginBlock { body, .. } => register_branches(body, found),
+        Statement::FunctionDef {
+            parameters, body, ..
+        }
+        | Statement::MethodDef {
+            parameters, body, ..
+        } => {
+            for parameter in parameters {
+                if let Some(default) = &parameter.default_value {
+                    branch_expression(default, found);
+                }
+            }
+            register_branches(body, found);
+        }
+        Statement::ClassDef {
+            namespace,
+            superclass_expression,
+            body,
+            ..
+        } => {
+            for held in namespace.iter().chain(superclass_expression.iter()) {
+                branch_expression(held, found);
+            }
+            register_branches(body, found);
+        }
+        Statement::ModuleDef { body, .. }
+        | Statement::Block {
+            statements: body, ..
+        } => register_branches(body, found),
+        Statement::If {
+            condition,
+            then_branch,
+            elsif_branches,
+            else_branch,
+            position,
+        } => {
+            found.add(
+                "if",
+                *position,
+                if_arms(then_branch, elsif_branches, else_branch, position.line),
+            );
+            branch_expression(condition, found);
+            register_branches(then_branch, found);
+            for branch in elsif_branches {
+                branch_expression(&branch.condition, found);
+                register_branches(&branch.body, found);
+            }
+            if let Some(body) = else_branch {
+                register_branches(body, found);
+            }
+        }
+        Statement::Unless {
+            condition,
+            then_branch,
+            else_branch,
+            position,
+        } => {
+            found.add(
+                "unless",
+                *position,
+                vec![
+                    ("then", first_line(then_branch, position.line)),
+                    (
+                        "else",
+                        else_branch
+                            .as_deref()
+                            .map_or(position.line, |body| first_line(body, position.line)),
+                    ),
+                ],
+            );
+            branch_expression(condition, found);
+            register_branches(then_branch, found);
+            if let Some(body) = else_branch {
+                register_branches(body, found);
+            }
+        }
+        Statement::Match {
+            expression,
+            cases,
+            position,
+        }
+        | Statement::CaseIn {
+            expression,
+            cases,
+            position,
+        } => {
+            let pattern_kind = if matches!(statement, Statement::Match { .. }) {
+                "when"
+            } else {
+                "in"
+            };
+            let mut arms: Vec<(&'static str, usize)> = cases
+                .iter()
+                .map(|case| {
+                    if matches!(case.pattern, crate::ast::MatchPattern::Wildcard) {
+                        ("else", first_line(&case.body, case.position.line))
+                    } else {
+                        (pattern_kind, first_line(&case.body, case.position.line))
+                    }
+                })
+                .collect();
+            let has_else = cases
+                .last()
+                .is_some_and(|case| matches!(case.pattern, crate::ast::MatchPattern::Wildcard));
+            if !has_else {
+                arms.push(("else", position.line));
+            }
+            found.add("case", *position, arms);
+            branch_expression(expression, found);
+            for case in cases {
+                if let Some(guard) = &case.guard {
+                    branch_expression(guard, found);
+                }
+                register_branches(&case.body, found);
+            }
+        }
+        Statement::Return {
+            value: Some(held), ..
+        }
+        | Statement::Raise {
+            exception: Some(held),
+            ..
+        } => branch_expression(held, found),
+        Statement::Break {
+            value: Some(held), ..
+        }
+        | Statement::Continue {
+            value: Some(held), ..
+        } => branch_expression(held, found),
+        Statement::Begin {
+            body,
+            rescue_clauses,
+            else_clause,
+            ensure_block,
+            ..
+        } => {
+            register_branches(body, found);
+            for clause in rescue_clauses {
+                register_branches(&clause.body, found);
+            }
+            for held in else_clause.iter().chain(ensure_block.iter()) {
+                register_branches(held, found);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn branch_expression(expression: &Expression, found: &mut FileBranches) {
+    match expression {
+        Expression::BinaryOp { left, right, .. } => {
+            branch_expression(left, found);
+            branch_expression(right, found);
+        }
+        Expression::UnaryOp { operand, .. } => branch_expression(operand, found),
+        Expression::PatternTest { value, .. } => branch_expression(value, found),
+        Expression::Call {
+            callee,
+            arguments,
+            trailing_block,
+            ..
+        } => {
+            branch_expression(callee, found);
+            for argument in arguments {
+                branch_expression(argument, found);
+            }
+            if let Some(block) = trailing_block {
+                branch_expression(block, found);
+            }
+        }
+        Expression::MethodCall {
+            receiver,
+            method,
+            arguments,
+            trailing_block,
+            position,
+        } => {
+            if method == crate::parser::SAFE_CALL {
+                found.add(
+                    "&.",
+                    *position,
+                    vec![("then", position.line), ("else", position.line)],
+                );
+            }
+            branch_expression(receiver, found);
+            for argument in arguments {
+                branch_expression(argument, found);
+            }
+            if let Some(block) = trailing_block {
+                branch_expression(block, found);
+            }
+        }
+        Expression::Super {
+            arguments,
+            trailing_block,
+            ..
+        } => {
+            for argument in arguments {
+                branch_expression(argument, found);
+            }
+            if let Some(block) = trailing_block {
+                branch_expression(block, found);
+            }
+        }
+        Expression::Yield { arguments, .. }
+        | Expression::Array {
+            elements: arguments,
+            ..
+        } => {
+            for argument in arguments {
+                branch_expression(argument, found);
+            }
+        }
+        Expression::Index { array, index, .. } => {
+            branch_expression(array, found);
+            branch_expression(index, found);
+        }
+        Expression::Dictionary { entries, .. } => {
+            for (key, value) in entries {
+                branch_expression(key, found);
+                branch_expression(value, found);
+            }
+        }
+        Expression::Lambda {
+            parameter_defaults,
+            body,
+            ..
+        } => {
+            for (_, default) in parameter_defaults {
+                branch_expression(default, found);
+            }
+            register_branches(body, found);
+        }
+        Expression::Grouped { expression, .. }
+        | Expression::Splat { expression, .. }
+        | Expression::KeywordSplat { expression, .. }
+        | Expression::BlockArg { expression, .. }
+        | Expression::Defined { expression, .. } => branch_expression(expression, found),
+        Expression::ScopeResolution { namespace, .. } => branch_expression(namespace, found),
+        Expression::SingletonClass { target, body, .. } => {
+            branch_expression(target, found);
+            register_branches(body, found);
+        }
+        Expression::Range { start, end, .. } => {
+            branch_expression(start, found);
+            branch_expression(end, found);
+        }
+        Expression::InterpolatedString { parts, .. } => {
+            for part in parts {
+                if let crate::ast::InterpolationPart::Expression(held) = part {
+                    branch_expression(held, found);
+                }
+            }
+        }
+        Expression::BeginRescue {
+            body,
+            rescue_clauses,
+            else_clause,
+            ensure_block,
+            ..
+        } => {
+            register_branches(body, found);
+            for clause in rescue_clauses {
+                register_branches(&clause.body, found);
+            }
+            for held in else_clause.iter().chain(ensure_block.iter()) {
+                register_branches(held, found);
+            }
+        }
+        Expression::If {
+            condition,
+            then_branch,
+            elsif_branches,
+            else_branch,
+            position,
+        } => {
+            found.add(
+                "if",
+                *position,
+                if_arms(then_branch, elsif_branches, else_branch, position.line),
+            );
+            branch_expression(condition, found);
+            register_branches(then_branch, found);
+            for branch in elsif_branches {
+                branch_expression(&branch.condition, found);
+                register_branches(&branch.body, found);
+            }
+            if let Some(body) = else_branch {
+                register_branches(body, found);
+            }
+        }
+        Expression::Unless {
+            condition,
+            then_branch,
+            else_branch,
+            position,
+        } => {
+            found.add(
+                "unless",
+                *position,
+                vec![
+                    ("then", first_line(then_branch, position.line)),
+                    (
+                        "else",
+                        else_branch
+                            .as_deref()
+                            .map_or(position.line, |body| first_line(body, position.line)),
+                    ),
+                ],
+            );
+            branch_expression(condition, found);
+            register_branches(then_branch, found);
+            if let Some(body) = else_branch {
+                register_branches(body, found);
+            }
+        }
+        Expression::Case {
+            expression,
+            cases,
+            else_case,
+            position,
+        } => {
+            let mut arms: Vec<(&'static str, usize)> = cases
+                .iter()
+                .map(|case| ("when", case.body.position().line))
+                .collect();
+            arms.push((
+                "else",
+                else_case
+                    .as_ref()
+                    .map_or(position.line, |held| held.position().line),
+            ));
+            found.add("case", *position, arms);
+            branch_expression(expression, found);
+            for case in cases {
+                if let Some(guard) = &case.guard {
+                    branch_expression(guard, found);
+                }
+                branch_expression(&case.body, found);
+            }
+            if let Some(held) = else_case {
+                branch_expression(held, found);
             }
         }
         _ => {}

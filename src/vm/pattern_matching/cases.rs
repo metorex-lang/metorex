@@ -16,7 +16,7 @@ impl VirtualMachine {
         self.warn_duplicated_when_clauses(cases, position)?;
 
         // Try each case in order
-        for case in cases {
+        for (index, case) in cases.iter().enumerate() {
             // Try to match the pattern
             let mut bindings: HashMap<String, Object> = HashMap::new();
             if self.match_pattern(&case.pattern, &match_value, &mut bindings, position)? {
@@ -24,6 +24,7 @@ impl VirtualMachine {
                 if !self.evaluate_guard_with_bindings(case.guard.as_ref(), &bindings)? {
                     continue;
                 }
+                self.coverage_branch(position, index);
 
                 // Ruby case/when branches do NOT introduce a new scope — assignments
                 // leak out, matching Ruby semantics. Pattern bindings are applied in-place.
@@ -34,6 +35,7 @@ impl VirtualMachine {
                 let mut last_value = Object::Nil;
                 for statement in &case.body {
                     if let Statement::Expression { expression, .. } = statement {
+                        self.coverage_count_inline(statement, position.line);
                         last_value = self.evaluate_expression(expression)?;
                         continue;
                     }
@@ -53,6 +55,7 @@ impl VirtualMachine {
 
         // No branch matched and there is no `else`. Ruby's `case/when`
         // evaluates to nil; only `case/in` raises.
+        self.coverage_branch(position, cases.len());
         let _ = match_value;
         Ok(ControlFlow::Value(Object::Nil))
     }
@@ -107,7 +110,7 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<ControlFlow, MetorexError> {
         let match_value = match_value.clone();
-        for case in cases {
+        for (index, case) in cases.iter().enumerate() {
             let mut bindings: HashMap<String, Object> = HashMap::new();
             self.pattern_failure = None;
             if self.match_pattern(&case.pattern, &match_value, &mut bindings, position)? {
@@ -122,10 +125,12 @@ impl VirtualMachine {
                     continue;
                 }
 
+                self.coverage_branch(position, index);
                 let result = (|| -> Result<ControlFlow, MetorexError> {
                     let mut last_value = Object::Nil;
                     for statement in &case.body {
                         if let Statement::Expression { expression, .. } = statement {
+                            self.coverage_count_inline(statement, position.line);
                             last_value = self.evaluate_expression(expression)?;
                             continue;
                         }
@@ -204,13 +209,13 @@ impl VirtualMachine {
         expression: &Expression,
         cases: &[ExprMatchCase],
         else_case: Option<&Expression>,
-        _position: Position,
+        position: Position,
     ) -> Result<Object, MetorexError> {
         // Evaluate the value to match against
         let match_value = self.evaluate_expression(expression)?;
 
         // Try each case in order
-        for case in cases {
+        for (index, case) in cases.iter().enumerate() {
             // Try to match the pattern
             let mut bindings: HashMap<String, Object> = HashMap::new();
             if self.match_pattern(&case.pattern, &match_value, &mut bindings, case.position)? {
@@ -220,9 +225,11 @@ impl VirtualMachine {
                 }
 
                 // Pattern and guard matched! Evaluate the body expression with bindings
+                self.coverage_branch(position, index);
                 self.environment_mut().push_scope();
                 self.apply_pattern_bindings(&bindings);
 
+                self.coverage_count_arm(&case.body);
                 let result = self.evaluate_expression(&case.body);
                 self.environment_mut().pop_scope();
 
@@ -231,7 +238,9 @@ impl VirtualMachine {
         }
 
         // No pattern matched - evaluate else case if present, otherwise return nil
+        self.coverage_branch(position, cases.len());
         if let Some(else_expr) = else_case {
+            self.coverage_count_arm(else_expr);
             self.evaluate_expression(else_expr)
         } else {
             Ok(Object::Nil)

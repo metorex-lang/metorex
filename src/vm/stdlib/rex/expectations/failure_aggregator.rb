@@ -10,29 +10,44 @@ module Rex
         @metadata = metadata
         @failures = []
         @other_errors = []
+        @seen_source_ids = {}
       end
 
+      # What `call` answers in place of raising, so the caller goes on.
+      class AggregatedFailure
+        MESSAGE =
+          "AggregatedFailure: This method caused a failure which has been " \
+          "suppressed to be aggregated into our failure report by returning " \
+          "this value, further errors can be ignored."
+
+        def inspect
+          MESSAGE
+        end
+      end
+
+      AGGREGATED_FAILURE = AggregatedFailure.new
+
       def aggregate
-        outer = Thread.current[:rex_failure_aggregator]
-        Thread.current[:rex_failure_aggregator] = method(:call)
-        begin
-          yield
-        rescue Rex::ExpectationNotMet => error
-          @failures << error
-        rescue *Rex::Core::DANGEROUS_EXCEPTIONS
-          raise
-        rescue Exception => error
-          @other_errors << error
-        ensure
-          Thread.current[:rex_failure_aggregator] = outer
+        Rex::Support.with_failure_notifier(self) do
+          begin
+            yield
+          rescue Rex::ExpectationNotMet => error
+            @failures << error
+          rescue Rex::Support::AllExceptionsExceptOnesWeMustNotRescue => error
+            @other_errors << error
+          end
         end
         notify_aggregated_failures
       end
 
-      def call(failure)
+      def call(failure, options = {})
+        source_id = options[:source_id]
+        return if source_id && @seen_source_ids.key?(source_id)
+
+        @seen_source_ids[source_id] = true
         failure.set_backtrace(caller) unless failure.backtrace
         @failures << failure
-        nil
+        AGGREGATED_FAILURE
       end
 
       private
@@ -41,8 +56,8 @@ module Rex
         all_errors = failures + other_errors
         case all_errors.size
         when 0 then true
-        when 1 then raise all_errors.first
-        else raise MultipleExpectationsNotMetError.new(self)
+        when 1 then Rex::Support.notify_failure(all_errors.first)
+        else Rex::Support.notify_failure(MultipleExpectationsNotMetError.new(self))
         end
       end
     end

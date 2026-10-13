@@ -327,6 +327,11 @@ pub(crate) fn character_units(string_value: &crate::object::StringValue) -> Vec<
         "UTF-8" if string_value.holds_bytes() => {
             grouped(utf8_characters(&binary_bytes(string_value)))
         }
+        // UTF-16 and UTF-32 read two or four bytes, or a surrogate pair, as
+        // one character.
+        held if let Some(shape) = super::wide::wide_encoding(held) => grouped(
+            super::wide::wide_characters(&binary_bytes(string_value), shape),
+        ),
         _ => string_value.as_str().chars().map(String::from).collect(),
     }
 }

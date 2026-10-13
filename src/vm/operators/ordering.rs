@@ -117,12 +117,14 @@ impl VirtualMachine {
             return self.invoke_method(class, method, left, vec![right], position);
         }
 
-        // An object with neither the operator nor `<=>` still gets the call
-        // offered to `method_missing`, as any other missing method would.
+        // An object that is not Comparable has no comparison operator, so
+        // the call is offered to `method_missing`, as any other missing
+        // method would be.
         if matches!(left, Object::Instance(_))
             && let Some(operator) = comparison_operator_name(op)
-            && self.lookup_method(&left, "<=>").is_none()
+            && !self.is_comparable(&left)
             && let Some((class, method)) = self.lookup_method(&left, "method_missing")
+            && !method.is_undefined
         {
             let name = Object::symbol(operator.to_string());
             return self.invoke_method(class, method, left, vec![name, right], position);
@@ -165,15 +167,21 @@ impl VirtualMachine {
                 };
                 return Ok(Object::Bool(result));
             }
-            // nil or other: raise ArgumentError
-            let exc = Object::exception(
-                "ArgumentError",
-                format!("comparison of {} with {} failed", left_type, right_type),
-            );
+            // A nil names the two values compared. Anything else is compared
+            // with 0, which a value that is not a number refuses.
+            let message = if matches!(cmp_result, Object::Nil) {
+                format!("comparison of {} with {} failed", left_type, right_type)
+            } else {
+                format!(
+                    "comparison of {} with 0 failed",
+                    self.class_name_of(&cmp_result)
+                )
+            };
+            let exc = Object::exception("ArgumentError", message.clone());
             return Err(MetorexError::UncaughtException {
                 exception: exc,
                 location: position_to_location(position),
-                message: "comparison failed".to_string(),
+                message,
             });
         }
 

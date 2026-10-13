@@ -261,15 +261,15 @@ end
 // ── `extend` with no name errors (line 236) ──────────────────────────────────
 
 #[test]
-fn extend_no_name_errors() {
-    let err = parse_err(
+fn extend_without_a_module_raises_argument_error() {
+    let err = run_err(
         r#"
 class Host
   extend
 end
 "#,
     );
-    assert!(err.contains("module") || err.contains("Expected"));
+    assert!(err.contains("wrong number of arguments (given 0, expected 1+)"));
 }
 
 // ── bare `include` reports the missing argument at runtime ───────────────────

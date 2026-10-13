@@ -1,0 +1,9 @@
+....
+
+Finished in N seconds (files took N seconds to load)
+4 examples, 0 failures
+
+
+Coverage: 73.33% of lines (11 of 15) and 40.00% of branches (2 of 5) in 1 file
+  lib/ledger.rb   73.33% of lines   40.00% of branches  not run: 13, 14, 16, 21
+exit 0

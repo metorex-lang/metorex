@@ -29,6 +29,7 @@ module Rex
         @dry_run = false
         @ordering_manager = Ordering::ConfigurationManager.new
         @default_formatter = "progress"
+        @coverage_dir = "coverage"
         @output_stream = $stdout
         @error_stream = $stderr
         @deprecation_stream = $stderr
@@ -56,7 +57,6 @@ module Rex
         @inclusion_filter = {}
         @exclusion_filter = {}
         @formatters = []
-        @expectation_syntax = [:expect]
       end
 
       def before(*arguments, &block)
@@ -147,7 +147,7 @@ module Rex
 
       def expect_with(*frameworks)
         @expectation_frameworks = frameworks.map { |framework| framework == :rspec ? Rex::Matchers : framework }
-        yield ExpectationConfiguration.new(self) if block_given?
+        yield Rex::Expectations.configuration if block_given?
       end
 
       def mock_with(framework)
@@ -172,13 +172,11 @@ module Rex
       end
 
       def expectation_syntax
-        @expectation_syntax
+        Rex::Expectations.configuration.syntax
       end
 
       def expectation_syntax=(syntaxes)
-        @expectation_syntax = Array(syntaxes)
-        Expectations::Syntax.enable_should if @expectation_syntax.include?(:should)
-        Expectations::Syntax.disable_should unless @expectation_syntax.include?(:should)
+        Rex::Expectations.configuration.syntax = syntaxes
       end
 
       # A setting RSpec 2 needed, which RSpec 3 always behaves as.
@@ -484,8 +482,17 @@ module Rex
         @pending_failure_output = mode
       end
 
+      RAISE_ERROR_WARNING_NOTIFIER = ->(message) { raise message }
+
       # Turns each warning Rex would print into an error.
-      attr_accessor :raise_on_warning
+      def raise_on_warning=(value)
+        Rex::Support.warning_notifier =
+          value ? RAISE_ERROR_WARNING_NOTIFIER : Rex::Support::DEFAULT_WARNING_NOTIFIER
+      end
+
+      def raise_on_warning
+        Rex::Support.warning_notifier.equal?(RAISE_ERROR_WARNING_NOTIFIER)
+      end
 
       def bisect_runner=(value)
         @bisect_runner = value
@@ -560,6 +567,28 @@ module Rex
         @format_docstrings_block || DEFAULT_DOCSTRING_FORMATTER
       end
 
+      # `--coverage` and the settings that shape its report.
+      attr_accessor :coverage, :coverage_dir, :coverage_threshold
+      attr_writer :coverage_formats, :coverage_exclude
+
+      def coverage_formats
+        @coverage_formats || ["summary"]
+      end
+
+      def coverage_exclude
+        @coverage_exclude ||= []
+      end
+
+      # How many worker processes the top-level groups run in.
+      def jobs
+        @jobs || 1
+      end
+      attr_writer :jobs
+
+      # Whether a parallel run is followed by a serial one whose outcomes it
+      # is compared with.
+      attr_accessor :verify_parallel
+
       # Whether `RSpec` names Rex. It does from load, and a suite with an
       # `RSpec` of its own sets this to false to take the name back.
       def rspec_constant
@@ -584,87 +613,6 @@ module Rex
       end
     end
 
-    # The object `config.expect_with(:rspec) { |c| }` yields.
-    class ExpectationConfiguration
-      attr_accessor :include_chain_clauses_in_custom_matcher_descriptions,
-                    :max_formatted_output_length, :strict_predicate_matchers
-
-      FALSE_POSITIVE_BEHAVIOURS = {
-        warn: ->(message) { Rex.warning(message) },
-        raise: ->(message) { raise ArgumentError, message },
-        nothing: ->(_message) { true }
-      }.freeze
-
-      def on_potential_false_positives
-        @on_potential_false_positives || :warn
-      end
-
-      def on_potential_false_positives=(behavior)
-        unless FALSE_POSITIVE_BEHAVIOURS.key?(behavior)
-          raise ArgumentError, "Supported values are: #{FALSE_POSITIVE_BEHAVIOURS.keys}"
-        end
-
-        @on_potential_false_positives = behavior
-      end
-
-      def false_positives_handler
-        FALSE_POSITIVE_BEHAVIOURS.fetch(on_potential_false_positives)
-      end
-
-      def initialize(configuration)
-        @configuration = configuration
-      end
-
-      def syntax=(syntaxes)
-        @configuration.expectation_syntax = syntaxes
-      end
-
-      def syntax
-        @configuration.expectation_syntax
-      end
-    end
-
-    # The object `config.mock_with(:rspec) { |c| }` yields, which is also the
-    # mocks configuration itself.
-    class MockConfiguration
-      attr_accessor :verify_doubled_constant_names, :allow_message_expectations_on_nil,
-                    :transfer_nested_constants, :temporarily_suppress_partial_double_verification,
-                    :color
-
-      attr_writer :verify_partial_doubles
-
-      def initialize(configuration)
-        @configuration = configuration
-        @verify_doubled_constant_names = false
-        @temporarily_suppress_partial_double_verification = false
-      end
-
-      # On unless a suite turns it off, so a stub of a method the object
-      # does not have fails where it is written.
-      def verify_partial_doubles?
-        @verify_partial_doubles.nil? ? true : @verify_partial_doubles
-      end
-      alias verify_partial_doubles verify_partial_doubles?
-
-      def syntax=(syntaxes)
-        syntaxes = Array(syntaxes)
-        Rex::Mocks::Syntax.enable_should if syntaxes.include?(:should)
-        @syntax = syntaxes
-      end
-
-      def syntax
-        @syntax || [:expect]
-      end
-
-      def before_verifying_doubles(&block)
-        (@verifying_double_callbacks ||= []) << block
-      end
-      alias when_declaring_verified_double before_verifying_doubles
-
-      def verifying_double_callbacks
-        @verifying_double_callbacks || []
-      end
-    end
   end
 
   def self.configuration
@@ -679,7 +627,8 @@ module Rex
     warn_with("WARNING: #{text}.", options)
   end
 
-  # Prints a warning naming where it was called from, or raises it when
+  # Hands a warning naming where it was called from to
+  # `RSpec::Support.warning_notifier`, which prints it, or raises it when
   # `config.raise_on_warning` is on.
   def self.warn_with(message, options = {})
     if options[:use_spec_location_as_call_site]
@@ -689,9 +638,7 @@ module Rex
     call_site = options.fetch(:call_site) { Core.first_non_rex_line }
     message += " Use #{options[:replacement]} instead." if options[:replacement]
     message += " Called from #{call_site}." if call_site
-    raise message if configuration.raise_on_warning
-
-    ::Kernel.warn(message)
+    Rex::Support.warning_notifier.call(message)
   end
 
   def self.reset

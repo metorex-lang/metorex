@@ -6,6 +6,7 @@ pub mod common;
 
 mod rex {
     mod config;
+    mod coverage;
     mod diffs;
     mod dsl;
     mod errors;
@@ -16,6 +17,7 @@ mod rex {
     mod metadata;
     mod mocks;
     mod ordering;
+    mod parallel;
     mod runner;
 
     pub(crate) use crate::common::EXAMPLES_DIR;
@@ -42,7 +44,9 @@ mod rex {
     }
 
     /// Runs `metorex spec` with `arguments` in the fixture directory named
-    /// by `fixture`, reading stdout and stderr as one stream.
+    /// by `fixture`, reading stdout and stderr as one stream, with the
+    /// checkout's directory written as `ROOT`, as scripts/rex_expected.sh
+    /// writes it.
     pub(crate) fn run_spec(fixture: &str, arguments: &[&str]) -> SpecRun {
         run_spec_with_env(fixture, arguments, &[])
     }
@@ -73,7 +77,8 @@ mod rex {
             .envs(environment.iter().copied())
             .output()
             .expect("failed to run metorex spec");
-        let text = String::from_utf8_lossy(&output.stdout).to_string();
+        let text =
+            String::from_utf8_lossy(&output.stdout).replace(env!("CARGO_MANIFEST_DIR"), "ROOT");
         SpecRun {
             output: normalize_timing(&text),
             output_with_times: text
@@ -330,6 +335,24 @@ fn test_every_rex_source_file_is_carried_in_the_binary() {
         String::from_utf8_lossy(&output.stdout),
         "loaded\n",
         "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// The specs under spec/ describe interpreter behavior in Rex's own terms,
+/// and each passes under MRI's rspec as well.
+#[test]
+fn test_the_specs_under_spec_pass_under_metorex_spec() {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_metorex"))
+        .args(["spec", "--no-color"])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .env_remove("SPEC_OPTS")
+        .output()
+        .expect("run metorex spec");
+    let printed = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && printed.contains(" examples, 0 failures"),
+        "{printed}{}",
         String::from_utf8_lossy(&output.stderr)
     );
 }

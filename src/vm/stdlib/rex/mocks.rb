@@ -42,9 +42,6 @@ module Rex
         Thread.current[:rex_mock_space] = nil
       end
 
-      def configuration
-        @configuration ||= Rex::Core::MockConfiguration.new(Rex.configuration)
-      end
 
       def allow_message(subject, message, opts = {}, &block)
         space.proxy_for(subject).add_stub(message, opts, &block)
@@ -68,6 +65,19 @@ module Rex
       def initialize
         @proxies = {}
         @any_instance_recorders = {}
+        @constant_mutators = []
+      end
+
+      def register_constant_mutator(mutator)
+        @constant_mutators << mutator
+      end
+
+      def constant_mutator_for(name)
+        @constant_mutators.find { |mutator| mutator.full_constant_name == name }
+      end
+
+      def registered?(object)
+        @proxies.key?(object.__id__)
       end
 
       def proxy_for(object)
@@ -94,8 +104,28 @@ module Rex
         @proxies[object.__id__]
       end
 
-      def any_instance_recorder_for(klass)
+      def any_instance_recorder_for(klass, only_return_existing = false)
+        return @any_instance_recorders[klass.__id__] if only_return_existing
+
         @any_instance_recorders[klass.__id__] ||= AnyInstance::Recorder.new(klass)
+      end
+
+      def any_instance_proxy_for(klass)
+        AnyInstance::Proxy.new(any_instance_recorder_for(klass), proxies_of(klass))
+      end
+
+      def proxies_of(klass)
+        @proxies.values.select { |proxy| klass === proxy.object }
+      end
+
+      def ensure_registered(object)
+        proxy_for(object)
+      end
+
+      def any_instance_recorders_from_ancestry_of(object)
+        Rex::Support.class_of(object).ancestors.filter_map do |klass|
+          @any_instance_recorders[klass.__id__]
+        end
       end
 
       def verify_all
@@ -105,9 +135,12 @@ module Rex
 
       def reset_all
         @proxies.each_value(&:reset)
-        @any_instance_recorders.each_value(&:reset)
+        @any_instance_recorders.each_value(&:stop_all_observation!)
         @proxies.clear
         @any_instance_recorders.clear
+      ensure
+        @constant_mutators.reverse_each(&:idempotently_reset)
+        @constant_mutators.clear
       end
     end
 
@@ -290,12 +323,7 @@ module Rex
         if backtrace_line
           exception.set_backtrace([backtrace_line] + caller)
         end
-        if (aggregator = Thread.current[:rex_failure_aggregator])
-          exception.set_backtrace(caller) unless exception.backtrace
-          aggregator.call(exception)
-        else
-          raise exception
-        end
+        Rex::Support.notify_failure(exception)
       end
     end
 
@@ -770,6 +798,11 @@ module Rex
         @similar_messages = []
         @implementation = Implementation.new
         self.inner_implementation_action = implementation_block
+      end
+
+      def and_yield_receiver_to_implementation
+        @yield_receiver_to_implementation_block = true
+        self
       end
 
       def and_return(first_value, *values, &_block)
@@ -1323,3 +1356,8 @@ end
 require "rex/mocks/proxy"
 require "rex/mocks/verifying"
 require "rex/mocks/targets"
+require "rex/mocks/any_instance"
+require "rex/mocks/mutate_const"
+require "rex/mocks/configuration"
+
+Rex::Mocks.configuration.reset_syntaxes_to_default

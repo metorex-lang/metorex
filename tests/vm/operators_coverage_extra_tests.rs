@@ -59,6 +59,7 @@ Eq2.new(1) == Eq2.new(1)
 fn comparable_spaceship_equal_via_eq() {
     let result = run(r#"
 class Cmp1
+  include Comparable
   def initialize(n)
     @n = n
   end
@@ -75,6 +76,7 @@ Cmp1.new(5) == Cmp1.new(5)
 fn comparable_spaceship_float_zero_via_eq() {
     let result = run(r#"
 class CmpF
+  include Comparable
   def <=>(other)
     0.0
   end
@@ -88,6 +90,7 @@ CmpF.new == CmpF.new
 fn comparable_spaceship_nil_via_eq() {
     let result = run(r#"
 class CmpN
+  include Comparable
   def <=>(other)
     nil
   end
@@ -102,6 +105,7 @@ fn comparable_spaceship_bad_return_errors() {
     let err = run_err(
         r#"
 class BadCmp
+  include Comparable
   def <=>(other)
     "not a number"
   end
@@ -109,7 +113,36 @@ end
 BadCmp.new == BadCmp.new
 "#,
     );
-    assert!(err.contains("comparison") || err.contains("failed") || err.contains("ArgumentError"));
+    assert!(err.contains("comparison of String with 0 failed"));
+}
+
+#[test]
+fn comparable_less_than_with_a_bad_spaceship_return_errors() {
+    let err = run_err(
+        r#"
+class BadOrder
+  include Comparable
+  def <=>(other)
+    "not a number"
+  end
+end
+BadOrder.new < BadOrder.new
+"#,
+    );
+    assert!(err.contains("comparison of String with 0 failed"));
+}
+
+#[test]
+fn spaceship_without_comparable_leaves_equality_to_identity() {
+    let result = run(r#"
+class NoCmp
+  def <=>(other)
+    0
+  end
+end
+NoCmp.new == NoCmp.new
+"#);
+    assert_eq!(result, Some(Object::Bool(false)));
 }
 
 // ── Instance identity shortcut ────────────────────────────────────────────────

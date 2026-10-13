@@ -868,16 +868,20 @@ impl VirtualMachine {
                 then_branch,
                 elsif_branches,
                 else_branch,
-                ..
-            } => {
-                self.evaluate_if_expression(condition, then_branch, elsif_branches, else_branch)?
-            }
+                position,
+            } => self.evaluate_if_expression(
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+                *position,
+            )?,
             Statement::Unless {
                 condition,
                 then_branch,
                 else_branch,
-                ..
-            } => self.evaluate_unless_expression(condition, then_branch, else_branch)?,
+                position,
+            } => self.evaluate_unless_expression(condition, then_branch, else_branch, *position)?,
             Statement::Begin {
                 body,
                 rescue_clauses,

@@ -42,3 +42,17 @@ fn test_output_from_any_process_and_aggregate_failures_metadata() {
 fn test_include_counts_match_rspec() {
     assert_matches("matchers/include_counts", "documentation", &["-fd"]);
 }
+
+#[test]
+fn test_matchers_a_group_defines_and_the_fail_matchers() {
+    assert_matches(
+        "matchers/group_matchers",
+        "documentation",
+        &["--format", "documentation"],
+    );
+}
+
+#[test]
+fn test_contain_exactly_finds_the_pairing_rspec_finds() {
+    assert_matches("matchers/contain_exactly", "progress", &[]);
+}

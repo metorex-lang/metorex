@@ -1,0 +1,26 @@
+
+constant stubbing
+  replaces a defined constant
+  defines an undefined constant and its parent modules
+  hides a constant
+  transfers nested constants when asked
+  reports what a stub replaced
+  refuses a name that is not a String (FAILED - 1)
+  puts every constant back after each example
+
+Failures:
+
+  1) constant stubbing refuses a name that is not a String
+     Failure/Error: stub_const(:RATE, 1)
+
+     ArgumentError:
+       `stub_const` requires a String, but you provided a Symbol
+     # ./spec/constants_spec.rb:37:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+7 examples, 1 failure
+
+Failed examples:
+
+rspec ./spec/constants_spec.rb:36 # constant stubbing refuses a name that is not a String
+exit 1

@@ -238,32 +238,32 @@ Three layers, chosen per feature by what the layer above cannot do:
 
 ## 13. Parallel execution
 
-- [ ] 13.1. Group-level work distribution across Threads, with a per-worker reporter
-- [ ] 13.2. `--jobs N`, defaulting to the machine's core count
-- [ ] 13.3. Output serialized per group, so a parallel documentation run reads the same as a serial one
-- [ ] 13.4. Shared-state detection: a warning when a parallel run and a serial run disagree under one seed
-- [ ] 13.5. `--jobs 1` as the exact equivalent of a serial run, proved by identical output bytes
-- [ ] 13.6. Examples under `tests/_examples/rex/parallel/`
+- [x] 13.1. Group-level work distribution across forked worker processes, since Metorex runs threads one at a time, with a recorder in each worker standing in for the reporter
+- [x] 13.2. `--jobs N` and `--jobs auto` for the machine's core count, defaulting to 1 so `before(:suite)`, fail-fast, and interrupts behave as in RSpec unless a suite asks
+- [x] 13.3. Output serialized per group, so a parallel documentation run reads the same as a serial one
+- [x] 13.4. Shared-state detection: `--verify-parallel` warns when a parallel run and a serial run disagree under one seed
+- [x] 13.5. `--jobs 1` as the exact equivalent of a serial run, proved by identical output bytes
+- [x] 13.6. Examples under `tests/_examples/rex/parallel/`
 
 ## 14. Coverage
 
-- [ ] 14.1. `metorex spec --coverage`, reading the line table the VM already walks
-- [ ] 14.2. Branch coverage from the bytecode's jump targets
-- [ ] 14.3. `--coverage-format` for a summary, an LCOV file, and a JSON file
-- [ ] 14.4. `--coverage-threshold N`, failing the run below it
-- [ ] 14.5. Filters for which files count, defaulting to everything loaded that is not a spec file
-- [ ] 14.6. Examples under `tests/_examples/rex/coverage/`
+- [x] 14.1. `metorex spec --coverage`, reading the line table the VM already walks
+- [x] 14.2. Branch coverage counted where the VM chooses an arm of an `if`, `unless`, `case`, `while`, or `&.`, since Metorex walks the syntax tree rather than bytecode
+- [x] 14.3. `--coverage-format` for a summary, an LCOV file, and a JSON file
+- [x] 14.4. `--coverage-threshold N`, failing the run below it
+- [x] 14.5. Filters for which files count, defaulting to everything loaded that is not a spec file
+- [x] 14.6. Examples under `tests/_examples/rex/coverage/`
 
 ## 15. Compatibility proof
 
-- [ ] 15.1. Port the `tests/_examples/` assertions that already read as specs into `spec/` files run by `metorex spec`
-- [ ] 15.2. Run `rspec-expectations`' own spec suite unchanged, and record the pass count
-- [ ] 15.3. Run `rspec-mocks`' own spec suite unchanged, and record the pass count
+- [x] 15.1. Port the `tests/_examples/` assertions that already read as specs into `spec/` files run by `metorex spec`, each also passing under MRI's rspec: the interpreter fixes the Rex work needed, 43 examples
+- [x] 15.2. Run `rspec-expectations`' own spec suite unchanged, and record the pass count: 2201 of 2456, 9 pending
+- [x] 15.3. Run `rspec-mocks`' own spec suite unchanged, and record the pass count: 1292 of 1807, 9 pending, leaving out the one file that needs the aruba gem
 - [ ] 15.4. Run `rspec-core`'s own spec suite unchanged, and record the pass count
-- [ ] 15.5. Pick a third-party library with an RSpec suite and no C extensions, run it, and record the result
-- [ ] 15.6. Byte-compare `documentation` formatter output against real RSpec for a fixture suite
-- [ ] 15.7. A `scripts/run_rspec_suite.sh` driver shaped like `scripts/run_ruby_spec.sh`, with a commented list advanced one line at a time
-- [ ] 15.8. README section describing the built-in runner, its flags, and what it does that the gem cannot
+- [x] 15.5. Pick a third-party library with an RSpec suite and no C extensions, run it, and record the result: diff-lcs, 322 of 322
+- [x] 15.6. Byte-compare `documentation` formatter output against real RSpec for a fixture suite
+- [x] 15.7. A `scripts/run_rspec_suite.sh` driver shaped like `scripts/run_ruby_spec.sh`, with a commented list advanced one line at a time
+- [x] 15.8. README section describing the built-in runner, its flags, and what it does that the gem cannot
 
 ## 16. Speed
 

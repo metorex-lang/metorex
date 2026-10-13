@@ -1,17 +1,36 @@
 
+partial doubles of core class methods
+  stubs a Kernel function
+  stubs a native class method
+  checks a native class method's arguments (FAILED - 1)
+  restores the native class method
+  refuses a class method the class does not have (FAILED - 2)
+
 verified partial doubles
-  rejects a method the class does not define (FAILED - 1)
-  rejects the wrong number of arguments on a real object (FAILED - 2)
+  rejects a method the class does not define (FAILED - 3)
+  rejects the wrong number of arguments on a real object (FAILED - 4)
   accepts a method the class defines
 
 Failures:
 
-  1) verified partial doubles rejects a method the class does not define
+  1) partial doubles of core class methods checks a native class method's arguments
+     Failure/Error: File.exist?
+
+     ArgumentError:
+       Wrong number of arguments. Expected 1, got 0.
+     # ./spec/core_class_methods_spec.rb:14:in 'block (2 levels) in <top (required)>'
+
+  2) partial doubles of core class methods refuses a class method the class does not have
+     Failure/Error: allow(File).to receive(:no_such_method)
+       File does not implement: no_such_method
+     # ./spec/core_class_methods_spec.rb:22:in 'block (2 levels) in <top (required)>'
+
+  3) verified partial doubles rejects a method the class does not define
      Failure/Error: allow(Ledger).to receive(:close)
        Ledger does not implement: close
      # ./spec/verified_partials_spec.rb:8:in 'block (2 levels) in <top (required)>'
 
-  2) verified partial doubles rejects the wrong number of arguments on a real object
+  4) verified partial doubles rejects the wrong number of arguments on a real object
      Failure/Error: ledger.record
 
      ArgumentError:
@@ -19,10 +38,12 @@ Failures:
      # ./spec/verified_partials_spec.rb:14:in 'block (2 levels) in <top (required)>'
 
 Finished in N seconds (files took N seconds to load)
-3 examples, 2 failures
+8 examples, 4 failures
 
 Failed examples:
 
+rspec ./spec/core_class_methods_spec.rb:12 # partial doubles of core class methods checks a native class method's arguments
+rspec ./spec/core_class_methods_spec.rb:21 # partial doubles of core class methods refuses a class method the class does not have
 rspec ./spec/verified_partials_spec.rb:7 # verified partial doubles rejects a method the class does not define
 rspec ./spec/verified_partials_spec.rb:11 # verified partial doubles rejects the wrong number of arguments on a real object
 exit 1

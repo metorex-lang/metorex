@@ -89,6 +89,28 @@ module Rex
             options[:fail_fast] = attached ? attached.to_i : 1
           when "--no-fail-fast"
             options[:fail_fast] = false
+          when "--jobs"
+            options[:jobs] = Parser.jobs_from(take.call)
+          when "--verify-parallel"
+            options[:verify_parallel] = true
+          when "--coverage"
+            options[:coverage] = true
+          when "--coverage-format"
+            format = take.call
+            unless Rex::Core::CoverageReport::FORMATS.include?(format)
+              raise OptionError, "invalid argument: --coverage-format #{format}"
+            end
+
+            (options[:coverage_formats] ||= []) << format
+          when "--coverage-dir"
+            options[:coverage_dir] = take.call
+          when "--coverage-threshold"
+            threshold = Float(take.call, exception: false)
+            raise OptionError, "invalid argument: --coverage-threshold #{attached}" unless threshold
+
+            options[:coverage_threshold] = threshold
+          when "--coverage-exclude"
+            (options[:coverage_exclude] ||= []) << take.call
           when "--failure-exit-code"
             options[:failure_exit_code] = take.call.to_i
           when "--error-exit-code"
@@ -188,6 +210,19 @@ module Rex
         options
       end
 
+      # A number of workers, or `auto` for one per processor.
+      def self.jobs_from(text)
+        if text == "auto"
+          require "etc"
+          return Etc.nprocessors
+        end
+
+        jobs = Integer(text, exception: false)
+        raise OptionError, "invalid argument: --jobs #{text}" unless jobs && jobs.positive?
+
+        jobs
+      end
+
       def configure_only_failures(options)
         options[:only_failures] = true
         (options[:inclusion_filter] ||= {})[:last_run_status] = "failed"
@@ -242,6 +277,16 @@ module Rex
                 --force-color, --force-colour  Force the output to be in color, even if the output is not a TTY
                 --no-color, --no-colour        Force the output to not be in color, even if the output is a TTY
                 --[no-]diff                    Print a diff with failures that compare two values (default: on).
+                --jobs N                       Run the top-level groups in N worker processes, or one per processor
+                                                 with `auto` (default: 1).
+                --verify-parallel              After a parallel run, run the suite again serially with the same seed
+                                                 and warn about examples whose outcome differs.
+                --coverage                     Report which lines and branches of the loaded files ran, leaving out
+                                                 the spec files and the spec directory.
+                --coverage-format FORMAT       summary (the default), lcov, or json; may be given more than once.
+                --coverage-dir DIR             Where the lcov and json files are written (default: coverage).
+                --coverage-threshold PERCENT   Fail the run when line coverage is below PERCENT.
+                --coverage-exclude PATTERN     Leave out files matching the glob PATTERN; may be given more than once.
             -p, --[no-]profile [COUNT]         Enable profiling of examples and list the slowest examples (default: 10).
             -w, --warnings                     Enable ruby warnings
 
@@ -332,6 +377,9 @@ module Rex
 
         files = spec_files(options, configuration)
         configuration.files_to_run = files
+        # Measuring starts before anything the suite requires is loaded,
+        # since only a file loaded while it is on is counted.
+        CoverageReport.start if configuration.coverage
         configuration.requires.each { |path| require_handling_errors(path) }
         load_spec_helper(configuration)
 
@@ -362,19 +410,33 @@ module Rex
           next if no_examples_failed
 
           Rex::Core::Suite.run_hooks(:before)
-          success = groups.map { |group| group.run(reporter) }.all?
+          success = if parallel?(configuration, groups)
+                      !Parallel.run(groups, configuration.jobs, reporter) && !world.wants_to_quit
+                    else
+                      groups.map { |group| group.run(reporter) }.all?
+                    end
           Rex::Core::Suite.run_hooks(:after)
         end
         return configuration.failure_exit_code if no_examples_failed
+
+        Parallel.verify(groups, world) if parallel?(configuration, groups) && configuration.verify_parallel
+        coverage_met = configuration.coverage ? report_coverage(configuration, world) : true
         Rex::Core::ExampleStatusPersister.persist(world.all_examples, configuration.example_status_persistence_file_path) if configuration.example_status_persistence_file_path && !configuration.dry_run
 
         if world.non_example_failure
           exit_code_for_errors(configuration)
-        elsif success && world.reporter.failed_examples.empty?
+        elsif success && world.reporter.failed_examples.empty? && coverage_met
           0
         else
           configuration.failure_exit_code
         end
+      end
+
+      # The counts of this process and of each worker, reported together.
+      def report_coverage(configuration, world)
+        data = CoverageReport.collect
+        world.worker_coverage.each { |counts| CoverageReport.merge(data, counts) }
+        CoverageReport.report(data, configuration)
       end
 
       # Runs the examples `ids` name with `formatter` as the only one
@@ -413,6 +475,12 @@ module Rex
         Bisect::Coordinator.bisect_with(self, @args, formatter) ? 0 : configuration.failure_exit_code
       end
 
+      # Workers run the groups when there are jobs to share them between and
+      # the run is a real one.
+      def parallel?(configuration, groups)
+        configuration.jobs > 1 && groups.size > 1 && !configuration.dry_run
+      end
+
       def exit_code_for_errors(configuration)
         configuration.error_exit_code || configuration.failure_exit_code
       end
@@ -436,6 +504,13 @@ module Rex
         configuration.full_backtrace = true if options[:full_backtrace]
         configuration.color_mode = options[:color_mode] if options[:color_mode]
         configuration.diff_enabled = options[:diff] if options.key?(:diff)
+        configuration.jobs = options[:jobs] if options[:jobs]
+        configuration.verify_parallel = true if options[:verify_parallel]
+        configuration.coverage = true if options[:coverage]
+        configuration.coverage_formats = options[:coverage_formats] if options[:coverage_formats]
+        configuration.coverage_dir = options[:coverage_dir] if options[:coverage_dir]
+        configuration.coverage_threshold = options[:coverage_threshold] if options[:coverage_threshold]
+        configuration.coverage_exclude.concat(options[:coverage_exclude]) if options[:coverage_exclude]
         configuration.deprecation_stream = options[:deprecation_stream] if options[:deprecation_stream]
         configuration.profile_examples = options[:profile_examples] if options.key?(:profile_examples)
         configuration.warnings = true if options[:warnings]

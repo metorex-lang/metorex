@@ -40,10 +40,10 @@ class IO
         return nil if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
       end
       # Nothing is ready yet. Handing control over is what lets another
-      # thread write to one of these streams or close it.
-      break unless Thread.__hand_over__
+      # thread write to one of these streams or close it. With no thread to
+      # hand over to, another process may still write, so the wait goes on.
+      sleep 0.001 unless Thread.__hand_over__
     end
-    nil
   end
 
   # The stream an argument names, which anything answering `to_io` gives.

@@ -350,36 +350,27 @@ Foo.config
 }
 
 #[test]
-fn setter_on_class_falls_back_to_class_var() {
-    // No defined setter — assignment stores into a class variable.
-    let result = run_class(
+fn setter_on_class_without_a_writer_raises_no_method_error() {
+    let err = run_err(
         r#"
 class Foo
 end
 Foo.title = "hello"
-Foo.instance_variable_get("@title")
 "#,
     );
-    assert_eq!(
-        result,
-        Some(metorex::object::Object::string("hello".to_string()))
-    );
+    assert!(err.contains("undefined method 'title=' for class Foo"));
 }
 
 #[test]
-fn setter_on_module_falls_back_to_class_var() {
-    let result = run_class(
+fn setter_on_module_without_a_writer_raises_no_method_error() {
+    let err = run_err(
         r#"
 module Mx
 end
 Mx.label = "world"
-Mx.instance_variable_get("@label")
 "#,
     );
-    assert_eq!(
-        result,
-        Some(metorex::object::Object::string("world".to_string()))
-    );
+    assert!(err.contains("undefined method 'label=' for module Mx"));
 }
 
 // ── module body with constant assignment ──────────────────────────────────

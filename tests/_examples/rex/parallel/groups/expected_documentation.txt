@@ -1,0 +1,82 @@
+
+invoices
+rendering invoice 1001
+  prints while it runs
+  fails on a total (FAILED - 1)
+
+payments
+  captures a card (FAILED - 2)
+
+refunds
+  waits on the refund rule (PENDING: the refund rule)
+refund queue is long
+  warns on stderr
+
+monthly reports
+  hands a block matcher a value (FAILED - 3)
+  for a quiet month
+    has no rows
+
+exports
+  is skipped (PENDING: the CSV format)
+
+Pending: (Failures listed here are expected and do not affect your suite's status)
+
+  1) refunds waits on the refund rule
+     # the refund rule
+     Failure/Error: expect(1).to eq(2)
+
+       expected: 2
+            got: 1
+
+       (compared using ==)
+     # ./spec/billing_spec.rb:22:in 'block (2 levels) in <top (required)>'
+
+  2) exports is skipped
+     # the CSV format
+     # ./spec/reports_spec.rb:15
+
+Failures:
+
+  1) invoices fails on a total
+     Failure/Error: expect(10 + 5).to eq(16)
+
+       expected: 16
+            got: 15
+
+       (compared using ==)
+     # ./spec/billing_spec.rb:8:in 'block (2 levels) in <top (required)>'
+
+  2) payments captures a card
+     Failure/Error: before(:context) { raise "the gateway is down" }
+
+     RuntimeError:
+       the gateway is down
+     # ./spec/billing_spec.rb:13:in 'block (2 levels) in <top (required)>'
+
+  3) monthly reports hands a block matcher a value
+     Failure/Error: expect(counter.push(1)).not_to change { counter.size }
+       expected `counter.size` not to have changed, but was not given a block
+     # ./spec/reports_spec.rb:10:in 'block (2 levels) in <top (required)>'
+
+Deprecation Warnings:
+
+The implicit block expectation syntax is deprecated, you should pass a block rather than an argument to `expect` to use the provided block expectation matcher or the matcher must implement `supports_value_expectations?`. e.g  `expect { value }.to change `counter.size`` not `expect(value).to change `counter.size``
+
+
+If you need more of the backtrace for any of these deprecations to
+identify where to make the necessary changes, you can configure
+`config.raise_errors_for_deprecations!`, and it will turn the
+deprecation warnings into errors, giving you the full backtrace.
+
+1 deprecation warning total
+
+Finished in N seconds (files took N seconds to load)
+8 examples, 3 failures, 2 pending
+
+Failed examples:
+
+rspec ./spec/billing_spec.rb:7 # invoices fails on a total
+rspec ./spec/billing_spec.rb:15 # payments captures a card
+rspec ./spec/reports_spec.rb:8 # monthly reports hands a block matcher a value
+exit 1

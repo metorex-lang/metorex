@@ -58,3 +58,30 @@ fn test_an_unmet_any_instance_expectation_points_at_its_line() {
         &["--format", "documentation"],
     );
 }
+
+#[test]
+fn test_the_mocks_configuration_starts_where_rspecs_starts() {
+    assert_matches(
+        "mocks/default_configuration",
+        "documentation",
+        &["--format", "documentation"],
+    );
+}
+
+#[test]
+fn test_any_instance_yields_the_receiver_and_stubs_message_chains() {
+    assert_matches(
+        "mocks/any_instance_features",
+        "documentation",
+        &["--format", "documentation", "--order", "defined"],
+    );
+}
+
+#[test]
+fn test_constants_are_stubbed_hidden_and_put_back_as_rspec_does() {
+    assert_matches(
+        "mocks/constants",
+        "documentation",
+        &["--format", "documentation", "--order", "defined"],
+    );
+}

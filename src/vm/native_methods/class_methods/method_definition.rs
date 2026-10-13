@@ -149,6 +149,7 @@ impl VirtualMachine {
                         // An exception answers its own methods natively, so a
                         // class holding exceptions counts them as present.
                         && !answers_exception_method(self, class_rc, &name)
+                        && !self.core_ancestor_defines(class_rc, &name, position)?
                     {
                         let msg = format!(
                             "undefined method '{}' for {} '{}'",
@@ -258,5 +259,24 @@ impl VirtualMachine {
             _ => {}
         }
         Ok(Unclaimed)
+    }
+}
+
+impl VirtualMachine {
+    /// Whether a core class or module among `class_rc`'s ancestors defines
+    /// `name` in Ruby, as Object defines `<=>`.
+    fn core_ancestor_defines(
+        &mut self,
+        class_rc: &Rc<Class>,
+        name: &str,
+        position: Position,
+    ) -> Result<bool, MetorexError> {
+        let class_object = if class_rc.is_module() {
+            Object::Module(Rc::clone(class_rc))
+        } else {
+            Object::Class(Rc::clone(class_rc))
+        };
+        let owners = self.ancestor_names(class_object, position)?;
+        Ok(crate::vm::native_methods::object_methods::nearest_core_owner(&owners, name).is_some())
     }
 }

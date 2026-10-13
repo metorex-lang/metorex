@@ -207,6 +207,7 @@ pub(crate) const NATIVE_MODULE_METHODS: &[(&str, &[&str], bool)] = &[
     ("public_method_defined?", &["arguments"], true),
     ("refinements", &[], false),
     ("remove_class_variable", &["value"], false),
+    ("ruby2_keywords", &["method_names"], true),
     ("set_temporary_name", &["value"], false),
     ("singleton_class?", &[], false),
     ("undefined_instance_methods", &[], false),
@@ -287,7 +288,12 @@ pub(crate) fn undefined_instance_method_error(
     class_rc: &Rc<Class>,
     position: Position,
 ) -> MetorexError {
-    let msg = format!("undefined method '{}' for {}", name, class_rc.name());
+    let msg = format!(
+        "undefined method '{}' for {} '{}'",
+        name,
+        class_rc.kind_name().to_lowercase(),
+        class_rc.inspect_name()
+    );
     let exc = Object::exception("NameError", msg.clone());
     if let Object::Exception(cell) = &exc {
         cell.borrow_mut().name = Some(name.to_string());

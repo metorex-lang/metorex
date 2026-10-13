@@ -10,6 +10,13 @@ fn parse_err(code: &str) -> String {
     Parser::new(tokens).parse().unwrap_err()[0].to_string()
 }
 
+fn run_err(code: &str) -> String {
+    let tokens = Lexer::new(code).tokenize();
+    let stmts = Parser::new(tokens).parse().expect("parse failed");
+    let mut vm = VirtualMachine::new();
+    vm.execute_program(&stmts).unwrap_err().to_string()
+}
+
 fn run(code: &str) -> Option<Object> {
     let tokens = Lexer::new(code).tokenize();
     let stmts = Parser::new(tokens).parse().expect("parse failed");
@@ -24,15 +31,15 @@ fn module_with_non_ident_name_error() {
 }
 
 #[test]
-fn include_with_non_ident_name_error() {
-    let err = parse_err("class Foo\n  include 42\nend");
-    assert!(err.contains("module name") || err.contains("Expected") || err.contains("include"));
+fn include_with_a_non_module_argument_raises_type_error() {
+    let err = run_err("class Foo\n  include 42\nend");
+    assert!(err.contains("wrong argument type Integer (expected Module)"));
 }
 
 #[test]
-fn extend_with_non_ident_name_error() {
-    let err = parse_err("class Foo\n  extend 42\nend");
-    assert!(err.contains("module name") || err.contains("Expected") || err.contains("extend"));
+fn extend_with_a_non_module_argument_raises_type_error() {
+    let err = run_err("class Foo\n  extend 42\nend");
+    assert!(err.contains("wrong argument type Integer (expected Module)"));
 }
 
 #[test]

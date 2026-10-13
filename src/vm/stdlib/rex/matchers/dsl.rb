@@ -10,13 +10,16 @@ module Rex
       end
       alias matcher define
 
-      def define_negated_matcher(negated_name, base_name, &description_override)
-        Matchers.define_negated_matcher(negated_name, base_name, &description_override)
-      end
-
       private
 
-      def warn_about_block_args(_name, _declarations)
+      def warn_about_block_args(name, declarations)
+        declarations.parameters.each do |type, argument_name|
+          next unless type == :block
+
+          Rex.warning("Your `#{name}` custom matcher receives a block argument (`#{argument_name}`), " \
+                      "but due to limitations in ruby, RSpec cannot provide the block. Instead, " \
+                      "use the `block_arg` method to access the block")
+        end
       end
 
       # The class-level calls a `define` block makes.

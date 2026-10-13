@@ -1,0 +1,28 @@
+
+Matchers a group defines
+  matches with a matcher the group defines
+  describes an alias by its own name
+  negates a matcher the group defines
+  leaves Rex::Matchers without the group's matchers
+  fails an alias with its own name in the message (FAILED - 1)
+  matches a failing expectation with fail_with
+  matches a failing expectation with fail_including
+  matches any failing expectation with fail
+
+A sibling group
+  does not answer the other group's matchers
+
+Failures:
+
+  1) Matchers a group defines fails an alias with its own name in the message
+     Failure/Error: expect([3]).to include(a_number_dividing_by_two)
+       expected [3] to include (a number dividing by two)
+     # ./spec/group_matchers_spec.rb:29:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+9 examples, 1 failure
+
+Failed examples:
+
+rspec ./spec/group_matchers_spec.rb:28 # Matchers a group defines fails an alias with its own name in the message
+exit 1

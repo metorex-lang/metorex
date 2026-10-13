@@ -1,0 +1,36 @@
+.FFF.
+
+Failures:
+
+  1) contain_exactly reports the fewest unpaired items
+     Failure/Error: expect([1, 2, 3, 4]).to contain_exactly(a_value < 3, a_value < 2, 5, 6)
+
+       expected collection contained:  [(a value < 3), (a value < 2), 5, 6]
+       actual collection contained:    [1, 2, 3, 4]
+       the missing elements were:      [5, 6]
+       the extra elements were:        [3, 4]
+     # ./spec/contain_exactly_spec.rb:7:in 'block (2 levels) in <top (required)>'
+
+  2) contain_exactly reports items that match nothing
+     Failure/Error: expect(%w[web db cache]).to contain_exactly("web", "queue", a_string_starting_with("c"))
+
+       expected collection contained:  ["web", "queue", (a string starting with "c")]
+       actual collection contained:    ["cache", "db", "web"]
+       the missing elements were:      ["queue"]
+       the extra elements were:        ["db"]
+     # ./spec/contain_exactly_spec.rb:11:in 'block (2 levels) in <top (required)>'
+
+  3) contain_exactly fails a value it cannot turn into an array
+     Failure/Error: expect(nil).to contain_exactly(1)
+       expected a collection that can be converted to an array with `#to_ary` or `#to_a`, but got nil
+     # ./spec/contain_exactly_spec.rb:15:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+5 examples, 3 failures
+
+Failed examples:
+
+rspec ./spec/contain_exactly_spec.rb:6 # contain_exactly reports the fewest unpaired items
+rspec ./spec/contain_exactly_spec.rb:10 # contain_exactly reports items that match nothing
+rspec ./spec/contain_exactly_spec.rb:14 # contain_exactly fails a value it cannot turn into an array
+exit 1

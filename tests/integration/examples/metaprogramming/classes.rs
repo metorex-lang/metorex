@@ -249,3 +249,24 @@ fn test_metaprogramming_public_through_extend_self_no_parens_execution() {
     let output = run_example("metaprogramming/public_through_extend_self_no_parens.rb");
     assert_eq!(output, PUBLIC_THROUGH_EXTEND_SELF);
 }
+
+#[test]
+fn test_class_exec_binds_a_splat_parameter_with_and_without_arguments() {
+    let output = run_example("metaprogramming/class_exec_splat_parameter.rb");
+    assert_eq!(output, "{}\n{skip: true}\n");
+}
+
+#[test]
+fn test_class_exec_reads_a_captured_local_named_like_a_kernel_function() {
+    let output = run_example("metaprogramming/class_exec_captured_local_named_like_a_function.rb");
+    let lines: Vec<&str> = output.lines().collect();
+    assert_eq!(lines[1], ":be_a");
+    assert_eq!(lines[3], ":be_an");
+    assert!(lines[0].starts_with("#<NoMethodError: undefined method 'be_a' for an instance of"));
+}
+
+#[test]
+fn test_class_exec_reads_its_captures_over_a_caller_local_of_the_same_name() {
+    let output = run_example("metaprogramming/class_exec_block_named_like_a_caller_local.rb");
+    assert_eq!(output, "[:ran, Object]\n:argument\n:caller_local\n");
+}

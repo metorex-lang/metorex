@@ -171,8 +171,12 @@ impl VirtualMachine {
         self.refuse_moved_receiver(&receiver, position)?;
         // `held&.name(args) { block }` runs none of what follows when there
         // is no receiver, so the arguments are never evaluated.
-        if method_name == crate::parser::SAFE_CALL && matches!(receiver, Object::Nil) {
-            return Ok(Object::Nil);
+        if method_name == crate::parser::SAFE_CALL {
+            let nil_receiver = matches!(receiver, Object::Nil);
+            self.coverage_branch(position, usize::from(nil_receiver));
+            if nil_receiver {
+                return Ok(Object::Nil);
+            }
         }
         let arguments = self.evaluate_arguments(argument_exprs)?;
 
@@ -188,6 +192,11 @@ impl VirtualMachine {
         if let Some(method) = find_refinement(&receiver, method_name, self) {
             let class = self.builtins().class_of(&receiver);
             return self.invoke_method(class, method, receiver, arguments, position);
+        }
+
+        if let Some(result) = self.call_undefined_name(&receiver, method_name, &arguments, position)
+        {
+            return result;
         }
 
         // For Class/Module receivers, a module-level copy of a method wins
@@ -460,6 +469,40 @@ impl VirtualMachine {
                 position,
             ))
         }
+    }
+
+    /// A call of a name the receiver's class retired with `undef_method`,
+    /// native methods such as `inspect` and `<=>` included, reaches
+    /// `method_missing`, or raises the NoMethodError a name nothing defines
+    /// raises. Answers None when the name was not undefined.
+    pub(crate) fn call_undefined_name(
+        &mut self,
+        receiver: &Object,
+        method_name: &str,
+        arguments: &[Object],
+        position: Position,
+    ) -> Option<Result<Object, MetorexError>> {
+        if !matches!(receiver, Object::Instance(_)) {
+            return None;
+        }
+        let (_, method) = self.lookup_method(receiver, method_name)?;
+        if !method.is_undefined {
+            return None;
+        }
+        if method_name != "method_missing"
+            && let Some(handled) =
+                self.restricted_call_via_method_missing(receiver, method_name, arguments, position)
+        {
+            return Some(handled);
+        }
+        let wording = self.receiver_wording_for(receiver, position);
+        Some(Err(crate::vm::errors::undefined_method_error_worded(
+            method_name,
+            receiver,
+            arguments,
+            wording,
+            position,
+        )))
     }
 
     /// A call that visibility refuses still reaches a user-defined
@@ -1179,9 +1222,6 @@ impl VirtualMachine {
                         return Some((sc, method));
                     }
                     cursor = current.superclass();
-                }
-                if let Some(method) = module_rc.find_method(method_name) {
-                    return Some((Rc::clone(module_rc), method));
                 }
                 // User-defined modules are instances of the global `Module`
                 // class. Methods mixed into Module via `class Module; include

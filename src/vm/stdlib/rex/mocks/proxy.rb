@@ -287,6 +287,9 @@ module Rex
 
       def message_received(message, *args, &block)
         RubyFeatures.ensure_not_a_ruby_object_cycle(message)
+        Mocks.space.any_instance_recorders_from_ancestry_of(object).each do |subscriber|
+          subscriber.notify_received_message(object, message, args, block)
+        end
         super
       end
       ruby2_keywords(:message_received)
@@ -580,11 +583,17 @@ module Rex
         return unless @method_is_stashed
 
         @klass.__send__(:remove_method, @method) if defined_directly?
-        @klass.__send__(:define_method, @method, @stashed_unbound)
+        # A method the interpreter answers natively, such as `File.exist?`,
+        # answers again once the stub is removed, with its own arity.
+        @klass.__send__(:define_method, @method, @stashed_unbound) unless answered_natively?
         @method_is_stashed = false
       end
 
       private
+
+      def answered_natively?
+        @stashed_unbound.source_location.nil? && !defined_directly? && @object.respond_to?(@method, true)
+      end
 
       def defined_directly?
         @klass.instance_methods(false).include?(@method) ||

@@ -235,6 +235,13 @@ module Rex
         Rex::Mocks.teardown
       end
 
+      # Forgets the outcome of a run, so the example can run again.
+      def reset_for_rerun
+        @exception = nil
+        @execution_result = ExecutionResult.new
+        @metadata[:execution_result] = @execution_result
+      end
+
       def record_exception(error)
         return @exception = error unless @exception
 

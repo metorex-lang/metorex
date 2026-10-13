@@ -5,6 +5,7 @@ output from any process
   fails when the child writes something else (FAILED - 1)
 after capture
   still prints to stdout afterwards
+  leaves a stream that wraps stderr open
 
 aggregate failures as metadata
   reports every failure in the example (FAILED - 2)
@@ -31,7 +32,7 @@ Failures:
                  got: 1
 
             (compared using ==)
-          # ./spec/process_output_spec.rb:22:in 'block (2 levels) in <top (required)>'
+          # ./spec/process_output_spec.rb:46:in 'block (2 levels) in <top (required)>'
 
      2.2) Failure/Error: expect(3).to eq(4)
 
@@ -39,13 +40,13 @@ Failures:
                  got: 3
 
             (compared using ==)
-          # ./spec/process_output_spec.rb:23:in 'block (2 levels) in <top (required)>'
+          # ./spec/process_output_spec.rb:47:in 'block (2 levels) in <top (required)>'
 
 Finished in N seconds (files took N seconds to load)
-6 examples, 2 failures
+7 examples, 2 failures
 
 Failed examples:
 
 rspec ./spec/process_output_spec.rb:10 # output from any process fails when the child writes something else
-rspec ./spec/process_output_spec.rb:21 # aggregate failures as metadata reports every failure in the example
+rspec ./spec/process_output_spec.rb:45 # aggregate failures as metadata reports every failure in the example
 exit 1

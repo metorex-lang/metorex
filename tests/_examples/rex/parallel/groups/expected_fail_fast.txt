@@ -1,0 +1,24 @@
+
+invoices
+rendering invoice 1001
+  prints while it runs
+  fails on a total (FAILED - 1)
+
+Failures:
+
+  1) invoices fails on a total
+     Failure/Error: expect(10 + 5).to eq(16)
+
+       expected: 16
+            got: 15
+
+       (compared using ==)
+     # ./spec/billing_spec.rb:8:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+2 examples, 1 failure
+
+Failed examples:
+
+rspec ./spec/billing_spec.rb:7 # invoices fails on a total
+exit 1

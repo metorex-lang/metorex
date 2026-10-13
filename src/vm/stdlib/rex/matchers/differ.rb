@@ -11,8 +11,7 @@ module Rex
       def self.append_diff(message, expected, actual)
         return message unless Rex.configuration.diff_enabled?
 
-        diff = diff(actual, expected)
-        diff.strip.empty? ? message : "#{message}\nDiff:#{diff}"
+        MultiMatcherDiff.from(expected, actual).message_with_diff(message, self)
       end
 
       def self.diff(actual, expected)
@@ -133,6 +132,67 @@ module Rex
 
       def self.color(text, code)
         "\e[#{code}m#{text}\e[0m"
+      end
+    end
+  end
+end
+
+module Rex
+  module Matchers
+    # The diffs a failure message ends with: one for a plain matcher, or one
+    # per failing diffable matcher of a compound one, each with its label.
+    class MultiMatcherDiff
+      DEFAULT_DIFF_LABEL = "Diff:".freeze
+      DESCRIPTION_MAX_LENGTH = 65
+
+      def initialize(expected_list)
+        @expected_list = expected_list
+      end
+
+      def self.from(expected, actual)
+        return expected if self === expected
+
+        new([[expected, DEFAULT_DIFF_LABEL, actual]])
+      end
+
+      def self.for_many_matchers(matchers)
+        new(matchers.map { |matcher| [matcher.expected, diff_label_for(matcher), matcher.actual] })
+      end
+
+      def message_with_diff(message, differ)
+        diff = diffs(differ)
+        message = "#{message}\n#{diff}" unless diff.empty?
+        message
+      end
+
+      class << self
+        private
+
+        def diff_label_for(matcher)
+          "Diff for (#{truncated(ObjectFormatter.format(matcher))}):"
+        end
+
+        def truncated(description)
+          return description if description.length <= DESCRIPTION_MAX_LENGTH
+
+          description[0...(DESCRIPTION_MAX_LENGTH - 3)] << "..."
+        end
+      end
+
+      private
+
+      def diffs(differ)
+        @expected_list.map do |(expected, diff_label, actual)|
+          diff = differ.diff(actual, expected)
+          next if diff.strip.empty?
+
+          if diff == "\e[0m\n\e[0m"
+            "#{diff_label}\n" \
+              "  <The diff is empty, are your objects producing identical `#inspect` output?>"
+          else
+            "#{diff_label}#{diff}"
+          end
+        end.compact.join("\n")
       end
     end
   end

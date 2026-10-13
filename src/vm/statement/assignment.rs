@@ -959,7 +959,6 @@ impl VirtualMachine {
                                 .clone()
                                 .and_then(|singleton| singleton.find_method(&setter_method))
                         })
-                        .or_else(|| class_rc.find_method(&setter_method))
                 {
                     self.invoke_method(
                         Rc::clone(&class_rc),
@@ -984,9 +983,12 @@ impl VirtualMachine {
                     {
                         return Ok(());
                     }
-                    // Store as class variable
-                    class_rc
-                        .set_class_var(format!("@{}", setter_method.trim_end_matches('=')), value);
+                    self.send_to_object(
+                        Object::Class(class_rc),
+                        &setter_method,
+                        vec![value],
+                        *position,
+                    )?;
                     Ok(())
                 }
             }
@@ -1002,7 +1004,6 @@ impl VirtualMachine {
                                 .clone()
                                 .and_then(|singleton| singleton.find_method(&setter_method))
                         })
-                        .or_else(|| module_rc.find_method(&setter_method))
                 {
                     self.invoke_method(
                         Rc::clone(&module_rc),
@@ -1029,8 +1030,7 @@ impl VirtualMachine {
                     {
                         return Ok(());
                     }
-                    module_rc
-                        .set_class_var(format!("@{}", setter_method.trim_end_matches('=')), value);
+                    self.send_to_object(receiver, &setter_method, vec![value], *position)?;
                     Ok(())
                 }
             }
@@ -1278,7 +1278,8 @@ impl VirtualMachine {
                 let writes = crate::vm::method_invocation::descends_from(&class, "IO")
                     || self
                         .lookup_method(&value, "write")
-                        .is_some_and(|(_, method)| !method.is_undefined);
+                        .is_some_and(|(_, method)| !method.is_undefined)
+                    || self.responds_via_missing(&value, "write", false, position)?;
                 if !writes {
                     let named = class_named(&value);
                     return Err(simple_exception(
@@ -1429,7 +1430,7 @@ impl VirtualMachine {
 /// spells it.
 fn class_named(value: &Object) -> String {
     match value {
-        Object::Instance(instance) => instance.borrow().class.name().to_string(),
+        Object::Instance(instance) => instance.borrow().class.inspect_name(),
         other => crate::vm::native_methods::define_method::ruby_class_name(other).to_string(),
     }
 }

@@ -6,7 +6,7 @@ Failures:
      Failure/Error: expect { raise ArgumentError }.to raise_error
 
      RuntimeError:
-       WARNING: Using the `raise_error` matcher without providing a specific error or message risks false positives, since `raise_error` will match when Ruby raises a `NoMethodError`, `NameError` or `ArgumentError`, potentially allowing the expectation to pass without even executing the method you are intending to call. Actual error raised was #<ArgumentError: ArgumentError>. Instead consider providing a specific error class or message. This message can be suppressed by setting: `RSpec::Expectations.configuration.on_potential_false_positives = :nothing`. Called from /Users/gd/workspace/metorex-lang/metorex/tests/_examples/rex/config/warnings/spec/warnings_spec.rb:5:in 'block (2 levels) in <top (required)>'.
+       WARNING: Using the `raise_error` matcher without providing a specific error or message risks false positives, since `raise_error` will match when Ruby raises a `NoMethodError`, `NameError` or `ArgumentError`, potentially allowing the expectation to pass without even executing the method you are intending to call. Actual error raised was #<ArgumentError: ArgumentError>. Instead consider providing a specific error class or message. This message can be suppressed by setting: `RSpec::Expectations.configuration.on_potential_false_positives = :nothing`. Called from ROOT/tests/_examples/rex/config/warnings/spec/warnings_spec.rb:5:in 'block (2 levels) in <top (required)>'.
      # ./spec/warnings_spec.rb:5:in 'block (2 levels) in <top (required)>'
 
 Finished in N seconds (files took N seconds to load)

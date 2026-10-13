@@ -237,6 +237,24 @@ impl VirtualMachine {
                     stub.owner_class = Some(owner);
                     return Ok(Some(Object::Method(std::rc::Rc::new(stub))));
                 }
+                // A class or module is an object too, so Kernel's private
+                // functions, such as `puts`, are methods it has.
+                if matches!(receiver, Object::Class(_) | Object::Module(_))
+                    && !public_only
+                    && crate::vm::native_methods::is_kernel_private_function(&name_str)
+                    && let Some(Object::Module(kernel)) = self.globals().get("Kernel")
+                {
+                    let mut stub = crate::object::Method::new(
+                        name_str.clone(),
+                        vec!["args".to_string()],
+                        vec![],
+                    );
+                    stub.receiver = Some(Box::new(receiver.clone()));
+                    stub.owner = Some("Kernel".to_string());
+                    stub.original_name = Some(name_str.clone());
+                    stub.owner_class = Some(kernel);
+                    return Ok(Some(Object::Method(std::rc::Rc::new(stub))));
+                }
                 let cls = self.builtins().class_of(receiver);
                 let msg = format!("undefined method '{}' for class '{}'", name_str, cls.name());
                 let exc = Object::exception("NameError", msg.clone());

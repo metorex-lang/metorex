@@ -186,9 +186,9 @@ fn file_respond_to_unknown_method() {
 }
 
 #[test]
-fn file_respond_to_non_string_arg_returns_false() {
-    let result = run(r#"File.respond_to?(42)"#);
-    assert_eq!(result, Some(Object::Bool(false)));
+fn file_respond_to_non_string_arg_raises_type_error() {
+    let err = run_err(r#"File.respond_to?(42)"#);
+    assert!(err.contains("42 is not a symbol nor a string"));
 }
 
 // ── `Thread.respond_to?` (lines 340-352) ─────────────────────────────────────

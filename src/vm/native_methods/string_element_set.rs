@@ -27,7 +27,11 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         let held = target.to_text();
-        let letters = held.chars().count() as i64;
+        // The characters as the string's encoding reads them, each spelled
+        // the way the string holds it, which for a wide encoding is a run of
+        // bytes.
+        let units = crate::vm::native_methods::string_methods::character_units(target);
+        let letters = units.len() as i64;
         let (start, width, value) = match arguments {
             [pattern @ Object::Regex(..), value] => {
                 let (start, width) =
@@ -93,11 +97,18 @@ impl VirtualMachine {
                 target.mark_bytes();
             }
         }
-        let characters: Vec<char> = held.chars().collect();
         let (start, end) = (start as usize, (start + width) as usize);
-        let mut made: String = characters[..start].iter().collect();
-        made.push_str(&replacement.to_text());
-        made.extend(characters[end..].iter());
+        let mut made: String = units[..start].concat();
+        if target.holds_bytes() {
+            made.extend(
+                crate::vm::native_methods::string_methods::binary_bytes(&replacement)
+                    .iter()
+                    .map(|byte| *byte as char),
+            );
+        } else {
+            made.push_str(&replacement.to_text());
+        }
+        made.push_str(&units[end..].concat());
         target.replace_text(made);
         Ok(Object::String(replacement))
     }

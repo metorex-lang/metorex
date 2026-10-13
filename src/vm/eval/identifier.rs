@@ -533,11 +533,66 @@ impl VirtualMachine {
     /// The constant `name` names in the scopes open where the running code
     /// was written, or in the ancestors of the innermost of them short of
     /// Object. Top-level code has no such scope. Fires no autoload.
-    pub(crate) fn constant_before_object(&self, name: &str) -> Option<Object> {
-        let nesting: Vec<Rc<crate::class::Class>> = match self.method_nesting_stack.last() {
-            Some(nesting) if !nesting.is_empty() => nesting.clone(),
+    /// The modules open where the running code was written, innermost
+    /// first: the nesting a method or block carries, which is empty for code
+    /// written at the top level, or the bodies open around code that carries
+    /// none.
+    fn code_written_at_top_level(&self) -> bool {
+        self.top_level_block_depths.last() == Some(&self.method_nesting_stack.len())
+    }
+
+    /// Note that the block whose nesting was just pushed was written at the
+    /// top level, when its nesting is empty.
+    pub(crate) fn enter_block_nesting(&mut self, nesting: Vec<Rc<crate::class::Class>>) {
+        let top_level = nesting.is_empty();
+        self.method_nesting_stack.push(nesting);
+        if top_level {
+            self.top_level_block_depths
+                .push(self.method_nesting_stack.len());
+        }
+    }
+
+    /// Runs `body` with `scope` innermost in the lexical nesting, as a
+    /// `class` or `module` body opened in a block or a method has it.
+    pub(crate) fn with_body_nesting<T>(
+        &mut self,
+        scope: &Rc<crate::class::Class>,
+        body: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        if self.method_nesting_stack.is_empty() {
+            return body(self);
+        }
+        let mut nesting = vec![Rc::clone(scope)];
+        nesting.extend(
+            self.lexical_nesting()
+                .into_iter()
+                .filter(|held| !Rc::ptr_eq(held, scope)),
+        );
+        self.method_nesting_stack.push(nesting);
+        let result = body(self);
+        self.method_nesting_stack.pop();
+        result
+    }
+
+    pub(crate) fn leave_block_nesting(&mut self) {
+        if self.top_level_block_depths.last() == Some(&self.method_nesting_stack.len()) {
+            self.top_level_block_depths.pop();
+        }
+        self.method_nesting_stack.pop();
+    }
+
+    pub(crate) fn lexical_nesting(&self) -> Vec<Rc<crate::class::Class>> {
+        match self.method_nesting_stack.last() {
+            Some(nesting) if !nesting.is_empty() || self.def_scope_stack.is_empty() => {
+                nesting.clone()
+            }
+            Some(_) if self.code_written_at_top_level() => Vec::new(),
             _ => self.def_scope_stack.iter().rev().cloned().collect(),
-        };
+        }
+    }
+
+    pub(crate) fn constant_before_object(&self, name: &str) -> Option<Object> {
+        let nesting = self.lexical_nesting();
         let innermost = nesting.first()?;
         if let Some(value) = nesting.iter().find_map(|scope| scope.get_class_var(name)) {
             return Some(value);
@@ -569,10 +624,7 @@ impl VirtualMachine {
     /// Whether a scope open where the code was written has an autoload
     /// registered for `name` and no constant of that name yet.
     fn autoload_pending_in_lexical_scope(&self, name: &str) -> bool {
-        let nesting: Vec<Rc<crate::class::Class>> = match self.method_nesting_stack.last() {
-            Some(nesting) if !nesting.is_empty() => nesting.clone(),
-            _ => self.def_scope_stack.iter().rev().cloned().collect(),
-        };
+        let nesting = self.lexical_nesting();
         nesting.iter().any(|scope| {
             scope.get_class_var(name).is_none() && scope.lookup_autoload(name).is_some()
         })

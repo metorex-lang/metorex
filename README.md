@@ -634,6 +634,29 @@ See [examples/concurrency.rb](examples/advanced/concurrency.rb)
 
 See [examples/serialization.rb](examples/advanced/serialization.rb)
 
+## Built-in Spec Runner
+
+`metorex spec` runs a suite written for RSpec 3.13 with Rex, the spec framework metorex carries. `require "rspec"` loads Rex as well, and `RSpec` names it, so a suite runs with no gems installed. It reads `.rspec`, `.rspec-local`, and `SPEC_OPTS`, loads `spec_helper`, and prints what RSpec prints: the expected output of each fixture under `tests/_examples/rex` is RSpec's own output for the same suite.
+
+It takes the options `metorex spec --help` lists, which are RSpec's, and these of its own:
+
+- `--jobs N` runs the top-level groups in N forked worker processes, and `--jobs auto` runs one per processor. The parent hands each group's events to the formatters in the order a serial run would, so the output reads as it does with one job
+- `--verify-parallel` runs the suite again in one process with the same seed after a parallel run, and warns about each example whose outcome changed
+- `--coverage` reports the lines and branches of the loaded files that ran, counted by the interpreter rather than a coverage gem. `--coverage-format` picks `summary`, `lcov`, or `json`, `--coverage-dir` says where the files go, `--coverage-threshold PERCENT` fails a run below it, and `--coverage-exclude PATTERN` leaves files out. Parallel workers merge their counts
+- `config.source_expressions = true` quotes the expression handed to `expect` in a failure, `config.failure_context_lines = N` prints N lines around the failing line, and `config.diff_line_limit = N` leaves out a diff longer than N lines
+
+### Compatibility
+
+`scripts/run_rspec_suite.sh` runs the RSpec libraries' own suites against Rex, a spec file to a process, and prints the totals:
+
+| Suite | Passing | Examples | Pending |
+| :-- | --: | --: | --: |
+| rspec-expectations | 2201 | 2456 | 9 |
+| rspec-mocks | 1292 | 1807 | 9 |
+| rspec-core | not run | | |
+
+rspec-mocks leaves out `spec/integration/rails_support_spec.rb`, and rspec-core's `spec_helper` loads its support files, both of which need the aruba gem. diff-lcs's suite passes all 322 of its examples, with documentation output identical to RSpec's byte for byte.
+
 ## Roadmap Highlights
 
 See [ROADMAP.md](ROADMAP.md) for complete details.

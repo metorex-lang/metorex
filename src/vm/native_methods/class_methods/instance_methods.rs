@@ -107,6 +107,53 @@ impl VirtualMachine {
                     stub.owner_class = Some(Rc::clone(class_rc));
                     return Ok(Answered(Object::Method(Rc::new(stub))));
                 }
+                // A class below Object reaches the methods Kernel and
+                // BasicObject answer natively, owned by whichever of the two
+                // its ancestors reach first, as BasicObject owns `==`.
+                if class_rc.name() != "BasicObject"
+                    && (is_native_kernel_method(&name_str)
+                        || NATIVE_BASIC_OBJECT_METHODS.contains(&name_str.as_str())
+                        || BASIC_OBJECT_PRIVATE_METHODS.contains(&name_str.as_str()))
+                {
+                    let named = if class_rc.is_module() {
+                        Object::Module(Rc::clone(class_rc))
+                    } else {
+                        Object::Class(Rc::clone(class_rc))
+                    };
+                    let owners = self.ancestor_names(named, position)?;
+                    let owner = crate::vm::native_methods::object_methods::nearest_core_owner(
+                        &owners, &name_str,
+                    );
+                    if let Some(owner @ ("Kernel" | "BasicObject")) = owner
+                        && let Some(Object::Class(owner_rc) | Object::Module(owner_rc)) =
+                            self.globals().get(owner)
+                    {
+                        let mut stub = Method::with_owner(
+                            name_str.clone(),
+                            vec!["args".to_string()],
+                            vec![],
+                            owner.to_string(),
+                        );
+                        stub.variadic_param = Some((0, "args".to_string()));
+                        if name_str == "warn" {
+                            stub.parameters = vec!["msgs".to_string()];
+                            stub.variadic_param = Some((0, "msgs".to_string()));
+                            stub.keyword_parameters = ["uplevel", "category"]
+                                .map(|keyword| {
+                                    (
+                                        keyword.to_string(),
+                                        Some(crate::ast::Expression::NilLiteral { position }),
+                                    )
+                                })
+                                .to_vec();
+                        }
+                        stub.native_alias = Some(name_str.clone());
+                        stub.original_name = Some(name_str.clone());
+                        stub.owner_class = Some(owner_rc);
+                        stub.origin_class = Some(Rc::clone(class_rc));
+                        return Ok(Answered(Object::Method(Rc::new(stub))));
+                    }
+                }
                 // Kernel methods are implemented natively rather than living
                 // in Object's method table. A body-less stub reaches the same
                 // native implementation when invoked, so `Object` can hand out
@@ -219,6 +266,33 @@ impl VirtualMachine {
                         class_rc.name().to_string(),
                     );
                     stub.variadic_param = Some((0, "args".to_string()));
+                    return Ok(Answered(Object::Method(Rc::new(stub))));
+                }
+                // A singleton class holds the class methods Ruby's core
+                // defines natively, such as `File.exist?`, owned by the
+                // singleton class of the class that defines them.
+                if let Some(attached) = self.attached_class_of(class_rc)
+                    && let Some(definer) =
+                        native_singleton_method_definer(&attached, &name_str, true)
+                {
+                    let owner = if Rc::ptr_eq(&definer, &attached) {
+                        Rc::clone(class_rc)
+                    } else if definer.is_module() {
+                        self.singleton_class_of(&Object::Module(definer))
+                    } else {
+                        self.singleton_class_of(&Object::Class(definer))
+                    };
+                    let mut stub = Method::with_owner(
+                        name_str.clone(),
+                        vec!["args".to_string()],
+                        vec![],
+                        owner.name().to_string(),
+                    );
+                    stub.variadic_param = Some((0, "args".to_string()));
+                    stub.native_alias = Some(name_str.clone());
+                    stub.original_name = Some(name_str.clone());
+                    stub.owner_class = Some(owner);
+                    stub.origin_class = Some(Rc::clone(class_rc));
                     return Ok(Answered(Object::Method(Rc::new(stub))));
                 }
                 return Err(undefined_instance_method_error(
@@ -512,3 +586,28 @@ impl VirtualMachine {
 
 /// The methods `-n` and `-p` give Kernel, private and as module functions.
 pub(crate) const LINE_LOOP_METHODS: [&str; 4] = ["chomp", "chop", "gsub", "sub"];
+
+/// The class or module, `attached` or one of its superclasses, whose class
+/// methods Ruby's core defines `name` among natively, as File defines
+/// `exist?` and Kernel defines `warn`.
+pub(crate) fn native_singleton_method_definer(
+    attached: &Rc<Class>,
+    name: &str,
+    include_super: bool,
+) -> Option<Rc<Class>> {
+    let mut cursor = Some(Rc::clone(attached));
+    while let Some(current) = cursor {
+        let kernel_function = current.ruby_name() == "Kernel"
+            && (KERNEL_PRIVATE_FUNCTIONS.contains(&name) || is_native_kernel_method(name));
+        if kernel_function
+            || crate::vm::method_lookup::core_singleton_method(&current.ruby_name(), name)
+        {
+            return Some(current);
+        }
+        if !include_super {
+            return None;
+        }
+        cursor = current.superclass();
+    }
+    None
+}

@@ -43,3 +43,8 @@ fn test_a_diff_past_the_line_limit_is_left_out() {
 fn test_no_diff_leaves_every_diff_out() {
     assert_matches("diffs/limits", "no_diff", &["--no-diff"]);
 }
+
+#[test]
+fn test_a_compound_matcher_diffs_each_failing_matcher_with_its_label() {
+    assert_matches("diffs/compound", "progress", &[]);
+}

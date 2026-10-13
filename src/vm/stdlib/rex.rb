@@ -17,6 +17,7 @@ end
 
 RSpec = Rex unless defined?(RSpec)
 
+require "rex/support"
 require "rex/core/configuration"
 require "rex/core/hooks"
 require "rex/core/memoized_helpers"
@@ -32,6 +33,10 @@ require "rex/mocks"
 require "rex/core/formatters"
 require "rex/core/deprecations"
 require "rex/core/runner"
+require "rex/core/parallel"
+require "rex/core/coverage"
 
 Rex::Core::ExampleGroup.__send__(:include, Rex::Matchers)
 Rex::Core::ExampleGroup.__send__(:include, Rex::Mocks::ExampleMethods)
+Rex::Core::ExampleGroup.extend(Rex::Matchers::DSL)
+Rex::Expectations.configuration.reset_syntaxes_to_default

@@ -14,16 +14,12 @@ module Rex
           raise ArgumentError, "Failure message is nil. Does your matcher define the appropriate failure_message[_when_negated] method to return a string?"
         end
 
-        message = Rex::Matchers::Differ.append_diff(message, expected, actual) if expected || actual
-        if (aggregator = Thread.current[:rex_failure_aggregator])
-          aggregator.call(ExpectationNotMet.new(message))
-        else
-          raise ExpectationNotMet, message
-        end
+        message = Rex::Matchers::Differ.append_diff(message, expected, actual)
+        Rex::Support.notify_failure(ExpectationNotMet.new(message))
       end
 
       def configuration
-        @configuration ||= Core::ExpectationConfiguration.new(Rex.configuration)
+        @configuration ||= Configuration.new
       end
     end
 
@@ -202,35 +198,204 @@ module Rex
       end
     end
 
-    # `should` and `should_not` on every object, on when a suite asks for
-    # the old syntax.
+    # Where `should`, `should_not`, and `expect` are defined, and whether
+    # each is.
     module Syntax
-      module ShouldMethods
-        def should(matcher = nil, message = nil, &block)
-          Rex::Matchers.last_should_verb = true
-          PositiveExpectationHandler.handle_matcher(self, matcher, message, &block)
-        end
+      module_function
 
-        def should_not(matcher = nil, message = nil, &block)
-          Rex::Matchers.last_should_verb = true
-          NegativeExpectationHandler.handle_matcher(self, matcher, message, &block)
+      def default_should_host
+        @default_should_host ||= ::Object.ancestors.last
+      end
+
+      def warn_about_should!
+        @warn_about_should = true
+      end
+
+      def warn_about_should_unless_configured(method_name)
+        return unless @warn_about_should
+
+        Rex.deprecate(
+          "Using `#{method_name}` from rspec-expectations' old `:should` syntax without explicitly enabling the syntax",
+          replacement: "the new `:expect` syntax or explicitly enable `:should` with `config.expect_with(:rspec) { |c| c.syntax = :should }`"
+        )
+        @warn_about_should = false
+      end
+
+      def enable_should(syntax_host = default_should_host)
+        @warn_about_should = false if syntax_host == default_should_host
+        return if should_enabled?(syntax_host)
+
+        syntax_host.module_exec do
+          def should(matcher = nil, message = nil, &block)
+            ::Rex::Expectations::Syntax.warn_about_should_unless_configured(::Kernel.__method__)
+            ::Rex::Matchers.last_should_verb = true
+            ::Rex::Expectations::PositiveExpectationHandler.handle_matcher(self, matcher, message, &block)
+          end
+
+          def should_not(matcher = nil, message = nil, &block)
+            ::Rex::Expectations::Syntax.warn_about_should_unless_configured(::Kernel.__method__)
+            ::Rex::Matchers.last_should_verb = true
+            ::Rex::Expectations::NegativeExpectationHandler.handle_matcher(self, matcher, message, &block)
+          end
         end
       end
 
-      def self.enable_should
-        return if @should_enabled
+      def disable_should(syntax_host = default_should_host)
+        return unless should_enabled?(syntax_host)
 
-        @should_enabled = true
-        BasicObject.__send__(:include, ShouldMethods)
+        syntax_host.module_exec do
+          undef should
+          undef should_not
+        end
       end
 
-      def self.disable_should
-        return unless @should_enabled
+      def enable_expect(syntax_host = ::Rex::Matchers)
+        return if expect_enabled?(syntax_host)
 
-        @should_enabled = false
-        ShouldMethods.instance_methods(false).each do |name|
-          ShouldMethods.__send__(:remove_method, name)
+        syntax_host.module_exec do
+          def expect(value = ::Rex::Expectations::ExpectationTarget::UNDEFINED, &block)
+            target = ::Rex::Expectations::ExpectationTarget.for(value, block)
+            target.source_location = caller_locations(1, 1).first if ::Rex.configuration.source_expressions
+            target
+          end
         end
+      end
+
+      def disable_expect(syntax_host = ::Rex::Matchers)
+        return unless expect_enabled?(syntax_host)
+
+        syntax_host.module_exec do
+          undef expect
+        end
+      end
+
+      def should_enabled?(syntax_host = default_should_host)
+        syntax_host.method_defined?(:should)
+      end
+
+      def expect_enabled?(syntax_host = ::Rex::Matchers)
+        syntax_host.method_defined?(:expect)
+      end
+    end
+
+    # What `config.expect_with(:rspec) { |c| }` yields, and
+    # `RSpec::Expectations.configuration`.
+    class Configuration
+      FALSE_POSITIVE_BEHAVIOURS = {
+        warn: ->(message) { Rex.warning(message) },
+        raise: ->(message) { raise ArgumentError, message },
+        nothing: ->(_message) { true }
+      }.freeze
+
+      def initialize
+        @on_potential_false_positives = :warn
+        @strict_predicate_matchers = false
+      end
+
+      def syntax=(values)
+        if Array(values).include?(:expect)
+          Expectations::Syntax.enable_expect
+        else
+          Expectations::Syntax.disable_expect
+        end
+
+        if Array(values).include?(:should)
+          Expectations::Syntax.enable_should
+        else
+          Expectations::Syntax.disable_should
+        end
+      end
+
+      def syntax
+        syntaxes = []
+        syntaxes << :should if Expectations::Syntax.should_enabled?
+        syntaxes << :expect if Expectations::Syntax.expect_enabled?
+        syntaxes
+      end
+
+      # Rex reads the length where it formats, so the setting is kept here
+      # rather than on a formatter instance.
+      attr_reader :max_formatted_output_length
+
+      def max_formatted_output_length=(length)
+        @max_formatted_output_length = length
+        @max_formatted_output_length_set = true
+      end
+
+      def max_formatted_output_length_set?
+        @max_formatted_output_length_set ? true : false
+      end
+
+      def color?
+        ::Rex.configuration.color_enabled?
+      end
+
+      def add_should_and_should_not_to(*modules)
+        modules.each do |mod|
+          Expectations::Syntax.enable_should(mod)
+        end
+      end
+
+      attr_writer :backtrace_formatter
+
+      def backtrace_formatter
+        @backtrace_formatter ||= ::Rex.configuration.backtrace_formatter
+      end
+
+      attr_writer :include_chain_clauses_in_custom_matcher_descriptions
+
+      def include_chain_clauses_in_custom_matcher_descriptions?
+        @include_chain_clauses_in_custom_matcher_descriptions ||= false
+      end
+      alias include_chain_clauses_in_custom_matcher_descriptions include_chain_clauses_in_custom_matcher_descriptions?
+
+      def reset_syntaxes_to_default
+        self.syntax = [:should, :expect]
+        Rex::Expectations::Syntax.warn_about_should!
+      end
+
+      NullBacktraceFormatter = Module.new do
+        def self.format_backtrace(backtrace)
+          backtrace
+        end
+      end
+
+      def warn_about_potential_false_positives=(boolean)
+        if boolean
+          self.on_potential_false_positives = :warn
+        elsif warn_about_potential_false_positives?
+          self.on_potential_false_positives = :nothing
+        end
+      end
+
+      attr_reader :on_potential_false_positives
+
+      def on_potential_false_positives=(behavior)
+        unless FALSE_POSITIVE_BEHAVIOURS.key?(behavior)
+          raise ArgumentError, "Supported values are: #{FALSE_POSITIVE_BEHAVIOURS.keys}"
+        end
+
+        @on_potential_false_positives = behavior
+      end
+
+      attr_reader :strict_predicate_matchers
+
+      def strict_predicate_matchers=(value)
+        raise ArgumentError, "Pass `true` or `false`" unless value == true || value == false
+
+        @strict_predicate_matchers = value
+      end
+
+      def strict_predicate_matchers?
+        @strict_predicate_matchers
+      end
+
+      def warn_about_potential_false_positives?
+        on_potential_false_positives == :warn
+      end
+
+      def false_positives_handler
+        FALSE_POSITIVE_BEHAVIOURS.fetch(@on_potential_false_positives)
       end
     end
   end

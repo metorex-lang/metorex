@@ -134,8 +134,12 @@ impl VirtualMachine {
             {
                 return Ok(Object::Bool(result.is_truthy()));
             }
-            // Comparable protocol: if <=> is defined, use it for ==
-            if let Some((cmp_class, cmp_method)) = self.lookup_method(&left, "<=>") {
+            // Comparable's `==` asks `<=>`. Object's `==` is identity, which
+            // the check above answered.
+            if self.is_comparable(&left)
+                && let Some((cmp_class, cmp_method)) = self.lookup_method(&left, "<=>")
+                && !cmp_method.is_undefined
+            {
                 let cmp_obj = self.invoke_method(
                     cmp_class,
                     cmp_method,
@@ -148,12 +152,10 @@ impl VirtualMachine {
                     Object::Float(f) => Ok(Object::Bool(f == 0.0)),
                     Object::Nil => Ok(Object::Bool(false)),
                     other => {
-                        // ArgumentError: <=> must return Integer, Float, or nil
-                        let msg = format!(
-                            "comparison of {} with {} failed",
-                            left.type_name(),
-                            other.type_name()
-                        );
+                        // Ruby compares what `<=>` returned with 0, which a
+                        // value that is not a number refuses.
+                        let msg =
+                            format!("comparison of {} with 0 failed", self.class_name_of(&other));
                         let exc = Object::exception("ArgumentError", msg.clone());
                         Err(MetorexError::UncaughtException {
                             exception: exc,

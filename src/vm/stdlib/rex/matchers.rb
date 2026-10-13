@@ -3,6 +3,10 @@ module Rex
     class << self
       attr_accessor :last_matcher, :last_expectation_verb, :last_should_verb
 
+      def configuration
+        Expectations.configuration
+      end
+
       # `it { is_expected.to eq 5 }` is described as "is expected to eq 5".
       def generated_description
         return nil unless last_matcher && last_expectation_verb
@@ -20,21 +24,29 @@ module Rex
         self.last_should_verb = nil
       end
 
+    end
+
+    # The matcher-defining methods, which Rex::Matchers and every example
+    # group answer.
+    module DSL
       def alias_matcher(new_name, old_name, options = {}, &description_override)
         description_override ||= lambda do |old_description|
           old_description.gsub(EnglishPhrasing.split_words(old_name), EnglishPhrasing.split_words(new_name))
         end
         klass = options.fetch(:klass) { AliasedMatcher }
         define_method(new_name) do |*arguments, &block|
-          klass.new(__send__(old_name, *arguments, &block), description_override)
+          matcher = __send__(old_name, *arguments, &block)
+          matcher.matcher_name = new_name if matcher.respond_to?(:matcher_name=)
+          klass.new(matcher, description_override)
         end
-        ruby2_keywords(new_name)
+        ruby2_keywords(new_name) if respond_to?(:ruby2_keywords, true)
       end
 
       def define_negated_matcher(negated_name, base_name, &description_override)
         alias_matcher(negated_name, base_name, klass: AliasedNegatedMatcher, &description_override)
       end
     end
+    extend DSL
 
     # Formats an object the way a failure message shows it.
     module ObjectFormatter
@@ -51,7 +63,7 @@ module Rex
 
       def self.max_length
         length = Rex::Expectations.configuration.max_formatted_output_length
-        length.nil? && Rex::Expectations.configuration.instance_variable_defined?(:@max_formatted_output_length) ? Float::INFINITY : (length || MAX_LENGTH)
+        length.nil? && Rex::Expectations.configuration.max_formatted_output_length_set? ? Float::INFINITY : (length || MAX_LENGTH)
       end
 
       def self.prepare_for_inspection(object)
@@ -92,6 +104,8 @@ module Rex
         end
       end
     end
+
+    ::Rex::Support::ObjectFormatter = ObjectFormatter
 
     module EnglishPhrasing
       def self.split_words(symbol)
@@ -143,10 +157,31 @@ module Rex
       end
     end
 
-    def self.matcher?(object)
-      return false if object.is_a?(Module)
+    def self.is_a_matcher?(object)
+      return true if ::Rex::Matchers::BuiltIn::BaseMatcher === object
 
-      object.respond_to?(:matches?) && (object.respond_to?(:failure_message) || object.respond_to?(:failure_message_for_should))
+      begin
+        return false if object.respond_to?(:i_respond_to_everything_so_im_not_really_a_matcher)
+      rescue NoMethodError
+        # An object such as a BasicObject answers no reflection methods.
+        return false
+      end
+      return false unless object.respond_to?(:matches?)
+
+      object.respond_to?(:failure_message) ||
+        object.respond_to?(:failure_message_for_should)
+    end
+
+    ::Rex::Support.register_matcher_definition do |object|
+      is_a_matcher?(object)
+    end
+
+    def self.is_a_describable_matcher?(object)
+      is_a_matcher?(object) && object.respond_to?(:description)
+    end
+
+    class << self
+      alias matcher? is_a_matcher?
     end
 
     # What lets a matcher stand where a value goes: `===`, `and`, `or`.
@@ -236,19 +271,7 @@ module Rex
         UNDEFINED = Object.new.freeze
 
         attr_reader :actual, :expected, :rescued_exception
-
-        def self.matcher_name
-          @matcher_name ||= underscore(name.split("::").last)
-        end
-
-        def self.underscore(camel_cased_word)
-          word = camel_cased_word.to_s.dup
-          word.gsub!(/([A-Z]+)([A-Z][a-z])/, '\1_\2')
-          word.gsub!(/([a-z\d])([A-Z])/, '\1_\2')
-          word.tr!("-", "_")
-          word.downcase!
-          word
-        end
+        attr_writer :matcher_name
 
         def initialize(expected = UNDEFINED)
           @expected = expected unless UNDEFINED.equal?(expected)
@@ -264,8 +287,7 @@ module Rex
           begin
             yield
             true
-          rescue *exceptions => error
-            @rescued_exception = error
+          rescue *exceptions => @rescued_exception
             false
           end
         end
@@ -293,24 +315,77 @@ module Rex
         end
 
         def expected_formatted
-          ObjectFormatter.format(@expected)
+          Rex::Support::ObjectFormatter.format(@expected)
         end
 
         def actual_formatted
-          ObjectFormatter.format(@actual)
+          Rex::Support::ObjectFormatter.format(@actual)
         end
 
-        def failure_message
-          "expected #{description_of @actual} to #{description}"
+        def self.matcher_name
+          @matcher_name ||= underscore(name.split("::").last)
         end
 
-        def failure_message_when_negated
-          "expected #{description_of @actual} not to #{description}"
+        def matcher_name
+          if defined?(@matcher_name)
+            @matcher_name
+          else
+            self.class.matcher_name
+          end
         end
 
-        def inspect
-          "#<#{self.class.name} #{description}>"
+        def self.underscore(camel_cased_word)
+          word = camel_cased_word.to_s.dup
+          word.gsub!(/([A-Z]+)([A-Z][a-z])/, '\1_\2')
+          word.gsub!(/([a-z\d])([A-Z])/, '\1_\2')
+          word.tr!("-", "_")
+          word.downcase!
+          word
         end
+        private_class_method :underscore
+
+        module HashFormatting
+          def improve_hash_formatting(inspect_string)
+            inspect_string.gsub(/(\S)=>(\S)/, '\1 => \2')
+          end
+          module_function :improve_hash_formatting
+        end
+
+        include HashFormatting
+
+        module StringEncodingFormatting
+          def string_encoding_differs?
+            actual.is_a?(String) && expected.is_a?(String) && actual.encoding != expected.encoding
+          end
+          module_function :string_encoding_differs?
+
+          def format_encoding(value)
+            "#<Encoding:#{value.encoding.name}>"
+          end
+          module_function :format_encoding
+        end
+
+        include StringEncodingFormatting
+
+        # The failure messages a matcher has when it does not write its own.
+        module DefaultFailureMessages
+          def failure_message
+            +"expected #{description_of @actual} to #{description}"
+          end
+
+          def failure_message_when_negated
+            +"expected #{description_of @actual} not to #{description}"
+          end
+
+          def self.has_default_failure_messages?(matcher)
+            matcher.method(:failure_message).owner == self &&
+              matcher.method(:failure_message_when_negated).owner == self
+          rescue NameError
+            false
+          end
+        end
+
+        include DefaultFailureMessages
       end
 
       class Eq < BaseMatcher
@@ -1157,10 +1232,6 @@ module Rex
           end
         end
 
-        def improve_hash_formatting(text)
-          text.gsub(/(\S)=>(\S)/, '\\1 => \\2')
-        end
-
         def diff_would_wrongly_highlight_matched_item?
           return false unless actual.is_a?(String) && expected.is_a?(Array)
           return false if Regexp === expecteds.first
@@ -1181,7 +1252,8 @@ module Rex
           if Array === actual
             generate_failure_message
           else
-            "expected a collection that can be converted to an array with `#to_ary` or `#to_a`, but got #{actual_formatted}"
+            "expected a collection that can be converted to an array with " \
+              "`#to_ary` or `#to_a`, but got #{actual_formatted}"
           end
         end
 
@@ -1196,62 +1268,233 @@ module Rex
         end
 
         def matches?(actual)
-          @actual = actual
-          convert_actual_to_an_array && match_when_sorted? || (Array === @actual && pairings_match?)
+          @pairings_maximizer = nil
+          @best_solution = nil
+          @extra_items = nil
+          @missing_items = nil
+          super(actual)
         end
 
         private
 
         def generate_failure_message
-          message = "expected collection contained:  #{description_of(safe_sort(surface_descriptions_in expected))}\n"
-          message += "actual collection contained:    #{description_of(safe_sort(actual))}\n"
-          message += "the missing elements were:      #{description_of(safe_sort(surface_descriptions_in missing_items))}\n" unless missing_items.empty?
-          message += "the extra elements were:        #{description_of(safe_sort(extra_items))}\n" unless extra_items.empty?
+          message = expected_collection_line
+          message += actual_collection_line
+          message += missing_elements_line unless missing_items.empty?
+          message += extra_elements_line unless extra_items.empty?
           message
         end
 
-        def safe_sort(array)
-          array.sort
-        rescue StandardError
-          array
+        def expected_collection_line
+          message_line("expected collection contained", expected, true)
         end
 
-        def convert_actual_to_an_array
-          if @actual.respond_to?(:to_ary)
-            @actual = @actual.to_ary
-          elsif @actual.respond_to?(:to_a) && !@actual.is_a?(Hash) && !@actual.is_a?(String)
-            @actual = @actual.to_a
+        def actual_collection_line
+          message_line("actual collection contained", actual)
+        end
+
+        def missing_elements_line
+          message_line("the missing elements were", missing_items, true)
+        end
+
+        def extra_elements_line
+          message_line("the extra elements were", extra_items)
+        end
+
+        def describe_collection(collection, surface_descriptions = false)
+          if surface_descriptions
+            "#{description_of(safe_sort(surface_descriptions_in(collection)))}\n"
           else
-            false
+            "#{description_of(safe_sort(collection))}\n"
           end
+        end
+
+        def message_line(prefix, collection, surface_descriptions = false)
+          format("%-32s%s", "#{prefix}:", describe_collection(collection, surface_descriptions))
+        end
+
+        def match(_expected, _actual)
+          return false unless convert_actual_to_an_array
+
+          match_when_sorted? || (extra_items.empty? && missing_items.empty?)
         end
 
         def match_when_sorted?
           values_match?(safe_sort(expected), safe_sort(actual))
         end
 
-        def pairings_match?
-          missing_items.empty? && extra_items.empty?
+        def convert_actual_to_an_array
+          if actual.respond_to?(:to_ary)
+            @actual = actual.to_ary
+          elsif actual.respond_to?(:to_a) && !to_a_disallowed?(actual)
+            @actual = actual.to_a
+          else
+            false
+          end
+        end
+
+        def safe_sort(array)
+          array.sort
+        rescue Rex::Support::AllExceptionsExceptOnesWeMustNotRescue
+          array
+        end
+
+        def to_a_disallowed?(object)
+          NilClass === object
         end
 
         def missing_items
-          @missing_items ||= begin
-            remaining = actual.dup
-            expected.reject do |expected_item|
-              index = remaining.index { |actual_item| values_match?(expected_item, actual_item) }
-              remaining.delete_at(index) if index
-              index
-            end
+          @missing_items ||= best_solution.unmatched_expected_indexes.map do |index|
+            expected[index]
           end
         end
 
         def extra_items
-          @extra_items ||= begin
-            remaining = expected.dup
-            actual.reject do |actual_item|
-              index = remaining.index { |expected_item| values_match?(expected_item, actual_item) }
-              remaining.delete_at(index) if index
-              index
+          @extra_items ||= best_solution.unmatched_actual_indexes.map do |index|
+            actual[index]
+          end
+        end
+
+        def best_solution
+          @best_solution ||= pairings_maximizer.find_best_solution
+        end
+
+        def pairings_maximizer
+          @pairings_maximizer ||= begin
+            expected_matches = Array.new(expected.size) { |index| [index, []] }.to_h
+            actual_matches = Array.new(actual.size) { |index| [index, []] }.to_h
+
+            expected.each_with_index do |expected_item, expected_index|
+              actual.each_with_index do |actual_item, actual_index|
+                next unless values_match?(expected_item, actual_item)
+
+                expected_matches[expected_index] << actual_index
+                actual_matches[actual_index] << expected_index
+              end
+            end
+
+            PairingsMaximizer.new(expected_matches, actual_matches)
+          end
+        end
+
+        # Pairs each expected item with an actual item it matches so that
+        # as few items as possible are left unpaired, trying each pairing
+        # of an item that matches more than one.
+        class PairingsMaximizer
+          Solution = Struct.new(:unmatched_expected_indexes, :unmatched_actual_indexes,
+                                :indeterminate_expected_indexes, :indeterminate_actual_indexes) do
+            def worse_than?(other)
+              unmatched_item_count > other.unmatched_item_count
+            end
+
+            def candidate?
+              indeterminate_expected_indexes.empty? &&
+                indeterminate_actual_indexes.empty?
+            end
+
+            def ideal?
+              candidate? && (
+                unmatched_expected_indexes.empty? ||
+                unmatched_actual_indexes.empty?
+              )
+            end
+
+            def unmatched_item_count
+              unmatched_expected_indexes.count + unmatched_actual_indexes.count
+            end
+
+            def +(other)
+              self.class.new(
+                unmatched_expected_indexes + other.unmatched_expected_indexes,
+                unmatched_actual_indexes + other.unmatched_actual_indexes,
+                [], []
+              )
+            end
+          end
+
+          attr_reader :expected_to_actual_matched_indexes, :actual_to_expected_matched_indexes, :solution
+
+          def initialize(expected_to_actual_matched_indexes, actual_to_expected_matched_indexes)
+            @expected_to_actual_matched_indexes = expected_to_actual_matched_indexes
+            @actual_to_expected_matched_indexes = actual_to_expected_matched_indexes
+
+            unmatched_expected_indexes, indeterminate_expected_indexes =
+              categorize_indexes(expected_to_actual_matched_indexes, actual_to_expected_matched_indexes)
+
+            unmatched_actual_indexes, indeterminate_actual_indexes =
+              categorize_indexes(actual_to_expected_matched_indexes, expected_to_actual_matched_indexes)
+
+            @solution = Solution.new(unmatched_expected_indexes, unmatched_actual_indexes,
+                                     indeterminate_expected_indexes, indeterminate_actual_indexes)
+          end
+
+          def find_best_solution
+            return solution if solution.candidate?
+
+            best_solution_so_far = NullSolution
+
+            expected_index = solution.indeterminate_expected_indexes.first
+            actuals = expected_to_actual_matched_indexes[expected_index]
+
+            actuals.each do |actual_index|
+              solution = best_solution_for_pairing(expected_index, actual_index)
+              return solution if solution.ideal?
+
+              best_solution_so_far = solution if best_solution_so_far.worse_than?(solution)
+            end
+
+            best_solution_so_far
+          end
+
+          NullSolution = Class.new do
+            def self.worse_than?(_other)
+              true
+            end
+          end
+          private_constant :NullSolution
+
+          private
+
+          def categorize_indexes(indexes_to_categorize, other_indexes)
+            unmatched = []
+            indeterminate = []
+
+            indexes_to_categorize.each_pair do |index, matches|
+              if matches.empty?
+                unmatched << index
+              elsif !reciprocal_single_match?(matches, index, other_indexes)
+                indeterminate << index
+              end
+            end
+
+            return unmatched, indeterminate
+          end
+
+          def reciprocal_single_match?(matches, index, other_list)
+            return false unless matches.one?
+
+            other_list[matches.first] == [index]
+          end
+
+          def best_solution_for_pairing(expected_index, actual_index)
+            modified_expecteds = apply_pairing_to(
+              solution.indeterminate_expected_indexes,
+              expected_to_actual_matched_indexes, actual_index
+            )
+            modified_expecteds.delete(expected_index)
+
+            modified_actuals = apply_pairing_to(
+              solution.indeterminate_actual_indexes,
+              actual_to_expected_matched_indexes, expected_index
+            )
+            modified_actuals.delete(actual_index)
+
+            solution + self.class.new(modified_expecteds, modified_actuals).find_best_solution
+          end
+
+          def apply_pairing_to(indeterminates, original_matches, other_list_index)
+            indeterminates.each_with_object({}) do |index, accumulated|
+              accumulated[index] = original_matches[index] - [other_list_index]
             end
           end
         end
@@ -2398,8 +2641,10 @@ module Rex
           captured.rewind
           captured.read
         ensure
+          # The clone is left open: when the stream is a wrapper rather than
+          # an IO, as a suite's stderr splitter is, closing the clone closes
+          # the stream it wraps.
           @stream.reopen(original) if original
-          original&.close
           captured&.close
           captured&.unlink
         end
@@ -2788,63 +3033,201 @@ module Rex
         end
       end
 
-      module Compound
-        class Base < BaseMatcher
-          attr_reader :matcher_1, :matcher_2
+      # `matcher.and(other)` and `matcher.or(other)`.
+      class Compound < BaseMatcher
+        attr_reader :matcher_1, :matcher_2, :evaluator
 
-          def initialize(matcher_1, matcher_2)
+        def initialize(matcher_1, matcher_2)
+          @matcher_1 = matcher_1
+          @matcher_2 = matcher_2
+        end
+
+        def does_not_match?(_actual)
+          raise NotImplementedError, "`expect(...).not_to matcher.#{conjunction} matcher` " \
+                                     "is not supported, since it creates a bit of an ambiguity. Instead, define negated versions " \
+                                     "of whatever matchers you wish to negate with `RSpec::Matchers.define_negated_matcher` and " \
+                                     "use `expect(...).to matcher.#{conjunction} matcher`."
+        end
+
+        def description
+          "#{matcher_1.description} #{conjunction} #{matcher_2.description}"
+        end
+
+        def supports_block_expectations?
+          matcher_supports_block_expectations?(matcher_1) &&
+            matcher_supports_block_expectations?(matcher_2)
+        end
+
+        def supports_value_expectations?
+          matcher_supports_value_expectations?(matcher_1) &&
+            matcher_supports_value_expectations?(matcher_2)
+        end
+
+        def expects_call_stack_jump?
+          NestedEvaluator.matcher_expects_call_stack_jump?(matcher_1) ||
+            NestedEvaluator.matcher_expects_call_stack_jump?(matcher_2)
+        end
+
+        def diffable?
+          matcher_is_diffable?(matcher_1) || matcher_is_diffable?(matcher_2)
+        end
+
+        def expected
+          return nil unless evaluator
+
+          ::Rex::Matchers::MultiMatcherDiff.for_many_matchers(diffable_matcher_list)
+        end
+
+        protected
+
+        def diffable_matcher_list
+          list = []
+          list.concat(diffable_matcher_list_for(matcher_1)) unless matcher_1_matches?
+          list.concat(diffable_matcher_list_for(matcher_2)) unless matcher_2_matches?
+          list
+        end
+
+        private
+
+        def initialize_copy(other)
+          @matcher_1 = @matcher_1.clone
+          @matcher_2 = @matcher_2.clone
+          super
+        end
+
+        def match(_expected, actual)
+          evaluator_class =
+            if supports_block_expectations? && Proc === actual
+              NestedEvaluator
+            elsif supports_value_expectations?
+              SequentialEvaluator
+            else
+              raise "Block and value matchers can't be combined in a compound expectation " \
+                    "(#{matcher_1.description}, #{matcher_2.description})"
+            end
+          @evaluator = evaluator_class.new(actual, matcher_1, matcher_2)
+        end
+
+        def indent_multiline_message(message)
+          message.lines.map do |line|
+            line =~ /\S/ ? "   " + line : line
+          end.join
+        end
+
+        def compound_failure_message
+          "#{indent_multiline_message(matcher_1.failure_message.sub(/\n+\z/, ''))}" \
+            "\n\n...#{conjunction}:" \
+            "\n\n#{indent_multiline_message(matcher_2.failure_message.sub(/\A\n+/, ''))}"
+        end
+
+        def matcher_1_matches?
+          evaluator.matcher_matches?(matcher_1)
+        end
+
+        def matcher_2_matches?
+          evaluator.matcher_matches?(matcher_2)
+        end
+
+        def matcher_supports_block_expectations?(matcher)
+          matcher.supports_block_expectations?
+        rescue NoMethodError
+          false
+        end
+
+        def matcher_supports_value_expectations?(matcher)
+          matcher.supports_value_expectations?
+        rescue NoMethodError
+          true
+        end
+
+        def matcher_is_diffable?(matcher)
+          matcher.diffable?
+        rescue NoMethodError
+          false
+        end
+
+        def diffable_matcher_list_for(matcher)
+          return [] unless matcher_is_diffable?(matcher)
+          return matcher.diffable_matcher_list if Compound === matcher
+
+          [matcher]
+        end
+
+        # Matches each matcher against a value in turn.
+        class SequentialEvaluator
+          def initialize(actual, *)
+            @actual = actual
+          end
+
+          def matcher_matches?(matcher)
+            matcher.matches?(@actual)
+          end
+        end
+
+        # Matches two block matchers with one call of the block, one matcher
+        # wrapped around the other.
+        class NestedEvaluator
+          def initialize(actual, matcher_1, matcher_2)
+            @actual = actual
             @matcher_1 = matcher_1
             @matcher_2 = matcher_2
+            @match_results = {}
+
+            inner, outer = order_block_matchers
+
+            @match_results[outer] = outer.matches?(proc do |*arguments|
+              @match_results[inner] = inner.matches?(inner_matcher_block(arguments))
+            end)
           end
 
-          def description
-            "#{matcher_1.description} #{conjunction} #{matcher_2.description}"
+          def matcher_matches?(matcher)
+            @match_results.fetch(matcher) do
+              raise ArgumentError, "Your #{matcher.description} has no match " \
+                                   "results, this can occur when an unexpected call stack or " \
+                                   "local jump occurs. Perhaps one of your matchers needs to " \
+                                   "declare `expects_call_stack_jump?` as `true`?"
+            end
           end
 
-          def supports_block_expectations?
-            [matcher_1, matcher_2].all? { |matcher| matcher.respond_to?(:supports_block_expectations?) && matcher.supports_block_expectations? }
-          end
-
-          def supports_value_expectations?
-            true
-          end
-
-          def diffable?
+          def self.matcher_expects_call_stack_jump?(matcher)
+            matcher.expects_call_stack_jump?
+          rescue NoMethodError
             false
           end
 
           private
 
-          def compound_failure_message
-            "#{indent_multiline_message(matcher_1.failure_message.sub(/\n+\z/, ''))}" \
-              "\n\n...#{conjunction}:" \
-              "\n\n#{indent_multiline_message(matcher_2.failure_message.sub(/\A\n*/, '').sub(/\n*\z/, ''))}"
-          end
+          # The inner matcher is handed the value the outer block yields
+          # with, or a block that passes on what the outer one yields.
+          def inner_matcher_block(outer_arguments)
+            return @actual if outer_arguments.empty?
 
-          def indent_multiline_message(message)
-            message.lines.map do |line|
-              line =~ /\S/ ? "   " + line : line
-            end.join
-          end
+            proc do |*inner_arguments|
+              unless inner_arguments.empty?
+                raise ArgumentError, "(#{@matcher_1.description}) and " \
+                                     "(#{@matcher_2.description}) cannot be combined in a compound expectation " \
+                                     "since both matchers pass arguments to the block."
+              end
 
-          def match_both(actual)
-            if Proc === actual && supports_block_expectations?
-              value = nil
-              inner = proc { value = actual.call }
-              @matcher_1_matches = matcher_1.matches?(inner)
-              @matcher_2_matches = matcher_2.matches?(proc { value })
-            else
-              @matcher_1_matches = matcher_1.matches?(actual)
-              @matcher_2_matches = matcher_2.matches?(actual)
+              @actual.call(*outer_arguments)
             end
+          end
+
+          def order_block_matchers
+            return @matcher_1, @matcher_2 unless self.class.matcher_expects_call_stack_jump?(@matcher_2)
+            return @matcher_2, @matcher_1 unless self.class.matcher_expects_call_stack_jump?(@matcher_1)
+
+            raise ArgumentError, "(#{@matcher_1.description}) and " \
+                                 "(#{@matcher_2.description}) cannot be combined in a compound expectation " \
+                                 "because they both expect a call stack jump."
           end
         end
 
-        class And < Base
+        class And < self
           def failure_message
-            if @matcher_1_matches
+            if matcher_1_matches?
               matcher_2.failure_message
-            elsif @matcher_2_matches
+            elsif matcher_2_matches?
               matcher_1.failure_message
             else
               compound_failure_message
@@ -2853,9 +3236,9 @@ module Rex
 
           private
 
-          def match(_expected, actual)
-            match_both(actual)
-            @matcher_1_matches && @matcher_2_matches
+          def match(*)
+            super
+            matcher_1_matches? && matcher_2_matches?
           end
 
           def conjunction
@@ -2863,16 +3246,16 @@ module Rex
           end
         end
 
-        class Or < Base
+        class Or < self
           def failure_message
             compound_failure_message
           end
 
           private
 
-          def match(_expected, actual)
-            match_both(actual)
-            @matcher_1_matches || @matcher_2_matches
+          def match(*)
+            super
+            matcher_1_matches? || matcher_2_matches?
           end
 
           def conjunction
@@ -2934,61 +3317,90 @@ module Rex
 
     # A matcher reached through an alias, which describes itself with the
     # alias's name.
-    class AliasedMatcher
-      include Composable
+    # A class with as few methods as Ruby allows, so a delegator can hand
+    # nearly every message on through `method_missing`.
+    class BaseDelegator
+      kept_methods = [
+        # Methods that raise warnings if removed.
+        :__id__, :__send__, :object_id,
 
-      def initialize(base_matcher, description_block)
-        @base_matcher = base_matcher
-        @description_block = description_block
-      end
+        # Methods that are explicitly undefined in some subclasses.
+        :==, :===,
 
-      def method_missing(name, *arguments, &block)
-        result = @base_matcher.__send__(name, *arguments, &block)
-        if result.equal?(@base_matcher)
-          self
-        elsif Matchers.matcher?(result) && result.respond_to?(:description)
-          self.class.new(result, @description_block)
-        else
-          result
-        end
-      end
-      ruby2_keywords(:method_missing) if respond_to?(:ruby2_keywords, true)
-
-      def respond_to_missing?(name, include_private = false)
-        @base_matcher.respond_to?(name, include_private)
-      end
-
-      def matches?(*arguments, &block)
-        @base_matcher.matches?(*arguments, &block)
-      end
-
-      def does_not_match?(*arguments, &block)
-        @base_matcher.respond_to?(:does_not_match?) ? @base_matcher.does_not_match?(*arguments, &block) : !@base_matcher.matches?(*arguments, &block)
-      end
-
-      def description
-        @description_block.call(@base_matcher.description)
-      end
-
-      def failure_message
-        @description_block.call(@base_matcher.failure_message)
-      end
-
-      def failure_message_when_negated
-        @description_block.call(@base_matcher.failure_message_when_negated)
-      end
-
-      def inspect
-        "#<#{self.class.name}(#{@base_matcher.inspect})>"
+        # Methods kept on purpose.
+        :class, :respond_to?, :__method__, :method, :dup,
+        :clone, :initialize_dup, :initialize_copy, :initialize_clone
+      ]
+      instance_methods.each do |method|
+        undef_method(method) unless kept_methods.include?(method.to_sym)
       end
     end
 
+    # Wraps a matcher, handing it every message the wrapper does not answer.
+    class MatcherDelegator < BaseDelegator
+      include Composable
+      attr_reader :base_matcher
+
+      def initialize(base_matcher)
+        @base_matcher = base_matcher
+      end
+
+      def method_missing(*arguments, &block)
+        base_matcher.__send__(*arguments, &block)
+      end
+      ruby2_keywords(:method_missing) if respond_to?(:ruby2_keywords, true)
+
+      def respond_to_missing?(name, include_all = false)
+        super || base_matcher.respond_to?(name, include_all)
+      end
+
+      def initialize_copy(other)
+        @base_matcher = @base_matcher.clone
+        super
+      end
+    end
+
+    # What `alias_matcher` builds: the matcher it names, described with the
+    # alias's own phrasing.
+    class AliasedMatcher < MatcherDelegator
+      def initialize(base_matcher, description_block)
+        @description_block = description_block
+        super(base_matcher)
+      end
+
+      def method_missing(*)
+        return_value = super
+        return return_value unless Rex::Matchers.is_a_matcher?(return_value)
+
+        self.class.new(return_value, @description_block)
+      end
+
+      def description
+        @description_block.call(super)
+      end
+
+      def failure_message
+        @description_block.call(super)
+      end
+
+      def failure_message_when_negated
+        @description_block.call(super)
+      end
+    end
+
+    # An alias whose base matcher answers `==` and `===` itself.
+    class AliasedMatcherWithOperatorSupport < AliasedMatcher
+      undef ==
+      undef ===
+    end
+
+    # What `define_negated_matcher` builds.
     class AliasedNegatedMatcher < AliasedMatcher
       def matches?(*arguments, &block)
         if @base_matcher.respond_to?(:does_not_match?)
           @base_matcher.does_not_match?(*arguments, &block)
         else
-          !@base_matcher.matches?(*arguments, &block)
+          !super
         end
       end
 
@@ -2997,30 +3409,27 @@ module Rex
       end
 
       def failure_message
-        optimal_failure_message(:failure_message, :failure_message_when_negated)
+        optimal_failure_message(__method__, :failure_message_when_negated)
       end
 
       def failure_message_when_negated
-        optimal_failure_message(:failure_message_when_negated, :failure_message)
+        optimal_failure_message(__method__, :failure_message)
       end
 
       private
 
+      DefaultFailureMessages = BuiltIn::BaseMatcher::DefaultFailureMessages
+
+      # A base matcher with RSpec's default messages has its own message
+      # rephrased; one with custom messages has the inverted one used.
       def optimal_failure_message(same, inverted)
         if DefaultFailureMessages.has_default_failure_messages?(@base_matcher)
           base_message = @base_matcher.__send__(same)
           overridden = @description_block.call(base_message)
           return overridden if overridden != base_message
         end
-        @base_matcher.__send__(inverted)
-      end
-    end
 
-    module DefaultFailureMessages
-      def self.has_default_failure_messages?(matcher)
-        matcher.method(:failure_message).owner == BuiltIn::BaseMatcher
-      rescue NameError
-        false
+        @base_matcher.__send__(inverted)
       end
     end
 
@@ -3046,11 +3455,7 @@ module Rex
     def be(*arguments)
       arguments.empty? ? BuiltIn::Be.new : equal(*arguments)
     end
-    alias_matcher :a_value, :be, klass: AliasedMatcherWithOperatorSupport = Class.new(AliasedMatcher) {
-      %i[== < <= >= > === =~].each do |operator|
-        define_method(operator) { |operand| self.class.new(@base_matcher.__send__(operator, operand), @description_block) }
-      end
-    }
+    alias_matcher :a_value, :be, klass: AliasedMatcherWithOperatorSupport
 
     def be_truthy
       BuiltIn::BeTruthy.new

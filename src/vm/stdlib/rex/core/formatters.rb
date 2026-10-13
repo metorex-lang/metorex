@@ -288,6 +288,8 @@ module Rex
         end
 
         def exception_class_name(error = exception)
+          return error.remote_class_name if error.respond_to?(:remote_class_name)
+
           name = error.class.name.to_s
           name = "(anonymous error class)" if name.empty?
           name
@@ -1003,10 +1005,11 @@ module Rex
       class Profiler
         NOTIFICATIONS = %i[example_group_started example_group_finished example_started].freeze
 
-        attr_reader :example_groups
+        attr_reader :example_groups, :durations
 
         def initialize
           @example_groups = Hash.new { |hash, group| hash[group] = { count: 0 } }
+          @durations = {}
         end
 
         def example_group_started(notification)
@@ -1022,7 +1025,8 @@ module Rex
           group = @example_groups[notification.group]
           return unless group.key?(:start)
 
-          group[:total_time] = Rex::Core.monotonic_now - group[:start]
+          # A group a worker ran took the time the worker measured.
+          group[:total_time] = @durations.delete(notification.group) || (Rex::Core.monotonic_now - group[:start])
         end
 
         def example_started(notification)
@@ -1030,6 +1034,8 @@ module Rex
           @example_groups[group][:count] += 1
         end
       end
+
+      attr_reader :profiler
 
       def initialize(configuration)
         @configuration = configuration

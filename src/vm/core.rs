@@ -508,6 +508,10 @@ pub struct VirtualMachine {
     /// The lexical nesting captured by each method currently on the call
     /// stack, so `Module.nesting` inside a body reports the definition site.
     pub(crate) method_nesting_stack: Vec<Vec<Rc<crate::class::Class>>>,
+    /// The depths of `method_nesting_stack` whose entry belongs to a block
+    /// written at the top level, where an empty nesting means no module is
+    /// open rather than that none was recorded.
+    pub(crate) top_level_block_depths: Vec<usize>,
     /// Tags of the `catch` blocks currently running, innermost last. `throw`
     /// consults them so a tag nothing is catching raises rather than unwinding
     /// past the whole program.
@@ -706,6 +710,7 @@ impl VirtualMachine {
             embedded_sources_run: std::collections::HashSet::new(),
             method_owner_stack: Vec::new(),
             method_nesting_stack: Vec::new(),
+            top_level_block_depths: Vec::new(),
             catch_tags: Vec::new(),
             autoload_reload_depth: 0,
             reported_duplicate_keys: std::collections::HashSet::new(),

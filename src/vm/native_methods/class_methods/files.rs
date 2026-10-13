@@ -191,25 +191,6 @@ impl VirtualMachine {
                         return Ok(Answered(Object::string(expanded)));
                     }
                 }
-                "respond_to?" => {
-                    if let Some(name_arg) = arguments.first() {
-                        let name_str = match name_arg {
-                            Object::String(s) => s.as_str().to_string(),
-                            Object::Symbol(s) => s.as_str().to_string(),
-                            _ => return Ok(Answered(Object::Bool(false))),
-                        };
-                        let known = matches!(
-                            name_str.as_str(),
-                            "dirname"
-                                | "expand_path"
-                                | "realpath"
-                                | "absolute_path"
-                                | "join"
-                                | "respond_to?"
-                        );
-                        return Ok(Answered(Object::Bool(known)));
-                    }
-                }
                 _ => {}
             }
         }

@@ -13,8 +13,9 @@
 # `--bisect` prints in parentheses as `(N seconds)` and the one it ends with
 # as `in N seconds.`, an object address such as 0x0000000100cfac28 as 0x,
 # and in a JSON document each duration and run time as N and the version
-# as V, each `--profile` time and percentage as N, and each HTML duration
-# as N. An exception class a JSON document names `RSpec::...` is written
+# as V, each `--profile` time and percentage as N, each HTML duration as
+# N, and the checkout's directory, which a deprecation's call site names,
+# as ROOT. An exception class a JSON document names `RSpec::...` is written
 # `Rex::...`, since RSpec is Rex's other name and a class reports Rex's, and
 # RSpec's `ExpectationNotMetError` is written as Rex's `ExpectationNotMet`.
 #
@@ -60,6 +61,7 @@ printf '%s\n' "$output" \
   | sed -E 's/^(Top [0-9]+ slowest examples) \([0-9.]+ seconds, [0-9.]+% of total time\):$/\1 (N seconds, N% of total time):/' \
   | sed -E 's/^    [0-9.]+ seconds (\.\/.*)$/    N seconds \1/' \
   | sed -E 's/^    [0-9.]+ seconds average \([0-9.]+ seconds \/ (.*)\) (\.\/.*)$/    N seconds average (N seconds \/ \1) \2/' \
+  | ROOT="$root" ruby -pe 'gsub(ENV["ROOT"], "ROOT")' \
   > "expected_$name.txt"
 printf 'exit %s\n' "$status" >> "expected_$name.txt"
 echo "wrote tests/_examples/rex/$fixture/expected_$name.txt (exit $status)"

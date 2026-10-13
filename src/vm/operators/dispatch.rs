@@ -34,19 +34,13 @@ impl VirtualMachine {
         use BinaryOp::*;
 
         // An operator a class undefined is one its instances do not answer,
-        // whatever the interpreter would otherwise make of the pair.
-        if matches!(left, Object::Instance(_))
-            && let Some(name) = crate::vm::eval::binary_op_method_name(op)
-            && self
-                .lookup_method(&left, name)
-                .is_some_and(|(_, method)| method.is_undefined)
+        // whatever the interpreter would otherwise make of the pair, so the
+        // call reaches `method_missing`.
+        if let Some(name) = crate::vm::eval::binary_op_method_name(op)
+            && let Some(result) =
+                self.call_undefined_name(&left, name, std::slice::from_ref(&right), position)
         {
-            return Err(crate::vm::errors::undefined_method_error(
-                name,
-                &left,
-                std::slice::from_ref(&right),
-                position,
-            ));
+            return result;
         }
 
         // A Complex carries its own arithmetic too, and a real number on the

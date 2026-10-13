@@ -34,12 +34,23 @@ module Rex
         @description_filters << pattern
       end
 
+      # The coverage counts each `--jobs` worker sent back.
+      def worker_coverage
+        @worker_coverage ||= []
+      end
+
       def description_filter
         @description_filters.empty? ? nil : Regexp.union(*@description_filters)
       end
 
       def add_id_filter(path, scoped_ids)
         ((@id_filters ||= {})[File.expand_path(path)] ||= []).concat(scoped_ids)
+      end
+
+      # The file at `path` read for its tokens and syntax tree, read once.
+      def source_from_file(path)
+        require "rex/support/source"
+        (@sources_by_path ||= {})[path] ||= Rex::Support::Source.from_file(path)
       end
 
       def all_examples

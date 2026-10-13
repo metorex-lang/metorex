@@ -1,0 +1,110 @@
+{
+  "line_percent": 75.0,
+  "branch_percent": 42.86,
+  "files": {
+    "lib/fees.rb": {
+      "line_percent": 80.0,
+      "branch_percent": 50.0,
+      "lines": [
+        1,
+        1,
+        1,
+        1,
+        0,
+        null,
+        null,
+        null
+      ],
+      "branches": [
+        {
+          "kind": "case",
+          "line": 3,
+          "arms": [
+            {
+              "kind": "when",
+              "line": 4,
+              "count": 1
+            },
+            {
+              "kind": "else",
+              "line": 5,
+              "count": 0
+            }
+          ]
+        }
+      ]
+    },
+    "lib/ledger.rb": {
+      "line_percent": 73.33,
+      "branch_percent": 40.0,
+      "lines": [
+        1,
+        1,
+        3,
+        null,
+        null,
+        1,
+        2,
+        null,
+        null,
+        1,
+        1,
+        1,
+        0,
+        0,
+        null,
+        0,
+        null,
+        null,
+        null,
+        1,
+        0,
+        null,
+        null,
+        1,
+        1,
+        null,
+        null
+      ],
+      "branches": [
+        {
+          "kind": "if",
+          "line": 11,
+          "arms": [
+            {
+              "kind": "then",
+              "line": 12,
+              "count": 1
+            },
+            {
+              "kind": "elsif",
+              "line": 14,
+              "count": 0
+            },
+            {
+              "kind": "else",
+              "line": 16,
+              "count": 0
+            }
+          ]
+        },
+        {
+          "kind": "if",
+          "line": 25,
+          "arms": [
+            {
+              "kind": "then",
+              "line": 25,
+              "count": 0
+            },
+            {
+              "kind": "else",
+              "line": 25,
+              "count": 1
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

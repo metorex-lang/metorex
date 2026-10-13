@@ -47,6 +47,9 @@ impl VirtualMachine {
             let class = self.builtins().class_of(&receiver);
             return self.invoke_method(class, method, receiver, arguments, position);
         }
+        if let Some(result) = self.call_undefined_name(&receiver, name, &arguments, position) {
+            return result;
+        }
         // A module-level method lives either on the singleton class, put
         // there by `class << Mod`, or under the name-mangled key `def
         // self.name` uses. Neither is reachable by an instance-method lookup.

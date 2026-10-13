@@ -179,6 +179,22 @@ impl VirtualMachine {
                         "method_defined?" | "public_method_defined?"
                     ))));
                 }
+                // A singleton class holds the class methods Ruby's core
+                // defines natively, which are public.
+                if found.is_none()
+                    && let Some(attached) = self.attached_class_of(class_rc)
+                    && super::instance_methods::native_singleton_method_definer(
+                        &attached,
+                        &name,
+                        include_super,
+                    )
+                    .is_some()
+                {
+                    return Ok(Answered(Object::Bool(matches!(
+                        method_name,
+                        "method_defined?" | "public_method_defined?"
+                    ))));
+                }
                 // The public ones live there too, so Kernel reports them the
                 // same way rather than answering that it has none.
                 if matches!(class_rc.name(), "Kernel" | "Object")

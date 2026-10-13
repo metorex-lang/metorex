@@ -206,13 +206,22 @@ pub(super) const SOURCE: &str = r##"
     elsif waiting.bytesize == wanted
       waiting
     else
-      # What was put back is already in hand, so a descriptor with nothing
-      # waiting behind it does not make the read fail.
-      more = begin
-        __stream_read__(wanted - waiting.bytesize).to_s
-      rescue Errno::EAGAIN
-        raise if waiting.empty?
-        ""
+      # A read of so many bytes waits for all of them, or for the end of the
+      # stream, since a pipe hands over what has arrived so far. What was
+      # put back is already in hand, so a descriptor with nothing waiting
+      # behind it does not make the read fail.
+      more = "".b
+      remaining = wanted - waiting.bytesize
+      while remaining > 0
+        chunk = begin
+          __stream_read__(remaining).to_s
+        rescue Errno::EAGAIN
+          raise if waiting.empty? && more.empty?
+          break
+        end
+        break if chunk.empty?
+        more << chunk.b
+        remaining -= chunk.bytesize
       end
       waiting + more
     end
@@ -231,6 +240,15 @@ pub(super) const SOURCE: &str = r##"
     return nil if length && held.empty?
     held
   end
+
+  # One read from the descriptor, up to `wanted` bytes: what has arrived,
+  # without waiting for the rest, as `readpartial` and `read_nonblock` take.
+  def __read_once__(wanted)
+    __take_bom__
+    held = __stream_read__(wanted)
+    held.nil? ? nil : held.to_s.dup.force_encoding(Encoding::BINARY)
+  end
+  private :__read_once__
 
   # Up to `count` bytes read from the descriptor, or everything it has ready
   # for a count of 0. A fiber that is not blocking hands the wait for
@@ -283,7 +301,7 @@ pub(super) const SOURCE: &str = r##"
     unless @peeked.nil? || @peeked.empty?
       return __fill_buffer__ target, __take_ready__(wanted)
     end
-    held = read wanted
+    held = __read_once__ wanted
     if held.nil? || held.empty?
       __fill_buffer__ target, ""
       raise EOFError, "end of file reached"
@@ -462,7 +480,7 @@ pub(super) const SOURCE: &str = r##"
       return :wait_readable unless exception
       raise IO::EAGAINWaitReadable, "read would block"
     end
-    held = read wanted
+    held = __read_once__ wanted
     if held.nil? || held.empty?
       __fill_buffer__ target, ""
       return nil unless exception

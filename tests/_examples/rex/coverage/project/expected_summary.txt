@@ -1,0 +1,10 @@
+....
+
+Finished in N seconds (files took N seconds to load)
+4 examples, 0 failures
+
+
+Coverage: 75.00% of lines (15 of 20) and 42.86% of branches (3 of 7) in 2 files
+  lib/fees.rb     80.00% of lines   50.00% of branches  not run: 5
+  lib/ledger.rb   73.33% of lines   40.00% of branches  not run: 13, 14, 16, 21
+exit 0

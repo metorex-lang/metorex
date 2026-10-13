@@ -108,12 +108,10 @@ impl VirtualMachine {
                 }
                 _ => (new_module(), false, true),
             }
-        } else if let Some(Object::Module(existing)) = self.globals().get(name)
-            // A module reached only because something including it was mixed
-            // into this scope is not a constant of this scope, so the keyword
-            // opens a module of its own rather than reopening that one.
-            && existing.ruby_name() == full_name
-        {
+        } else if let Some(Object::Module(existing)) = self.globals().get(name) {
+            // A top-level constant naming a module reopens that module,
+            // whichever name the module was first given, as `RSpec = Rex`
+            // followed by `module RSpec` reopens Rex.
             (existing, false, false)
         } else if let Some(Object::Module(existing)) = self.environment().get(name)
             && existing.ruby_name() == full_name
@@ -214,7 +212,9 @@ impl VirtualMachine {
         // when a statement raises.
         // A module body opens and closes the same way a class body does.
         self.fire_event("class", position, Vec::new())?;
-        let body_result = self.execute_module_body(&module, body, position);
+        let body_result = self.with_body_nesting(&module, |vm| {
+            vm.execute_module_body(&module, body, position)
+        });
         self.fire_event("end", position, Vec::new())?;
 
         self.environment_mut().pop_scope();

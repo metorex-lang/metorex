@@ -39,30 +39,6 @@ module Rex
         class_double(*args).as_null_object
       end
 
-      def allow(target)
-        AllowanceTarget.new(target)
-      end
-
-      def allow_any_instance_of(klass)
-        AnyInstanceAllowanceTarget.new(klass)
-      end
-
-      def expect_any_instance_of(klass)
-        AnyInstanceExpectationTarget.new(klass)
-      end
-
-      def receive(method_name, &block)
-        Matchers::Receive.new(method_name, block)
-      end
-
-      def receive_messages(message_return_value_hash)
-        Matchers::ReceiveMessages.new(message_return_value_hash)
-      end
-
-      def receive_message_chain(*messages, &block)
-        Matchers::ReceiveMessageChain.new(messages, &block)
-      end
-
       def have_received(method_name, &block)
         Matchers::HaveReceived.new(method_name, &block)
       end
@@ -76,7 +52,7 @@ module Rex
       end
 
       def self.declare_verifying_double(type, ref, *args)
-        if Mocks.configuration.verify_doubled_constant_names && !ref.defined?
+        if Mocks.configuration.verify_doubled_constant_names? && !ref.defined?
           ErrorGenerator.new.raise_verifying_double_not_defined_error(ref)
         end
 
@@ -213,7 +189,7 @@ module Rex
         end
 
         def setup_any_instance_method_substitute(subject, method, block)
-          proxy = Mocks.space.any_instance_recorder_for(subject)
+          proxy = Mocks.space.any_instance_proxy_for(subject)
           setup_method_substitute(proxy, method, block)
         end
 
@@ -283,13 +259,13 @@ module Rex
         end
 
         def setup_any_instance_expectation(subject)
-          each_message_on(Mocks.space.any_instance_recorder_for(subject)) do |recorder, message, return_value|
-            recorder.should_receive(message).and_return(return_value)
+          each_message_on(Mocks.space.any_instance_proxy_for(subject)) do |host, message, return_value|
+            host.should_receive(message).and_return(return_value)
           end
         end
 
         def setup_any_instance_allowance(subject)
-          Mocks.space.any_instance_recorder_for(subject).stub(@message_return_value_hash)
+          Mocks.space.any_instance_proxy_for(subject).stub(@message_return_value_hash)
         end
 
         private
@@ -334,7 +310,7 @@ module Rex
         end
 
         def setup_any_instance_allowance(subject, &block)
-          proxy = Mocks.space.any_instance_recorder_for(subject)
+          proxy = Mocks.space.any_instance_proxy_for(subject)
           chain = proxy.stub_chain(*@chain, &(@block || block))
           replay_customizations(chain)
         end
@@ -520,259 +496,8 @@ module Rex
     # `allow_any_instance_of` and `expect_any_instance_of`: a stub on the
     # class that hands each instance its own proxy the first time it is
     # called.
-    module AnyInstance
-      class Recorder
-        attr_reader :klass
-
-        def initialize(klass)
-          @klass = klass
-          @stubbed_methods = {}
-          @expectations = []
-          @instances_seen = {}
-        end
-
-        def stub(method_name_or_hash, &block)
-          if Hash === method_name_or_hash
-            method_name_or_hash.each do |name, value|
-              stub(name).and_return(value)
-            end
-            return
-          end
-
-          chain = Chain.new(self, :add_stub, method_name_or_hash.to_sym, block)
-          observe!(method_name_or_hash.to_sym)
-          (@stubbed_methods[method_name_or_hash.to_sym] ||= []) << chain
-          chain
-        end
-
-        def stub_chain(*chain, &block)
-          raise NotImplementedError, "receive_message_chain on any instance is not supported"
-        end
-
-        def should_receive(method_name, &block)
-          chain = Chain.new(self, :add_message_expectation, method_name.to_sym, block)
-          chain.expectation_fulfilled = false
-          observe!(method_name.to_sym)
-          (@stubbed_methods[method_name.to_sym] ||= []) << chain
-          @expectations << chain
-          chain
-        end
-
-        def should_not_receive(method_name, &block)
-          should_receive(method_name, &block).never
-        end
-
-        def playback!(instance, method_name)
-          return if @instances_seen.key?([instance.__id__, method_name])
-
-          @instances_seen[[instance.__id__, method_name]] = instance
-          (@stubbed_methods[method_name] || []).each do |chain|
-            chain.playback!(instance)
-          end
-        end
-
-        def verify
-          missing = @expectations.reject(&:expectation_fulfilled?).map(&:method_name)
-          return if missing.empty?
-
-          if missing.size == 1
-            message = "Exactly one instance should have received the following message(s) but didn't: #{missing.join(', ')}"
-          else
-            message = "Exactly one instance should have received the following message(s) but didn't: #{missing.sort.join(', ')}"
-          end
-          error = MockExpectationError.new(message)
-          location = @expectations.find { |chain| !chain.expectation_fulfilled? }&.expected_from
-          error.set_backtrace([location].compact + caller)
-          raise error
-        end
-
-        def reset
-          @stubbed_methods.each_key do |method_name|
-            restore_original(method_name)
-          end
-          @stubbed_methods.clear
-          @expectations.clear
-        end
-
-        private
-
-        def observe!(method_name)
-          return if @originals&.key?(method_name)
-
-          @originals ||= {}
-          owned = @klass.instance_methods(false).include?(method_name) ||
-                  @klass.private_instance_methods(false).include?(method_name)
-          @originals[method_name] = owned ? @klass.instance_method(method_name) : :none
-          recorder = self
-          @klass.__send__(:define_method, method_name) do |*args, &block|
-            recorder.playback!(self, method_name)
-            __send__(method_name, *args, &block)
-          end
-          @klass.__send__(:ruby2_keywords, method_name)
-        end
-
-        def restore_original(method_name)
-          original = @originals&.delete(method_name)
-          return unless original
-
-          @klass.__send__(:remove_method, method_name)
-          @klass.__send__(:define_method, method_name, original) unless original == :none
-        end
-      end
-
-      # The customizations of one any-instance stub or expectation, replayed
-      # onto each instance that receives the message.
-      class Chain
-        attr_reader :method_name, :expected_from
-        attr_writer :expectation_fulfilled
-
-        def initialize(recorder, proxy_method, method_name, block)
-          @recorder = recorder
-          @proxy_method = proxy_method
-          @method_name = method_name
-          @block = block
-          @customizations = []
-          @expected_from = Mocks.caller_line
-          @expectation_fulfilled = true
-        end
-
-        def expectation_fulfilled?
-          @expectation_fulfilled
-        end
-
-        def playback!(instance)
-          proxy = Mocks.space.proxy_for(instance)
-          expectation = proxy.__send__(@proxy_method, @method_name, expected_from: @expected_from, &@block)
-          @customizations.each do |method, args, block|
-            expectation.__send__(method, *args, &block)
-          end
-          if @proxy_method == :add_message_expectation
-            chain = self
-            expectation.define_singleton_method(:invoke) do |*invoke_args, &invoke_block|
-              chain.expectation_fulfilled = true
-              super(*invoke_args, &invoke_block)
-            end
-          end
-          expectation
-        end
-
-        %i[with and_return and_raise and_throw and_yield and_call_original
-           once twice thrice exactly times time never at_least at_most].each do |method|
-          define_method(method) do |*args, &block|
-            @customizations << [method, args, block]
-            @expectation_fulfilled = true if method == :never
-            self
-          end
-          ruby2_keywords(method)
-        end
-      end
-    end
-
-    # `stub_const` and `hide_const`, undone when the example ends.
-    module ConstantMutator
-      def self.stub(constant_name, value, _options = {})
-        parent, name = split(constant_name)
-        existed = parent.const_defined?(name, false)
-        original = parent.const_get(name, false) if existed
-        Mocks.space.instance_variable_get(:@constant_resets)&.push(nil)
-        register_reset do
-          parent.__send__(:remove_const, name) if parent.const_defined?(name, false)
-          parent.const_set(name, original) if existed
-        end
-        parent.__send__(:remove_const, name) if existed
-        parent.const_set(name, value)
-        value
-      end
-
-      def self.hide(constant_name)
-        parent, name = split(constant_name)
-        return unless parent.const_defined?(name, false)
-
-        original = parent.const_get(name, false)
-        register_reset { parent.const_set(name, original) unless parent.const_defined?(name, false) }
-        parent.__send__(:remove_const, name)
-        nil
-      end
-
-      def self.split(constant_name)
-        names = constant_name.to_s.sub(/\A::/, "").split("::")
-        name = names.pop
-        parent = names.inject(Object) { |scope, part| scope.const_get(part) }
-        [parent, name.to_sym]
-      end
-
-      def self.register_reset(&block)
-        resets = Mocks.space.instance_variable_get(:@constant_resets) || Mocks.space.instance_variable_set(:@constant_resets, [])
-        resets.compact!
-        resets << block
-      end
-    end
-
-    class Space
-      alias reset_all_without_constants reset_all
-
-      def reset_all
-        reset_all_without_constants
-      ensure
-        (@constant_resets || []).compact.reverse_each(&:call)
-        @constant_resets = []
-      end
-    end
-
     # `should_receive` and its relatives on every object, on when a suite
     # asks for the old syntax.
-    module Syntax
-      module ShouldMethods
-        def should_receive(message, opts = {}, &block)
-          Mocks.expect_message(self, message, opts, &block)
-        end
-
-        def should_not_receive(message, &block)
-          Mocks.expect_message(self, message, {}, &block).never
-        end
-
-        def stub(message_or_hash, opts = {}, &block)
-          if Hash === message_or_hash
-            message_or_hash.each { |message, value| Mocks.allow_message(self, message).and_return(value) }
-          else
-            Mocks.allow_message(self, message_or_hash, opts, &block)
-          end
-        end
-
-        def unstub(message)
-          Mocks.space.proxy_for(self).remove_stub(message)
-        end
-
-        def stub_chain(*chain, &block)
-          Matchers::ReceiveMessageChain.new(chain, &block).setup_allowance(self)
-        end
-
-        def as_null_object
-          Mocks.space.proxy_for(self).as_null_object
-        end
-
-        def null_object?
-          Mocks.space.proxy_for(self).null_object?
-        end
-
-        def received_message?(message, *args, &block)
-          Mocks.space.proxy_for(self).received_message?(message, *args, &block)
-        end
-      end
-
-      def self.enable_should
-        return if @should_enabled
-
-        @should_enabled = true
-        BasicObject.__send__(:include, ShouldMethods)
-      end
-
-      def self.disable_should
-        return unless @should_enabled
-
-        @should_enabled = false
-      end
-    end
   end
 
   module Expectations

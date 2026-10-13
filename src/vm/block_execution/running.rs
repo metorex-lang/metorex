@@ -177,8 +177,7 @@ impl VirtualMachine {
         // not the ones open in the method that called it, which is what
         // `Module.nesting` in the body reports and where an `eval` written
         // there opens what it defines.
-        self.method_nesting_stack
-            .push(block.captured_nesting.clone());
+        self.enter_block_nesting(block.captured_nesting.clone());
 
         // A trace sees a block body opening and closing, and reads the
         // parameters the block declared off either event.
@@ -338,7 +337,7 @@ impl VirtualMachine {
         }
         self.environment_mut().pop_scope();
         self.class_var_cref_stack.pop();
-        self.method_nesting_stack.pop();
+        self.leave_block_nesting();
         self.def_scope_stack = saved_def_scope;
         self.lexical_home_frame = saved_lexical_home;
         // The exception says where it came from while the block's own file is
@@ -474,8 +473,7 @@ impl VirtualMachine {
                 .cloned()
                 .or_else(|| block.captured_def_scope.last().cloned()),
         );
-        self.method_nesting_stack
-            .push(block.captured_nesting.clone());
+        self.enter_block_nesting(block.captured_nesting.clone());
         self.running_block_breaks.push(running_break_flag(block));
         let result = match self.enter_block_body(block) {
             Err(error) => Err(error),
@@ -569,7 +567,7 @@ impl VirtualMachine {
             }
         };
         self.running_block_breaks.pop();
-        self.method_nesting_stack.pop();
+        self.leave_block_nesting();
         self.class_var_cref_stack.pop();
 
         self.current_source_file = saved_source_file;

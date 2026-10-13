@@ -1708,3 +1708,17 @@ fn test_io_clone_holds_a_descriptor_of_its_own() {
     let output = run_example("stdlib/io/io_clone_descriptor.rb");
     assert_eq!(output, expected);
 }
+
+#[test]
+fn test_line_coverage_counts_each_kind_of_conditional_as_mri_does() {
+    let expected = "[1, 2, 1, 1, 1, nil, 0, nil, nil, nil, 1, 1, nil, nil, 1, 1, nil, 0, nil, 1, nil, 0, nil, nil, nil, 1, 1, 1, nil, nil, nil, 1, 1, 1, 2, 2, nil, 1, nil, nil, 1, 1, 1, nil, nil, 1, 1, 1, 1, 1, 1, 1]\n";
+    let output = run_example("coverage/conditional_lines.rb");
+    assert_eq!(output, expected);
+}
+
+#[test]
+fn test_branch_coverage_counts_each_arm_of_each_conditional() {
+    let expected = "if at 2: then@3=1 elsif@5=1 else@7=0\nif at 12: then@12=1 else@12=0\ncase at 16: when@18=0 when@20=1 else@22=0\nunless at 27: then@28=1 else@27=0\nwhile at 34: body@35=2\n&. at 42: then@42=0 else@42=1\n";
+    let output = run_example("coverage/branch_arms.rb");
+    assert_eq!(output, expected);
+}

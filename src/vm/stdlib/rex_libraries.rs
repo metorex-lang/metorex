@@ -6,6 +6,12 @@ const LOADS_REX: &str = "require \"rex\"\n";
 
 pub(super) const REX_LIBRARIES: &[(&str, &str)] = &[
     ("rex", include_str!("rex.rb")),
+    ("rex/support", include_str!("rex/support.rb")),
+    ("rex/support/source", include_str!("rex/support/source.rb")),
+    (
+        "rex/expectations/block_snippet_extractor",
+        include_str!("rex/expectations/block_snippet_extractor.rb"),
+    ),
     ("rex/core/bisect", include_str!("rex/core/bisect.rb")),
     (
         "rex/core/configuration",
@@ -41,6 +47,8 @@ pub(super) const REX_LIBRARIES: &[(&str, &str)] = &[
         include_str!("rex/core/memoized_helpers.rb"),
     ),
     ("rex/core/metadata", include_str!("rex/core/metadata.rb")),
+    ("rex/core/coverage", include_str!("rex/core/coverage.rb")),
+    ("rex/core/parallel", include_str!("rex/core/parallel.rb")),
     ("rex/core/runner", include_str!("rex/core/runner.rb")),
     (
         "rex/core/shared_example_group",
@@ -66,12 +74,28 @@ pub(super) const REX_LIBRARIES: &[(&str, &str)] = &[
     ("rex/mocks/proxy", include_str!("rex/mocks/proxy.rb")),
     ("rex/mocks/targets", include_str!("rex/mocks/targets.rb")),
     (
+        "rex/mocks/any_instance",
+        include_str!("rex/mocks/any_instance.rb"),
+    ),
+    (
+        "rex/mocks/mutate_const",
+        include_str!("rex/mocks/mutate_const.rb"),
+    ),
+    (
+        "rex/mocks/configuration",
+        include_str!("rex/mocks/configuration.rb"),
+    ),
+    (
         "rex/mocks/verifying",
         include_str!("rex/mocks/verifying.rb"),
     ),
     (
         "rex/matchers/extras",
         include_str!("rex/matchers/extras.rb"),
+    ),
+    (
+        "rex/matchers/fail_matchers",
+        include_str!("rex/matchers/fail_matchers.rb"),
     ),
     ("rspec", LOADS_REX),
     ("rspec/core", LOADS_REX),
@@ -80,6 +104,16 @@ pub(super) const REX_LIBRARIES: &[(&str, &str)] = &[
     ("rspec/autorun", LOADS_REX),
     ("rspec/matchers", LOADS_REX),
     ("rspec/support", LOADS_REX),
+    ("rspec/support/ruby_features", LOADS_REX),
+    ("rspec/support/recursive_const_methods", LOADS_REX),
+    (
+        "rspec/expectations/block_snippet_extractor",
+        "require \"rex/expectations/block_snippet_extractor\"\n",
+    ),
+    (
+        "rspec/matchers/fail_matchers",
+        "require \"rex/matchers/fail_matchers\"\n",
+    ),
     ("rspec/core/formatters", LOADS_REX),
     ("rspec/core/formatters/base_formatter", LOADS_REX),
     ("rspec/core/formatters/base_text_formatter", LOADS_REX),

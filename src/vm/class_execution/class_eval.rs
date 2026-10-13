@@ -72,7 +72,17 @@ impl VirtualMachine {
         // block mutates the caller's local, matching Ruby's closure semantics
         // for blocks (including `Class.new do ... end`).
         for (name, cell) in block.captured_vars.iter() {
-            if self.environment().get(name).is_none() {
+            // A global such as the `method` function does not hide a local
+            // the block captured under the same name.
+            let global = self.environment().global_scope().borrow().own_var_ref(name);
+            let held_only_globally = global.as_ref().is_some_and(|global| {
+                !Rc::ptr_eq(cell, global)
+                    && self
+                        .environment()
+                        .get_ref(name)
+                        .is_some_and(|found| Rc::ptr_eq(&found, global))
+            });
+            if self.environment().get(name).is_none() || held_only_globally {
                 self.environment_mut()
                     .define_shared(name.clone(), cell.clone());
             }
@@ -169,25 +179,30 @@ impl VirtualMachine {
         args: Vec<Object>,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let prev_self = self.environment().get("self");
+        // The block reads the variables it captured where it was written,
+        // in a scope of its own, so neither a local of the caller's nor a
+        // parameter it binds here clashes with one of the caller's.
+        self.environment_mut().push_isolated_scope();
+        self.environment_mut()
+            .attach_captured(Rc::clone(&block.captured_vars));
+        self.environment_mut()
+            .attach_reserved(Rc::clone(&block.reserved_names));
         self.environment_mut().define("self".to_string(), self_obj);
-        for (name, cell) in block.captured_vars.iter() {
-            if self.environment().get(name).is_none() {
-                self.environment_mut()
-                    .define_shared(name.clone(), cell.clone());
-            }
+        if let Err(error) = crate::vm::block_execution::bind_block_params(
+            self,
+            &block.parameters,
+            &block.parameter_defaults,
+            args,
+            position,
+        ) {
+            self.environment_mut().pop_scope();
+            return Err(error);
         }
-        // Bind the block's positional parameters to the supplied arguments.
-        let positional: Vec<&String> = block
-            .parameters
-            .iter()
-            .filter(|p| !p.starts_with('&') && !p.starts_with('*'))
-            .collect();
-        for (i, param) in positional.iter().enumerate() {
-            let value = args.get(i).cloned().unwrap_or(Object::Nil);
-            self.environment_mut()
-                .define(param.as_str().to_string(), value);
-        }
+        // The body reads constants through the scopes the block was written
+        // in, not those of the method that called `class_exec`.
+        let saved_def_scope =
+            std::mem::replace(&mut self.def_scope_stack, block.captured_def_scope.clone());
+        self.enter_block_nesting(block.captured_nesting.clone());
         self.def_scope_stack.push(Rc::clone(class));
         self.class_var_cref_stack.push(Some(Rc::clone(class)));
         self.constant_homes.push((
@@ -211,13 +226,10 @@ impl VirtualMachine {
         self.borrowed_frames.pop();
         self.user_def_nesting = saved_nesting;
         self.constant_homes.pop();
-        self.def_scope_stack.pop();
+        self.def_scope_stack = saved_def_scope;
+        self.leave_block_nesting();
         self.class_var_cref_stack.pop();
-        if let Some(prev) = prev_self {
-            self.environment_mut().define("self".to_string(), prev);
-        } else {
-            self.environment_mut().undefine("self");
-        }
+        self.environment_mut().pop_scope();
         result
     }
 

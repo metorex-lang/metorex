@@ -232,6 +232,9 @@ impl VirtualMachine {
                     self.coverage_stop();
                     return Ok(Some(Object::Nil));
                 }
+                "__coverage_branches__" => {
+                    return Ok(Some(self.coverage_branch_report()));
+                }
                 "__coverage_result__" => {
                     let clear = matches!(arguments.first(), Some(Object::Bool(true)));
                     return self.coverage_report(clear).map(Some);

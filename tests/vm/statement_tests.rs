@@ -896,17 +896,15 @@ NoSetter[:x] = 1
 // Without an explicit def self.dyn=, the assignment stores as @dyn on the class.
 
 #[test]
-fn class_setter_missing_falls_back_to_class_var() {
-    let result = run(r#"
+fn class_setter_missing_raises_no_method_error() {
+    let err = run_err(
+        r#"
 class NoExplicitSetter
-  def self.get
-    @dyn
-  end
 end
 NoExplicitSetter.dyn = 99
-NoExplicitSetter.get
-"#);
-    assert_eq!(result, Some(Object::Int(99)));
+"#,
+    );
+    assert!(err.contains("undefined method 'dyn=' for class NoExplicitSetter"));
 }
 
 // ── ScopeResolution assignment: Ns::Name = value (statement.rs 521-540) ──

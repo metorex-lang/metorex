@@ -103,10 +103,10 @@ Storage.data
 fn module_setter_method_dispatch() {
     let result = run(r#"
 module Cfg
-  def config_value=(val)
+  def self.config_value=(val)
     @config_value = val
   end
-  def config_value
+  def self.config_value
     @config_value
   end
 end

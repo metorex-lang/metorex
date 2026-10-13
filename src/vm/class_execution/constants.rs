@@ -8,6 +8,15 @@ impl VirtualMachine {
     /// Ruby reaches top-level constants because they are Object's, so a class
     /// body whose class does not descend from Object never sees them.
     pub(crate) fn lexical_scope_reaches_top_level(&self) -> bool {
+        // A block run as a class body, as `class_exec` runs one, reads
+        // constants where it was written rather than in the class it runs on.
+        if let Some((depth, home)) = self.constant_homes.last()
+            && *depth == self.def_scope_stack.len()
+        {
+            return home.as_ref().is_none_or(|home| {
+                crate::vm::method_invocation::descends_from(home, "Object") || home.is_module()
+            });
+        }
         let innermost = self.def_scope_stack.last().cloned().or_else(|| {
             // Inside a method body the lexical chain is the nesting captured
             // where the method was defined, innermost first.
@@ -52,27 +61,22 @@ impl VirtualMachine {
             }
             return Some(current);
         }
-        for enclosing in self.def_scope_stack.iter().rev() {
-            if let Some(val) = enclosing.get_class_var(name) {
-                return Some(val);
-            }
-            // A still-being-defined enclosing scope resolves to itself when
-            // referenced by its own simple name (e.g. `ModuleSpecs::Alias`
-            // inside `module ModuleSpecs; class Allonym; include ... end; end`
-            // before ModuleSpecs has been bound in globals).
-            if enclosing.name() == name {
-                return Some(scope_object(enclosing));
-            }
+        // The modules open where the code was written, and the ancestors of
+        // the innermost one, as a constant read anywhere else finds them.
+        if let Some(value) = self.constant_before_object(name) {
+            return Some(value);
         }
-        // Inside a method body the lexical chain is the nesting captured
-        // where the method was written, innermost first, which is what lets a
-        // name written there reach a sibling of the class holding it.
-        if let Some(nesting) = self.method_nesting_stack.last() {
-            for enclosing in nesting {
-                if let Some(value) = enclosing.get_class_var(name) {
-                    return Some(value);
-                }
-            }
+        // A still-being-defined enclosing scope resolves to itself when
+        // referenced by its own simple name (e.g. `ModuleSpecs::Alias`
+        // inside `module ModuleSpecs; class Allonym; include ... end; end`
+        // before ModuleSpecs has been bound in globals).
+        if let Some(enclosing) = self
+            .def_scope_stack
+            .iter()
+            .rev()
+            .find(|held| held.name() == name)
+        {
+            return Some(scope_object(enclosing));
         }
         self.environment()
             .get(name)

@@ -571,3 +571,71 @@ fn test_a_trap_runs_for_a_signal_the_process_sends_itself() {
     let output = run_example("methods/trap_own_signal.rb");
     assert_eq!(output, "[:interrupted]\n");
 }
+
+#[test]
+fn test_io_select_waits_for_a_pipe_another_process_writes() {
+    let output = run_example("io/select_waits_for_another_process.rb");
+    assert_eq!(output, "true\n[\"worker 1\", \"worker 0\"]\n");
+}
+
+#[test]
+fn test_io_read_with_a_length_waits_for_every_byte_a_pipe_will_send() {
+    let output = run_example("io/read_length_waits_for_every_byte.rb");
+    assert_eq!(output, "[100000, 30000, 40000, nil]\n");
+}
+
+#[test]
+fn test_undef_method_removes_every_method_a_class_inherits_from_object() {
+    let output = run_example("methods/undef_inherited_core_methods.rb");
+    assert_eq!(
+        output,
+        "[:__id__, :__send__, :class, :object_id, :respond_to?]\n"
+    );
+}
+
+#[test]
+fn test_a_module_answers_respond_to_without_its_own_instance_respond_to_missing() {
+    let output = run_example("methods/module_respond_to_missing_is_for_instances.rb");
+    assert_eq!(output, "false\nfalse\nfalse\ntrue\ntrue\nfalse\n");
+}
+
+#[test]
+fn test_an_assignment_to_a_class_or_module_attribute_needs_a_class_level_writer() {
+    let output = run_example("methods/setter_on_a_class_needs_a_class_method.rb");
+    assert_eq!(
+        output,
+        "undefined method 'level=' for module Settings\n\
+         undefined method 'size=' for class Widget\n\
+         undefined method 'color=' for class Widget\n\
+         []\n"
+    );
+}
+
+#[test]
+fn test_stderr_accepts_an_object_that_answers_write_through_method_missing() {
+    let output = run_example("io/stderr_wrapper_answers_write_through_method_missing.rb");
+    assert_eq!(
+        output,
+        "written through the wrapper\n$stderr must have write method, #<Class:0x> given\n"
+    );
+}
+
+#[test]
+fn test_a_class_hands_out_kernel_functions_as_methods() {
+    let output = run_example("methods/kernel_function_method_on_a_class.rb");
+    assert_eq!(
+        output,
+        "[:puts, Kernel]\ncalled through String\nKernel\nKernel\n:puts\nNameError\n"
+    );
+}
+
+#[test]
+fn test_a_call_of_an_undefined_name_reaches_method_missing() {
+    let output = run_example("methods/undefined_names_reach_method_missing.rb");
+    assert_eq!(
+        output,
+        "[:missing, :<=>, 1]\n[:missing, :==, 2]\n[:missing, :<=>, 3]\n[:missing, :<, 4]\n\
+         \"custom match\"\nNoMethodError\n[:missing, :inspect]\n\
+         \"undefined method 'hash' for an instance of Plain\"\n[:missing, :<, 5]\n"
+    );
+}

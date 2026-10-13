@@ -198,3 +198,43 @@ fn test_a_method_defined_from_a_block_reads_constants_where_the_block_was_writte
     let output = run_example("constants/define_singleton_method_block_cref.rb");
     assert_eq!(output, expected);
 }
+
+#[test]
+fn test_a_block_run_by_class_exec_reads_constants_where_it_was_written() {
+    let expected = "\"top-level Diff::LCS\"\n\"top-level Diff::LCS\"\n\"top-level Diff::LCS\"\n";
+    let output = run_example("constants/class_exec_block_lexical_lookup.rb");
+    assert_eq!(output, expected);
+}
+
+#[test]
+fn test_a_when_constant_in_a_called_method_reads_where_the_method_was_written() {
+    let output = run_example("constants/when_constant_in_called_method.rb");
+    assert_eq!(output, ":array\n");
+}
+
+#[test]
+fn test_module_reopens_the_module_a_top_level_alias_names() {
+    let output = run_example("constants/reopen_module_through_alias.rb");
+    assert_eq!(output, "[true, :added, :configured]\n[false, true]\n");
+}
+
+#[test]
+fn test_include_and_extend_of_a_top_level_constant_skip_the_nested_one() {
+    let output = run_example("constants/mixin_top_level_constant.rb");
+    assert_eq!(output, "[:top_level, :top_level]\n");
+}
+
+#[test]
+fn test_basic_object_class_exec_reads_constants_where_the_block_was_written() {
+    let output = run_example("constants/basic_object_class_exec_reads_lexical_constants.rb");
+    assert_eq!(output, "Class\n:outer_local\n");
+}
+
+#[test]
+fn test_def_on_a_constant_in_a_class_body_opened_in_a_block_reaches_the_constant() {
+    let output = run_example("constants/def_on_constant_in_block_class_body.rb");
+    assert_eq!(
+        output,
+        "[:class_singleton, []]\n[:class_own, []]\n[:receiver_singleton, []]\n[:other_method]\n"
+    );
+}

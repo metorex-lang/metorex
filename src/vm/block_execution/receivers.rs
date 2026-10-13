@@ -269,8 +269,11 @@ impl VirtualMachine {
         // The scopes open around the body are the ones the block was written
         // in, whatever the receiver it runs against, which is what
         // `Module.nesting` there reports.
-        self.method_nesting_stack
-            .push(block.captured_nesting.clone());
+        self.enter_block_nesting(block.captured_nesting.clone());
+        // A constant in the body is looked up through the modules the block
+        // was written in, not those of the method running it.
+        let saved_def_scope =
+            std::mem::replace(&mut self.def_scope_stack, block.captured_def_scope.clone());
         // A `def` or an `alias` written at the top of the body belongs to the
         // receiver alone. Anything the body calls out to keeps its own
         // definee, so this reaches only the statements written here.
@@ -415,7 +418,8 @@ impl VirtualMachine {
             result
         });
         self.leave_running_code();
-        self.method_nesting_stack.pop();
+        self.def_scope_stack = saved_def_scope;
+        self.leave_block_nesting();
         self.class_var_cref_stack.pop();
         if carried {
             self.class_var_home.pop();

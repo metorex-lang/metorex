@@ -17,21 +17,30 @@ impl VirtualMachine {
         then_branch: &[Statement],
         elsif_branches: &[ElsifBranch],
         else_branch: &Option<Vec<Statement>>,
+        position: Position,
     ) -> Result<ControlFlow, MetorexError> {
         let condition_value = self.evaluate_condition(condition)?;
 
         if is_truthy(&condition_value) {
+            self.coverage_branch(position, 0);
             self.execute_statements_internal(then_branch)
         } else {
             // Try each elsif branch
-            for elsif in elsif_branches {
+            for (index, elsif) in elsif_branches.iter().enumerate() {
+                // Ruby counts an `elsif` line each time its condition is
+                // tested.
+                if self.coverage.is_some() {
+                    self.coverage_count(elsif.position.line);
+                }
                 let elsif_condition_value = self.evaluate_expression(&elsif.condition)?;
                 if is_truthy(&elsif_condition_value) {
+                    self.coverage_branch(position, index + 1);
                     return self.execute_statements_internal(&elsif.body);
                 }
             }
 
             // If no elsif matched, try else branch
+            self.coverage_branch(position, elsif_branches.len() + 1);
             if let Some(else_stmts) = else_branch {
                 self.execute_statements_internal(else_stmts)
             } else {
@@ -46,15 +55,20 @@ impl VirtualMachine {
         condition: &Expression,
         then_branch: &[Statement],
         else_branch: &Option<Vec<Statement>>,
+        position: Position,
     ) -> Result<ControlFlow, MetorexError> {
         let condition_value = self.evaluate_condition(condition)?;
 
         if !is_truthy(&condition_value) {
+            self.coverage_branch(position, 0);
             self.execute_statements_internal(then_branch)
-        } else if let Some(else_stmts) = else_branch {
-            self.execute_statements_internal(else_stmts)
         } else {
-            Ok(ControlFlow::Next)
+            self.coverage_branch(position, 1);
+            if let Some(else_stmts) = else_branch {
+                self.execute_statements_internal(else_stmts)
+            } else {
+                Ok(ControlFlow::Next)
+            }
         }
     }
 
@@ -63,6 +77,7 @@ impl VirtualMachine {
         &mut self,
         condition: &Expression,
         body: &[Statement],
+        position: Position,
     ) -> Result<ControlFlow, MetorexError> {
         loop {
             // Each pass is a place the turn can be handed over, so a loop
@@ -73,6 +88,7 @@ impl VirtualMachine {
             if !is_truthy(&condition_value) {
                 break;
             }
+            self.coverage_branch(position, 0);
 
             // `redo` runs the body again without reading the condition.
             let mut pass = self.loop_pass(body)?;
@@ -111,8 +127,10 @@ impl VirtualMachine {
         &mut self,
         condition: &Expression,
         body: &[Statement],
+        position: Position,
     ) -> Result<ControlFlow, MetorexError> {
         loop {
+            self.coverage_branch(position, 0);
             // `redo` runs the body again without reading the condition.
             loop {
                 match self.loop_pass(body)? {

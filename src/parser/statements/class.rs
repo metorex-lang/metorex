@@ -379,11 +379,11 @@ impl Parser {
             return Ok(self.include_call_statement(arguments, start_pos));
         }
 
-        // `include ::Kernel` names a top-level constant. Metorex resolves an
-        // unqualified constant from the top level anyway, so the leading `::`
-        // only has to be consumed.
-        if self.check(&[TokenKind::ColonColon]) {
-            self.advance();
+        // Anything but a bare constant name, as `include ::Kernel` or
+        // `include self`, is an expression evaluated where the call is made.
+        if !matches!(self.peek().kind, TokenKind::Ident(_)) {
+            let arguments = self.parse_arguments_without_parens()?;
+            return Ok(self.include_call_statement(arguments, start_pos));
         }
         let mut module_name = match self.advance().kind {
             TokenKind::Ident(name) => name,
@@ -466,6 +466,14 @@ impl Parser {
         let start_pos = self
             .expect(TokenKind::Extend, "Expected 'extend'")?
             .position;
+        // A bare `extend` is an ArgumentError at runtime, as a bare
+        // `include` is, and the newline after it ends the statement.
+        if matches!(
+            self.peek().kind,
+            TokenKind::Newline | TokenKind::Semicolon | TokenKind::Comment(_) | TokenKind::EOF
+        ) {
+            return Ok(mixin_call_statement("extend", Vec::new(), start_pos));
+        }
         self.skip_whitespace();
 
         // `extend(Mod)` is a call with its arguments in parentheses, which
@@ -476,6 +484,12 @@ impl Parser {
             return Ok(mixin_call_statement("extend", arguments, start_pos));
         }
 
+        // Anything but a bare constant name, as `extend ::Mod` or
+        // `extend self`, is an expression evaluated where the call is made.
+        if !matches!(self.peek().kind, TokenKind::Ident(_)) {
+            let arguments = self.parse_arguments_without_parens()?;
+            return Ok(mixin_call_statement("extend", arguments, start_pos));
+        }
         let mut module_name = match self.advance().kind {
             TokenKind::Ident(name) => name,
             _ => return Err(self.error_at_previous("Expected module name after 'extend'")),
