@@ -14,15 +14,71 @@ pub(crate) fn method_state_changed() {
     METHOD_STATE.with(|state| state.set(state.get() + 1));
 }
 
-fn method_state() -> u64 {
+/// The number `method_state_changed` moves on: the class lookup caches and
+/// the fast paths' guards hold an answer only while it stays where it was.
+pub fn method_state() -> u64 {
     METHOD_STATE.with(|state| state.get())
+}
+
+/// Whether a fast path may run, which turns on a check of the methods it
+/// stands in for, such as that `eq` is still Rex's own. The check runs again
+/// only after a method table, a mixin chain, or a singleton's attachment
+/// changed, which is what `method_state` counts.
+#[derive(Debug, Default)]
+pub struct MethodGuard {
+    /// The state the last check ran under, or None before the first.
+    checked_under: std::cell::Cell<Option<u64>>,
+    holds: std::cell::Cell<bool>,
+}
+
+impl MethodGuard {
+    pub const fn new() -> Self {
+        Self {
+            checked_under: std::cell::Cell::new(None),
+            holds: std::cell::Cell::new(false),
+        }
+    }
+
+    /// What `check` answered under the current method state, running it
+    /// only when the state moved since it last ran.
+    pub fn holds(&self, check: impl FnOnce() -> bool) -> bool {
+        let state = method_state();
+        if self.checked_under.get() != Some(state) {
+            self.holds.set(check());
+            // The check may define a method itself, which moves the state
+            // past the one it ran under, so the state is read after it.
+            self.checked_under.set(Some(method_state()));
+        }
+        self.holds.get()
+    }
 }
 
 impl Class {
     /// Define or replace a method on this class.
     pub fn define_method(&self, name: impl Into<String>, method: Rc<Method>) {
         method_state_changed();
-        self.methods.borrow_mut().insert(name.into(), method);
+        let name = name.into();
+        if name.starts_with("__class__") {
+            self.holds_class_methods.set(true);
+        }
+        self.methods.borrow_mut().insert(name, method);
+    }
+
+    /// Set `holds_class_methods` and `holds_extended_copies` from what the
+    /// tables hold, after they were copied in whole.
+    pub(crate) fn note_held_names(&self) {
+        self.holds_class_methods.set(
+            self.methods
+                .borrow()
+                .keys()
+                .any(|name| name.starts_with("__class__")),
+        );
+        self.holds_extended_copies.set(
+            self.class_variables
+                .borrow()
+                .keys()
+                .any(|name| name.starts_with("__ext__")),
+        );
     }
 
     /// Determine whether this class defines a method (without checking superclasses).
@@ -128,7 +184,9 @@ impl Class {
         }
         match self.get_class_var("__attached__") {
             Some(crate::object::Object::Class(attached))
-            | Some(crate::object::Object::Module(attached)) => {
+            | Some(crate::object::Object::Module(attached))
+                if attached.holds_class_methods.get() =>
+            {
                 attached.find_own_method(&format!("__class__{}", name))
             }
             _ => None,

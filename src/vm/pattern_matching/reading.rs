@@ -120,6 +120,9 @@ impl VirtualMachine {
         value: &Object,
         named: &str,
     ) -> Option<std::rc::Rc<crate::object::Method>> {
+        if !self.any_refinement_active() {
+            return None;
+        }
         let target = crate::vm::method_lookup::refinement_target_name(value, self)?;
         self.find_refined_method(&target, named)
     }

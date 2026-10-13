@@ -802,6 +802,10 @@ end
 # a program names it.
 autoload :Pathname, "<internal:pathname_builtin>"
 
+# Rex, the spec framework metorex carries, loads the first time a program
+# names `RSpec`, and runs the examples it defined when the program ends.
+autoload :RSpec, "rex/autoload"
+
 module Kernel
   # Naming Pathname loads it, and it defines this method over again.
   def Pathname(path)

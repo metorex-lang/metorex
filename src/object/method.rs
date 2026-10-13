@@ -8,6 +8,22 @@ use std::rc::Rc;
 
 use super::Object;
 
+/// The names a method's frames carry, made once per kind of receiver: index
+/// 0 for an object, 1 for a class or module. A copy starts empty, since a
+/// copy is usually renamed or moved to another owner.
+#[derive(Debug, Default)]
+pub struct FrameNames(pub RefCell<[Option<CachedFrameName>; 2]>);
+
+/// One cached frame name: the name the method was called by, the frame name,
+/// and the name it was defined as.
+pub type CachedFrameName = (Rc<str>, Rc<str>, Rc<str>);
+
+impl Clone for FrameNames {
+    fn clone(&self) -> Self {
+        Self::default()
+    }
+}
+
 /// Method definition (function bound to a class)
 #[derive(Debug, Clone)]
 pub struct Method {
@@ -75,6 +91,8 @@ pub struct Method {
     /// written in. `super` from the copy starts past that one, whatever
     /// class the copy was installed on.
     pub alias_origin: Option<Rc<crate::class::Class>>,
+    /// The frame name and defined name a call of this method runs under.
+    pub frame_names: FrameNames,
     /// The lexically enclosing modules at the point of definition, innermost
     /// first. `Module.nesting` inside the method reports these rather than
     /// the scopes open at the call site.
@@ -121,6 +139,7 @@ impl Method {
             captured_def_scope: Vec::new(),
             captured_refinements: Vec::new(),
             alias_origin: None,
+            frame_names: FrameNames::default(),
             captured_nesting: Vec::new(),
             reads_as_proc: false,
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
@@ -160,6 +179,7 @@ impl Method {
             captured_def_scope: Vec::new(),
             captured_refinements: Vec::new(),
             alias_origin: None,
+            frame_names: FrameNames::default(),
             captured_nesting: Vec::new(),
             reads_as_proc: false,
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
@@ -199,6 +219,7 @@ impl Method {
             captured_def_scope: Vec::new(),
             captured_refinements: Vec::new(),
             alias_origin: None,
+            frame_names: FrameNames::default(),
             captured_nesting: Vec::new(),
             reads_as_proc: false,
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
@@ -239,6 +260,7 @@ impl Method {
             captured_def_scope: Vec::new(),
             captured_refinements: Vec::new(),
             alias_origin: None,
+            frame_names: FrameNames::default(),
             captured_nesting: Vec::new(),
             reads_as_proc: false,
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
@@ -273,6 +295,7 @@ impl Method {
             captured_def_scope: Vec::new(),
             captured_refinements: Vec::new(),
             alias_origin: None,
+            frame_names: FrameNames::default(),
             captured_nesting: Vec::new(),
             reads_as_proc: false,
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
@@ -307,6 +330,7 @@ impl Method {
             captured_def_scope: self.captured_def_scope.clone(),
             captured_refinements: self.captured_refinements.clone(),
             alias_origin: self.alias_origin.clone(),
+            frame_names: FrameNames::default(),
             captured_nesting: self.captured_nesting.clone(),
             reads_as_proc: self.reads_as_proc,
             ruby2_keywords: Rc::clone(&self.ruby2_keywords),

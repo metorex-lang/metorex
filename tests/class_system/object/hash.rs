@@ -71,6 +71,7 @@ fn test_hash_non_hashable() {
         singleton_methods: Rc::new(RefCell::new(HashMap::new())),
         singleton_class: Rc::new(RefCell::new(None)),
         frozen: false,
+        program_dunder_names: std::collections::HashSet::new(),
     })));
     assert!(inst.hash().is_none());
 }

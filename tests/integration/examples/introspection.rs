@@ -1147,3 +1147,18 @@ fn test_introspection_private_methods_own_chain_no_parens_execution() {
     let output = run_example("introspection/private_methods_own_chain_no_parens.rb");
     assert_eq!(output, PRIVATE_METHODS_OWN_CHAIN_OUTPUT);
 }
+
+#[test]
+fn test_a_class_answers_kernel_s_public_methods_until_one_is_undefined() {
+    let output = run_example("introspection/class_answers_kernel_methods.rb");
+    assert_eq!(output, "[]\nfalse\ntrue\nfalse\ntrue\ntrue\n:first\n");
+}
+
+#[test]
+fn test_instance_variables_named_with_two_underscores_are_listed() {
+    let output = run_example("introspection/dunder_instance_variables.rb");
+    assert_eq!(
+        output,
+        "[:@__hidden, :@shown]\n\"#<Ledger: @__hidden=1>\"\n[:@__hidden]\n1\n[:@__hidden, :@__set]\n"
+    );
+}

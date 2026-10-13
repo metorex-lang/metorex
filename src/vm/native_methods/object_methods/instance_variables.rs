@@ -28,7 +28,7 @@ impl VirtualMachine {
                         // The interpreter's own slots start with `__`.
                         .filter(|name| {
                             !crate::vm::native_methods::struct_methods::is_member_slot(name)
-                                && !name.starts_with("__")
+                                && inst.lists_var(name)
                         })
                         .map(|k| Object::symbol(format!("@{}", k)))
                         .collect()
@@ -260,7 +260,13 @@ impl VirtualMachine {
                         if is_frozen {
                             return Err(self.frozen_modification_error(receiver, position));
                         }
-                        instance_rc.borrow_mut().set_var(var_name, value.clone());
+                        if position.prelude {
+                            instance_rc.borrow_mut().set_var(var_name, value.clone());
+                        } else {
+                            instance_rc
+                                .borrow_mut()
+                                .set_program_var(var_name, value.clone());
+                        }
                         Ok(Some(value))
                     }
                     Object::Class(class_rc) => {

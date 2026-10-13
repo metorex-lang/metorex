@@ -353,30 +353,11 @@ impl VirtualMachine {
             return Err(self.arity_error_in_callee(error, &method, &class, position));
         }
 
-        // Prefer the method's original owner class (if recorded) over the
-        // class we dispatched through. For aliased/mixed-in methods this
-        // lets `super` walk from the method's true defining class. An alias
-        // is named for the module the method it copies was written in.
-        let owning_class_name = method
-            .alias_origin
-            .as_ref()
-            .map(|origin| origin.ruby_name())
-            .or_else(|| method.owner.clone())
-            .unwrap_or_else(|| class.name().to_string());
-        // `super` follows the definition, so the frame is named for the
-        // method as defined even when it was reached through an alias.
-        let defined_name = method
-            .original_name
-            .clone()
-            .unwrap_or_else(|| method_name.clone());
         // A method on a class or module is named with a dot, the way Ruby
         // writes `Foo.bar` in a backtrace, and an instance method with a hash.
-        let separator = if matches!(receiver, Object::Class(_) | Object::Module(_)) {
-            "."
-        } else {
-            "#"
-        };
-        let frame_name = format!("{}{}{}", owning_class_name, separator, defined_name);
+        let on_a_module = matches!(receiver, Object::Class(_) | Object::Module(_));
+        let (frame_name, defined_name) =
+            self.frame_names_for(&method, &class, &method_name, on_a_module);
         let frame_location = position_to_location(position);
         let frame_location_string = Some(format!("{}", frame_location));
 
@@ -514,7 +495,9 @@ impl VirtualMachine {
                     position,
                 )
                 .map(|()| value),
-            Err(error) => Err(error.with_stack_frame(StackFrame::new(frame_name, frame_location))),
+            Err(error) => {
+                Err(error.with_stack_frame(StackFrame::new(frame_name.to_string(), frame_location)))
+            }
         };
         self.leave_running_code();
         finished
@@ -1203,5 +1186,55 @@ impl VirtualMachine {
         if let Some(at) = self.live_frames.iter().rposition(|held| *held == frame) {
             self.live_frames.remove(at);
         }
+    }
+}
+
+impl VirtualMachine {
+    /// The name a call of `method` runs under, `Ledger#total` or
+    /// `Ledger.open`, and the name it was defined as. A method whose owner
+    /// is recorded keeps both once made; an alias, whose owner's name can
+    /// still change, makes them each time.
+    fn frame_names_for(
+        &self,
+        method: &Rc<crate::object::Method>,
+        class: &Rc<crate::class::Class>,
+        method_name: &str,
+        on_a_module: bool,
+    ) -> (Rc<str>, Rc<str>) {
+        let slot = usize::from(on_a_module);
+        let cacheable = method.alias_origin.is_none() && method.owner.is_some();
+        if cacheable
+            && let Some((callee, frame_name, defined)) = &method.frame_names.0.borrow()[slot]
+            && **callee == *method_name
+        {
+            return (Rc::clone(frame_name), Rc::clone(defined));
+        }
+        // Prefer the method's original owner class (if recorded) over the
+        // class we dispatched through. For aliased/mixed-in methods this
+        // lets `super` walk from the method's true defining class. An alias
+        // is named for the module the method it copies was written in.
+        let owning_class_name = method
+            .alias_origin
+            .as_ref()
+            .map(|origin| origin.ruby_name())
+            .or_else(|| method.owner.clone())
+            .unwrap_or_else(|| class.name().to_string());
+        // `super` follows the definition, so the frame is named for the
+        // method as defined even when it was reached through an alias.
+        let defined: Rc<str> = method
+            .original_name
+            .as_deref()
+            .unwrap_or(method_name)
+            .into();
+        let separator = if on_a_module { "." } else { "#" };
+        let frame_name: Rc<str> = format!("{owning_class_name}{separator}{defined}").into();
+        if cacheable {
+            method.frame_names.0.borrow_mut()[slot] = Some((
+                method_name.into(),
+                Rc::clone(&frame_name),
+                Rc::clone(&defined),
+            ));
+        }
+        (frame_name, defined)
     }
 }

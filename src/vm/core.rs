@@ -326,6 +326,24 @@ pub struct VirtualMachine {
     /// stack when it started. A `def` written in the method's body installs
     /// there, unless a class body opened since is deeper.
     pub(crate) method_definees: HashMap<u64, (usize, Definee)>,
+    /// Whether Rex's native fast paths run, which `config.fast_paths` sets.
+    pub(crate) fast_paths_enabled: bool,
+    /// By method name, the methods Rex's fast paths stand in for, as Rex
+    /// defined them.
+    pub(crate) fast_path_originals: HashMap<String, Vec<Rc<crate::object::Method>>>,
+    /// By class and method name, the method state a guard was last checked
+    /// under and whether the class answered with a recorded method.
+    pub(crate) fast_path_checks: HashMap<(usize, String), (u64, bool)>,
+    /// The class-level methods Rex's fast paths stand in for: the owner,
+    /// the name, and the method as Rex defined it.
+    pub(crate) fast_path_class_originals:
+        Vec<(Rc<crate::class::Class>, String, Rc<crate::object::Method>)>,
+    /// The method state the class-level methods were last checked under,
+    /// and whether each was still Rex's own.
+    pub(crate) fast_path_class_check: Option<(u64, bool)>,
+    /// The matchers Rex matches natively: the kind, the matcher class, and
+    /// the names of its methods the native match stands in for.
+    pub(crate) fast_matchers: Vec<(String, Rc<crate::class::Class>, Vec<Object>)>,
     /// Frames running code their method did not write: a file's top level,
     /// which runs in the frame of the method that loaded it, and a block
     /// `instance_exec` or `class_exec` runs. A `def` there is written in no
@@ -488,7 +506,7 @@ pub struct VirtualMachine {
     /// Symbol / String). Keyed by a stable string tag so every lookup for
     /// the same receiver returns the same Class instance.
     pub(crate) primitive_singleton_classes:
-        std::collections::HashMap<String, Rc<crate::class::Class>>,
+        crate::fast_hash::NameMap<String, Rc<crate::class::Class>>,
     /// Stack of positional arguments captured for each active method
     /// invocation. `super` (bare form) reads the top entry to forward args
     /// to the parent method; pushed by invoke_method, popped on return.
@@ -652,6 +670,12 @@ impl VirtualMachine {
             toplevel_public: false,
             toplevel_frame: Some(TOP_LEVEL_FRAME),
             method_definees: HashMap::new(),
+            fast_paths_enabled: true,
+            fast_path_originals: HashMap::new(),
+            fast_path_checks: HashMap::new(),
+            fast_path_class_originals: Vec::new(),
+            fast_path_class_check: None,
+            fast_matchers: Vec::new(),
             borrowed_frames: Vec::new(),
             unused_block_methods: HashSet::new(),
             running_block_breaks: Vec::new(),
@@ -703,7 +727,7 @@ impl VirtualMachine {
             flip_flops: std::collections::HashMap::new(),
             pattern_timeouts: std::collections::HashMap::new(),
             traced_binding: None,
-            primitive_singleton_classes: std::collections::HashMap::new(),
+            primitive_singleton_classes: crate::fast_hash::NameMap::default(),
             method_arg_stack: Vec::new(),
             method_running_stack: Vec::new(),
             weak_references: Vec::new(),
@@ -937,6 +961,12 @@ impl VirtualMachine {
             }
         }
         refinements
+    }
+
+    /// Whether any `using` is in force, which a call checks before it builds
+    /// the keys a refinement is looked up under.
+    pub(crate) fn any_refinement_active(&self) -> bool {
+        self.refinement_scopes.iter().any(|scope| !scope.is_empty())
     }
 
     /// Look up a refined method for the given target class (keyed by pointer
@@ -1252,7 +1282,7 @@ impl VirtualMachine {
                 FrameKind::Block => continue,
                 FrameKind::Boundary => return None,
                 FrameKind::Method { defined, .. } => {
-                    return Some((frame.owner_path().map(str::to_string), defined.clone()));
+                    return Some((frame.owner_path().map(str::to_string), defined.to_string()));
                 }
             }
         }
@@ -1266,7 +1296,7 @@ impl VirtualMachine {
                 FrameKind::Block => continue,
                 FrameKind::Boundary => return None,
                 FrameKind::Method { callee, defined } => {
-                    return Some((callee.clone(), defined.clone()));
+                    return Some((callee.to_string(), defined.to_string()));
                 }
             }
         }

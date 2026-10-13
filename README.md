@@ -636,12 +636,13 @@ See [examples/serialization.rb](examples/advanced/serialization.rb)
 
 ## Built-in Spec Runner
 
-`metorex spec` runs a suite written for RSpec 3.13 with Rex, the spec framework metorex carries. `require "rspec"` loads Rex as well, and `RSpec` names it, so a suite runs with no gems installed. It reads `.rspec`, `.rspec-local`, and `SPEC_OPTS`, loads `spec_helper`, and prints what RSpec prints: the expected output of each fixture under `tests/_examples/rex` is RSpec's own output for the same suite.
+`metorex spec` runs a suite written for RSpec 3.13 with Rex, the spec framework metorex carries. `require "rspec"` loads Rex as well, and `RSpec` names it, so a suite runs with no gems installed. A script run with `metorex` that names `RSpec` loads Rex the first time it does, and runs its examples as it ends, as `require "rspec/autorun"` does. It reads `.rspec`, `.rspec-local`, and `SPEC_OPTS`, loads `spec_helper`, and prints what RSpec prints: the expected output of each fixture under `tests/_examples/rex` is RSpec's own output for the same suite.
 
 It takes the options `metorex spec --help` lists, which are RSpec's, and these of its own:
 
 - `--jobs N` runs the top-level groups in N forked worker processes, and `--jobs auto` runs one per processor. The parent hands each group's events to the formatters in the order a serial run would, so the output reads as it does with one job
 - `--verify-parallel` runs the suite again in one process with the same seed after a parallel run, and warns about each example whose outcome changed
+- `--no-fast-paths`, or `config.fast_paths = false`, runs the Ruby versions of the parts of Rex that also have native versions, so a difference between the two can be checked
 - `--coverage` reports the lines and branches of the loaded files that ran, counted by the interpreter rather than a coverage gem. `--coverage-format` picks `summary`, `lcov`, or `json`, `--coverage-dir` says where the files go, `--coverage-threshold PERCENT` fails a run below it, and `--coverage-exclude PATTERN` leaves files out. Parallel workers merge their counts
 - `config.source_expressions = true` quotes the expression handed to `expect` in a failure, `config.failure_context_lines = N` prints N lines around the failing line, and `config.diff_line_limit = N` leaves out a diff longer than N lines
 
@@ -652,10 +653,25 @@ It takes the options `metorex spec --help` lists, which are RSpec's, and these o
 | Suite | Passing | Examples | Pending |
 | :-- | --: | --: | --: |
 | rspec-expectations | 2231 | 2455 | 17 |
-| rspec-mocks | 1319 | 1806 | 9 |
-| rspec-core | 2009 | 2264 | 19 |
+| rspec-mocks | 1376 | 1806 | 9 |
+| rspec-core | 2038 | 2258 | 19 |
 
 The driver needs MRI with the aruba and thread_order gems, which rspec-core's suite loads. diff-lcs's suite passes all 322 of its examples, with documentation output identical to RSpec's byte for byte.
+
+### Speed
+
+`scripts/bench_rex.sh` runs `benchmarks/rex_suite`, 3000 trivial examples, with a release build and compares boot time, load time, examples per second, and peak memory with `benchmarks/rex_suite/baseline.json`. `scripts/compare_fast_paths.sh` runs the RSpec libraries' suites with the fast paths on and off and checks that every spec file prints the same.
+
+Times on an Apple M-series machine, release build:
+
+| Suite | Before | After | MRI 4.0 with RSpec 3.13 |
+| :-- | --: | --: | --: |
+| `benchmarks/rex_suite`, running the examples | 5.24 s | 3.81 s | 0.12 s |
+| `benchmarks/rex_suite`, loading the spec files | 3.21 s | 1.88 s | 0.13 s |
+| diff-lcs, all 322 examples | 2.32 s | 2.22 s | 1.44 s |
+| diff-lcs, the 272 examples outside `ldiff_spec.rb` | 0.63 s | 0.59 s | 0.03 s |
+
+For `rex_suite`, "before" is the baseline recorded before any fast path. For diff-lcs it is the build with the fast paths in place, before the interpreter changes its profile led to: skipping refinement lookups when no `using` is in force, a faster hash for method and variable tables, keeping the method caches when an example's singleton class is made, and reading the clock less often. diff-lcs runs with MRI's `ruby` first on `PATH`, since `ldiff_spec.rb` starts it for each case, and most of that file's time is spent waiting on those processes.
 
 ## Roadmap Highlights
 

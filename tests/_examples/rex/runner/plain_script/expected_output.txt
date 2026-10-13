@@ -1,0 +1,20 @@
+.F
+
+Failures:
+
+  1) a ledger rounds a total
+     Failure/Error: expect(10.0 / 4).to eq(2)
+
+       expected: 2
+            got: 2.5
+
+       (compared using ==)
+     # ledger_autorun.rb:9:in 'block (2 levels) in <main>'
+
+Finished in N seconds (files took N seconds to load)
+2 examples, 1 failure
+
+Failed examples:
+
+rspec ledger_autorun.rb:8 # a ledger rounds a total
+exit 1

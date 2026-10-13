@@ -480,6 +480,8 @@ impl VirtualMachine {
                         );
                         self.emit_warning_to_stderr(&msg, assign_pos);
                     }
+                    // A value written over a pending autoload takes its place.
+                    class.remove_autoload(const_name);
                     class.set_class_var(const_name, const_value.clone());
                     let assign_file = self
                         .reported_current_file()

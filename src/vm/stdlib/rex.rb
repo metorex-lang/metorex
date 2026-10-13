@@ -17,7 +17,7 @@ module Rex
   end
 end
 
-RSpec = Rex unless defined?(RSpec)
+RSpec = Rex if Object.autoload?(:RSpec) || !defined?(RSpec)
 
 require "rex/support"
 require "rex/core/framework"
@@ -127,6 +127,7 @@ require "rex/matchers"
 require "rex/mocks"
 require "rex/core/parallel"
 require "rex/core/coverage"
+require "rex/core/fast_paths"
 
 Rex::Core::ExampleGroup.extend(Rex::Matchers::DSL)
 Rex::Expectations.configuration.reset_syntaxes_to_default

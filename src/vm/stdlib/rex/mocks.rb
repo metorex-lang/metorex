@@ -28,16 +28,21 @@ module Rex
         Thread.current[:rex_mock_space] ||= Space.new
       end
 
+      # A fast path: an example that made no double, stub, or constant
+      # change verifies and takes down nothing, and its space is made only
+      # when it first needs one. `__mock_space_idle__` says when that holds.
       def setup
-        Thread.current[:rex_mock_space] = Space.new
+        Thread.current[:rex_mock_space] = __mock_space_idle__(nil, Space) ? nil : Space.new
       end
 
       def verify
+        return if __mock_space_idle__(Thread.current[:rex_mock_space], Space)
+
         space.verify_all
       end
 
       def teardown
-        space.reset_all
+        space.reset_all unless __mock_space_idle__(Thread.current[:rex_mock_space], Space)
       ensure
         Thread.current[:rex_mock_space] = nil
       end

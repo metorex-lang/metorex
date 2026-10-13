@@ -5,6 +5,8 @@ use super::*;
 /// How long a thread runs before it hands the turn to the others, which is
 /// how often MRI's timer marks a turn as spent.
 const TIME_SLICE: std::time::Duration = std::time::Duration::from_millis(100);
+/// How many statements run between two reads of the clock for the time slice.
+const STATEMENTS_BETWEEN_CLOCK_READS: u64 = 64;
 
 impl VirtualMachine {
     /// Counts a statement, and hands the turn over once the thread has held
@@ -14,7 +16,11 @@ impl VirtualMachine {
         position: crate::lexer::Position,
     ) -> Result<(), MetorexError> {
         self.statements_run = self.statements_run.wrapping_add(1);
-        if self.turn_started.elapsed() >= TIME_SLICE {
+        // Reading the clock costs more than a statement does, so the time
+        // slice is checked every so many statements rather than at each.
+        if self.statements_run.is_multiple_of(STATEMENTS_BETWEEN_CLOCK_READS)
+            && self.turn_started.elapsed() >= TIME_SLICE
+        {
             self.turn_started = std::time::Instant::now();
             self.share_the_turn(position)?;
         }

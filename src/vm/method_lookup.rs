@@ -56,7 +56,7 @@ pub(crate) fn find_refinement(
     name: &str,
     vm: &crate::vm::VirtualMachine,
 ) -> Option<Rc<crate::object::Method>> {
-    if singleton_answers(receiver, name) {
+    if !vm.any_refinement_active() || singleton_answers(receiver, name) {
         return None;
     }
     if let Some(key) = refinement_target_name(receiver, vm)
@@ -593,7 +593,8 @@ impl VirtualMachine {
     pub(crate) fn responds_to(&self, receiver: &Object, name: &str) -> bool {
         // A refinement in force here answers for the receiver too, which is
         // what `respond_to?` reports while the refinement is active.
-        if let Some(target) = refinement_target_name(receiver, self)
+        if self.any_refinement_active()
+            && let Some(target) = refinement_target_name(receiver, self)
             && self.find_refined_method(&target, name).is_some()
         {
             return true;
@@ -645,10 +646,11 @@ impl VirtualMachine {
         }
         let mut cursor = Some(Rc::clone(class_rc));
         while let Some(current) = cursor {
+            // A method undefined on the singleton class answers no further up.
             if let Some(sc) = current.singleton_class_slot().clone()
-                && sc.find_method(name).is_some()
+                && let Some(found) = sc.find_method(name)
             {
-                return true;
+                return !found.is_undefined;
             }
             if core_singleton_method(&current.ruby_name(), name) {
                 return true;
@@ -678,15 +680,23 @@ impl VirtualMachine {
         }
         // A class answers to `new` and to Module's own natives, which live in
         // the dispatch tables rather than in a method map. It also carries
-        // Kernel's default `respond_to_missing?` the way any object does. The
-        // rest of Kernel's surface is not reported here yet: turning it all on
-        // changes which names mspec's mocks alias and breaks Module#autoload.
+        // Kernel's default `respond_to_missing?` the way any object does.
         if name == "respond_to_missing?" || (name == "new" && matches!(receiver, Object::Class(_)))
         {
             return true;
         }
         // Class's own public methods, such as `allocate` and `superclass`.
         if matches!(receiver, Object::Class(_)) && class_public_method(name) {
+            return true;
+        }
+        // Kernel's and BasicObject's public methods, such as
+        // `singleton_class` and `is_a?`, which a class or module answers as
+        // any object does, unless one of them was undefined on the way.
+        if (core_public_method("Kernel", name) || core_public_method("BasicObject", name))
+            && self
+                .lookup_method(receiver, name)
+                .is_none_or(|(_, method)| !method.is_undefined)
+        {
             return true;
         }
         // An exception class builds one with `exception` as well as `new`.
@@ -1342,6 +1352,19 @@ pub(crate) fn module_level_method(class_rc: &Rc<Class>, method_name: &str) -> Op
 
 /// A method written on the module itself with `def self.name` or `def Mod.name`.
 pub(crate) fn module_own_method(class_rc: &Rc<Class>, method_name: &str) -> Option<Rc<Method>> {
+    // Classes holding no `def self.name` anywhere up the chain answer none.
+    let mut cursor = Some(Rc::clone(class_rc));
+    let mut any_held = false;
+    while let Some(current) = cursor {
+        if current.holds_class_methods.get() {
+            any_held = true;
+            break;
+        }
+        cursor = current.superclass();
+    }
+    if !any_held {
+        return None;
+    }
     class_rc.find_inherited_method(&format!("__class__{}", method_name))
 }
 
@@ -1353,6 +1376,9 @@ pub(crate) fn module_extended_method(
     class_rc: &Rc<Class>,
     method_name: &str,
 ) -> Option<Rc<Method>> {
+    if !class_rc.holds_extended_copies.get() {
+        return None;
+    }
     let copied = match class_rc.get_class_var(&format!("__ext__{}", method_name)) {
         Some(Object::Method(method)) => method,
         _ => return None,
@@ -1373,6 +1399,15 @@ pub(crate) fn names_self(receiver_expr: &Expression) -> bool {
         Expression::Identifier { name, .. } => name == "self",
         _ => false,
     }
+}
+
+/// Whether `name` is one of the public instance methods the core class or
+/// module named `owner` defines.
+pub(crate) fn core_public_method(owner: &str, name: &str) -> bool {
+    crate::vm::native_methods::core_method_names::CORE_METHODS
+        .iter()
+        .find(|row| row.owner == owner)
+        .is_some_and(|row| row.public.contains(&name))
 }
 
 /// Whether `name` is one of the public instance methods Class defines.

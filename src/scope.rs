@@ -12,7 +12,7 @@ use std::rc::Rc;
 pub struct Scope {
     /// Variable storage: maps variable names to shared mutable references
     /// This allows closures to mutate captured variables
-    variables: HashMap<String, Rc<RefCell<Object>>>,
+    variables: crate::fast_hash::NameMap<String, Rc<RefCell<Object>>>,
 
     /// The names in `variables` in the order they were first bound, which is
     /// the order `local_variables` reports them in.
@@ -38,7 +38,7 @@ pub struct Scope {
     /// Ruby's parser reserves a local for the rest of the body. A block
     /// written before that assignment does not close over one of these:
     /// Ruby's local does not exist yet where the block was written.
-    hoisted_names: HashSet<String>,
+    hoisted_names: std::collections::HashSet<String, crate::fast_hash::NameHashing>,
 
     /// The names a block closed over where it was written, shared with every
     /// call of the block. They are read and written through, after this
@@ -59,13 +59,13 @@ impl Scope {
     /// Creates a new scope with no parent (global scope)
     pub fn new() -> Self {
         Scope {
-            variables: HashMap::new(),
+            variables: crate::fast_hash::NameMap::default(),
             order: Vec::new(),
             parent: None,
             is_method_boundary: false,
             inherited_names: Vec::new(),
             hidden_names: HashSet::new(),
-            hoisted_names: HashSet::new(),
+            hoisted_names: Default::default(),
             captured: None,
             reserved: Rc::new(Vec::new()),
         }
@@ -74,13 +74,13 @@ impl Scope {
     /// Creates a new scope with the given parent scope
     pub fn with_parent(parent: Rc<RefCell<Scope>>) -> Self {
         Scope {
-            variables: HashMap::new(),
+            variables: crate::fast_hash::NameMap::default(),
             order: Vec::new(),
             parent: Some(parent),
             is_method_boundary: false,
             inherited_names: Vec::new(),
             hidden_names: HashSet::new(),
-            hoisted_names: HashSet::new(),
+            hoisted_names: Default::default(),
             captured: None,
             reserved: Rc::new(Vec::new()),
         }

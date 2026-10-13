@@ -132,6 +132,11 @@ impl VirtualMachine {
     /// creating one. Used by method lookup, which must not materialize a
     /// singleton class just by asking.
     pub(crate) fn existing_singleton_class(&self, receiver: &Object) -> Option<Rc<Class>> {
+        // Most programs give no value of these kinds a singleton class, which
+        // spares building the key to look one up by.
+        if self.primitive_singleton_classes.is_empty() {
+            return None;
+        }
         let key = primitive_singleton_key(receiver).or_else(|| match receiver {
             Object::Exception(details) => Some(format!("__exception_{:p}", Rc::as_ptr(details))),
             Object::Instance(_) | Object::Class(_) | Object::Module(_) => None,

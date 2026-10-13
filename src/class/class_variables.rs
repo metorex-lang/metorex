@@ -19,9 +19,22 @@ impl Class {
             self.unrealized_autoloads.borrow_mut().remove(&key);
         }
         // A singleton class answers for the class it is attached to, which
-        // is part of what a method lookup through it finds.
-        if key == "__attached__" || key == "__singleton__" {
+        // is part of what a method lookup through it finds. One made for an
+        // object, rather than a class, is nobody's superclass, so while it
+        // has answered no lookup of its own no cached answer depends on it.
+        // The mark that says a class is a singleton, set before what it is
+        // attached to, likewise changes nothing a lookup has answered yet.
+        let answered_nothing = self.method_cache.borrow().is_empty();
+        let changes_lookups = match key.as_str() {
+            "__attached__" => !(matches!(value, Object::Instance(_)) && answered_nothing),
+            "__singleton__" => !answered_nothing,
+            _ => false,
+        };
+        if changes_lookups {
             super::methods::method_state_changed();
+        }
+        if key.starts_with("__ext__") {
+            self.holds_extended_copies.set(true);
         }
         self.class_variables.borrow_mut().insert(key, value);
     }
@@ -166,8 +179,10 @@ impl Class {
             deprecated_constants: RefCell::new(source.deprecated_constants.borrow().clone()),
             autoload_locations: RefCell::new(source.autoload_locations.borrow().clone()),
             const_locations: RefCell::new(source.const_locations.borrow().clone()),
-            method_cache: RefCell::new(HashMap::new()),
-            method_walks: RefCell::new(HashMap::new()),
+            method_cache: RefCell::new(crate::fast_hash::NameMap::default()),
+            method_walks: RefCell::new(crate::fast_hash::NameMap::default()),
+            holds_class_methods: std::cell::Cell::new(false),
+            holds_extended_copies: std::cell::Cell::new(false),
         };
         if let Some(src_sc) = source.singleton_class.borrow().as_ref() {
             let sc_copy = Rc::new(Class {
@@ -205,11 +220,15 @@ impl Class {
                 deprecated_constants: RefCell::new(src_sc.deprecated_constants.borrow().clone()),
                 autoload_locations: RefCell::new(src_sc.autoload_locations.borrow().clone()),
                 const_locations: RefCell::new(src_sc.const_locations.borrow().clone()),
-                method_cache: RefCell::new(HashMap::new()),
-                method_walks: RefCell::new(HashMap::new()),
+                method_cache: RefCell::new(crate::fast_hash::NameMap::default()),
+                method_walks: RefCell::new(crate::fast_hash::NameMap::default()),
+                holds_class_methods: std::cell::Cell::new(false),
+                holds_extended_copies: std::cell::Cell::new(false),
             });
+            sc_copy.note_held_names();
             *copy.singleton_class.borrow_mut() = Some(sc_copy);
         }
+        copy.note_held_names();
         copy
     }
 }
@@ -241,8 +260,10 @@ impl Clone for Class {
             deprecated_constants: RefCell::new(self.deprecated_constants.borrow().clone()),
             autoload_locations: RefCell::new(self.autoload_locations.borrow().clone()),
             const_locations: RefCell::new(self.const_locations.borrow().clone()),
-            method_cache: RefCell::new(HashMap::new()),
-            method_walks: RefCell::new(HashMap::new()),
+            method_cache: RefCell::new(crate::fast_hash::NameMap::default()),
+            method_walks: RefCell::new(crate::fast_hash::NameMap::default()),
+            holds_class_methods: std::cell::Cell::new(self.holds_class_methods.get()),
+            holds_extended_copies: std::cell::Cell::new(self.holds_extended_copies.get()),
         }
     }
 }

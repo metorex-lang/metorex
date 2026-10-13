@@ -130,6 +130,8 @@ impl VirtualMachine {
                         self.emit_warning_to_stderr(&msg, assign_pos);
                     }
                     crate::vm::statement::name_constant_value(module, const_name, &const_value);
+                    // A value written over a pending autoload takes its place.
+                    module.remove_autoload(const_name);
                     module.set_class_var(const_name, const_value);
                     let assign_file = self
                         .reported_current_file()

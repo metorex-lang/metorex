@@ -172,6 +172,12 @@ module Rex
           end
         end
 
+        # The example hooks registered here, with the metadata each is
+        # filtered by.
+        def example_hook_entries(position)
+          hooks_for(position, :example) { return EMPTY_HOOK_ARRAY }.items_and_filters
+        end
+
         def processable_hooks_for(position, scope, host)
           if scope == :example
             all_hooks_for(position, scope)
@@ -253,15 +259,65 @@ module Rex
         end
 
         def run_example_hooks_for(example, position, each_method)
+          if (entries = flattened_example_hook_entries(example, position))
+            metadata = example.metadata
+            entries.each do |hook, filters|
+              hook.run(example) if filters.empty? || MetadataFilter.apply?(:all?, filters, metadata)
+            end
+            return
+          end
+
           owner_parent_groups.__send__(each_method) do |group|
             group.hooks.run_owned_hooks_for(position, :example, example)
           end
         end
 
-        def run_around_example_hooks_for(example)
-          hooks = FlatMap.flat_map(owner_parent_groups) do |group|
-            group.hooks.matching_hooks_for(:around, :example, example)
+        # A fast path: the example hooks of the example's group and the
+        # groups around it, in the order they run, built once and kept until
+        # a hook is added anywhere, with this collection's own put on the
+        # end they run from. An example's hooks are this collection's when
+        # it belongs to the singleton class of the example's group instance.
+        # nil when that is not so, or when the guard does not hold.
+        def flattened_example_hook_entries(example, position)
+          groups = owner_parent_groups
+          group = groups[1]
+          return nil unless group && group.equal?(example.example_group) && groups.first.singleton_class?
+
+          return nil unless Rex.configuration.fast_paths?
+
+          flattened = FastPaths::FLATTENED_HOOKS[group] ||= { receivers: groups.drop(1).map(&:hooks) }
+          state = __method_state__
+          unless flattened[:state] == state
+            flattened[:state] = state
+            flattened[:held] = FastPaths.hooks_guard.holds?(flattened[:receivers])
           end
+          return nil unless flattened[:held]
+
+          changes = FilterableItemRepository.changes
+          unless flattened[:changes] == changes
+            flattened[:changes] = changes
+            parents = groups.drop(1)
+            flattened[:before] = parents.reverse.flat_map { |each_group| each_group.hooks.example_hook_entries(:before) }
+            flattened[:after] = parents.flat_map { |each_group| each_group.hooks.example_hook_entries(:after) }
+            flattened[:around] = parents.flat_map { |each_group| each_group.hooks.example_hook_entries(:around) }
+          end
+          own = example_hook_entries(position)
+          return flattened[position] if own.empty?
+
+          position == :before ? flattened[position] + own : own + flattened[position]
+        end
+
+        def run_around_example_hooks_for(example)
+          hooks = if (entries = flattened_example_hook_entries(example, :around))
+                    metadata = example.metadata
+                    entries.filter_map do |hook, filters|
+                      hook if filters.empty? || MetadataFilter.apply?(:all?, filters, metadata)
+                    end
+                  else
+                    FlatMap.flat_map(owner_parent_groups) do |group|
+                      group.hooks.matching_hooks_for(:around, :example, example)
+                    end
+                  end
 
           return yield if hooks.empty?
 

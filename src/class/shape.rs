@@ -19,11 +19,12 @@ pub struct Class {
     /// `new` made on one, which is what its `class` answers.
     pub(crate) instance_of: RefCell<Option<Rc<Class>>>,
     pub(crate) superclass: Option<Rc<Class>>,
-    pub(crate) methods: RefCell<HashMap<String, Rc<Method>>>,
+    pub(crate) methods: RefCell<crate::fast_hash::NameMap<String, Rc<Method>>>,
     pub(crate) instance_variables: RefCell<HashSet<String>>,
     /// Class variables, constants, and class-level bookkeeping keyed by name.
     /// Insertion-ordered so `Module#class_variables` reports definition order.
-    pub(crate) class_variables: RefCell<IndexMap<String, crate::object::Object>>,
+    pub(crate) class_variables:
+        RefCell<crate::fast_hash::NameIndexMap<String, crate::object::Object>>,
     /// Included modules, in reverse inclusion order (last included = first searched).
     pub(crate) mixins: RefCell<Vec<Rc<Class>>>,
     /// Prepended modules, in reverse prepend order. These sit ahead of the
@@ -87,10 +88,17 @@ pub struct Class {
     pub(crate) const_locations: RefCell<HashMap<String, (String, i64)>>,
     /// What `find_method` found for each name, with the method state it was
     /// found under. An entry from an earlier state is looked up again.
-    pub(crate) method_cache: RefCell<HashMap<String, CachedLookup>>,
+    pub(crate) method_cache: RefCell<crate::fast_hash::NameMap<String, CachedLookup>>,
     /// How many times `find_method` walked the ancestry for each name rather
     /// than answering from the cache.
-    pub(crate) method_walks: RefCell<HashMap<String, u64>>,
+    pub(crate) method_walks: RefCell<crate::fast_hash::NameMap<String, u64>>,
+    /// Whether the method table holds a `def self.name`, kept under a
+    /// `__class__` name, which spares a lookup of one building that name
+    /// when there is none.
+    pub(crate) holds_class_methods: std::cell::Cell<bool>,
+    /// Whether a module this extended left a copy of one of its methods
+    /// here, under an `__ext__` name.
+    pub(crate) holds_extended_copies: std::cell::Cell<bool>,
 }
 
 /// A class is written out by name alone. Following what it holds would go on

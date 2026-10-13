@@ -64,6 +64,10 @@ pub(super) const REX_LIBRARIES: &[(&str, &str)] = &[
         include_str!("rex/core/example_status_persister.rb"),
     ),
     (
+        "rex/core/fast_paths",
+        include_str!("rex/core/fast_paths.rb"),
+    ),
+    (
         "rex/core/filter_manager",
         include_str!("rex/core/filter_manager.rb"),
     ),
@@ -382,6 +386,10 @@ pub(super) const REX_LIBRARIES: &[(&str, &str)] = &[
         "require \"rex\"\nrequire \"rex/core/example_status_persister\"\n",
     ),
     (
+        "rspec/core/fast_paths",
+        "require \"rex\"\nrequire \"rex/core/fast_paths\"\n",
+    ),
+    (
         "rspec/core/filter_manager",
         "require \"rex\"\nrequire \"rex/core/filter_manager\"\n",
     ),
@@ -683,10 +691,15 @@ pub(super) const REX_LIBRARIES: &[(&str, &str)] = &[
     ("rspec/mocks/verifying_double", LOADS_REX),
     ("rspec/mocks/verifying_message_expectation", LOADS_REX),
     ("rspec/mocks/verifying_proxy", LOADS_REX),
+    (
+        "rex/autoload",
+        "require \"rex\"\nRex::Core::Runner.autorun\n",
+    ),
+    ("rspec", LOADS_REX),
     ("rspec/core", LOADS_REX),
     ("rspec/expectations", LOADS_REX),
     ("rspec/mocks", LOADS_REX),
-    ("rspec/autorun", LOADS_REX),
+    ("rspec/autorun", "require \"rex/autoload\"\n"),
     ("rspec/matchers", LOADS_REX),
     ("rspec/support", LOADS_REX),
     ("rspec/support/ruby_features", LOADS_REX),

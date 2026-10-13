@@ -96,3 +96,34 @@ fn test_raise_on_warning_turns_a_warning_into_a_failure() {
 fn test_rspec_constant_false_leaves_rspec_for_the_suite_to_define() {
     assert_matches("config/rspec_constant", "documentation", &["-fd"]);
 }
+
+/// What the fast paths setting reads under `arguments`.
+fn fast_paths_printed(arguments: &[&str]) -> String {
+    let run = run_spec("config/fast_paths", arguments);
+    run.output
+        .lines()
+        .find(|line| line.starts_with("fast paths: "))
+        .unwrap_or_default()
+        .to_string()
+}
+
+#[test]
+fn test_fast_paths_are_on_by_default() {
+    assert_eq!(fast_paths_printed(&[]), "fast paths: true");
+}
+
+#[test]
+fn test_no_fast_paths_turns_them_off() {
+    assert_eq!(
+        fast_paths_printed(&["--no-fast-paths"]),
+        "fast paths: false"
+    );
+}
+
+#[test]
+fn test_the_configuration_turns_fast_paths_off() {
+    assert_eq!(
+        fast_paths_printed(&["--require", "./spec/fast_paths_off.rb"]),
+        "fast paths: false"
+    );
+}

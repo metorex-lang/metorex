@@ -18,6 +18,7 @@ mod rex {
     mod mocks;
     mod ordering;
     mod parallel;
+    mod performance;
     mod runner;
 
     pub(crate) use crate::common::EXAMPLES_DIR;
@@ -359,6 +360,28 @@ fn test_the_specs_under_spec_pass_under_metorex_spec() {
     assert!(
         output.status.success() && printed.contains(" examples, 0 failures"),
         "{printed}{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// `require "rspec"` and each of its siblings load Rex, which `RSpec` names.
+/// `rspec/autorun` also runs the examples as the program ends, which the
+/// plain_script fixture covers.
+#[test]
+fn test_the_rspec_names_load_rex() {
+    let program = ["rspec", "rspec/core", "rspec/expectations", "rspec/mocks"]
+        .iter()
+        .map(|name| format!("p(require(\"{name}\") || true)"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_metorex"))
+        .args(["-e", &format!("{program}\np(RSpec.equal?(Rex))")])
+        .output()
+        .expect("run metorex");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "true\ntrue\ntrue\ntrue\ntrue\n",
+        "{}",
         String::from_utf8_lossy(&output.stderr)
     );
 }

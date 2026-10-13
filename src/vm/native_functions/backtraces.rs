@@ -46,6 +46,36 @@ impl VirtualMachine {
     /// The frames running as Location objects, outermost call last, the way
     /// `caller_locations(0)` reports them.
     pub(crate) fn caller_location_objects(&mut self, position: Position) -> Vec<Object> {
+        let all = self.unresolved_caller_location_objects(position);
+        for location in &all {
+            self.resolve_location_path(location);
+        }
+        all
+    }
+
+    /// Set the `absolute_path` of a Location made by
+    /// `unresolved_caller_location_objects`, which resolving a path on disk
+    /// gives it.
+    fn resolve_location_path(&mut self, location: &Object) {
+        let Object::Instance(location) = location else {
+            return;
+        };
+        let path = match location.borrow().get_var("path") {
+            Some(Object::String(path)) => path.as_str().to_string(),
+            _ => return,
+        };
+        let absolute = match self.absolute_path_for(&path) {
+            Some(resolved) => Object::string(resolved),
+            None => Object::Nil,
+        };
+        location
+            .borrow_mut()
+            .set_var("absolute_path".to_string(), absolute);
+    }
+
+    /// `caller_location_objects` with each `absolute_path` left nil, for a
+    /// caller that keeps only some of them and resolves those.
+    fn unresolved_caller_location_objects(&mut self, position: Position) -> Vec<Object> {
         use crate::object::Instance;
         use std::rc::Rc;
         let sites = self.running_backtrace_sites(position);
@@ -54,10 +84,7 @@ impl VirtualMachine {
             .into_iter()
             .map(|((path, line, label), column)| {
                 let location = Instance::new(Rc::clone(&loc_class));
-                let absolute = match self.absolute_path_for(&path) {
-                    Some(resolved) => Object::string(resolved),
-                    None => Object::Nil,
-                };
+                let absolute = Object::Nil;
                 {
                     let mut filling = location.borrow_mut();
                     filling.set_var("lineno".to_string(), Object::Int(line as i64));
@@ -155,7 +182,7 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Vec<Object>>, MetorexError> {
-        let all = self.caller_location_objects(position);
+        let all = self.unresolved_caller_location_objects(position);
         let Some((skip, length)) = self.caller_slice_bounds(arguments, all.len(), 1, position)?
         else {
             return Ok(None);
@@ -163,6 +190,10 @@ impl VirtualMachine {
         let mut kept: Vec<Object> = all.into_iter().skip(skip).collect();
         if let Some(length) = length {
             kept.truncate(length);
+        }
+        // Only the locations kept are looked up on disk.
+        for location in &kept {
+            self.resolve_location_path(location);
         }
         Ok(Some(kept))
     }

@@ -18,9 +18,9 @@ impl Class {
             temporary_name: RefCell::new(None),
             instance_of: RefCell::new(None),
             superclass,
-            methods: RefCell::new(HashMap::new()),
+            methods: RefCell::new(crate::fast_hash::NameMap::default()),
             instance_variables: RefCell::new(HashSet::new()),
-            class_variables: RefCell::new(IndexMap::new()),
+            class_variables: RefCell::new(crate::fast_hash::NameIndexMap::default()),
             mixins: RefCell::new(Vec::new()),
             prepends: RefCell::new(Vec::new()),
             private_method_names: RefCell::new(HashSet::new()),
@@ -37,8 +37,10 @@ impl Class {
             deprecated_constants: RefCell::new(HashSet::new()),
             autoload_locations: RefCell::new(HashMap::new()),
             const_locations: RefCell::new(HashMap::new()),
-            method_cache: RefCell::new(HashMap::new()),
-            method_walks: RefCell::new(HashMap::new()),
+            method_cache: RefCell::new(crate::fast_hash::NameMap::default()),
+            method_walks: RefCell::new(crate::fast_hash::NameMap::default()),
+            holds_class_methods: std::cell::Cell::new(false),
+            holds_extended_copies: std::cell::Cell::new(false),
         }
     }
 

@@ -110,9 +110,10 @@ impl VirtualMachine {
                     // A refinement in force says how a value writes itself,
                     // whatever kind it is, so it is asked before the kind's
                     // own rendering is used.
-                    if crate::vm::method_lookup::refinement_target_name(&value, self)
-                        .and_then(|target| self.find_refined_method(&target, "to_s"))
-                        .is_some()
+                    if self.any_refinement_active()
+                        && crate::vm::method_lookup::refinement_target_name(&value, self)
+                            .and_then(|target| self.find_refined_method(&target, "to_s"))
+                            .is_some()
                     {
                         let written = self.send_to_object(
                             value.clone(),

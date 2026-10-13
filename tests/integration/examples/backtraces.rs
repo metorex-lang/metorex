@@ -28,3 +28,12 @@ fn test_a_method_s_frame_names_its_own_file_for_a_dispatch_error() {
         "private method 'hidden' called for class Registry\nlibrary.rb:13:in 'Settings#alias_name'\nmain.rb:4:in '<main>'\nlibrary.rb:17:in 'Settings#missing_name'\nmain.rb:11:in '<main>'\n"
     );
 }
+
+#[test]
+fn test_an_at_exit_handler_s_backtrace_ends_at_its_block() {
+    let output = run_example("backtraces/at_exit_handler_raise.rb");
+    assert_eq!(
+        output,
+        "at_exit_handler_raise.rb:1:in 'Object#boom'\nat_exit_handler_raise.rb:3:in 'block in <main>'\n"
+    );
+}

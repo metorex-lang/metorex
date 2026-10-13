@@ -509,6 +509,7 @@ pub(crate) fn runs_when_named_bare(name: &str) -> bool {
             | "iterator?"
             | "instance_variables_to_inspect"
             | "__timeout_close__"
+            | "__method_state__"
             | "__load_abstract_syntax_tree__"
             | "__load_instruction_sequence__"
             | "abort"

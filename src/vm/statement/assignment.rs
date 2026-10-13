@@ -522,6 +522,8 @@ impl VirtualMachine {
                     if !is_new {
                         self.warn_already_initialized(&enclosing, name, *position);
                     }
+                    // A value written over a pending autoload takes its place.
+                    enclosing.remove_autoload(name);
                     enclosing.set_class_var(name, value);
                     enclosing.set_const_location(name, assign_file, position.line as i64);
                     if is_new {
@@ -545,6 +547,7 @@ impl VirtualMachine {
                         } else {
                             self.warn_already_initialized(&object_class, name, *position);
                         }
+                        object_class.remove_autoload(name);
                         object_class.set_class_var(name, value);
                         object_class.set_const_location(name, assign_file, position.line as i64);
                     }
@@ -596,7 +599,13 @@ impl VirtualMachine {
                             return Err(self.frozen_modification_error(&receiver, *position));
                         }
                         let mut instance = instance_rc.borrow_mut();
-                        instance.set_var(name.clone(), value);
+                        // The core library written in Ruby keeps its own
+                        // slots the way the interpreter does.
+                        if position.prelude {
+                            instance.set_var(name.clone(), value);
+                        } else {
+                            instance.set_program_var(name.clone(), value);
+                        }
                         Ok(())
                     }
                     // An exception carries its own instance variables, so a

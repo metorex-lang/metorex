@@ -24,6 +24,9 @@ pub struct Instance {
     /// Whether `freeze` has been called. Subsequent ivar assignments / setter
     /// invocations must raise FrozenError.
     pub frozen: bool,
+    /// The variables starting with `__` the program assigned, which it
+    /// lists, unlike the interpreter's own slots of that shape.
+    pub program_dunder_names: std::collections::HashSet<String>,
 }
 
 impl Instance {
@@ -35,6 +38,7 @@ impl Instance {
             singleton_methods: Rc::new(RefCell::new(HashMap::new())),
             singleton_class: Rc::new(RefCell::new(None)),
             frozen: false,
+            program_dunder_names: std::collections::HashSet::new(),
         }));
         super::live::record_instance(&made);
         made
@@ -58,6 +62,22 @@ impl Instance {
     /// Set an instance variable
     pub fn set_var(&mut self, name: String, value: Object) {
         self.instance_vars.insert(name, value);
+    }
+
+    /// Set an instance variable the program assigned, which `instance_variables`
+    /// lists whatever its name.
+    pub fn set_program_var(&mut self, name: String, value: Object) {
+        if name.starts_with("__") {
+            self.program_dunder_names.insert(name.clone());
+        }
+        self.instance_vars.insert(name, value);
+    }
+
+    /// Whether `instance_variables` and `inspect` list the variable `name`:
+    /// every one the program assigned, and none of the interpreter's own
+    /// slots, whose names start with `__`.
+    pub fn lists_var(&self, name: &str) -> bool {
+        !name.starts_with("__") || self.program_dunder_names.contains(name)
     }
 
     /// Check if this instance's class (or a superclass) knows about the variable.

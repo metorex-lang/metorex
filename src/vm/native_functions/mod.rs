@@ -21,6 +21,7 @@ mod conversions;
 mod dispatch;
 mod evaluation;
 mod exiting;
+mod fast_paths;
 mod generator;
 mod input;
 mod math;

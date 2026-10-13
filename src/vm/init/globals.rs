@@ -314,6 +314,27 @@ pub(crate) fn register_native_functions(globals: &mut GlobalRegistry) {
         "__resolve_feature_path__",
         Object::NativeFunction("__resolve_feature_path__".to_string()),
     );
+    // The method state the class lookup caches are kept under, which Rex's
+    // fast paths read to know when to check their guards again.
+    globals.set(
+        "__method_state__",
+        Object::NativeFunction("__method_state__".to_string()),
+    );
+    // Rex's native fast paths: whether they run, the methods they stand in
+    // for, and the value of a `let`.
+    for name in [
+        "__fast_paths__",
+        "__guard_fast_path__",
+        "__let_value__",
+        "__populate_example_metadata__",
+        "__new_example_group__",
+        "__guard_fast_path_class_method__",
+        "__guard_fast_matcher__",
+        "__expect_to__",
+        "__mock_space_idle__",
+    ] {
+        globals.set(name, Object::NativeFunction(name.to_string()));
+    }
     // Top-level `to_s` — Ruby's top-level self is "main", so bare to_s returns "main"
     globals.set("to_s", Object::NativeFunction("top_level_to_s".to_string()));
     // Top-level `define_method` — installs a method on Object (or current

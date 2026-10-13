@@ -470,8 +470,8 @@ impl VirtualMachine {
                     let value = self.evaluate_expression(expression)?;
                     // A refinement in force may say how an object becomes a
                     // block, which stands ahead of whatever its own kind does.
-                    let refined_to_proc =
-                        crate::vm::method_lookup::refinement_target_name(&value, self)
+                    let refined_to_proc = self.any_refinement_active()
+                        && crate::vm::method_lookup::refinement_target_name(&value, self)
                             .and_then(|target| self.find_refined_method(&target, "to_proc"))
                             .is_some();
                     match value {

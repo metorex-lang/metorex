@@ -124,6 +124,12 @@ jobs:
       - name: Run Ruby spec suite
         run: scripts/run_ruby_spec.sh
 
+      - name: Install the gems the RSpec suites load
+        run: gem install --no-document diff-lcs rake aruba thread_order
+
+      - name: Compare the RSpec suites with fast paths on and off
+        run: scripts/compare_fast_paths.sh
+
   coverage:
     name: Code Coverage
     if: github.event.context == 'continuous-integration/jenkins/branch' && github.event.state == 'success'

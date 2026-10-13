@@ -167,10 +167,12 @@ EOS
             remove_method(name)
           end
 
+          # `__let_value__` reads a value already stored straight from the
+          # memo, and otherwise asks `__memoized.fetch_or_store`.
           if block.arity == 1
-            define_method(name) { __memoized.fetch_or_store(name) { super(Rex.current_example, &nil) } }
+            define_method(name) { __let_value__(name) { super(Rex.current_example, &nil) } }
           else
-            define_method(name) { __memoized.fetch_or_store(name) { super(&nil) } }
+            define_method(name) { __let_value__(name) { super(&nil) } }
           end
         end
 

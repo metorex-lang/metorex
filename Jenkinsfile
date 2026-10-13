@@ -162,6 +162,23 @@ pipeline {
           }
         }
 
+        stage('rspec-suites') {
+          agent {
+            kubernetes {
+              defaultContainer 'ci'
+              yaml buildPod('risa', '4', '8')
+            }
+          }
+          environment {
+            CARGO_TARGET_DIR = '/cache/target-rspec'
+            JOBS = '10'
+          }
+          steps {
+            sh 'cargo build'
+            sh 'scripts/compare_fast_paths.sh'
+          }
+        }
+
         stage('coverage') {
           agent {
             kubernetes {

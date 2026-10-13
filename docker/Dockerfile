@@ -53,6 +53,10 @@ RUN case "$TARGETARCH" in \
 # unpacked, so what it holds is found without being told where to look.
 ENV PATH=/usr/local/ruby/bin:$PATH
 
+# The gems the RSpec libraries' own suites load, which
+# scripts/run_rspec_suite.sh puts on the load path.
+RUN gem install --no-document diff-lcs rake aruba thread_order
+
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:$PATH

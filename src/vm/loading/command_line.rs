@@ -265,6 +265,11 @@ impl VirtualMachine {
                 return Some(canonical.display().to_string());
             }
         }
+        // A name such as `<metorex>/rex.rb` or `<internal:prelude>` names
+        // code carried in the binary, which no file on disk holds.
+        if named.starts_with('<') {
+            return None;
+        }
         std::fs::canonicalize(named)
             .ok()
             .map(|resolved| resolved.display().to_string())

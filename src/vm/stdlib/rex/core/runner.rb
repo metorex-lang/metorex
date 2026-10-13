@@ -60,6 +60,8 @@ module Rex
         load_spec_helper
         return if Rex.world.wants_to_quit
 
+        __fast_paths__(@configuration.fast_paths?)
+
         @configuration.load_spec_files
       ensure
         @world.announce_filters

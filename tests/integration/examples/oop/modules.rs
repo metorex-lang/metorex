@@ -554,6 +554,12 @@ fn test_oop_an_autoload_in_an_open_scope_comes_ahead_of_a_top_level_constant() {
     assert_eq!(output, ":autoloaded\n:top_level\n");
 }
 
+#[test]
+fn test_oop_an_assigned_constant_replaces_a_pending_autoload() {
+    let output = run_example("oop/autoload_replaced_by_assignment.rb");
+    assert_eq!(output, "nil\n5\nnil\n3\nnil\n");
+}
+
 /// The expected output of both `oop/refined_operators` variants.
 const REFINED_OPERATORS_OUTPUT: &str = concat!(
     "NoMethodError\n",

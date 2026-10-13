@@ -49,6 +49,19 @@ module Rex
         value_for(:coverage_exclude) { @coverage_exclude ||= [] }
       end
 
+      # Whether the native versions of the hot parts of Rex run. Off, the
+      # Ruby versions run, which a divergence can be checked against.
+      def fast_paths
+        value = value_for(:fast_paths) { @fast_paths }
+        value.nil? ? true : value
+      end
+      alias fast_paths? fast_paths
+
+      def fast_paths=(value)
+        @fast_paths = value
+        __fast_paths__(fast_paths)
+      end
+
       # How many worker processes the top-level groups run in.
       def jobs
         value_for(:jobs) { @jobs } || 1
@@ -72,7 +85,7 @@ module Rex
 
       def rspec_constant=(value)
         if value
-          Object.const_set(:RSpec, Rex) unless defined?(::RSpec)
+          Object.const_set(:RSpec, Rex) if Object.autoload?(:RSpec) || !defined?(::RSpec)
         elsif rspec_constant
           Object.__send__(:remove_const, :RSpec)
         end

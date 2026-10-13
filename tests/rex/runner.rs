@@ -148,3 +148,54 @@ fn test_dot_rspec_local_overrides_dot_rspec() {
 fn test_spec_loads_spec_helper_before_the_spec_files() {
     assert_matches_rspec("runner/spec_helper", "default", &[]);
 }
+
+/// `metorex FILE` run in the plain_script fixture, with the timing line
+/// written with `N` and the status after it, as the expected file has them.
+fn plain_script_transcript(file: &str) -> String {
+    let directory = format!(
+        "{}/{}/rex/runner/plain_script",
+        env!("CARGO_MANIFEST_DIR"),
+        super::EXAMPLES_DIR
+    );
+    let output = std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg("exec \"$0\" \"$@\" 2>&1")
+        .arg(env!("CARGO_BIN_EXE_metorex"))
+        .arg(file)
+        .current_dir(&directory)
+        .env("SHELL", "/bin/zsh")
+        .output()
+        .expect("run metorex");
+    let printed: String = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(|line| {
+            if line.starts_with("Finished in ") && line.contains("(files took ") {
+                "Finished in N seconds (files took N seconds to load)\n".to_string()
+            } else {
+                format!("{line}\n")
+            }
+        })
+        .collect();
+    format!(
+        "{}\nexit {}\n",
+        printed.trim_end_matches('\n'),
+        output.status.code().unwrap_or(-1)
+    )
+}
+
+#[test]
+fn test_a_script_requiring_rspec_autorun_runs_its_examples_as_it_ends() {
+    assert_eq!(
+        plain_script_transcript("ledger_autorun.rb"),
+        expected("runner/plain_script", "expected_output.txt")
+    );
+}
+
+#[test]
+fn test_naming_rspec_in_a_script_loads_rex_and_runs_the_examples() {
+    assert_eq!(
+        plain_script_transcript("ledger_autoload.rb")
+            .replace("ledger_autoload.rb", "ledger_autorun.rb"),
+        expected("runner/plain_script", "expected_output.txt")
+    );
+}

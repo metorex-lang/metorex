@@ -9,6 +9,7 @@ pub mod class;
 pub mod compiler;
 pub mod environment;
 pub mod error;
+pub mod fast_hash;
 pub mod file_loader;
 pub mod lexer;
 pub mod object;

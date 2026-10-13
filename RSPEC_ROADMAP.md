@@ -258,8 +258,8 @@ Three layers, chosen per feature by what the layer above cannot do:
 
 - [x] 15.1. Port the `tests/_examples/` assertions that already read as specs into `spec/` files run by `metorex spec`, each also passing under MRI's rspec: the interpreter fixes the Rex work needed, 43 examples
 - [x] 15.2. Run `rspec-expectations`' own spec suite unchanged, and record the pass count: 2231 of 2455, 17 pending
-- [x] 15.3. Run `rspec-mocks`' own spec suite unchanged, and record the pass count: 1319 of 1806, 9 pending
-- [x] 15.4. Run `rspec-core`'s own spec suite unchanged, and record the pass count: 2009 of 2264, 19 pending
+- [x] 15.3. Run `rspec-mocks`' own spec suite unchanged, and record the pass count: 1376 of 1806, 9 pending
+- [x] 15.4. Run `rspec-core`'s own spec suite unchanged, and record the pass count: 2038 of 2258, 19 pending
 - [x] 15.5. Pick a third-party library with an RSpec suite and no C extensions, run it, and record the result: diff-lcs, 322 of 322
 - [x] 15.6. Byte-compare `documentation` formatter output against real RSpec for a fixture suite
 - [x] 15.7. A `scripts/run_rspec_suite.sh` driver shaped like `scripts/run_ruby_spec.sh`, with a commented list advanced one line at a time
@@ -269,20 +269,20 @@ Three layers, chosen per feature by what the layer above cannot do:
 
 Begins after the compatibility proof passes. Each item lands with its guard and with a spec that redefines the thing it optimizes and proves the deopt fires.
 
-- [ ] 16.1. A benchmark fixture suite of a few thousand trivial examples, plus a recorded baseline checked into the repo
-- [ ] 16.2. `scripts/bench_rex.sh`, reporting boot time, examples per second, and peak memory against that baseline
-- [ ] 16.3. CI runs the compatibility suites twice, fast paths on and off, and byte-compares the output
-- [ ] 16.4. `--no-fast-paths` and `config.fast_paths`, so any divergence can be bisected by a user
-- [ ] 16.5. A method-table redefinition counter the fast paths read, shared with the VM's inline caches
-- [ ] 16.6. Prelude snapshot, or a split prelude whose spec half loads on `metorex spec` and on the first `describe`, whichever measures better
-- [ ] 16.7. Hook chains flattened into one ordered list when the group is defined, rather than walked per example
-- [ ] 16.8. `let` compiled to a method plus a memo slot in the example scope, with `__memoized` kept as a compatible view
-- [ ] 16.9. Metadata populated natively, still a mutable Hash the suite can write to
-- [ ] 16.10. Example group instances allocated natively, deoptimizing for a group that defines `initialize`
-- [ ] 16.11. Native `eq`, `be`, `be_truthy`, `be_nil`, `include`, and `match`, each behind its guard
-- [ ] 16.12. Native double teardown, so a mock-heavy suite pays the undo record rather than a global space walk
-- [ ] 16.13. Profile one third-party suite before and after, and record both numbers in the README
-- [ ] 16.14. Examples under `tests/_examples/rex/performance/`, one per guard, each redefining the optimized method and asserting the Ruby path runs
+- [x] 16.1. A benchmark fixture suite of a few thousand trivial examples, plus a recorded baseline checked into the repo
+- [x] 16.2. `scripts/bench_rex.sh`, reporting boot time, examples per second, and peak memory against that baseline
+- [x] 16.3. CI runs the compatibility suites twice, fast paths on and off, and byte-compares the output
+- [x] 16.4. `--no-fast-paths` and `config.fast_paths`, so any divergence can be bisected by a user
+- [x] 16.5. A method-table redefinition counter the fast paths read, shared with the VM's inline caches
+- [x] 16.6. Prelude snapshot, or a split prelude whose spec half loads on `metorex spec` and on the first `describe`, whichever measures better: split, since a plain script boots in 0.04 s and loading Rex adds 0.05 s, of which parsing is 0.03 s. Naming `RSpec` loads Rex and runs the examples as the program ends
+- [x] 16.7. Hook chains flattened into one ordered list when the group is defined, rather than walked per example
+- [x] 16.8. `let` compiled to a method plus a memo slot in the example scope, with `__memoized` kept as a compatible view
+- [x] 16.9. Metadata populated natively, still a mutable Hash the suite can write to
+- [x] 16.10. Example group instances allocated natively, deoptimizing for a group that defines `initialize`
+- [x] 16.11. Native `eq`, `be`, `be_truthy`, `be_nil`, `include`, and `match`, each behind its guard
+- [x] 16.12. Native double teardown, so a mock-heavy suite pays the undo record rather than a global space walk
+- [x] 16.13. Profile one third-party suite before and after, and record both numbers in the README
+- [x] 16.14. Examples under `tests/_examples/rex/performance/`, one per guard, each redefining the optimized method and asserting the Ruby path runs
 
 ## Open questions
 

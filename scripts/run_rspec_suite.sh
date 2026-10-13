@@ -14,6 +14,10 @@
 # Each suite runs against Rex alone: rspec-support's spec helpers go on the
 # load path, and its library does not, since Rex answers `rspec/support`.
 #
+# SPEC_ARGS holds arguments added to each `metorex spec` run, such as
+# `--no-fast-paths`. With LOG_DIR set, what each spec file printed is copied
+# there, named after the file.
+#
 # Needs MRI with the diff-lcs, rake, aruba, and thread_order gems, whose
 # libraries the suites load, and curl for the first download.
 
@@ -324,27 +328,35 @@ for path in "${SPEC_PATHS[@]}"; do
   fi
 done
 
-# Runs one spec file in its suite's copy, writing what it printed next to it.
+# Runs one spec file in a copy of its suite of its own, writing what it
+# printed next to it. A copy of its own keeps what one file writes, such as
+# aruba's `tmp/aruba`, away from the files running beside it.
 run_one() {
   local path="$1"
   local suite="${path%%/*}"
   local file="${path#*/}"
   local log="$WORK_DIR/logs/${path//\//__}.txt"
-  mkdir -p "$WORK_DIR/logs"
+  local run_dir="$WORK_DIR/runs/${path//\//__}"
+  mkdir -p "$WORK_DIR/logs" "$run_dir"
+  cp -R "$WORK_DIR/$suite/." "$run_dir/"
   (
-    cd "$WORK_DIR/$suite"
+    cd "$run_dir"
     perl -e 'alarm shift; exec @ARGV' "$FILE_TIMEOUT" "$METOREX" spec --format progress --no-color --seed 1 \
-      -I "$HELPERS_DIR" -I "$DIFF_LCS_LIB" -I "$RAKE_LIB" $ARUBA_LOAD_PATH "$file" > "$log" 2>&1
+      -I "$HELPERS_DIR" -I "$DIFF_LCS_LIB" -I "$RAKE_LIB" $ARUBA_LOAD_PATH ${SPEC_ARGS:-} "$file" > "$log" 2>&1
   ) || true
   local summary
   summary=$(sed 's/\x1b\[[0-9;]*m//g' "$log" | grep -E '^[0-9]+ examples?, ' | tail -1 || true)
   printf '%s\t%s\n' "$path" "${summary:-did not finish}"
 }
 export -f run_one
-export WORK_DIR HELPERS_DIR DIFF_LCS_LIB RAKE_LIB ARUBA_LOAD_PATH METOREX FILE_TIMEOUT
+export WORK_DIR HELPERS_DIR DIFF_LCS_LIB RAKE_LIB ARUBA_LOAD_PATH METOREX FILE_TIMEOUT SPEC_ARGS
 
 RESULTS="$WORK_DIR/results.tsv"
 printf '%s\n' "${SPEC_PATHS[@]}" | xargs -P "$JOBS" -I {} bash -c 'run_one "$@"' _ {} > "$RESULTS"
+if [ -n "${LOG_DIR:-}" ]; then
+  mkdir -p "$LOG_DIR"
+  cp "$WORK_DIR"/logs/*.txt "$LOG_DIR/"
+fi
 
 while IFS=$'\t' read -r path summary; do
   TOTAL_FILES=$((TOTAL_FILES + 1))

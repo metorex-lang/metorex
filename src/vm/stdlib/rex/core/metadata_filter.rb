@@ -71,6 +71,16 @@ module Rex
     end
 
     module FilterableItemRepository
+      # How many times any repository gained or lost an item, which a list
+      # built from repositories is kept under.
+      def self.changes
+        @changes ||= 0
+      end
+
+      def self.changed
+        @changes = changes + 1
+      end
+
       class UpdateOptimized
         attr_reader :items_and_filters
 
@@ -80,14 +90,17 @@ module Rex
         end
 
         def append(item, metadata)
+          FilterableItemRepository.changed
           @items_and_filters << [item, metadata]
         end
 
         def prepend(item, metadata)
+          FilterableItemRepository.changed
           @items_and_filters.unshift [item, metadata]
         end
 
         def delete(item, metadata)
+          FilterableItemRepository.changed
           @items_and_filters.delete [item, metadata]
         end
 

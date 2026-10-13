@@ -174,6 +174,18 @@ impl VirtualMachine {
             "open" => self.open_stream(arguments, position),
             "require" => self.require_feature(arguments, position),
             "__resolve_feature_path__" => self.resolve_feature_path(arguments, position),
+            "__method_state__" => Ok(Object::Int(crate::class::method_state() as i64)),
+            "__fast_paths__" => self.set_fast_paths(&arguments),
+            "__guard_fast_path__" => self.guard_fast_path(&arguments, position),
+            "__let_value__" => self.let_value(&arguments, position),
+            "__populate_example_metadata__" => self.populate_example_metadata(&arguments, position),
+            "__new_example_group__" => self.new_example_group(&arguments, position),
+            "__guard_fast_path_class_method__" => {
+                self.guard_fast_path_class_method(&arguments, position)
+            }
+            "__guard_fast_matcher__" => self.guard_fast_matcher(&arguments, position),
+            "__expect_to__" => self.expect_to(&arguments, position),
+            "__mock_space_idle__" => self.mock_space_idle(&arguments),
             // A handle naming an object without keeping it alive, and the
             // object a handle names while anything else still holds it.
             "__weak_reference__" => {

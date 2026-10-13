@@ -169,7 +169,9 @@ module Rex
 
           description_args = description.nil? ? [] : [description]
           hash = new(example_metadata, user_metadata, index_provider, description_args, block)
-          hash.populate
+          # A fast path: the metadata filled natively, unless a step of
+          # `populate` was redefined or the example needs the Ruby steps.
+          hash.populate unless __populate_example_metadata__(hash, RESERVED_KEYS, Metadata)
           hash.metadata
         end
 

@@ -1,0 +1,7 @@
+{
+  "boot_seconds": 0.0998,
+  "load_seconds": 3.21,
+  "examples_per_second": 572.5,
+  "peak_memory_bytes": 280313856,
+  "examples": 3000
+}

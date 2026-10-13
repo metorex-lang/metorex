@@ -152,6 +152,11 @@ module Rex::Core
           options[:color_mode] = :off
         end
 
+        parser.on('--[no-]fast-paths', 'Run the native versions of the hot parts of Rex (default: on).',
+                  '  Off runs the Ruby versions, which a divergence can be checked against.') do |value|
+          options[:fast_paths] = value
+        end
+
         parser.on('--[no-]diff', 'Print a diff with failures that compare two values (default: on).') do |value|
           options[:diff_enabled] = value
         end

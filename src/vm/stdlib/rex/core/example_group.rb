@@ -330,7 +330,7 @@ module Rex
         should_run_context_hooks = descendant_filtered_examples.any?
         begin
           Rex.current_scope = :before_context_hook
-          run_before_context_hooks(new('before(:context) hook')) if should_run_context_hooks
+          run_before_context_hooks(new_instance_for('before(:context) hook')) if should_run_context_hooks
           result_for_this_group = run_examples(reporter)
           results_for_descendants = ordering_strategy.order(children).map { |child| child.run(reporter) }.all?
           result_for_this_group && results_for_descendants
@@ -343,7 +343,7 @@ module Rex
           false
         ensure
           Rex.current_scope = :after_context_hook
-          run_after_context_hooks(new('after(:context) hook')) if should_run_context_hooks
+          run_after_context_hooks(new_instance_for('after(:context) hook')) if should_run_context_hooks
           reporter.example_group_finished(self)
         end
       end
@@ -363,10 +363,22 @@ module Rex
         end
       end
 
+      # A fast path: the instance built natively, as `new` builds it,
+      # unless a group, a module, or a redefinition gives it initializers
+      # of its own.
+      def self.new_instance_for(inspect_output)
+        threadsafe = Rex.configuration.threadsafe?
+        memo_class = threadsafe ? MemoizedHelpers::ThreadsafeMemoized : MemoizedHelpers::NonThreadSafeMemoized
+        __new_example_group__(self, inspect_output, memo_class,
+                              threadsafe ? Support::ReentrantMutex : nil, ExampleGroup) ||
+          new(inspect_output)
+      end
+      private_class_method :new_instance_for
+
       def self.run_examples(reporter)
         ordering_strategy.order(filtered_examples).map do |example|
           next if Rex.world.wants_to_quit
-          instance = new(example.inspect_output)
+          instance = new_instance_for(example.inspect_output)
           set_ivars(instance, before_context_ivars)
           succeeded = example.run(instance, reporter)
           if !succeeded && reporter.fail_fast_limit_met?

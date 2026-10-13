@@ -85,7 +85,7 @@ impl VirtualMachine {
             };
             names
                 .into_iter()
-                .filter(|name| !name.starts_with("__"))
+                .filter(|name| borrowed.lists_var(name.trim_start_matches('@')))
                 .filter_map(|name| {
                     let key = name.trim_start_matches('@').to_string();
                     borrowed

@@ -49,6 +49,15 @@ module Rex
       end
 
       def to(matcher = nil, message = nil, &block)
+        # A fast path: `eq`, `be`, `be_truthy`, `be_nil`, `match`, and
+        # `include` matched natively. It answers nil when the steps below
+        # have to run, and false for a failure they then report.
+        matched = __expect_to__(@target, matcher, message, block, Rex::Matchers, self.class)
+        return matched if matched
+        if matched == false
+          return with_source_location { ExpectationHelper.handle_failure(matcher, message, :failure_message) }
+        end
+
         prevent_operator_matchers(:to) unless matcher
         enforce_value_expectation(matcher)
         with_source_location { PositiveExpectationHandler.handle_matcher(@target, matcher, message, &block) }

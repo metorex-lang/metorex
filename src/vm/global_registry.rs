@@ -4,12 +4,12 @@
 //! including built-in classes and singleton values.
 
 use crate::object::Object;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 
 /// Registry that owns global objects accessible throughout the VM.
 #[derive(Debug, Default)]
 pub struct GlobalRegistry {
-    objects: HashMap<String, Object>,
+    objects: crate::fast_hash::NameMap<String, Object>,
     /// The subset of names that are Ruby global variables rather than
     /// constants, classes, or native functions, which share this registry.
     variable_names: BTreeSet<String>,

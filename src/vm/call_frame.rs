@@ -12,7 +12,7 @@ use std::rc::Rc;
 pub enum FrameKind {
     /// A method activation. `callee` is the name the method was called by,
     /// which differs from `defined` when the method was reached by an alias.
-    Method { callee: String, defined: String },
+    Method { callee: Rc<str>, defined: Rc<str> },
     /// A block body, which reports the method that encloses it.
     Block,
     /// A class body or a loaded file, where no method is running at all.
@@ -22,8 +22,9 @@ pub enum FrameKind {
 /// Call frame information stored on the VM call stack for debugging.
 #[derive(Debug, Clone)]
 pub struct CallFrame {
-    /// Human-readable frame identifier (method/function name).
-    name: String,
+    /// Human-readable frame identifier (method/function name). Shared, so
+    /// a method's frames reuse the one name the method caches.
+    name: Rc<str>,
     /// Optional source location ("file:line") to aid debugging.
     location: Option<String>,
     /// The file the call site sits in, when known. `location` carries only a
@@ -50,7 +51,7 @@ pub struct CallFrame {
 
 impl CallFrame {
     /// Create a new call frame description for a block body.
-    pub fn new(name: impl Into<String>, location: Option<String>) -> Self {
+    pub fn new(name: impl Into<Rc<str>>, location: Option<String>) -> Self {
         Self {
             name: name.into(),
             location,
@@ -66,10 +67,10 @@ impl CallFrame {
 
     /// Create a frame for a method activation.
     pub fn method(
-        name: impl Into<String>,
+        name: impl Into<Rc<str>>,
         location: Option<String>,
-        callee: impl Into<String>,
-        defined: impl Into<String>,
+        callee: impl Into<Rc<str>>,
+        defined: impl Into<Rc<str>>,
     ) -> Self {
         Self {
             name: name.into(),
@@ -88,7 +89,7 @@ impl CallFrame {
     }
 
     /// Create a frame for a class body or a loaded file.
-    pub fn boundary(name: impl Into<String>) -> Self {
+    pub fn boundary(name: impl Into<Rc<str>>) -> Self {
         Self {
             name: name.into(),
             location: None,

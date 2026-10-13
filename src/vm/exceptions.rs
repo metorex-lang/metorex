@@ -1023,6 +1023,12 @@ pub(crate) fn backtrace_sites(
                     .and_then(|line| line.parse::<usize>().ok())
             })
             .unwrap_or(0);
+        // The outermost frame called from line 0 was started by the
+        // interpreter, as an `at_exit` handler is once the program ends,
+        // so it too names no place of its own.
+        if line == 0 && index + 1 == frames.len() {
+            continue;
+        }
         let path = frame
             .source_file()
             .map(|file| file.to_string())
