@@ -620,6 +620,30 @@ impl VirtualMachine {
                 }
             }
 
+            // `block_given?` and `yield` reach the call's block from a default
+            // value as well as from the body, so the block is bound before
+            // the parameters. A body that came from a `define_method` block
+            // keeps the `block_given?` of the frame the block was written
+            // in, which is why Ruby answers false there however the method
+            // is called.
+            let from_a_block = method.captured_vars.is_some();
+            let inherits_block_given = method
+                .captured_vars
+                .as_ref()
+                .is_some_and(|captured| captured.contains_key("block_given?"));
+            if !inherits_block_given {
+                self.environment_mut().define(
+                    "block_given?".to_string(),
+                    Object::Bool(block.is_some() && !from_a_block),
+                );
+            }
+            if let Some(block_value) = block.as_ref().filter(|_| !from_a_block) {
+                self.environment_mut()
+                    .define("__block__".to_string(), block_value.clone());
+            }
+
+            // The named &block parameter is bound after the others, since a
+            // default value cannot read it.
             let keyword_hash = arguments.last().cloned();
             let (positional, kwargs) = crate::vm::param_binding::split_keyword_args_for(
                 arguments,
@@ -647,27 +671,7 @@ impl VirtualMachine {
             );
             refused.map_err(|error| self.keyword_error_in_callee(error, method))?;
 
-            // Bind the block: define block_given? as a Bool, __block__ for internal use,
-            // and the named &block parameter if the method declared one.
-            // A body that came from a `define_method` block keeps the
-            // `block_given?` of the frame the block was written in, which is
-            // why Ruby answers false there however the method is called.
-            let from_a_block = method.captured_vars.is_some();
-            let inherits_block_given = method
-                .captured_vars
-                .as_ref()
-                .is_some_and(|captured| captured.contains_key("block_given?"));
-            if !inherits_block_given {
-                self.environment_mut().define(
-                    "block_given?".to_string(),
-                    Object::Bool(block.is_some() && !from_a_block),
-                );
-            }
             if let Some(block_value) = block {
-                if !from_a_block {
-                    self.environment_mut()
-                        .define("__block__".to_string(), block_value.clone());
-                }
                 if let Some(block_param) = &method.block_parameter {
                     self.environment_mut()
                         .define(block_param.clone(), block_value);
@@ -680,6 +684,11 @@ impl VirtualMachine {
             self.execute_body_statements(method.body(), method.lambda_body)
         })();
 
+        // An error the interpreter raised in the body takes its backtrace
+        // while the body's own file is current, which its frame names.
+        if let Err(error) = &result {
+            self.trace_error_leaving_frame(error);
+        }
         if let Some(previous) = saved_def_scope {
             self.def_scope_stack = previous;
         }
@@ -745,6 +754,16 @@ impl VirtualMachine {
         self.live_frames.push(frame);
 
         let result = (|| -> Result<Object, MetorexError> {
+            // `block_given?` and `yield` reach the call's block from a default
+            // value as well as from the body, so the block is bound before
+            // the parameters, and the named &block parameter after them.
+            self.environment_mut()
+                .define("block_given?".to_string(), Object::Bool(block.is_some()));
+            if let Some(block_value) = &block {
+                self.environment_mut()
+                    .define("__block__".to_string(), block_value.clone());
+            }
+
             // Bind parameters to arguments (no self for standalone functions)
             let keyword_hash = arguments.last().cloned();
             let (positional, kwargs) = split_keyword_args(
@@ -771,13 +790,7 @@ impl VirtualMachine {
                 function.keyword_rest_parameter.as_deref(),
             )?;
 
-            // Bind the block: define block_given? as a Bool, __block__ for internal use,
-            // and the named &block parameter if the function declared one.
-            self.environment_mut()
-                .define("block_given?".to_string(), Object::Bool(block.is_some()));
             if let Some(block_value) = block {
-                self.environment_mut()
-                    .define("__block__".to_string(), block_value.clone());
                 if let Some(block_param) = &function.block_parameter {
                     self.environment_mut()
                         .define(block_param.clone(), block_value);

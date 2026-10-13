@@ -656,7 +656,63 @@ fn parameter_pair(kind: &str, name: &str) -> Object {
 
 /// The parameter list Ruby reports: positionals in the order they were
 /// declared, then the keywords, the keyword rest, and the block.
+/// The arity MRI gives a core method written in C, for a Method standing for
+/// one of the methods metorex answers natively.
+fn native_arity(method_obj: &crate::object::Method) -> Option<i8> {
+    use super::native_arities::{INSTANCE_ARITIES, SINGLETON_ARITIES};
+    if method_obj.source_location.is_some()
+        || !method_obj.body.is_empty()
+        || method_obj.c_function.is_some()
+    {
+        return None;
+    }
+    let written = method_obj
+        .original_name
+        .as_deref()
+        .unwrap_or(&method_obj.name);
+    let (table, name) = match written.strip_prefix("__class__") {
+        Some(named) => (SINGLETON_ARITIES, named),
+        None => (INSTANCE_ARITIES, written),
+    };
+    // The class the method was found on, its superclasses, and the modules
+    // most core classes take their shared methods from.
+    let mut owners: Vec<String> = Vec::new();
+    let mut class = method_obj.owner_class.clone();
+    while let Some(held) = class {
+        owners.push(held.ruby_name());
+        class = held.superclass();
+    }
+    if owners.is_empty()
+        && let Some(owner) = &method_obj.owner
+    {
+        owners.push(owner.clone());
+    }
+    owners.extend(["Comparable", "Enumerable", "Kernel"].map(String::from));
+    owners.iter().find_map(|owner| {
+        table
+            .iter()
+            .find(|(defined_on, named, _)| defined_on == owner && *named == name)
+            .map(|(_, _, arity)| *arity)
+    })
+}
+
+/// The parameters MRI lists for a C method of `arity`: one unnamed required
+/// parameter for each one required, then an unnamed rest when it takes more.
+fn native_parameter_list(arity: i8) -> Object {
+    let required = if arity < 0 { -(arity + 1) } else { arity };
+    let mut listed: Vec<Object> = (0..required)
+        .map(|_| Object::array(vec![Object::symbol("req".to_string())]))
+        .collect();
+    if arity < 0 {
+        listed.push(Object::array(vec![Object::symbol("rest".to_string())]));
+    }
+    Object::array(listed)
+}
+
 pub(crate) fn method_parameter_list(method_obj: &crate::object::Method) -> Object {
+    if let Some(arity) = native_arity(method_obj) {
+        return native_parameter_list(arity);
+    }
     let splat_index = method_obj.variadic_param.as_ref().map(|(index, _)| *index);
     let mut listed = Vec::new();
     for (index, name) in method_obj.parameters.iter().enumerate() {
@@ -695,6 +751,9 @@ pub(crate) fn method_parameter_list(method_obj: &crate::object::Method) -> Objec
 /// Ruby's arity: the count of required parameters, made negative when a call
 /// may pass more or fewer than that.
 fn method_arity(method_obj: &crate::object::Method) -> i64 {
+    if let Some(arity) = native_arity(method_obj) {
+        return i64::from(arity);
+    }
     // A method a C extension defined takes the count it was defined with,
     // and either variadic form takes any number.
     if let Some(function) = method_obj.c_function {

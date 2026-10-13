@@ -497,3 +497,77 @@ fn test_methods_warn_parameters_no_parens_execution() {
     let output = run_example("methods/warn_parameters_no_parens.rb");
     assert_eq!(output, WARN_PARAMETERS_OUTPUT);
 }
+
+#[test]
+fn test_alias_accepts_keyword_method_names() {
+    let expected = "ready and paid\nready or paid\nready unless paid\nready and paid\n";
+    let output = run_example("methods/alias_keyword_names.rb");
+    assert_eq!(output, expected);
+}
+
+#[test]
+fn test_bare_names_reach_method_missing() {
+    let expected =
+        "predicate valid\npredicate paid\npredicate within [3]\npredicate empty\nNameError\n";
+    let output = run_example("methods/method_missing_for_bare_names.rb");
+    assert_eq!(output, expected);
+}
+
+#[test]
+fn test_method_missing_frames_name_the_file_method_missing_is_written_in() {
+    let expected = "method_missing_bare_runner.rb:5:in 'BarePredicates#method_missing'\n\
+                    method_missing_bare_backtrace.rb:6:in 'Checker#check'\n\
+                    method_missing_bare_backtrace.rb:10:in '<main>'\n\
+                    method_missing_bare_runner.rb:5:in 'BarePredicates#method_missing'\n\
+                    method_missing_bare_backtrace.rb:18:in 'ExplicitChecker#check'\n";
+    let output = run_example("methods/method_missing_bare_backtrace.rb");
+    assert_eq!(output, expected);
+}
+
+#[test]
+fn test_method_missing_super_words_the_receiver_as_ruby_does() {
+    let expected = "undefined method 'shipped' for an instance of Forwarder\n\
+                    undefined method 'shipped' for #<Forwarder:0x>\n";
+    let output = run_example("methods/method_missing_super_wording.rb");
+    assert_eq!(output, expected);
+}
+
+#[test]
+fn test_native_methods_report_the_signatures_mri_gives_them() {
+    let expected = "[[:rest]]\n-1\n[[:rest]]\n-1\n[[:req]]\n1\n-1\n0\n2\n";
+    let output = run_example("methods/native_method_signatures.rb");
+    assert_eq!(output, expected);
+}
+
+#[test]
+fn test_a_method_object_a_statement_answers_is_not_called() {
+    let expected = ":done\n:done\n:done\nhello\na Method held in a local is not called\n";
+    let output = run_example("methods/discarded_method_object.rb");
+    assert_eq!(output, expected);
+}
+
+#[test]
+fn test_a_bound_kernel_method_inside_a_rescue_finds_the_method() {
+    let expected = "-2\n-2\nnil\n";
+    let output = run_example("methods/bound_call_inside_rescue.rb");
+    assert_eq!(output, expected);
+}
+
+#[test]
+fn test_a_default_value_reaches_the_block_the_method_was_called_with() {
+    let expected = "[3, 5, 7]\n[1, 2, 3]\n:from_the_block\n:passed\ntrue\nfalse\n";
+    let output = run_example("methods/yield_in_default_value.rb");
+    assert_eq!(output, expected);
+}
+
+#[test]
+fn test_a_method_called_on_include_s_answer_reads_as_an_expression() {
+    let output = run_example("methods/include_call_chain.rb");
+    assert_eq!(output, "[:included, 2, 2]\n");
+}
+
+#[test]
+fn test_a_trap_runs_for_a_signal_the_process_sends_itself() {
+    let output = run_example("methods/trap_own_signal.rb");
+    assert_eq!(output, "[:interrupted]\n");
+}

@@ -315,10 +315,20 @@ impl VirtualMachine {
         // A singleton method's `super` reaches the class's own copy, so the
         // receiver's singleton class comes ahead of its class in the chain.
         let mut chain = Vec::new();
+        let class_ancestors = walk_ancestors(instance_class);
         if let Some(singleton) = instance_borrowed.singleton_class.borrow().clone() {
-            chain.push(singleton);
+            chain.push(Rc::clone(&singleton));
+            // The modules the object was extended with, or that its singleton
+            // class includes, stand between the singleton class and the class.
+            for ancestor in walk_ancestors(&singleton) {
+                if !chain.iter().any(|c| Rc::ptr_eq(c, &ancestor))
+                    && !class_ancestors.iter().any(|c| Rc::ptr_eq(c, &ancestor))
+                {
+                    chain.push(ancestor);
+                }
+            }
         }
-        for ancestor in walk_ancestors(instance_class) {
+        for ancestor in class_ancestors {
             if !chain.iter().any(|c| Rc::ptr_eq(c, &ancestor)) {
                 chain.push(ancestor);
             }
@@ -547,12 +557,22 @@ impl VirtualMachine {
                 Some(other) => other.to_string(),
                 None => "method_missing".to_string(),
             };
-            let message = format!(
-                "undefined method '{}' for an instance of {}",
-                missing,
-                self.builtins().class_of(&self_val).name()
-            );
-            return Err(MetorexError::UncaughtException {
+            // A name written bare reached `method_missing`, and Ruby reports
+            // it as a name that is neither a local nor a method.
+            let written_bare = self
+                .bare_names_missing
+                .last()
+                .is_some_and(|(bare, depth)| *bare == missing && self.call_stack.len() > *depth);
+            if written_bare && evaluated_args.len() == 1 {
+                // Traced here, while `method_missing`'s own file is the one
+                // running, so its frame names that file.
+                let error = self.undefined_name_error(&missing, position);
+                self.trace_error_leaving_frame(&error);
+                return Err(error);
+            }
+            let wording = self.receiver_wording_for(&self_val, position);
+            let message = format!("undefined method '{}' for {}", missing, wording);
+            let error = MetorexError::UncaughtException {
                 exception: crate::vm::errors::no_method_error(
                     &message,
                     &missing,
@@ -561,7 +581,9 @@ impl VirtualMachine {
                 ),
                 location: position_to_location(position),
                 message,
-            });
+            };
+            self.trace_error_leaving_frame(&error);
+            return Err(error);
         }
         // `super` from an `initialize` that nothing above defines
         // reaches Object's, which takes no arguments and does

@@ -1,0 +1,19 @@
+F
+
+Failures:
+
+  1) an account when nested misspells a let
+     Failure/Error: expect(acount[:balance]).to eq(100)
+
+     NameError:
+       undefined local variable or method 'acount' for an instance of Rex::ExampleGroups::AnAccount::WhenNested
+       Helpers declared nearby: statement, account, owner
+     # ./spec/undefined_let_spec.rb:9:in 'block (3 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+1 example, 1 failure
+
+Failed examples:
+
+rspec ./spec/undefined_let_spec.rb:8 # an account when nested misspells a let
+exit 1

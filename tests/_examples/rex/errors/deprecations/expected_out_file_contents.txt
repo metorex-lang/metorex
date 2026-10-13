@@ -1,0 +1,7 @@
+RSpec::Core::Configuration#treat_symbols_as_metadata_keys_with_true_values= is deprecated, it is now set to true as default and setting it to false has no effect.
+The implicit block expectation syntax is deprecated, you should pass a block rather than an argument to `expect` to use the provided block expectation matcher or the matcher must implement `supports_value_expectations?`. e.g  `expect { value }.to change `counter.size`` not `expect(value).to change `counter.size``
+
+If you need more of the backtrace for any of these deprecations to
+identify where to make the necessary changes, you can configure
+`config.raise_errors_for_deprecations!`, and it will turn the
+deprecation warnings into errors, giving you the full backtrace.

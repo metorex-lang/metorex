@@ -1,0 +1,12 @@
+
+Rex names the framework
+  is the module RSpec names
+  aliases the expectation failure class
+  runs each example in an instance of its group
+
+Rex.context
+  defines a top-level group
+
+Finished in N seconds (files took N seconds to load)
+4 examples, 0 failures
+exit 0

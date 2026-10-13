@@ -319,7 +319,11 @@ impl Parser {
             // `found or next`, `(break 123 while true)`: Ruby reads a jump as
             // an expression, which stands for the one-statement `begin` that
             // holds it.
-            TokenKind::Break | TokenKind::Continue | TokenKind::Redo | TokenKind::Return => {
+            TokenKind::Break
+            | TokenKind::Continue
+            | TokenKind::Redo
+            | TokenKind::Retry
+            | TokenKind::Return => {
                 self.stream
                     .restore_position(self.stream.current_position() - 1);
                 let jump = self.parse_statement()?;

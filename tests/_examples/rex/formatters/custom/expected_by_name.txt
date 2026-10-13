@@ -1,0 +1,27 @@
+passed: opens
+failed: closes
+
+Pending: (Failures listed here are expected and do not affect your suite's status)
+
+  1) an account freezes
+     # the freeze rule
+     # ./spec/totals_spec.rb:12
+
+Failures:
+
+  1) an account closes
+     Failure/Error: expect(:open).to eq(:closed)
+
+       expected: :closed
+            got: :open
+
+       (compared using ==)
+
+       Diff:
+       @@ -1 +1 @@
+       -:closed
+       +:open
+     # ./spec/totals_spec.rb:9:in 'block (2 levels) in <top (required)>'
+silent: 3 examples, 1 failure, 1 pending
+1 passed, 1 failed of 3
+exit 1

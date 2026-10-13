@@ -1701,3 +1701,10 @@ fn test_stdlib_marshal_extended_values_no_parens_execution() {
     let output = run_example("stdlib/marshal_extended_values_no_parens.rb");
     assert_eq!(output, MARSHAL_EXTENDED_VALUES_OUTPUT);
 }
+
+#[test]
+fn test_io_clone_holds_a_descriptor_of_its_own() {
+    let expected = "false\nstdout still open\ncaptured \"from a child\\n\"\n";
+    let output = run_example("stdlib/io/io_clone_descriptor.rb");
+    assert_eq!(output, expected);
+}

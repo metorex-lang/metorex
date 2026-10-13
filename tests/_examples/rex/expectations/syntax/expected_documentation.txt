@@ -1,0 +1,42 @@
+
+the should syntax
+  passes with should
+  passes with should_not
+  fails with should (FAILED - 1)
+  fails with should_not (FAILED - 2)
+  runs the expect syntax alongside
+
+a matcher that calls expect
+  passes
+  fails with its own message (FAILED - 3)
+
+Failures:
+
+  1) the should syntax fails with should
+     Failure/Error: 5.should eq(6)
+
+       expected: 6
+            got: 5
+
+       (compared using ==)
+     # ./spec/syntax_spec.rb:21:in 'block (2 levels) in <top (required)>'
+
+  2) the should syntax fails with should_not
+     Failure/Error: 5.should_not be > 4
+       `expect(5).not_to be > 4` not only FAILED, it is a bit confusing.
+     # ./spec/syntax_spec.rb:25:in 'block (2 levels) in <top (required)>'
+
+  3) a matcher that calls expect fails with its own message
+     Failure/Error: expect([1, 2, 3]).to have_total(7)
+       expected [1, 2, 3] to total 7, arguments [7]
+     # ./spec/syntax_spec.rb:39:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+7 examples, 3 failures
+
+Failed examples:
+
+rspec ./spec/syntax_spec.rb:20 # the should syntax fails with should
+rspec ./spec/syntax_spec.rb:24 # the should syntax fails with should_not
+rspec ./spec/syntax_spec.rb:38 # a matcher that calls expect fails with its own message
+exit 1

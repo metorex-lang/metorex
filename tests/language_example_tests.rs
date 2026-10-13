@@ -11,6 +11,7 @@ mod integration {
         mod advanced;
         mod algorithms;
         mod array_methods;
+        mod backtraces;
         mod basics;
         mod callables;
         mod control_flow;

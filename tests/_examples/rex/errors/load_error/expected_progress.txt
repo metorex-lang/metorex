@@ -1,0 +1,12 @@
+
+An error occurred while loading ./spec/broken_spec.rb.
+Failure/Error: UndefinedHelper.configure
+
+NameError:
+  uninitialized constant UndefinedHelper
+# ./spec/broken_spec.rb:7:in '<top (required)>'
+
+
+Finished in N seconds (files took N seconds to load)
+0 examples, 0 failures, 1 error occurred outside of examples
+exit 1

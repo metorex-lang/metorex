@@ -1,0 +1,34 @@
+
+doubles that pass
+  answers stubbed messages
+  returns several values in order
+  raises, throws, and yields
+  uses a block implementation
+  counts messages
+  matches arguments
+  stubs several messages at once
+  stubs a chain of messages
+  records messages on a spy
+  records messages on a stubbed partial double
+
+partial doubles that pass
+  stubs a class method for one example
+  has the original class method back in the next example
+  calls through to the original
+  wraps the original
+  stubs any instance
+  has the original instance method back in the next example
+  expects a message on any instance
+  stubs a constant
+  has the original constant back in the next example
+
+verifying doubles that pass
+  answers a method the class has
+  checks keywords against the real signature
+  doubles a class
+  doubles an object
+  makes an instance spy
+
+Finished in N seconds (files took N seconds to load)
+24 examples, 0 failures
+exit 0

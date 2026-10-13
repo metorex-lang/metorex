@@ -1,0 +1,10 @@
+Run options: include {focus: true}
+
+focused runs
+  runs because it is focused
+  a focused group
+    runs every example in it
+
+Finished in N seconds (files took N seconds to load)
+2 examples, 0 failures
+exit 0

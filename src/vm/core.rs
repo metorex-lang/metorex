@@ -182,6 +182,11 @@ pub struct VirtualMachine {
     /// The file whose code is running right now, which differs from
     /// `current_file` inside a method defined in another file.
     pub(crate) current_source_file: Option<String>,
+    /// The bare names handed to `method_missing`, with the depth of the
+    /// call stack each was handed over at. A `super` from that
+    /// `method_missing` raises NameError for one of these, as MRI does for a
+    /// name written without a receiver or arguments.
+    pub(crate) bare_names_missing: Vec<(String, usize)>,
     /// The file names `eval` was handed for the code it ran, which name
     /// code that has no file of its own to read back.
     pub(crate) eval_named_files: std::collections::HashSet<String>,
@@ -606,6 +611,7 @@ impl VirtualMachine {
             open_sockets: Default::default(),
             open_streams: Default::default(),
             current_source_file: None,
+            bare_names_missing: Vec::new(),
             eval_named_files: Default::default(),
             current_source_encoding: None,
             file_encodings: HashMap::new(),

@@ -1,0 +1,22 @@
+
+apple
+  is defined third
+  is defined second
+  is defined first
+
+mango
+WARNING: Ignoring unknown ordering specified using `:order => :unknown` metadata.
+         Falling back to configured global ordering.
+         Unrecognized ordering specified at: ./spec/custom_spec.rb:25
+  falls back to the global ordering
+WARNING: Ignoring unknown ordering specified using `:order => :unknown` metadata.
+         Falling back to configured global ordering.
+         Unrecognized ordering specified at: ./spec/custom_spec.rb:25
+
+zebra
+  runs first by name
+  runs second by name
+
+Finished in N seconds (files took N seconds to load)
+6 examples, 0 failures
+exit 0

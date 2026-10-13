@@ -1,0 +1,14 @@
+
+An error occurred while loading ./spec/missing_shared_spec.rb.
+Failure/Error: it_behaves_like "something nobody defined"
+
+ArgumentError:
+  Could not find shared examples "something nobody defined"
+# ./spec/missing_shared_spec.rb:2:in 'block in <top (required)>'
+# ./spec/missing_shared_spec.rb:1:in '<top (required)>'
+No examples found.
+
+
+Finished in N seconds (files took N seconds to load)
+0 examples, 0 failures, 1 error occurred outside of examples
+exit 1

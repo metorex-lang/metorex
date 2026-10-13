@@ -1,0 +1,11 @@
+
+a host group
+  has the context's metadata
+  has the context's let
+
+a group with the tag
+  does not include the context
+
+Finished in N seconds (files took N seconds to load)
+3 examples, 0 failures
+exit 0

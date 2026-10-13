@@ -1,0 +1,8 @@
+Run options: include {priority: "high"}
+
+tagged examples
+  has a priority
+
+Finished in N seconds (files took N seconds to load)
+1 example, 0 failures
+exit 0

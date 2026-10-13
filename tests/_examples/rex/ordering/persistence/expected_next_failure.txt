@@ -1,0 +1,23 @@
+Run options: include {last_run_status: "failed"}
+
+an invoice
+  sums the lines (FAILED - 1)
+
+Failures:
+
+  1) an invoice sums the lines
+     Failure/Error: expect(2 + 2).to eq(5)
+
+       expected: 5
+            got: 4
+
+       (compared using ==)
+     # ./spec/status_spec.rb:11:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+1 example, 1 failure
+
+Failed examples:
+
+rspec ./spec/status_spec.rb:10 # an invoice sums the lines
+exit 1

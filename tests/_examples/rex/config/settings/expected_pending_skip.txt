@@ -1,0 +1,25 @@
+F**...
+
+
+Failures:
+
+  1) failures with a cause prints the cause under the failure
+     Failure/Error: raise ConnectionError, "could not reach the ledger service"
+
+     ConnectionError:
+       could not reach the ledger service
+     # ./spec/settings_spec.rb:6:in 'Object#connect'
+     # ./spec/settings_spec.rb:11:in 'block (2 levels) in <top (required)>'
+     # ------------------
+     # --- Caused by: ---
+     # IOError:
+     #   socket closed
+     #   ./spec/settings_spec.rb:4:in 'Object#connect'
+
+Finished in N seconds (files took N seconds to load)
+6 examples, 1 failure, 2 pending
+
+Failed examples:
+
+rspec ./spec/settings_spec.rb:10 # failures with a cause prints the cause under the failure
+exit 1

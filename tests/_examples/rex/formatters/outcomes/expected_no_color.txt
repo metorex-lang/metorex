@@ -1,0 +1,2 @@
+Please only use one of --force-color and --no-color
+exit 1

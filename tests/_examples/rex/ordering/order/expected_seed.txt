@@ -1,0 +1,24 @@
+
+Randomized with seed 1234
+
+formatting
+  writes a string
+  writes a number
+
+parsing
+  reads a number
+  reads a list
+  reads a string
+  with nested input
+    reads a nested list
+    reads a nested map
+
+validation
+  accepts a short name
+  rejects an empty name
+
+Finished in N seconds (files took N seconds to load)
+9 examples, 0 failures
+
+Randomized with seed 1234
+exit 0

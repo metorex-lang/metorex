@@ -1,0 +1,34 @@
+Run options: include {last_run_status: "failed"}
+
+an invoice
+  sums the lines (FAILED - 1)
+  formats the date (FAILED - 2)
+
+Failures:
+
+  1) an invoice sums the lines
+     Failure/Error: expect(2 + 2).to eq(5)
+
+       expected: 5
+            got: 4
+
+       (compared using ==)
+     # ./spec/status_spec.rb:11:in 'block (2 levels) in <top (required)>'
+
+  2) an invoice formats the date
+     Failure/Error: expect("2026-10-12").to eq("2026-10-13")
+
+       expected: "2026-10-13"
+            got: "2026-10-12"
+
+       (compared using ==)
+     # ./spec/status_spec.rb:15:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+2 examples, 2 failures
+
+Failed examples:
+
+rspec ./spec/status_spec.rb:10 # an invoice sums the lines
+rspec ./spec/status_spec.rb:14 # an invoice formats the date
+exit 1

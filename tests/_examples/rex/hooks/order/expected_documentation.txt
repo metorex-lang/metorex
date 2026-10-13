@@ -1,0 +1,40 @@
+
+hook order
+  runs outer hooks
+  nested
+    runs hooks from the outside in and the inside out
+
+the recorded order
+  matches RSpec's
+
+memoized helpers
+  builds a let once per example
+  runs let! before the example
+  with a redefined let
+    reaches the outer definition through super
+  Array
+    builds an implicit subject
+    is expected to be empty
+    is expected to be empty
+    with a named subject
+      reads the subject by name
+      reads the same object through subject
+      is expected to include 3
+  a string subject
+    is expected to eq "a string subject"
+
+helper modules
+  includes a configured module
+  with metadata
+    extends groups that match
+  without matching metadata
+    leaves other groups alone
+  when loud
+    includes a module by metadata
+  when prepended
+    prepends a configured module
+suite before, config before context, outer before all, config around start, outer around start, config before each, outer before, outer example, outer after, config after each, outer around end, config around end, inner before context, config around start, outer around start, config before each, outer before, inner before, inner example, inner after added later, inner after, outer after, config after each, outer around end, config around end, inner after context, outer after all, config after context, config before context, config around start, config before each, config after each, config around end, config after context, config before context, config around start, config before each, config after each, config around end, config around start, config before each, config after each, config around end, config around start, config before each, config after each, config around end, config around start, config before each, config after each, config around end, config around start, config before each, config after each, config around end, config around start, config before each, config after each, config around end, config around start, config before each, config after each, config around end, config around start, config before each, config after each, config around end, config around start, config before each, config after each, config around end, config around start, config before each, config after each, config around end, config after context, config before context, config around start, config before each, config after each, config around end, config around start, config before each, config after each, config around end, config around start, config before each, config after each, config around end, config around start, config before each, config after each, config around end, config around start, config before each, config after each, config around end, config after context, suite after
+
+Finished in N seconds (files took N seconds to load)
+18 examples, 0 failures
+exit 0

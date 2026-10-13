@@ -1,0 +1,99 @@
+
+a before(:context) hook that raises
+  fails the first example (FAILED - 1)
+  fails the second example (FAILED - 2)
+
+an after hook that raises
+  passes on its own (FAILED - 3)
+  fails on its own too (FAILED - 4)
+
+an after(:context) hook that raises
+  passes
+  
+An error occurred in an `after(:context)` hook.
+Failure/Error: after(:context) { raise "the teardown failed" }
+
+RuntimeError:
+  the teardown failed
+# ./spec/hooks_spec.rb:24:in 'block (2 levels) in <top (required)>'
+
+an around hook that raises
+  passes before the wrapper raises (FAILED - 5)
+
+a before hook that raises
+  reports both errors (FAILED - 6)
+
+Failures:
+
+  1) a before(:context) hook that raises fails the first example
+     Failure/Error: before(:context) { raise "the database is down" }
+
+     RuntimeError:
+       the database is down
+     # ./spec/hooks_spec.rb:2:in 'block (2 levels) in <top (required)>'
+
+  2) a before(:context) hook that raises fails the second example
+     Failure/Error: before(:context) { raise "the database is down" }
+
+     RuntimeError:
+       the database is down
+     # ./spec/hooks_spec.rb:2:in 'block (2 levels) in <top (required)>'
+
+  3) an after hook that raises passes on its own
+     Failure/Error: after { raise ArgumentError, "the cleanup failed" }
+
+     ArgumentError:
+       the cleanup failed
+     # ./spec/hooks_spec.rb:12:in 'block (2 levels) in <top (required)>'
+
+  4) an after hook that raises fails on its own too
+     Got 1 failure and 1 other error:
+
+     4.1) Failure/Error: expect(1).to eq(2)
+
+            expected: 2
+                 got: 1
+
+            (compared using ==)
+          # ./spec/hooks_spec.rb:19:in 'block (2 levels) in <top (required)>'
+
+     4.2) Failure/Error: after { raise ArgumentError, "the cleanup failed" }
+
+          ArgumentError:
+            the cleanup failed
+          # ./spec/hooks_spec.rb:12:in 'block (2 levels) in <top (required)>'
+
+  5) an around hook that raises passes before the wrapper raises
+     Failure/Error: raise "the wrapper failed"
+
+     RuntimeError:
+       the wrapper failed
+     # ./spec/hooks_spec.rb:33:in 'block (2 levels) in <top (required)>'
+
+  6) a before hook that raises reports both errors
+     Got 0 failures and 2 other errors:
+
+     6.1) Failure/Error: before { raise IOError, "the fixture file is missing" }
+
+          IOError:
+            the fixture file is missing
+          # ./spec/hooks_spec.rb:41:in 'block (2 levels) in <top (required)>'
+
+     6.2) Failure/Error: after { raise "the cleanup failed as well" }
+
+          RuntimeError:
+            the cleanup failed as well
+          # ./spec/hooks_spec.rb:42:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+7 examples, 6 failures, 1 error occurred outside of examples
+
+Failed examples:
+
+rspec ./spec/hooks_spec.rb:4 # a before(:context) hook that raises fails the first example
+rspec ./spec/hooks_spec.rb:7 # a before(:context) hook that raises fails the second example
+rspec ./spec/hooks_spec.rb:14 # an after hook that raises passes on its own
+rspec ./spec/hooks_spec.rb:18 # an after hook that raises fails on its own too
+rspec ./spec/hooks_spec.rb:36 # an around hook that raises passes before the wrapper raises
+rspec ./spec/hooks_spec.rb:44 # a before hook that raises reports both errors
+exit 1

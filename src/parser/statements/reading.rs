@@ -160,7 +160,7 @@ impl Parser {
             }
             // `include Named if ready` and `extend Named unless done` take a
             // modifier as any statement does.
-            TokenKind::Include => {
+            TokenKind::Include if !self.include_call_is_chained() => {
                 let included = self.parse_include()?;
                 self.wrap_with_modifier(included)
             }
@@ -379,6 +379,35 @@ impl Parser {
                     self.wrap_with_modifier(stmt)
                 }
             }
+        }
+    }
+
+    /// Whether the `include` at the cursor is a call whose answer a `.` or
+    /// `&.` goes on to call a method on, `include(1).once`, which reads as
+    /// an expression rather than as mixing a module in.
+    fn include_call_is_chained(&self) -> bool {
+        let opening = self.peek_ahead(1);
+        if opening.kind != TokenKind::LParen || opening.had_leading_space {
+            return false;
+        }
+        let mut depth = 0usize;
+        let mut offset = 1;
+        loop {
+            match self.peek_ahead(offset).kind {
+                TokenKind::LParen => depth += 1,
+                TokenKind::RParen => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return matches!(
+                            self.peek_ahead(offset + 1).kind,
+                            TokenKind::Dot | TokenKind::SafeDot
+                        );
+                    }
+                }
+                TokenKind::EOF => return false,
+                _ => {}
+            }
+            offset += 1;
         }
     }
 }

@@ -1,0 +1,17 @@
+...
+
+Top 2 slowest examples (8 seconds, 44.4% of total time):
+  an export takes five seconds
+    5 seconds ./spec/ranking_spec.rb:24
+  an import takes three seconds
+    3 seconds ./spec/ranking_spec.rb:19
+
+Top 2 slowest example groups:
+  an export
+    10 seconds average (10 seconds / 1 example) ./spec/ranking_spec.rb:23
+  an import
+    4 seconds average (8 seconds / 2 examples) ./spec/ranking_spec.rb:15
+
+Finished in N seconds (files took N seconds to load)
+3 examples, 0 failures
+exit 0

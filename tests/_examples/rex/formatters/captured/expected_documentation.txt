@@ -1,0 +1,9 @@
+captured:
+| 
+| a ledger
+|   balances
+|   rejects a negative entry
+| 
+| a ledger written to a StringIO
+|   holds what the documentation formatter wrote so far
+exit 0

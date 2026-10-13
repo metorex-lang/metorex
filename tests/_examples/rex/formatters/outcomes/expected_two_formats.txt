@@ -1,0 +1,95 @@
+
+a cart
+.  starts empty
+F  adds an item (FAILED - 1)
+*  applies a coupon (PENDING: the coupon rules)
+*  ships to a second address (PENDING: Not yet implemented)
+  when checking out
+.    charges the card
+F    sends a receipt (FAILED - 2)
+
+
+Pending: (Failures listed here are expected and do not affect your suite's status)
+
+  1) a cart applies a coupon
+     # the coupon rules
+     Failure/Error: expect(10 - 1).to eq(8)
+
+       expected: 8
+            got: 9
+
+       (compared using ==)
+     # ./spec/outcomes_spec.rb:12:in 'block (2 levels) in <top (required)>'
+
+  2) a cart ships to a second address
+     # Not yet implemented
+     # ./spec/outcomes_spec.rb:15
+
+Pending: (Failures listed here are expected and do not affect your suite's status)
+
+  1) a cart applies a coupon
+     # the coupon rules
+     Failure/Error: expect(10 - 1).to eq(8)
+
+       expected: 8
+            got: 9
+
+       (compared using ==)
+     # ./spec/outcomes_spec.rb:12:in 'block (2 levels) in <top (required)>'
+
+  2) a cart ships to a second address
+     # Not yet implemented
+     # ./spec/outcomes_spec.rb:15
+
+Failures:
+
+  1) a cart adds an item
+     Failure/Error: expect([:apple].size).to eq(2)
+
+       expected: 2
+            got: 1
+
+       (compared using ==)
+     # ./spec/outcomes_spec.rb:7:in 'block (2 levels) in <top (required)>'
+
+  2) a cart when checking out sends a receipt
+     Failure/Error: raise ArgumentError, "no email address on file"
+
+     ArgumentError:
+       no email address on file
+     # ./spec/outcomes_spec.rb:23:in 'block (3 levels) in <top (required)>'
+
+Failures:
+
+  1) a cart adds an item
+     Failure/Error: expect([:apple].size).to eq(2)
+
+       expected: 2
+            got: 1
+
+       (compared using ==)
+     # ./spec/outcomes_spec.rb:7:in 'block (2 levels) in <top (required)>'
+
+  2) a cart when checking out sends a receipt
+     Failure/Error: raise ArgumentError, "no email address on file"
+
+     ArgumentError:
+       no email address on file
+     # ./spec/outcomes_spec.rb:23:in 'block (3 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+6 examples, 2 failures, 2 pending
+
+Failed examples:
+
+rspec ./spec/outcomes_spec.rb:6 # a cart adds an item
+rspec ./spec/outcomes_spec.rb:22 # a cart when checking out sends a receipt
+
+Finished in N seconds (files took N seconds to load)
+6 examples, 2 failures, 2 pending
+
+Failed examples:
+
+rspec ./spec/outcomes_spec.rb:6 # a cart adds an item
+rspec ./spec/outcomes_spec.rb:22 # a cart when checking out sends a receipt
+exit 1

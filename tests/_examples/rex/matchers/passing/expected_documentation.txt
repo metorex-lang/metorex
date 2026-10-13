@@ -1,0 +1,16 @@
+
+matchers that pass
+  eq, eql, equal, be
+  truthiness
+  comparisons
+  types
+  predicates
+  collections
+  match
+  blocks
+  composition
+  aggregates failures that do not happen
+
+Finished in N seconds (files took N seconds to load)
+10 examples, 0 failures
+exit 0

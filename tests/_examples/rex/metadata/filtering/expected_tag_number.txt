@@ -1,0 +1,8 @@
+Run options: include {version: 3}
+
+tagged examples
+  has a version
+
+Finished in N seconds (files took N seconds to load)
+1 example, 0 failures
+exit 0

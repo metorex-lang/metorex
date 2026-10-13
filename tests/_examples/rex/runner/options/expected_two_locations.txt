@@ -1,0 +1,10 @@
+Run options: include {locations: {"./spec/money_spec.rb" => [3, 12]}}
+
+Money
+  adds cents
+  with zero
+    formats zero
+
+Finished in N seconds (files took N seconds to load)
+2 examples, 0 failures
+exit 0

@@ -295,16 +295,21 @@ impl Parser {
         // Parse parameters (optional parentheses). Parens for params must come
         // immediately after the method name — do NOT skip newlines here, or
         // `def foo\n(@x = y)` would eat the grouped expression as a param list.
+        // A default value runs in the method, where `yield` reaches the
+        // method's block.
+        self.def_body_depth += 1;
         let parameters = if self.match_token(&[TokenKind::LParen]) {
-            self.parse_parameters()?
+            self.parse_parameters()
         } else if self.can_start_no_paren_params() {
             // `def name arg, *rest, &block` — Ruby's paren-less param list.
             // Stops at newline/semicolon (statement terminator).
-            self.parse_parameters_no_parens()?
+            self.parse_parameters_no_parens()
         } else {
             self.skip_whitespace();
-            Vec::new()
+            Ok(Vec::new())
         };
+        self.def_body_depth -= 1;
+        let parameters = parameters?;
         // A method takes one `*` parameter at most, which gathers what the
         // others leave.
         if parameters

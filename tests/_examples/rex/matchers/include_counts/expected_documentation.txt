@@ -1,0 +1,71 @@
+
+include with a count
+  passes once
+  passes at least twice
+  fails when found more often than exactly (FAILED - 1)
+  fails when found fewer times than at least (FAILED - 2)
+  fails outside a range (FAILED - 3)
+  fails negated when the count matches (FAILED - 4)
+  describes itself (FAILED - 5)
+  refuses a count with two expected items (FAILED - 6)
+  refuses two at_least constraints (FAILED - 7)
+
+Failures:
+
+  1) include with a count fails when found more often than exactly
+     Failure/Error: expect([1, 1, 2]).to include(1).exactly(1).times
+       expected [1, 1, 2] to include 1 once but it is included twice
+     # ./spec/include_counts_spec.rb:11:in 'block (2 levels) in <top (required)>'
+
+  2) include with a count fails when found fewer times than at least
+     Failure/Error: expect("apple").to include("p").at_least(3).times
+       expected "apple" to include "p" at least 3 times but it is included twice
+     # ./spec/include_counts_spec.rb:15:in 'block (2 levels) in <top (required)>'
+
+  3) include with a count fails outside a range
+     Failure/Error: expect([5, 5, 5, 5]).to include(5).at_least(1).at_most(2).times
+       expected [5, 5, 5, 5] to include 5 between 1 and 2 times but it is included 4 times
+     # ./spec/include_counts_spec.rb:19:in 'block (2 levels) in <top (required)>'
+
+  4) include with a count fails negated when the count matches
+     Failure/Error: expect(%w[a b a]).not_to include("a").twice
+       expected ["a", "b", "a"] not to include "a" twice but it is included twice
+     # ./spec/include_counts_spec.rb:23:in 'block (2 levels) in <top (required)>'
+
+  5) include with a count describes itself
+     Failure/Error: expect(include(3).thrice.description).to eq("include 3 thrice")
+
+       expected: "include 3 thrice"
+            got: "include 3 3 times"
+
+       (compared using ==)
+     # ./spec/include_counts_spec.rb:27:in 'block (2 levels) in <top (required)>'
+
+  6) include with a count refuses a count with two expected items
+     Failure/Error: expect([1, 2]).to include(1, 2).once
+
+     NotImplementedError:
+       Count constraint supported only when testing for a single value being included
+     # ./spec/include_counts_spec.rb:31:in 'block (2 levels) in <top (required)>'
+
+  7) include with a count refuses two at_least constraints
+     Failure/Error: expect { include(1).at_least(1).at_least(2) }.to raise_error(ArgumentError, "Multiple at_least constraints are not supported")
+
+       expected ArgumentError with "Multiple at_least constraints are not supported", got #<ArgumentError: Multiple at_most constraints are not supported> with backtrace:
+         # ./spec/include_counts_spec.rb:35:in 'block (3 levels) in <top (required)>'
+         # ./spec/include_counts_spec.rb:35:in 'block (2 levels) in <top (required)>'
+     # ./spec/include_counts_spec.rb:35:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+9 examples, 7 failures
+
+Failed examples:
+
+rspec ./spec/include_counts_spec.rb:10 # include with a count fails when found more often than exactly
+rspec ./spec/include_counts_spec.rb:14 # include with a count fails when found fewer times than at least
+rspec ./spec/include_counts_spec.rb:18 # include with a count fails outside a range
+rspec ./spec/include_counts_spec.rb:22 # include with a count fails negated when the count matches
+rspec ./spec/include_counts_spec.rb:26 # include with a count describes itself
+rspec ./spec/include_counts_spec.rb:30 # include with a count refuses a count with two expected items
+rspec ./spec/include_counts_spec.rb:34 # include with a count refuses two at_least constraints
+exit 1

@@ -1,0 +1,28 @@
+
+verified partial doubles
+  rejects a method the class does not define (FAILED - 1)
+  rejects the wrong number of arguments on a real object (FAILED - 2)
+  accepts a method the class defines
+
+Failures:
+
+  1) verified partial doubles rejects a method the class does not define
+     Failure/Error: allow(Ledger).to receive(:close)
+       Ledger does not implement: close
+     # ./spec/verified_partials_spec.rb:8:in 'block (2 levels) in <top (required)>'
+
+  2) verified partial doubles rejects the wrong number of arguments on a real object
+     Failure/Error: ledger.record
+
+     ArgumentError:
+       Wrong number of arguments. Expected 1 to 2, got 0.
+     # ./spec/verified_partials_spec.rb:14:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+3 examples, 2 failures
+
+Failed examples:
+
+rspec ./spec/verified_partials_spec.rb:7 # verified partial doubles rejects a method the class does not define
+rspec ./spec/verified_partials_spec.rb:11 # verified partial doubles rejects the wrong number of arguments on a real object
+exit 1

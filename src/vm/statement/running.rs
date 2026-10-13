@@ -70,18 +70,9 @@ impl VirtualMachine {
         match statement {
             Statement::Expression {
                 expression,
-                position,
+                position: _,
             } => {
                 let result = self.evaluate_expression(expression)?;
-
-                // Ruby-style auto-call: if expression statement evaluates to a Method
-                // and the expression is a bare identifier, auto-call it with zero args
-                if matches!(expression, Expression::Identifier { .. })
-                    && matches!(result, Object::Method(_))
-                {
-                    let called = self.invoke_callable(result, vec![], *position)?;
-                    return Ok(ControlFlow::Value(called));
-                }
 
                 // The value travels with the flow, so the last expression in
                 // an `if` branch is what the `if` answers.

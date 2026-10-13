@@ -608,3 +608,23 @@ fn test_errors_builtin_error_ancestry_no_parens_execution() {
     let output = run_example("errors/builtin_error_ancestry_no_parens.rb");
     assert_eq!(output, BUILTIN_ERROR_ANCESTRY);
 }
+
+#[test]
+fn test_rescue_retry_runs_ensure_once() {
+    let expected = "body succeeded on attempt 3\nstatement ensure after 3\nvalue ensure after 2\nvalue after 2\nmethod ensure after 4\nmethod answered after 4\nmethod-level ensure after 2\nmethod-level rescue answered after 2\n";
+    let output = run_example("rescue/retry_with_ensure.rb");
+    assert_eq!(output, expected);
+}
+
+#[test]
+fn test_retry_written_as_an_expression_reruns_the_method_body() {
+    let expected = "[:tried, :tried]\n[:tried, :tried, :tried]\n\"always\"\n[:tried, :tried]\n";
+    let output = run_example("rescue/retry_in_method_rescue.rb");
+    assert_eq!(output, expected);
+}
+
+#[test]
+fn test_cause_nil_leaves_an_exception_never_raised_without_a_cause() {
+    let output = run_example("rescue/raise_instance_without_cause.rb");
+    assert_eq!(output, "\"original\"\nnil\n");
+}

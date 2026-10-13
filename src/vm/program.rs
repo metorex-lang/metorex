@@ -280,16 +280,6 @@ impl VirtualMachine {
                         vm.fire_line_event(*position)?;
                     }
                     let result = vm.evaluate_expression(expression)?;
-
-                    // Ruby-style auto-call: if expression statement evaluates to a Method
-                    // and the expression is a bare identifier, auto-call it with zero args
-                    if matches!(expression, Expression::Identifier { .. })
-                        && matches!(result, Object::Method(_))
-                    {
-                        last_value = Some(vm.invoke_callable(result, vec![], *position)?);
-                        continue;
-                    }
-
                     last_value = Some(result);
                     continue;
                 }

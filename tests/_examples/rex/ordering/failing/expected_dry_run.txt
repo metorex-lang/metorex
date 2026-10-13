@@ -1,0 +1,11 @@
+
+an order total
+  adds the line items
+  applies the discount
+  adds the tax
+  rounds to cents
+  is pending until the rule is written
+
+Finished in N seconds (files took N seconds to load)
+5 examples, 0 failures
+exit 0

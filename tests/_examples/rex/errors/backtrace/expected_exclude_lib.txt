@@ -1,0 +1,19 @@
+F.....
+
+Failures:
+
+  1) an inventory counts the items
+     Failure/Error: FakeClient.fetch("/items")
+
+     IOError:
+       connection refused for /items
+     # ./vendor/gems/fake_client-1.2/lib/fake_client.rb:3:in 'FakeClient.fetch'
+     # ./spec/inventory_spec.rb:5:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+6 examples, 1 failure
+
+Failed examples:
+
+rspec ./spec/inventory_spec.rb:4 # an inventory counts the items
+exit 1

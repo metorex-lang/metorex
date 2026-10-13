@@ -3,9 +3,11 @@
 
 mod gem_libraries;
 mod prism_libraries;
+mod rex_libraries;
 mod rubygems_libraries;
 use gem_libraries::GEM_LIBRARIES;
 use prism_libraries::PRISM_LIBRARIES;
+use rex_libraries::REX_LIBRARIES;
 use rubygems_libraries::RUBYGEMS_LIBRARIES;
 
 /// The file a library metorex carries says its code was written in.
@@ -310,6 +312,7 @@ pub(crate) fn embedded_library(name: &str) -> Option<&'static str> {
         .or_else(|| {
             PRISM_LIBRARIES
                 .iter()
+                .chain(REX_LIBRARIES)
                 .chain(GEM_LIBRARIES)
                 .chain(RUBYGEMS_LIBRARIES)
                 .find(|(named, _)| *named == trimmed)
@@ -325,6 +328,7 @@ pub(crate) fn embedded_library_names() -> impl Iterator<Item = &'static str> {
         .chain(
             PRISM_LIBRARIES
                 .iter()
+                .chain(REX_LIBRARIES)
                 .chain(GEM_LIBRARIES)
                 .chain(RUBYGEMS_LIBRARIES)
                 .map(|(named, _)| *named),

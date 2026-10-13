@@ -1,0 +1,20 @@
+
+parsing
+  reads a number
+  reads a string
+  reads a list
+  with nested input
+    reads a nested list
+    reads a nested map
+
+formatting
+  writes a number
+  writes a string
+
+validation
+  rejects an empty name
+  accepts a short name
+
+Finished in N seconds (files took N seconds to load)
+9 examples, 0 failures
+exit 0

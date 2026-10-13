@@ -1,0 +1,11 @@
+Run options: include {fast: true, slow: true}
+
+tagged examples
+  runs fast
+  runs slow
+  a fast group
+    inherits the tag
+
+Finished in N seconds (files took N seconds to load)
+3 examples, 0 failures
+exit 0

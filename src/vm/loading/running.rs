@@ -258,6 +258,12 @@ impl VirtualMachine {
         // it, so `using` there is allowed.
         let caller_method_nesting = std::mem::take(&mut self.user_def_nesting);
         let result = self.execute_program(&statements);
+        // An error the interpreter raised here takes its backtrace now, while
+        // the file's own frame stands. Taken by the rescue that catches it,
+        // the backtrace would start in the rescuing file instead.
+        if let Err(error) = &result {
+            self.trace_error_leaving_frame(error);
+        }
         self.user_def_nesting = caller_method_nesting;
         if own_locals {
             self.environment_mut().pop_scope();

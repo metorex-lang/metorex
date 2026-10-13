@@ -1,0 +1,13 @@
+
+first group
+  runs one
+  runs two
+  runs three
+
+second group
+  runs four
+  runs five
+
+Finished in N seconds (files took N seconds to load)
+5 examples, 0 failures
+exit 0

@@ -1,0 +1,3 @@
+
+To use `--only-failures`, you must first set `config.example_status_persistence_file_path`.
+exit 1

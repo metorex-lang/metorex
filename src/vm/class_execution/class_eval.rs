@@ -106,13 +106,15 @@ impl VirtualMachine {
         // The method running this block did not write it.
         self.borrowed_frames.push(self.current_method_frame);
         let frame = self.block_frame_at(block, position);
-        let result = self.apply_class_body_in_frame(
-            class,
-            &block.body,
-            position,
-            frame,
-            Some(block.home_frame),
-        );
+        let result = self.in_block_source_file(block, |vm| {
+            vm.apply_class_body_in_frame(
+                class,
+                &block.body,
+                position,
+                frame,
+                Some(block.home_frame),
+            )
+        });
         self.borrowed_frames.pop();
         self.pop_refinement_scope();
         self.user_def_nesting = saved_nesting;
@@ -126,6 +128,31 @@ impl VirtualMachine {
         } else {
             self.environment_mut().undefine("self");
         }
+        result
+    }
+
+    /// Runs `run` with the file and source encoding the block was written in
+    /// as the current ones, so a call or a raise in the body is located in
+    /// the block's own file rather than in the file that ran it.
+    fn in_block_source_file<T>(
+        &mut self,
+        block: &crate::object::BlockStatement,
+        run: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        let body_source_file = block
+            .source_file
+            .clone()
+            .or_else(|| self.current_source_file.clone());
+        let saved_source_file = std::mem::replace(&mut self.current_source_file, body_source_file);
+        let saved_source_encoding = std::mem::replace(
+            &mut self.current_source_encoding,
+            self.current_source_file
+                .as_ref()
+                .and_then(|named| self.file_encodings.get(named).cloned()),
+        );
+        let result = run(self);
+        self.current_source_file = saved_source_file;
+        self.current_source_encoding = saved_source_encoding;
         result
     }
 
@@ -172,13 +199,15 @@ impl VirtualMachine {
         // The method running this block did not write it.
         self.borrowed_frames.push(self.current_method_frame);
         let frame = self.block_frame_at(block, position);
-        let result = self.apply_class_body_in_frame(
-            class,
-            &block.body,
-            position,
-            frame,
-            Some(block.home_frame),
-        );
+        let result = self.in_block_source_file(block, |vm| {
+            vm.apply_class_body_in_frame(
+                class,
+                &block.body,
+                position,
+                frame,
+                Some(block.home_frame),
+            )
+        });
         self.borrowed_frames.pop();
         self.user_def_nesting = saved_nesting;
         self.constant_homes.pop();

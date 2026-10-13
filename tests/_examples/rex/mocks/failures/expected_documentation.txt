@@ -1,0 +1,168 @@
+
+doubles
+  rejects a message a strict double was not told about (FAILED - 1)
+  rejects a message on an anonymous double (FAILED - 2)
+  reports an expected message that never arrived (FAILED - 3)
+  reports a message received too many times (FAILED - 4)
+  reports a message received with other arguments (FAILED - 5)
+  reports a count that falls short (FAILED - 6)
+  reports a message that was never to arrive (FAILED - 7)
+  reports at_least (FAILED - 8)
+  reports a stubbed double given unexpected arguments (FAILED - 9)
+
+partial doubles
+  reports an expected message on a real object (FAILED - 10)
+
+spies
+  reports a spy that did not receive the message (FAILED - 11)
+  reports a spy given other arguments (FAILED - 12)
+
+verifying doubles
+  rejects a method the class does not have (FAILED - 13)
+  rejects the wrong number of arguments (FAILED - 14)
+  rejects a class method the class does not have (FAILED - 15)
+  rejects a missing keyword (FAILED - 16)
+
+Failures:
+
+  1) doubles rejects a message a strict double was not told about
+     Failure/Error: mailer.deliver
+       #<Double "mailer"> received unexpected message :deliver with (no args)
+     # ./spec/doubles_spec.rb:9:in 'block (2 levels) in <top (required)>'
+
+  2) doubles rejects a message on an anonymous double
+     Failure/Error: double.deliver("hello")
+       #<Double (anonymous)> received unexpected message :deliver with ("hello")
+     # ./spec/doubles_spec.rb:13:in 'block (2 levels) in <top (required)>'
+
+  3) doubles reports an expected message that never arrived
+     Failure/Error: expect(mailer).to receive(:deliver)
+
+       (Double "mailer").deliver(*(any args))
+           expected: 1 time with any arguments
+           received: 0 times with any arguments
+     # ./spec/doubles_spec.rb:18:in 'block (2 levels) in <top (required)>'
+
+  4) doubles reports a message received too many times
+     Failure/Error: mailer.deliver
+
+       (Double "mailer").deliver(no args)
+           expected: 1 time with any arguments
+           received: 2 times
+     # ./spec/doubles_spec.rb:25:in 'block (2 levels) in <top (required)>'
+
+  5) doubles reports a message received with other arguments
+     Failure/Error: mailer.deliver("goodbye", to: "ada@example.com")
+
+       #<Double "mailer"> received :deliver with unexpected arguments
+         expected: ("hello", {to: "ada@example.com"})
+              got: ("goodbye", {to: "ada@example.com"})
+       Diff:
+       @@ -1 +1 @@
+       -["hello", {to: "ada@example.com"}]
+       +["goodbye", {to: "ada@example.com"}]
+     # ./spec/doubles_spec.rb:31:in 'block (2 levels) in <top (required)>'
+
+  6) doubles reports a count that falls short
+     Failure/Error: expect(mailer).to receive(:deliver).exactly(3).times
+
+       (Double "mailer").deliver(*(any args))
+           expected: 3 times with any arguments
+           received: 1 time with any arguments
+     # ./spec/doubles_spec.rb:36:in 'block (2 levels) in <top (required)>'
+
+  7) doubles reports a message that was never to arrive
+     Failure/Error: mailer.deliver
+
+       (Double "mailer").deliver(no args)
+           expected: 0 times with any arguments
+           received: 1 time
+     # ./spec/doubles_spec.rb:43:in 'block (2 levels) in <top (required)>'
+
+  8) doubles reports at_least
+     Failure/Error: expect(mailer).to receive(:deliver).at_least(:twice)
+
+       (Double "mailer").deliver(*(any args))
+           expected: at least 2 times with any arguments
+           received: 1 time with any arguments
+     # ./spec/doubles_spec.rb:48:in 'block (2 levels) in <top (required)>'
+
+  9) doubles reports a stubbed double given unexpected arguments
+     Failure/Error: mailer.deliver(2)
+
+       #<Double "mailer"> received :deliver with unexpected arguments
+         expected: (1)
+              got: (2)
+        Please stub a default value first if message might be received with other args as well. 
+     # ./spec/doubles_spec.rb:55:in 'block (2 levels) in <top (required)>'
+
+  10) partial doubles reports an expected message on a real object
+      Failure/Error: expect(Mailer).to receive(:default_sender)
+
+        (Mailer (class)).default_sender(*(any args))
+            expected: 1 time with any arguments
+            received: 0 times with any arguments
+      # ./spec/doubles_spec.rb:61:in 'block (2 levels) in <top (required)>'
+
+  11) spies reports a spy that did not receive the message
+      Failure/Error: expect(mailer).to have_received(:deliver)
+
+        (Double "mailer").deliver(*(any args))
+            expected: 1 time with any arguments
+            received: 0 times with any arguments
+      # ./spec/doubles_spec.rb:68:in 'block (2 levels) in <top (required)>'
+
+  12) spies reports a spy given other arguments
+      Failure/Error: expect(mailer).to have_received(:deliver).with("goodbye")
+
+        #<Double "mailer"> received :deliver with unexpected arguments
+          expected: ("goodbye")
+               got: ("hello")
+      # ./spec/doubles_spec.rb:74:in 'block (2 levels) in <top (required)>'
+
+  13) verifying doubles rejects a method the class does not have
+      Failure/Error: instance_double(Mailer, archive: true)
+        the Mailer class does not implement the instance method: archive
+      # ./spec/doubles_spec.rb:80:in 'block (2 levels) in <top (required)>'
+
+  14) verifying doubles rejects the wrong number of arguments
+      Failure/Error: mailer.deliver
+
+      ArgumentError:
+        Missing required keyword arguments: to
+      # ./spec/doubles_spec.rb:86:in 'block (2 levels) in <top (required)>'
+
+  15) verifying doubles rejects a class method the class does not have
+      Failure/Error: class_double(Mailer, archive_all: true)
+        the Mailer class does not implement the class method: archive_all
+      # ./spec/doubles_spec.rb:90:in 'block (2 levels) in <top (required)>'
+
+  16) verifying doubles rejects a missing keyword
+      Failure/Error: mailer.deliver("hello")
+
+      ArgumentError:
+        Missing required keyword arguments: to
+      # ./spec/doubles_spec.rb:96:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+16 examples, 16 failures
+
+Failed examples:
+
+rspec ./spec/doubles_spec.rb:7 # doubles rejects a message a strict double was not told about
+rspec ./spec/doubles_spec.rb:12 # doubles rejects a message on an anonymous double
+rspec ./spec/doubles_spec.rb:16 # doubles reports an expected message that never arrived
+rspec ./spec/doubles_spec.rb:21 # doubles reports a message received too many times
+rspec ./spec/doubles_spec.rb:28 # doubles reports a message received with other arguments
+rspec ./spec/doubles_spec.rb:34 # doubles reports a count that falls short
+rspec ./spec/doubles_spec.rb:40 # doubles reports a message that was never to arrive
+rspec ./spec/doubles_spec.rb:46 # doubles reports at_least
+rspec ./spec/doubles_spec.rb:52 # doubles reports a stubbed double given unexpected arguments
+rspec ./spec/doubles_spec.rb:60 # partial doubles reports an expected message on a real object
+rspec ./spec/doubles_spec.rb:66 # spies reports a spy that did not receive the message
+rspec ./spec/doubles_spec.rb:71 # spies reports a spy given other arguments
+rspec ./spec/doubles_spec.rb:79 # verifying doubles rejects a method the class does not have
+rspec ./spec/doubles_spec.rb:83 # verifying doubles rejects the wrong number of arguments
+rspec ./spec/doubles_spec.rb:89 # verifying doubles rejects a class method the class does not have
+rspec ./spec/doubles_spec.rb:93 # verifying doubles rejects a missing keyword
+exit 1

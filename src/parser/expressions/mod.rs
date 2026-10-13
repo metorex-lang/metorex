@@ -978,7 +978,12 @@ impl Parser {
                     | Some(TokenKind::Until)
                     | Some(TokenKind::Rescue)
             );
-            if !reads_as_value {
+            // `it[0]` indexes the parameter. `it [0]` calls a method named
+            // `it` with an array.
+            let indexed = tokens.get(at + 1).is_some_and(|held| {
+                matches!(held.kind, TokenKind::LBracket) && !held.had_leading_space
+            });
+            if !reads_as_value && !indexed {
                 continue;
             }
             return true;

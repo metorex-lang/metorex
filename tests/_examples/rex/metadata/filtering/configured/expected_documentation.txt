@@ -1,0 +1,9 @@
+Run options: exclude {version: #<Proc: ./spec/configured_spec.rb:3>, broken: true}
+
+configured filters
+  runs
+  runs on an old version
+
+Finished in N seconds (files took N seconds to load)
+2 examples, 0 failures
+exit 0

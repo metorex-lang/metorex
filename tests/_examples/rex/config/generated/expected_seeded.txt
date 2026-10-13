@@ -1,0 +1,14 @@
+
+Randomized with seed 7
+
+Ledger
+  has no top-level describe
+  describes a chained custom matcher with its chain
+  sums its entries
+  stubs only methods the object has
+
+Finished in N seconds (files took N seconds to load)
+4 examples, 0 failures
+
+Randomized with seed 7
+exit 0

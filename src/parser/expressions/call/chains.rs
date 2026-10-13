@@ -83,7 +83,9 @@ impl Parser {
                     expr = method_call(expr, name, arguments, None, safe, position);
                     continue;
                 }
-                let method_name = match self.advance().kind {
+                let name_token = self.advance();
+                let name_line = name_token.position.line;
+                let method_name = match name_token.kind {
                     TokenKind::Ident(name) => name,
                     // Allow keywords as method names (e.g., obj.class, obj.if, etc.)
                     TokenKind::Class => "class".to_string(),
@@ -182,7 +184,14 @@ impl Parser {
                 };
                 refuse_two_blocks(&arguments, trailing_block.is_some())?;
 
-                let position = expr.position();
+                // Ruby gives a call the line its method name is written on,
+                // which is a later line than the receiver's start when the
+                // receiver spans several. The column stays the receiver's,
+                // where a highlighted failure starts.
+                let position = crate::lexer::Position {
+                    line: name_line,
+                    ..expr.position()
+                };
                 expr = if safe {
                     method_call(expr, method_name, arguments, trailing_block, true, position)
                 } else {

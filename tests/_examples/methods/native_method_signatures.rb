@@ -1,0 +1,9 @@
+p "x".method(:upcase).parameters
+p "x".method(:upcase).arity
+p [].method(:push).parameters
+p "x".method(:center).arity
+p 1.method(:+).parameters
+p Integer.method(:sqrt).arity
+p method(:puts).arity
+p "x".method(:freeze).arity
+p 5.method(:between?).arity

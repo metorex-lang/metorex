@@ -1,0 +1,29 @@
+
+Account
+  starts empty
+  rounds wrong (FAILED - 1)
+
+Money
+  adds cents
+  formats dollars
+  with zero
+    formats zero
+
+Failures:
+
+  1) Account rounds wrong
+     Failure/Error: expect(Account.new.balance.to_s).to eq("$0.01")
+
+       expected: "$0.01"
+            got: "$0.00"
+
+       (compared using ==)
+     # ./spec/models/account_spec.rb:9:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+5 examples, 1 failure
+
+Failed examples:
+
+rspec ./spec/models/account_spec.rb:8 # Account rounds wrong
+exit 3

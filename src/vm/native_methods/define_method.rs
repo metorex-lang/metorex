@@ -167,6 +167,9 @@ impl VirtualMachine {
         }
         method.lambda_body = true;
         method.captured_def_scope = block.captured_def_scope.clone();
+        // A constant in the body is looked up through the modules the block
+        // was written in, as it is while the block runs as a block.
+        method.captured_nesting = block.captured_nesting.clone();
         method.captured_vars = Some(if block.captured_vars.is_empty() {
             self.environment().current_scope_var_refs()
         } else {

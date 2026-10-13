@@ -1,0 +1,36 @@
+FF
+
+Failures:
+
+  1) diff limits diffs a value within the line limit
+     Failure/Error: expect("one\ntwo").to eq("one\nthree")
+
+       expected: "one\nthree"
+            got: "one\ntwo"
+
+       (compared using ==)
+
+       Diff:
+       @@ -1,2 +1,2 @@
+        one
+       -three
+       +two
+     # ./spec/limits_spec.rb:7:in 'block (2 levels) in <top (required)>'
+
+  2) diff limits prints no diff past the line limit
+     Failure/Error: expect("a\nb\nc\nd").to eq("a\nb\nc\ne")
+
+       expected: "a\nb\nc\ne"
+            got: "a\nb\nc\nd"
+
+       (compared using ==)
+     # ./spec/limits_spec.rb:11:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+2 examples, 2 failures
+
+Failed examples:
+
+rspec ./spec/limits_spec.rb:6 # diff limits diffs a value within the line limit
+rspec ./spec/limits_spec.rb:10 # diff limits prints no diff past the line limit
+exit 1

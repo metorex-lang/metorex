@@ -1,0 +1,31 @@
+before the context
+.FF
+
+Failures:
+
+  1) an order total applies the discount
+     Failure/Error: expect(10 - 2).to eq(9)
+
+       expected: 9
+            got: 8
+
+       (compared using ==)
+     # ./spec/failing_spec.rb:9:in 'block (2 levels) in <top (required)>'
+
+  2) an order total adds the tax
+     Failure/Error: expect(10 * 2).to eq(21)
+
+       expected: 21
+            got: 20
+
+       (compared using ==)
+     # ./spec/failing_spec.rb:13:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+3 examples, 2 failures
+
+Failed examples:
+
+rspec ./spec/failing_spec.rb:8 # an order total applies the discount
+rspec ./spec/failing_spec.rb:12 # an order total adds the tax
+exit 1

@@ -1,0 +1,64 @@
+
+Array
+  behaves like a collection
+    reports its size
+    is not empty
+  it should behave like a sortable collection
+    sorts
+  when included in place
+    reports its size (FAILED - 1)
+    is not empty
+
+Hash
+  behaves like a lookup
+    finds a key
+  behaves like a collection
+    reports its size
+    is not empty
+
+a context with a logger
+  runs the context's before hook
+
+a group including a context by name
+  has the context's let
+
+metadata
+  names its location
+  Array
+    inherits its group's metadata and described class
+
+String
+  behaves like a collection
+    reports its size (FAILED - 2)
+    is not empty
+
+Failures:
+
+  1) Array when included in place reports its size
+     Failure/Error: expect(subject.size).to eq(size)
+
+       expected: 4
+            got: 3
+
+       (compared using ==)
+     Shared Example Group: "a collection" called from ./spec/shared_spec.rb:11
+     # ./spec/support/collection_examples.rb:3:in 'block (2 levels) in <top (required)>'
+
+  2) String behaves like a collection reports its size
+     Failure/Error: expect(subject.size).to eq(size)
+
+       expected: 5
+            got: 3
+
+       (compared using ==)
+     Shared Example Group: "a collection" called from ./spec/shared_spec.rb:64
+     # ./spec/support/collection_examples.rb:3:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+14 examples, 2 failures
+
+Failed examples:
+
+rspec './spec/shared_spec.rb[1:3:1]' # Array when included in place reports its size
+rspec './spec/shared_spec.rb[6:1:1]' # String behaves like a collection reports its size
+exit 1

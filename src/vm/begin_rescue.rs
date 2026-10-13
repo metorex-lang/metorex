@@ -20,10 +20,18 @@ impl VirtualMachine {
         ensure_block: Option<&[Statement]>,
     ) -> Result<Object, MetorexError> {
         // `retry` in a rescue body runs the whole begin body again, which is
-        // what this loop is for.
+        // what this loop is for. A `retry` from the body itself belongs to
+        // an enclosing rescue and passes through.
         loop {
-            match self.begin_once(body, rescue_clauses, else_clause, ensure_block) {
-                Err(MetorexError::BlockRetry { .. }) => continue,
+            let mut retried_here = false;
+            match self.begin_once(
+                body,
+                rescue_clauses,
+                else_clause,
+                ensure_block,
+                &mut retried_here,
+            ) {
+                Err(MetorexError::BlockRetry { .. }) if retried_here => continue,
                 other => return other,
             }
         }
@@ -36,6 +44,7 @@ impl VirtualMachine {
         rescue_clauses: &[crate::ast::RescueClause],
         else_clause: Option<&[Statement]>,
         ensure_block: Option<&[Statement]>,
+        retried_here: &mut bool,
     ) -> Result<Object, MetorexError> {
         // What `$!` named before this form ran, which a clause handling an
         // exception of its own puts back when it is done.
@@ -104,6 +113,13 @@ impl VirtualMachine {
             && let Some(else_stmts) = else_clause
         {
             final_value = self.execute_statements_for_value(else_stmts);
+        }
+
+        // `retry` runs the body again before the begin is left, so ensure
+        // waits for the pass that does leave it.
+        if handled && matches!(final_value, Err(MetorexError::BlockRetry { .. })) {
+            *retried_here = true;
+            return final_value;
         }
 
         if let Some(ensure_stmts) = ensure_block {

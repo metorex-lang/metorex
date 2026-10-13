@@ -1,0 +1,16 @@
+
+shared group names
+  counts by a Module name
+  behaves like countable
+    counts by a Symbol name
+
+a group with the tag
+  includes the context the tag triggers
+
+a block argument and a customization block
+  behaves like a sum
+    adds its arguments
+
+Finished in N seconds (files took N seconds to load)
+4 examples, 0 failures
+exit 0

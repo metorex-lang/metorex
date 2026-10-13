@@ -1,0 +1,65 @@
+FFFFFF
+
+Failures:
+
+  1) failing expressions names a one-line expression
+     Failure/Error: expect(user.age).to eq(42)
+
+       expected: 42
+            got: 41
+
+       (compared using ==)
+     # ./spec/expressions_spec.rb:7:in 'block (2 levels) in <top (required)>'
+
+  2) failing expressions prints every line of a multi-line expression
+     Failure/Error:
+       expect(user.name).to eq(
+         "Grace"
+       )
+
+       expected: "Grace"
+            got: "Ada"
+
+       (compared using ==)
+     # ./spec/expressions_spec.rb:11:in 'block (2 levels) in <top (required)>'
+
+  3) failing expressions prints a multi-line block expectation
+     Failure/Error:
+       expect {
+         user.age += 1
+       }.to change { user.age }.by(2)
+
+       expected `user.age` to have changed by 2, but was changed by 1
+     # ./spec/expressions_spec.rb:19:in 'block (2 levels) in <top (required)>'
+
+  4) failing expressions names a negated expectation
+     Failure/Error: expect(user.name).not_to start_with("A")
+       expected "Ada" not to start with "A"
+     # ./spec/expressions_spec.rb:23:in 'block (2 levels) in <top (required)>'
+
+  5) failing expressions leaves a literal as it is
+     Failure/Error: expect(41).to eq(42)
+
+       expected: 42
+            got: 41
+
+       (compared using ==)
+     # ./spec/expressions_spec.rb:27:in 'block (2 levels) in <top (required)>'
+
+  6) failing expressions keeps a message the expectation was given
+     Failure/Error: expect(user.age).to eq(42), "the age is off"
+       the age is off
+     # ./spec/expressions_spec.rb:31:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+6 examples, 6 failures
+
+Failed examples:
+
+rspec ./spec/expressions_spec.rb:6 # failing expressions names a one-line expression
+rspec ./spec/expressions_spec.rb:10 # failing expressions prints every line of a multi-line expression
+rspec ./spec/expressions_spec.rb:16 # failing expressions prints a multi-line block expectation
+rspec ./spec/expressions_spec.rb:22 # failing expressions names a negated expectation
+rspec ./spec/expressions_spec.rb:26 # failing expressions leaves a literal as it is
+rspec ./spec/expressions_spec.rb:30 # failing expressions keeps a message the expectation was given
+exit 1

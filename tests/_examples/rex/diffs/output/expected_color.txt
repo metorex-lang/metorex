@@ -1,0 +1,225 @@
+[31mF[0m[31mF[0m[31mF[0m[31mF[0m[31mF[0m[31mF[0m[31mF[0m[31mF[0m[31mF[0m[31mF[0m[31mF[0m[31mF[0m[31mF[0m
+
+Failures:
+
+  1) diffs shows one hunk for a change in a multi-line String
+     [31mFailure/Error: expect("alpha\nbeta\ngamma\ndelta\n").to eq("alpha\nbeta\nGAMMA\ndelta\n")[0m
+     [31m[0m
+     [31m  expected: "alpha\nbeta\nGAMMA\ndelta\n"[0m
+     [31m       got: "alpha\nbeta\ngamma\ndelta\n"[0m
+     [31m[0m
+     [31m  (compared using ==)[0m
+     [31m[0m
+     [31m  Diff:[0m[0m
+     [31m  [0m[34m@@ -1,4 +1,4 @@[0m
+     [31m  [0m[0m alpha[0m
+     [31m  [0m[0m beta[0m
+     [31m  [0m[31m-GAMMA[0m
+     [31m  [0m[32m+gamma[0m
+     [31m  [0m[0m delta[0m
+     [31m  [0m[0m
+     [36m# ./spec/diffs_spec.rb:5:in 'block (2 levels) in <top (required)>'[0m
+
+  2) diffs shows separate hunks for changes far apart
+     [31mFailure/Error: expect(actual.join("\n")).to eq(expected.join("\n"))[0m
+     [31m[0m
+     [31m  expected: "line 1\nline two\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline eighteen\nline 19\nline 20"[0m
+     [31m       got: "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20"[0m
+     [31m[0m
+     [31m  (compared using ==)[0m
+     [31m[0m
+     [31m  Diff:[0m[0m
+     [31m  [0m[34m@@ -1,5 +1,5 @@[0m
+     [31m  [0m[0m line 1[0m
+     [31m  [0m[31m-line two[0m
+     [31m  [0m[32m+line 2[0m
+     [31m  [0m[0m line 3[0m
+     [31m  [0m[0m line 4[0m
+     [31m  [0m[0m line 5[0m
+     [31m  [0m[34m@@ -15,6 +15,6 @@[0m
+     [31m  [0m[0m line 15[0m
+     [31m  [0m[0m line 16[0m
+     [31m  [0m[0m line 17[0m
+     [31m  [0m[31m-line eighteen[0m
+     [31m  [0m[32m+line 18[0m
+     [31m  [0m[0m line 19[0m
+     [31m  [0m[0m line 20[0m
+     [31m  [0m[0m
+     [36m# ./spec/diffs_spec.rb:13:in 'block (2 levels) in <top (required)>'[0m
+
+  3) diffs merges hunks whose context overlaps
+     [31mFailure/Error: expect(actual.join("\n")).to eq(expected.join("\n"))[0m
+     [31m[0m
+     [31m  expected: "row 1\nrow 2\nrow three\nrow 4\nrow 5\nrow 6\nrow 7\nrow 8\nrow nine\nrow 10\nrow 11\nrow 12"[0m
+     [31m       got: "row 1\nrow 2\nrow 3\nrow 4\nrow 5\nrow 6\nrow 7\nrow 8\nrow 9\nrow 10\nrow 11\nrow 12"[0m
+     [31m[0m
+     [31m  (compared using ==)[0m
+     [31m[0m
+     [31m  Diff:[0m[0m
+     [31m  [0m[0m[0m
+     [31m  [0m[34m@@ -1,12 +1,12 @@[0m
+     [31m  [0m[0m row 1[0m
+     [31m  [0m[0m row 2[0m
+     [31m  [0m[31m-row three[0m
+     [31m  [0m[32m+row 3[0m
+     [31m  [0m[0m row 4[0m
+     [31m  [0m[0m row 5[0m
+     [31m  [0m[0m row 6[0m
+     [31m  [0m[0m row 7[0m
+     [31m  [0m[0m row 8[0m
+     [31m  [0m[31m-row nine[0m
+     [31m  [0m[32m+row 9[0m
+     [31m  [0m[0m row 10[0m
+     [31m  [0m[0m row 11[0m
+     [31m  [0m[0m row 12[0m
+     [31m  [0m[0m
+     [36m# ./spec/diffs_spec.rb:21:in 'block (2 levels) in <top (required)>'[0m
+
+  4) diffs pairs lines as diff-lcs does when two pairings are equally long
+     [31mFailure/Error: expect("b\na\nc\n").to eq("a\nb\nc\n")[0m
+     [31m[0m
+     [31m  expected: "a\nb\nc\n"[0m
+     [31m       got: "b\na\nc\n"[0m
+     [31m[0m
+     [31m  (compared using ==)[0m
+     [31m[0m
+     [31m  Diff:[0m[0m
+     [31m  [0m[0m[0m
+     [31m  [0m[34m@@ -1,3 +1,3 @@[0m
+     [31m  [0m[31m-a[0m
+     [31m  [0m[0m b[0m
+     [31m  [0m[32m+a[0m
+     [31m  [0m[0m c[0m
+     [31m  [0m[0m
+     [36m# ./spec/diffs_spec.rb:25:in 'block (2 levels) in <top (required)>'[0m
+
+  5) diffs shows added and removed lines at the ends
+     [31mFailure/Error: expect("middle\nend\nextra").to eq("start\nmiddle\nend")[0m
+     [31m[0m
+     [31m  expected: "start\nmiddle\nend"[0m
+     [31m       got: "middle\nend\nextra"[0m
+     [31m[0m
+     [31m  (compared using ==)[0m
+     [31m[0m
+     [31m  Diff:[0m[0m
+     [31m  [0m[0m[0m
+     [31m  [0m[34m@@ -1,3 +1,3 @@[0m
+     [31m  [0m[31m-start[0m
+     [31m  [0m[0m middle[0m
+     [31m  [0m[0m end[0m
+     [31m  [0m[32m+extra[0m
+     [31m  [0m[0m
+     [36m# ./spec/diffs_spec.rb:29:in 'block (2 levels) in <top (required)>'[0m
+
+  6) diffs diffs a Hash by its sorted keys
+     [31mFailure/Error: expect({ name: "Ada", role: "admin", age: 36 }).to eq({ name: "Ada", role: "editor", age: 36, team: "core" })[0m
+     [31m[0m
+     [31m  expected: {age: 36, name: "Ada", role: "editor", team: "core"}[0m
+     [31m       got: {age: 36, name: "Ada", role: "admin"}[0m
+     [31m[0m
+     [31m  (compared using ==)[0m
+     [31m[0m
+     [31m  Diff:[0m[0m
+     [31m  [0m[34m@@ -1,4 +1,3 @@[0m
+     [31m  [0m[0m :age => 36,[0m
+     [31m  [0m[0m :name => "Ada",[0m
+     [31m  [0m[31m-:role => "editor",[0m
+     [31m  [0m[31m-:team => "core",[0m
+     [31m  [0m[32m+:role => "admin",[0m
+     [31m  [0m[0m
+     [36m# ./spec/diffs_spec.rb:33:in 'block (2 levels) in <top (required)>'[0m
+
+  7) diffs diffs an Array
+     [31mFailure/Error: expect([1, :two, "three", [4]]).to eq([1, :two, "three", [5]])[0m
+     [31m[0m
+     [31m  expected: [1, :two, "three", [5]][0m
+     [31m       got: [1, :two, "three", [4]][0m
+     [31m[0m
+     [31m  (compared using ==)[0m
+     [36m# ./spec/diffs_spec.rb:37:in 'block (2 levels) in <top (required)>'[0m
+
+  8) diffs diffs a Struct through pretty_print
+     [31mFailure/Error: expect(Point.new(1, 2)).to eq(Point.new(1, 3))[0m
+     [31m[0m
+     [31m  expected: #<struct Point x=1, y=3>[0m
+     [31m       got: #<struct Point x=1, y=2>[0m
+     [31m[0m
+     [31m  (compared using ==)[0m
+     [31m[0m
+     [31m  Diff:[0m[0m
+     [31m  [0m[34m@@ -1 +1 @@[0m
+     [31m  [0m[31m-"#<struct Point x=1, y=3>"[0m
+     [31m  [0m[32m+"#<struct Point x=1, y=2>"[0m
+     [31m  [0m[0m
+     [36m# ./spec/diffs_spec.rb:41:in 'block (2 levels) in <top (required)>'[0m
+
+  9) diffs diffs Arrays of Strings as their lines
+     [31mFailure/Error: expect(%w[apple banana cherry]).to eq(%w[apple blueberry cherry])[0m
+     [31m[0m
+     [31m  expected: ["apple", "blueberry", "cherry"][0m
+     [31m       got: ["apple", "banana", "cherry"][0m
+     [31m[0m
+     [31m  (compared using ==)[0m
+     [36m# ./spec/diffs_spec.rb:45:in 'block (2 levels) in <top (required)>'[0m
+
+  10) diffs prints no diff for one-line Strings
+      [31mFailure/Error: expect("short").to eq("shorter")[0m
+      [31m[0m
+      [31m  expected: "shorter"[0m
+      [31m       got: "short"[0m
+      [31m[0m
+      [31m  (compared using ==)[0m
+      [36m# ./spec/diffs_spec.rb:49:in 'block (2 levels) in <top (required)>'[0m
+
+  11) diffs prints no diff for numbers
+      [31mFailure/Error: expect(41).to eq(42)[0m
+      [31m[0m
+      [31m  expected: 42[0m
+      [31m       got: 41[0m
+      [31m[0m
+      [31m  (compared using ==)[0m
+      [36m# ./spec/diffs_spec.rb:53:in 'block (2 levels) in <top (required)>'[0m
+
+  12) diffs diffs what include was given against the Hash
+      [31mFailure/Error: expect({ a: 1, b: 2 }).to include(a: 1, c: 3)[0m
+      [31m[0m
+      [31m  expected {a: 1, b: 2} to include {c: 3}[0m
+      [31m  Diff:[0m[0m
+      [31m  [0m[34m@@ -1,2 +1,2 @@[0m
+      [31m  [0m[0m :a => 1,[0m
+      [31m  [0m[31m-:c => 3,[0m
+      [31m  [0m[32m+:b => 2,[0m
+      [31m  [0m[0m
+      [36m# ./spec/diffs_spec.rb:57:in 'block (2 levels) in <top (required)>'[0m
+
+  13) diffs diffs a multi-line String against a pattern
+      [31mFailure/Error: expect("first\nsecond").to match(/first\nthird/)[0m
+      [31m[0m
+      [31m  expected "first\nsecond" to match /first\nthird/[0m
+      [31m  Diff:[0m[0m
+      [31m  [0m[34m@@ -1 +1,2 @@[0m
+      [31m  [0m[31m-/first\nthird/[0m
+      [31m  [0m[32m+first[0m
+      [31m  [0m[32m+second[0m
+      [31m  [0m[0m
+      [36m# ./spec/diffs_spec.rb:61:in 'block (2 levels) in <top (required)>'[0m
+
+Finished in N seconds (files took N seconds to load)
+[31m13 examples, 13 failures[0m
+
+Failed examples:
+
+[31mrspec ./spec/diffs_spec.rb:4[0m [36m# diffs shows one hunk for a change in a multi-line String[0m
+[31mrspec ./spec/diffs_spec.rb:8[0m [36m# diffs shows separate hunks for changes far apart[0m
+[31mrspec ./spec/diffs_spec.rb:16[0m [36m# diffs merges hunks whose context overlaps[0m
+[31mrspec ./spec/diffs_spec.rb:24[0m [36m# diffs pairs lines as diff-lcs does when two pairings are equally long[0m
+[31mrspec ./spec/diffs_spec.rb:28[0m [36m# diffs shows added and removed lines at the ends[0m
+[31mrspec ./spec/diffs_spec.rb:32[0m [36m# diffs diffs a Hash by its sorted keys[0m
+[31mrspec ./spec/diffs_spec.rb:36[0m [36m# diffs diffs an Array[0m
+[31mrspec ./spec/diffs_spec.rb:40[0m [36m# diffs diffs a Struct through pretty_print[0m
+[31mrspec ./spec/diffs_spec.rb:44[0m [36m# diffs diffs Arrays of Strings as their lines[0m
+[31mrspec ./spec/diffs_spec.rb:48[0m [36m# diffs prints no diff for one-line Strings[0m
+[31mrspec ./spec/diffs_spec.rb:52[0m [36m# diffs prints no diff for numbers[0m
+[31mrspec ./spec/diffs_spec.rb:56[0m [36m# diffs diffs what include was given against the Hash[0m
+[31mrspec ./spec/diffs_spec.rb:60[0m [36m# diffs diffs a multi-line String against a pattern[0m
+exit 1

@@ -1,0 +1,10 @@
+
+Money
+  adds cents
+  formats dollars
+  with zero
+    formats zero
+
+Finished in N seconds (files took N seconds to load)
+3 examples, 0 failures
+exit 0

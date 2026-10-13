@@ -1,0 +1,10 @@
+
+an interrupted run
+  runs the first example
+
+RSpec is shutting down and will print the summary report... Interrupt again to force quit (warning: at_exit hooks will be skipped if you force quit).
+  is interrupted while it runs
+
+Finished in N seconds (files took N seconds to load)
+2 examples, 0 failures
+exit 1

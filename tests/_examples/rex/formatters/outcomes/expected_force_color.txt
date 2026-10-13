@@ -1,0 +1,45 @@
+[32m.[0m[31mF[0m[33m*[0m[33m*[0m[32m.[0m[31mF[0m
+
+Pending: (Failures listed here are expected and do not affect your suite's status)
+
+  1) a cart applies a coupon
+     [36m# the coupon rules[0m
+     [33mFailure/Error: expect(10 - 1).to eq(8)[0m
+     [33m[0m
+     [33m  expected: 8[0m
+     [33m       got: 9[0m
+     [33m[0m
+     [33m  (compared using ==)[0m
+     [36m# ./spec/outcomes_spec.rb:12:in 'block (2 levels) in <top (required)>'[0m
+[33m
+  2) a cart ships to a second address[0m
+     [36m# Not yet implemented[0m
+[36m     # ./spec/outcomes_spec.rb:15
+[0m
+
+Failures:
+
+  1) a cart adds an item
+     [31mFailure/Error: expect([:apple].size).to eq(2)[0m
+     [31m[0m
+     [31m  expected: 2[0m
+     [31m       got: 1[0m
+     [31m[0m
+     [31m  (compared using ==)[0m
+     [36m# ./spec/outcomes_spec.rb:7:in 'block (2 levels) in <top (required)>'[0m
+
+  2) a cart when checking out sends a receipt
+     [31mFailure/Error: raise ArgumentError, "no email address on file"[0m
+     [31m[0m
+     [31mArgumentError:[0m
+     [31m  no email address on file[0m
+     [36m# ./spec/outcomes_spec.rb:23:in 'block (3 levels) in <top (required)>'[0m
+
+Finished in N seconds (files took N seconds to load)
+[31m6 examples, 2 failures, 2 pending[0m
+
+Failed examples:
+
+[31mrspec ./spec/outcomes_spec.rb:6[0m [36m# a cart adds an item[0m
+[31mrspec ./spec/outcomes_spec.rb:22[0m [36m# a cart when checking out sends a receipt[0m
+exit 1

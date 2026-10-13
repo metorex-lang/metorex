@@ -1,0 +1,24 @@
+
+Randomized with seed 5
+
+parsing
+  reads a string
+  reads a list
+  reads a number
+  with nested input
+    reads a nested list
+    reads a nested map
+
+validation
+  rejects an empty name
+  accepts a short name
+
+formatting
+  writes a string
+  writes a number
+
+Finished in N seconds (files took N seconds to load)
+9 examples, 0 failures
+
+Randomized with seed 5
+exit 0

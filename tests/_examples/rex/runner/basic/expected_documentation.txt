@@ -1,0 +1,48 @@
+
+Calculator
+  adds two numbers
+  reports a wrong sum (FAILED - 1)
+  when dividing
+    divides evenly
+    raises on zero (FAILED - 2)
+    is not written yet (PENDING: Not yet implemented)
+    is turned off (PENDING: Temporarily skipped with xit)
+
+Pending: (Failures listed here are expected and do not affect your suite's status)
+
+  1) Calculator when dividing is not written yet
+     # Not yet implemented
+     # ./spec/calculator_spec.rb:26
+
+  2) Calculator when dividing is turned off
+     # Temporarily skipped with xit
+     # ./spec/calculator_spec.rb:28
+
+Failures:
+
+  1) Calculator reports a wrong sum
+     Failure/Error: expect(calculator.add(2, 2)).to eq(5)
+
+       expected: 5
+            got: 4
+
+       (compared using ==)
+     # ./spec/calculator_spec.rb:14:in 'block (2 levels) in <top (required)>'
+
+  2) Calculator when dividing raises on zero
+     Failure/Error: def divide(a, b) = a / b
+
+     ZeroDivisionError:
+       divided by 0
+     # ./spec/calculator_spec.rb:3:in 'Integer#/'
+     # ./spec/calculator_spec.rb:3:in 'Calculator#divide'
+     # ./spec/calculator_spec.rb:23:in 'block (3 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+6 examples, 2 failures, 2 pending
+
+Failed examples:
+
+rspec ./spec/calculator_spec.rb:13 # Calculator reports a wrong sum
+rspec ./spec/calculator_spec.rb:22 # Calculator when dividing raises on zero
+exit 1

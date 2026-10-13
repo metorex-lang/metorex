@@ -1,0 +1,10 @@
+Run options: include {full_description: /formats/}
+
+Money
+  formats dollars
+  with zero
+    formats zero
+
+Finished in N seconds (files took N seconds to load)
+2 examples, 0 failures
+exit 0

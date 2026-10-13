@@ -1,0 +1,65 @@
+...........**F*******..
+
+Pending: (Failures listed here are expected and do not affect your suite's status)
+
+  1) pending and skipped is pending with a reason
+     # waiting on refunds
+     Failure/Error: expect(1).to eq(2)
+
+       expected: 2
+            got: 1
+
+       (compared using ==)
+     # ./spec/groups_spec.rb:57:in 'block (2 levels) in <top (required)>'
+
+  2) pending and skipped calls pending in the body
+     # rates are not final
+     Failure/Error: expect(0.1 + 0.2).to eq(0.3)
+
+       expected: 0.3
+            got: 0.30000000000000004
+
+       (compared using ==)
+     # ./spec/groups_spec.rb:62:in 'block (2 levels) in <top (required)>'
+
+  3) pending and skipped calls skip in the body
+     # needs a network
+     # ./spec/groups_spec.rb:70
+
+  4) pending and skipped skips through metadata
+     # flaky on CI
+     # ./spec/groups_spec.rb:75
+
+  5) pending and skipped is turned off with xspecify
+     # Temporarily skipped with xspecify
+     # ./spec/groups_spec.rb:79
+
+  6) pending and skipped is turned off with xexample
+     # Temporarily skipped with xexample
+     # ./spec/groups_spec.rb:82
+
+  7) pending and skipped is skipped with no reason
+     # No reason given
+     # ./spec/groups_spec.rb:85
+
+  8) a group turned off with xdescribe does not run
+     # Temporarily skipped with xdescribe
+     # ./spec/groups_spec.rb:90
+
+  9) a group turned off with xcontext does not run either
+     # Temporarily skipped with xcontext
+     # ./spec/groups_spec.rb:96
+
+Failures:
+
+  1) pending and skipped passes while pending FIXED
+     Expected pending 'this one works' to fail. No error was raised.
+     # ./spec/groups_spec.rb:65
+
+Finished in N seconds (files took N seconds to load)
+23 examples, 1 failure, 9 pending
+
+Failed examples:
+
+rspec ./spec/groups_spec.rb:65 # pending and skipped passes while pending
+exit 1

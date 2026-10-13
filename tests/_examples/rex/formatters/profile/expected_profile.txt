@@ -1,0 +1,9 @@
+.
+
+Top 1 slowest examples (N seconds, N% of total time):
+  a report totals the rows
+    N seconds ./spec/profile_spec.rb:2
+
+Finished in N seconds (files took N seconds to load)
+1 example, 0 failures
+exit 0

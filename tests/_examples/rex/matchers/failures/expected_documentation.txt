@@ -1,0 +1,740 @@
+
+block matchers
+  raise_error with a class (FAILED - 1)
+  raise_error nothing raised (FAILED - 2)
+  raise_error message (FAILED - 3)
+  raise_error regexp (FAILED - 4)
+  raise_error negated (FAILED - 5)
+  throw_symbol (FAILED - 6)
+  throw_symbol nothing (FAILED - 7)
+  change (FAILED - 8)
+  change from to (FAILED - 9)
+  change not (FAILED - 10)
+  change by_at_least (FAILED - 11)
+  output (FAILED - 12)
+  output to stderr (FAILED - 13)
+  yield_control (FAILED - 14)
+  yield_control count (FAILED - 15)
+  yield_with_args (FAILED - 16)
+  yield_with_no_args (FAILED - 17)
+  yield_successive_args (FAILED - 18)
+
+collection matchers
+  include (FAILED - 19)
+  include several (FAILED - 20)
+  include negated (FAILED - 21)
+  include string (FAILED - 22)
+  include hash pair (FAILED - 23)
+  contain_exactly (FAILED - 24)
+  match_array (FAILED - 25)
+  contain_exactly negated (FAILED - 26)
+  start_with (FAILED - 27)
+  end_with array (FAILED - 28)
+  all (FAILED - 29)
+  match regexp (FAILED - 30)
+  match nested (FAILED - 31)
+  cover (FAILED - 32)
+
+comparison matchers
+  be > (FAILED - 33)
+  be <= (FAILED - 34)
+  be > negated (FAILED - 35)
+  be == (FAILED - 36)
+  be_between (FAILED - 37)
+  be_between exclusive (FAILED - 38)
+  be_within (FAILED - 39)
+  be_within percent (FAILED - 40)
+  be_a (FAILED - 41)
+  be_an_instance_of (FAILED - 42)
+  be_kind_of negated (FAILED - 43)
+  respond_to (FAILED - 44)
+  respond_to with arity
+
+composed and custom matchers
+  satisfy (FAILED - 45)
+  satisfy with a description (FAILED - 46)
+  have_attributes (FAILED - 47)
+  and (FAILED - 48)
+  or (FAILED - 49)
+  include with a composed matcher (FAILED - 50)
+  operator == (FAILED - 51)
+  a message string (FAILED - 52)
+  a message proc (FAILED - 53)
+  aggregate_failures (FAILED - 54)
+
+defined matchers
+  default messages (FAILED - 55)
+  default negated (FAILED - 56)
+  custom messages (FAILED - 57)
+  custom negated (FAILED - 58)
+  is expected to be a multiple of 3
+  is expected to be a single word
+
+equality matchers
+  eq (FAILED - 59)
+  eq negated (FAILED - 60)
+  eq strings (FAILED - 61)
+  eq arrays (FAILED - 62)
+  eq hashes (FAILED - 63)
+  eq multi-line strings (FAILED - 64)
+  eql (FAILED - 65)
+  eql negated (FAILED - 66)
+  equal true (FAILED - 67)
+  equal nil (FAILED - 68)
+  be (FAILED - 69)
+  be negated (FAILED - 70)
+  be_truthy (FAILED - 71)
+  be_falsey (FAILED - 72)
+  be_nil (FAILED - 73)
+  be_nil negated (FAILED - 74)
+
+predicate matchers
+  be_empty (FAILED - 75)
+  be_empty negated (FAILED - 76)
+  be_delivered (FAILED - 77)
+  have_items (FAILED - 78)
+  be_overdue with an argument (FAILED - 79)
+  be_a predicate it lacks (FAILED - 80)
+  have_key (FAILED - 81)
+
+Failures:
+
+  1) block matchers raise_error with a class
+     Failure/Error: it("raise_error with a class") { expect { 1 / 0 }.to raise_error(ArgumentError) }
+
+       expected ArgumentError, got #<ZeroDivisionError: divided by 0> with backtrace:
+         # ./spec/blocks_spec.rb:2:in 'Integer#/'
+         # ./spec/blocks_spec.rb:2:in 'block (3 levels) in <top (required)>'
+         # ./spec/blocks_spec.rb:2:in 'block (2 levels) in <top (required)>'
+     # ./spec/blocks_spec.rb:2:in 'block (2 levels) in <top (required)>'
+
+  2) block matchers raise_error nothing raised
+     Failure/Error: it("raise_error nothing raised") { expect { 1 }.to raise_error(ZeroDivisionError) }
+       expected ZeroDivisionError but nothing was raised
+     # ./spec/blocks_spec.rb:3:in 'block (2 levels) in <top (required)>'
+
+  3) block matchers raise_error message
+     Failure/Error: it("raise_error message") { expect { raise "boom" }.to raise_error("bang") }
+
+       expected Exception with "bang", got #<RuntimeError: boom> with backtrace:
+         # ./spec/blocks_spec.rb:4:in 'block (3 levels) in <top (required)>'
+         # ./spec/blocks_spec.rb:4:in 'block (2 levels) in <top (required)>'
+     # ./spec/blocks_spec.rb:4:in 'block (2 levels) in <top (required)>'
+
+  4) block matchers raise_error regexp
+     Failure/Error: it("raise_error regexp") { expect { raise ArgumentError, "bad value" }.to raise_error(ArgumentError, /missing/) }
+
+       expected ArgumentError with message matching /missing/, got #<ArgumentError: bad value> with backtrace:
+         # ./spec/blocks_spec.rb:5:in 'block (3 levels) in <top (required)>'
+         # ./spec/blocks_spec.rb:5:in 'block (2 levels) in <top (required)>'
+     # ./spec/blocks_spec.rb:5:in 'block (2 levels) in <top (required)>'
+
+  5) block matchers raise_error negated
+     Failure/Error: it("raise_error negated") { expect { raise "boom" }.not_to raise_error }
+
+       expected no Exception, got #<RuntimeError: boom> with backtrace:
+         # ./spec/blocks_spec.rb:6:in 'block (3 levels) in <top (required)>'
+         # ./spec/blocks_spec.rb:6:in 'block (2 levels) in <top (required)>'
+     # ./spec/blocks_spec.rb:6:in 'block (2 levels) in <top (required)>'
+
+  6) block matchers throw_symbol
+     Failure/Error: it("throw_symbol") { expect { throw :done }.to throw_symbol(:halt) }
+       expected :halt to be thrown, got :done
+     # ./spec/blocks_spec.rb:7:in 'block (2 levels) in <top (required)>'
+
+  7) block matchers throw_symbol nothing
+     Failure/Error: it("throw_symbol nothing") { expect { 1 }.to throw_symbol }
+       expected a Symbol to be thrown, got nothing
+     # ./spec/blocks_spec.rb:8:in 'block (2 levels) in <top (required)>'
+
+  8) block matchers change
+     Failure/Error: expect { list << 1 }.to change { list.size }.by(2)
+       expected `list.size` to have changed by 2, but was changed by 1
+     # ./spec/blocks_spec.rb:11:in 'block (2 levels) in <top (required)>'
+
+  9) block matchers change from to
+     Failure/Error: expect { count += 1 }.to change { count }.from(0).to(2)
+       expected `count` to have initially been 0, but was 1
+     # ./spec/blocks_spec.rb:15:in 'block (2 levels) in <top (required)>'
+
+  10) block matchers change not
+      Failure/Error: expect { list << 1 }.not_to change { list.size }
+        expected `list.size` not to have changed, but did change from 0 to 1
+      # ./spec/blocks_spec.rb:19:in 'block (2 levels) in <top (required)>'
+
+  11) block matchers change by_at_least
+      Failure/Error: expect { total += 1 }.to change { total }.by_at_least(2)
+        expected `total` to have changed by at least 2, but was changed by 1
+      # ./spec/blocks_spec.rb:23:in 'block (2 levels) in <top (required)>'
+
+  12) block matchers output
+      Failure/Error: it("output") { expect { print "hello" }.to output("goodbye").to_stdout }
+        expected block to output "goodbye" to stdout, but output "hello"
+      # ./spec/blocks_spec.rb:25:in 'block (2 levels) in <top (required)>'
+
+  13) block matchers output to stderr
+      Failure/Error: it("output to stderr") { expect { 1 }.to output.to_stderr }
+        expected block to output to stderr, but did not
+      # ./spec/blocks_spec.rb:26:in 'block (2 levels) in <top (required)>'
+
+  14) block matchers yield_control
+      Failure/Error: it("yield_control") { expect { |probe| [].each(&probe) }.to yield_control }
+        expected given block to yield control but did not yield
+      # ./spec/blocks_spec.rb:27:in 'block (2 levels) in <top (required)>'
+
+  15) block matchers yield_control count
+      Failure/Error: it("yield_control count") { expect { |probe| [1, 2].each(&probe) }.to yield_control.once }
+        expected given block to yield control once but yielded twice
+      # ./spec/blocks_spec.rb:28:in 'block (2 levels) in <top (required)>'
+
+  16) block matchers yield_with_args
+      Failure/Error: it("yield_with_args") { expect { |probe| [1].each(&probe) }.to yield_with_args(2) }
+
+        expected given block to yield with arguments, but yielded with unexpected arguments
+        expected: [2]
+             got: [1]
+      # ./spec/blocks_spec.rb:29:in 'block (2 levels) in <top (required)>'
+
+  17) block matchers yield_with_no_args
+      Failure/Error: it("yield_with_no_args") { expect { |probe| [1].each(&probe) }.to yield_with_no_args }
+        expected given block to yield with no arguments, but yielded with arguments: [1]
+      # ./spec/blocks_spec.rb:30:in 'block (2 levels) in <top (required)>'
+
+  18) block matchers yield_successive_args
+      Failure/Error: it("yield_successive_args") { expect { |probe| [1, 2].each(&probe) }.to yield_successive_args(1, 3) }
+
+        expected given block to yield successively with arguments, but yielded with unexpected arguments
+        expected: [1, 3]
+             got: [1, 2]
+      # ./spec/blocks_spec.rb:31:in 'block (2 levels) in <top (required)>'
+
+  19) collection matchers include
+      Failure/Error: it("include") { expect([1, 2, 3]).to include(4) }
+        expected [1, 2, 3] to include 4
+      # ./spec/collections_spec.rb:2:in 'block (2 levels) in <top (required)>'
+
+  20) collection matchers include several
+      Failure/Error: it("include several") { expect([1, 2, 3]).to include(4, 5) }
+        expected [1, 2, 3] to include 4 and 5
+      # ./spec/collections_spec.rb:3:in 'block (2 levels) in <top (required)>'
+
+  21) collection matchers include negated
+      Failure/Error: it("include negated") { expect([1, 2, 3]).not_to include(2) }
+        expected [1, 2, 3] not to include 2
+      # ./spec/collections_spec.rb:4:in 'block (2 levels) in <top (required)>'
+
+  22) collection matchers include string
+      Failure/Error: it("include string") { expect("checkout").to include("cart") }
+        expected "checkout" to include "cart"
+      # ./spec/collections_spec.rb:5:in 'block (2 levels) in <top (required)>'
+
+  23) collection matchers include hash pair
+      Failure/Error: it("include hash pair") { expect({ a: 1, b: 2 }).to include(c: 3) }
+
+        expected {a: 1, b: 2} to include {c: 3}
+        Diff:
+        @@ -1 +1,2 @@
+        -:c => 3,
+        +:a => 1,
+        +:b => 2,
+      # ./spec/collections_spec.rb:6:in 'block (2 levels) in <top (required)>'
+
+  24) collection matchers contain_exactly
+      Failure/Error: it("contain_exactly") { expect([1, 2, 3]).to contain_exactly(1, 2, 4) }
+
+        expected collection contained:  [1, 2, 4]
+        actual collection contained:    [1, 2, 3]
+        the missing elements were:      [4]
+        the extra elements were:        [3]
+      # ./spec/collections_spec.rb:7:in 'block (2 levels) in <top (required)>'
+
+  25) collection matchers match_array
+      Failure/Error: it("match_array") { expect([3, 1]).to match_array([1, 2, 3]) }
+
+        expected collection contained:  [1, 2, 3]
+        actual collection contained:    [1, 3]
+        the missing elements were:      [2]
+      # ./spec/collections_spec.rb:8:in 'block (2 levels) in <top (required)>'
+
+  26) collection matchers contain_exactly negated
+      Failure/Error: it("contain_exactly negated") { expect([1, 2]).not_to contain_exactly(2, 1) }
+        expected [1, 2] not to contain exactly 2 and 1
+      # ./spec/collections_spec.rb:9:in 'block (2 levels) in <top (required)>'
+
+  27) collection matchers start_with
+      Failure/Error: it("start_with") { expect("checkout").to start_with("cart") }
+        expected "checkout" to start with "cart"
+      # ./spec/collections_spec.rb:10:in 'block (2 levels) in <top (required)>'
+
+  28) collection matchers end_with array
+      Failure/Error: it("end_with array") { expect([1, 2, 3]).to end_with(2) }
+        expected [1, 2, 3] to end with 2
+      # ./spec/collections_spec.rb:11:in 'block (2 levels) in <top (required)>'
+
+  29) collection matchers all
+      Failure/Error: it("all") { expect([1, 2, 3]).to all(be_odd) }
+
+        expected [1, 2, 3] to all be odd
+
+           object at index 1 failed to match:
+              expected `2.odd?` to be truthy, got false
+      # ./spec/collections_spec.rb:12:in 'block (2 levels) in <top (required)>'
+
+  30) collection matchers match regexp
+      Failure/Error: it("match regexp") { expect("order 42").to match(/invoice \d+/) }
+
+        expected "order 42" to match /invoice \d+/
+        Diff:
+        @@ -1 +1 @@
+        -/invoice \d+/
+        +"order 42"
+      # ./spec/collections_spec.rb:13:in 'block (2 levels) in <top (required)>'
+
+  31) collection matchers match nested
+      Failure/Error: it("match nested") { expect({ id: 1, tags: ["a"] }).to match({ id: Integer, tags: [String, String] }) }
+
+        expected {id: 1, tags: ["a"]} to match {id: Integer, tags: [String, String]}
+        Diff:
+        @@ -1,2 +1,2 @@
+        -:id => Integer,
+        -:tags => [String, String],
+        +:id => 1,
+        +:tags => ["a"],
+      # ./spec/collections_spec.rb:14:in 'block (2 levels) in <top (required)>'
+
+  32) collection matchers cover
+      Failure/Error: it("cover") { expect(1..5).to cover(7) }
+        expected 1..5 to cover 7
+      # ./spec/collections_spec.rb:15:in 'block (2 levels) in <top (required)>'
+
+  33) comparison matchers be >
+      Failure/Error: it("be >") { expect(3).to be > 4 }
+
+        expected: > 4
+             got:   3
+      # ./spec/comparison_spec.rb:2:in 'block (2 levels) in <top (required)>'
+
+  34) comparison matchers be <=
+      Failure/Error: it("be <=") { expect(5).to be <= 4 }
+
+        expected: <= 4
+             got:    5
+      # ./spec/comparison_spec.rb:3:in 'block (2 levels) in <top (required)>'
+
+  35) comparison matchers be > negated
+      Failure/Error: it("be > negated") { expect(5).not_to be > 4 }
+        `expect(5).not_to be > 4` not only FAILED, it is a bit confusing.
+      # ./spec/comparison_spec.rb:4:in 'block (2 levels) in <top (required)>'
+
+  36) comparison matchers be ==
+      Failure/Error: it("be ==") { expect(5).to be == 4 }
+
+        expected: == 4
+             got:    5
+      # ./spec/comparison_spec.rb:5:in 'block (2 levels) in <top (required)>'
+
+  37) comparison matchers be_between
+      Failure/Error: it("be_between") { expect(10).to be_between(1, 5) }
+        expected 10 to be between 1 and 5 (inclusive)
+      # ./spec/comparison_spec.rb:6:in 'block (2 levels) in <top (required)>'
+
+  38) comparison matchers be_between exclusive
+      Failure/Error: it("be_between exclusive") { expect(5).to be_between(1, 5).exclusive }
+        expected 5 to be between 1 and 5 (exclusive)
+      # ./spec/comparison_spec.rb:7:in 'block (2 levels) in <top (required)>'
+
+  39) comparison matchers be_within
+      Failure/Error: it("be_within") { expect(3.3).to be_within(0.1).of(3.0) }
+        expected 3.3 to be within 0.1 of 3.0
+      # ./spec/comparison_spec.rb:8:in 'block (2 levels) in <top (required)>'
+
+  40) comparison matchers be_within percent
+      Failure/Error: it("be_within percent") { expect(120).to be_within(10).percent_of(100) }
+        expected 120 to be within 10% of 100
+      # ./spec/comparison_spec.rb:9:in 'block (2 levels) in <top (required)>'
+
+  41) comparison matchers be_a
+      Failure/Error: it("be_a") { expect("text").to be_a(Integer) }
+        expected "text" to be a kind of Integer
+      # ./spec/comparison_spec.rb:10:in 'block (2 levels) in <top (required)>'
+
+  42) comparison matchers be_an_instance_of
+      Failure/Error: it("be_an_instance_of") { expect(1).to be_an_instance_of(Numeric) }
+        expected 1 to be an instance of Numeric
+      # ./spec/comparison_spec.rb:11:in 'block (2 levels) in <top (required)>'
+
+  43) comparison matchers be_kind_of negated
+      Failure/Error: it("be_kind_of negated") { expect(1).not_to be_kind_of(Integer) }
+        expected 1 not to be a kind of Integer
+      # ./spec/comparison_spec.rb:12:in 'block (2 levels) in <top (required)>'
+
+  44) comparison matchers respond_to
+      Failure/Error: it("respond_to") { expect("text").to respond_to(:shout) }
+        expected "text" to respond to :shout
+      # ./spec/comparison_spec.rb:13:in 'block (2 levels) in <top (required)>'
+
+  45) composed and custom matchers satisfy
+      Failure/Error: it("satisfy") { expect(3).to satisfy { |value| value > 5 } }
+        expected 3 to satisfy expression `value > 5`
+      # ./spec/composed_spec.rb:4:in 'block (2 levels) in <top (required)>'
+
+  46) composed and custom matchers satisfy with a description
+      Failure/Error: it("satisfy with a description") { expect(3).to satisfy("be large") { |value| value > 5 } }
+        expected 3 to be large
+      # ./spec/composed_spec.rb:5:in 'block (2 levels) in <top (required)>'
+
+  47) composed and custom matchers have_attributes
+      Failure/Error: it("have_attributes") { expect(Person.new("Ada", 36)).to have_attributes(name: "Ada", age: 37) }
+
+        expected #<struct Person name="Ada", age=36> to have attributes {age: 37, name: "Ada"} but had attributes {age: 36, name: "Ada"}
+        Diff:
+        @@ -1,2 +1,2 @@
+        -:age => 37,
+        +:age => 36,
+         :name => "Ada",
+      # ./spec/composed_spec.rb:6:in 'block (2 levels) in <top (required)>'
+
+  48) composed and custom matchers and
+      Failure/Error: it("and") { expect(5).to be_odd.and be > 6 }
+
+        expected: > 6
+             got:   5
+      # ./spec/composed_spec.rb:7:in 'block (2 levels) in <top (required)>'
+
+  49) composed and custom matchers or
+      Failure/Error: it("or") { expect(4).to be_odd.or be > 6 }
+
+           expected `4.odd?` to be truthy, got false
+
+        ...or:
+
+           expected: > 6
+                got:   4
+      # ./spec/composed_spec.rb:8:in 'block (2 levels) in <top (required)>'
+
+  50) composed and custom matchers include with a composed matcher
+      Failure/Error: it("include with a composed matcher") { expect(["apple"]).to include(a_string_matching(/pear/)) }
+
+        expected ["apple"] to include (a string matching /pear/)
+        Diff:
+        @@ -1 +1 @@
+        -[(a string matching /pear/)]
+        +["apple"]
+      # ./spec/composed_spec.rb:9:in 'block (2 levels) in <top (required)>'
+
+  51) composed and custom matchers operator ==
+      Failure/Error: it("operator ==") { expect(4).to be == 5 }
+
+        expected: == 5
+             got:    4
+      # ./spec/composed_spec.rb:10:in 'block (2 levels) in <top (required)>'
+
+  52) composed and custom matchers a message string
+      Failure/Error: it("a message string") { expect(4).to eq(5), "the total was off" }
+        the total was off
+      # ./spec/composed_spec.rb:11:in 'block (2 levels) in <top (required)>'
+
+  53) composed and custom matchers a message proc
+      Failure/Error: it("a message proc") { expect(4).to eq(5), -> { "computed message" } }
+        computed message
+      # ./spec/composed_spec.rb:12:in 'block (2 levels) in <top (required)>'
+
+  54) composed and custom matchers aggregate_failures
+      Got 2 failures from failure aggregation block "the totals".
+      # ./spec/composed_spec.rb:14:in 'block (2 levels) in <top (required)>'
+
+      54.1) Failure/Error: expect(1).to eq(2)
+
+              expected: 2
+                   got: 1
+
+              (compared using ==)
+            # ./spec/composed_spec.rb:15:in 'block (3 levels) in <top (required)>'
+
+      54.2) Failure/Error: expect(3).to eq(4)
+
+              expected: 4
+                   got: 3
+
+              (compared using ==)
+            # ./spec/composed_spec.rb:16:in 'block (3 levels) in <top (required)>'
+
+  55) defined matchers default messages
+      Failure/Error: it("default messages") { expect(10).to be_a_multiple_of(3) }
+        expected 10 to be a multiple of 3
+      # ./spec/composed_spec.rb:33:in 'block (2 levels) in <top (required)>'
+
+  56) defined matchers default negated
+      Failure/Error: it("default negated") { expect(9).not_to be_a_multiple_of(3) }
+        expected 9 not to be a multiple of 3
+      # ./spec/composed_spec.rb:34:in 'block (2 levels) in <top (required)>'
+
+  57) defined matchers custom messages
+      Failure/Error: it("custom messages") { expect("two words").to be_a_word }
+        expected "two words" to be one word
+      # ./spec/composed_spec.rb:35:in 'block (2 levels) in <top (required)>'
+
+  58) defined matchers custom negated
+      Failure/Error: it("custom negated") { expect("word").not_to be_a_word }
+        expected "word" not to be one word
+      # ./spec/composed_spec.rb:36:in 'block (2 levels) in <top (required)>'
+
+  59) equality matchers eq
+      Failure/Error: it("eq") { expect(4).to eq(5) }
+
+        expected: 5
+             got: 4
+
+        (compared using ==)
+      # ./spec/equality_spec.rb:2:in 'block (2 levels) in <top (required)>'
+
+  60) equality matchers eq negated
+      Failure/Error: it("eq negated") { expect(5).not_to eq(5) }
+
+        expected: value != 5
+             got: 5
+
+        (compared using ==)
+      # ./spec/equality_spec.rb:3:in 'block (2 levels) in <top (required)>'
+
+  61) equality matchers eq strings
+      Failure/Error: it("eq strings") { expect("checkout").to eq("check out") }
+
+        expected: "check out"
+             got: "checkout"
+
+        (compared using ==)
+      # ./spec/equality_spec.rb:4:in 'block (2 levels) in <top (required)>'
+
+  62) equality matchers eq arrays
+      Failure/Error: it("eq arrays") { expect([1, 2, 3]).to eq([1, 2, 4]) }
+
+        expected: [1, 2, 4]
+             got: [1, 2, 3]
+
+        (compared using ==)
+      # ./spec/equality_spec.rb:5:in 'block (2 levels) in <top (required)>'
+
+  63) equality matchers eq hashes
+      Failure/Error: it("eq hashes") { expect({ name: "Ada", role: :admin }).to eq({ name: "Ada", role: :owner }) }
+
+        expected: {name: "Ada", role: :owner}
+             got: {name: "Ada", role: :admin}
+
+        (compared using ==)
+
+        Diff:
+        @@ -1,2 +1,2 @@
+         :name => "Ada",
+        -:role => :owner,
+        +:role => :admin,
+      # ./spec/equality_spec.rb:6:in 'block (2 levels) in <top (required)>'
+
+  64) equality matchers eq multi-line strings
+      Failure/Error: it("eq multi-line strings") { expect("line one\nline two\nline three\n").to eq("line one\nline 2\nline three\n") }
+
+        expected: "line one\nline 2\nline three\n"
+             got: "line one\nline two\nline three\n"
+
+        (compared using ==)
+
+        Diff:
+        @@ -1,3 +1,3 @@
+         line one
+        -line 2
+        +line two
+         line three
+      # ./spec/equality_spec.rb:7:in 'block (2 levels) in <top (required)>'
+
+  65) equality matchers eql
+      Failure/Error: it("eql") { expect(1).to eql(1.0) }
+
+        expected: 1.0
+             got: 1
+
+        (compared using eql?)
+      # ./spec/equality_spec.rb:8:in 'block (2 levels) in <top (required)>'
+
+  66) equality matchers eql negated
+      Failure/Error: it("eql negated") { expect(1).not_to eql(1) }
+
+        expected: value != 1
+             got: 1
+
+        (compared using eql?)
+      # ./spec/equality_spec.rb:9:in 'block (2 levels) in <top (required)>'
+
+  67) equality matchers equal true
+      Failure/Error: it("equal true") { expect(false).to equal(true) }
+
+        expected true
+             got false
+      # ./spec/equality_spec.rb:10:in 'block (2 levels) in <top (required)>'
+
+  68) equality matchers equal nil
+      Failure/Error: it("equal nil") { expect(1).to be(nil) }
+
+        expected nil
+             got #<Integer:3> => 1
+      # ./spec/equality_spec.rb:11:in 'block (2 levels) in <top (required)>'
+
+  69) equality matchers be
+      Failure/Error: it("be") { expect(nil).to be }
+        expected nil to evaluate to true
+      # ./spec/equality_spec.rb:12:in 'block (2 levels) in <top (required)>'
+
+  70) equality matchers be negated
+      Failure/Error: it("be negated") { expect(1).not_to be }
+        expected 1 to evaluate to false
+      # ./spec/equality_spec.rb:13:in 'block (2 levels) in <top (required)>'
+
+  71) equality matchers be_truthy
+      Failure/Error: it("be_truthy") { expect(nil).to be_truthy }
+
+        expected: truthy value
+             got: nil
+      # ./spec/equality_spec.rb:14:in 'block (2 levels) in <top (required)>'
+
+  72) equality matchers be_falsey
+      Failure/Error: it("be_falsey") { expect(1).to be_falsey }
+
+        expected: falsey value
+             got: 1
+      # ./spec/equality_spec.rb:15:in 'block (2 levels) in <top (required)>'
+
+  73) equality matchers be_nil
+      Failure/Error: it("be_nil") { expect(1).to be_nil }
+
+        expected: nil
+             got: 1
+      # ./spec/equality_spec.rb:16:in 'block (2 levels) in <top (required)>'
+
+  74) equality matchers be_nil negated
+      Failure/Error: it("be_nil negated") { expect(nil).not_to be_nil }
+
+        expected: not nil
+             got: nil
+      # ./spec/equality_spec.rb:17:in 'block (2 levels) in <top (required)>'
+
+  75) predicate matchers be_empty
+      Failure/Error: it("be_empty") { expect([1]).to be_empty }
+        expected `[1].empty?` to be truthy, got false
+      # ./spec/predicates_spec.rb:8:in 'block (2 levels) in <top (required)>'
+
+  76) predicate matchers be_empty negated
+      Failure/Error: it("be_empty negated") { expect([]).not_to be_empty }
+        expected `[].empty?` to be falsey, got true
+      # ./spec/predicates_spec.rb:9:in 'block (2 levels) in <top (required)>'
+
+  77) predicate matchers be_delivered
+      Failure/Error: it("be_delivered") { expect(Shipment.new([])).to be_delivered }
+        expected `#<struct Shipment items=[]>.delivered?` to be truthy, got false
+      # ./spec/predicates_spec.rb:10:in 'block (2 levels) in <top (required)>'
+
+  78) predicate matchers have_items
+      Failure/Error: it("have_items") { expect(Shipment.new([])).to have_items }
+        expected `#<struct Shipment items=[]>.has_items?` to be truthy, got false
+      # ./spec/predicates_spec.rb:11:in 'block (2 levels) in <top (required)>'
+
+  79) predicate matchers be_overdue with an argument
+      Failure/Error: it("be_overdue with an argument") { expect(Shipment.new([])).to be_overdue(5) }
+        expected `#<struct Shipment items=[]>.overdue?(5)` to be truthy, got false
+      # ./spec/predicates_spec.rb:12:in 'block (2 levels) in <top (required)>'
+
+  80) predicate matchers be_a predicate it lacks
+      Failure/Error: it("be_a predicate it lacks") { expect(Shipment.new([])).to be_frozen_solid }
+        expected #<struct Shipment items=[]> to respond to `frozen_solid?`
+      # ./spec/predicates_spec.rb:13:in 'block (2 levels) in <top (required)>'
+
+  81) predicate matchers have_key
+      Failure/Error: it("have_key") { expect({ a: 1 }).to have_key(:b) }
+        expected `{a: 1}.has_key?(:b)` to be truthy, got false
+      # ./spec/predicates_spec.rb:14:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+84 examples, 81 failures
+
+Failed examples:
+
+rspec ./spec/blocks_spec.rb:2 # block matchers raise_error with a class
+rspec ./spec/blocks_spec.rb:3 # block matchers raise_error nothing raised
+rspec ./spec/blocks_spec.rb:4 # block matchers raise_error message
+rspec ./spec/blocks_spec.rb:5 # block matchers raise_error regexp
+rspec ./spec/blocks_spec.rb:6 # block matchers raise_error negated
+rspec ./spec/blocks_spec.rb:7 # block matchers throw_symbol
+rspec ./spec/blocks_spec.rb:8 # block matchers throw_symbol nothing
+rspec ./spec/blocks_spec.rb:9 # block matchers change
+rspec ./spec/blocks_spec.rb:13 # block matchers change from to
+rspec ./spec/blocks_spec.rb:17 # block matchers change not
+rspec ./spec/blocks_spec.rb:21 # block matchers change by_at_least
+rspec ./spec/blocks_spec.rb:25 # block matchers output
+rspec ./spec/blocks_spec.rb:26 # block matchers output to stderr
+rspec ./spec/blocks_spec.rb:27 # block matchers yield_control
+rspec ./spec/blocks_spec.rb:28 # block matchers yield_control count
+rspec ./spec/blocks_spec.rb:29 # block matchers yield_with_args
+rspec ./spec/blocks_spec.rb:30 # block matchers yield_with_no_args
+rspec ./spec/blocks_spec.rb:31 # block matchers yield_successive_args
+rspec ./spec/collections_spec.rb:2 # collection matchers include
+rspec ./spec/collections_spec.rb:3 # collection matchers include several
+rspec ./spec/collections_spec.rb:4 # collection matchers include negated
+rspec ./spec/collections_spec.rb:5 # collection matchers include string
+rspec ./spec/collections_spec.rb:6 # collection matchers include hash pair
+rspec ./spec/collections_spec.rb:7 # collection matchers contain_exactly
+rspec ./spec/collections_spec.rb:8 # collection matchers match_array
+rspec ./spec/collections_spec.rb:9 # collection matchers contain_exactly negated
+rspec ./spec/collections_spec.rb:10 # collection matchers start_with
+rspec ./spec/collections_spec.rb:11 # collection matchers end_with array
+rspec ./spec/collections_spec.rb:12 # collection matchers all
+rspec ./spec/collections_spec.rb:13 # collection matchers match regexp
+rspec ./spec/collections_spec.rb:14 # collection matchers match nested
+rspec ./spec/collections_spec.rb:15 # collection matchers cover
+rspec ./spec/comparison_spec.rb:2 # comparison matchers be >
+rspec ./spec/comparison_spec.rb:3 # comparison matchers be <=
+rspec ./spec/comparison_spec.rb:4 # comparison matchers be > negated
+rspec ./spec/comparison_spec.rb:5 # comparison matchers be ==
+rspec ./spec/comparison_spec.rb:6 # comparison matchers be_between
+rspec ./spec/comparison_spec.rb:7 # comparison matchers be_between exclusive
+rspec ./spec/comparison_spec.rb:8 # comparison matchers be_within
+rspec ./spec/comparison_spec.rb:9 # comparison matchers be_within percent
+rspec ./spec/comparison_spec.rb:10 # comparison matchers be_a
+rspec ./spec/comparison_spec.rb:11 # comparison matchers be_an_instance_of
+rspec ./spec/comparison_spec.rb:12 # comparison matchers be_kind_of negated
+rspec ./spec/comparison_spec.rb:13 # comparison matchers respond_to
+rspec ./spec/composed_spec.rb:4 # composed and custom matchers satisfy
+rspec ./spec/composed_spec.rb:5 # composed and custom matchers satisfy with a description
+rspec ./spec/composed_spec.rb:6 # composed and custom matchers have_attributes
+rspec ./spec/composed_spec.rb:7 # composed and custom matchers and
+rspec ./spec/composed_spec.rb:8 # composed and custom matchers or
+rspec ./spec/composed_spec.rb:9 # composed and custom matchers include with a composed matcher
+rspec ./spec/composed_spec.rb:10 # composed and custom matchers operator ==
+rspec ./spec/composed_spec.rb:11 # composed and custom matchers a message string
+rspec ./spec/composed_spec.rb:12 # composed and custom matchers a message proc
+rspec ./spec/composed_spec.rb:13 # composed and custom matchers aggregate_failures
+rspec ./spec/composed_spec.rb:33 # defined matchers default messages
+rspec ./spec/composed_spec.rb:34 # defined matchers default negated
+rspec ./spec/composed_spec.rb:35 # defined matchers custom messages
+rspec ./spec/composed_spec.rb:36 # defined matchers custom negated
+rspec ./spec/equality_spec.rb:2 # equality matchers eq
+rspec ./spec/equality_spec.rb:3 # equality matchers eq negated
+rspec ./spec/equality_spec.rb:4 # equality matchers eq strings
+rspec ./spec/equality_spec.rb:5 # equality matchers eq arrays
+rspec ./spec/equality_spec.rb:6 # equality matchers eq hashes
+rspec ./spec/equality_spec.rb:7 # equality matchers eq multi-line strings
+rspec ./spec/equality_spec.rb:8 # equality matchers eql
+rspec ./spec/equality_spec.rb:9 # equality matchers eql negated
+rspec ./spec/equality_spec.rb:10 # equality matchers equal true
+rspec ./spec/equality_spec.rb:11 # equality matchers equal nil
+rspec ./spec/equality_spec.rb:12 # equality matchers be
+rspec ./spec/equality_spec.rb:13 # equality matchers be negated
+rspec ./spec/equality_spec.rb:14 # equality matchers be_truthy
+rspec ./spec/equality_spec.rb:15 # equality matchers be_falsey
+rspec ./spec/equality_spec.rb:16 # equality matchers be_nil
+rspec ./spec/equality_spec.rb:17 # equality matchers be_nil negated
+rspec ./spec/predicates_spec.rb:8 # predicate matchers be_empty
+rspec ./spec/predicates_spec.rb:9 # predicate matchers be_empty negated
+rspec ./spec/predicates_spec.rb:10 # predicate matchers be_delivered
+rspec ./spec/predicates_spec.rb:11 # predicate matchers have_items
+rspec ./spec/predicates_spec.rb:12 # predicate matchers be_overdue with an argument
+rspec ./spec/predicates_spec.rb:13 # predicate matchers be_a predicate it lacks
+rspec ./spec/predicates_spec.rb:14 # predicate matchers have_key
+exit 1

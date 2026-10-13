@@ -448,6 +448,26 @@ impl VirtualMachine {
             return self.call_native_function(&fn_name, vec![], position);
         }
 
+        // A bare name nothing answers is handed to a `method_missing` the
+        // program wrote, as a call with no receiver would be.
+        if !name.starts_with(char::is_uppercase)
+            && let Some((owner, handler)) = self.lookup_method(&receiver, "method_missing")
+            && !handler.is_undefined
+            && crate::vm::native_methods::object_methods::written_by_program(&handler)
+        {
+            let depth = self.call_stack.len();
+            self.bare_names_missing.push((name.to_string(), depth));
+            let answered = self.invoke_method(
+                owner,
+                handler,
+                receiver,
+                vec![Object::symbol(name.to_string())],
+                position,
+            );
+            self.bare_names_missing.pop();
+            return answered;
+        }
+
         // A constant no scope holds is asked of `const_missing` on the class
         // or module the code was written in.
         if name.starts_with(char::is_uppercase)

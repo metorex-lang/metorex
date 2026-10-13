@@ -182,11 +182,10 @@ impl VirtualMachine {
             // `exception`, handed the message when there is one, which is
             // where a copy carrying that message comes from.
             Some(Object::Exception(cell)) => {
-                re_raised = true;
                 let existing = Object::Exception(Rc::clone(cell));
                 let handed: Vec<Object> = message.into_iter().collect();
                 let answered = self.send_to_object(existing, "exception", handed, position)?;
-                let Object::Exception(_) = &answered else {
+                let Object::Exception(answered_cell) = &answered else {
                     let msg = "exception object expected".to_string();
                     return Err(MetorexError::UncaughtException {
                         exception: Object::exception("TypeError", msg.clone()),
@@ -194,6 +193,9 @@ impl VirtualMachine {
                         message: msg,
                     });
                 };
+                // An exception raised before keeps the cause it was raised
+                // with, where one never raised takes the cause named here.
+                re_raised = answered_cell.borrow().cause_settled;
                 answered
             }
             Some(given @ Object::String(_)) => runtime_error_from(given),
@@ -687,6 +689,14 @@ impl VirtualMachine {
                 // A handled exception leaves `$!` naming whatever it was
                 // before, so an outer handler still names what it handles.
                 self.restore_current_exception(standing);
+                // `retry` runs the body again before the begin is left, so
+                // ensure waits for the pass that does leave it.
+                if matches!(
+                    final_result,
+                    Ok(ControlFlow::Retry { .. }) | Err(MetorexError::BlockRetry { .. })
+                ) {
+                    return final_result;
+                }
             }
         } else if final_result.is_ok()
             && matches!(

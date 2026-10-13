@@ -191,3 +191,10 @@ fn test_metaprogramming_extend_sees_later_methods_no_parens_execution() {
     let output = run_example("metaprogramming/extend_sees_later_methods_no_parens.rb");
     assert_eq!(output, EXTEND_SEES_LATER_METHODS_OUTPUT);
 }
+
+#[test]
+fn test_a_method_defined_from_a_block_reads_constants_where_the_block_was_written() {
+    let expected = "[:feature, \"from Helper\", 1]\n[:feature, \"from Helper\", 2]\n\"found\"\n\"found\"\n\"found\"\n\"found\"\n\"found\"\n";
+    let output = run_example("constants/define_singleton_method_block_cref.rb");
+    assert_eq!(output, expected);
+}

@@ -1,0 +1,4 @@
+passed: opens
+failed: closes
+1 passed, 1 failed of 3
+exit 1

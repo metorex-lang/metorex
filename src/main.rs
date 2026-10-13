@@ -4,6 +4,7 @@
 use clap::Parser as ClapParser;
 
 mod bin_support;
+mod spec;
 
 use bin_support::*;
 
@@ -70,6 +71,11 @@ fn real_main() {
     // Ruby lets `-r`, `-I`, and `-W` carry their value attached (`-rfoo`),
     // which the argument parser only understands as two words.
     let mut arguments = interpreter_words(std::env::args_os().map(argument_text).collect());
+    if spec::wanted(&arguments) {
+        let mut cli = Cli::parse_from([arguments[0].clone()]);
+        cli.file = arguments.split_off(2);
+        run_inline(&cli, spec::PROGRAM, spec::PROGRAM_NAME);
+    }
     refuse_a_second_internal_encoding(&arguments);
     // RUBYOPT is read as though its words had been written on the command
     // line, ahead of what was, so a flag written there is overridden by the

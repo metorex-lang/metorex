@@ -727,6 +727,16 @@ pub(super) const SOURCE: &str = r##"
     copied
   end
 
+  # A clone holds a descriptor of its own as well, the way `dup` makes one.
+  def clone(freeze: nil)
+    copied = dup
+    singleton_methods.each do |named|
+      copied.define_singleton_method(named, method(named).unbind.bind(self))
+    end
+    copied.freeze if freeze.nil? ? frozen? : freeze
+    copied
+  end
+
   def inspect
     named = path
     if closed?

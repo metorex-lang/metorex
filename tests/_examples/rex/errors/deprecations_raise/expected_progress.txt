@@ -1,0 +1,18 @@
+F.
+
+Failures:
+
+  1) deprecations raised as errors fails where the deprecated call is
+     Failure/Error: expect(counter.push(1)).not_to change { counter.size }
+       The implicit block expectation syntax is deprecated, you should pass a block rather than an argument to `expect` to use the provided block expectation matcher or the matcher must implement `supports_value_expectations?`. e.g  `expect { value }.to change `counter.size`` not `expect(value).to change `counter.size``
+     # ./spec/raise_spec.rb:6:in 'block (2 levels) in <top (required)>'
+
+1 deprecation found.
+
+Finished in N seconds (files took N seconds to load)
+2 examples, 1 failure
+
+Failed examples:
+
+rspec ./spec/raise_spec.rb:4 # deprecations raised as errors fails where the deprecated call is
+exit 1

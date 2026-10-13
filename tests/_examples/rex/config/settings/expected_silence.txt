@@ -1,0 +1,48 @@
+
+failures with a cause
+  prints the cause under the failure (FAILED - 1)
+
+pending examples
+  fails as expected (PENDING: the rounding rule)
+
+metadata derived by the configuration
+  is slow because it is in an integration file
+
+hooks with a scope and metadata
+  ran the audited before(:context) hook
+  runs the audited before(:example) hook
+
+Pending: (Failures listed here are expected and do not affect your suite's status)
+
+  1) pending examples fails as expected
+     # the rounding rule
+     Failure/Error: expect(1.005.round(2)).to eq(1.0051)
+
+       expected: 1.0051
+            got: 1.01
+
+       (compared using ==)
+     # ./spec/settings_spec.rb:18:in 'block (2 levels) in <top (required)>'
+
+Failures:
+
+  1) failures with a cause prints the cause under the failure
+     Failure/Error: raise ConnectionError, "could not reach the ledger service"
+
+     ConnectionError:
+       could not reach the ledger service
+     # ./spec/settings_spec.rb:6:in 'Object#connect'
+     # ./spec/settings_spec.rb:11:in 'block (2 levels) in <top (required)>'
+     # ------------------
+     # --- Caused by: ---
+     # IOError:
+     #   socket closed
+     #   ./spec/settings_spec.rb:4:in 'Object#connect'
+
+Finished in N seconds (files took N seconds to load)
+5 examples, 1 failure, 1 pending
+
+Failed examples:
+
+rspec ./spec/settings_spec.rb:10 # failures with a cause prints the cause under the failure
+exit 1

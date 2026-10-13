@@ -1,0 +1,33 @@
+
+the should syntax for doubles
+  sets an expectation with should_receive
+  stubs with stub
+  refuses with should_not_receive (FAILED - 1)
+  reports an unmet should_receive (FAILED - 2)
+
+Failures:
+
+  1) the should syntax for doubles refuses with should_not_receive
+     Failure/Error: printer.print_page(3)
+
+       (#<Printer:0x>).print_page(3)
+           expected: 0 times with any arguments
+           received: 1 time with arguments: (3)
+     # ./spec/should_syntax_spec.rb:21:in 'block (2 levels) in <top (required)>'
+
+  2) the should syntax for doubles reports an unmet should_receive
+     Failure/Error: printer.should_receive(:print_page)
+
+       (#<Printer:0x>).print_page(*(any args))
+           expected: 1 time with any arguments
+           received: 0 times with any arguments
+     # ./spec/should_syntax_spec.rb:26:in 'block (2 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+4 examples, 2 failures
+
+Failed examples:
+
+rspec ./spec/should_syntax_spec.rb:18 # the should syntax for doubles refuses with should_not_receive
+rspec ./spec/should_syntax_spec.rb:24 # the should syntax for doubles reports an unmet should_receive
+exit 1

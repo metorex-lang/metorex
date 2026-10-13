@@ -1,0 +1,13 @@
+Bisect started using options: "--seed 2"
+Running suite to find failures... (N seconds)
+Starting bisect with 1 failing example and 5 non-failing examples.
+Checking that failure(s) are order-dependent... failure appears to be order-dependent
+
+Round 1: bisecting over non-failing examples 1-5 .. ignoring examples 4-5 (N seconds)
+Round 2: bisecting over non-failing examples 1-3 .. ignoring example 3 (N seconds)
+Round 3: bisecting over non-failing examples 1-2 .. ignoring example 2 (N seconds)
+Bisect complete! Reduced necessary non-failing examples from 5 to 1 in N seconds.
+
+The minimal reproduction command is:
+  rspec './spec/settings_spec.rb[1:1,1:3]' --seed 2
+exit 0

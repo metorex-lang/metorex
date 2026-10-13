@@ -1,0 +1,17 @@
+
+Randomized with seed 7
+
+second group
+  runs four
+  runs five
+
+first group
+  runs two
+  runs three
+  runs one
+
+Finished in N seconds (files took N seconds to load)
+5 examples, 0 failures
+
+Randomized with seed 7
+exit 0

@@ -1,0 +1,29 @@
+
+a feature group
+  runs as an example with metadata
+
+hooks registered in the configuration
+  run in RSpec's order
+  ran the after hooks in order for the example before
+
+settings added by a suite
+  read their defaults
+  answer nil and false when unset
+
+the current example
+  is exposed under the configured name
+
+a group with database metadata
+the database is ready
+  runs the hook defined once matching metadata appeared
+
+Array
+  has behavior: a list
+    is countable
+
+docstrings
+  are formatted by the configured block
+
+Finished in N seconds (files took N seconds to load)
+9 examples, 0 failures
+exit 0
