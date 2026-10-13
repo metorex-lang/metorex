@@ -1,81 +1,65 @@
 module Rex
   module Core
-    # `Rex.describe` and its aliases, and the same methods on `main` and on
-    # every Module while the DSL is exposed globally.
     module DSL
-      GROUP_METHODS = %i[example_group describe context xdescribe xcontext fdescribe fcontext].freeze
-      SHARED_METHODS = %i[shared_examples shared_examples_for shared_context].freeze
+      def self.example_group_aliases
+        @example_group_aliases ||= []
+      end
 
-      GROUP_METHODS.each do |name|
-        define_method(name) do |*arguments, &block|
-          location = Metadata.location_from(caller_locations(1, 8))
-          extra = case name
-                  when :xdescribe then { skip: "Temporarily skipped with xdescribe" }
-                  when :xcontext then { skip: "Temporarily skipped with xcontext" }
-                  when :fdescribe, :fcontext then { focus: true }
-                  else {}
-                  end
-          ExampleGroup.subclass(*arguments, location: location, extra_metadata: extra, &block)
+      def self.exposed_globally?
+        @exposed_globally ||= false
+      end
+
+      def self.expose_example_group_alias(name)
+        return if example_group_aliases.include?(name)
+
+        example_group_aliases << name
+
+        (class << Rex; self; end).__send__(:define_method, name) do |*args, &example_group_block|
+          group = Rex::Core::ExampleGroup.__send__(name, *args, &example_group_block)
+          Rex.world.record(group)
+          group
         end
+
+        expose_example_group_alias_globally(name) if exposed_globally?
+      end
+
+      class << self
+        attr_accessor :top_level
       end
 
       def self.expose_globally!
-        return if @exposed
+        return if exposed_globally?
 
-        @exposed = true
-        aliases.each { |name| expose_name_globally(name) }
-        main = TOPLEVEL_BINDING.receiver
-        GROUP_METHODS.each do |name|
-          main.define_singleton_method(name) do |*arguments, &block|
-            Rex.__send__(name, *arguments, &block)
-          end
-          Module.__send__(:define_method, name) do |*arguments, &block|
-            Rex.__send__(name, *arguments, &block)
-          end
+        example_group_aliases.each do |method_name|
+          expose_example_group_alias_globally(method_name)
         end
-        SHARED_METHODS.each do |name|
-          main.define_singleton_method(name) do |*arguments, &block|
-            Rex.__send__(name, *arguments, &block)
-          end
-          Module.__send__(:define_method, name) do |*arguments, &block|
-            Rex.__send__(name, *arguments, &block)
-          end
-        end
-      end
 
-      # A name `config.alias_example_group_to` adds, on Rex and, while the
-      # DSL is exposed, on `main` and every Module.
-      def self.expose_example_group_alias(name)
-        aliases << name
-        define_method(name) do |*arguments, &block|
-          Rex::Core::ExampleGroup.__send__(name, *arguments, &block)
-        end
-        Rex.singleton_class.__send__(:define_method, name, instance_method(name))
-        expose_name_globally(name) if @exposed
-      end
-
-      def self.aliases
-        @aliases ||= []
-      end
-
-      def self.expose_name_globally(name)
-        main = TOPLEVEL_BINDING.receiver
-        main.define_singleton_method(name) { |*arguments, &block| Rex.__send__(name, *arguments, &block) }
-        Module.__send__(:define_method, name) { |*arguments, &block| Rex.__send__(name, *arguments, &block) }
+        @exposed_globally = true
       end
 
       def self.remove_globally!
-        return unless @exposed
+        return unless exposed_globally?
 
-        @exposed = false
-        main = TOPLEVEL_BINDING.receiver
-        (GROUP_METHODS + SHARED_METHODS + aliases).each do |name|
-          main.singleton_class.__send__(:remove_method, name) if main.singleton_class.method_defined?(name, false)
-          Module.__send__(:remove_method, name) if Module.method_defined?(name, false)
+        example_group_aliases.each do |method_name|
+          change_global_dsl { undef_method method_name }
         end
+
+        @exposed_globally = false
+      end
+
+      def self.expose_example_group_alias_globally(method_name)
+        change_global_dsl do
+          remove_method(method_name) if method_defined?(method_name)
+          define_method(method_name) { |*a, &b| ::Rex.__send__(method_name, *a, &b) }
+        end
+      end
+
+      def self.change_global_dsl(&changes)
+        (class << top_level; self; end).class_exec(&changes)
+        Module.class_exec(&changes)
       end
     end
   end
-
-  extend Core::DSL
 end
+
+::Rex::Core::DSL.top_level = self

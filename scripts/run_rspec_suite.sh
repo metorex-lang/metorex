@@ -14,8 +14,8 @@
 # Each suite runs against Rex alone: rspec-support's spec helpers go on the
 # load path, and its library does not, since Rex answers `rspec/support`.
 #
-# Needs MRI with the diff-lcs and rake gems, whose libraries the suites load,
-# and curl for the first download.
+# Needs MRI with the diff-lcs, rake, aruba, and thread_order gems, whose
+# libraries the suites load, and curl for the first download.
 
 set -euo pipefail
 
@@ -48,6 +48,31 @@ gem_lib() {
 }
 DIFF_LCS_LIB="$(gem_lib diff-lcs)/lib"
 RAKE_LIB="$(gem_lib rake)/lib"
+gem_lib aruba > /dev/null
+gem_lib thread_order > /dev/null
+# aruba, thread_order, and every gem they depend on, as -I arguments. The
+# RSpec gems are left out, since Rex answers for them, and so is any gem
+# metorex carries a library of its own for.
+ARUBA_GEMS="$(ruby -e '
+  seen = {}
+  pending = %w[aruba thread_order].map { |name| Gem::Specification.find_by_name(name) }
+  until pending.empty?
+    spec = pending.shift
+    next if seen[spec.name]
+    seen[spec.name] = spec
+    spec.runtime_dependencies.each { |dependency| pending << dependency.to_spec }
+  end
+  seen.each_value do |spec|
+    next if spec.name.start_with?("rspec")
+    puts [spec.name.tr("-", "/"), *spec.full_require_paths].join(" ")
+  end
+')"
+ARUBA_LOAD_PATH=""
+while read -r feature paths; do
+  if ! "$METOREX" -e "require '$feature'" > /dev/null 2>&1; then
+    for path in $paths; do ARUBA_LOAD_PATH+=" -I $path"; done
+  fi
+done <<< "$ARUBA_GEMS"
 
 WORK_DIR=$(mktemp -d -t metorex_rspec_suites.XXXXXX)
 HELPERS_DIR="$WORK_DIR/support_spec_helpers"
@@ -136,7 +161,7 @@ run_spec "rspec-expectations/spec/rspec/matchers/multi_matcher_diff_spec.rb"
 run_spec "rspec-expectations/spec/rspec/matchers_spec.rb"
 
 # rspec-mocks
-# run_spec "rspec-mocks/spec/integration/rails_support_spec.rb"
+run_spec "rspec-mocks/spec/integration/rails_support_spec.rb"
 run_spec "rspec-mocks/spec/rspec/mocks/and_call_original_spec.rb"
 run_spec "rspec-mocks/spec/rspec/mocks/and_invoke_spec.rb"
 run_spec "rspec-mocks/spec/rspec/mocks/and_return_spec.rb"
@@ -212,82 +237,82 @@ run_spec "rspec-mocks/spec/rspec/mocks/verifying_doubles/object_double_spec.rb"
 run_spec "rspec-mocks/spec/rspec/mocks_spec.rb"
 
 # rspec-core
-# run_spec "rspec-core/spec/integration/bisect_runners_spec.rb"
-# run_spec "rspec-core/spec/integration/bisect_spec.rb"
-# run_spec "rspec-core/spec/integration/fail_if_no_examples_spec.rb"
-# run_spec "rspec-core/spec/integration/failed_line_detection_spec.rb"
-# run_spec "rspec-core/spec/integration/filtering_spec.rb"
-# run_spec "rspec-core/spec/integration/order_spec.rb"
-# run_spec "rspec-core/spec/integration/output_stream_spec.rb"
-# run_spec "rspec-core/spec/integration/persistence_failures_spec.rb"
-# run_spec "rspec-core/spec/integration/spec_file_load_errors_spec.rb"
-# run_spec "rspec-core/spec/integration/suite_hooks_errors_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/aggregate_failures_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/backtrace_formatter_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/bisect/coordinator_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/bisect/example_minimizer_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/bisect/server_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/bisect/shell_command_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/bisect/shell_runner_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/bisect/utilities_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/configuration/only_failures_support_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/configuration_options_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/configuration_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/did_you_mean_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/drb_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/dsl_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/example_execution_result_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/example_group_constants_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/example_group_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/example_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/example_status_persister_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/failed_example_notification_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/filter_manager_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/filterable_item_repository_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/formatters/base_text_formatter_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/formatters/console_codes_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/formatters/deprecation_formatter_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/formatters/documentation_formatter_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/formatters/exception_presenter_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/formatters/failure_list_formatter_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/formatters/fallback_message_formatter_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/formatters/helpers_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/formatters/html_formatter_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/formatters/html_snippet_extractor_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/formatters/json_formatter_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/formatters/profile_formatter_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/formatters/progress_formatter_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/formatters/snippet_extractor_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/formatters/syntax_highlighter_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/formatters_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/hooks_filtering_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/hooks_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/invocations_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/memoized_helpers_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/metadata_filter_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/metadata_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/notifications_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/option_parser_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/ordering_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/output_wrapper_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/pending_example_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/pending_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/profiler_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/project_initializer_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/rake_task_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/reporter_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/resources/a_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/resources/acceptance/foo_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/rspec_matchers_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/ruby_project_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/runner_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/set_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/shared_context_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/shared_example_group_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/suite_hooks_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/warnings_spec.rb"
-# run_spec "rspec-core/spec/rspec/core/world_spec.rb"
-# run_spec "rspec-core/spec/rspec/core_spec.rb"
+run_spec "rspec-core/spec/integration/bisect_runners_spec.rb"
+run_spec "rspec-core/spec/integration/bisect_spec.rb"
+run_spec "rspec-core/spec/integration/fail_if_no_examples_spec.rb"
+run_spec "rspec-core/spec/integration/failed_line_detection_spec.rb"
+run_spec "rspec-core/spec/integration/filtering_spec.rb"
+run_spec "rspec-core/spec/integration/order_spec.rb"
+run_spec "rspec-core/spec/integration/output_stream_spec.rb"
+run_spec "rspec-core/spec/integration/persistence_failures_spec.rb"
+run_spec "rspec-core/spec/integration/spec_file_load_errors_spec.rb"
+run_spec "rspec-core/spec/integration/suite_hooks_errors_spec.rb"
+run_spec "rspec-core/spec/rspec/core/aggregate_failures_spec.rb"
+run_spec "rspec-core/spec/rspec/core/backtrace_formatter_spec.rb"
+run_spec "rspec-core/spec/rspec/core/bisect/coordinator_spec.rb"
+run_spec "rspec-core/spec/rspec/core/bisect/example_minimizer_spec.rb"
+run_spec "rspec-core/spec/rspec/core/bisect/server_spec.rb"
+run_spec "rspec-core/spec/rspec/core/bisect/shell_command_spec.rb"
+run_spec "rspec-core/spec/rspec/core/bisect/shell_runner_spec.rb"
+run_spec "rspec-core/spec/rspec/core/bisect/utilities_spec.rb"
+run_spec "rspec-core/spec/rspec/core/configuration/only_failures_support_spec.rb"
+run_spec "rspec-core/spec/rspec/core/configuration_options_spec.rb"
+run_spec "rspec-core/spec/rspec/core/configuration_spec.rb"
+run_spec "rspec-core/spec/rspec/core/did_you_mean_spec.rb"
+run_spec "rspec-core/spec/rspec/core/drb_spec.rb"
+run_spec "rspec-core/spec/rspec/core/dsl_spec.rb"
+run_spec "rspec-core/spec/rspec/core/example_execution_result_spec.rb"
+run_spec "rspec-core/spec/rspec/core/example_group_constants_spec.rb"
+run_spec "rspec-core/spec/rspec/core/example_group_spec.rb"
+run_spec "rspec-core/spec/rspec/core/example_spec.rb"
+run_spec "rspec-core/spec/rspec/core/example_status_persister_spec.rb"
+run_spec "rspec-core/spec/rspec/core/failed_example_notification_spec.rb"
+run_spec "rspec-core/spec/rspec/core/filter_manager_spec.rb"
+run_spec "rspec-core/spec/rspec/core/filterable_item_repository_spec.rb"
+run_spec "rspec-core/spec/rspec/core/formatters/base_text_formatter_spec.rb"
+run_spec "rspec-core/spec/rspec/core/formatters/console_codes_spec.rb"
+run_spec "rspec-core/spec/rspec/core/formatters/deprecation_formatter_spec.rb"
+run_spec "rspec-core/spec/rspec/core/formatters/documentation_formatter_spec.rb"
+run_spec "rspec-core/spec/rspec/core/formatters/exception_presenter_spec.rb"
+run_spec "rspec-core/spec/rspec/core/formatters/failure_list_formatter_spec.rb"
+run_spec "rspec-core/spec/rspec/core/formatters/fallback_message_formatter_spec.rb"
+run_spec "rspec-core/spec/rspec/core/formatters/helpers_spec.rb"
+run_spec "rspec-core/spec/rspec/core/formatters/html_formatter_spec.rb"
+run_spec "rspec-core/spec/rspec/core/formatters/html_snippet_extractor_spec.rb"
+run_spec "rspec-core/spec/rspec/core/formatters/json_formatter_spec.rb"
+run_spec "rspec-core/spec/rspec/core/formatters/profile_formatter_spec.rb"
+run_spec "rspec-core/spec/rspec/core/formatters/progress_formatter_spec.rb"
+run_spec "rspec-core/spec/rspec/core/formatters/snippet_extractor_spec.rb"
+run_spec "rspec-core/spec/rspec/core/formatters/syntax_highlighter_spec.rb"
+run_spec "rspec-core/spec/rspec/core/formatters_spec.rb"
+run_spec "rspec-core/spec/rspec/core/hooks_filtering_spec.rb"
+run_spec "rspec-core/spec/rspec/core/hooks_spec.rb"
+run_spec "rspec-core/spec/rspec/core/invocations_spec.rb"
+run_spec "rspec-core/spec/rspec/core/memoized_helpers_spec.rb"
+run_spec "rspec-core/spec/rspec/core/metadata_filter_spec.rb"
+run_spec "rspec-core/spec/rspec/core/metadata_spec.rb"
+run_spec "rspec-core/spec/rspec/core/notifications_spec.rb"
+run_spec "rspec-core/spec/rspec/core/option_parser_spec.rb"
+run_spec "rspec-core/spec/rspec/core/ordering_spec.rb"
+run_spec "rspec-core/spec/rspec/core/output_wrapper_spec.rb"
+run_spec "rspec-core/spec/rspec/core/pending_example_spec.rb"
+run_spec "rspec-core/spec/rspec/core/pending_spec.rb"
+run_spec "rspec-core/spec/rspec/core/profiler_spec.rb"
+run_spec "rspec-core/spec/rspec/core/project_initializer_spec.rb"
+run_spec "rspec-core/spec/rspec/core/rake_task_spec.rb"
+run_spec "rspec-core/spec/rspec/core/reporter_spec.rb"
+run_spec "rspec-core/spec/rspec/core/resources/a_spec.rb"
+run_spec "rspec-core/spec/rspec/core/resources/acceptance/foo_spec.rb"
+run_spec "rspec-core/spec/rspec/core/rspec_matchers_spec.rb"
+run_spec "rspec-core/spec/rspec/core/ruby_project_spec.rb"
+run_spec "rspec-core/spec/rspec/core/runner_spec.rb"
+run_spec "rspec-core/spec/rspec/core/set_spec.rb"
+run_spec "rspec-core/spec/rspec/core/shared_context_spec.rb"
+run_spec "rspec-core/spec/rspec/core/shared_example_group_spec.rb"
+run_spec "rspec-core/spec/rspec/core/suite_hooks_spec.rb"
+run_spec "rspec-core/spec/rspec/core/warnings_spec.rb"
+run_spec "rspec-core/spec/rspec/core/world_spec.rb"
+run_spec "rspec-core/spec/rspec/core_spec.rb"
 
 # Copies each suite named in the queue once.
 for path in "${SPEC_PATHS[@]}"; do
@@ -309,14 +334,14 @@ run_one() {
   (
     cd "$WORK_DIR/$suite"
     perl -e 'alarm shift; exec @ARGV' "$FILE_TIMEOUT" "$METOREX" spec --format progress --no-color --seed 1 \
-      -I "$HELPERS_DIR" -I "$DIFF_LCS_LIB" -I "$RAKE_LIB" "$file" > "$log" 2>&1
+      -I "$HELPERS_DIR" -I "$DIFF_LCS_LIB" -I "$RAKE_LIB" $ARUBA_LOAD_PATH "$file" > "$log" 2>&1
   ) || true
   local summary
   summary=$(sed 's/\x1b\[[0-9;]*m//g' "$log" | grep -E '^[0-9]+ examples?, ' | tail -1 || true)
   printf '%s\t%s\n' "$path" "${summary:-did not finish}"
 }
 export -f run_one
-export WORK_DIR HELPERS_DIR DIFF_LCS_LIB RAKE_LIB METOREX FILE_TIMEOUT
+export WORK_DIR HELPERS_DIR DIFF_LCS_LIB RAKE_LIB ARUBA_LOAD_PATH METOREX FILE_TIMEOUT
 
 RESULTS="$WORK_DIR/results.tsv"
 printf '%s\n' "${SPEC_PATHS[@]}" | xargs -P "$JOBS" -I {} bash -c 'run_one "$@"' _ {} > "$RESULTS"

@@ -216,6 +216,9 @@ impl VirtualMachine {
         // or module body the load was called from. A wrapped load names a
         // module for them to land on instead.
         let caller_def_scope = std::mem::take(&mut self.def_scope_stack);
+        // A `class_exec` block the load was called from holds its constants
+        // where it was written, which says nothing about the file's bodies.
+        let caller_constant_homes = std::mem::take(&mut self.constant_homes);
         let wrapped = self.load_wrap_module.take();
         if let Some(wrapper) = &wrapped {
             self.def_scope_stack.push(Rc::clone(wrapper));
@@ -271,6 +274,7 @@ impl VirtualMachine {
         self.call_stack_pop();
         self.method_nesting_stack = caller_nesting;
         self.def_scope_stack = caller_def_scope;
+        self.constant_homes = caller_constant_homes;
         if let Some(saved) = previous_self {
             match saved {
                 Some(receiver) => self.environment_mut().define("self".to_string(), receiver),
@@ -348,6 +352,7 @@ impl VirtualMachine {
         // for from.
         let caller_def_scope = std::mem::take(&mut self.def_scope_stack);
         let caller_nesting = std::mem::take(&mut self.method_nesting_stack);
+        let caller_constant_homes = std::mem::take(&mut self.constant_homes);
         let caller_library = self
             .loading_embedded_library
             .replace(crate::vm::stdlib::embedded_library_file(name));
@@ -365,6 +370,7 @@ impl VirtualMachine {
         self.loading_embedded_library = caller_library;
         self.method_nesting_stack = caller_nesting;
         self.def_scope_stack = caller_def_scope;
+        self.constant_homes = caller_constant_homes;
         result?;
         Ok(true)
     }

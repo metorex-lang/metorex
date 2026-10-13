@@ -1,3 +1,6 @@
+require "fileutils"
+require "json"
+
 module Rex
   module Core
     # `metorex spec --coverage`: which lines and branches of the files the
@@ -81,7 +84,7 @@ module Rex
           absolute = File.expand_path(path)
           next if loaded_specs.include?(absolute) || absolute.start_with?(spec_directory)
 
-          relative = Rex::Core.relative_path(absolute).sub(%r{\A\./}, "")
+          relative = Rex::Core::Metadata.relative_path(absolute).sub(%r{\A\./}, "")
           next if configuration.coverage_exclude.any? { |pattern| excluded?(pattern, relative) }
 
           FileResult.new(relative, data[:lines][path], data[:branches][path] || [])
@@ -127,7 +130,7 @@ module Rex
         output.puts
         output.puts "Coverage: #{format('%.2f', percent(covered, relevant))}% of lines (#{covered} of #{relevant}) " \
                     "and #{format('%.2f', percent(covered_arms, arms))}% of branches (#{covered_arms} of #{arms}) " \
-                    "in #{Formatters.pluralize(results.size, 'file')}"
+                    "in #{Formatters::Helpers.pluralize(results.size, 'file')}"
         width = results.map { |result| result.path.size }.max || 0
         results.each do |result|
           line = "  #{result.path.ljust(width)}  #{format('%6.2f', result.line_percent)}% of lines  " \

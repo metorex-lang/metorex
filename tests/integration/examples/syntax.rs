@@ -613,3 +613,12 @@ fn test_syntax_subscript_block_no_parens_execution() {
     let output = run_example("syntax/subscript_block_no_parens.rb");
     assert_eq!(output, SUBSCRIPT_BLOCK_OUTPUT);
 }
+
+#[test]
+fn test_syntax_forms_aruba_and_its_dependencies_use() {
+    let output = run_example("syntax/gem_syntax_forms.rb");
+    assert_eq!(
+        output,
+        "1\n3\n\"bad size\"\n12\n8\n2\n[2, 4]\n[3]\n{line: 1}\n{total: 3, \"key\" => 9}\n:callable\nObject\n"
+    );
+}

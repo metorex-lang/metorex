@@ -41,6 +41,9 @@ pub struct CallFrame {
     /// a method frame or a block written in one. None for a singleton
     /// method.
     owner_path: Option<String>,
+    /// The class or module the method a block frame was written in was
+    /// defined on.
+    owner_class: Option<Rc<crate::class::Class>>,
     /// The scope that was current when the frame was pushed.
     entering_scope: Option<Rc<RefCell<Scope>>>,
 }
@@ -56,6 +59,7 @@ impl CallFrame {
             block_depth: 1,
             written_in: None,
             owner_path: None,
+            owner_class: None,
             entering_scope: None,
         }
     }
@@ -78,6 +82,7 @@ impl CallFrame {
             block_depth: 0,
             written_in: None,
             owner_path: None,
+            owner_class: None,
             entering_scope: None,
         }
     }
@@ -92,6 +97,7 @@ impl CallFrame {
             block_depth: 0,
             written_in: None,
             owner_path: None,
+            owner_class: None,
             entering_scope: None,
         }
     }
@@ -156,6 +162,17 @@ impl CallFrame {
     pub fn owned_by(mut self, owner_path: Option<String>) -> Self {
         self.owner_path = owner_path;
         self
+    }
+
+    pub fn owned_by_class(mut self, owner_class: Option<Rc<crate::class::Class>>) -> Self {
+        self.owner_class = owner_class;
+        self
+    }
+
+    /// The class or module the method a block frame was written in was
+    /// defined on.
+    pub fn owner_class(&self) -> Option<&Rc<crate::class::Class>> {
+        self.owner_class.as_ref()
     }
 
     /// The class path of the module the running method was defined in.

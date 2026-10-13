@@ -284,14 +284,16 @@ impl Parser {
             return self.wrap_with_pattern_test(expr);
         }
 
-        // Check for inline assignment: ident = expr (in condition context)
-        if matches!(
-            expr,
-            Expression::Identifier { .. }
-                | Expression::InstanceVariable { .. }
-                | Expression::ClassVariable { .. }
-                | Expression::GlobalVariable { .. }
-        ) && self.check(&[TokenKind::Equal])
+        // An assignment can be the condition, to a variable, an element,
+        // or through a setter: `while Thread.critical = true && locked`.
+        if crate::parser::statements::is_assignable(&expr)
+            && !matches!(
+                expr,
+                Expression::Splat { .. }
+                    | Expression::ScopeResolution { .. }
+                    | Expression::TopLevelConstant { .. }
+            )
+            && self.check(&[TokenKind::Equal])
         {
             let position = self.advance().position;
             self.skip_whitespace();
@@ -453,7 +455,7 @@ impl Parser {
                     params.push(prefix.to_string());
                 } else {
                     let param_token = self.advance();
-                    match param_token.kind {
+                    match crate::parser::method_name_as_identifier(param_token.kind) {
                         TokenKind::Ident(name) => {
                             self.declare_local(&name);
                             // `|x:|` names a keyword parameter, which takes

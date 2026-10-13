@@ -65,6 +65,13 @@ impl VirtualMachine {
                     written.filename = Some(named.clone());
                 }
                 made.source_location = Some(written);
+                // The method belongs to the class it was defined on, which is
+                // where `super` in its body starts from, whatever class the
+                // receiver is.
+                if made.owner_class.is_none() {
+                    made.owner = Some(class_rc.name().to_string());
+                    made.owner_class = Some(Rc::clone(class_rc));
+                }
                 made
             }
             Object::Method(source) => {

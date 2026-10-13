@@ -43,6 +43,7 @@ impl VirtualMachine {
             .nested_in_a_block(block.written_depth.unwrap_or(1))
             .written_in_scope(block.written_in.clone())
             .owned_by(block.defining_owner.clone())
+            .owned_by_class(block.defining_class.clone())
             .with_source_file(block.source_file.clone());
             vm.call_stack_push(frame);
             // A thread's body is where a trace hears the thread start and end.

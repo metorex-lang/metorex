@@ -1,9 +1,9 @@
-require "json"
+require "rex/core/formatters/base_formatter"
+require 'json'
 
 module Rex
   module Core
     module Formatters
-      # `--format json`: the run as one JSON document, in RSpec's shape.
       class JsonFormatter < BaseFormatter
         Formatters.register self, :message, :dump_summary, :dump_profile, :stop, :seed, :close
 
@@ -11,7 +11,9 @@ module Rex
 
         def initialize(output)
           super
-          @output_hash = { version: Rex::VERSION }
+          @output_hash = {
+            :version => Rex::Core::Version::STRING
+          }
         end
 
         def message(notification)
@@ -20,11 +22,11 @@ module Rex
 
         def dump_summary(summary)
           @output_hash[:summary] = {
-            duration: summary.duration,
-            example_count: summary.example_count,
-            failure_count: summary.failure_count,
-            pending_count: summary.pending_count,
-            errors_outside_of_examples_count: summary.errors_outside_of_examples_count
+            :duration => summary.duration,
+            :example_count => summary.example_count,
+            :failure_count => summary.failure_count,
+            :pending_count => summary.pending_count,
+            :errors_outside_of_examples_count => summary.errors_outside_of_examples_count
           }
           @output_hash[:summary_line] = summary.totals_line
         end
@@ -32,12 +34,13 @@ module Rex
         def stop(group_notification)
           @output_hash[:examples] = group_notification.notifications.map do |notification|
             format_example(notification.example).tap do |hash|
-              exception = notification.example.exception
-              if exception
+              e = notification.example.exception
+
+              if e
                 hash[:exception] = {
-                  class: exception.class.name,
-                  message: exception.message,
-                  backtrace: notification.formatted_backtrace
+                  :class => e.class.name,
+                  :message => e.message,
+                  :backtrace => notification.formatted_backtrace,
                 }
               end
             end
@@ -46,7 +49,6 @@ module Rex
 
         def seed(notification)
           return unless notification.seed_used?
-
           @output_hash[:seed] = notification.seed
         end
 
@@ -63,7 +65,9 @@ module Rex
         def dump_profile_slowest_examples(profile)
           @output_hash[:profile] = {}
           @output_hash[:profile][:examples] = profile.slowest_examples.map do |example|
-            format_example(example).tap { |hash| hash[:run_time] = example.execution_result.run_time }
+            format_example(example).tap do |hash|
+              hash[:run_time] = example.execution_result.run_time
+            end
           end
           @output_hash[:profile][:slowest] = profile.slow_duration
           @output_hash[:profile][:total] = profile.duration
@@ -71,23 +75,23 @@ module Rex
 
         def dump_profile_slowest_example_groups(profile)
           @output_hash[:profile] ||= {}
-          @output_hash[:profile][:groups] = profile.slowest_groups.map do |location, hash|
-            hash.update(location: location)
+          @output_hash[:profile][:groups] = profile.slowest_groups.map do |loc, hash|
+            hash.update(:location => loc)
           end
         end
 
-        private
+      private
 
         def format_example(example)
           {
-            id: example.id,
-            description: example.description,
-            full_description: example.full_description,
-            status: example.execution_result.status.to_s,
-            file_path: example.metadata[:file_path],
-            line_number: example.metadata[:line_number],
-            run_time: example.execution_result.run_time,
-            pending_message: example.execution_result.pending_message
+            :id => example.id,
+            :description => example.description,
+            :full_description => example.full_description,
+            :status => example.execution_result.status.to_s,
+            :file_path => example.metadata[:file_path],
+            :line_number  => example.metadata[:line_number],
+            :run_time => example.execution_result.run_time,
+            :pending_message => example.execution_result.pending_message,
           }
         end
       end

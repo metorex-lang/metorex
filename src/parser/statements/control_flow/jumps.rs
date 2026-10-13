@@ -103,27 +103,9 @@ impl Parser {
         let parsed = self.parse_expression();
         self.assignment_rhs_depth -= 1;
         let mut value = parsed?;
-        // The value can be an assignment: `return x = value`.
-        if self.check(&[TokenKind::Equal])
-            && matches!(
-                value,
-                Expression::Identifier { .. }
-                    | Expression::InstanceVariable { .. }
-                    | Expression::ClassVariable { .. }
-                    | Expression::GlobalVariable { .. }
-                    | Expression::Index { .. }
-            )
-        {
-            let eq_pos = self.advance().position;
-            self.skip_whitespace();
-            let assigned = self.parse_expression()?;
-            value = Expression::BinaryOp {
-                op: crate::ast::BinaryOp::Assign,
-                left: Box::new(value),
-                right: Box::new(assigned),
-                position: eq_pos,
-            };
-        }
+        // The value can be an assignment, to a variable or through a
+        // setter: `return x = value`, `return self.name = value`.
+        value = self.fold_assignment(value)?;
         if self.check(&[TokenKind::KeywordAnd, TokenKind::KeywordOr]) {
             return Err(self.error_at_current("void value expression"));
         }

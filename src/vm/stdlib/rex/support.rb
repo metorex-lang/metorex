@@ -245,3 +245,31 @@ module Rex
     end
   end
 end
+
+module Rex
+  module Support
+    # The warnings and deprecations the RSpec libraries print.
+    module Warnings
+      def deprecate(deprecated, options = {})
+        warn_with "DEPRECATION: #{deprecated} is deprecated.", options
+      end
+
+      def warn_deprecation(message, options = {})
+        warn_with "DEPRECATION: \n #{message}", options
+      end
+
+      def warning(text, options = {})
+        warn_with "WARNING: #{text}.", options
+      end
+
+      # Hands a message naming where it was called from to the warning
+      # notifier, which prints it, or raises it when `raise_on_warning` is on.
+      def warn_with(message, options = {})
+        call_site = options.fetch(:call_site) { CallerFilter.first_non_rspec_line }
+        message += " Use #{options[:replacement]} instead." if options[:replacement]
+        message += " Called from #{call_site}." if call_site
+        Support.warning_notifier.call message
+      end
+    end
+  end
+end

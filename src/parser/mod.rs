@@ -189,6 +189,16 @@ pub(crate) struct AnonymousBlockParams {
 
 /// The names a block's parameter list binds, with the `*`, `**` and `&`
 /// markers and any default value left out.
+/// `include` and `extend` are methods rather than keywords, so a parameter
+/// may take either name. Any other token comes back as it was.
+pub(crate) fn method_name_as_identifier(kind: TokenKind) -> TokenKind {
+    match kind {
+        TokenKind::Include => TokenKind::Ident("include".to_string()),
+        TokenKind::Extend => TokenKind::Ident("extend".to_string()),
+        other => other,
+    }
+}
+
 fn parameter_names(parameters: &[String]) -> Vec<String> {
     parameters
         .iter()

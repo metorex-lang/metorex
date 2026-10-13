@@ -655,6 +655,17 @@ impl VirtualMachine {
             }
             cursor = current.superclass();
         }
+        // A module made by a subclass of Module answers what that subclass
+        // defines for its instances.
+        if let Some(made_from) = class_rc.instance_of()
+            && made_from
+                .find_method_with_owner(name)
+                .is_some_and(|(owner, method)| {
+                    !method.is_undefined && !owner.is_method_private(name)
+                })
+        {
+            return true;
+        }
         // What Class or Module, and their ancestors, define for their
         // instances, unless it is private there, as Kernel's functions are.
         if self
@@ -1222,6 +1233,13 @@ impl VirtualMachine {
                         return Some((sc, method));
                     }
                     cursor = current.superclass();
+                }
+                // A module made by `new` on a subclass of Module answers the
+                // methods that subclass writes.
+                if let Some(made_from) = module_rc.instance_of()
+                    && let Some(method) = made_from.find_method(method_name)
+                {
+                    return Some((made_from, method));
                 }
                 // User-defined modules are instances of the global `Module`
                 // class. Methods mixed into Module via `class Module; include

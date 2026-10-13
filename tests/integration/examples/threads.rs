@@ -345,3 +345,12 @@ fn test_threads_thread_names_and_backtraces_no_parens_execution() {
     let output = run_example("threads/thread_names_and_backtraces_no_parens.rb");
     assert_eq!(output, THREAD_NAMES_AND_BACKTRACES_OUTPUT);
 }
+
+#[test]
+fn test_a_subclass_of_mutex_locks_as_mutex_does() {
+    let output = run_example("threads/mutex_subclass.rb");
+    assert_eq!(
+        output,
+        "[true, true]\n\"deadlock; recursive locking\"\n:inside\n"
+    );
+}

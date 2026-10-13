@@ -639,3 +639,93 @@ fn test_a_call_of_an_undefined_name_reaches_method_missing() {
          \"undefined method 'hash' for an instance of Plain\"\n[:missing, :<, 5]\n"
     );
 }
+
+#[test]
+fn test_a_binary_ampersand_at_the_end_of_a_line_continues_the_expression() {
+    let output = run_example("parser/trailing_binary_ampersand.rb");
+    assert_eq!(output, "2\n[2]\n7\n2\n");
+}
+
+#[test]
+fn test_an_attribute_list_ends_at_the_newline_before_an_if() {
+    let output = run_example("parser/attr_list_ends_at_newline.rb");
+    assert_eq!(output, "[:backtrace, :cause, :cause=]\n");
+}
+
+#[test]
+fn test_assignments_after_return_and_while_and_operands_after_end_and_lambda() {
+    let output = run_example("parser/assignment_and_operand_positions.rb");
+    assert_eq!(
+        output,
+        ":returned\n2\n[Proc, Proc]\n[:from_if, :from_or]\n:none\n"
+    );
+}
+
+#[test]
+fn test_class_new_taken_as_a_method_object_constructs_past_an_overriding_new() {
+    let output = run_example("methods/class_new_as_a_method_object.rb");
+    assert_eq!(output, "Guard\n0\nThread::Mutex\nPlain\n");
+}
+
+#[test]
+fn test_a_rescue_naming_a_class_constant_asks_the_module_it_holds() {
+    let output = run_example("rescue/module_case_equality_through_class_constant.rb");
+    assert_eq!(output, "Catching\n[:caught, \"deep\"]\n");
+}
+
+#[test]
+fn test_super_in_a_define_method_body_starts_past_the_class_it_was_defined_on() {
+    let output = run_example("methods/define_method_super_from_a_subclass.rb");
+    assert_eq!(
+        output,
+        "[:group, :from_module]\n[:group, :from_module]\nGroup\n"
+    );
+}
+
+#[test]
+fn test_super_in_a_block_starts_past_the_class_its_method_was_defined_on() {
+    let output = run_example("methods/super_in_a_block_of_a_class_named_later.rb");
+    assert_eq!(output, ":from_module\n");
+}
+
+#[test]
+fn test_include_inside_an_instance_method_calls_the_object_s_own_include() {
+    let output = run_example("methods/include_inside_an_instance_method.rb");
+    assert_eq!(
+        output,
+        "[[Comparable, []], [Enumerable, [:tagged]]]\nfalse\n"
+    );
+}
+
+#[test]
+fn test_array_difference_matches_structs_by_eql() {
+    let output = run_example("array_methods/difference_of_structs.rb");
+    assert_eq!(output, "true\ntrue\ntrue\n0\n1\ntrue\n");
+}
+
+#[test]
+fn test_object_eql_is_identity_and_array_difference_uses_it() {
+    let output = run_example("methods/eql_and_array_difference.rb");
+    assert_eq!(
+        output,
+        "true\nfalse\n[1, 3]\ntrue\n[#<struct Point x=3, y=4>]\ntrue\n"
+    );
+}
+
+#[test]
+fn test_a_def_in_a_block_instance_exec_runs_from_a_block_lands_on_the_receiver() {
+    let output = run_example("methods/def_in_instance_exec_from_a_block.rb");
+    assert_eq!(
+        output,
+        "[[:initialize], [:total], [], Group]\n[:initialize]\n"
+    );
+}
+
+#[test]
+fn test_a_keyword_value_may_stand_on_the_line_after_its_label() {
+    let output = run_example("methods/keyword_args/value_on_the_next_line.rb");
+    assert_eq!(
+        output,
+        "[:level, [:fatal, :warn], :info]\n[:mode, :plain, 1]\n[:short, :held, 2]\n{level: 2}\n{level: 1}\n"
+    );
+}

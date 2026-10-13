@@ -651,11 +651,11 @@ It takes the options `metorex spec --help` lists, which are RSpec's, and these o
 
 | Suite | Passing | Examples | Pending |
 | :-- | --: | --: | --: |
-| rspec-expectations | 2201 | 2456 | 9 |
-| rspec-mocks | 1292 | 1807 | 9 |
-| rspec-core | not run | | |
+| rspec-expectations | 2231 | 2455 | 17 |
+| rspec-mocks | 1319 | 1806 | 9 |
+| rspec-core | 2009 | 2264 | 19 |
 
-rspec-mocks leaves out `spec/integration/rails_support_spec.rb`, and rspec-core's `spec_helper` loads its support files, both of which need the aruba gem. diff-lcs's suite passes all 322 of its examples, with documentation output identical to RSpec's byte for byte.
+The driver needs MRI with the aruba and thread_order gems, which rspec-core's suite loads. diff-lcs's suite passes all 322 of its examples, with documentation output identical to RSpec's byte for byte.
 
 ## Roadmap Highlights
 

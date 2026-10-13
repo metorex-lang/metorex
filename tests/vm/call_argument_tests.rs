@@ -95,10 +95,10 @@ fn a_method_defined_on_a_receiver_is_not_read_as_a_local() {
 }
 
 #[test]
-fn a_keyword_shorthand_at_the_end_of_a_line_reads_the_local() {
+fn a_keyword_label_at_the_end_of_a_line_takes_its_value_from_the_next_line() {
     let code = "def pair(first:, second:)\n  [first, second]\nend\nfirst = 1\nsecond = 2\nanswer = pair first:, second:\nanswer";
     assert_eq!(
         run(code),
-        Some(Object::array(vec![Object::Int(1), Object::Int(2)]))
+        Some(Object::array(vec![Object::Int(1), Object::Nil]))
     );
 }

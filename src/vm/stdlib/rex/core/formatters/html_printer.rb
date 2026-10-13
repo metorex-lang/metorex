@@ -1,155 +1,10 @@
-require "erb"
+require 'erb'
 
 module Rex
   module Core
     module Formatters
-      # `--format html`: the run as one HTML page, in RSpec's layout.
-      class HtmlFormatter < BaseFormatter
-        Formatters.register self, :start, :example_group_started, :start_dump,
-                            :example_started, :example_passed, :example_failed,
-                            :example_pending, :dump_summary
-
-        def initialize(output)
-          super(output)
-          @failed_examples = []
-          @example_group_number = 0
-          @example_number = 0
-          @header_red = nil
-          @printer = HtmlPrinter.new(output)
-        end
-
-        def start(notification)
-          super
-          @printer.print_html_start
-          @printer.flush
-        end
-
-        def example_group_started(notification)
-          super
-          @example_group_red = false
-          @example_group_number += 1
-          @printer.print_example_group_end unless @example_group_number == 1
-          @printer.print_example_group_start(@example_group_number, notification.group.description,
-                                             notification.group.parent_groups.size)
-          @printer.flush
-        end
-
-        def start_dump(_notification)
-          @printer.print_example_group_end
-          @printer.flush
-        end
-
-        def example_started(_notification)
-          @example_number += 1
-        end
-
-        def example_passed(passed)
-          @printer.move_progress(percent_done)
-          @printer.print_example_passed(passed.example.description, passed.example.execution_result.run_time)
-          @printer.flush
-        end
-
-        def example_failed(failure)
-          @failed_examples << failure.example
-          unless @header_red
-            @header_red = true
-            @printer.make_header_red
-          end
-          unless @example_group_red
-            @example_group_red = true
-            @printer.make_example_group_header_red(@example_group_number)
-          end
-          @printer.move_progress(percent_done)
-
-          example = failure.example
-          exception = failure.exception
-          message_lines = failure.fully_formatted_lines(nil)
-          # The first two lines are the description and a blank line.
-          exception_details = if exception
-                                {
-                                  message: message_lines.drop(2).join("\n"),
-                                  backtrace: failure.formatted_backtrace.join("\n")
-                                }
-                              end
-          extra = extra_failure_content(failure)
-          @printer.print_example_failed(example.execution_result.pending_fixed?, example.description,
-                                        example.execution_result.run_time, @failed_examples.size,
-                                        exception_details, extra == "" ? false : extra)
-          @printer.flush
-        end
-
-        def example_pending(pending)
-          example = pending.example
-          @printer.make_header_yellow unless @header_red
-          @printer.make_example_group_header_yellow(@example_group_number) unless @example_group_red
-          @printer.move_progress(percent_done)
-          @printer.print_example_pending(example.description, example.execution_result.pending_message)
-          @printer.flush
-        end
-
-        def dump_summary(summary)
-          @printer.print_summary(summary.duration, summary.example_count, summary.failure_count, summary.pending_count)
-          @printer.flush
-        end
-
-        private
-
-        def percent_done
-          return 100.0 unless @example_count > 0
-
-          ((@example_number.to_f / @example_count * 1000).to_i / 10.0).to_f
-        end
-
-        # The source around the failing line, for a subclass to replace with
-        # other content.
-        def extra_failure_content(failure)
-          formatter = Rex.configuration.backtrace_formatter
-          backtrace = (failure.exception.backtrace || []).reject { |line| formatter.exclude?(line) }
-                                                         .map { |line| formatter.backtrace_line(line) }
-          @snippet_extractor ||= HtmlSnippetExtractor.new
-          "    <pre class=\"ruby\"><code>#{@snippet_extractor.snippet(backtrace)}</code></pre>"
-        end
-      end
-
-      # The lines around a failure, numbered, with the failing one marked.
-      class HtmlSnippetExtractor
-        def snippet(backtrace)
-          raw_code, line = snippet_for(backtrace[0])
-          highlighted = %(#{raw_code}\n<span class="comment"># Install the coderay gem to get syntax highlighting</span>)
-          post_process(highlighted, line)
-        end
-
-        def snippet_for(error_line)
-          if error_line =~ /(.*):(\d+)/
-            file = Regexp.last_match(1)
-            line = Regexp.last_match(2).to_i
-            [lines_around(file, line), line]
-          else
-            ["# Couldn't get snippet for #{error_line}", 1]
-          end
-        end
-
-        # Two lines above the failing one and one below.
-        def lines_around(file, line)
-          return "# Couldn't get snippet for #{file}" unless File.file?(file)
-
-          lines = File.read(file).split("\n")
-          min = [0, line - 3].max
-          max = [line + 1, lines.length - 1].min
-          lines[min..max].join("\n")
-        end
-
-        def post_process(highlighted, offending_line)
-          highlighted.split("\n").each_with_index.map do |line, index|
-            new_line = "<span class=\"linenum\">#{offending_line + index - 2}</span>#{line}"
-            index == 2 ? "<span class=\"offending\">#{new_line}</span>" : new_line
-          end.join("\n")
-        end
-      end
-
       class HtmlPrinter
         include ERB::Util
-
         def initialize(output)
           @output = output
         end
@@ -251,7 +106,7 @@ module Rex
                        "makeYellow('example_group_#{group_id}');</script>"
         end
 
-        private
+      private
 
         def indentation_style(number_of_parents)
           "style=\"margin-left: #{(number_of_parents - 1) * 15}px;\""
@@ -357,7 +212,6 @@ function assign_display_style_for_group(classname, display_flag, subgroup_flag) 
   }
 }
 EOF
-        # rubocop:enable Layout/LineLength
 
         GLOBAL_STYLES = <<-EOF
 #rspec-header {

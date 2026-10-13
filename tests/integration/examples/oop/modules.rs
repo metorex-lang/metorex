@@ -536,6 +536,24 @@ fn test_oop_autoload_reopening_no_parens_execution() {
     assert_eq!(output, AUTOLOAD_REOPENING_OUTPUT);
 }
 
+#[test]
+fn test_oop_autoload_from_a_method_called_in_a_class_exec_block() {
+    let output = run_example("oop/autoload_from_nested_class.rb");
+    assert_eq!(output, "15\n");
+}
+
+#[test]
+fn test_oop_a_clone_owns_the_methods_its_singleton_class_copied() {
+    let output = run_example("oop/clone_singleton_super.rb");
+    assert_eq!(output, "4\ntrue\ntrue\n");
+}
+
+#[test]
+fn test_oop_an_autoload_in_an_open_scope_comes_ahead_of_a_top_level_constant() {
+    let output = run_example("oop/autoload_shadows_a_top_level_constant.rb");
+    assert_eq!(output, ":autoloaded\n:top_level\n");
+}
+
 /// The expected output of both `oop/refined_operators` variants.
 const REFINED_OPERATORS_OUTPUT: &str = concat!(
     "NoMethodError\n",

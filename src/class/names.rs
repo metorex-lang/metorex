@@ -175,3 +175,14 @@ impl Class {
         vars
     }
 }
+
+impl Class {
+    /// The subclass of Module this module was made from by `new`, if any.
+    pub fn instance_of(&self) -> Option<Rc<Class>> {
+        self.instance_of.borrow().clone()
+    }
+
+    pub fn set_instance_of(&self, class: Rc<Class>) {
+        *self.instance_of.borrow_mut() = Some(class);
+    }
+}

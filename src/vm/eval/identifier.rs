@@ -142,6 +142,18 @@ impl VirtualMachine {
         {
             return Ok(val);
         }
+        // A scope open where the code was written that autoloads the name
+        // holds it ahead of a top-level constant of the same name.
+        if name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
+            for scope in self.lexical_nesting() {
+                if scope.get_class_var(name).is_none()
+                    && scope.lookup_autoload(name).is_some()
+                    && let Some(val) = self.try_autoload_constant(&scope, name)?
+                {
+                    return Ok(val);
+                }
+            }
+        }
         if let Some(val) = self.environment().get(name) {
             // A method on `self` wins over a same-named Kernel function, so a
             // bare `to_s` inside a class reaches that class's `to_s` rather

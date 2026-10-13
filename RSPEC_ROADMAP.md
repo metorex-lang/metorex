@@ -257,9 +257,9 @@ Three layers, chosen per feature by what the layer above cannot do:
 ## 15. Compatibility proof
 
 - [x] 15.1. Port the `tests/_examples/` assertions that already read as specs into `spec/` files run by `metorex spec`, each also passing under MRI's rspec: the interpreter fixes the Rex work needed, 43 examples
-- [x] 15.2. Run `rspec-expectations`' own spec suite unchanged, and record the pass count: 2201 of 2456, 9 pending
-- [x] 15.3. Run `rspec-mocks`' own spec suite unchanged, and record the pass count: 1292 of 1807, 9 pending, leaving out the one file that needs the aruba gem
-- [ ] 15.4. Run `rspec-core`'s own spec suite unchanged, and record the pass count
+- [x] 15.2. Run `rspec-expectations`' own spec suite unchanged, and record the pass count: 2231 of 2455, 17 pending
+- [x] 15.3. Run `rspec-mocks`' own spec suite unchanged, and record the pass count: 1319 of 1806, 9 pending
+- [x] 15.4. Run `rspec-core`'s own spec suite unchanged, and record the pass count: 2009 of 2264, 19 pending
 - [x] 15.5. Pick a third-party library with an RSpec suite and no C extensions, run it, and record the result: diff-lcs, 322 of 322
 - [x] 15.6. Byte-compare `documentation` formatter output against real RSpec for a fixture suite
 - [x] 15.7. A `scripts/run_rspec_suite.sh` driver shaped like `scripts/run_ruby_spec.sh`, with a commented list advanced one line at a time

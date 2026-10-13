@@ -101,6 +101,7 @@ impl Parser {
                 | TokenKind::PercentW(_, _)
                 | TokenKind::PercentI(_, _)
                 | TokenKind::Ampersand
+                | TokenKind::Lambda
                 | TokenKind::Colon
                 | TokenKind::Include
                 | TokenKind::Extend
@@ -121,7 +122,7 @@ impl Parser {
         // space after, while the block-arg form has the operand glued to
         // the `&`. If the token after `&` has leading whitespace, the user
         // meant the binary operator.
-        if self.peek().kind == TokenKind::Ampersand && self.peek_ahead(1).had_leading_space {
+        if self.peek().kind == TokenKind::Ampersand && self.ampersand_is_binary() {
             return false;
         }
 
@@ -251,6 +252,7 @@ impl Parser {
                     | TokenKind::PercentW(_, _)
                     | TokenKind::PercentI(_, _)
                     | TokenKind::Ampersand
+                    | TokenKind::Lambda
                     | TokenKind::Colon
                     | TokenKind::Include
                     | TokenKind::Extend
@@ -264,10 +266,7 @@ impl Parser {
 
         // Same disambiguation for method-call paren-less args:
         // `obj.foo & x` is `obj.foo() & x`, not `obj.foo(&x)`.
-        if can_be_arg
-            && self.peek().kind == TokenKind::Ampersand
-            && self.peek_ahead(1).had_leading_space
-        {
+        if can_be_arg && self.peek().kind == TokenKind::Ampersand && self.ampersand_is_binary() {
             return false;
         }
 
@@ -315,6 +314,14 @@ impl Parser {
     /// Metorex also accepts `name -> expr` as a one-parameter lambda, so the
     /// two are told apart by looking past the parameter list for the `{` or
     /// `do` that opens a lambda body.
+    /// Whether the `&` ahead is the binary operator, which a space or the
+    /// end of the line after it says, rather than a block argument glued to
+    /// its operand.
+    fn ampersand_is_binary(&self) -> bool {
+        let after = self.peek_ahead(1);
+        after.had_leading_space || matches!(after.kind, TokenKind::Newline | TokenKind::Comment(_))
+    }
+
     pub(crate) fn arrow_starts_lambda_argument(&mut self) -> bool {
         let saved_position = self.stream().current_position();
         self.advance(); // consume '->'
@@ -582,10 +589,14 @@ impl Parser {
         name: &str,
         named_at: crate::lexer::Position,
     ) -> Result<Expression, MetorexError> {
+        // A line break after the label is skipped, so the value may stand on
+        // the next line.
+        while matches!(self.peek().kind, TokenKind::Newline | TokenKind::Comment(_)) {
+            self.advance();
+        }
         if self.is_at_end()
             || self.check(&[
                 TokenKind::Comma,
-                TokenKind::Newline,
                 TokenKind::Semicolon,
                 TokenKind::End,
                 TokenKind::RParen,

@@ -321,7 +321,13 @@ fn test_every_rex_source_file_is_carried_in_the_binary() {
     names.sort();
     let program = names
         .iter()
-        .map(|name| format!("require \"{name}\""))
+        // A file built on a gem, as the rake task is on rake, may find the
+        // gem missing, which is not a file Rex failed to carry.
+        .map(|name| {
+            format!(
+                "begin\n  require \"{name}\"\nrescue LoadError => error\n  raise if error.message.include?(\"rex/\")\nend"
+            )
+        })
         .collect::<Vec<_>>()
         .join("\n");
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_metorex"))

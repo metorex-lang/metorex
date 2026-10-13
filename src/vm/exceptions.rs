@@ -804,6 +804,7 @@ impl VirtualMachine {
             let held = self
                 .environment()
                 .get(name)
+                .or_else(|| self.resolve_constant_in_scope(name))
                 .or_else(|| self.resolve_qualified_constant(name));
             if let Some(held) = &held {
                 if !matches!(held, Object::Class(_) | Object::Module(_)) {

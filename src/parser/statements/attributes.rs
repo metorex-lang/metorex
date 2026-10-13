@@ -130,13 +130,9 @@ impl Parser {
 
         attributes.push(self.parse_attribute_expression()?);
 
-        loop {
-            self.skip_whitespace();
-
-            if !self.match_token(&[TokenKind::Comma]) {
-                break;
-            }
-
+        // A newline may follow a comma but not stand before one, so the
+        // line after the names starts a statement of its own.
+        while self.match_token(&[TokenKind::Comma]) {
             self.skip_whitespace();
             attributes.push(self.parse_attribute_expression()?);
         }

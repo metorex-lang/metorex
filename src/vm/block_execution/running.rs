@@ -91,6 +91,7 @@ impl VirtualMachine {
         .nested_in_a_block(depth)
         .written_in_scope(block.written_in.clone())
         .owned_by(block.defining_owner.clone())
+        .owned_by_class(block.defining_class.clone())
         .with_source_file(self.file_for_frames());
         // The body runs in the file the block was written in, which is what a
         // backtrace entry for a call made from here has to name.
@@ -445,6 +446,7 @@ impl VirtualMachine {
         .nested_in_a_block(depth)
         .written_in_scope(block.written_in.clone())
         .owned_by(block.defining_owner.clone())
+        .owned_by_class(block.defining_class.clone())
         .with_source_file(self.file_for_frames());
         self.call_stack_push(frame);
         self.environment_mut().push_isolated_scope();

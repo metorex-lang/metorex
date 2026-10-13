@@ -108,6 +108,23 @@ impl Class {
         self.class_variables.borrow_mut().shift_remove(name)
     }
 
+    /// Makes each method `source` owned in this copy's table owned by the
+    /// copy instead, so `super` from it starts past the copy.
+    pub fn take_ownership_of_methods_from(self: &Rc<Self>, source: &Rc<Class>) {
+        let mut methods = self.methods.borrow_mut();
+        for method in methods.values_mut() {
+            if method
+                .owner_class
+                .as_ref()
+                .is_some_and(|owner| Rc::ptr_eq(owner, source))
+            {
+                let mut owned = (**method).clone();
+                owned.owner_class = Some(Rc::clone(self));
+                *method = Rc::new(owned);
+            }
+        }
+    }
+
     /// Deep-ish copy for `Class#dup`/`Module#dup`. The result is anonymous
     /// (Ruby's `#name` returns nil until assigned to a constant), carries its
     /// own method/class-var tables, and — critically — gets a fresh singleton
@@ -118,6 +135,7 @@ impl Class {
             name: String::new(),
             assigned_name: RefCell::new(None),
             temporary_name: RefCell::new(None),
+            instance_of: RefCell::new(None),
             superclass: source.superclass.clone(),
             methods: RefCell::new(source.methods.borrow().clone()),
             instance_variables: RefCell::new(source.instance_variables.borrow().clone()),
@@ -156,6 +174,7 @@ impl Class {
                 name: format!("#<Class:{}>", copy.name),
                 assigned_name: RefCell::new(None),
                 temporary_name: RefCell::new(None),
+                instance_of: RefCell::new(None),
                 superclass: src_sc.superclass.clone(),
                 methods: RefCell::new(src_sc.methods.borrow().clone()),
                 instance_variables: RefCell::new(src_sc.instance_variables.borrow().clone()),
@@ -201,6 +220,7 @@ impl Clone for Class {
             name: self.name.clone(),
             assigned_name: RefCell::new(self.assigned_name.borrow().clone()),
             temporary_name: RefCell::new(self.temporary_name.borrow().clone()),
+            instance_of: RefCell::new(self.instance_of.borrow().clone()),
             superclass: self.superclass.clone(),
             methods: RefCell::new(self.methods.borrow().clone()),
             instance_variables: RefCell::new(self.instance_variables.borrow().clone()),

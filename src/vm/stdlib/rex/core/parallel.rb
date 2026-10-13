@@ -5,6 +5,17 @@ module Rex
     # parent replays the groups to the formatters in the order a serial run
     # would have run them, so the output reads the same.
     module Parallel
+      # The coverage counts each worker sent back.
+      def self.worker_coverage
+        @worker_coverage ||= []
+      end
+
+      # Sends what the run reports to `recorder` in place of the reporter
+      # the configuration built.
+      def self.report_to(recorder)
+        Rex.configuration.instance_variable_set(:@reporter, recorder)
+      end
+
       # An exception that cannot be sent between processes as it is, sent
       # as its class name, message, backtrace, and cause.
       class RemoteError < StandardError
@@ -142,13 +153,13 @@ module Rex
         end
 
         def example_group_started(group)
-          @group_starts[group] = Rex::Core.monotonic_now
+          @group_starts[group] = Rex::Core::Time.now
           record(:group_started, group.id)
         end
 
         def example_group_finished(group)
           started = @group_starts.delete(group)
-          record(:group_finished, group.id, started ? Rex::Core.monotonic_now - started : 0)
+          record(:group_finished, group.id, started ? (Rex::Core::Time.now - started).to_f : 0)
         end
 
         def example_started(example)
@@ -233,7 +244,7 @@ module Rex
               recorded[index] = [events, quit]
             in [:done, quit, coverage]
               world.wants_to_quit ||= quit
-              world.worker_coverage << coverage if coverage
+              worker_coverage << coverage if coverage
               open_workers.delete(worker)
             in nil
               open_workers.delete(worker)
@@ -268,7 +279,7 @@ module Rex
         pipe = Pipe.new
         pid = fork do
           recorder = Recorder.new
-          world.reporter = recorder
+          report_to(recorder)
           world.wants_to_quit = false
           $stdout = RecordingStream.new(recorder, :output)
           $stderr = RecordingStream.new(recorder, :error_output)
@@ -299,7 +310,7 @@ module Rex
         # with, which the parent reports, are cleared.
         ::Coverage.result(stop: false, clear: true) if Rex.configuration.coverage
         recorder = Recorder.new
-        Rex.world.reporter = recorder
+        report_to(recorder)
         $stdout = RecordingStream.new(recorder, :output)
         $stderr = RecordingStream.new(recorder, :error_output)
         groups.each_with_index do |group, index|
@@ -332,7 +343,8 @@ module Rex
               @reporter.example_group_started(@groups_by_id.fetch(id))
             in [:group_finished, id, duration]
               group = @groups_by_id.fetch(id)
-              @reporter.profiler.durations[group] = duration
+              profiler = @reporter.instance_variable_get(:@profiler)
+              profiler.durations[group] = duration if profiler
               @reporter.example_group_finished(group)
             in [:example_started, id]
               @reporter.example_started(@examples_by_id.fetch(id))
@@ -372,7 +384,7 @@ module Rex
           result.pending_exception = data[:pending_exception]
           result.pending_fixed = data[:pending_fixed]
           result.run_time = data[:run_time]
-          example.exception = data[:example_exception]
+          example.instance_variable_set(:@exception, data[:example_exception])
           example.metadata.update(data[:metadata])
         end
       end

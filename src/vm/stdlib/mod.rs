@@ -240,6 +240,7 @@ const EMBEDDED_LIBRARIES: &[(&[&str], &str)] = &[
     ),
     (&["matrix"], include_str!("matrix.rb")),
     (&["drb", "drb/drb"], include_str!("drb.rb")),
+    (&["drb/acl"], include_str!("drb_acl.rb")),
     (&["fiddle"], include_str!("fiddle.rb")),
     (&["json"], include_str!("json.rb")),
     (&["objspace"], include_str!("objspace.rb")),

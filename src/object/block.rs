@@ -78,6 +78,9 @@ pub struct BlockStatement {
     pub defining_method: Option<(String, String)>,
     /// The class path of the module the enclosing method was defined in.
     pub defining_owner: Option<String>,
+    /// The class or module the enclosing method was defined on, which is
+    /// where a `super` in the block starts from.
+    pub defining_class: Option<Rc<Class>>,
     /// True for `-> {}` and `lambda {}`, false for `proc {}` and every
     /// ordinary block. Lambdas check arity strictly; procs pad missing
     /// arguments with nil and drop extras.
@@ -149,6 +152,7 @@ impl BlockStatement {
             captured_nesting: Vec::new(),
             defining_method: None,
             defining_owner: None,
+            defining_class: None,
             is_lambda: false,
             source_file: None,
             home_frame: None,
@@ -186,6 +190,7 @@ impl BlockStatement {
             captured_nesting: Vec::new(),
             defining_method,
             defining_owner: None,
+            defining_class: None,
             is_lambda,
             source_file: None,
             home_frame: None,

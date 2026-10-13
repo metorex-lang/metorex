@@ -123,6 +123,7 @@ fn class_of_block() {
         captured_nesting: vec![],
         defining_method: None,
         defining_owner: None,
+        defining_class: None,
         is_lambda: false,
         source_file: None,
         home_frame: None,

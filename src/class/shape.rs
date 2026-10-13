@@ -15,6 +15,9 @@ pub struct Class {
     /// Name set by `Module#set_temporary_name`. It takes precedence over the
     /// assigned name until the module gains a permanent one.
     pub(crate) temporary_name: RefCell<Option<String>>,
+    /// The subclass of Module this module was made from, for a module
+    /// `new` made on one, which is what its `class` answers.
+    pub(crate) instance_of: RefCell<Option<Rc<Class>>>,
     pub(crate) superclass: Option<Rc<Class>>,
     pub(crate) methods: RefCell<HashMap<String, Rc<Method>>>,
     pub(crate) instance_variables: RefCell<HashSet<String>>,

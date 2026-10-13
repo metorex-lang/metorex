@@ -46,6 +46,14 @@ impl VirtualMachine {
                         "Encoding" | "Object" | "BasicObject"
                     ))));
                 }
+                // A module made by `new` on a subclass of Module is a kind of
+                // that subclass and each class it inherits from.
+                if let Object::Module(module) = receiver
+                    && let Some(made_from) = module.instance_of()
+                    && crate::vm::method_invocation::descends_from_class(&made_from, target_class)
+                {
+                    return Ok(Some(Object::Bool(true)));
+                }
                 // A class is a kind of the singleton class of itself and of
                 // each class it inherits from, since those are the classes
                 // its own singleton class inherits from.

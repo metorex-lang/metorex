@@ -26,6 +26,15 @@ impl VirtualMachine {
                         position,
                     ));
                 }
+                // Object's own `eql?` is identity. Asking `values_eql` would
+                // send `eql?` back to this very method.
+                if let Object::Instance(instance) = receiver
+                    && crate::vm::native_methods::array_subclass_value(receiver).is_none()
+                    && crate::vm::native_methods::string_subclass_value(receiver).is_none()
+                {
+                    let same = matches!(&arguments[0], Object::Instance(other) if std::rc::Rc::ptr_eq(instance, other));
+                    return Ok(Some(Object::Bool(same)));
+                }
                 Ok(Some(Object::Bool(self.values_eql(
                     receiver,
                     &arguments[0],

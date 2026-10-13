@@ -597,7 +597,7 @@ impl Parser {
                     param_pos,
                 ));
             } else {
-                let name = match self.advance().kind {
+                let name = match crate::parser::method_name_as_identifier(self.advance().kind) {
                     TokenKind::Ident(name) => {
                         self.declare_local(&name);
                         name
@@ -741,7 +741,7 @@ impl Parser {
                     param_pos,
                 ));
             } else {
-                let name = match self.advance().kind {
+                let name = match crate::parser::method_name_as_identifier(self.advance().kind) {
                     TokenKind::Ident(name) => {
                         self.declare_local(&name);
                         name

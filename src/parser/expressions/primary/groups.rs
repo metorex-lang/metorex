@@ -504,7 +504,8 @@ impl Parser {
                 };
 
                 self.skip_whitespace();
-                let value = self.parse_expression()?;
+                // A value may be an assignment, as `{ line: @line += 1 }` has.
+                let value = self.parse_expression_with_assignment()?;
                 entries.push((key, value));
                 self.skip_whitespace();
 

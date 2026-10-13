@@ -337,7 +337,14 @@ impl VirtualMachine {
         // the only way to place a method from an anonymous module or from one
         // of two modules that share a name. Matching the frame's class name
         // covers the cases where no owner was recorded.
-        let running_owner = self.method_owner_stack.last().cloned().flatten();
+        // In a block, the method the block was written in is the one whose
+        // owner `super` starts past, whichever method is running the block.
+        let block_owner = match self.call_stack.last() {
+            Some(top) if top.block_depth() > 0 => top.owner_class().cloned(),
+            _ => None,
+        };
+        let running_owner =
+            block_owner.or_else(|| self.method_owner_stack.last().cloned().flatten());
         // A method a refinement holds stands in front of the class it
         // refines, so `super` from it starts at that class's own method.
         let refined_at = running_owner
@@ -354,8 +361,14 @@ impl VirtualMachine {
         // A method bound into a hierarchy its own module is not part of has
         // no place in the chain. `super` from it reaches whatever the
         // receiver's own ancestors define, so the search starts at the top.
-        let placed =
-            recorded_owner.or_else(|| chain.iter().find(|c| c.name() == class_name).cloned());
+        let placed = recorded_owner.or_else(|| {
+            // A class made with `Class.new` and named afterwards answers
+            // to the name it was given, which is the one a frame shows.
+            chain
+                .iter()
+                .find(|c| c.name() == class_name || c.ruby_name() == class_name)
+                .cloned()
+        });
         let defining_class = match &placed {
             Some(found) => Rc::clone(found),
             None => Rc::clone(&chain[0]),

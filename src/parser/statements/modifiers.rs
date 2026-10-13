@@ -17,7 +17,14 @@ impl Parser {
     ) -> Result<Statement, MetorexError> {
         let opened_at = self.stream.current_position();
         let parsed = parse(self)?;
-        if !self.check(&[TokenKind::Dot]) {
+        // A call or a logical operator after `end` makes the whole construct
+        // an operand: `if ready then value end || fallback`.
+        if !self.check(&[
+            TokenKind::Dot,
+            TokenKind::SafeDot,
+            TokenKind::LogicalOr,
+            TokenKind::LogicalAnd,
+        ]) {
             // `begin ... end while cond` and the rest of the modifiers read
             // the block they follow.
             return self.wrap_with_modifier(parsed);

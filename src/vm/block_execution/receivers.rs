@@ -177,6 +177,7 @@ impl VirtualMachine {
             }
         }
         .owned_by(block.defining_owner.clone())
+        .owned_by_class(block.defining_class.clone())
         .nested_in_a_block(
             block
                 .written_depth
@@ -285,7 +286,12 @@ impl VirtualMachine {
         // A `def` in the block, or in a block it opens, installs on the
         // receiver's singleton class rather than where the method running
         // the block was defined.
-        let running_frame = self.current_method_frame;
+        // The frame is the one `written_in_method` reads from inside the
+        // body, which is the home of a block the call sits in.
+        let running_frame = match self.lexical_home_frame {
+            Some(home) => home,
+            None => self.current_method_frame,
+        };
         let replaced_definee = match running_frame {
             Some(running)
                 if !crate::vm::native_methods::object_methods::refuses_a_singleton(&receiver) =>

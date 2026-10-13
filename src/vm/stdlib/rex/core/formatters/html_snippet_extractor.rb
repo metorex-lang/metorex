@@ -1,0 +1,71 @@
+module Rex
+  module Core
+    module Formatters
+      class HtmlSnippetExtractor
+        module NullConverter
+          def self.convert(code)
+            %Q(#{code}\n<span class="comment"># Install the coderay gem to get syntax highlighting</span>)
+          end
+        end
+
+        module CoderayConverter
+          def self.convert(code)
+            CodeRay.scan(code, :ruby).html(:line_numbers => false)
+          end
+        end
+
+        @@converter = NullConverter
+
+        begin
+          require 'coderay'
+          require "rex/core/formatters/syntax_highlighter"
+          Rex::Core::Formatters::SyntaxHighlighter.attempt_to_add_rspec_terms_to_coderay_keywords
+          @@converter = CoderayConverter
+        rescue LoadError
+        end
+
+
+        def snippet(backtrace)
+          raw_code, line = snippet_for(backtrace[0])
+          highlighted = @@converter.convert(raw_code)
+          post_process(highlighted, line)
+        end
+
+        def snippet_for(error_line)
+          if error_line =~ /(.*):(\d+)/
+            file = Regexp.last_match[1]
+            line = Regexp.last_match[2].to_i
+            [lines_around(file, line), line]
+          else
+            ["# Couldn't get snippet for #{error_line}", 1]
+          end
+        end
+
+        def lines_around(file, line)
+          if File.file?(file)
+            lines = File.read(file).split("\n")
+            min = [0, line - 3].max
+            max = [line + 1, lines.length - 1].min
+            selected_lines = []
+            selected_lines.join("\n")
+            lines[min..max].join("\n")
+          else
+            "# Couldn't get snippet for #{file}"
+          end
+        rescue SecurityError
+          "# Couldn't get snippet for #{file}"
+        end
+
+        def post_process(highlighted, offending_line)
+          new_lines = []
+          highlighted.split("\n").each_with_index do |line, i|
+            new_line = "<span class=\"linenum\">#{offending_line + i - 2}</span>#{line}"
+            new_line = "<span class=\"offending\">#{new_line}</span>" if i == 2
+            new_lines << new_line
+          end
+          new_lines.join("\n")
+        end
+      end
+    end
+  end
+end

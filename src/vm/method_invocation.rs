@@ -316,6 +316,14 @@ impl VirtualMachine {
             .allocation_counts
             .entry(Rc::as_ptr(&class) as usize)
             .or_insert(0) += 1;
+        // `new` on a subclass of Module makes a module whose class is that
+        // subclass, and runs the subclass's `initialize` with it as `self`.
+        if class.name() != "Module"
+            && descends_from(&class, "Module")
+            && !descends_from(&class, "Class")
+        {
+            return self.build_module_instance(class, arguments, position);
+        }
         // `Hash.new`, `Hash.new(default)`, and `Hash.new { |hash, key| ... }`
         // all answer a native Dict, with the default kept beside the entries.
         if class.name() == "Hash" && arguments.len() <= 2 {
@@ -954,6 +962,58 @@ impl VirtualMachine {
 
         false
     }
+}
+
+impl VirtualMachine {
+    /// A module made by `new` on a subclass of Module.
+    fn build_module_instance(
+        &mut self,
+        class: Rc<Class>,
+        arguments: Vec<Object>,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
+        let made = Class::new_module("");
+        made.set_instance_of(Rc::clone(&class));
+        let receiver = Object::Module(Rc::clone(&made));
+        let block = self.pending_block.take();
+        match class.find_method("initialize") {
+            Some(initialize) if !initialize.is_undefined && !initialize.body.is_empty() => {
+                self.pending_block = block;
+                self.invoke_method(
+                    Rc::clone(&class),
+                    initialize,
+                    receiver.clone(),
+                    arguments,
+                    position,
+                )?;
+            }
+            // Module's own `initialize` runs a block as the module's body.
+            _ => {
+                if let Some(Object::Block(body)) = block {
+                    self.apply_block_as_class_body_with_self(
+                        &made,
+                        &body,
+                        position,
+                        receiver.clone(),
+                    )?;
+                    made.set_current_visibility("public");
+                }
+            }
+        }
+        Ok(receiver)
+    }
+}
+
+/// Whether `class` is `ancestor` or a subclass of it.
+pub(crate) fn descends_from_class(class: &Rc<Class>, ancestor: &Rc<Class>) -> bool {
+    let mut cursor = Some(Rc::clone(class));
+    while let Some(current) = cursor {
+        if Rc::ptr_eq(&current, ancestor) {
+            return true;
+        }
+        cursor = current.superclass();
+    }
+    false
 }
 
 /// Whether `class` is `name` or descends from it.

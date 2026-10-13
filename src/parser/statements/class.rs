@@ -100,9 +100,16 @@ impl Parser {
             // look past it when deciding which of the two forms follows.
             let named_from_root = matches!(self.peek().kind, TokenKind::ColonColon);
             let name_at = usize::from(named_from_root);
+            // The name may be qualified, as `Core::Event.new(:entity)` is.
+            let mut name_end = name_at + 1;
+            while matches!(self.peek_ahead(name_end).kind, TokenKind::ColonColon)
+                && matches!(self.peek_ahead(name_end + 1).kind, TokenKind::Ident(_))
+            {
+                name_end += 2;
+            }
             let call_form = matches!(self.peek_ahead(name_at).kind, TokenKind::Ident(_))
                 && matches!(
-                    self.peek_ahead(name_at + 1).kind,
+                    self.peek_ahead(name_end).kind,
                     TokenKind::Dot | TokenKind::LParen
                 );
             // A superclass that is not written as a name at all, such as
@@ -125,13 +132,13 @@ impl Parser {
             if names_nothing {
                 return Err(self.error_at_current("Expected superclass name"));
             }
-            if call_form || !named_form {
+            // A leading `::` starts the lookup at the top level, past a
+            // module of the same name open here, which the expression form
+            // does.
+            if call_form || !named_form || named_from_root {
                 superclass_expression = Some(Box::new(self.parse_expression()?));
                 None
             } else {
-                // Metorex resolves a bare constant at the top level anyway,
-                // so a leading `::` needs nothing beyond being consumed.
-                self.match_token(&[TokenKind::ColonColon]);
                 let mut parent = match self.advance().kind {
                     TokenKind::Ident(parent) => parent,
                     _ => return Err(self.error_at_previous("Expected superclass name")),

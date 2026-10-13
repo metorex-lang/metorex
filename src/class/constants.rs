@@ -16,6 +16,7 @@ impl Class {
             name: name.into(),
             assigned_name: RefCell::new(None),
             temporary_name: RefCell::new(None),
+            instance_of: RefCell::new(None),
             superclass,
             methods: RefCell::new(HashMap::new()),
             instance_variables: RefCell::new(HashSet::new()),

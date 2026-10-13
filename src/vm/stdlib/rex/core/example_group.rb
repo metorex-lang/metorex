@@ -1,469 +1,600 @@
+
 module Rex
   module Core
-    # A group written with `describe`. Each group is a subclass of its parent
-    # group, and each example runs in a new instance of its group.
+
     class ExampleGroup
+      extend Hooks
+
       include MemoizedHelpers
-      include Pending
       extend MemoizedHelpers::ClassMethods
+      include Pending
+      extend SharedExampleGroup
 
-      GROUP_ONLY_KEYS = [:parent_example_group, :example_group, :block, :scoped_id,
-                         :description_args, :description, :full_description,
-                         :file_path, :line_number, :location, :absolute_file_path].freeze
-
-      # Every group has these, set when the group is defined.
-      class << self
-        def metadata
-          @metadata ||= {}
-        end
-
-        def description
-          description = metadata[:description]
-          description = description.nil? || description.empty? ? to_s : description
-          Rex.configuration.format_docstrings_block.call(description)
-        end
-
-        def described_class
-          metadata[:described_class]
-        end
-
-        def hooks
-          @hooks ||= Hooks::Collection.new
-        end
-
-        def examples
-          @examples ||= []
-        end
-
-        def children
-          @children ||= []
-        end
-
-        def declaration_line
-          metadata[:line_number]
-        end
-
-        def file_path
-          metadata[:file_path]
-        end
-
-        def location
-          metadata[:location]
-        end
-
-        def id
-          "#{metadata[:rerun_file_path]}[#{metadata[:scoped_id]}]"
-        end
-
-        def top_level?
-          superclass == ExampleGroup
-        end
-
-        def top_level_description
-          parent_groups.last.description
-        end
-
-        # This group and the groups it sits in, innermost first.
-        def parent_groups
-          groups = []
-          group = self
-          while group < ExampleGroup
-            groups << group
-            group = group.superclass
-          end
-          groups
-        end
-
-        def descendants
-          [self] + children.flat_map(&:descendants)
-        end
-
-        # The `let` and `subject` names this group and the groups around it
-        # declare, innermost first.
-        def let_names
-          parent_groups.flat_map do |group|
-            next [] unless group.const_defined?(:LetDefinitions, false)
-
-            group.const_get(:LetDefinitions, false).instance_methods(false).sort
-          end.uniq
-        end
-
-        def inspect
-          name || "#<Class:#{description}>"
-        end
-
-        def to_s
-          name || super
-        end
-
-        def set_it_up(description_args, user_metadata, location, parent_metadata)
-          file_path, line_number = location
-          @metadata = parent_metadata ? parent_metadata.reject { |key, _| GROUP_ONLY_KEYS.include?(key) } : {}
-          @metadata.update(user_metadata)
-          @metadata[:description_args] = description_args
-          @metadata[:description] = ExampleGroup.build_description_from(*description_args)
-          @metadata[:parent_example_group] = parent_metadata
-          @metadata[:described_class] = ExampleGroup.described_class_from(description_args, parent_metadata)
-          @metadata[:file_path] = file_path
-          @metadata[:line_number] = line_number
-          @metadata[:location] = "#{file_path}:#{line_number}"
-          @metadata[:absolute_file_path] = File.expand_path(file_path)
-          # A group, and every example in it, reruns through the file its
-          # outermost group was written in, which a shared group's support
-          # file is not.
-          @metadata[:rerun_file_path] = parent_metadata ? parent_metadata[:rerun_file_path] : file_path
-          @metadata[:full_description] = ExampleGroup.full_description_for(@metadata)
-          Rex.configuration.derived_metadata_blocks.dup.each do |filter, derive|
-            derive.call(@metadata) if Metadata.filter_applies?(filter, @metadata)
-          end
-          Rex.configuration.inclusions.each do |mod, filter|
-            include(mod) if Metadata.filter_applies?(filter, @metadata)
-          end
-          Rex.configuration.prependings.each do |mod, filter|
-            prepend(mod) if Metadata.filter_applies?(filter, @metadata)
-          end
-          Rex.configuration.extensions.each do |mod, filter|
-            extend(mod) if Metadata.filter_applies?(filter, @metadata)
-          end
-          include_matching_shared_contexts(parent_metadata)
-        end
-
-        # The shared contexts whose metadata this group matches, unless the
-        # group it sits in matched them already and passed them down.
-        def include_matching_shared_contexts(parent_metadata)
-          matches = lambda do |filter|
-            Metadata.filter_applies?(filter, @metadata) &&
-              !(parent_metadata && Metadata.filter_applies?(filter, parent_metadata))
-          end
-          Rex.configuration.named_context_inclusions.each do |name, filter|
-            next unless matches.call(filter)
-
-            shared = Rex.world.shared_example_group_registry.find([], name)
-            raise ArgumentError, "Could not find shared context #{name.inspect}" unless shared
-
-            shared.include_in(self, nil, [], nil)
-          end
-          Rex.configuration.automatic_shared_inclusions.each do |shared, filter|
-            shared.include_in(self, nil, [], nil) if matches.call(filter)
-          end
-        end
-
-        # `describe` inside a group: a subclass of this group.
-        def subclass(*arguments, location:, extra_metadata: {}, &block)
-          description = arguments.shift
-          rest, user_metadata = Metadata.split(arguments)
-          description_args = description.nil? ? rest : [description, *rest]
-          user_metadata = user_metadata.merge(extra_metadata)
-
-          group = Class.new(self)
-          group.set_it_up(description_args, user_metadata, location, self == ExampleGroup ? nil : metadata)
-          if self == ExampleGroup
-            Rex.world.register(group)
-          else
-            children << group
-          end
-          group.metadata[:scoped_id] = group.scoped_id_from_parent
-          Rex::ExampleGroups.assign_const(group)
-          group.module_exec(&block) if block
-          if self == ExampleGroup
-            Rex.configuration.on_example_group_definition_callbacks.each { |callback| callback.call(group) }
-          end
-          group
-        end
-
-        def scoped_id_from_parent
-          if self.superclass == ExampleGroup
-            Rex.world.next_top_level_index(file_path).to_s
-          else
-            "#{superclass.metadata[:scoped_id]}:#{superclass.next_runnable_index}"
-          end
-        end
-
-        # Examples and child groups are numbered together, in the order they
-        # are written.
-        def next_runnable_index
-          @runnable_index = (@runnable_index || 0) + 1
-        end
-
-        def define_example_group_method(name, extra_metadata = {})
-          define_singleton_method(name) do |*arguments, &block|
-            location = Metadata.location_from(caller_locations(1, 8))
-            subclass(*arguments, location: location, extra_metadata: extra_metadata, &block)
-          end
-        end
-
-        def define_example_method(name, extra_metadata = {})
-          define_singleton_method(name) do |*arguments, &block|
-            description = arguments.first.is_a?(Hash) ? nil : arguments.shift
-            user_metadata = Metadata.build_hash_from(arguments).merge(extra_metadata)
-            user_metadata[:skip] = "Not yet implemented" if block.nil? && !user_metadata.key?(:skip)
-            location = Metadata.location_from(caller_locations(1, 8))
-            example = Example.new(self, description, user_metadata, block, location)
-            example.metadata[:scoped_id] = "#{metadata[:scoped_id]}:#{next_runnable_index}"
-            example.metadata[:last_run_status] = Rex.configuration.last_run_statuses[example.id]
-            examples << example
-            example
-          end
-        end
-
-        def before(*arguments, &block)
-          scope, filter = Hooks.scope_and_metadata(arguments)
-          hooks.register(:before, scope, filter, block, :append)
-        end
-        alias append_before before
-
-        def prepend_before(*arguments, &block)
-          scope, filter = Hooks.scope_and_metadata(arguments)
-          hooks.register(:before, scope, filter, block, :prepend)
-        end
-
-        def after(*arguments, &block)
-          scope, filter = Hooks.scope_and_metadata(arguments)
-          hooks.register(:after, scope, filter, block, :prepend)
-        end
-        alias prepend_after after
-
-        def append_after(*arguments, &block)
-          scope, filter = Hooks.scope_and_metadata(arguments)
-          hooks.register(:after, scope, filter, block, :append)
-        end
-
-        def around(*arguments, &block)
-          scope, filter = Hooks.scope_and_metadata(arguments)
-          hooks.register(:around, scope, filter, block)
-        end
-
-        def filtered_examples
-          Rex.world.filtered_examples_for(self)
-        end
-
-        def descendant_filtered_examples
-          filtered_examples + children.flat_map(&:descendant_filtered_examples)
-        end
-
-        # Runs this group's examples, then its child groups. Answers whether
-        # every example passed.
-        def run(reporter)
-          return if Rex.world.wants_to_quit
-          reporter.example_group_started(self)
-          should_run_context_hooks = descendant_filtered_examples.any?
-          begin
-            run_before_context_hooks if should_run_context_hooks
-            passed = run_examples(reporter)
-            children_passed = ordering_strategy.order(children).map { |child| child.run(reporter) }.all?
-            passed && children_passed
-          rescue SkipDeclaredInExample => skipped
-            descendant_filtered_examples.each { |example| example.skip_with_exception(reporter, skipped) }
-            true
-          rescue *Rex::Core::DANGEROUS_EXCEPTIONS
-            raise
-          rescue Exception => error
-            descendant_filtered_examples.each { |example| example.fail_with_exception(reporter, error) }
-            false
-          ensure
-            run_after_context_hooks if should_run_context_hooks
-            reporter.example_group_finished(self)
-          end
-        end
-
-        def ordering_strategy
-          order = metadata.fetch(:order, :global)
-          registry = Rex.configuration.ordering_registry
-          registry.fetch(order) do
-            warn <<~WARNING
-              WARNING: Ignoring unknown ordering specified using `:order => #{order.inspect}` metadata.
-                       Falling back to configured global ordering.
-                       Unrecognized ordering specified at: #{location}
-            WARNING
-            registry.fetch(:global)
-          end
-        end
-
-        def run_examples(reporter)
-          ordering_strategy.order(filtered_examples).map do |example|
-            next if Rex.world.wants_to_quit
-            instance = new
-            instance.__rex_context_ivars = before_context_ivars
-            passed = example.run(instance, reporter)
-            Rex.world.wants_to_quit = true if reporter.fail_fast_limit_met?
-            passed
-          end.all?
-        end
-
-        def before_context_ivars
-          @before_context_ivars ||= superclass < ExampleGroup ? superclass.before_context_ivars.dup : {}
-        end
-
-        def run_before_context_hooks
-          return if Rex.configuration.dry_run
-
-          hooks_to_run = []
-          hooks_to_run.concat(Rex.configuration.hooks.for(:before, :context).select { |hook| hook.applies_to?(metadata) }) if top_level?
-          hooks_to_run.concat(hooks.for(:before, :context))
-          return if hooks_to_run.empty?
-
-          instance = new
-          instance.__rex_context_ivars = before_context_ivars
-          instance.__send__(:__rex_install_context_ivars)
-          Rex.current_example = nil
-          hooks_to_run.each { |hook| instance.instance_exec(&hook.block) }
-          instance.instance_variables.each do |name|
-            next if name.to_s.start_with?("@__")
-            before_context_ivars[name] = instance.instance_variable_get(name)
-          end
-        end
-
-        def run_after_context_hooks
-          return if Rex.configuration.dry_run
-
-          hooks_to_run = hooks.for(:after, :context).dup
-          hooks_to_run.concat(Rex.configuration.hooks.for(:after, :context).select { |hook| hook.applies_to?(metadata) }) if top_level?
-          return if hooks_to_run.empty?
-
-          instance = new
-          instance.__rex_context_ivars = before_context_ivars
-          instance.__send__(:__rex_install_context_ivars)
-          hooks_to_run.each do |hook|
-            begin
-              instance.instance_exec(&hook.block)
-            rescue *Rex::Core::DANGEROUS_EXCEPTIONS
-              raise
-            rescue Exception => error
-              Rex.world.reporter.notify_non_example_exception(error, "An error occurred in an `after(:context)` hook.")
-            end
-          end
+      def self.idempotently_define_singleton_method(name, &definition)
+        (class << self; self; end).module_exec do
+          remove_method(name) if method_defined?(name) && instance_method(name).owner == self
+          define_method(name, &definition)
         end
       end
 
-      def self.build_description_from(parent_description = nil, my_description = nil)
-        return parent_description.to_s unless my_description
-        return my_description.to_s if parent_description.to_s == ""
 
-        separator = description_separator(parent_description, my_description)
-        parent_description.to_s + separator + my_description.to_s
+      def self.metadata
+        @metadata ||= nil
       end
 
-      def self.description_separator(parent_part, child_part)
-        if parent_part.is_a?(Module) && /\A(?:#|::|\.)/.match?(child_part.to_s)
-          ""
-        else
-          " "
+      def self.with_replaced_metadata(meta)
+        orig_metadata = metadata
+        @metadata = meta
+        yield
+      ensure
+        @metadata = orig_metadata
+      end
+
+      def self.superclass_metadata
+        @superclass_metadata ||= superclass.respond_to?(:metadata) ? superclass.metadata : nil
+      end
+
+      def self.delegate_to_metadata(*names)
+        names.each do |name|
+          idempotently_define_singleton_method(name) { metadata.fetch(name) }
         end
       end
 
-      def self.full_description_for(metadata)
+      delegate_to_metadata :described_class, :file_path, :location
+
+      def self.description
         description = metadata[:description]
-        parent = metadata[:parent_example_group]
-        return description unless parent
-
-        separator = description_separator(parent[:description_args].last, metadata[:description_args].first)
-        parent[:full_description] + separator + description
-      end
-
-      def self.described_class_from(description_args, parent_metadata)
-        candidate = description_args.first
-        return candidate unless candidate.nil? || candidate.is_a?(String)
-
-        parent_metadata && parent_metadata[:described_class]
-      end
-
-      define_example_group_method :example_group
-      define_example_group_method :describe
-      define_example_group_method :context
-      define_example_group_method :xdescribe, skip: "Temporarily skipped with xdescribe"
-      define_example_group_method :xcontext, skip: "Temporarily skipped with xcontext"
-      define_example_group_method :fdescribe, focus: true
-      define_example_group_method :fcontext, focus: true
-
-      define_example_method :example
-      define_example_method :it
-      define_example_method :specify
-      define_example_method :focus, focus: true
-      define_example_method :fexample, focus: true
-      define_example_method :fit, focus: true
-      define_example_method :fspecify, focus: true
-      define_example_method :xexample, skip: "Temporarily skipped with xexample"
-      define_example_method :xit, skip: "Temporarily skipped with xit"
-      define_example_method :xspecify, skip: "Temporarily skipped with xspecify"
-      define_example_method :skip, skip: true
-      define_example_method :pending, pending: true
-
-      attr_writer :__rex_context_ivars
-
-      def initialize(inspect_output = nil)
-        @__inspect_output = inspect_output || "an example"
+        Rex.configuration.format_docstrings_block.call(description)
       end
 
       def described_class
         self.class.described_class
       end
 
-      # A name written bare that nothing defines is often a misspelled `let`,
-      # so the error names the helpers declared around the example.
-      def method_missing(name, *arguments, &block)
-        super
-      rescue NameError => error
-        raise unless error.instance_of?(NameError) && error.name == name && arguments.empty?
 
-        helpers = self.class.let_names
-        raise if helpers.empty?
 
-        hinted = NameError.new("#{error.message}\nHelpers declared nearby: #{helpers.join(', ')}", name, receiver: self)
-        hinted.set_backtrace(error.backtrace)
-        raise hinted, cause: nil
+      def self.define_example_method(name, extra_options={})
+        idempotently_define_singleton_method(name) do |*all_args, &block|
+          desc, *args = *all_args
+
+          options = Metadata.build_hash_from(args)
+          options.update(:skip => Rex::Core::Pending::NOT_YET_IMPLEMENTED) unless block
+          options.update(extra_options)
+
+          Rex::Core::Example.new(self, desc, options, block)
+        end
       end
-      ruby2_keywords(:method_missing)
 
-      def respond_to_missing?(name, include_private = false)
-        super
+      define_example_method :example
+      define_example_method :it
+      define_example_method :specify
+
+      define_example_method :focus,    :focus => true
+      define_example_method :fexample, :focus => true
+      define_example_method :fit,      :focus => true
+      define_example_method :fspecify, :focus => true
+      define_example_method :xexample, :skip => 'Temporarily skipped with xexample'
+      define_example_method :xit,      :skip => 'Temporarily skipped with xit'
+      define_example_method :xspecify, :skip => 'Temporarily skipped with xspecify'
+      define_example_method :skip,     :skip => true
+      define_example_method :pending,  :pending => true
+
+
+
+      def self.define_example_group_method(name, metadata={})
+        idempotently_define_singleton_method(name) do |*args, &example_group_block|
+          thread_data = Rex::Support.thread_local_data
+          top_level   = self == ExampleGroup
+
+          registration_collection =
+            if top_level
+              if thread_data[:in_example_group]
+                raise "Creating an isolated context from within a context is " \
+                      "not allowed. Change `RSpec.#{name}` to `#{name}` or " \
+                      "move this to a top-level scope."
+              end
+
+              thread_data[:in_example_group] = true
+              Rex.world.example_groups
+            else
+              children
+            end
+
+          begin
+            description = args.shift
+            combined_metadata = metadata.dup
+            combined_metadata.merge!(args.pop) if args.last.is_a? Hash
+            args << combined_metadata
+
+            subclass(self, description, args, registration_collection, &example_group_block)
+          ensure
+            thread_data.delete(:in_example_group) if top_level
+          end
+        end
+
+        Rex::Core::DSL.expose_example_group_alias(name)
+      end
+
+      define_example_group_method :example_group
+
+      define_example_group_method :describe
+
+      define_example_group_method :context
+
+      define_example_group_method :xdescribe, :skip => "Temporarily skipped with xdescribe"
+
+      define_example_group_method :xcontext,  :skip => "Temporarily skipped with xcontext"
+
+      define_example_group_method :fdescribe, :focus => true
+
+      define_example_group_method :fcontext,  :focus => true
+
+
+
+      def self.define_nested_shared_group_method(new_name, report_label="it should behave like")
+        idempotently_define_singleton_method(new_name) do |name, *args, &customization_block|
+          group = example_group("#{report_label} #{name}", :caller => (the_caller = caller)) do
+            find_and_eval_shared("examples", name, the_caller.first, *args, &customization_block)
+          end
+          group.metadata[:shared_group_name] = name
+          group
+        end
+      end
+
+      define_nested_shared_group_method :it_behaves_like, "behaves like"
+      define_nested_shared_group_method :it_should_behave_like
+
+      def self.include_context(name, *args, &block)
+        find_and_eval_shared("context", name, caller.first, *args, &block)
+      end
+
+      def self.include_examples(name, *args, &block)
+        find_and_eval_shared("examples", name, caller.first, *args, &block)
+      end
+
+      def self.reset_memoized
+        @descendant_filtered_examples = nil
+        @_descendants = nil
+        @parent_groups = nil
+        @declaration_locations = nil
+      end
+
+      def self.add_example(example)
+        reset_memoized
+        examples << example
+      end
+
+      def self.remove_example(example)
+        reset_memoized
+        examples.delete example
+      end
+
+      def self.find_and_eval_shared(label, name, inclusion_location, *args, &customization_block)
+        shared_module = Rex.world.shared_example_group_registry.find(parent_groups, name)
+
+        unless shared_module
+          raise ArgumentError, "Could not find shared #{label} #{name.inspect}"
+        end
+
+        shared_module.include_in(
+          self, Metadata.relative_path(inclusion_location),
+          args, customization_block
+        )
+      end
+
+
+      def self.subclass(parent, description, args, registration_collection, &example_group_block)
+        subclass = Class.new(parent)
+        subclass.set_it_up(description, args, registration_collection, &example_group_block)
+        subclass.module_exec(&example_group_block) if example_group_block
+
+        MemoizedHelpers.define_helpers_on(subclass)
+
+        subclass
+      end
+
+      def self.set_it_up(description, args, registration_collection, &example_group_block)
+        ensure_example_groups_are_configured
+
+        registration_collection << self
+
+        @user_metadata = Metadata.build_hash_from(args)
+
+        @metadata = Metadata::ExampleGroupHash.create(
+          superclass_metadata, @user_metadata,
+          superclass.method(:next_runnable_index_for),
+          description, *args, &example_group_block
+        )
+
+        config = Rex.configuration
+        config.apply_derived_metadata_to(@metadata)
+
+        ExampleGroups.assign_const(self)
+
+        @currently_executing_a_context_hook = false
+
+        config.configure_group(self)
+      end
+
+      def self.examples
+        @examples ||= []
+      end
+
+      def self.filtered_examples
+        Rex.world.filtered_examples[self]
+      end
+
+      def self.descendant_filtered_examples
+        @descendant_filtered_examples ||= filtered_examples +
+          FlatMap.flat_map(children, &:descendant_filtered_examples)
+      end
+
+      def self.children
+        @children ||= []
+      end
+
+      def self.traverse_tree_until(&block)
+        return if yield self
+
+        children.each do |child|
+          child.traverse_tree_until(&block)
+        end
+      end
+
+      def self.next_runnable_index_for(file)
+        if self == ExampleGroup
+          Rex.world.num_example_groups_defined_in(file) + 1
+        else
+          children.count + examples.count
+        end
+      end
+
+      def self.descendants
+        @_descendants ||= [self] + FlatMap.flat_map(children, &:descendants)
+      end
+
+      def self.parent_groups
+        @parent_groups ||= ancestors.select { |a| a < Rex::Core::ExampleGroup }
+      end
+
+      def self.top_level?
+        superclass == ExampleGroup
+      end
+
+      def self.ensure_example_groups_are_configured
+        unless defined?(@@example_groups_configured)
+          Rex.configuration.configure_mock_framework
+          Rex.configuration.configure_expectation_framework
+          @@example_groups_configured = true
+        end
+      end
+
+      def self.before_context_ivars
+        @before_context_ivars ||= {}
+      end
+
+      def self.store_before_context_ivars(example_group_instance)
+        each_instance_variable_for_example(example_group_instance) do |ivar|
+          before_context_ivars[ivar] = example_group_instance.instance_variable_get(ivar)
+        end
+      end
+
+      def self.currently_executing_a_context_hook?
+        @currently_executing_a_context_hook
+      end
+
+      def self.run_before_context_hooks(example_group_instance)
+        set_ivars(example_group_instance, superclass_before_context_ivars)
+
+        @currently_executing_a_context_hook = true
+
+        ContextHookMemoized::Before.isolate_for_context_hook(example_group_instance) do
+          hooks.run(:before, :context, example_group_instance)
+        end
+      ensure
+        store_before_context_ivars(example_group_instance)
+        @currently_executing_a_context_hook = false
+      end
+
+      if RUBY_VERSION.to_f >= 1.9
+        def self.superclass_before_context_ivars
+          superclass.before_context_ivars
+        end
+      else
+        def self.superclass_before_context_ivars
+          if superclass.respond_to?(:before_context_ivars)
+            superclass.before_context_ivars
+          else
+            ancestors.find { |a| a.respond_to?(:before_context_ivars) }.before_context_ivars
+          end
+        end
+      end
+
+      def self.run_after_context_hooks(example_group_instance)
+        set_ivars(example_group_instance, before_context_ivars)
+
+        @currently_executing_a_context_hook = true
+
+        ContextHookMemoized::After.isolate_for_context_hook(example_group_instance) do
+          hooks.run(:after, :context, example_group_instance)
+        end
+      ensure
+        before_context_ivars.clear
+        @currently_executing_a_context_hook = false
+      end
+
+      def self.run(reporter=Rex::Core::NullReporter)
+        return if Rex.world.wants_to_quit
+        reporter.example_group_started(self)
+
+        should_run_context_hooks = descendant_filtered_examples.any?
+        begin
+          Rex.current_scope = :before_context_hook
+          run_before_context_hooks(new('before(:context) hook')) if should_run_context_hooks
+          result_for_this_group = run_examples(reporter)
+          results_for_descendants = ordering_strategy.order(children).map { |child| child.run(reporter) }.all?
+          result_for_this_group && results_for_descendants
+        rescue Pending::SkipDeclaredInExample => ex
+          for_filtered_examples(reporter) { |example| example.skip_with_exception(reporter, ex) }
+          true
+        rescue Support::AllExceptionsExceptOnesWeMustNotRescue => ex
+          for_filtered_examples(reporter) { |example| example.fail_with_exception(reporter, ex) }
+          Rex.world.wants_to_quit = true if reporter.fail_fast_limit_met?
+          false
+        ensure
+          Rex.current_scope = :after_context_hook
+          run_after_context_hooks(new('after(:context) hook')) if should_run_context_hooks
+          reporter.example_group_finished(self)
+        end
+      end
+
+      def self.ordering_strategy
+        order = metadata.fetch(:order, :global)
+        registry = Rex.configuration.ordering_registry
+
+        registry.fetch(order) do
+          warn <<-WARNING.gsub(/^ +\|/, '')
+            |WARNING: Ignoring unknown ordering specified using `:order => #{order.inspect}` metadata.
+            |         Falling back to configured global ordering.
+            |         Unrecognized ordering specified at: #{location}
+          WARNING
+
+          registry.fetch(:global)
+        end
+      end
+
+      def self.run_examples(reporter)
+        ordering_strategy.order(filtered_examples).map do |example|
+          next if Rex.world.wants_to_quit
+          instance = new(example.inspect_output)
+          set_ivars(instance, before_context_ivars)
+          succeeded = example.run(instance, reporter)
+          if !succeeded && reporter.fail_fast_limit_met?
+            Rex.world.wants_to_quit = true
+          end
+          succeeded
+        end.all?
+      end
+
+      def self.for_filtered_examples(reporter, &block)
+        filtered_examples.each(&block)
+
+        children.each do |child|
+          reporter.example_group_started(child)
+          child.for_filtered_examples(reporter, &block)
+          reporter.example_group_finished(child)
+        end
+        false
+      end
+
+      def self.declaration_locations
+        @declaration_locations ||= [Metadata.location_tuple_from(metadata)] +
+          examples.map { |e| Metadata.location_tuple_from(e.metadata) } +
+          FlatMap.flat_map(children, &:declaration_locations)
+      end
+
+      def self.id
+        Metadata.id_from(metadata)
+      end
+
+      def self.top_level_description
+        parent_groups.last.description
+      end
+
+      def self.set_ivars(instance, ivars)
+        ivars.each { |name, value| instance.instance_variable_set(name, value) }
+      end
+
+      if RUBY_VERSION.to_f < 1.9
+        INSTANCE_VARIABLE_TO_IGNORE = '@__inspect_output'.freeze
+      else
+        INSTANCE_VARIABLE_TO_IGNORE = :@__inspect_output
+      end
+
+      def self.each_instance_variable_for_example(group)
+        group.instance_variables.each do |ivar|
+          yield ivar unless ivar == INSTANCE_VARIABLE_TO_IGNORE
+        end
+      end
+
+      def initialize(inspect_output=nil)
+        @__inspect_output = inspect_output || '(no description provided)'
+        super()
       end
 
       def inspect
         "#<#{self.class} #{@__inspect_output}>"
       end
 
-      private
-
-      def __rex_install_context_ivars
-        (@__rex_context_ivars || {}).each do |name, value|
-          instance_variable_set(name, value)
+      unless method_defined?(:singleton_class)
+        def singleton_class
+          class << self; self; end
         end
+      end
+
+      def self.update_inherited_metadata(updates)
+        metadata.update(updates) do |key, existing_group_value, new_inherited_value|
+          @user_metadata.key?(key) ? existing_group_value : new_inherited_value
+        end
+
+        Rex.configuration.configure_group(self)
+        examples.each { |ex| ex.update_inherited_metadata(updates) }
+        children.each { |group| group.update_inherited_metadata(updates) }
+      end
+
+      WrongScopeError = Class.new(NoMethodError)
+
+      def self.method_missing(name, *args)
+        if method_defined?(name)
+          raise WrongScopeError,
+                "`#{name}` is not available on an example group (e.g. a " \
+                "`describe` or `context` block). It is only available from " \
+                "within individual examples (e.g. `it` blocks) or from " \
+                "constructs that run in the scope of an example (e.g. " \
+                "`before`, `let`, etc)."
+        end
+
+        super
+      end
+      private_class_method :method_missing
+
+    private
+
+      def method_missing(name, *args)
+        if self.class.respond_to?(name)
+          raise WrongScopeError,
+                "`#{name}` is not available from within an example (e.g. an " \
+                "`it` block) or from constructs that run in the scope of an " \
+                "example (e.g. `before`, `let`, etc). It is only available " \
+                "on an example group (e.g. a `describe` or `context` block)."
+        end
+
+        begin
+          super(name, *args)
+        rescue NameError => error
+          raise unless error.instance_of?(NameError) && error.name == name && args.empty?
+
+          helpers = self.class.parent_groups.flat_map do |group|
+            next [] unless group.const_defined?(:LetDefinitions, false)
+
+            group.const_get(:LetDefinitions, false).instance_methods(false)
+          end.uniq
+          raise if helpers.empty?
+
+          hinted = NameError.new("#{error.message}\nHelpers declared nearby: #{helpers.join(', ')}", name, receiver: self)
+          hinted.set_backtrace(error.backtrace)
+          raise hinted, cause: nil
+        end
+      end
+      ruby2_keywords :method_missing if respond_to?(:ruby2_keywords, true)
+    end
+
+    class AnonymousExampleGroup < ExampleGroup
+      def self.metadata
+        {}
+      end
+    end
+
+    class SharedExampleGroupInclusionStackFrame
+      attr_reader :shared_group_name
+      attr_reader :inclusion_location
+
+      def initialize(shared_group_name, inclusion_location)
+        @shared_group_name  = shared_group_name
+        @inclusion_location = inclusion_location
+      end
+
+      def formatted_inclusion_location
+        @formatted_inclusion_location ||= begin
+          Rex.configuration.backtrace_formatter.backtrace_line(
+            inclusion_location.sub(/(:\d+):in .+$/, '\1')
+          )
+        end
+      end
+
+      def description
+        @description ||= "Shared Example Group: #{shared_group_name.inspect} " \
+          "called from #{formatted_inclusion_location}"
+      end
+
+      def self.current_backtrace
+        shared_example_group_inclusions.reverse
+      end
+
+      def self.with_frame(name, location)
+        current_stack = shared_example_group_inclusions
+        if current_stack.any? { |frame| frame.shared_group_name == name }
+          raise ArgumentError, "can't include shared examples recursively"
+        else
+          current_stack << new(name, location)
+          yield
+        end
+      ensure
+        current_stack.pop
+      end
+
+      def self.shared_example_group_inclusions
+        Rex::Support.thread_local_data[:shared_example_group_inclusions] ||= []
       end
     end
   end
-end
 
-module Rex
-  # Every group is named as a constant here, so an error message names it,
-  # the way RSpec names `RSpec::ExampleGroups::Calculator`.
   module ExampleGroups
+    extend Support::RecursiveConstMethods
+
     def self.assign_const(group)
-      base_name = base_name_for(group)
-      scope = constant_scope_for(group)
-      name = disambiguate(base_name, scope)
-      scope.const_set(name, group)
+      base_name   = base_name_for(group)
+      const_scope = constant_scope_for(group)
+      name        = disambiguate(base_name, const_scope)
+
+      const_scope.const_set(name, group)
     end
 
     def self.constant_scope_for(group)
-      scope = group.superclass
-      scope == Rex::Core::ExampleGroup ? self : scope
+      const_scope = group.superclass
+      const_scope = self if const_scope == ::Rex::Core::ExampleGroup
+      const_scope
+    end
+
+    def self.remove_all_constants
+      constants.each do |constant|
+        __send__(:remove_const, constant)
+      end
     end
 
     def self.base_name_for(group)
-      description = group.description.to_s
-      return +"Anonymous" if description.empty?
+      return "Anonymous".dup if group.description.empty?
 
-      name = " " + description
-      name = name.gsub(/[^0-9a-zA-Z]+([0-9a-zA-Z])/) { Regexp.last_match(1).upcase }
-      name = name.lstrip.gsub(/\W/, "")
-      name.sub(/\A([^A-Z]|\z)/, 'Nested\1')
+      name = ' ' + group.description
+      name.gsub!(/[^0-9a-zA-Z]+([0-9a-zA-Z])/) do
+        match = ::Regexp.last_match[1]
+        match.upcase!
+        match
+      end
+
+      name.lstrip!
+      name.gsub!(/\W/, ''.freeze)
+
+      name.gsub!(/\A([^A-Z]|\z)/, 'Nested\1'.freeze)
+
+      name
     end
 
-    def self.disambiguate(name, scope)
-      return name unless scope.const_defined?(name, false)
+    if RUBY_VERSION == '1.9.2'
+      class << self
+        alias _base_name_for base_name_for
+        def base_name_for(group)
+          _base_name_for(group) + '_'
+        end
+      end
+      private_class_method :_base_name_for
+    end
 
-      name += "_2"
-      name = name.next while scope.const_defined?(name, false)
+    def self.disambiguate(name, const_scope)
+      return name unless const_defined_on?(const_scope, name)
+
+      name << "_2"
+      name.next! while const_defined_on?(const_scope, name)
       name
     end
   end

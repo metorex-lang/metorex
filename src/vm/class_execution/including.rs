@@ -23,6 +23,15 @@ impl VirtualMachine {
             .or_else(|| self.resolve_qualified_constant(module_name))
             .or_else(|| self.environment().get(module_name))
             .or_else(|| self.globals().get(module_name));
+        // Run where `self` is an ordinary object, as in an instance method,
+        // `include Mod` is a call of that object's own `include`.
+        if let Some(receiver @ Object::Instance(_)) = self.environment().get("self")
+            && !self.is_the_main_object(&receiver)
+            && let Some(named) = module.clone()
+        {
+            let answered = self.send_to_object(receiver, "include", vec![named], position)?;
+            return Ok(ControlFlow::Value(answered));
+        }
         let module_rc = match module {
             Some(Object::Module(m)) => m,
             Some(_) => {
@@ -198,6 +207,22 @@ impl VirtualMachine {
             && let Some(method) = sc.find_method(hook)
         {
             self.invoke_method(sc, method, receiver, vec![argument.clone()], position)?;
+            return Ok(true);
+        }
+        // A module made by `new` on a subclass of Module hears the hook the
+        // subclass writes.
+        if let Some(made_from) = module_rc.instance_of()
+            && let Some(method) = made_from.find_method(hook)
+            && !method.is_undefined
+            && !method.body.is_empty()
+        {
+            self.invoke_method(
+                made_from,
+                method,
+                receiver,
+                vec![argument.clone()],
+                position,
+            )?;
             return Ok(true);
         }
         Ok(false)

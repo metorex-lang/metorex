@@ -129,6 +129,13 @@ impl VirtualMachine {
                         return Ok(Some(class));
                     }
                 }
+                // A module made by `new` on a subclass of Module is an
+                // instance of that subclass.
+                if let Object::Module(module) = receiver
+                    && let Some(made_from) = module.instance_of()
+                {
+                    return Ok(Some(Object::Class(made_from)));
+                }
                 // A class is an instance of Class, a module an instance of
                 // Module. `class_of` answers Object for both because it drives
                 // `is_a?` over the inheritance chain.

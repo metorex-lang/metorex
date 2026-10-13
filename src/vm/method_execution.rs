@@ -154,6 +154,11 @@ impl VirtualMachine {
         let stands_on_a_plain_object = matches!(&receiver, Object::Instance(held)
                 if held.borrow().class.ruby_name() == "Object")
             && written_by_the_program(&method);
+        // A module made by `new` on a subclass of Module runs the methods
+        // that subclass writes, `initialize` among them.
+        let stands_on_a_module_instance = matches!(&receiver, Object::Module(held)
+                if held.instance_of().is_some())
+            && written_by_the_program(&method);
         // A method a class or module answers because it extended a module
         // the program wrote runs its own body, as `extend Typed` puts a
         // module's `attr_accessor` ahead of Module's own.
@@ -172,7 +177,8 @@ impl VirtualMachine {
                 || stands_for_a_class_method
                 || stands_on_its_own_singleton
                 || stands_in_a_refinement
-                || stands_on_a_plain_object);
+                || stands_on_a_plain_object
+                || stands_on_a_module_instance);
         if !overrides_builtin
             && let Some(result) = self.call_native_method(
                 class.as_ref(),

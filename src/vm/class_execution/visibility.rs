@@ -15,7 +15,9 @@ const ALWAYS_PRIVATE_METHODS: [&str; 5] = [
 /// Mark a freshly defined method with the visibility currently in force in
 /// the class body, as set by a bare `private` or `protected`.
 pub(crate) fn apply_current_visibility(class: &Rc<Class>, method_name: &str) {
-    if ALWAYS_PRIVATE_METHODS.contains(&method_name) {
+    // A singleton class is left out, so `def initialize` written for one
+    // object is public there.
+    if ALWAYS_PRIVATE_METHODS.contains(&method_name) && !class.is_singleton_class() {
         class.set_method_private(method_name.to_string());
         return;
     }

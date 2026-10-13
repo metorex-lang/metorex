@@ -1,170 +1,102 @@
 module Rex
   module Core
-    # Raised by `skip` inside an example to stop it there.
-    class SkipDeclaredInExample < StandardError
-      attr_reader :argument
-
-      def initialize(argument)
-        @argument = argument
-        super(argument.to_s)
-      end
-    end
-
-    # Raised for an example marked pending that passed.
-    class PendingExampleFixedError < StandardError
-    end
-
-    module Pending
-      NO_REASON_GIVEN = "No reason given"
-      NOT_YET_IMPLEMENTED = "Not yet implemented"
-      SkipDeclaredInExample = Core::SkipDeclaredInExample
-      PendingExampleFixedError = Core::PendingExampleFixedError
-
-      # A pending example that passed.
-      def self.mark_fixed!(example)
-        example.execution_result.pending_fixed = true
-      end
-
-      def pending(message = nil, &block)
-        current_example = Rex.current_example
-        if block
-          raise ArgumentError, "Passing a block within an example is now deprecated. Use `skip` instead."
-        elsif current_example
-          Pending.mark_pending!(current_example, message)
-        else
-          raise "`pending` may not be used outside of examples, such as in before(:context). Maybe you want `skip`?"
-        end
-      end
-
-      def skip(message = nil)
-        current_example = Rex.current_example
-        Pending.mark_skipped!(current_example, message) if current_example
-        raise SkipDeclaredInExample.new(message)
-      end
-
-      def self.mark_pending!(example, message)
-        message = NO_REASON_GIVEN if message.nil? || message == true
-        example.metadata[:pending] = true
-        example.execution_result.pending_message = message.to_s
-        example.execution_result.pending_fixed = false
-      end
-
-      def self.mark_skipped!(example, message)
-        mark_pending!(example, message)
-        example.metadata[:skip] = true
-      end
-    end
-
-    # What happened when an example ran.
-    class ExecutionResult
-      attr_accessor :status, :exception, :pending_message, :pending_exception,
-                    :pending_fixed, :started_at, :finished_at, :run_time
-
-      def pending_fixed?
-        @pending_fixed ? true : false
-      end
-
-      def example_skipped?
-        status == :pending && pending_exception.nil?
-      end
-    end
-
     class Example
-      attr_reader :example_group, :metadata, :execution_result, :example_group_instance
-      attr_accessor :exception
-
-      def initialize(example_group, description, user_metadata, block, location)
-        @example_group = example_group
-        @block = block
-        @execution_result = ExecutionResult.new
-        file_path, line_number = location
-        @metadata = example_group.metadata.reject { |key, _| ExampleGroup::GROUP_ONLY_KEYS.include?(key) }
-        @metadata.update(user_metadata)
-        @metadata[:example_group] = example_group.metadata
-        @metadata[:description_args] = description.nil? ? [] : [description]
-        @metadata[:description] = description.to_s
-        @metadata[:file_path] = file_path
-        @metadata[:line_number] = line_number
-        @metadata[:location] = "#{file_path}:#{line_number}"
-        @metadata[:absolute_file_path] = File.expand_path(file_path)
-        @metadata[:block] = block
-        @metadata[:rerun_file_path] = example_group.metadata[:rerun_file_path] || file_path
-        @metadata[:shared_group_inclusion_backtrace] = SharedGroupInclusion.current_backtrace
-        @metadata[:skip] = "Not yet implemented" if block.nil? && !@metadata.key?(:skip)
-        @metadata[:execution_result] = @execution_result
-        refresh_full_description
-        Rex.configuration.derived_metadata_blocks.dup.each do |filter, derive|
-          derive.call(@metadata) if Metadata.filter_applies?(filter, @metadata)
-        end
+      def self.delegate_to_metadata(key)
+        define_method(key) { @metadata[key] }
       end
 
-      def refresh_full_description
-        @metadata[:full_description] = ExampleGroup.build_description_from(
-          example_group.metadata[:full_description], @metadata[:description]
-        )
-      end
+      delegate_to_metadata :execution_result
+      delegate_to_metadata :file_path
+      delegate_to_metadata :full_description
+      delegate_to_metadata :location
+      delegate_to_metadata :pending
+      delegate_to_metadata :skip
 
       def description
-        description = @metadata[:description].to_s
-        description = "example at #{location}" if description.empty?
+        description = if metadata[:description].to_s.empty?
+                        location_description
+                      else
+                        metadata[:description]
+                      end
+
         Rex.configuration.format_docstrings_block.call(description)
       end
 
-      def full_description
-        @metadata[:full_description]
+      def inspect_output
+        inspect_output = "\"#{description}\""
+        unless metadata[:description].to_s.empty?
+          inspect_output += " (#{location})"
+        end
+        inspect_output
       end
 
-      def location
-        @metadata[:location]
-      end
+      def location_rerun_argument
+        @location_rerun_argument ||= begin
+          loaded_spec_files = Rex.configuration.loaded_spec_files
 
-      def file_path
-        @metadata[:file_path]
-      end
-
-      def line_number
-        @metadata[:line_number]
-      end
-
-      def id
-        "#{@metadata[:rerun_file_path]}[#{scoped_id}]"
-      end
-
-      # `./spec/a_spec.rb[1:2]` as the file and the scoped id.
-      def self.parse_id(id)
-        id.match(/\A(.*?)(?:\[([\d\s:,]+)\])?\z/).captures
-      end
-
-      def scoped_id
-        @metadata[:scoped_id]
+          Metadata.ascending(metadata) do |meta|
+            break meta[:location] if loaded_spec_files.include?(meta[:absolute_file_path])
+          end
+        end
       end
 
       def rerun_argument
         location_rerun_argument
       end
 
-      # The location of this example, or of the nearest group around it, in
-      # a file that was loaded as a spec file. An example a shared group
-      # defined is located in the support file, which a rerun cannot name.
-      def location_rerun_argument
-        @location_rerun_argument ||= begin
-          loaded = Rex.configuration.loaded_spec_files
-          found = nil
-          meta = @metadata
-          while meta && found.nil?
-            found = meta[:location] if loaded.include?(meta[:absolute_file_path])
-            meta = meta[:example_group] || meta[:parent_example_group]
-          end
-          found || location
+      def id
+        @id ||= Metadata.id_from(metadata)
+      end
+
+      def self.parse_id(id)
+        id.match(/\A(.*?)(?:\[([\d\s:,]+)\])?\z/).captures
+      end
+
+      def duplicate_with(metadata_overrides={})
+        new_metadata = metadata.clone.merge(metadata_overrides)
+
+        Rex::Core::Metadata::RESERVED_KEYS.each do |reserved_key|
+          new_metadata.delete reserved_key
+        end
+
+        Example.new(example_group, description.clone,
+                    new_metadata, metadata[:block])
+      end
+
+      def update_inherited_metadata(updates)
+        metadata.update(updates) do |_key, existing_example_value, _new_inherited_value|
+          existing_example_value
         end
       end
 
-      def pending?
-        @metadata[:pending] ? true : false
-      end
+      attr_reader :exception
 
-      def skipped?
-        @metadata[:skip] ? true : false
+      attr_reader :metadata
+
+      attr_reader :example_group_instance
+
+      attr_accessor :clock
+
+      def initialize(example_group_class, description, user_metadata, example_block=nil)
+        @example_group_class = example_group_class
+        @example_block       = example_block
+
+        example_group_class.examples << self
+
+        @metadata = Metadata::ExampleHash.create(
+          @example_group_class.metadata, user_metadata,
+          example_group_class.method(:next_runnable_index_for),
+          description, example_block
+        )
+
+        config = Rex.configuration
+        config.apply_derived_metadata_to(@metadata)
+
+        @metadata[:last_run_status] = config.last_run_statuses[id]
+
+        @example_group_instance = @exception = nil
+        @clock = Rex::Core::Time
+        @reporter = Rex::Core::NullReporter
       end
 
       def inspect
@@ -172,206 +104,93 @@ module Rex
       end
       alias to_s inspect
 
-      # Runs the example in a fresh instance of its group and reports it.
+      attr_reader :reporter
+
+      def example_group
+        @example_group_class
+      end
+
+      def pending?
+        !!pending
+      end
+
+      def skipped?
+        !!skip
+      end
+
       def run(example_group_instance, reporter)
         @example_group_instance = example_group_instance
+        @reporter = reporter
+        Rex.configuration.configure_example(self, hooks)
         Rex.current_example = self
-        @execution_result.started_at = Rex::Core.monotonic_now
-        reporter.example_started(self)
 
-        if skipped?
-          Pending.mark_skipped!(self, @metadata[:skip])
-        elsif Rex.configuration.dry_run
-          # A dry run builds every group and runs no example body.
-        else
-          if @metadata[:pending] && !@execution_result.pending_message
-            Pending.mark_pending!(self, @metadata[:pending])
-          end
-          Rex::Mocks.setup
-          run_with_around_hooks do
-            begin
-              run_before_hooks
-              if @metadata[:aggregate_failures]
-                example = self
-                Rex::Expectations::FailureAggregator.new(nil, hide_backtrace: true).aggregate do
-                  @example_group_instance.instance_exec(example, &@block)
+        start(reporter)
+        Pending.mark_pending!(self, pending) if pending?
+
+        begin
+          if skipped?
+            Pending.mark_pending! self, skip
+          elsif !Rex.configuration.dry_run?
+            with_around_and_singleton_context_hooks do
+              begin
+                run_before_example
+                Rex.current_scope = :example
+                @example_group_instance.instance_exec(self, &@example_block)
+
+                if pending?
+                  Pending.mark_fixed! self
+
+                  raise Pending::PendingExampleFixedError,
+                        'Expected example to fail since it is pending, but it passed.',
+                        [location]
                 end
-              else
-                @example_group_instance.instance_exec(self, &@block)
+              rescue Pending::SkipDeclaredInExample => _
+              rescue AllExceptionsExcludingDangerousOnesOnRubiesThatAllowIt => e
+                set_exception(e)
+              ensure
+                Rex.current_scope = :after_example_hook
+                run_after_example
               end
-              if pending?
-                @execution_result.pending_fixed = true
-                raise PendingExampleFixedError, "Expected pending '#{@execution_result.pending_message}' to fail. No error was raised."
-              end
-            rescue SkipDeclaredInExample
-              # The example already marked itself skipped.
-            rescue *Rex::Core::DANGEROUS_EXCEPTIONS
-              raise
-            rescue Exception => error
-              record_exception(error)
-            ensure
-              run_after_hooks
             end
           end
-          verify_and_take_down_mocks
+        rescue Support::AllExceptionsExceptOnesWeMustNotRescue => e
+          set_exception(e)
+        ensure
+          @example_group_instance = nil
         end
 
-        assign_generated_description
         finish(reporter)
       ensure
-        Rex.current_example = nil
-        @example_group_instance = nil
-      end
-
-      # Expectations on doubles are checked once the example and its `after`
-      # hooks are done, and every stub is taken down whatever happened.
-      def verify_and_take_down_mocks
-        Rex::Mocks.verify if @exception.nil? || pending?
-      rescue *Rex::Core::DANGEROUS_EXCEPTIONS
-        raise
-      rescue Exception => error
-        record_exception(error)
-      ensure
-        Rex::Mocks.teardown
-      end
-
-      # Forgets the outcome of a run, so the example can run again.
-      def reset_for_rerun
-        @exception = nil
-        @execution_result = ExecutionResult.new
-        @metadata[:execution_result] = @execution_result
-      end
-
-      def record_exception(error)
-        return @exception = error unless @exception
-
-        @exception = MultipleExceptionError.new(@exception) unless MultipleExceptionError === @exception
-        @exception.add(error)
-      end
-
-      def assign_generated_description
-        if @metadata[:description].to_s.empty? && (generated = Rex::Matchers.generated_description)
-          @metadata[:description] = generated
-          refresh_full_description
-        end
-        Rex::Matchers.clear_generated_description
-      end
-
-      def finish(reporter)
-        @execution_result.finished_at = Rex::Core.monotonic_now
-        @execution_result.run_time = @execution_result.finished_at - @execution_result.started_at
-        if pending? && !@execution_result.pending_fixed?
-          @execution_result.status = :pending
-          @execution_result.pending_exception = @exception
-          @exception = nil
-          reporter.example_finished(self)
-          reporter.example_pending(self)
-          true
-        elsif @exception
-          @execution_result.status = :failed
-          @execution_result.exception = @exception
-          reporter.example_finished(self)
-          reporter.example_failed(self)
-          false
-        else
-          @execution_result.status = :passed
-          reporter.example_finished(self)
-          reporter.example_passed(self)
-          true
-        end
-      end
-
-      # Marks the example failed without running it, the way an error in a
-      # `before(:context)` hook fails every example in its group.
-      def fail_with_exception(reporter, error)
-        Rex.current_example = self
-        @execution_result.started_at = Rex::Core.monotonic_now
-        reporter.example_started(self)
-        @exception = error
-        finish(reporter)
-      ensure
+        execution_result.ensure_timing_set(clock)
         Rex.current_example = nil
       end
 
-      def skip_with_exception(reporter, error)
-        fail_with_exception(reporter, error)
+      if Rex::Support::Ruby.jruby? || RUBY_VERSION.to_f < 1.9
+        AllExceptionsExcludingDangerousOnesOnRubiesThatAllowIt = Exception
+      else
+        AllExceptionsExcludingDangerousOnesOnRubiesThatAllowIt = Support::AllExceptionsExceptOnesWeMustNotRescue
       end
 
-      def run_before_hooks
-        @example_group_instance.__send__(:__rex_install_context_ivars)
-        hooks_for(:before).each do |hook|
-          @example_group_instance.instance_exec(self, &hook.block)
-        end
-      end
-
-      def run_after_hooks
-        hooks_for(:after).each do |hook|
-          begin
-            @example_group_instance.instance_exec(self, &hook.block)
-          rescue *Rex::Core::DANGEROUS_EXCEPTIONS
-            raise
-          rescue SkipDeclaredInExample
-          rescue Exception => error
-            record_exception(error)
-          end
-        end
-      end
-
-      # `before` hooks run from the configuration inward through each group,
-      # and `after` hooks run the other way.
-      def hooks_for(kind)
-        chain = example_group.parent_groups.reverse
-        hooks = []
-        if kind == :before
-          hooks.concat(applicable(Rex.configuration.hooks.for(:before, :example)))
-          chain.each { |group| hooks.concat(applicable(group.hooks.for(:before, :example))) }
-        else
-          chain.reverse_each { |group| hooks.concat(applicable(group.hooks.for(:after, :example))) }
-          hooks.concat(applicable(Rex.configuration.hooks.for(:after, :example)))
-        end
-        hooks
-      end
-
-      def applicable(hooks)
-        hooks.select { |hook| hook.applies_to?(@metadata) }
-      end
-
-      def run_with_around_hooks(&inner)
-        chain = example_group.parent_groups.reverse
-        arounds = applicable(Rex.configuration.hooks.for(:around, :example))
-        chain.each { |group| arounds.concat(applicable(group.hooks.for(:around, :example))) }
-        runner = inner
-        arounds.reverse_each do |hook|
-          wrapped = runner
-          runner = lambda do
-            procsy = Procsy.new(self, &wrapped)
-            begin
-              @example_group_instance.instance_exec(procsy, &hook.block)
-            rescue *Rex::Core::DANGEROUS_EXCEPTIONS
-              raise
-            rescue SkipDeclaredInExample
-            rescue Exception => error
-              record_exception(error)
-            end
-          end
-        end
-        runner.call
-      end
-
-      # What an `around` hook receives: the example, which it runs with `run`
-      # or `call`.
       class Procsy
         attr_reader :example
 
-        def initialize(example, &block)
-          @example = example
-          @proc = block
-          @executed = false
+        Example.public_instance_methods(false).each do |name|
+          name_sym = name.to_sym
+          next if name_sym == :run || name_sym == :inspect || name_sym == :to_s
+
+          define_method(name) { |*a, &b| @example.__send__(name, *a, &b) }
         end
 
-        def call(*arguments, &block)
+        Proc.public_instance_methods(false).each do |name|
+          name_sym = name.to_sym
+          next if name_sym == :call || name_sym == :inspect || name_sym == :to_s || name_sym == :to_proc
+
+          define_method(name) { |*a, &b| @proc.__send__(name, *a, &b) }
+        end
+
+        def call(*args, &block)
           @executed = true
-          @proc.call(*arguments, &block)
+          @proc.call(*args, &block)
         end
         alias run call
 
@@ -379,104 +198,255 @@ module Rex
           method(:call).to_proc
         end
 
+        def initialize(example, &block)
+          @example  = example
+          @proc     = block
+          @executed = false
+        end
+
+        def wrap(&block)
+          self.class.new(example, &block)
+        end
+
         def executed?
           @executed
         end
 
-        def metadata
-          @example.metadata
-        end
-
-        def description
-          @example.description
-        end
-
-        def full_description
-          @example.full_description
-        end
-
-        def location
-          @example.location
-        end
-
-        def exception
-          @example.exception
-        end
-
-        def pending?
-          @example.pending?
-        end
-
-        def skipped?
-          @example.skipped?
-        end
-
-        def example_group
-          @example.example_group
-        end
-
         def inspect
-          @example.inspect.sub("Example", "ExampleProcsy")
+          @example.inspect.gsub('Example', 'Example::Procsy')
         end
       end
-    end
 
-    # Several exceptions from one example, such as a failure in the body and
-    # another in an `after` hook. Rex's own failures count as failures, and
-    # everything else as other errors.
-    class MultipleExceptionError < StandardError
-      attr_reader :failures, :other_errors, :all_exceptions, :aggregation_metadata, :aggregation_block_label
-
-      def initialize(*exceptions)
-        super()
-        @failures = []
-        @other_errors = []
-        @all_exceptions = []
-        @aggregation_metadata = { hide_backtrace: true }
-        @aggregation_block_label = nil
-        exceptions.each { |error| add(error) }
+      def display_exception
+        @exception || execution_result.pending_exception
       end
 
-      def add(error)
-        return if error.is_a?(PendingExampleFixedError)
-        return if error.equal?(self)
-
-        all_exceptions << error
-        if error.class.name.to_s =~ /RSpec|\ARex::/
-          failures << error
+      def display_exception=(ex)
+        if pending? && !(Pending::PendingExampleFixedError === ex)
+          @exception = nil
+          execution_result.pending_fixed = false
+          execution_result.pending_exception = ex
         else
-          other_errors << error
+          @exception = ex
         end
       end
 
-      def message
-        all_exceptions.map(&:message).join("\n\n")
+
+      def set_exception(exception)
+        return self.display_exception = exception unless display_exception
+
+        unless Rex::Core::MultipleExceptionError === display_exception
+          self.display_exception = Rex::Core::MultipleExceptionError.new(display_exception)
+        end
+
+        display_exception.add exception
       end
 
-      def summary
-        "Got #{exception_count_description}"
+      def set_aggregate_failures_exception(exception)
+        return set_exception(exception) unless display_exception
+
+        exception = Rex::Core::MultipleExceptionError::InterfaceTag.for(exception)
+        exception.add display_exception
+        self.display_exception = exception
       end
 
-      def exception_count_description
-        failure_count = Formatters.pluralize(failures.size, "failure")
-        return failure_count if other_errors.empty?
 
-        "#{failure_count} and #{Formatters.pluralize(other_errors.size, 'other error')}"
+      def fail_with_exception(reporter, exception)
+        start(reporter)
+        set_exception(exception)
+        finish(reporter)
+      end
+
+      def skip_with_exception(reporter, exception)
+        start(reporter)
+        Pending.mark_skipped! self, exception.argument
+        finish(reporter)
+      end
+
+      def instance_exec(*args, &block)
+        @example_group_instance.instance_exec(*args, &block)
+      end
+
+      # The example as it was before it ran, so it can run again.
+      def reset_for_rerun
+        @exception = nil
+        @metadata[:execution_result] = ExecutionResult.new
+      end
+
+    private
+
+      def hooks
+        example_group_instance.singleton_class.hooks
+      end
+
+      def with_around_example_hooks
+        Rex.current_scope = :before_example_hook
+        hooks.run(:around, :example, self) { yield }
+      rescue Support::AllExceptionsExceptOnesWeMustNotRescue => e
+        set_exception(e)
+      end
+
+      def start(reporter)
+        reporter.example_started(self)
+        execution_result.started_at = clock.now
+      end
+
+      def finish(reporter)
+        pending_message = execution_result.pending_message
+
+        if @exception
+          execution_result.exception = @exception
+          record_finished :failed, reporter
+          reporter.example_failed self
+          false
+        elsif pending_message
+          execution_result.pending_message = pending_message
+          record_finished :pending, reporter
+          reporter.example_pending self
+          true
+        else
+          record_finished :passed, reporter
+          reporter.example_passed self
+          true
+        end
+      end
+
+      def record_finished(status, reporter)
+        execution_result.record_finished(status, clock.now)
+        reporter.example_finished(self)
+      end
+
+      def run_before_example
+        @example_group_instance.setup_mocks_for_rspec
+        hooks.run(:before, :example, self)
+      end
+
+      def with_around_and_singleton_context_hooks
+        singleton_context_hooks_host = example_group_instance.singleton_class
+        singleton_context_hooks_host.run_before_context_hooks(example_group_instance)
+        with_around_example_hooks { yield }
+      ensure
+        singleton_context_hooks_host.run_after_context_hooks(example_group_instance)
+      end
+
+      def run_after_example
+        assign_generated_description if defined?(::Rex::Matchers)
+        hooks.run(:after, :example, self)
+        verify_mocks
+      ensure
+        @example_group_instance.teardown_mocks_for_rspec
+      end
+
+      def verify_mocks
+        @example_group_instance.verify_mocks_for_rspec if mocks_need_verification?
+      rescue Support::AllExceptionsExceptOnesWeMustNotRescue => e
+        set_exception(e)
+      end
+
+      def mocks_need_verification?
+        exception.nil? || execution_result.pending_fixed?
+      end
+
+      def assign_generated_description
+        if metadata[:description].empty? && (description = generate_description)
+          metadata[:description] = description
+          metadata[:full_description] += description
+        end
+      ensure
+        Rex::Matchers.clear_generated_description
+      end
+
+      def generate_description
+        Rex::Matchers.generated_description
+      rescue Support::AllExceptionsExceptOnesWeMustNotRescue => e
+        location_description + " (Got an error when generating description " \
+          "from matcher: #{e.class}: #{e.message} -- #{e.backtrace.first})"
+      end
+
+      def location_description
+        "example at #{location}"
+      end
+
+      class ExecutionResult
+        include HashImitatable
+
+        attr_accessor :status
+
+        attr_accessor :exception
+
+        attr_accessor :started_at
+
+        attr_accessor :finished_at
+
+        attr_accessor :run_time
+
+        attr_accessor :pending_message
+
+        attr_accessor :pending_exception
+
+        attr_accessor :pending_fixed
+
+        def pending_fixed?
+          !!pending_fixed
+        end
+
+        def example_skipped?
+          status == :pending && !pending_exception
+        end
+
+        def record_finished(status, finished_at)
+          self.status = status
+          calculate_run_time(finished_at)
+        end
+
+        def ensure_timing_set(clock)
+          calculate_run_time(clock.now) unless finished_at
+        end
+
+      private
+
+        def calculate_run_time(finished_at)
+          self.finished_at = finished_at
+          self.run_time    = (finished_at - started_at).to_f
+        end
+
+        def hash_for_delegation
+          super.tap do |hash|
+            hash[:status] &&= status.to_s
+          end
+        end
+
+        def set_value(name, value)
+          value &&= value.to_sym if name == :status
+          super(name, value)
+        end
+
+        def get_value(name)
+          if name == :status
+            status.to_s if status
+          else
+            super
+          end
+        end
+
+        def issue_deprecation(_method_name, *_args)
+          Rex.deprecate("Treating `metadata[:execution_result]` as a hash",
+                          :replacement => "the attributes methods to access the data")
+        end
       end
     end
 
-    DANGEROUS_EXCEPTIONS = [NoMemoryError, SignalException, Interrupt, SystemExit].freeze
+    class SuiteHookContext < Example
+      def initialize(hook_description, reporter)
+        super(AnonymousExampleGroup, hook_description, {})
+        @example_group_instance = AnonymousExampleGroup.new
+        @reporter = reporter
+      end
 
-    def self.monotonic_now
-      Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      def set_exception(exception)
+        reporter.notify_non_example_exception(exception, "An error occurred in #{description}.")
+        Rex.world.wants_to_quit = true
+      end
     end
-  end
-
-  def self.current_example
-    Thread.current[:rex_current_example]
-  end
-
-  def self.current_example=(example)
-    Thread.current[:rex_current_example] = example
   end
 end

@@ -205,6 +205,25 @@ impl VirtualMachine {
                         | "+@"
                         | "~"
                 );
+                // `Klass.method(:new)` is Class#new, which takes any
+                // arguments and hands them to `initialize`.
+                if name_str == "new"
+                    && let Object::Class(_) = receiver
+                    && let Some(Object::Class(class_class)) = self.globals().get("Class")
+                {
+                    let mut stub = crate::object::Method::new(
+                        name_str.clone(),
+                        vec!["args".to_string()],
+                        vec![],
+                    );
+                    stub.variadic_param = Some((0, "args".to_string()));
+                    stub.receiver = Some(Box::new(receiver.clone()));
+                    stub.owner = Some("Class".to_string());
+                    stub.original_name = Some(name_str.clone());
+                    stub.native_alias = Some(name_str.clone());
+                    stub.owner_class = Some(class_class);
+                    return Ok(Some(Object::Method(std::rc::Rc::new(stub))));
+                }
                 if is_operator || self.responds_to(receiver, &name_str) {
                     let owner = self.builtins().class_of(receiver);
                     let mut stub = crate::object::Method::new(

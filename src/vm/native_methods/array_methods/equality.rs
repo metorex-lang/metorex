@@ -53,9 +53,15 @@ impl VirtualMachine {
                     self.invoke_method(class, method, left.clone(), vec![right.clone()], position)?;
                 return Ok(answer.is_truthy());
             }
-            // Object's own `eql?` is identity, which is where a class that
-            // defines none lands.
-            return Ok(identical(left, right));
+            // A Struct or Data value answers `eql?` natively by its members,
+            // and Object's own is identity, where a class that defines none
+            // lands.
+            if identical(left, right) {
+                return Ok(true);
+            }
+            let answer =
+                self.send_to_object(left.clone(), "eql?", vec![right.clone()], position)?;
+            return Ok(answer.is_truthy());
         }
         // A String subclass holds its text behind the instance, and Ruby
         // compares that text rather than the two objects.

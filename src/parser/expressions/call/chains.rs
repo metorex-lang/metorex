@@ -358,11 +358,26 @@ impl Parser {
                 let name_token = self.advance();
                 let name = match name_token.kind {
                     TokenKind::Ident(name) => name,
-                    _ => return Err(self.error_at_previous("Expected constant name after '::'")),
+                    // A keyword after `::` names a method, as in
+                    // `::Kernel::raise`.
+                    other => match crate::parser::expressions::primary::groups::keyword_symbol_key(
+                        &other,
+                    ) {
+                        Some(keyword) => keyword.to_string(),
+                        None => {
+                            return Err(self.error_at_previous("Expected constant name after '::'"));
+                        }
+                    },
                 };
                 // A constant is capitalized, so a lowercase name after `::`
-                // names a method rather than something in the namespace.
-                if name.starts_with(|first: char| first.is_lowercase() || first == '_') {
+                // names a method rather than something in the namespace. So
+                // does a capitalized one with `(` against it, as
+                // `Kernel::Integer("12")` has.
+                let called_with_parentheses =
+                    self.check(&[TokenKind::LParen]) && !self.peek().had_leading_space;
+                if name.starts_with(|first: char| first.is_lowercase() || first == '_')
+                    || called_with_parentheses
+                {
                     let arguments = if self.match_token(&[TokenKind::LParen]) {
                         self.parse_arguments()?
                     } else if self.can_start_argument_for_method_call(&name) {

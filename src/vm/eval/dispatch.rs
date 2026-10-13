@@ -61,6 +61,9 @@ impl VirtualMachine {
             *is_lambda,
         );
         block.defining_owner = self.enclosing_method_owner().and_then(|(owner, _)| owner);
+        if block.defining_method.is_some() {
+            block.defining_class = self.method_owner_stack.last().cloned().flatten();
+        }
         block.outer_locals = Rc::new(outer_locals.clone());
         block.reserved_names = Rc::new(self.visible_local_names());
         // The block's body belongs to the file it was written in,

@@ -469,6 +469,17 @@ impl VirtualMachine {
             return Ok(Some(result));
         }
 
+        // An instance of a subclass of Mutex answers the same methods as one
+        // of Mutex itself.
+        if let Object::Instance(instance) = receiver
+            && class.name() != "Thread::Mutex"
+            && super::class_methods::class_named_in_chain(&instance.borrow().class, "Thread::Mutex")
+            && let Some(result) =
+                self.call_mutex_method(receiver, method_name, arguments, position)?
+        {
+            return Ok(Some(result));
+        }
+
         // Dispatch to the appropriate class-specific method implementation
         match class.name() {
             "Object" | "Proc" | "Method" => {

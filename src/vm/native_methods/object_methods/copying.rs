@@ -177,12 +177,14 @@ impl VirtualMachine {
                         message: msg,
                     });
                 }
-                let copy = crate::class::Class::duplicate(class_rc);
-                Ok(Some(Object::Class(std::rc::Rc::new(copy))))
+                let copy = std::rc::Rc::new(crate::class::Class::duplicate(class_rc));
+                copy.take_ownership_of_methods_from(class_rc);
+                Ok(Some(Object::Class(copy)))
             }
             Object::Module(mod_rc) => {
-                let copy = crate::class::Class::duplicate(mod_rc);
-                Ok(Some(Object::Module(std::rc::Rc::new(copy))))
+                let copy = std::rc::Rc::new(crate::class::Class::duplicate(mod_rc));
+                copy.take_ownership_of_methods_from(mod_rc);
+                Ok(Some(Object::Module(copy)))
             }
             // A callable and a Binding copy as a new reference to the same
             // code and scope, so the copy is a separate object with the
@@ -302,9 +304,9 @@ impl VirtualMachine {
         if let (Object::Instance(original), Object::Instance(copied)) = (receiver, copy) {
             let singleton = original.borrow().singleton_class.borrow().clone();
             if let Some(singleton) = singleton {
-                let copied_singleton = crate::class::Class::duplicate(&singleton);
-                *copied.borrow().singleton_class.borrow_mut() =
-                    Some(std::rc::Rc::new(copied_singleton));
+                let copied_singleton = std::rc::Rc::new(crate::class::Class::duplicate(&singleton));
+                copied_singleton.take_ownership_of_methods_from(&singleton);
+                *copied.borrow().singleton_class.borrow_mut() = Some(copied_singleton);
             }
             let methods = original.borrow().singleton_methods.borrow().clone();
             for (name, method) in methods {

@@ -215,3 +215,12 @@ fn test_oop_undefining_new_no_parens_execution() {
     let output = run_example("oop/undefining_new_no_parens.rb");
     assert_eq!(output, UNDEFINING_NEW_OUTPUT);
 }
+
+#[test]
+fn test_new_on_a_module_subclass_makes_a_module_of_that_class() {
+    let output = run_example("oop/module_subclass_instances.rb");
+    assert_eq!(
+        output,
+        "nil\ntrue\n:logging\n\"logger\"\n[#<Named logger>, \"logger\", Named, true, true]\n[]\n[true, true, false]\n"
+    );
+}
