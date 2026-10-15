@@ -52,12 +52,11 @@ pub(crate) fn write_integer(
     bytes
 }
 
-/// A packed result as a String. Every byte stands for one character, which is
-/// how metorex holds a run of bytes, and the result carries no character
-/// meaning, which is what ASCII-8BIT says.
+/// A packed result as a String tagged ASCII-8BIT, which says its bytes carry
+/// no character meaning.
 pub(crate) fn bytes_to_string(bytes: &[u8]) -> Object {
-    Object::String(std::rc::Rc::new(crate::object::StringValue::from_bytes(
-        bytes.iter().map(|byte| *byte as char).collect::<String>(),
+    Object::String(std::rc::Rc::new(crate::object::StringValue::binary(
+        bytes.to_vec(),
     )))
 }
 

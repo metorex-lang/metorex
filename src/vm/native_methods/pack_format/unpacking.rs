@@ -7,12 +7,11 @@ impl VirtualMachine {
     /// `String#unpack` — read the bytes back as the directives describe them.
     pub(crate) fn string_unpack(
         &mut self,
-        text: &str,
+        bytes: &[u8],
         format: &str,
         pointer: u64,
         position: Position,
     ) -> Result<Vec<Object>, MetorexError> {
-        let bytes = string_to_bytes(text);
         let directives = parse_format(format, "unpack", position)?;
         let mut out: Vec<Object> = Vec::new();
         let mut at = 0usize;
@@ -52,7 +51,7 @@ impl VirtualMachine {
                         (_, Count::Exactly(width)) => Some(*width),
                         (_, Count::One) => Some(1),
                     };
-                    let source = string_to_bytes(&held.as_str());
+                    let source = held.bytes().to_vec();
                     let stops = source
                         .iter()
                         .position(|byte| *byte == 0)

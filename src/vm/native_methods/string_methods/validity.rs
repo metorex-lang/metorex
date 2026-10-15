@@ -16,14 +16,12 @@ pub(crate) fn holds_valid_text(string_value: &crate::object::StringValue) -> boo
     match named.as_str() {
         "ASCII-8BIT" | "BINARY" => true,
         "US-ASCII" => string_value.as_str().is_ascii(),
-        "UTF-8" if string_value.holds_bytes() => String::from_utf8(
-            crate::vm::native_methods::pack_format::string_to_bytes(&string_value.as_str()),
-        )
-        .is_ok(),
-        "UTF8-MAC" if string_value.holds_bytes() => String::from_utf8(
-            crate::vm::native_methods::pack_format::string_to_bytes(&string_value.as_str()),
-        )
-        .is_ok(),
+        "UTF-8" if string_value.holds_bytes() => {
+            String::from_utf8(string_value.bytes().to_vec()).is_ok()
+        }
+        "UTF8-MAC" if string_value.holds_bytes() => {
+            String::from_utf8(string_value.bytes().to_vec()).is_ok()
+        }
         "EUC-JP" => euc_jp_reads(&binary_bytes(string_value)),
         // Shift_JIS spells half-width katakana with one byte of its own, so
         // the shape of a run says more than a plain lead-and-trail pairing.

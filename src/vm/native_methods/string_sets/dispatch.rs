@@ -302,10 +302,9 @@ impl VirtualMachine {
                             letters.into_iter().collect()
                         }
                     };
-                    let made =
-                        Object::String(std::rc::Rc::new(crate::object::StringValue::from_bytes(
-                            text_methods::bytes_as_text(&text_methods::wide_bytes(&cut, shape)),
-                        )));
+                    let made = Object::String(std::rc::Rc::new(
+                        crate::object::StringValue::binary(text_methods::wide_bytes(&cut, shape)),
+                    ));
                     if let View::String(held) = made.view() {
                         held.set_encoding(string_value.encoding_name());
                     }
@@ -426,7 +425,8 @@ impl VirtualMachine {
                     None => 16,
                     Some(other) => self.integer_argument(method_name, other, position)?,
                 };
-                let total: i64 = crate::vm::native_methods::pack_format::string_to_bytes(&text)
+                let total: i64 = string_value
+                    .bytes()
                     .iter()
                     .map(|byte| i64::from(*byte))
                     .sum();
@@ -785,9 +785,7 @@ impl VirtualMachine {
                         name
                     }
                 };
-                let made = crate::object::StringValue::from_bytes(
-                    crate::vm::native_methods::pack_format::bytes_to_string(&bytes).to_string(),
-                );
+                let made = crate::object::StringValue::binary(bytes);
                 made.set_encoding(named);
                 Ok(Some(Object::String(std::rc::Rc::new(made))))
             }

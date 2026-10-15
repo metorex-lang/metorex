@@ -51,7 +51,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                Ok(Some(Object::Int(binary_bytes(string_value).len() as i64)))
+                Ok(Some(Object::Int(string_value.byte_len() as i64)))
             }
             // `byteslice` cuts by byte position rather than by character,
             // and what it hands back is tagged the way the whole string is.
@@ -258,16 +258,7 @@ impl VirtualMachine {
 /// The byte at `index` of a string, counting back from the end for a
 /// negative index.
 fn byte_at(string_value: &crate::object::StringValue, index: i64) -> Option<u8> {
-    let text = string_value.as_str();
-    if !bytes_are_characters(string_value) || string_value.is_ascii() {
-        let length = text.len() as i64;
-        let resolved = if index < 0 { index + length } else { index };
-        return (0..length)
-            .contains(&resolved)
-            .then(|| text.as_bytes()[resolved as usize]);
-    }
-    drop(text);
-    let bytes = string_value.byte_spelling(crate::vm::native_methods::pack_format::string_to_bytes);
+    let bytes = string_value.bytes();
     let length = bytes.len() as i64;
     let resolved = if index < 0 { index + length } else { index };
     (0..length)

@@ -501,7 +501,7 @@ impl VirtualMachine {
                 position,
             ));
         };
-        let bytes = super::pack_format::string_to_bytes(&message.as_str());
+        let bytes = message.bytes().to_vec();
         match digest_named(&algorithm.as_str(), &bytes) {
             Some(digested) => Ok(super::pack_format::bytes_to_string(&digested)),
             None => Err(MetorexError::runtime_error(
@@ -541,8 +541,8 @@ impl VirtualMachine {
         };
         let derived = pbkdf2(
             &algorithm.as_str(),
-            &super::pack_format::string_to_bytes(&pass.as_str()),
-            &super::pack_format::string_to_bytes(&salt.as_str()),
+            &pass.bytes(),
+            &salt.bytes(),
             rounds.max(1) as u32,
             length.max(0) as usize,
         );
@@ -587,8 +587,8 @@ impl VirtualMachine {
             ));
         };
         let derived = scrypt(
-            &super::pack_format::string_to_bytes(&pass.as_str()),
-            &super::pack_format::string_to_bytes(&salt.as_str()),
+            &pass.bytes(),
+            &salt.bytes(),
             n as usize,
             r as usize,
             p as usize,

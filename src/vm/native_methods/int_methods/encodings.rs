@@ -74,9 +74,7 @@ pub(crate) fn character_in_encoding(code: i64, named: &str) -> Option<Object> {
             let letter = char::from_u32(point)?;
             bytes.extend_from_slice(letter.encode_utf8(&mut room).as_bytes());
         }
-        let made = crate::object::StringValue::from_bytes(
-            crate::vm::native_methods::string_methods::bytes_as_text(&bytes),
-        );
+        let made = crate::object::StringValue::binary(bytes);
         made.set_encoding(named);
         return Some(Object::String(std::rc::Rc::new(made)));
     }
@@ -122,9 +120,7 @@ pub(crate) fn character_in_encoding(code: i64, named: &str) -> Option<Object> {
     {
         return None;
     }
-    let made = crate::object::StringValue::from_bytes(
-        crate::vm::native_methods::string_methods::bytes_as_text(&bytes),
-    );
+    let made = crate::object::StringValue::binary(bytes);
     made.set_encoding(named);
     Some(Object::String(std::rc::Rc::new(made)))
 }

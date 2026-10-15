@@ -1,41 +1,83 @@
-//! The text a Ruby String holds, with the encoding it is tagged with.
+//! The bytes a Ruby String holds, with the encoding they are tagged with.
 //!
-//! Metorex keeps every string's characters as Rust text. The encoding is a
-//! label carried alongside: `force_encoding` changes what a string says it
-//! is without touching what it holds, which is what Ruby does for a string
-//! whose bytes are already right.
+//! A string reads its bytes as text one of two ways. Most read them as UTF-8.
+//! One tagged binary or with an encoding that spells a character in more than
+//! one byte, and one marked as holding bytes, reads each byte as the character
+//! with that code point, so its text is never anything but a spelling of its
+//! bytes.
 
-use std::cell::RefCell;
+use std::cell::{Cell, Ref, RefCell};
+use std::rc::Rc;
 
 /// The encoding a string literal carries.
 pub const DEFAULT_ENCODING: &str = "UTF-8";
 
+/// Whether a string tagged `encoding` reads each byte as a character of its
+/// own, whatever else it says of itself.
+fn encoding_reads_bytes(encoding: &str) -> bool {
+    matches!(
+        encoding,
+        "ASCII-8BIT"
+            | "BINARY"
+            | "UTF-16"
+            | "UTF-16BE"
+            | "UTF-16LE"
+            | "UTF-32"
+            | "UTF-32BE"
+            | "UTF-32LE"
+    )
+}
+
+/// The bytes text spells, one per character below 256 and the UTF-8 form of
+/// every character above.
+pub fn bytes_of_characters(text: &str) -> Vec<u8> {
+    if text.is_ascii() {
+        return text.as_bytes().to_vec();
+    }
+    let mut bytes = Vec::with_capacity(text.len());
+    for character in text.chars() {
+        if (character as u32) < 256 {
+            bytes.push(character as u8);
+        } else {
+            let mut buffer = [0u8; 4];
+            bytes.extend_from_slice(character.encode_utf8(&mut buffer).as_bytes());
+        }
+    }
+    bytes
+}
+
+/// The text of bytes read one character per byte.
+fn characters_of_bytes(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| *byte as char).collect()
+}
+
 #[derive(Debug)]
 pub struct StringValue {
     /// What the string holds. Ruby lets a string change what it holds while
-    /// every reference to it sees the change, so the text sits behind a cell
+    /// every reference to it sees the change, so the bytes sit behind a cell
     /// rather than being fixed when the string is made.
-    text: RefCell<String>,
+    bytes: RefCell<Vec<u8>>,
     encoding: RefCell<String>,
     /// The id this string answers, handed out the first time one is asked
     /// for. A counter rather than an address, since an address a dropped
     /// string leaves behind can be handed to the next one.
-    object_id: std::cell::Cell<u64>,
+    object_id: Cell<u64>,
     /// Whether the string refuses to change. `freeze` sets it, and every
-    /// method that would change the text checks it first.
-    frozen: std::cell::Cell<bool>,
-    /// Whether the characters stand for bytes rather than for text. A run of
-    /// bytes read off a file or unpacked from a format is built this way, and
-    /// keeps saying so even after it is tagged with a text encoding.
-    holds_bytes: std::cell::Cell<bool>,
+    /// method that would change the bytes checks it first.
+    frozen: Cell<bool>,
+    /// Whether the bytes are read one character per byte under a text
+    /// encoding. A run of bytes read off a file or unpacked from a format is
+    /// built this way, and keeps saying so after it is tagged with a text
+    /// encoding.
+    holds_bytes: Cell<bool>,
     /// Whether something else is reading the string right now and refuses to
     /// have it changed underneath. An IO::Buffer over a string sets this for
     /// as long as it is in use.
-    borrowed: std::cell::Cell<bool>,
+    borrowed: Cell<bool>,
     /// Whether the string is one of the interned copies `String#-@` hands
     /// back. Ruby refuses a singleton class on one of those, since the same
     /// string stands for every use of that text.
-    deduplicated: std::cell::Cell<bool>,
+    deduplicated: Cell<bool>,
     /// The warning a change to this string prints, for one Ruby hands back
     /// with notice that it will be frozen in a later release. Cleared once
     /// the warning has been given, so it is printed only the first time.
@@ -43,25 +85,25 @@ pub struct StringValue {
     /// The pointer a `pack` with 'P' or 'p' left on the string it built, which
     /// names the string those directives wrote the address of. Zero where the
     /// string carries none, which is every string but a packed one.
-    pointer: std::cell::Cell<u64>,
+    pointer: Cell<u64>,
     /// Where the literal that made this string was written, as `file:line`.
     /// Only `--debug-frozen-string-literal` records it, and everything else
     /// leaves it empty.
     created_at: RefCell<Option<String>>,
-    /// Whether the text is all ASCII, worked out the first time it is asked
-    /// and forgotten whenever the text changes.
-    ascii: std::cell::Cell<Option<bool>>,
+    /// Whether the bytes are all ASCII, worked out the first time it is
+    /// asked and forgotten whenever the bytes change.
+    ascii: Cell<Option<bool>>,
+    /// The text of a string read one character per byte that holds a byte
+    /// above 0x7F, built the first time it is asked for and forgotten
+    /// whenever the bytes or the way they are read change.
+    spelled: RefCell<Option<String>>,
     /// Where every `CHARACTERS_PER_MARK`th character starts, built the first
     /// time a character is looked up by position and forgotten whenever the
     /// text changes.
-    character_marks: RefCell<Option<std::rc::Rc<CharacterMarks>>>,
+    character_marks: RefCell<Option<Rc<CharacterMarks>>>,
     /// The text's Rust characters, which a pattern is matched over, built
     /// the first time a match asks and forgotten whenever the text changes.
-    letters: RefCell<Option<std::rc::Rc<[char]>>>,
-    /// The bytes each character stands for when it stands for bytes, built
-    /// the first time they are asked for and forgotten whenever the text
-    /// changes.
-    byte_spelling: RefCell<Option<std::rc::Rc<[u8]>>>,
+    letters: RefCell<Option<Rc<[char]>>>,
 }
 
 /// How many characters apart the byte offsets in `CharacterMarks` are.
@@ -104,69 +146,108 @@ impl CharacterMarks {
 }
 
 impl StringValue {
-    /// Text tagged with the encoding a literal carries.
-    pub fn new(text: impl Into<String>) -> Self {
+    fn built(bytes: Vec<u8>, encoding: String, holds_bytes: bool) -> Self {
         Self {
-            text: RefCell::new(text.into()),
-            encoding: RefCell::new(DEFAULT_ENCODING.to_string()),
-            object_id: std::cell::Cell::new(0),
-            frozen: std::cell::Cell::new(false),
-            holds_bytes: std::cell::Cell::new(false),
-            borrowed: std::cell::Cell::new(false),
-            deduplicated: std::cell::Cell::new(false),
+            bytes: RefCell::new(bytes),
+            encoding: RefCell::new(encoding),
+            object_id: Cell::new(0),
+            frozen: Cell::new(false),
+            holds_bytes: Cell::new(holds_bytes),
+            borrowed: Cell::new(false),
+            deduplicated: Cell::new(false),
             chilled: RefCell::new(None),
-            pointer: std::cell::Cell::new(0),
+            pointer: Cell::new(0),
             created_at: RefCell::new(None),
-            ascii: std::cell::Cell::new(None),
+            ascii: Cell::new(None),
+            spelled: RefCell::new(None),
             character_marks: RefCell::new(None),
             letters: RefCell::new(None),
-            byte_spelling: RefCell::new(None),
         }
     }
 
-    /// Text tagged with an encoding named outright, which is what a run of
-    /// bytes with no character meaning is built as.
+    /// Text tagged with the encoding a literal carries.
+    pub fn new(text: impl Into<String>) -> Self {
+        Self::built(
+            text.into().into_bytes(),
+            DEFAULT_ENCODING.to_string(),
+            false,
+        )
+    }
+
+    /// Text tagged with an encoding named outright. Under an encoding that
+    /// reads each byte as a character, the text spells the bytes.
     pub fn with_encoding(text: impl Into<String>, encoding: impl Into<String>) -> Self {
-        Self {
-            text: RefCell::new(text.into()),
-            encoding: RefCell::new(encoding.into()),
-            object_id: std::cell::Cell::new(0),
-            frozen: std::cell::Cell::new(false),
-            holds_bytes: std::cell::Cell::new(false),
-            borrowed: std::cell::Cell::new(false),
-            deduplicated: std::cell::Cell::new(false),
-            chilled: RefCell::new(None),
-            pointer: std::cell::Cell::new(0),
-            created_at: RefCell::new(None),
-            ascii: std::cell::Cell::new(None),
-            character_marks: RefCell::new(None),
-            letters: RefCell::new(None),
-            byte_spelling: RefCell::new(None),
-        }
+        let encoding = encoding.into();
+        let text = text.into();
+        let bytes = if encoding_reads_bytes(&encoding) {
+            bytes_of_characters(&text)
+        } else {
+            text.into_bytes()
+        };
+        Self::built(bytes, encoding, false)
     }
 
     /// Text whose characters stand for the bytes they were read from.
     pub fn from_bytes(text: impl Into<String>) -> Self {
-        let made = Self::with_encoding(text, "ASCII-8BIT");
-        made.holds_bytes.set(true);
-        made
+        Self::built(
+            bytes_of_characters(&text.into()),
+            "ASCII-8BIT".to_string(),
+            true,
+        )
     }
 
-    /// Whether the characters stand for bytes rather than for text.
+    /// Bytes tagged binary.
+    pub fn binary(bytes: Vec<u8>) -> Self {
+        Self::built(bytes, "ASCII-8BIT".to_string(), true)
+    }
+
+    /// Bytes tagged with the named encoding. Bytes that are not UTF-8 are
+    /// read one character per byte.
+    pub fn of_bytes(bytes: Vec<u8>, encoding: impl Into<String>) -> Self {
+        let holds_bytes = std::str::from_utf8(&bytes).is_err();
+        Self::built(bytes, encoding.into(), holds_bytes)
+    }
+
+    /// Whether each byte reads as a character of its own.
+    pub fn reads_bytes(&self) -> bool {
+        self.holds_bytes.get() || encoding_reads_bytes(&self.encoding.borrow())
+    }
+
+    /// Whether the string is marked as holding bytes under a text encoding.
     pub fn holds_bytes(&self) -> bool {
         self.holds_bytes.get()
+    }
+
+    /// Change how the bytes are read, keeping the text they read as.
+    fn reread(&self, change: impl FnOnce()) {
+        let before = self.reads_bytes();
+        change();
+        let after = self.reads_bytes();
+        if before == after {
+            return;
+        }
+        let respelled = {
+            let bytes = self.bytes.borrow();
+            if after {
+                bytes_of_characters(std::str::from_utf8(&bytes).unwrap_or_default())
+            } else {
+                characters_of_bytes(&bytes).into_bytes()
+            }
+        };
+        *self.bytes.borrow_mut() = respelled;
+        self.forget_readings();
     }
 
     /// Say that the characters stand for bytes, which is what a copy built
     /// from one that does has to carry.
     pub fn mark_bytes(&self) {
-        self.holds_bytes.set(true);
+        self.reread(|| self.holds_bytes.set(true));
     }
 
     /// Say that the characters stand for text again, which is what reading a
     /// run of bytes back through an encoding that spells them leaves.
     pub fn clear_bytes(&self) {
-        self.holds_bytes.set(false);
+        self.reread(|| self.holds_bytes.set(false));
     }
 
     /// The name of the encoding this string says it is in.
@@ -174,71 +255,138 @@ impl StringValue {
         self.encoding.borrow().clone()
     }
 
-    /// Tag the string as being in another encoding, leaving what it holds
-    /// alone. Every reference to the same string sees the new tag, the way
-    /// Ruby's `force_encoding` changes the string itself.
+    /// Tag the string as being in another encoding, keeping the text it
+    /// reads as. Every reference to the same string sees the new tag.
     pub fn set_encoding(&self, encoding: impl Into<String>) {
-        *self.encoding.borrow_mut() = encoding.into();
+        let encoding = encoding.into();
+        self.reread(|| *self.encoding.borrow_mut() = encoding);
     }
 
-    /// The text itself. The borrow lasts as long as the value is held, so a
-    /// caller that changes the string has to let it go first.
-    pub fn as_str(&self) -> std::cell::Ref<'_, str> {
-        std::cell::Ref::map(self.text.borrow(), |held| held.as_str())
+    /// Tag the string as being in another encoding, keeping its bytes, which
+    /// is what Ruby's `force_encoding` does. Bytes read one per byte keep
+    /// being read that way unless the new encoding is UTF-8 or US-ASCII and
+    /// they spell it.
+    pub fn retag(&self, encoding: impl Into<String>) {
+        let encoding = encoding.into();
+        let broken = std::str::from_utf8(&self.bytes.borrow()).is_err();
+        let holds_bytes = if matches!(encoding.as_str(), "UTF-8" | "US-ASCII") {
+            broken
+        } else {
+            broken || self.reads_bytes() || encoding_reads_bytes(&encoding)
+        };
+        *self.encoding.borrow_mut() = encoding;
+        self.holds_bytes.set(holds_bytes);
+        self.forget_readings();
     }
 
-    /// Whether every character of the text is ASCII.
+    /// The bytes the string holds.
+    pub fn bytes(&self) -> Ref<'_, [u8]> {
+        Ref::map(self.bytes.borrow(), |held| held.as_slice())
+    }
+
+    /// How many bytes the string holds.
+    pub fn byte_len(&self) -> usize {
+        self.bytes.borrow().len()
+    }
+
+    /// Replace the bytes the string holds.
+    pub fn replace_bytes(&self, bytes: Vec<u8>) {
+        *self.bytes.borrow_mut() = bytes;
+        self.settle();
+    }
+
+    /// Replace the byte at `index`, which is within the string.
+    pub fn set_byte(&self, index: usize, byte: u8) {
+        self.bytes.borrow_mut()[index] = byte;
+        self.settle();
+    }
+
+    /// Add bytes to the end of the string.
+    pub fn append_bytes(&self, extra: &[u8]) {
+        self.bytes.borrow_mut().extend_from_slice(extra);
+        self.settle();
+    }
+
+    /// After a change to the bytes, read them one per byte when they no
+    /// longer spell UTF-8.
+    fn settle(&self) {
+        self.forget_readings();
+        if !self.reads_bytes() && std::str::from_utf8(&self.bytes.borrow()).is_err() {
+            self.holds_bytes.set(true);
+        }
+    }
+
+    /// The text the bytes read as. The borrow lasts as long as the value is
+    /// held, so a caller that changes the string has to let it go first.
+    pub fn as_str(&self) -> Ref<'_, str> {
+        if !self.reads_bytes() || self.is_ascii() {
+            // SAFETY: bytes read as UTF-8 are kept UTF-8 by `settle` and by
+            // every constructor, and ASCII bytes are UTF-8.
+            return Ref::map(self.bytes.borrow(), |held| unsafe {
+                std::str::from_utf8_unchecked(held)
+            });
+        }
+        if self.spelled.borrow().is_none() {
+            let text = characters_of_bytes(&self.bytes.borrow());
+            *self.spelled.borrow_mut() = Some(text);
+        }
+        Ref::map(self.spelled.borrow(), |held| {
+            held.as_deref().unwrap_or_default()
+        })
+    }
+
+    /// The bytes text spells under the way this string reads its bytes.
+    fn spell(&self, text: &str) -> Vec<u8> {
+        if self.reads_bytes() {
+            bytes_of_characters(text)
+        } else {
+            text.as_bytes().to_vec()
+        }
+    }
+
+    /// Whether every byte is ASCII.
     pub fn is_ascii(&self) -> bool {
         if let Some(known) = self.ascii.get() {
             return known;
         }
-        let found = self.text.borrow().is_ascii();
+        let found = self.bytes.borrow().is_ascii();
         self.ascii.set(Some(found));
         found
     }
 
-    fn forget_text_readings(&self) {
+    fn forget_readings(&self) {
         self.ascii.set(None);
+        *self.spelled.borrow_mut() = None;
         *self.character_marks.borrow_mut() = None;
         *self.letters.borrow_mut() = None;
-        *self.byte_spelling.borrow_mut() = None;
-    }
-
-    /// The bytes `spell` reads the text as, kept until the text changes.
-    /// Every caller passes the same reading, the one that takes each
-    /// character below 256 as one byte.
-    pub fn byte_spelling(&self, spell: impl FnOnce(&str) -> Vec<u8>) -> std::rc::Rc<[u8]> {
-        if let Some(bytes) = self.byte_spelling.borrow().as_ref() {
-            return std::rc::Rc::clone(bytes);
-        }
-        let bytes: std::rc::Rc<[u8]> = spell(&self.text.borrow()).into();
-        *self.byte_spelling.borrow_mut() = Some(std::rc::Rc::clone(&bytes));
-        bytes
     }
 
     /// The text's Rust characters, in order.
-    pub fn letters(&self) -> std::rc::Rc<[char]> {
+    pub fn letters(&self) -> Rc<[char]> {
         if let Some(letters) = self.letters.borrow().as_ref() {
-            return std::rc::Rc::clone(letters);
+            return Rc::clone(letters);
         }
-        let letters: std::rc::Rc<[char]> = self.text.borrow().chars().collect();
-        *self.letters.borrow_mut() = Some(std::rc::Rc::clone(&letters));
+        let letters: Rc<[char]> = self.as_str().chars().collect();
+        *self.letters.borrow_mut() = Some(Rc::clone(&letters));
         letters
     }
 
-    fn character_marks(&self) -> std::rc::Rc<CharacterMarks> {
+    fn character_marks(&self) -> Rc<CharacterMarks> {
         if let Some(marks) = self.character_marks.borrow().as_ref() {
-            return std::rc::Rc::clone(marks);
+            return Rc::clone(marks);
         }
-        let marks = std::rc::Rc::new(CharacterMarks::of(&self.text.borrow()));
-        *self.character_marks.borrow_mut() = Some(std::rc::Rc::clone(&marks));
+        let marks = Rc::new(CharacterMarks::of(&self.as_str()));
+        *self.character_marks.borrow_mut() = Some(Rc::clone(&marks));
         marks
     }
 
     /// How many Rust characters the text holds.
     pub fn character_count(&self) -> usize {
         if self.is_ascii() {
-            return self.text.borrow().len();
+            return self.byte_len();
+        }
+        if self.reads_bytes() {
+            return self.byte_len();
         }
         self.character_marks().count
     }
@@ -246,12 +394,14 @@ impl StringValue {
     /// The text of characters `from` up to but not including `to`, counted
     /// in Rust characters. Both are clamped to the text's length.
     pub fn character_slice(&self, from: usize, to: usize) -> String {
-        let text = self.text.borrow();
-        if self.is_ascii() {
-            let end = to.min(text.len());
-            return text[from.min(end)..end].to_string();
+        if self.is_ascii() || self.reads_bytes() {
+            let bytes = self.bytes.borrow();
+            let end = to.min(bytes.len());
+            let cut = &bytes[from.min(end)..end];
+            return characters_of_bytes(cut);
         }
         let marks = self.character_marks();
+        let text = self.as_str();
         let start = marks.byte_offset(&text, from);
         let end = marks.byte_offset(&text, to.max(from));
         text[start..end].to_string()
@@ -259,21 +409,23 @@ impl StringValue {
 
     /// A copy of the text, for a caller that keeps it past a change.
     pub fn to_text(&self) -> String {
-        self.text.borrow().clone()
+        self.as_str().to_string()
     }
 
     /// Replace what the string holds. Every reference to the same string
     /// sees the new text, which is what Ruby's in-place methods do.
     pub fn replace_text(&self, text: impl Into<String>) {
-        *self.text.borrow_mut() = text.into();
-        self.forget_text_readings();
+        let bytes = self.spell(&text.into());
+        *self.bytes.borrow_mut() = bytes;
+        self.forget_readings();
     }
 
     /// Add text to the end of what the string holds.
     pub fn append_text(&self, extra: &str) {
-        self.text.borrow_mut().push_str(extra);
         let ascii = self.ascii.get();
-        self.forget_text_readings();
+        let bytes = self.spell(extra);
+        self.bytes.borrow_mut().extend_from_slice(&bytes);
+        self.forget_readings();
         if ascii == Some(true) && extra.is_ascii() {
             self.ascii.set(Some(true));
         }
@@ -281,9 +433,8 @@ impl StringValue {
 
     /// Change the text through a function of what it holds now.
     pub fn update_text(&self, change: impl FnOnce(&str) -> String) {
-        let made = change(self.text.borrow().as_str());
-        *self.text.borrow_mut() = made;
-        self.forget_text_readings();
+        let made = change(&self.as_str());
+        self.replace_text(made);
     }
 
     /// Whether something else is reading the string and refuses a change.
@@ -373,33 +524,28 @@ impl StringValue {
 }
 
 impl Clone for StringValue {
-    /// A copy holds the same text under an id of its own, since Ruby's `dup`
+    /// A copy holds the same bytes under an id of its own, since Ruby's `dup`
     /// answers a string that changes on its own.
     fn clone(&self) -> Self {
-        Self {
-            text: RefCell::new(self.text.borrow().clone()),
-            encoding: RefCell::new(self.encoding.borrow().clone()),
-            object_id: std::cell::Cell::new(0),
-            frozen: std::cell::Cell::new(false),
-            holds_bytes: std::cell::Cell::new(self.holds_bytes.get()),
-            borrowed: std::cell::Cell::new(false),
-            deduplicated: std::cell::Cell::new(false),
-            chilled: RefCell::new(None),
-            pointer: std::cell::Cell::new(self.pointer.get()),
-            created_at: RefCell::new(self.created_at.borrow().clone()),
-            ascii: std::cell::Cell::new(self.ascii.get()),
-            character_marks: RefCell::new(self.character_marks.borrow().clone()),
-            letters: RefCell::new(self.letters.borrow().clone()),
-            byte_spelling: RefCell::new(self.byte_spelling.borrow().clone()),
-        }
+        let copy = Self::built(
+            self.bytes.borrow().clone(),
+            self.encoding.borrow().clone(),
+            self.holds_bytes.get(),
+        );
+        copy.pointer.set(self.pointer.get());
+        *copy.created_at.borrow_mut() = self.created_at.borrow().clone();
+        copy.ascii.set(self.ascii.get());
+        *copy.character_marks.borrow_mut() = self.character_marks.borrow().clone();
+        *copy.letters.borrow_mut() = self.letters.borrow().clone();
+        copy
     }
 }
 
 impl PartialEq for StringValue {
-    /// Two strings are equal when they hold the same text. Ruby compares an
-    /// ASCII-only string across encodings the same way.
+    /// Two strings are equal when they read as the same text. Ruby compares
+    /// an ASCII-only string across encodings the same way.
     fn eq(&self, other: &Self) -> bool {
-        *self.text.borrow() == *other.text.borrow()
+        *self.as_str() == *other.as_str()
     }
 }
 
@@ -414,46 +560,44 @@ impl PartialOrd for StringValue {
 
 impl Ord for StringValue {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let held = self.text.borrow();
-        let theirs = other.text.borrow();
-        held.cmp(&theirs)
+        self.as_str().cmp(&other.as_str())
     }
 }
 
 /// Comparing against plain text reads the text this holds.
 impl PartialEq<String> for StringValue {
     fn eq(&self, other: &String) -> bool {
-        &*self.text.borrow() == other
+        *self.as_str() == **other
     }
 }
 
 impl PartialEq<StringValue> for String {
     fn eq(&self, other: &StringValue) -> bool {
-        self == &*other.text.borrow()
+        **self == *other.as_str()
     }
 }
 
 impl PartialEq<str> for StringValue {
     fn eq(&self, other: &str) -> bool {
-        self.text.borrow().as_str() == other
+        *self.as_str() == *other
     }
 }
 
 impl PartialEq<&str> for StringValue {
     fn eq(&self, other: &&str) -> bool {
-        self.text.borrow().as_str() == *other
+        *self.as_str() == **other
     }
 }
 
 impl std::hash::Hash for StringValue {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.text.borrow().hash(state);
+        self.as_str().hash(state);
     }
 }
 
 impl std::fmt::Display for StringValue {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "{}", self.text.borrow())
+        write!(formatter, "{}", &*self.as_str())
     }
 }
 
@@ -461,7 +605,7 @@ impl std::fmt::Display for StringValue {
 /// wants a `String` from one does.
 impl From<StringValue> for String {
     fn from(held: StringValue) -> Self {
-        held.text.into_inner()
+        held.to_text()
     }
 }
 

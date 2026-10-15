@@ -191,9 +191,7 @@ pub(crate) fn text_in_encoding(bytes: &[u8], named: &str) -> Object {
         let made = crate::object::StringValue::with_encoding(text.to_string(), named);
         return Object::String(std::rc::Rc::new(made));
     }
-    let made = crate::object::StringValue::from_bytes(
-        crate::vm::native_methods::pack_format::bytes_to_string(bytes).to_string(),
-    );
+    let made = crate::object::StringValue::binary(bytes.to_vec());
     made.set_encoding(named);
     Object::String(std::rc::Rc::new(made))
 }

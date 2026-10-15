@@ -88,15 +88,8 @@ impl VirtualMachine {
                 // as the bytes it holds rather than as the characters they
                 // spell. An offset counts bytes too.
                 let bytes = binary_bytes(string_value);
-                let held = match crate::vm::native_methods::pack_format::bytes_to_string(
-                    &bytes[from.min(bytes.len())..],
-                )
-                .view()
-                {
-                    View::String(rest) => rest.as_str().to_string(),
-                    _ => String::new(),
-                };
-                let read = self.string_unpack(&held, &format, string_value.pointer(), position)?;
+                let held = &bytes[from.min(bytes.len())..];
+                let read = self.string_unpack(held, &format, string_value.pointer(), position)?;
                 if method_name == "unpack1" {
                     return Ok(Some(read.into_iter().next().unwrap_or(Object::Nil)));
                 }
@@ -198,38 +191,7 @@ impl VirtualMachine {
                     return Err(self.frozen_modification_error(receiver, position));
                 }
                 let named = self.encoding_name_argument(&arguments[0], position)?;
-                // Re-tagging says how to read the bytes the string already
-                // holds, so from here on they are read as bytes rather than
-                // as the characters they were written as.
-                let fixed_width = matches!(
-                    named.as_str(),
-                    "UTF-16" | "UTF-16BE" | "UTF-16LE" | "UTF-32" | "UTF-32BE" | "UTF-32LE"
-                );
-                // Read as bytes, each byte is a character of its own, so the
-                // text is spread out to say so.
-                let by_the_byte = matches!(named.as_str(), "ASCII-8BIT" | "BINARY");
-                if by_the_byte && !string_value.holds_bytes() {
-                    let bytes = binary_bytes(string_value);
-                    string_value.replace_text(
-                        crate::vm::native_methods::pack_format::bytes_to_string(&bytes).to_string(),
-                    );
-                    string_value.mark_bytes();
-                }
-                // Read back through an encoding that spells what the bytes
-                // hold, the string is text again.
-                if !by_the_byte
-                    && !fixed_width
-                    && string_value.holds_bytes()
-                    && matches!(named.as_str(), "UTF-8" | "US-ASCII")
-                    && let Ok(text) = String::from_utf8(binary_bytes(string_value))
-                {
-                    string_value.replace_text(text);
-                    string_value.clear_bytes();
-                }
-                string_value.set_encoding(named);
-                if fixed_width {
-                    string_value.mark_bytes();
-                }
+                string_value.retag(named);
                 Ok(Some(receiver.clone()))
             }
             // The encoding this string says it is in.

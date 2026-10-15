@@ -127,3 +127,12 @@ alive is the memory management decision's.
   thread, where CRuby frees a Symbol made at runtime once nothing refers to
   it.
 - An Integer that fits in an i64 and not in 63 bits is held on the heap.
+- A String, in `src/object/string_value.rs`, holds its bytes and an encoding
+  tag. `bytesize`, `getbyte`, `setbyte`, `bytesplice`, `unpack`, and
+  `pack(buffer:)` read and write the bytes in place. `force_encoding` keeps
+  the bytes and changes the tag. Methods that work on characters read the
+  bytes as text through the encoding: as UTF-8, or one character per byte
+  for a binary string, a UTF-16 or UTF-32 string, and a string whose bytes
+  are not valid in its text encoding. UTF-8 is read from the bytes without a
+  copy. Text read one character per byte is built on first use when a byte
+  is above 0x7F, and dropped when the bytes change.

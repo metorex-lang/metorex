@@ -30,7 +30,7 @@ pub(crate) fn grapheme_clusters(text: &str) -> Vec<String> {
 /// read out of those bytes and written back into them.
 pub(crate) fn encoded_grapheme_clusters(string_value: &crate::object::StringValue) -> Vec<Object> {
     use crate::vm::native_methods::string_methods::{
-        binary_bytes, bytes_as_text, wide_bytes, wide_encoding, wide_text,
+        binary_bytes, wide_bytes, wide_encoding, wide_text,
     };
     let named = string_value.encoding_name();
     if let Some(shape) = wide_encoding(&named)
@@ -39,9 +39,7 @@ pub(crate) fn encoded_grapheme_clusters(string_value: &crate::object::StringValu
         return grapheme_clusters(&wide_text(&binary_bytes(string_value), shape))
             .iter()
             .map(|cluster| {
-                let made = crate::object::StringValue::from_bytes(bytes_as_text(&wide_bytes(
-                    cluster, shape,
-                )));
+                let made = crate::object::StringValue::binary(wide_bytes(cluster, shape));
                 made.set_encoding(named.clone());
                 Object::String(std::rc::Rc::new(made))
             })

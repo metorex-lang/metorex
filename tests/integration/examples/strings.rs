@@ -597,3 +597,18 @@ fn test_strings_stringio_ungetc_no_parens_execution() {
     let output = run_example("strings/stringio_ungetc_no_parens.rb");
     assert_eq!(output, STRINGIO_UNGETC_OUTPUT);
 }
+
+/// The expected output of both `strings/bytes_kept` variants.
+const BYTES_KEPT_OUTPUT: &str = "2\n195\n\"è\"\n1\n#<Encoding:UTF-8>\ntrue\n[195, 169]\n2\ntrue\nfalse\n[255, 169]\n\"abé\"\n#<Encoding:UTF-8>\n\"aé\"\ntrue\n";
+
+#[test]
+fn test_strings_bytes_kept_execution() {
+    let output = run_example("strings/bytes_kept.rb");
+    assert_eq!(output, BYTES_KEPT_OUTPUT);
+}
+
+#[test]
+fn test_strings_bytes_kept_no_parens_execution() {
+    let output = run_example("strings/bytes_kept_no_parens.rb");
+    assert_eq!(output, BYTES_KEPT_OUTPUT);
+}

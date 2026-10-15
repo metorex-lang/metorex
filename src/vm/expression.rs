@@ -40,9 +40,7 @@ impl VirtualMachine {
         // string stand for bytes, and every other piece is written out in the
         // bytes its own encoding spells it with.
         if let Some(raw) = raw {
-            let spelled = crate::object::StringValue::from_bytes(
-                crate::vm::native_methods::pack_format::bytes_to_string(&raw).to_string(),
-            );
+            let spelled = crate::object::StringValue::binary(raw);
             match &carried {
                 Some((encoding, _)) => spelled.set_encoding(encoding.clone()),
                 // Bytes the literal itself escaped are written in the

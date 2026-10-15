@@ -167,7 +167,7 @@ impl VirtualMachine {
                             .map_err(|character| {
                                 self.undefined_conversion_error(character, &held, &wanted, position)
                             })?;
-                    let made = crate::object::StringValue::from_bytes(bytes_as_text(&bytes));
+                    let made = crate::object::StringValue::binary(bytes);
                     made.set_encoding(wanted);
                     return Ok(Some(Object::String(Rc::new(made))));
                 }
@@ -177,7 +177,7 @@ impl VirtualMachine {
                             .map_err(|character| {
                                 self.undefined_conversion_error(character, &held, &wanted, position)
                             })?;
-                    let made = crate::object::StringValue::from_bytes(bytes_as_text(&bytes));
+                    let made = crate::object::StringValue::binary(bytes);
                     made.set_encoding(wanted);
                     return Ok(Some(Object::String(Rc::new(made))));
                 }
@@ -186,7 +186,7 @@ impl VirtualMachine {
                         .map_err(|character| {
                             self.undefined_conversion_error(character, &held, &wanted, position)
                         })?;
-                    let made = crate::object::StringValue::from_bytes(bytes_as_text(&bytes));
+                    let made = crate::object::StringValue::binary(bytes);
                     made.set_encoding(wanted);
                     return Ok(Some(Object::String(Rc::new(made))));
                 }
@@ -194,13 +194,13 @@ impl VirtualMachine {
                     let bytes = spelled.map_err(|character| {
                         self.undefined_conversion_error(character, &held, &wanted, position)
                     })?;
-                    let made = crate::object::StringValue::from_bytes(bytes_as_text(&bytes));
+                    let made = crate::object::StringValue::binary(bytes);
                     made.set_encoding(wanted);
                     return Ok(Some(Object::String(Rc::new(made))));
                 }
                 if let Some(shape) = wide_encoding(&wanted) {
-                    let made = Object::String(Rc::new(crate::object::StringValue::from_bytes(
-                        bytes_as_text(&wide_bytes(&reading, shape)),
+                    let made = Object::String(Rc::new(crate::object::StringValue::binary(
+                        wide_bytes(&reading, shape),
                     )));
                     if let View::String(copied) = made.view() {
                         copied.set_encoding(wanted);

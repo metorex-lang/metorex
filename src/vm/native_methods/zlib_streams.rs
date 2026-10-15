@@ -467,9 +467,7 @@ impl VirtualMachine {
             )),
             "deflate" => {
                 let dictionary = match arguments.get(3).view() {
-                    Some(View::String(held)) => {
-                        super::pack_format::string_to_bytes(&held.as_str().to_string())
-                    }
+                    Some(View::String(held)) => held.bytes().to_vec(),
                     _ => Vec::new(),
                 };
                 Ok(super::pack_format::bytes_to_string(&zlib_wrap_with(
@@ -481,9 +479,7 @@ impl VirtualMachine {
             // was given with no flush asked for, header included.
             "deflate_handed_on" => {
                 let dictionary = match arguments.get(3).view() {
-                    Some(View::String(held)) => {
-                        super::pack_format::string_to_bytes(&held.as_str().to_string())
-                    }
+                    Some(View::String(held)) => held.bytes().to_vec(),
                     _ => Vec::new(),
                 };
                 let header = if dictionary.is_empty() { 2 } else { 6 };
@@ -498,9 +494,7 @@ impl VirtualMachine {
             // not part of it, which `Zlib::Inflate` passes through.
             "inflate_part" | "raw_inflate_part" => {
                 let dictionary = match arguments.get(3).view() {
-                    Some(View::String(held)) => {
-                        super::pack_format::string_to_bytes(&held.as_str().to_string())
-                    }
+                    Some(View::String(held)) => held.bytes().to_vec(),
                     _ => Vec::new(),
                 };
                 let raw = &*action.as_str() == "raw_inflate_part";
@@ -524,9 +518,7 @@ impl VirtualMachine {
             // text names the kind: `zlib`, `raw` or `gzip`.
             "inflate_so_far" => {
                 let dictionary = match arguments.get(3).view() {
-                    Some(View::String(held)) => {
-                        super::pack_format::string_to_bytes(&held.as_str().to_string())
-                    }
+                    Some(View::String(held)) => held.bytes().to_vec(),
                     _ => Vec::new(),
                 };
                 let kind = arguments

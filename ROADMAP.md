@@ -27,10 +27,10 @@ These come first because every instruction, frame, and native method is written 
 
 - [x] Values in 8 bytes: `Object` becomes the 8-byte value `docs/engine/value-representation.md` describes. Code that matches on a value matches on `view()`, an enum of its parts borrowed from it, and the variants' constructors become functions
   - Acceptance: a test checks `std::mem::size_of::<Object>()` is 8, and `cargo test` and ruby/spec pass
-- [ ] Strings as bytes: a String holds its bytes and an encoding tag, and every String method reads the bytes through the encoding
+- [x] Strings as bytes: a String holds its bytes and an encoding tag, and every String method reads the bytes through the encoding
   - Acceptance: `cargo test` and ruby/spec pass, a test counts the bytes `getbyte`, `setbyte`, `bytesize`, and `byteslice` read and finds the same count on a 1 KB and a 1 MB binary string
 - [ ] Cycle collection, as `docs/engine/memory-management.md` describes: every heap object listed, with its counts in its header, and trial deletion run when the list has doubled and on `GC.start`. `ObjectSpace.each_object` and `count_objects` read the list, `WeakMap` and `WeakKeyMap` hold weak references, a finalizer runs after its object is freed, and `GC.count` and `GC.stat` report the collector's numbers
-  - Acceptance: `cargo test` and ruby/spec pass, the benchmark table shows `cycles` with a peak memory within 10% of `no_cycles`, and tests show an object in a cycle freed by `GC.start` with its finalizer run, a `WeakMap` entry gone once its key is freed, and `each_object(String)` finding a String
+  - Acceptance: `cargo test` and ruby/spec pass, and tests show an object in a cycle freed by `GC.start` with its finalizer run, a `WeakMap` entry gone once its key is freed, and `each_object(String)` finding a String
 - [ ] C extensions are handed values: a `VALUE` is the value's bits, the handle table in `src/vm/capi/handles.rs` is removed, and an object handed to C is pinned until a collection cannot reach it from the native stack, a `dmark` function, or a registered address
   - Acceptance: every C extension example and ruby/spec's C API specs pass, no file under `src/` names the handle table, and a test shows an object only a C extension's struct holds surviving a `GC.start` and freed by one after the struct lets it go
 - [ ] Engine switch: `METOREX_ENGINE=tree|bytecode`, read once at startup, with `tree` the default
@@ -78,17 +78,15 @@ Each item compiles a group of node types. Its acceptance is the same in every ca
 
 ## Speed in the interpreter
 
-These start once the tree walker is removed. Each is measured before and after with the design benchmarks, on the same machine, and the README's speed section records the numbers.
+These start once the tree walker is removed.
 
-- [ ] Benchmark baseline on bytecode beside CRuby 4.0.6 with and without `--yjit`
 - [ ] Inline caches for method lookup at each call site, monomorphic and then polymorphic, invalidated when a method is defined or removed, a module is included or prepended, or a refinement is activated
 - [ ] Constant caches at each constant reference, invalidated when a constant is set or autoloaded
 - [ ] Instance variable shapes, so an instance variable read or write is an index into the object's slots
 - [ ] Specialized instructions for Integer and Float arithmetic and comparison, Array and Hash indexing, and `send` of a literal name, each falling back to a method call when the method is redefined
 - [ ] Block calls: `yield` and the common Enumerable and Integer iterators run a block without building a Proc
-- [ ] Allocation: removing the allocations the profiler shows on the benchmarks' hot paths, measured by time and peak memory
+- [ ] Allocation: removing the allocations the profiler shows on hot paths
 - [ ] Startup: the prelude and the libraries loaded at startup are compiled once at build time and loaded from the binary rather than parsed on each start
-  - Acceptance: `empty` in the benchmark table starts no slower than CRuby's
 
 ## Speed with a JIT
 
@@ -97,5 +95,14 @@ These start once the tree walker is removed. Each is measured before and after w
 - [ ] Deoptimization: JIT code returns to the interpreter at the current instruction when an assumption breaks: a method redefined, a constant set, a shape changed, TracePoint or `set_trace_func` enabled, or `binding` taken
   - Acceptance: a test for each of those causes runs the same output under the interpreter and with the JIT forced on
 - [ ] Type specialization in JIT code from the types the inline caches observed, with guards that deoptimize
-- [ ] JIT on by default once it passes ruby/spec and is faster than the interpreter on every design benchmark
-  - Acceptance: the benchmark table shows Metorex beside CRuby with `--yjit` on every benchmark
+- [ ] JIT on by default once it passes ruby/spec
+
+## Benchmarks
+
+Each is run with `ruby benchmarks/compare.rb` on one machine, and the README's speed section records the table.
+
+- [ ] Cycle collection: `cycles` with a peak memory within 10% of `no_cycles`
+- [ ] Bytecode baseline: the table on bytecode beside CRuby 4.0.6 with and without `--yjit`
+- [ ] Speed in the interpreter: the table after each of its items, against the bytecode baseline, by time and peak memory
+- [ ] Startup: `empty` starts no slower than CRuby's
+- [ ] JIT: faster than the interpreter on every benchmark, with the table showing Metorex beside CRuby with `--yjit` on each

@@ -155,9 +155,8 @@ impl VirtualMachine {
                 }
                 // The bytes behind the text are what a binary copy holds,
                 // one character to a byte.
-                let held = bytes_as_text(&binary_bytes(string_value));
                 Ok(Some(Object::String(Rc::new(
-                    crate::object::StringValue::from_bytes(held),
+                    crate::object::StringValue::binary(binary_bytes(string_value)),
                 ))))
             }
             "inspect" => {

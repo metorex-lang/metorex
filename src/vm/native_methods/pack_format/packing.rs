@@ -29,14 +29,14 @@ impl VirtualMachine {
                 // nulls, 'A' with spaces, and 'Z' adds a null of its own.
                 'a' | 'A' | 'Z' => {
                     let held = match items.get(taken).view() {
-                        Some(View::String(text)) => text.as_str().to_string(),
+                        Some(View::String(text)) => text.bytes().to_vec(),
                         // nil packs as nothing, which the padding then fills.
-                        Some(View::Nil) => String::new(),
+                        Some(View::Nil) => Vec::new(),
                         Some(other) => self.coerce_pack_string(&other.to_object(), position)?,
                         None => return Err(too_few_items(position)),
                     };
                     taken += 1;
-                    let source = string_to_bytes(&held);
+                    let source = held;
                     let width = match directive.count {
                         Count::Rest => source.len() + usize::from(directive.code == 'Z'),
                         Count::One => 1,
@@ -51,8 +51,8 @@ impl VirtualMachine {
                 // hexadecimal digits.
                 'b' | 'B' | 'h' | 'H' => {
                     let held = match items.get(taken).view() {
-                        Some(View::String(text)) => text.as_str().to_string(),
-                        Some(View::Nil) => String::new(),
+                        Some(View::String(text)) => text.bytes().to_vec(),
+                        Some(View::Nil) => Vec::new(),
                         Some(other) => self.coerce_pack_string(&other.to_object(), position)?,
                         None => return Err(too_few_items(position)),
                     };
@@ -60,7 +60,7 @@ impl VirtualMachine {
                     // Ruby reads the bits and nibbles off the bytes of the
                     // string, so a character spelled in several bytes
                     // contributes one digit per byte.
-                    let digits = string_to_bytes(&held);
+                    let digits = held;
                     let wanted = match directive.count {
                         Count::Rest => digits.len(),
                         Count::One => 1,
@@ -252,7 +252,7 @@ impl VirtualMachine {
                 // Uuencoding, written in lines of the length the count names.
                 'u' | 'm' | 'M' => {
                     let held = match items.get(taken).view() {
-                        Some(View::String(text)) => text.as_str().to_string(),
+                        Some(View::String(text)) => text.bytes().to_vec(),
                         // Quoted-printable writes whatever an object says it
                         // is, rather than asking it for a string of its own.
                         Some(other) if directive.code == 'M' => {
@@ -260,15 +260,15 @@ impl VirtualMachine {
                                 .send_to_object(other.to_object(), "to_s", vec![], position)?
                                 .view()
                             {
-                                View::String(text) => text.as_str().to_string(),
-                                spelled => spelled.to_string(),
+                                View::String(text) => text.bytes().to_vec(),
+                                spelled => spelled.to_string().into_bytes(),
                             }
                         }
                         Some(other) => self.coerce_pack_string(&other.to_object(), position)?,
                         None => return Err(too_few_items(position)),
                     };
                     taken += 1;
-                    let source = string_to_bytes(&held);
+                    let source = held;
                     let written = match directive.code {
                         'u' => encode_uu(&source, uu_line_length(&directive.count)),
                         'M' => {
@@ -286,9 +286,12 @@ impl VirtualMachine {
                     let held = match items.get(taken).view() {
                         Some(View::Nil) => None,
                         Some(other @ View::String(_)) => Some(other.to_object()),
-                        Some(other) => Some(Object::string(
-                            self.coerce_pack_string(&other.to_object(), position)?,
-                        )),
+                        Some(other) => Some(Object::String(std::rc::Rc::new(
+                            crate::object::StringValue::of_bytes(
+                                self.coerce_pack_string(&other.to_object(), position)?,
+                                "UTF-8",
+                            ),
+                        ))),
                         None => return Err(too_few_items(position)),
                     };
                     taken += 1;
@@ -319,9 +322,8 @@ impl VirtualMachine {
             made.set_pointer(pointer);
             return Ok(Object::String(std::rc::Rc::new(made)));
         }
-        let made =
-            crate::object::StringValue::with_encoding(bytes_to_string(&out).to_string(), named);
-        made.mark_bytes();
+        let made = crate::object::StringValue::binary(out);
+        made.set_encoding(named);
         made.set_pointer(pointer);
         Ok(Object::String(std::rc::Rc::new(made)))
     }
@@ -407,13 +409,13 @@ impl VirtualMachine {
         &mut self,
         value: &Object,
         position: Position,
-    ) -> Result<String, MetorexError> {
+    ) -> Result<Vec<u8>, MetorexError> {
         if self.responds_to(value, "to_str")
             && let View::String(text) = self
                 .send_to_object(value.clone(), "to_str", vec![], position)?
                 .view()
         {
-            return Ok(text.as_str().to_string());
+            return Ok(text.bytes().to_vec());
         }
         let message = format!(
             "no implicit conversion of {} into String",

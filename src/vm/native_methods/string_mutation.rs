@@ -276,8 +276,7 @@ impl VirtualMachine {
                         }
                     }
                 }
-                target.replace_text(super::string_methods::bytes_as_text(&bytes));
-                target.mark_bytes();
+                target.replace_bytes(bytes);
                 Ok(Some(receiver.clone()))
             }
             "setbyte" => {
@@ -292,13 +291,9 @@ impl VirtualMachine {
                 let index = self.integer_argument(method_name, &arguments[0], position)?;
                 let value = self.integer_argument(method_name, &arguments[1], position)?;
                 let (index, value) = (&index, &value);
-                let mut bytes = super::pack_format::string_to_bytes(&target.as_str());
-                let at = if *index < 0 {
-                    *index + bytes.len() as i64
-                } else {
-                    *index
-                };
-                if at < 0 || at >= bytes.len() as i64 {
+                let length = target.byte_len() as i64;
+                let at = if *index < 0 { *index + length } else { *index };
+                if at < 0 || at >= length {
                     let message = format!("index {} out of string", index);
                     return Err(crate::vm::errors::simple_exception(
                         "IndexError",
@@ -306,13 +301,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                bytes[at as usize] = (value.rem_euclid(256)) as u8;
-                if let View::String(made) = super::pack_format::bytes_to_string(&bytes).view() {
-                    target.replace_text(made.to_text());
-                    // The bytes written may not spell a letter in the string's
-                    // encoding any more, so what it holds stands for bytes.
-                    target.mark_bytes();
-                }
+                target.set_byte(at as usize, value.rem_euclid(256) as u8);
                 Ok(Some(Object::Int(*value)))
             }
             "bytesplice" => self.splice_string_bytes(receiver, arguments, position),
@@ -633,15 +622,7 @@ impl VirtualMachine {
         if let Some(Some(named)) = appended_encoding(target, source) {
             target.set_encoding(named);
         }
-        match String::from_utf8(spliced.clone()) {
-            Ok(text) if !target.holds_bytes() && target.encoding_name() == "UTF-8" => {
-                target.replace_text(text)
-            }
-            _ => {
-                target.replace_text(super::string_methods::bytes_as_text(&spliced));
-                target.mark_bytes();
-            }
-        }
+        target.replace_bytes(spliced);
         Ok(Some(receiver.clone()))
     }
 

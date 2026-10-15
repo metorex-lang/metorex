@@ -45,9 +45,7 @@ impl VirtualMachine {
                     bytes.extend(crate::vm::native_methods::string_methods::binary_bytes(
                         b.as_ref(),
                     ));
-                    let made = crate::object::StringValue::from_bytes(
-                        crate::vm::native_methods::pack_format::bytes_to_string(&bytes).to_string(),
-                    );
+                    let made = crate::object::StringValue::binary(bytes);
                     Object::String(Rc::new(made))
                 } else {
                     let mut combined = a.as_str().to_string();

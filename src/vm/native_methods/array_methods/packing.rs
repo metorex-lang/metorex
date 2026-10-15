@@ -20,11 +20,9 @@ impl VirtualMachine {
         if held.is_frozen() {
             return Err(self.frozen_modification_error(&buffer, position));
         }
-        let existing = crate::vm::native_methods::pack_format::string_to_bytes(&held.as_str());
+        let existing = held.bytes().to_vec();
         let written = match packed.view() {
-            View::String(text) => {
-                crate::vm::native_methods::pack_format::string_to_bytes(&text.as_str())
-            }
+            View::String(text) => text.bytes().to_vec(),
             _ => Vec::new(),
         };
         let (start, tail) = match leading_pack_offset(format) {
@@ -34,8 +32,7 @@ impl VirtualMachine {
         let mut made = existing;
         made.resize(start, 0);
         made.extend_from_slice(&tail);
-        held.replace_text(made.iter().map(|byte| *byte as char).collect::<String>());
-        held.mark_bytes();
+        held.replace_bytes(made);
         Ok(buffer)
     }
 }

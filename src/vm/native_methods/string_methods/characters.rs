@@ -28,13 +28,13 @@ impl VirtualMachine {
                     ));
                 }
                 let salt = match arguments[0].view() {
-                    View::String(held) => held.to_text(),
+                    View::String(held) => held.bytes().to_vec(),
                     _ if self.responds_to(&arguments[0], "to_str") => {
                         match self
                             .send_to_object(arguments[0].clone(), "to_str", vec![], position)?
                             .view()
                         {
-                            View::String(held) => held.to_text(),
+                            View::String(held) => held.bytes().to_vec(),
                             converted => {
                                 return Err(method_argument_type_error(
                                     method_name,
@@ -54,10 +54,8 @@ impl VirtualMachine {
                         ));
                     }
                 };
-                let key_bytes = crate::vm::native_methods::pack_format::string_to_bytes(
-                    &string_value.to_text(),
-                );
-                let salt_bytes = crate::vm::native_methods::pack_format::string_to_bytes(&salt);
+                let key_bytes = string_value.bytes().to_vec();
+                let salt_bytes = salt;
                 if key_bytes.contains(&0) {
                     return Err(crate::vm::errors::simple_exception(
                         "ArgumentError",
