@@ -1,0 +1,99 @@
+# Instruction format and dispatch
+
+## Decision
+
+- Metorex runs a register machine. A unit's registers are its locals
+  followed by its temporaries, and they are the frame's part of the value
+  stack segment that `docs/engine/frames-and-calls.md` describes. A call's
+  arguments are written to the caller's highest registers, which become the
+  callee's first registers, so arguments are still passed in place.
+- Each instruction is 4 bytes: an opcode byte and either three 8-bit
+  operands or one 8-bit and one 16-bit operand. In Rust each instruction is
+  a variant of an enum with `u8` and `u16` fields, which is 4 bytes with no
+  packing done by hand.
+- An operand of an arithmetic or comparison instruction below 128 names a
+  register, and one at 128 or above names the unit's constant at the
+  operand less 128. Other operands name registers or, as the 16-bit operand,
+  a constant, a jump target, or an entry in a side table.
+- A method call names its call site with the 16-bit operand: an entry in
+  the unit's side table holding the method name, the argument count, the
+  keyword names, the block's unit, and the inline cache. A source position
+  for each instruction is kept in a side table as well.
+- An operand that does not fit, a register past 255, a constant past 127 in
+  arithmetic or past 65,535 elsewhere, or a jump target past 65,535, is
+  given by an `Extend` instruction before it, whose operands supply the
+  high bits, as CPython's `EXTENDED_ARG` does.
+- Dispatch is a `match` on the instruction in one loop.
+
+## Rust has no guaranteed tail call
+
+A threaded interpreter in C or with LLVM's `musttail` ends each
+instruction's handler with a jump to the next one. In Rust that is the
+`become` expression, the `explicit_tail_calls` feature, which is unstable
+in rustc 1.96.0 (tracking issue #112788). Without it, a handler per
+instruction is a function called from a loop, the function pointers column
+below, and it is 1.11 to 1.41 times the time of `match`, which rustc
+compiles to one jump table.
+
+## The prototype
+
+`prototypes/values/src/dispatch.rs` runs the six kernels of
+`docs/engine/value-representation.md` over the 8-byte tagged value in five
+forms:
+
+- **Stack, byte stream**: an opcode byte followed by its operand bytes, a
+  wide operand big-endian, as `src/bytecode` lays out instructions now.
+- **Stack**: the same instructions, 4 bytes each.
+- **Register**: register instructions, 4 bytes each, with each literal
+  loaded into a register where it is used.
+- **Register, constant operands**: the decision above.
+- **Register, function pointers**: the register instructions decoded once
+  into a function pointer and operands each, 16 bytes, and run by calling
+  the pointer.
+
+Each loop is compiled as a compiler without an optimizer would compile it:
+`i += 1` is a load of `i`, a load of `1`, an add, and a store on the stack
+machine, and one add on the register machine with constant operands.
+
+```sh
+cargo run --release --manifest-path prototypes/values/Cargo.toml
+```
+
+Recorded on 2026-10-15 on an Apple M5 Max running macOS 27.0.1, with rustc
+1.96.0. Each time is the fastest of five runs.
+
+| Kernel | Stack, byte stream | Stack | Register | Register, constant operands | Register, function pointers | Stack ÷ register, constant operands |
+| :-- | --: | --: | --: | --: | --: | --: |
+| fib | 52.9 ms | 53.5 ms | 55.0 ms | 48.9 ms | 77.4 ms | 1.09× |
+| while_loop | 1014.2 ms | 954.6 ms | 830.8 ms | 709.1 ms | 1037.8 ms | 1.35× |
+| getivar | 452.3 ms | 433.5 ms | 359.8 ms | 317.1 ms | 472.1 ms | 1.37× |
+| object_new | 515.9 ms | 505.9 ms | 428.9 ms | 397.2 ms | 475.7 ms | 1.27× |
+| float_arithmetic | 574.2 ms | 543.0 ms | 521.9 ms | 426.0 ms | 679.7 ms | 1.27× |
+| array_sum | 229.6 ms | 221.1 ms | 169.3 ms | 145.8 ms | 234.6 ms | 1.52× |
+
+| Kernel | Stack, instructions run | Register | Register, constant operands |
+| :-- | --: | --: | --: |
+| fib | 26925369 | 20194027 | 14808954 |
+| while_loop | 650000010 | 350000006 | 250000005 |
+| getivar | 280000024 | 160000015 | 120000014 |
+| object_new | 170000008 | 90000005 | 70000004 |
+| float_arithmetic | 300000010 | 200000006 | 120000005 |
+| array_sum | 135000021 | 75000014 | 55000012 |
+
+The register machine with constant operands runs 38 to 55% as many
+instructions as the stack machine. Each register instruction does more,
+reading two operands and writing a third, so the time falls by less: it is
+1.09 to 1.52 times faster. Without constant operands, fib is 3% slower on
+registers than on the stack, since its literals each take an instruction.
+
+## Alternatives
+
+- **A stack machine**, as YARV and `src/bytecode` are: 1.09 to 1.52 times
+  the time of the decision on these kernels.
+- **A byte stream** with operands of their own sizes: 0.99 to 1.06 times
+  the time of 4-byte instructions on the stack machine, and an instruction
+  cannot be read without decoding the ones before it.
+- **Register operands only**, with literals loaded by an instruction of
+  their own: 1.08 to 1.23 times the time of constant operands.
+- **A function pointer per instruction**: 1.11 to 1.41 times the time of
+  `match`, as above.

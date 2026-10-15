@@ -1,9 +1,10 @@
 //! Times the prototypes and prints Markdown tables for
 //! docs/engine/value-representation.md, docs/engine/memory-management.md,
-//! and docs/engine/frames-and-calls.md. Each time is the fastest of five
-//! runs.
+//! docs/engine/frames-and-calls.md, and docs/engine/instruction-format.md.
+//! Each time is the fastest of five runs.
 
 mod calls;
+mod dispatch;
 mod enum_value;
 mod fibers;
 mod handles;
@@ -217,6 +218,66 @@ fn main() {
         "\nA resume and the suspension it runs to: {:.1} ns.",
         switch_time.as_secs_f64() * 1e9 / switch_count as f64
     );
+
+    println!(
+        "\nInstruction sizes: stack {} bytes, register {} bytes, decoded register {} bytes.",
+        std::mem::size_of::<dispatch::StackOp>(),
+        std::mem::size_of::<dispatch::RegisterOp>(),
+        std::mem::size_of::<dispatch::Decoded>(),
+    );
+    println!(
+        "\n| Kernel | Stack, byte stream | Stack | Register | Register, constant operands | Register, function pointers | Stack ÷ register, constant operands |"
+    );
+    println!("| :-- | --: | --: | --: | --: | --: | --: |");
+    let mut instructions_run = Vec::new();
+    for kernel in kernels::all() {
+        let expected = TaggedValue::describe(&machine::run::<TaggedValue>(&kernel.program));
+        let stack = dispatch::stack_program(&kernel);
+        let registers = dispatch::register_program(kernel.name, false);
+        let operands = dispatch::register_program(kernel.name, true);
+        let decoded = dispatch::decode(&registers);
+        let (bytes_time, bytes_answer) =
+            fastest(|| TaggedValue::describe(&dispatch::run_bytes(&stack)));
+        let (stack_time, stack_answer) =
+            fastest(|| TaggedValue::describe(&dispatch::run_stack::<false>(&stack).0));
+        let (register_time, register_answer) = fastest(|| {
+            TaggedValue::describe(&dispatch::run_registers::<false, false>(&registers).0)
+        });
+        let (operand_time, operand_answer) =
+            fastest(|| TaggedValue::describe(&dispatch::run_registers::<false, true>(&operands).0));
+        let (handler_time, handler_answer) =
+            fastest(|| TaggedValue::describe(&dispatch::run_handlers(&registers, &decoded)));
+        for answer in [
+            bytes_answer,
+            stack_answer,
+            register_answer,
+            operand_answer,
+            handler_answer,
+        ] {
+            assert_eq!(answer, expected, "{} answered differently", kernel.name);
+        }
+        println!(
+            "| {} | {} | {} | {} | {} | {} | {} |",
+            kernel.name,
+            milliseconds(bytes_time),
+            milliseconds(stack_time),
+            milliseconds(register_time),
+            milliseconds(operand_time),
+            milliseconds(handler_time),
+            ratio(stack_time, operand_time),
+        );
+        instructions_run.push((
+            kernel.name,
+            dispatch::run_stack::<true>(&stack).1,
+            dispatch::run_registers::<true, false>(&registers).1,
+            dispatch::run_registers::<true, true>(&operands).1,
+        ));
+    }
+    println!("\n| Kernel | Stack, instructions run | Register | Register, constant operands |");
+    println!("| :-- | --: | --: | --: |");
+    for (name, stack, registers, operands) in instructions_run {
+        println!("| {name} | {stack} | {registers} | {operands} |");
+    }
 
     // Counting every allocation from here on slows each one, so the
     // timings above run before it starts.

@@ -20,7 +20,7 @@ These come first because every instruction, frame, and native method is written 
   - Acceptance: the decision records how each of those keeps passing ruby/spec under it
 - [x] Frames and calls: frames in one contiguous value stack, arguments passed in place with no allocation per call, and fibers holding their own segment of frames, with a native stack only for the native methods running in them
   - Acceptance: a prototype call path measured on `method_calls` and `block_calls`
-- [ ] Instruction format and dispatch: stack or register machine, operand encoding, and how dispatch is written in Rust, measured on a prototype loop
+- [x] Instruction format and dispatch: stack or register machine, operand encoding, and how dispatch is written in Rust, measured on a prototype loop
   - Acceptance: the chosen format is the one the Groundwork instruction set item builds
 
 ## Groundwork
@@ -41,7 +41,7 @@ These come first because every instruction, frame, and native method is written 
   - Acceptance: a test runs a file with one compiled method and one that falls back and checks both counts and the named node type
 - [ ] Test harness on both engines: `scripts/run_ruby_spec.sh` and the example runners take the engine from the environment, and `test.sh` and the Jenkinsfile run `cargo test` and ruby/spec under `METOREX_ENGINE=bytecode` as a step of their own, with the engine report kept as a build artifact
   - Acceptance: the bytecode step runs in CI and fails the build when a test fails
-- [ ] Instruction set for `VirtualMachine`, in the format and value representation the design decisions chose: replace `BytecodeVm`'s opcodes with instructions that call into `VirtualMachine` for method lookup, invocation, constants, instance variables, and exceptions. Each instruction carries a source position in a side table for backtraces, `error_highlight`, and line events. `src/bytecode/vm` and the `BytecodeVm` struct are removed once nothing uses them, and the parts of `src/compiler` and `src/bytecode/disassembler.rs` that fit are kept
+- [ ] Instruction set for `VirtualMachine`: 4-byte register instructions with constant operands, dispatched by `match` in one loop, as `docs/engine/instruction-format.md` describes, over the value representation the design decisions chose. Replace `BytecodeVm`'s opcodes with instructions that call into `VirtualMachine` for method lookup, invocation, constants, instance variables, and exceptions. Each instruction carries a source position in a side table for backtraces, `error_highlight`, and line events. `src/bytecode/vm` and the `BytecodeVm` struct are removed once nothing uses them, and the parts of `src/compiler` and `src/bytecode/disassembler.rs` that fit are kept
   - Acceptance: `tests/bytecode` covers each instruction through `VirtualMachine`, no file under `src/` names `BytecodeVm`, and `METOREX_COUNTERS=1` counts each instruction executed beside the node kinds the tree walker evaluates
 - [ ] Locals in slots: each unit numbers its locals and keeps their names, so `binding`, `local_variables`, `eval` with a binding, and `Binding#local_variable_get` and `set` read and write the same slots. A block reaches its outer locals through shared cells, as `captured_vars` does now
   - Acceptance: the binding, eval, and closure examples pass with their units compiled, shown by the engine report naming no fallback for them

@@ -1,8 +1,9 @@
 # The prototypes that docs/engine/value-representation.md,
-# memory-management.md, and frames-and-calls.md record. It runs one
-# interpreter loop over Metorex's `Object` enum and over an 8-byte tagged
-# value, compares String layouts and the C API's VALUE conversion, and lays
-# out frames on the heap and in one contiguous stack. Run it with:
+# memory-management.md, frames-and-calls.md, and instruction-format.md
+# record. It runs one interpreter loop over Metorex's `Object` enum and over
+# an 8-byte tagged value, compares String layouts and the C API's VALUE
+# conversion, lays out frames on the heap and in one contiguous stack, and
+# runs the same kernels on stack and register instructions. Run it with:
 #
 #   cargo run --release --manifest-path prototypes/values/Cargo.toml
 
