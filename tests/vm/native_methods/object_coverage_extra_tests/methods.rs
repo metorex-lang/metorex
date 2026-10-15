@@ -1,6 +1,7 @@
 // The methods an object answers, and how it is sent one.
 
 use super::*;
+use metorex::object::{OptionView, View};
 // ── =~ / !~ ──────────────────────────────────────────────────────────────────
 
 #[test]
@@ -117,7 +118,7 @@ class MWS
 end
 MWS.new.method("hi")
 "#);
-    assert!(matches!(result, Some(Object::Method(_))));
+    assert!(matches!(result.view(), Some(View::Method(_))));
 }
 
 // ── class on bool/nil ────────────────────────────────────────────────────────
@@ -182,8 +183,8 @@ fn nil_to_r_returns_rational() {
     // nil.to_r via Rational class (when available).
     let result = run("nil.to_r");
     assert!(matches!(
-        result,
-        Some(Object::Int(_)) | Some(Object::Instance(_))
+        result.view(),
+        Some(View::Int(_)) | Some(View::Instance(_))
     ));
 }
 
@@ -191,8 +192,8 @@ fn nil_to_r_returns_rational() {
 fn nil_to_c_returns_complex() {
     let result = run("nil.to_c");
     assert!(matches!(
-        result,
-        Some(Object::Int(_)) | Some(Object::Instance(_))
+        result.view(),
+        Some(View::Int(_)) | Some(View::Instance(_))
     ));
 }
 

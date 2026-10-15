@@ -1,6 +1,7 @@
 // The values a range is built from, and how they step.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// The values a range walks: integers count up, and anything else follows
@@ -14,7 +15,7 @@ impl VirtualMachine {
         exclusive: bool,
         position: Position,
     ) -> Result<bool, MetorexError> {
-        if matches!(start, Object::Nil) || matches!(end, Object::Nil) {
+        if matches!(start.view(), View::Nil) || matches!(end.view(), View::Nil) {
             return Ok(false);
         }
         let order = self.evaluate_binary_operation(
@@ -23,9 +24,9 @@ impl VirtualMachine {
             end.clone(),
             position,
         )?;
-        match order {
-            Object::Int(0) => Ok(exclusive),
-            Object::Int(value) => Ok(value > 0),
+        match order.view() {
+            View::Int(0) => Ok(exclusive),
+            View::Int(value) => Ok(value > 0),
             _ => Ok(false),
         }
     }
@@ -37,14 +38,14 @@ impl VirtualMachine {
         exclusive: bool,
         position: Position,
     ) -> Result<Vec<Object>, MetorexError> {
-        if let (Object::Int(first), Object::Int(last)) = (start, end) {
-            let last = if exclusive { last - 1 } else { *last };
-            return Ok((*first..=last).map(Object::Int).collect());
+        if let (View::Int(first), View::Int(last)) = (start.view(), end.view()) {
+            let last = if exclusive { last - 1 } else { last };
+            return Ok((first..=last).map(Object::Int).collect());
         }
         // An Integer start walks by one up to a Float end, stopping at the
         // last whole number the end allows.
-        if let (Object::Int(first), Object::Float(last)) = (start, end) {
-            if last.is_infinite() && *last > 0.0 {
+        if let (View::Int(first), View::Float(last)) = (start.view(), end.view()) {
+            if last.is_infinite() && last > 0.0 {
                 return Err(crate::vm::errors::simple_exception(
                     "RangeError",
                     "cannot convert endless range to an array",
@@ -52,14 +53,14 @@ impl VirtualMachine {
                 ));
             }
             let mut elements = Vec::new();
-            let mut at = *first;
-            while (at as f64) < *last || (!exclusive && (at as f64) == *last) {
+            let mut at = first;
+            while (at as f64) < last || (!exclusive && (at as f64) == last) {
                 elements.push(Object::Int(at));
                 at += 1;
             }
             return Ok(elements);
         }
-        if matches!(start, Object::Nil) {
+        if matches!(start.view(), View::Nil) {
             return Err(crate::vm::errors::simple_exception(
                 "TypeError",
                 "can't iterate from NilClass",
@@ -68,7 +69,7 @@ impl VirtualMachine {
         }
         // A range with no end holds endlessly many values, so collecting them
         // is refused rather than run forever.
-        if matches!(end, Object::Nil) {
+        if matches!(end.view(), View::Nil) {
             return Err(crate::vm::errors::simple_exception(
                 "RangeError",
                 "cannot convert endless range to an array",
@@ -77,7 +78,7 @@ impl VirtualMachine {
         }
         // A String or Symbol answers `succ` natively, and anything else must
         // define one of its own.
-        let walkable = matches!(start, Object::String(_) | Object::Symbol(_))
+        let walkable = matches!(start.view(), View::String(_) | View::Symbol(_))
             || self.responds_to(start, "succ");
         if !walkable {
             let message = format!(
@@ -98,7 +99,7 @@ impl VirtualMachine {
             } else {
                 last
             };
-            let symbols = matches!(start, Object::Symbol(_));
+            let symbols = matches!(start.view(), View::Symbol(_));
             return Ok((first..=last)
                 .filter_map(char::from_u32)
                 .map(|letter| {
@@ -114,7 +115,7 @@ impl VirtualMachine {
         // A String range walks as String#upto does, which ends on length as
         // well as order: ("a".."ab") reaches "b" through "z" though each sorts
         // after "ab".
-        if let (Object::String(first), Object::String(last)) = (start, end) {
+        if let (View::String(first), View::String(last)) = (start.view(), end.view()) {
             let walked = crate::vm::native_methods::string_sets::upto_sequence(
                 &first.as_str(),
                 &last.as_str(),
@@ -139,7 +140,7 @@ impl VirtualMachine {
                 end.clone(),
                 position,
             )?;
-            let Object::Int(order) = order else {
+            let View::Int(order) = order.view() else {
                 break;
             };
             if order > 0 || (exclusive && order == 0) {
@@ -160,28 +161,28 @@ impl VirtualMachine {
 /// The first value of a String range with no end, which `each` walks with
 /// `succ` for as long as the block keeps asking.
 pub(crate) fn endless_string_start(start: &Object, end: &Object) -> Option<String> {
-    if !matches!(end, Object::Nil) {
+    if !matches!(end.view(), View::Nil) {
         return None;
     }
-    match start {
-        Object::String(text) => Some(text.as_str().to_string()),
+    match start.view() {
+        View::String(text) => Some(text.as_str().to_string()),
         _ => None,
     }
 }
 
 pub(crate) fn endless_int_start(start: &Object, end: &Object) -> Option<i64> {
-    let endless = matches!(end, Object::Nil)
-        || matches!(end, Object::Float(value) if value.is_infinite() && *value > 0.0);
-    match (endless, start) {
-        (true, Object::Int(first)) => Some(*first),
+    let endless = matches!(end.view(), View::Nil)
+        || matches!(end.view(), View::Float(value) if value.is_infinite() && value > 0.0);
+    match (endless, start.view()) {
+        (true, View::Int(first)) => Some(first),
         _ => None,
     }
 }
 
 /// The characters a String or Symbol is named with.
 pub(crate) fn name_of(value: &Object) -> Option<Rc<crate::object::StringValue>> {
-    match value {
-        Object::String(text) | Object::Symbol(text) => Some(Rc::clone(text)),
+    match value.view() {
+        View::String(text) | View::Symbol(text) => Some(Rc::clone(text)),
         _ => None,
     }
 }

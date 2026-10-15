@@ -1,6 +1,7 @@
 // Reading a number off the front of a string.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// The number a slice argument names, which Ruby reads through `to_int`
@@ -11,20 +12,23 @@ impl VirtualMachine {
         method_name: &str,
         position: Position,
     ) -> Result<i64, MetorexError> {
-        match given {
-            Object::Int(number) => Ok(*number),
-            Object::Float(number) => Ok(*number as i64),
+        match given.view() {
+            View::Int(number) => Ok(number),
+            View::Float(number) => Ok(number as i64),
             // A number past what a machine word holds names no place in a
             // string, which Ruby reports as a range rather than a type.
-            Object::BigInt(_) => Err(crate::vm::errors::simple_exception(
+            View::BigInt(_) => Err(crate::vm::errors::simple_exception(
                 "RangeError",
                 "bignum too big to convert into 'long'",
                 position,
             )),
-            other if self.answers_to(other, "to_int", position)? => {
-                match self.send_to_object(other.clone(), "to_int", vec![], position)? {
-                    Object::Int(number) => Ok(number),
-                    Object::Float(number) => Ok(number as i64),
+            _ if self.answers_to(given, "to_int", position)? => {
+                match self
+                    .send_to_object(given.clone(), "to_int", vec![], position)?
+                    .view()
+                {
+                    View::Int(number) => Ok(number),
+                    View::Float(number) => Ok(number as i64),
                     _ => Err(method_argument_type_error(
                         method_name,
                         "Integer",
@@ -33,10 +37,10 @@ impl VirtualMachine {
                     )),
                 }
             }
-            other => Err(method_argument_type_error(
+            _ => Err(method_argument_type_error(
                 method_name,
                 "Integer",
-                other,
+                given,
                 position,
             )),
         }

@@ -2,6 +2,7 @@
 // against.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Attempt to execute a native (built-in) method implementation.
@@ -45,7 +46,7 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        if let Object::Binding(binding) = receiver
+        if let View::Binding(binding) = receiver.view()
             && let Some(answered) =
                 self.call_binding_methods(binding, method_name, arguments, position)?
         {
@@ -73,15 +74,20 @@ impl VirtualMachine {
         if !matches!(
             method_name,
             "class" | "instance_variables" | "is_a?" | "kind_of?"
-        ) && let Some(backing @ Object::Block(_)) = proc_subclass_value(receiver)
-            && let Some(result) =
-                self.call_native_method(class, &backing, method_name, arguments, position)?
+        ) && let Some(backing @ View::Block(_)) = proc_subclass_value(receiver).view()
+            && let Some(result) = self.call_native_method(
+                class,
+                &backing.to_object(),
+                method_name,
+                arguments,
+                position,
+            )?
         {
             return Ok(Some(result));
         }
 
         // Block/Lambda methods
-        if let Object::Block(block) = receiver {
+        if let View::Block(block) = receiver.view() {
             match method_name {
                 "call" | "[]" | "===" | "yield" => {
                     return Ok(Some(block.call(self, arguments.to_vec(), position)?));
@@ -104,8 +110,8 @@ impl VirtualMachine {
                         .captured_vars()
                         .get("self")
                         .map(|cell| cell.borrow().clone())
-                        .or_else(|| match self.globals().get("TOPLEVEL_BINDING") {
-                            Some(Object::Binding(top)) => top.receiver.clone(),
+                        .or_else(|| match self.globals().get("TOPLEVEL_BINDING").view() {
+                            Some(View::Binding(top)) => top.receiver.clone(),
                             _ => None,
                         })
                         .unwrap_or(Object::Nil);
@@ -122,7 +128,7 @@ impl VirtualMachine {
         // Module-specific methods (refine, module_eval, stdlib stubs). Falls
         // through to call_class_methods afterwards so Class/Module share the
         // same table for things like `name`, `extend`, `remove_const`, etc.
-        if let Object::Module(module_rc) = receiver {
+        if let View::Module(module_rc) = receiver.view() {
             if let Some(result) =
                 self.call_module_methods(module_rc, receiver, method_name, arguments, position)?
             {
@@ -136,7 +142,7 @@ impl VirtualMachine {
         }
 
         // Class-specific methods (File/Dir dispatch first, then general class methods)
-        if let Object::Class(class_rc) = receiver {
+        if let View::Class(class_rc) = receiver.view() {
             if let Some(result) =
                 self.call_struct_class_methods(class_rc, method_name, arguments, position)?
             {
@@ -162,7 +168,7 @@ impl VirtualMachine {
         // An instance of a Module subclass is a module: give it the Module
         // method table, backed by its singleton class so constants and
         // methods defined on it are stored and read back per object.
-        if let Object::Instance(instance) = receiver
+        if let View::Instance(instance) = receiver.view()
             && instance.borrow().class.find_method(method_name).is_none()
             && self.is_module_subclass_instance(receiver)
         {
@@ -199,7 +205,8 @@ impl VirtualMachine {
             if let Some(result) =
                 self.call_string_mutation(&text, method_name, arguments, position)?
             {
-                if let (Object::String(answered), Object::String(backing)) = (&result, &text)
+                if let (View::String(answered), View::String(backing)) =
+                    (result.view(), text.view())
                     && Rc::ptr_eq(answered, backing)
                 {
                     return Ok(Some(receiver.clone()));
@@ -211,7 +218,8 @@ impl VirtualMachine {
             {
                 // A method that answers the string it was called on answers
                 // the subclass instance, not the characters behind it.
-                if let (Object::String(answered), Object::String(backing)) = (&result, &text)
+                if let (View::String(answered), View::String(backing)) =
+                    (result.view(), text.view())
                     && Rc::ptr_eq(answered, backing)
                 {
                     return Ok(Some(receiver.clone()));
@@ -228,7 +236,7 @@ impl VirtualMachine {
             // Array and the instance itself.
             match method_name {
                 "to_a" | "entries" => {
-                    let Object::Array(storage) = &elements else {
+                    let View::Array(storage) = elements.view() else {
                         return Ok(None);
                     };
                     let copied = storage.borrow().clone();
@@ -243,8 +251,8 @@ impl VirtualMachine {
                 // A copy of a subclass instance is one of the same class,
                 // which is what `clone` and `dup` answer in Ruby.
                 if matches!(method_name, "clone" | "dup")
-                    && let Object::Array(_) = &result
-                    && let Object::Instance(instance) = receiver
+                    && let View::Array(_) = result.view()
+                    && let View::Instance(instance) = receiver.view()
                 {
                     let class = Rc::clone(&instance.borrow().class);
                     let made = crate::object::Instance::new(class);
@@ -275,7 +283,7 @@ impl VirtualMachine {
             // `to_h` answers a plain Hash, which is what a subclass instance
             // converts into.
             if method_name == "to_h" && arguments.is_empty() && self.pending_block.is_none() {
-                let Object::Dict(stored) = &entries else {
+                let View::Dict(stored) = entries.view() else {
                     return Ok(None);
                 };
                 let copied = stored.borrow().clone();
@@ -284,7 +292,7 @@ impl VirtualMachine {
             // A subclass that writes its own `each` is what Enumerable is
             // written over, so the walking methods go through that body
             // rather than through the native table.
-            if let Object::Instance(instance) = receiver
+            if let View::Instance(instance) = receiver.view()
                 && enumerable_walks_through_each(method_name)
                 && instance
                     .borrow()
@@ -298,7 +306,7 @@ impl VirtualMachine {
             // key reads as, and the backing hash knows nothing of it.
             if method_name == "[]"
                 && arguments.len() == 1
-                && let Object::Dict(dict_rc) = &entries
+                && let View::Dict(dict_rc) = entries.view()
                 && let Some((owner, method)) = self.lookup_method(receiver, "default")
                 && !method.is_undefined
                 && self
@@ -321,8 +329,8 @@ impl VirtualMachine {
                 // `merge` answers a hash of the receiver's own class, where
                 // the rest of the table answers a plain one.
                 if method_name == "merge"
-                    && let Object::Dict(_) = &result
-                    && let Object::Instance(instance) = receiver
+                    && let View::Dict(_) = result.view()
+                    && let View::Instance(instance) = receiver.view()
                 {
                     let class = std::rc::Rc::clone(&instance.borrow().class);
                     let made = crate::object::Instance::new(class);
@@ -336,23 +344,23 @@ impl VirtualMachine {
 
         // An instance of a Set subclass answers Set's methods, applied to the
         // set it is backed by.
-        if let Some(backing @ Object::Set(_)) = set_subclass_value(receiver)
+        if let Some(backing @ View::Set(_)) = set_subclass_value(receiver).view()
             && let Some(result) =
-                self.call_set_method(&backing, method_name, arguments, position)?
+                self.call_set_method(&backing.to_object(), method_name, arguments, position)?
         {
             // A method that answers the set itself answers the instance.
-            return Ok(Some(match result {
-                Object::Set(inner) if matches!(&backing, Object::Set(outer) if Rc::ptr_eq(&inner, outer)) => {
+            return Ok(Some(match result.view() {
+                View::Set(inner) if matches!(backing, View::Set(outer) if Rc::ptr_eq(inner, outer)) => {
                     receiver.clone()
                 }
-                other => other,
+                _ => result.clone(),
             }));
         }
 
         // A pattern written as a literal is frozen where it stands. One
         // built by `Regexp.new` is not, so a program may still change it.
         if method_name == "frozen?"
-            && let Object::Regex(pattern, _) = receiver
+            && let View::Regex(pattern, _) = receiver.view()
         {
             return Ok(Some(Object::Bool(!self.pattern_was_built(pattern))));
         }
@@ -362,7 +370,7 @@ impl VirtualMachine {
         // The source a pattern was written from is tagged with the encoding
         // the pattern is read in.
         if method_name == "source"
-            && let Object::Regex(pattern, flags) = receiver
+            && let View::Regex(pattern, flags) = receiver.view()
             && arguments.is_empty()
         {
             let named = self.pattern_encoding_name(pattern, flags);
@@ -379,14 +387,14 @@ impl VirtualMachine {
             return Ok(Some(Object::String(Rc::new(made))));
         }
         if method_name == "fixed_encoding?"
-            && let Object::Regex(pattern, flags) = receiver
+            && let View::Regex(pattern, flags) = receiver.view()
         {
             return Ok(Some(Object::Bool(
                 self.pattern_fixes_encoding(pattern, flags),
             )));
         }
         if method_name == "encoding"
-            && let Object::Regex(pattern, flags) = receiver
+            && let View::Regex(pattern, flags) = receiver.view()
         {
             if !arguments.is_empty() {
                 return Err(crate::vm::errors::method_argument_error(
@@ -401,7 +409,7 @@ impl VirtualMachine {
         }
         // A Regexp is a primitive rather than an instance, so its methods are
         // dispatched before the class-name table below.
-        if let Object::Regex(pattern, flags) = receiver
+        if let View::Regex(pattern, flags) = receiver.view()
             && let Some(result) =
                 self.call_regexp_method(pattern, flags, method_name, arguments, position)?
         {
@@ -410,24 +418,24 @@ impl VirtualMachine {
 
         // An instance of a Regexp subclass answers Regexp's methods, backed
         // by the pattern it was built with.
-        if let Some(Object::Regex(pattern, flags)) = regexp_subclass_value(receiver) {
+        if let Some(View::Regex(pattern, flags)) = regexp_subclass_value(receiver).view() {
             if matches!(method_name, "clone" | "dup" | "frozen?") {
                 return self.call_object_method(receiver, method_name, arguments, position);
             }
             if method_name == "fixed_encoding?" {
                 return Ok(Some(Object::Bool(
-                    self.pattern_fixes_encoding(&pattern, &flags),
+                    self.pattern_fixes_encoding(pattern, flags),
                 )));
             }
             // The encoding and the source it is tagged in are the pattern's,
             // which the Regexp the instance holds answers for.
             if matches!(method_name, "encoding" | "source") {
-                let pattern = Object::Regex(pattern, flags);
+                let pattern = Object::Regex(pattern.clone(), flags.clone());
                 let class = self.builtins().class_of(&pattern);
                 return self.call_native_method(&class, &pattern, method_name, arguments, position);
             }
             if let Some(result) =
-                self.call_regexp_method(&pattern, &flags, method_name, arguments, position)?
+                self.call_regexp_method(pattern, flags, method_name, arguments, position)?
             {
                 return Ok(Some(result));
             }
@@ -437,7 +445,7 @@ impl VirtualMachine {
         // encoding, which Ruby reports as BINARY.
         if method_name == "encoding"
             && arguments.is_empty()
-            && let Object::Instance(instance) = receiver
+            && let View::Instance(instance) = receiver.view()
             && regexp_subclass_value(receiver).is_none()
             && super::class_methods::class_named_in_chain(&instance.borrow().class, "Regexp")
         {
@@ -445,7 +453,7 @@ impl VirtualMachine {
         }
 
         // Instances of a generated struct class get Struct's instance methods.
-        if let Object::Instance(instance) = receiver {
+        if let View::Instance(instance) = receiver.view() {
             let instance_class = Rc::clone(&instance.borrow().class);
             if let Some(members) = struct_methods::struct_members(&instance_class)
                 && let Some(result) = self.call_struct_instance_method(
@@ -463,7 +471,7 @@ impl VirtualMachine {
 
         // A fiber carries the number naming its coroutine, so an instance of
         // a subclass answers the same methods as one of Fiber itself.
-        if let Object::Instance(instance) = receiver
+        if let View::Instance(instance) = receiver.view()
             && instance.borrow().get_var("__fiber__").is_some()
             && let Some(result) =
                 self.call_fiber_method(receiver, method_name, arguments, position)?
@@ -473,7 +481,7 @@ impl VirtualMachine {
 
         // A thread carries the block it runs, so an instance of a subclass
         // answers the same methods as one of Thread itself.
-        if let Object::Instance(instance) = receiver
+        if let View::Instance(instance) = receiver.view()
             && instance.borrow().get_var("__thread_block").is_some()
             && class.name() != "Thread"
             && let Some(result) =
@@ -484,7 +492,7 @@ impl VirtualMachine {
 
         // An instance of a subclass of Mutex answers the same methods as one
         // of Mutex itself.
-        if let Object::Instance(instance) = receiver
+        if let View::Instance(instance) = receiver.view()
             && class.name() != "Thread::Mutex"
             && super::class_methods::class_named_in_chain(&instance.borrow().class, "Thread::Mutex")
             && let Some(result) =
@@ -513,7 +521,7 @@ impl VirtualMachine {
             "Symbol" => {
                 // The names a symbol answers for itself come first, since
                 // Object answers `to_s` for anything at all.
-                let Object::Symbol(text) = receiver else {
+                let View::Symbol(text) = receiver.view() else {
                     return Ok(None);
                 };
                 // The names a Symbol answers for itself: `id2name` and `name`
@@ -536,7 +544,7 @@ impl VirtualMachine {
                     "name" => {
                         let slot = format!("__symbol_name_{}", text.as_str());
                         let held = self.memoized_text(&slot, &text.as_str());
-                        if let Object::String(made) = &held {
+                        if let View::String(made) = held.view() {
                             made.set_encoding(named_in.clone());
                             made.freeze();
                         }
@@ -572,7 +580,7 @@ impl VirtualMachine {
                     // where a String compares against anything that reads as
                     // one.
                     "casecmp" | "casecmp?" if arguments.len() == 1 => {
-                        let Object::Symbol(other) = &arguments[0] else {
+                        let View::Symbol(other) = arguments[0].view() else {
                             return Ok(Some(Object::Nil));
                         };
                         let left = Object::String(Rc::clone(text));
@@ -605,9 +613,11 @@ impl VirtualMachine {
                     method_name,
                     "upcase" | "downcase" | "capitalize" | "swapcase" | "succ" | "next"
                 );
-                Ok(match answered {
-                    Some(Object::String(text)) if answers_a_symbol => Some(Object::Symbol(text)),
-                    other => other,
+                Ok(match answered.view() {
+                    Some(View::String(text)) if answers_a_symbol => {
+                        Some(Object::Symbol(text.clone()))
+                    }
+                    other => other.map(View::to_object),
                 })
             }
             "Integer" => self.call_int_method(receiver, method_name, arguments, position),

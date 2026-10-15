@@ -2,6 +2,7 @@
 // arguments it was handed.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 /// Bind block parameters to arguments, handling `*args` (variadic) and
 /// `&block` (block) prefixes in parameter names. `defaults` carries
@@ -163,7 +164,7 @@ pub(crate) fn bind_block_params(
         .map(|param| param.trim_start_matches('*').to_string());
     let mut arguments = arguments;
     // `**empty` passes no keywords at all, so it leaves nothing to bind.
-    if matches!(arguments.last(), Some(Object::Dict(entries))
+    if matches!(arguments.last().view(), Some(View::Dict(entries))
         if passed_as_keywords(entries) && keyword_entries_are_empty(entries))
     {
         arguments.pop();
@@ -171,8 +172,8 @@ pub(crate) fn bind_block_params(
     if !keyword_params.is_empty() || keyword_rest.is_some() {
         // Only a hash passed as keywords feeds them. One passed by position
         // stays a positional argument.
-        let named = match arguments.last() {
-            Some(Object::Dict(entries)) if passed_as_keywords(entries) => {
+        let named = match arguments.last().view() {
+            Some(View::Dict(entries)) if passed_as_keywords(entries) => {
                 let taken = entries.borrow().clone();
                 arguments.pop();
                 taken
@@ -391,25 +392,28 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<Option<Vec<Object>>, MetorexError> {
-        if let Object::Array(elements) = value {
+        if let View::Array(elements) = value.view() {
             return Ok(Some(elements.borrow().clone()));
         }
         // An Array subclass is taken apart as the Array it is, without
         // asking it to convert.
-        if let Some(Object::Array(elements)) =
-            crate::vm::native_methods::subclasses::array_subclass_value(value)
+        if let Some(View::Array(elements)) =
+            crate::vm::native_methods::subclasses::array_subclass_value(value).view()
         {
             return Ok(Some(elements.borrow().clone()));
         }
         if !self.answers_conversion(value, "to_ary", position)? {
             return Ok(None);
         }
-        match self.send_to_object(value.clone(), "to_ary", Vec::new(), position)? {
-            Object::Array(elements) => Ok(Some(elements.borrow().clone())),
-            Object::Nil => Ok(None),
+        match self
+            .send_to_object(value.clone(), "to_ary", Vec::new(), position)?
+            .view()
+        {
+            View::Array(elements) => Ok(Some(elements.borrow().clone())),
+            View::Nil => Ok(None),
             answered => {
                 let named = self.builtins().class_of(value).ruby_name();
-                let gives = self.builtins().class_of(&answered).ruby_name();
+                let gives = self.builtins().class_of(&answered.to_object()).ruby_name();
                 Err(crate::vm::errors::simple_exception(
                     "TypeError",
                     &format!("can't convert {named} to Array ({named}#to_ary gives {gives})"),
@@ -468,7 +472,7 @@ pub(crate) fn refuse_keywords_for_none_declared(
     {
         return Ok(());
     }
-    if matches!(arguments.last(), Some(Object::Dict(entries))
+    if matches!(arguments.last().view(), Some(View::Dict(entries))
         if entries.borrow().contains_key(crate::vm::param_binding::KWARGS_MARKER))
     {
         return Err(crate::vm::errors::simple_exception(
@@ -504,7 +508,7 @@ pub(crate) fn check_lambda_arity(
     let takes_keywords = names.iter().any(|name| {
         name.starts_with(crate::object::KEYWORD_PARAM_PREFIX) || name.starts_with("**")
     });
-    let given = if takes_keywords && matches!(arguments.last(), Some(Object::Dict(_))) {
+    let given = if takes_keywords && matches!(arguments.last().view(), Some(View::Dict(_))) {
         arguments.len().saturating_sub(1)
     } else {
         arguments.len()
@@ -608,7 +612,7 @@ pub(crate) fn marked_keyword_tail(
     if !block.ruby2_keywords.get() {
         return arguments;
     }
-    let Some(Object::Dict(entries)) = arguments.last() else {
+    let Some(View::Dict(entries)) = arguments.last().view() else {
         return arguments;
     };
     if !entries

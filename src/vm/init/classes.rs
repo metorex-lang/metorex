@@ -1,6 +1,7 @@
 // Registering the core classes and the singleton values.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 /// Initialize built-in methods for core classes.
 pub(crate) fn initialize_builtin_methods(builtins: &BuiltinClasses) {
@@ -95,7 +96,7 @@ pub(crate) fn register_singletons(globals: &mut GlobalRegistry) {
         let Some(held) = globals.get(long) else {
             continue;
         };
-        if let Object::String(text) = &held {
+        if let View::String(text) = held.view() {
             text.mark_deduplicated();
         }
         ruby_module.set_class_var(short, held);
@@ -114,8 +115,8 @@ pub(crate) fn register_singletons(globals: &mut GlobalRegistry) {
     basic_object.add_subclass(&object);
     // Mix Kernel in here so the chain Object → Kernel exists from the start;
     // Kernel itself was registered by `register_builtin_modules` already.
-    if let Some(Object::Module(kernel)) = globals.get("Kernel") {
-        object.add_mixin(kernel);
+    if let Some(View::Module(kernel)) = globals.get("Kernel").view() {
+        object.add_mixin(kernel.clone());
     }
     // Ruby's Object has `ruby2_keywords` as a private method; main inherits from Object.
     object.set_method_private("ruby2_keywords");
@@ -163,8 +164,8 @@ pub(crate) fn register_singletons(globals: &mut GlobalRegistry) {
     // Numeric types. Integer and Float already descend from a Numeric that
     // `register_builtin_classes` put here, and that is the one a program
     // reopens, so it is kept rather than replaced.
-    let numeric = match globals.get("Numeric") {
-        Some(Object::Class(existing)) => existing,
+    let numeric = match globals.get("Numeric").view() {
+        Some(View::Class(existing)) => existing.clone(),
         _ => {
             let numeric = Class::new("Numeric", Some(Rc::clone(&object)));
             globals.set("Numeric", Object::Class(Rc::clone(&numeric)));
@@ -173,8 +174,8 @@ pub(crate) fn register_singletons(globals: &mut GlobalRegistry) {
     };
     // A refinement is a module of its own kind, and Ruby gives it a class so
     // one can be told apart from an ordinary module.
-    if let Some(Object::Class(module_class)) = globals.get("Module") {
-        let refinement = Class::new("Refinement", Some(module_class));
+    if let Some(View::Class(module_class)) = globals.get("Module").view() {
+        let refinement = Class::new("Refinement", Some(module_class.clone()));
         globals.set("Refinement", Object::Class(refinement));
     }
     let rational_class = Class::new("Rational", Some(Rc::clone(&numeric)));
@@ -185,15 +186,16 @@ pub(crate) fn register_singletons(globals: &mut GlobalRegistry) {
     // constant. It is built once the VM can make one, in the prelude.
 
     // Struct — the builder every `Struct.new(...)` class descends from.
-    let object_class = match globals.get("Object") {
-        Some(Object::Class(class)) => Some(class),
+    let viewed = globals.get("Object");
+    let object_class = match viewed.view() {
+        Some(View::Class(class)) => Some(class),
         _ => None,
     };
-    let struct_class = Class::new("Struct", object_class);
+    let struct_class = Class::new("Struct", object_class.cloned());
     // Struct is created after the built-in modules are registered, so it takes
     // the Enumerable mixin here rather than in the loop over the others.
-    if let Some(Object::Module(enumerable)) = globals.get("Enumerable") {
-        struct_class.add_mixin(enumerable);
+    if let Some(View::Module(enumerable)) = globals.get("Enumerable").view() {
+        struct_class.add_mixin(enumerable.clone());
     }
     globals.set("Struct", Object::Class(struct_class));
 

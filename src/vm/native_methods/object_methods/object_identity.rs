@@ -2,23 +2,24 @@
 // that follow from it.
 
 use super::*;
+use crate::object::View;
 
 /// Whether two values are the same object. Reference types compare by
 /// identity, immediates by value.
 pub(crate) fn same_object(left: &Object, right: &Object) -> bool {
     use std::rc::Rc;
-    match (left, right) {
-        (Object::Instance(a), Object::Instance(b)) => Rc::ptr_eq(a, b),
-        (Object::String(a), Object::String(b)) => Rc::ptr_eq(a, b),
-        (Object::Array(a), Object::Array(b)) => Rc::ptr_eq(a, b),
-        (Object::Dict(a), Object::Dict(b)) => Rc::ptr_eq(a, b),
-        (Object::Class(a), Object::Class(b)) => Rc::ptr_eq(a, b),
-        (Object::Module(a), Object::Module(b)) => Rc::ptr_eq(a, b),
-        (Object::Symbol(a), Object::Symbol(b)) => a == b,
-        (Object::Int(a), Object::Int(b)) => a == b,
-        (Object::Float(a), Object::Float(b)) => a == b,
-        (Object::Bool(a), Object::Bool(b)) => a == b,
-        (Object::Nil, Object::Nil) => true,
+    match (left.view(), right.view()) {
+        (View::Instance(a), View::Instance(b)) => Rc::ptr_eq(a, b),
+        (View::String(a), View::String(b)) => Rc::ptr_eq(a, b),
+        (View::Array(a), View::Array(b)) => Rc::ptr_eq(a, b),
+        (View::Dict(a), View::Dict(b)) => Rc::ptr_eq(a, b),
+        (View::Class(a), View::Class(b)) => Rc::ptr_eq(a, b),
+        (View::Module(a), View::Module(b)) => Rc::ptr_eq(a, b),
+        (View::Symbol(a), View::Symbol(b)) => a == b,
+        (View::Int(a), View::Int(b)) => a == b,
+        (View::Float(a), View::Float(b)) => a == b,
+        (View::Bool(a), View::Bool(b)) => a == b,
+        (View::Nil, View::Nil) => true,
         _ => false,
     }
 }
@@ -87,15 +88,15 @@ pub(crate) enum MatchSide {
 
 /// Classify an operand of `=~`. A Symbol matches on its name, as Ruby's does.
 pub(crate) fn matchable_text(object: &Object) -> Option<MatchSide> {
-    match object {
-        Object::Regex(pattern, flags) => Some(MatchSide::Pattern(
+    match object.view() {
+        View::Regex(pattern, flags) => Some(MatchSide::Pattern(
             pattern.as_str().to_string(),
             flags.as_str().to_string(),
         )),
-        Object::String(text) => Some(MatchSide::Text(
+        View::String(text) => Some(MatchSide::Text(
             crate::vm::native_methods::regexp_methods::match_text(text),
         )),
-        Object::Symbol(text) => Some(MatchSide::Text(text.as_str().to_string())),
+        View::Symbol(text) => Some(MatchSide::Text(text.as_str().to_string())),
         _ => None,
     }
 }

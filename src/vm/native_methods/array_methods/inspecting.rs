@@ -1,6 +1,7 @@
 // How an array reads back as source.
 
 use super::*;
+use crate::object::View;
 
 /// Render array elements the way `Array#inspect` does, recursing so a nested
 /// array's own strings and symbols keep their quoting.
@@ -18,11 +19,11 @@ pub(crate) fn inspect_nested(nested: &Rc<RefCell<Vec<Object>>>) -> String {
 }
 
 pub(crate) fn inspect_element(element: &Object) -> String {
-    match element {
-        Object::String(s) => format!("{:?}", s.as_str()),
-        Object::Symbol(s) => crate::object::inspect_symbol(&s.as_str()),
-        Object::Nil => "nil".to_string(),
-        Object::Array(nested) => inspect_nested(nested),
+    match element.view() {
+        View::String(s) => format!("{:?}", s.as_str()),
+        View::Symbol(s) => crate::object::inspect_symbol(&s.as_str()),
+        View::Nil => "nil".to_string(),
+        View::Array(nested) => inspect_nested(nested),
         other => other.to_string(),
     }
 }

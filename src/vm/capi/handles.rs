@@ -4,6 +4,7 @@
 //! comparing two VALUEs compares the objects.
 
 use crate::object::Object;
+use crate::object::View;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -40,20 +41,20 @@ thread_local! {
 /// The address an object held by reference lives at, which is what tells it
 /// apart from every other object of its kind.
 fn identity(object: &Object) -> Option<usize> {
-    let address = match object {
-        Object::BigInt(held) => Rc::as_ptr(held) as *const () as usize,
-        Object::String(held) => Rc::as_ptr(held) as *const () as usize,
-        Object::Array(held) => Rc::as_ptr(held) as *const () as usize,
-        Object::Dict(held) => Rc::as_ptr(held) as *const () as usize,
-        Object::Instance(held) => Rc::as_ptr(held) as *const () as usize,
-        Object::Class(held) | Object::Module(held) => Rc::as_ptr(held) as *const () as usize,
-        Object::Method(held) => Rc::as_ptr(held) as *const () as usize,
-        Object::Block(held) => Rc::as_ptr(held) as *const () as usize,
-        Object::Exception(held) => Rc::as_ptr(held) as *const () as usize,
-        Object::Set(held) => Rc::as_ptr(held) as *const () as usize,
-        Object::Binding(held) => Rc::as_ptr(held) as *const () as usize,
-        Object::Regex(pattern, _) => Rc::as_ptr(pattern) as *const () as usize,
-        Object::Range { mark, .. } => Rc::as_ptr(mark) as usize,
+    let address = match object.view() {
+        View::BigInt(held) => Rc::as_ptr(held) as *const () as usize,
+        View::String(held) => Rc::as_ptr(held) as *const () as usize,
+        View::Array(held) => Rc::as_ptr(held) as *const () as usize,
+        View::Dict(held) => Rc::as_ptr(held) as *const () as usize,
+        View::Instance(held) => Rc::as_ptr(held) as *const () as usize,
+        View::Class(held) | View::Module(held) => Rc::as_ptr(held) as *const () as usize,
+        View::Method(held) => Rc::as_ptr(held) as *const () as usize,
+        View::Block(held) => Rc::as_ptr(held) as *const () as usize,
+        View::Exception(held) => Rc::as_ptr(held) as *const () as usize,
+        View::Set(held) => Rc::as_ptr(held) as *const () as usize,
+        View::Binding(held) => Rc::as_ptr(held) as *const () as usize,
+        View::Regex(pattern, _) => Rc::as_ptr(pattern) as *const () as usize,
+        View::Range { mark, .. } => Rc::as_ptr(mark) as usize,
         _ => return None,
     };
     Some(address)
@@ -61,17 +62,17 @@ fn identity(object: &Object) -> Option<usize> {
 
 /// The VALUE C code is handed for `object`.
 pub(crate) fn to_value(object: &Object) -> Value {
-    match object {
-        Object::Bool(false) => QFALSE,
-        Object::Nil => QNIL,
-        Object::Bool(true) => QTRUE,
-        Object::Int(number) if (FIXNUM_MIN..=FIXNUM_MAX).contains(number) => {
-            ((*number as Value) << 1) | 1
+    match object.view() {
+        View::Bool(false) => QFALSE,
+        View::Nil => QNIL,
+        View::Bool(true) => QTRUE,
+        View::Int(number) if (FIXNUM_MIN..=FIXNUM_MAX).contains(&number) => {
+            ((number as Value) << 1) | 1
         }
         _ => HANDLES.with(|table| {
             let mut table = table.borrow_mut();
-            let symbol_name = match object {
-                Object::Symbol(name) => Some(name.as_str().to_string()),
+            let symbol_name = match object.view() {
+                View::Symbol(name) => Some(name.as_str().to_string()),
                 _ => None,
             };
             let known = match (&symbol_name, identity(object)) {
@@ -116,6 +117,19 @@ pub(crate) fn to_object(value: Value) -> Object {
                 .unwrap_or(Object::Nil)
         }),
     }
+}
+
+/// How many places hold the object behind `value`, the handle table's own
+/// copy among them.
+pub(crate) fn references_to(value: Value) -> usize {
+    HANDLES.with(|table| {
+        let index = value.wrapping_sub(FIRST_HANDLE) / HANDLE_STRIDE;
+        table
+            .borrow()
+            .objects
+            .get(index)
+            .map_or(0, Object::references)
+    })
 }
 
 /// The objects the `count` VALUEs C handed over at `values` stand for.

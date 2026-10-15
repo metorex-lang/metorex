@@ -7,6 +7,7 @@
 pub(crate) use crate::class::Class;
 pub(crate) use crate::error::MetorexError;
 pub(crate) use crate::lexer::Position;
+use crate::object::View;
 pub(crate) use crate::object::{Method, Object};
 pub(crate) use crate::vm::VirtualMachine;
 pub(crate) use crate::vm::errors::*;
@@ -73,7 +74,7 @@ pub(crate) fn nested_answer(found: Option<Object>) -> ClassMethodAnswer {
 
 /// Whether two objects are the same instance.
 fn same_object(one: &Object, other: &Object) -> bool {
-    matches!((one, other), (Object::Instance(a), Object::Instance(b)) if Rc::ptr_eq(a, b))
+    matches!((one.view(), other.view()), (View::Instance(a), View::Instance(b)) if Rc::ptr_eq(a, b))
 }
 
 /// Whether a class is the named one or descends from it, which is what makes

@@ -1,6 +1,7 @@
 // The runs of bytes an encoding reads, and the ones it cannot.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// `scrub` answers the string with every run of bytes its encoding cannot
@@ -16,15 +17,16 @@ impl VirtualMachine {
         use crate::vm::native_methods::string_methods::binary_bytes;
         let named = held.encoding_name();
         let bytes = binary_bytes(held);
-        let block = match self.pending_block.take() {
-            Some(Object::Block(block)) => Some(block),
+        let viewed = self.pending_block.take();
+        let block = match viewed.view() {
+            Some(View::Block(block)) => Some(block),
             _ => None,
         };
         // A replacement of its own is read once, and refused where it is not
         // a string or does not read in the encoding it carries.
-        let stands_in = match arguments.first() {
-            None | Some(Object::Nil) => None,
-            Some(Object::String(written)) => {
+        let stands_in = match arguments.first().view() {
+            None | Some(View::Nil) => None,
+            Some(View::String(written)) => {
                 if !crate::vm::native_methods::string_methods::holds_valid_text(written) {
                     return Err(crate::vm::errors::simple_exception(
                         "ArgumentError",
@@ -36,7 +38,10 @@ impl VirtualMachine {
             }
             Some(other) => {
                 return Err(method_argument_type_error(
-                    "scrub", "String", other, position,
+                    "scrub",
+                    "String",
+                    &other.to_object(),
+                    position,
                 ));
             }
         };
@@ -58,8 +63,8 @@ impl VirtualMachine {
                             vec![Object::String(std::rc::Rc::new(piece))],
                             position,
                         )?;
-                        if let Object::String(answered) = answered {
-                            built.extend(binary_bytes(&answered));
+                        if let View::String(answered) = answered.view() {
+                            built.extend(binary_bytes(answered));
                         }
                     }
                     (None, None) => built.extend(stands_in_for(&named)),

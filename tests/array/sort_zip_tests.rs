@@ -1,5 +1,6 @@
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -283,7 +284,7 @@ fn array_dup_independent_coverage() {
 #[test]
 fn array_slice_with_start_and_length() {
     let result = run("[10, 20, 30, 40, 50][1, 3]");
-    if let Some(Object::Array(arr)) = result {
+    if let Some(View::Array(arr)) = result.view() {
         assert_eq!(arr.borrow().len(), 3);
     } else {
         panic!("expected array");

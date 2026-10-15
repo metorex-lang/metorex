@@ -1,6 +1,7 @@
 // Defining and removing methods on a module.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Defining, removing, aliasing and undefining the methods of a module.
@@ -22,14 +23,15 @@ impl VirtualMachine {
                 return Ok(Answered(result));
             }
             "class_exec" | "module_exec" => {
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(b)) => b,
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(b)) => b,
                     _ => return Err(local_jump_error(method_name, position)),
                 };
                 let result = self.class_exec_block(
                     class_rc,
                     Object::Class(Rc::clone(class_rc)),
-                    &block,
+                    block,
                     arguments.to_vec(),
                     position,
                 )?;
@@ -158,7 +160,7 @@ impl VirtualMachine {
                             undef_target_name(class_rc)
                         );
                         let exc = Object::exception("NameError", msg.clone());
-                        if let Object::Exception(cell) = &exc {
+                        if let View::Exception(cell) = exc.view() {
                             cell.borrow_mut().name = Some(name.clone());
                         }
                         return Err(MetorexError::UncaughtException {

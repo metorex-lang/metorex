@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -107,7 +108,7 @@ fn eval_runtime_error() {
 #[test]
 fn parse_returns_array() {
     let result = run(r#"parse("1 + 2")"#);
-    assert!(matches!(result, Some(Object::Array(_))));
+    assert!(matches!(result.view(), Some(View::Array(_))));
 }
 
 #[test]

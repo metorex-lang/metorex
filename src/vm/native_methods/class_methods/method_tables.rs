@@ -2,6 +2,7 @@
 // decide which of them a receiver reaches.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 /// The visibility state a bare `module_function` sets in a module body. Every
 /// method defined afterwards is copied to the module object and made private
@@ -295,7 +296,7 @@ pub(crate) fn undefined_instance_method_error(
         class_rc.inspect_name()
     );
     let exc = Object::exception("NameError", msg.clone());
-    if let Object::Exception(cell) = &exc {
+    if let View::Exception(cell) = exc.view() {
         cell.borrow_mut().name = Some(name.to_string());
     }
     MetorexError::UncaughtException {
@@ -348,8 +349,8 @@ pub(crate) fn holds_exceptions(vm: &VirtualMachine, class_rc: &Rc<Class>) -> boo
     }
     class_rc.is_singleton_class()
         && matches!(
-            class_rc.get_class_var("__attached__"),
-            Some(Object::Exception(_))
+            class_rc.get_class_var("__attached__").view(),
+            Some(View::Exception(_))
         )
 }
 
@@ -358,8 +359,8 @@ pub(crate) fn holds_exceptions(vm: &VirtualMachine, class_rc: &Rc<Class>) -> boo
 /// its own display.
 pub(crate) fn undef_target_name(class_rc: &Rc<Class>) -> String {
     if class_rc.is_singleton_class()
-        && let Some(Object::Class(attached) | Object::Module(attached)) =
-            class_rc.get_class_var("__attached__")
+        && let Some(View::Class(attached) | View::Module(attached)) =
+            class_rc.get_class_var("__attached__").view()
     {
         return attached.inspect_name();
     }

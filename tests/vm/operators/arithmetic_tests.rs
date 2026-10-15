@@ -1,5 +1,6 @@
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -178,7 +179,7 @@ fn multiply_type_error_string_times_string() {
 
 #[test]
 fn power_int_negative_exponent() {
-    assert!(matches!(run("2**-1"), Some(Object::Float(_))));
+    assert!(matches!(run("2**-1").view(), Some(View::Float(_))));
 }
 
 #[test]
@@ -202,8 +203,8 @@ fn power_float_int() {
 fn int_add_overflow_to_float() {
     let result = run("4611686018427387903 + 4611686018427387903");
     assert!(matches!(
-        result,
-        Some(Object::Float(_)) | Some(Object::Int(_))
+        result.view(),
+        Some(View::Float(_)) | Some(View::Int(_))
     ));
 }
 

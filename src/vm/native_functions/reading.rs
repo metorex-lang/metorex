@@ -1,6 +1,7 @@
 // Reading lines in, and opening a stream.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// `chomp` and `chop` with no receiver rewrite `$_` in place, which
@@ -10,14 +11,14 @@ impl VirtualMachine {
         name: &str,
         arguments: Vec<Object>,
     ) -> Result<Object, MetorexError> {
-        let line = match self.globals().get("_") {
-            Some(Object::String(text)) => text.as_str().to_string(),
+        let line = match self.globals().get("_").view() {
+            Some(View::String(text)) => text.as_str().to_string(),
             _ => String::new(),
         };
-        let separator = match arguments.first() {
-            Some(Object::String(text)) => Some(text.as_str().to_string()),
-            _ => match self.globals().get("/") {
-                Some(Object::String(text)) => Some(text.as_str().to_string()),
+        let separator = match arguments.first().view() {
+            Some(View::String(text)) => Some(text.as_str().to_string()),
+            _ => match self.globals().get("/").view() {
+                Some(View::String(text)) => Some(text.as_str().to_string()),
                 _ => None,
             },
         };
@@ -69,8 +70,8 @@ impl VirtualMachine {
                 arguments[1..].to_vec(),
                 position,
             )?;
-            if let Some(Object::Block(block)) = pending {
-                return self.execute_block_callable(&block, vec![opened], position);
+            if let Some(View::Block(block)) = pending.view() {
+                return self.execute_block_callable(block, vec![opened], position);
             }
             return Ok(opened);
         }
@@ -86,18 +87,19 @@ impl VirtualMachine {
         let path = self.coerce_load_path(target, position)?;
         let mut open_arguments = vec![Object::string(path)];
         if let Some(mode) = positional.get(1)
-            && !matches!(mode, Object::Nil)
+            && !matches!(mode.view(), View::Nil)
         {
             open_arguments.push(mode.clone());
         }
-        let Some(Object::Class(file_class)) = self.globals().get("File") else {
+        let viewed = self.globals().get("File");
+        let Some(View::Class(file_class)) = viewed.view() else {
             return Err(MetorexError::runtime_error(
                 "File is not defined",
                 crate::vm::utils::position_to_location(position),
             ));
         };
         self.pending_block = pending;
-        self.call_file_dir_methods(&file_class, "open", &open_arguments, position)
+        self.call_file_dir_methods(file_class, "open", &open_arguments, position)
             .map(|opened| opened.unwrap_or(Object::Nil))
     }
 

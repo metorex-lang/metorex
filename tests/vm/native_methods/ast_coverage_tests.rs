@@ -3,6 +3,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -16,12 +17,12 @@ fn run(code: &str) -> Option<Object> {
 // Returns the "op" field of the first parsed BinaryOp expression.
 fn binary_op_of(code: &str) -> String {
     let result = run(&format!("parse({:?})", code));
-    match result {
-        Some(Object::Array(arr)) => {
+    match result.view() {
+        Some(View::Array(arr)) => {
             let arr = arr.borrow();
-            if let Some(Object::Dict(d)) = arr.first() {
+            if let Some(View::Dict(d)) = arr.first().view() {
                 let d = d.borrow();
-                if let Some(Object::String(s)) = d.get("op") {
+                if let Some(View::String(s)) = d.get("op").view() {
                     return s.as_str().to_string();
                 }
             }
@@ -80,17 +81,17 @@ fn parse_next_statement_is_continue() {
     // parse a loop containing `next`; the while body's first element should
     // serialize as {"type": "Continue"}.
     let result = run(r#"parse("i = 0\nwhile i < 1\n  next\n  i += 1\nend")"#);
-    match result {
-        Some(Object::Array(arr)) => {
+    match result.view() {
+        Some(View::Array(arr)) => {
             let arr = arr.borrow();
             // Second stmt is the while loop
-            if let Some(Object::Dict(while_d)) = arr.get(1) {
+            if let Some(View::Dict(while_d)) = arr.get(1).view() {
                 let while_d = while_d.borrow();
-                if let Some(Object::Array(body)) = while_d.get("body") {
+                if let Some(View::Array(body)) = while_d.get("body").view() {
                     let body = body.borrow();
-                    if let Some(Object::Dict(first_stmt)) = body.first() {
+                    if let Some(View::Dict(first_stmt)) = body.first().view() {
                         let first_stmt = first_stmt.borrow();
-                        if let Some(Object::String(ty)) = first_stmt.get("type") {
+                        if let Some(View::String(ty)) = first_stmt.get("type").view() {
                             assert_eq!(ty.as_ref(), "Continue");
                             return;
                         }

@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -13,8 +14,8 @@ fn run(code: &str) -> Option<Object> {
 }
 
 fn inspected(code: &str) -> String {
-    match run(&format!("require 'objspace'\n({code}).inspect")) {
-        Some(Object::String(text)) => text.as_str().to_string(),
+    match run(&format!("require 'objspace'\n({code}).inspect")).view() {
+        Some(View::String(text)) => text.as_str().to_string(),
         other => panic!("expected an inspection, got {other:?}"),
     }
 }

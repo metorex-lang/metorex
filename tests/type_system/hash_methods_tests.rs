@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -379,7 +380,7 @@ fn hash_index_assign_symbol_key() {
 #[test]
 fn hash_index_assign_integer_key() {
     let result = run(r#"h = {}; h[42] = "answer"; h[42]"#);
-    if let Some(Object::String(s)) = result {
+    if let Some(View::String(s)) = result.view() {
         assert_eq!(&*s.as_str(), "answer");
     } else {
         panic!("expected string, got {:?}", result);
@@ -389,7 +390,7 @@ fn hash_index_assign_integer_key() {
 #[test]
 fn hash_index_assign_bool_key() {
     let result = run(r#"h = {}; h[true] = "yes"; h[true]"#);
-    if let Some(Object::String(s)) = result {
+    if let Some(View::String(s)) = result.view() {
         assert_eq!(&*s.as_str(), "yes");
     } else {
         panic!("expected string, got {:?}", result);
@@ -399,7 +400,7 @@ fn hash_index_assign_bool_key() {
 #[test]
 fn hash_index_assign_nil_key() {
     let result = run(r#"h = {}; h[nil] = "nothing"; h[nil]"#);
-    if let Some(Object::String(s)) = result {
+    if let Some(View::String(s)) = result.view() {
         assert_eq!(&*s.as_str(), "nothing");
     } else {
         panic!("expected string, got {:?}", result);
@@ -409,7 +410,7 @@ fn hash_index_assign_nil_key() {
 #[test]
 fn hash_index_assign_float_key() {
     let result = run(r#"h = {}; h[1.5] = "f"; h[1.5]"#);
-    if let Some(Object::String(s)) = result {
+    if let Some(View::String(s)) = result.view() {
         assert_eq!(&*s.as_str(), "f");
     } else {
         panic!("expected string, got {:?}", result);

@@ -6,6 +6,7 @@ use super::exports::text;
 use super::handles::{QNIL, Value, to_object, to_value};
 use super::{called_from, interpreter, or_raise, raise};
 use crate::object::Object;
+use crate::object::View;
 use std::ffi::c_char;
 
 fn error(class: &str, message: String) -> ! {
@@ -37,8 +38,8 @@ fn member_symbols(count: i32, names: *const *const c_char) -> Vec<Object> {
 }
 
 fn members_of(object: Object) -> Vec<Object> {
-    match call(object, "members", Vec::new()) {
-        Object::Array(members) => members.borrow().clone(),
+    match call(object, "members", Vec::new()).view() {
+        View::Array(members) => members.borrow().clone(),
         _ => Vec::new(),
     }
 }
@@ -98,7 +99,7 @@ pub extern "C-unwind" fn rb_metorex_data_define(
     } else {
         to_object(superclass)
     };
-    if !matches!(superclass, Object::Class(_)) {
+    if !matches!(superclass.view(), View::Class(_)) {
         error(
             "TypeError",
             format!(
@@ -166,8 +167,8 @@ pub extern "C-unwind" fn rb_struct_getmember(instance: Value, name: Value) -> Va
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_struct_initialize(instance: Value, values: Value) -> Value {
     let instance_object = to_object(instance);
-    let values = match to_object(values) {
-        Object::Array(held) => held.borrow().clone(),
+    let values = match to_object(values).view() {
+        View::Array(held) => held.borrow().clone(),
         _ => Vec::new(),
     };
     let is_data = call(
@@ -190,8 +191,8 @@ pub extern "C-unwind" fn rb_struct_initialize(instance: Value, values: Value) ->
         error("ArgumentError", "struct size differs".to_string());
     }
     for (index, member) in members.iter().enumerate() {
-        let named = match member {
-            Object::Symbol(name) => name.as_str().to_string(),
+        let named = match member.view() {
+            View::Symbol(name) => name.as_str().to_string(),
             other => other.to_string(),
         };
         let variable = Object::symbol(format!("@{}", named));

@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -299,7 +300,10 @@ end
 MSC.config
 "#);
     // May or may not be supported depending on attr_reader handling in this branch.
-    assert!(matches!(result, Some(Object::Int(10)) | Some(Object::Nil)));
+    assert!(matches!(
+        result.view(),
+        Some(View::Int(10)) | Some(View::Nil)
+    ));
 }
 
 #[test]
@@ -467,7 +471,7 @@ end
 K.new.respond_to?(:hidden)
 "#);
     // respond_to? should see the private method existing.
-    assert!(matches!(result, Some(Object::Bool(_))));
+    assert!(matches!(result.view(), Some(View::Bool(_))));
 }
 
 // ── resolve_constant_in_scope: find include target in enclosing scope (line 1060)

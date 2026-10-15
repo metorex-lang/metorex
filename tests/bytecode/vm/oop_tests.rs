@@ -4,6 +4,7 @@ use metorex::bytecode::vm::BytecodeVm;
 use metorex::compiler::Compiler;
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::View;
 use metorex::parser::Parser;
 
 /// Helper: compile source and execute on the bytecode VM.
@@ -30,8 +31,8 @@ fn run_ok(source: &str) -> Object {
 #[test]
 fn class_definition_creates_class() {
     let result = run_ok("class Foo\nend\nreturn Foo");
-    match result {
-        Object::Class(c) => assert_eq!(c.name(), "Foo"),
+    match result.view() {
+        View::Class(c) => assert_eq!(c.name(), "Foo"),
         _ => panic!("Expected Class, got {:?}", result),
     }
 }
@@ -39,14 +40,14 @@ fn class_definition_creates_class() {
 #[test]
 fn class_stored_as_global() {
     let result = run_ok("class Bar\nend\nreturn Bar");
-    assert!(matches!(result, Object::Class(_)));
+    assert!(matches!(result.view(), View::Class(_)));
 }
 
 #[test]
 fn multiple_classes() {
     let result = run_ok("class A\nend\nclass B\nend\nreturn A");
-    match result {
-        Object::Class(c) => assert_eq!(c.name(), "A"),
+    match result.view() {
+        View::Class(c) => assert_eq!(c.name(), "A"),
         _ => panic!("Expected Class"),
     }
 }
@@ -56,8 +57,8 @@ fn multiple_classes() {
 #[test]
 fn class_with_method_defined() {
     let result = run_ok("class Foo\n  def greet\n    return 42\n  end\nend\nreturn Foo");
-    match result {
-        Object::Class(c) => {
+    match result.view() {
+        View::Class(c) => {
             assert!(c.find_method("greet").is_some());
         }
         _ => panic!("Expected Class with method"),
@@ -69,8 +70,8 @@ fn class_with_multiple_methods() {
     let result = run_ok(
         "class Calc\n  def add(a, b)\n    return a + b\n  end\n  def sub(a, b)\n    return a - b\n  end\nend\nreturn Calc",
     );
-    match result {
-        Object::Class(c) => {
+    match result.view() {
+        View::Class(c) => {
             assert!(c.find_method("add").is_some());
             assert!(c.find_method("sub").is_some());
         }
@@ -97,8 +98,8 @@ fn class_definition_with_initialize() {
     // Test that initialize with instance vars compiles and runs
     let result =
         run("class Person\n  def initialize(name)\n    @name = name\n  end\nend\nreturn Person");
-    match result {
-        Ok(Object::Class(c)) => {
+    match result.as_ref().map(Object::view) {
+        Ok(View::Class(c)) => {
             assert_eq!(c.name(), "Person");
             assert!(c.find_method("initialize").is_some());
         }
@@ -127,8 +128,8 @@ fn class_is_truthy() {
 #[test]
 fn class_name_accessible() {
     let result = run_ok("class MyClass\nend\nreturn MyClass");
-    match result {
-        Object::Class(c) => assert_eq!(c.name(), "MyClass"),
+    match result.view() {
+        View::Class(c) => assert_eq!(c.name(), "MyClass"),
         _ => panic!("Expected Class"),
     }
 }
@@ -147,7 +148,10 @@ fn method_function_stored_in_globals() {
 
     let method_func = vm.get_global("Foo#bar");
     assert!(method_func.is_some(), "Expected Foo#bar in globals");
-    assert!(matches!(method_func.unwrap(), Object::CompiledFunction(_)));
+    assert!(matches!(
+        method_func.unwrap().view(),
+        View::CompiledFunction(_)
+    ));
 }
 
 // ── Empty class ─────────────────────────────────────────────────────
@@ -155,8 +159,8 @@ fn method_function_stored_in_globals() {
 #[test]
 fn empty_class_has_no_methods() {
     let result = run_ok("class Empty\nend\nreturn Empty");
-    match result {
-        Object::Class(c) => {
+    match result.view() {
+        View::Class(c) => {
             assert!(c.find_method("anything").is_none());
         }
         _ => panic!("Expected Class"),
@@ -241,7 +245,7 @@ return d
 "#;
     let result = run_ok(src);
     assert!(
-        matches!(result, Object::Instance(_)),
+        matches!(result.view(), View::Instance(_)),
         "Expected Instance, got {:?}",
         result
     );

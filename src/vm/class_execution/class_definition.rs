@@ -1,6 +1,7 @@
 // Running a `class` body, and the hooks a new class fires.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Execute class definition - create a Class object and register it in the environment.
@@ -23,13 +24,13 @@ impl VirtualMachine {
         // `class NS::Name` — evaluate NS and use it as the parent scope for
         // the new class's constant binding.
         let parent_scope = if let Some(expr) = namespace_expr {
-            match self.evaluate_expression(expr)? {
-                Object::Class(c) | Object::Module(c) => {
-                    self.refuse_private_reopening(&c, name, position)?;
-                    Some(c)
+            match self.evaluate_expression(expr)?.view() {
+                View::Class(c) | View::Module(c) => {
+                    self.refuse_private_reopening(c, name, position)?;
+                    Some(c.clone())
                 }
                 held => {
-                    let shown = self.get_inspect_representation(&held, position)?;
+                    let shown = self.get_inspect_representation(&held.to_object(), position)?;
                     return Err(crate::vm::errors::simple_exception(
                         "TypeError",
                         &format!("{shown} is not a class/module"),
@@ -50,9 +51,9 @@ impl VirtualMachine {
         // A superclass written as a call is evaluated here, which is what
         // `class Point < Struct.new(:x)` names.
         let evaluated_parent = match superclass_expression {
-            Some(expression) => match self.evaluate_expression(expression)? {
-                Object::Class(class) => Some(class),
-                other => return Err(self.superclass_not_a_class(&other, position)),
+            Some(expression) => match self.evaluate_expression(expression)?.view() {
+                View::Class(class) => Some(class.clone()),
+                other => return Err(self.superclass_not_a_class(&other.to_object(), position)),
             },
             None => None,
         };
@@ -97,9 +98,9 @@ impl VirtualMachine {
                         .ok(),
                 }
             };
-            match resolved {
-                Some(Object::Class(class)) => Some(class),
-                Some(held) => return Err(self.superclass_not_a_class(&held, position)),
+            match resolved.view() {
+                Some(View::Class(class)) => Some(class.clone()),
+                Some(held) => return Err(self.superclass_not_a_class(&held.to_object(), position)),
                 None => {
                     return Err(MetorexError::runtime_error(
                         format!("Undefined superclass '{}'", super_name),
@@ -112,8 +113,8 @@ impl VirtualMachine {
             // Object, so `class Foo; end` has the full Object → Kernel →
             // BasicObject ancestry. Built-in classes (BasicObject, Object itself)
             // are constructed directly in `init.rs` and don't hit this branch.
-            match self.globals().get("Object") {
-                Some(Object::Class(object_class)) => Some(object_class),
+            match self.globals().get("Object").view() {
+                Some(View::Class(object_class)) => Some(object_class.clone()),
                 _ => None,
             }
         };
@@ -149,24 +150,24 @@ impl VirtualMachine {
             } else {
                 self.try_autoload_constant(parent, name)?
             };
-            match resolved {
-                Some(Object::Class(c)) => Some(c),
+            match resolved.view() {
+                Some(View::Class(c)) => Some(c.clone()),
                 Some(_) => return Err(self.not_a_class_error(Some(parent), name, position)),
                 None => None,
             }
         } else if let Some(held) = self.globals().get(name) {
-            match held {
-                Object::Class(c) => Some(c),
+            match held.view() {
+                View::Class(c) => Some(c.clone()),
                 _ => return Err(self.not_a_class_error(None, name, position)),
             }
-        } else if let Some(Object::Class(c)) = self.environment().get(name) {
-            Some(c)
-        } else if let Some(Object::Class(object_class)) = self.globals().get("Object") {
+        } else if let Some(View::Class(c)) = self.environment().get(name).view() {
+            Some(c.clone())
+        } else if let Some(View::Class(object_class)) = self.globals().get("Object").view() {
             // A top-level name registered as an autoload is loaded first,
             // so the body reopens the class the file defines.
-            match self.try_autoload_constant(&object_class, name)? {
-                Some(Object::Class(c)) => Some(c),
-                Some(_) => return Err(self.not_a_class_error(Some(&object_class), name, position)),
+            match self.try_autoload_constant(object_class, name)?.view() {
+                Some(View::Class(c)) => Some(c.clone()),
+                Some(_) => return Err(self.not_a_class_error(Some(object_class), name, position)),
                 None => None,
             }
         } else {
@@ -233,8 +234,8 @@ impl VirtualMachine {
             Some(parent) => Some(Rc::clone(parent)),
             // Top-level classes record on Object, the home of top-level
             // constants.
-            None => match self.globals().get("Object") {
-                Some(Object::Class(object_class)) => Some(object_class),
+            None => match self.globals().get("Object").view() {
+                Some(View::Class(object_class)) => Some(object_class.clone()),
                 _ => None,
             },
         };
@@ -372,8 +373,8 @@ impl VirtualMachine {
         const_name: &str,
         position: Position,
     ) -> Result<(), MetorexError> {
-        let owner_rc = match &owner {
-            Object::Class(c) | Object::Module(c) => Rc::clone(c),
+        let owner_rc = match owner.view() {
+            View::Class(c) | View::Module(c) => Rc::clone(c),
             _ => return Ok(()),
         };
         // Only class-level definitions count as the hook: `def
@@ -422,8 +423,8 @@ impl VirtualMachine {
     pub(crate) fn user_const_added_hook_defined(&self) -> bool {
         ["Class", "Module"].iter().any(|global_name| {
             matches!(
-                self.globals().get(global_name),
-                Some(Object::Class(global_class)) if global_class.find_method("const_added").is_some()
+                self.globals().get(global_name).view(),
+                Some(View::Class(global_class)) if global_class.find_method("const_added").is_some()
             )
         })
     }
@@ -473,8 +474,8 @@ impl VirtualMachine {
 
     /// Where a top-level constant was defined, when that is known.
     pub(crate) fn top_level_constant_location(&self, name: &str) -> Option<(String, i64)> {
-        match self.globals().get("Object") {
-            Some(Object::Class(object)) => object.get_const_location(name),
+        match self.globals().get("Object").view() {
+            Some(View::Class(object)) => object.get_const_location(name),
             _ => None,
         }
     }

@@ -1,6 +1,7 @@
 // Kernel as a module, and the classes that build classes.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The Kernel module methods, and `Class.new` / `Module.new`.
@@ -25,8 +26,8 @@ impl VirtualMachine {
         // as the bare form.
         if class_rc.name() == "Kernel" && method_name == "block_given?" {
             return Ok(Answered(Object::Bool(matches!(
-                self.environment().get("block_given?"),
-                Some(Object::Bool(true))
+                self.environment().get("block_given?").view(),
+                Some(View::Bool(true))
             ))));
         }
         if class_rc.name() == "Kernel" && method_name == "binding" {
@@ -35,8 +36,8 @@ impl VirtualMachine {
                 .map(Answered);
         }
         if method_name == "new" && class_rc.name() == "Class" {
-            let superclass = match arguments.first() {
-                Some(Object::Class(c)) => {
+            let superclass = match arguments.first().view() {
+                Some(View::Class(c)) => {
                     // Singleton (meta) classes can't be used as a superclass —
                     // MRI raises TypeError("can't make subclass of singleton
                     // class") in this case.
@@ -48,10 +49,12 @@ impl VirtualMachine {
                     }
                     Some(Rc::clone(c))
                 }
-                Some(other) => return Err(self.superclass_not_a_class(other, position)),
+                Some(other) => {
+                    return Err(self.superclass_not_a_class(&other.to_object(), position));
+                }
                 None => self.globals().get("Object").and_then(|o| {
-                    if let Object::Class(c) = o {
-                        Some(c)
+                    if let View::Class(c) = o.view() {
+                        Some(c.clone())
                     } else {
                         None
                     }
@@ -70,8 +73,8 @@ impl VirtualMachine {
             if let Some(sc) = &superclass {
                 self.trigger_inherited_hook(sc, Rc::clone(&anon), position)?;
             }
-            if let Some(Object::Block(block)) = pending {
-                self.apply_block_as_class_body(&anon, &block, position)?;
+            if let Some(View::Block(block)) = pending.view() {
+                self.apply_block_as_class_body(&anon, block, position)?;
                 // A `private` or `module_function` toggle in the block ends
                 // with the block, as it does with a class body.
                 anon.set_current_visibility("public");
@@ -80,10 +83,10 @@ impl VirtualMachine {
         }
         if method_name == "new" && class_rc.name() == "Module" {
             let anon = Class::new_module("");
-            if let Some(Object::Block(block)) = self.pending_block.take() {
+            if let Some(View::Block(block)) = self.pending_block.take().view() {
                 self.apply_block_as_class_body_with_self(
                     &anon,
-                    &block,
+                    block,
                     position,
                     Object::Module(Rc::clone(&anon)),
                 )?;

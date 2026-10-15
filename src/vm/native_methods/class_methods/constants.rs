@@ -1,6 +1,7 @@
 // Reading and writing the constants a module holds.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Reading, writing and removing the constants a module holds.
@@ -38,8 +39,8 @@ impl VirtualMachine {
                 let mut current = Rc::clone(class_rc);
                 if let Some(stripped) = rest.strip_prefix("::") {
                     rest = stripped;
-                    current = match self.globals().get("Object") {
-                        Some(Object::Class(c)) => c,
+                    current = match self.globals().get("Object").view() {
+                        Some(View::Class(c)) => c.clone(),
                         _ => return Ok(Answered(Object::Bool(false))),
                     };
                 }
@@ -63,9 +64,9 @@ impl VirtualMachine {
                     // Intermediate segments must resolve to a class/module
                     // value; a registered-but-unloaded autoload can't be
                     // traversed without triggering the load.
-                    match entry {
-                        Some((_, Some(Object::Class(c)))) | Some((_, Some(Object::Module(c)))) => {
-                            current = c;
+                    match entry.as_ref().map(|(_, held)| held.view()) {
+                        Some(Some(View::Class(c))) | Some(Some(View::Module(c))) => {
+                            current = c.clone();
                         }
                         _ => return Ok(Answered(Object::Bool(false))),
                     }
@@ -86,7 +87,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let was_symbol = matches!(&arguments[0], Object::Symbol(_));
+                let was_symbol = matches!(arguments[0].view(), View::Symbol(_));
                 let const_path =
                     self.coerce_method_name(&arguments[0], "const_source_location", position)?;
                 let inherit = match arguments.get(1) {
@@ -110,8 +111,8 @@ impl VirtualMachine {
                 let mut current = Rc::clone(class_rc);
                 if let Some(stripped) = rest.strip_prefix("::") {
                     rest = stripped;
-                    current = match self.globals().get("Object") {
-                        Some(Object::Class(c)) => c,
+                    current = match self.globals().get("Object").view() {
+                        Some(View::Class(c)) => c.clone(),
                         _ => return Err(wrong_name(&const_path)),
                     };
                 }
@@ -156,9 +157,9 @@ impl VirtualMachine {
                                 if !Rc::ptr_eq(cls, &current) || n != *seg {
                                     return false;
                                 }
-                                let same = match (loader, &thread) {
-                                    (Object::Nil, Object::Nil) => true,
-                                    (Object::Instance(a), Object::Instance(b)) => Rc::ptr_eq(a, b),
+                                let same = match (loader.view(), thread.view()) {
+                                    (View::Nil, View::Nil) => true,
+                                    (View::Instance(a), View::Instance(b)) => Rc::ptr_eq(a, b),
                                     _ => false,
                                 };
                                 !same
@@ -192,8 +193,8 @@ impl VirtualMachine {
                         Some((owner, None)) => self.try_autoload_constant(&owner, seg)?,
                         None => self.try_autoload_constant(&current, seg)?,
                     };
-                    match resolved {
-                        Some(Object::Class(c)) | Some(Object::Module(c)) => current = c,
+                    match resolved.view() {
+                        Some(View::Class(c)) | Some(View::Module(c)) => current = c.clone(),
                         _ => return Ok(Answered(Object::Nil)),
                     }
                 }
@@ -216,7 +217,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let was_symbol = matches!(&arguments[0], Object::Symbol(_));
+                let was_symbol = matches!(arguments[0].view(), View::Symbol(_));
                 let const_path = self.coerce_method_name(&arguments[0], "const_get", position)?;
                 let inherit = match arguments.get(1) {
                     None => true,
@@ -238,8 +239,8 @@ impl VirtualMachine {
                 let mut current = Rc::clone(class_rc);
                 if let Some(stripped) = rest.strip_prefix("::") {
                     rest = stripped;
-                    current = match self.globals().get("Object") {
-                        Some(Object::Class(c)) => c,
+                    current = match self.globals().get("Object").view() {
+                        Some(View::Class(c)) => c.clone(),
                         _ => return Err(wrong_name(&const_path)),
                     };
                 }
@@ -278,8 +279,8 @@ impl VirtualMachine {
                         self.warn_deprecated_constant(&current, seg, position);
                         value = resolved;
                     } else {
-                        match resolved {
-                            Object::Class(c) | Object::Module(c) => current = c,
+                        match resolved.view() {
+                            View::Class(c) | View::Module(c) => current = c.clone(),
                             other => {
                                 let msg =
                                     format!("{} does not refer to class/module", other.type_name());
@@ -352,14 +353,14 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let const_name = match &arguments[0] {
-                    Object::Symbol(s) => s.as_str().to_string(),
-                    Object::String(s) => s.as_str().to_string(),
-                    other => {
+                let const_name = match arguments[0].view() {
+                    View::Symbol(s) => s.as_str().to_string(),
+                    View::String(s) => s.as_str().to_string(),
+                    _ => {
                         return Err(method_argument_type_error(
                             "const_missing",
                             "Symbol or String",
-                            other,
+                            &arguments[0],
                             position,
                         ));
                     }
@@ -450,7 +451,7 @@ impl VirtualMachine {
         }
         // An anonymous module/class value takes the constant path as
         // its name, cascading into anonymous modules nested under it.
-        if let Object::Class(v) | Object::Module(v) = &value {
+        if let View::Class(v) | View::Module(v) = value.view() {
             let qualified = if class_rc.name() == "Object" {
                 const_name.to_string()
             } else {

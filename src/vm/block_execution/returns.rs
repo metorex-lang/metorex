@@ -1,6 +1,7 @@
 // What a `return` written in a block means.
 
 use super::*;
+use crate::object::View;
 
 /// The same definition written without the `self.` that named the receiver.
 /// A block running against a receiver has that receiver's singleton class as
@@ -50,7 +51,7 @@ pub(crate) fn escaped_return_error(
 ) -> MetorexError {
     let message = "unexpected return".to_string();
     let exception = Object::exception("LocalJumpError", message.clone());
-    if let Object::Exception(details) = &exception {
+    if let View::Exception(details) = exception.view() {
         let mut details = details.borrow_mut();
         details
             .instance_vars
@@ -71,7 +72,7 @@ pub(crate) fn escaped_return_error(
 pub(crate) fn orphaned_return_error(value: Object, position: Position) -> MetorexError {
     let message = "unexpected return".to_string();
     let exception = Object::exception("LocalJumpError", message.clone());
-    if let Object::Exception(details) = &exception {
+    if let View::Exception(details) = exception.view() {
         let mut details = details.borrow_mut();
         details
             .instance_vars

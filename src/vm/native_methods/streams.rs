@@ -2,6 +2,7 @@
 // in by number, is held here under a handle the Ruby side carries, the same
 // way `Socket.__net__` holds its sockets.
 
+use crate::object::{OptionView, View};
 use std::collections::HashMap;
 use std::os::unix::io::{AsRawFd as _, FromRawFd as _, IntoRawFd as _, OwnedFd, RawFd};
 
@@ -277,8 +278,8 @@ impl VirtualMachine {
     /// is what `Signal.trap('PIPE', 'SYSTEM_DEFAULT')` asks for.
     fn leaves_a_broken_pipe_to_the_system(&self) -> bool {
         matches!(
-            self.signal_handlers.get("PIPE"),
-            Some(Object::String(held)) if *held.as_str() == *"SYSTEM_DEFAULT"
+            self.signal_handlers.get("PIPE").view(),
+            Some(View::String(held)) if *held.as_str() == *"SYSTEM_DEFAULT"
         )
     }
 
@@ -289,37 +290,37 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let Some(Object::String(action)) = arguments.first() else {
+        let Some(View::String(action)) = arguments.first().view() else {
             return Err(crate::vm::errors::argument_count_error(
                 crate::vm::errors::Arity::AtLeast(1),
                 arguments.len(),
                 position,
             ));
         };
-        let handle = match arguments.get(1) {
-            Some(Object::Int(held)) => *held as u64,
+        let handle = match arguments.get(1).view() {
+            Some(View::Int(held)) => held as u64,
             _ => 0,
         };
-        let text = match arguments.get(2) {
-            Some(Object::String(held)) => held.as_str().to_string(),
+        let text = match arguments.get(2).view() {
+            Some(View::String(held)) => held.as_str().to_string(),
             _ => String::new(),
         };
         // Where the text names a path, a binary one names the file its bytes
         // spell.
-        let path = match arguments.get(2) {
-            Some(Object::String(held)) => super::file_methods::path_text(held),
+        let path = match arguments.get(2).view() {
+            Some(View::String(held)) => super::file_methods::path_text(held),
             _ => String::new(),
         };
         // A separator whose characters stand for bytes names those bytes
         // rather than the ones its text is spelled with.
-        let text_bytes = match arguments.get(2) {
-            Some(Object::String(held)) if held.holds_bytes() => {
+        let text_bytes = match arguments.get(2).view() {
+            Some(View::String(held)) if held.holds_bytes() => {
                 crate::vm::native_methods::string_methods::binary_bytes(held)
             }
             _ => text.as_bytes().to_vec(),
         };
-        let count = match arguments.get(3) {
-            Some(Object::Int(held)) => *held,
+        let count = match arguments.get(3).view() {
+            Some(View::Int(held)) => held,
             _ => 0,
         };
         match &*action.as_str() {
@@ -377,20 +378,22 @@ impl VirtualMachine {
             // child's environment changes, each with its value or nil.
             "pty_spawn" => {
                 let mut words = Vec::new();
-                if let Some(Object::Array(given)) = arguments.get(4) {
+                if let Some(View::Array(given)) = arguments.get(4).view() {
                     for word in given.borrow().iter() {
                         words.push(self.get_string_representation(word, position)?);
                     }
                 }
                 let mut environment = Vec::new();
-                if let Some(Object::Array(given)) = arguments.get(5) {
+                if let Some(View::Array(given)) = arguments.get(5).view() {
                     for pair in given.borrow().iter() {
-                        let Object::Array(pair) = pair else { continue };
+                        let View::Array(pair) = pair.view() else {
+                            continue;
+                        };
                         let pair = pair.borrow();
                         let named = self.get_string_representation(&pair[0], position)?;
-                        let value = match &pair[1] {
-                            Object::Nil => None,
-                            held => Some(self.get_string_representation(held, position)?),
+                        let value = match pair[1].view() {
+                            View::Nil => None,
+                            _ => Some(self.get_string_representation(&pair[1], position)?),
                         };
                         environment.push((named, value));
                     }
@@ -475,8 +478,8 @@ impl VirtualMachine {
                 // A request that names no buffer carries a number instead,
                 // which is what the caller sent in place of one.
                 let answered = if buffer.is_empty() {
-                    let held = match arguments.get(4) {
-                        Some(Object::Int(held)) => *held as libc::c_int,
+                    let held = match arguments.get(4).view() {
+                        Some(View::Int(held)) => held as libc::c_int,
                         _ => 0,
                     };
                     // SAFETY: the descriptor is one this program holds open.
@@ -503,8 +506,8 @@ impl VirtualMachine {
                     return Err(closed_error(position));
                 };
                 let command = count as libc::c_int;
-                let argument = match arguments.get(4) {
-                    Some(Object::Int(held)) => *held as libc::c_int,
+                let argument = match arguments.get(4).view() {
+                    Some(View::Int(held)) => held as libc::c_int,
                     _ => 0,
                 };
                 // SAFETY: `number` is a descriptor this program holds open,
@@ -848,8 +851,8 @@ impl VirtualMachine {
                 // The fifth argument carries how a paragraph is read: bit
                 // one steps over the newlines standing before it, and bit
                 // two steps over the ones standing after it.
-                let mode = match arguments.get(4) {
-                    Some(Object::Int(held)) => *held,
+                let mode = match arguments.get(4).view() {
+                    Some(View::Int(held)) => held,
                     _ => 0,
                 };
                 let skipping = mode & 1 != 0;
@@ -1148,7 +1151,8 @@ impl VirtualMachine {
     /// the operating system opened for it. Done once the prelude has defined
     /// IO, since each one is an IO of its own.
     pub(crate) fn open_standard_streams(&mut self) {
-        let Some(Object::Class(io_class)) = self.globals().get("IO") else {
+        let viewed = self.globals().get("IO");
+        let Some(View::Class(io_class)) = viewed.view() else {
             return;
         };
         for (number, named, constant) in [
@@ -1157,7 +1161,7 @@ impl VirtualMachine {
             (2, "stderr", "STDERR"),
         ] {
             let built = self.send_to_object(
-                Object::Class(std::rc::Rc::clone(&io_class)),
+                Object::Class(std::rc::Rc::clone(io_class)),
                 "__standard__",
                 vec![Object::Int(number), Object::string(named.to_string())],
                 Position::new(0, 0, 0),
@@ -1169,7 +1173,7 @@ impl VirtualMachine {
             self.globals_mut().set_variable(named, stream.clone());
             // Each is a constant on Object, which is what makes naming it
             // again warn that it was already set.
-            if let Some(Object::Class(object_class)) = self.globals().get("Object") {
+            if let Some(View::Class(object_class)) = self.globals().get("Object").view() {
                 object_class.set_class_var(constant, stream.clone());
             }
         }

@@ -2,6 +2,7 @@
 // rather than in the prelude.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     pub(crate) fn call_module_methods(
@@ -29,14 +30,15 @@ impl VirtualMachine {
         }
 
         if method_name == "module_exec" || method_name == "class_exec" {
-            let block = match self.pending_block.take() {
-                Some(Object::Block(b)) => b,
+            let viewed = self.pending_block.take();
+            let block = match viewed.view() {
+                Some(View::Block(b)) => b,
                 _ => return Err(local_jump_error(method_name, position)),
             };
             let result = self.class_exec_block(
                 module_rc,
                 Object::Module(Rc::clone(module_rc)),
-                &block,
+                block,
                 arguments.to_vec(),
                 position,
             )?;
@@ -50,9 +52,9 @@ impl VirtualMachine {
                 .class_var_names()
                 .into_iter()
                 .filter(|key| key.starts_with(REFINEMENT_KEY_PREFIX))
-                .filter_map(|key| match module_rc.get_class_var(&key) {
-                    Some(Object::Class(holder) | Object::Module(holder)) => {
-                        Some(Object::Module(holder))
+                .filter_map(|key| match module_rc.get_class_var(&key).view() {
+                    Some(View::Class(holder) | View::Module(holder)) => {
+                        Some(Object::Module(holder.clone()))
                     }
                     _ => None,
                 })
@@ -81,12 +83,12 @@ impl VirtualMachine {
             }
             // Ruby refines a module as readily as a class, and reports
             // anything else with its own wording.
-            let target = match &arguments[0] {
-                Object::Class(target) | Object::Module(target) => Rc::clone(target),
-                other => {
+            let target = match arguments[0].view() {
+                View::Class(target) | View::Module(target) => Rc::clone(target),
+                _ => {
                     let message = format!(
                         "wrong argument type {} (expected Class or Module)",
-                        self.builtins().class_of(other).name()
+                        self.builtins().class_of(&arguments[0]).name()
                     );
                     return Err(MetorexError::UncaughtException {
                         exception: Object::exception("TypeError", message.clone()),
@@ -101,8 +103,8 @@ impl VirtualMachine {
                 target.name(),
                 Rc::as_ptr(&target)
             );
-            let holder = match module_rc.get_class_var(&refinement_key) {
-                Some(Object::Class(existing) | Object::Module(existing)) => existing,
+            let holder = match module_rc.get_class_var(&refinement_key).view() {
+                Some(View::Class(existing) | View::Module(existing)) => existing.clone(),
                 _ => {
                     // The refinement is anonymous, so binding it to a
                     // constant names it. Its display comes from the label
@@ -120,7 +122,8 @@ impl VirtualMachine {
                     holder
                 }
             };
-            let Some(Object::Block(block)) = self.pending_block.take() else {
+            let viewed = self.pending_block.take();
+            let Some(View::Block(block)) = viewed.view() else {
                 let message = "no block given".to_string();
                 return Err(MetorexError::UncaughtException {
                     exception: Object::exception("ArgumentError", message.clone()),
@@ -134,7 +137,7 @@ impl VirtualMachine {
             module_rc.set_class_var(&refinement_key, Object::Module(Rc::clone(&holder)));
             self.push_refinement_scope();
             self.activate_refinement(Rc::clone(module_rc));
-            let body = self.apply_refine_block(&holder, &block, position);
+            let body = self.apply_refine_block(&holder, block, position);
             self.pop_refinement_scope();
             body?;
             return Ok(Some(Object::Module(holder)));
@@ -212,19 +215,19 @@ impl VirtualMachine {
         if module_rc.name() == "Coverage" {
             match method_name {
                 "__coverage_start__" => {
-                    let by_mode = matches!(arguments.first(), Some(Object::Bool(true)));
-                    let modes = match arguments.get(1) {
-                        Some(Object::Array(held)) => held
+                    let by_mode = matches!(arguments.first().view(), Some(View::Bool(true)));
+                    let modes = match arguments.get(1).view() {
+                        Some(View::Array(held)) => held
                             .borrow()
                             .iter()
-                            .filter_map(|mode| match mode {
-                                Object::Symbol(name) => Some(name.as_str().to_string()),
+                            .filter_map(|mode| match mode.view() {
+                                View::Symbol(name) => Some(name.as_str().to_string()),
                                 _ => None,
                             })
                             .collect(),
                         _ => Vec::new(),
                     };
-                    let eval_too = matches!(arguments.get(2), Some(Object::Bool(true)));
+                    let eval_too = matches!(arguments.get(2).view(), Some(View::Bool(true)));
                     self.coverage_start(by_mode, modes, eval_too);
                     return Ok(Some(Object::Nil));
                 }
@@ -236,7 +239,7 @@ impl VirtualMachine {
                     return Ok(Some(self.coverage_branch_report()));
                 }
                 "__coverage_result__" => {
-                    let clear = matches!(arguments.first(), Some(Object::Bool(true)));
+                    let clear = matches!(arguments.first().view(), Some(View::Bool(true)));
                     return self.coverage_report(clear).map(Some);
                 }
                 _ => {}
@@ -356,8 +359,8 @@ impl VirtualMachine {
             for class in crate::object::live::live_classes() {
                 if class.is_singleton_class()
                     && matches!(
-                        class.get_class_var("__attached__"),
-                        Some(Object::Class(attached)) if attached.is_singleton_class()
+                        class.get_class_var("__attached__").view(),
+                        Some(View::Class(attached)) if attached.is_singleton_class()
                     )
                 {
                     continue;
@@ -368,7 +371,7 @@ impl VirtualMachine {
                     Object::Class(class)
                 });
             }
-            if matches!(wanted, Object::Nil) {
+            if matches!(wanted.view(), View::Nil) {
                 return Ok(Some(Object::array(candidates)));
             }
             let mut found = Vec::new();
@@ -411,8 +414,8 @@ impl VirtualMachine {
         // Where an object was made, as the file and the line it was written
         // on, and nil for one made before the tracing was switched on.
         if module_rc.name() == "ObjectSpace" && method_name == "__allocation_site__" {
-            let held = match arguments.first() {
-                Some(Object::String(text)) => text.created_at(),
+            let held = match arguments.first().view() {
+                Some(View::String(text)) => text.created_at(),
                 _ => None,
             };
             return Ok(Some(match held {
@@ -424,8 +427,8 @@ impl VirtualMachine {
         // What the object space can say about how much a program holds,
         // counted from what it has built rather than from a heap walk.
         if module_rc.name() == "ObjectSpace" && method_name == "__allocated__" {
-            let counted = match arguments.first() {
-                Some(Object::Class(held)) | Some(Object::Module(held)) => self
+            let counted = match arguments.first().view() {
+                Some(View::Class(held)) | Some(View::Module(held)) => self
                     .allocation_counts
                     .get(&(Rc::as_ptr(held) as usize))
                     .copied()
@@ -487,9 +490,9 @@ impl VirtualMachine {
                         .register_autoload(method_name, arguments.to_vec(), position)
                         .map(Some);
                 }
-                let const_name = match arguments.first() {
-                    Some(Object::Symbol(s)) => s.as_str().to_string(),
-                    Some(Object::String(s)) => s.as_str().to_string(),
+                let const_name = match arguments.first().view() {
+                    Some(View::Symbol(s)) => s.as_str().to_string(),
+                    Some(View::String(s)) => s.as_str().to_string(),
                     _ => return Ok(Some(Object::Nil)),
                 };
                 if !is_valid_constant_name(&const_name) {
@@ -515,16 +518,23 @@ impl VirtualMachine {
                 // Coerce the filename: String/Symbol pass through; anything
                 // else must respond to #to_path and return a String, else
                 // TypeError. Empty strings raise ArgumentError.
-                let path = match arguments.get(1) {
-                    Some(Object::String(s)) => s.as_str().to_string(),
-                    Some(Object::Symbol(s)) => s.as_str().to_string(),
+                let path = match arguments.get(1).view() {
+                    Some(View::String(s)) => s.as_str().to_string(),
+                    Some(View::Symbol(s)) => s.as_str().to_string(),
                     Some(other) => {
-                        let other_obj = other.clone();
-                        if let Some((cls, method)) = self.lookup_method(&other_obj, "to_path") {
-                            let result =
-                                self.invoke_method(cls, method, other_obj, Vec::new(), position)?;
-                            match result {
-                                Object::String(s) => s.as_str().to_string(),
+                        let other_obj = other;
+                        if let Some((cls, method)) =
+                            self.lookup_method(&other_obj.to_object(), "to_path")
+                        {
+                            let result = self.invoke_method(
+                                cls,
+                                method,
+                                other_obj.to_object(),
+                                Vec::new(),
+                                position,
+                            )?;
+                            match result.view() {
+                                View::String(s) => s.as_str().to_string(),
                                 _ => {
                                     let msg = "to_path must return a String".to_string();
                                     let exc = Object::exception("TypeError", msg.clone());
@@ -586,13 +596,13 @@ impl VirtualMachine {
                         .register_autoload(method_name, arguments.to_vec(), position)
                         .map(Some);
                 }
-                let const_name = match arguments.first() {
-                    Some(Object::Symbol(s)) => s.as_str().to_string(),
-                    Some(Object::String(s)) => s.as_str().to_string(),
+                let const_name = match arguments.first().view() {
+                    Some(View::Symbol(s)) => s.as_str().to_string(),
+                    Some(View::String(s)) => s.as_str().to_string(),
                     _ => return Ok(Some(Object::Nil)),
                 };
                 // `autoload?(name, inherit=true)` — second arg disables ancestor lookup.
-                let inherit = !matches!(arguments.get(1), Some(Object::Bool(false)));
+                let inherit = !matches!(arguments.get(1).view(), Some(View::Bool(false)));
                 // `effective_autoload` is thread-aware (loading thread
                 // sees nil, other threads see the path) and consults the
                 // ancestor chain via `lookup_autoload`. For
@@ -651,15 +661,15 @@ impl VirtualMachine {
                     return Ok(None);
                 }
                 for arg in arguments {
-                    match arg {
-                        Object::Module(t) | Object::Class(t) => {
+                    match arg.view() {
+                        View::Module(t) | View::Class(t) => {
                             self.default_append_features(t, module_rc, position)?;
                         }
-                        other => {
+                        _ => {
                             return Err(method_argument_type_error(
                                 method_name,
                                 "Module",
-                                other,
+                                arg,
                                 position,
                             ));
                         }
@@ -673,9 +683,9 @@ impl VirtualMachine {
             // A module also answers with the mixin hooks that Class leaves
             // undefined; the shared names come from the class dispatch path.
             "private_methods" => {
-                let Some(Object::Array(names)) =
-                    self.call_class_methods(module_rc, method_name, arguments, position)?
-                else {
+                let answered =
+                    self.call_class_methods(module_rc, method_name, arguments, position)?;
+                let Some(View::Array(names)) = answered.view() else {
                     return Ok(None);
                 };
                 {
@@ -686,7 +696,7 @@ impl VirtualMachine {
                     list.sort_by_key(|entry| entry.to_string());
                     list.dedup_by_key(|entry| entry.to_string());
                 }
-                return Ok(Some(Object::Array(names)));
+                return Ok(Some(Object::Array(names.clone())));
             }
             "extend_object" if !arguments.is_empty() => {
                 if module_rc.find_method("__class__extend_object").is_some() {
@@ -723,7 +733,7 @@ impl VirtualMachine {
     ) -> Result<Object, MetorexError> {
         let mut modules = Vec::with_capacity(arguments.len());
         for argument in arguments {
-            let Object::Module(module) = argument else {
+            let View::Module(module) = argument.view() else {
                 let message = format!(
                     "wrong argument type {} (expected Module)",
                     crate::vm::native_methods::define_method::ruby_class_name(argument)

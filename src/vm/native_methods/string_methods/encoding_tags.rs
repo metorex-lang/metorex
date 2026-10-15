@@ -2,6 +2,7 @@
 // tag does to it.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The encoding a string says it is written in, and what changing that
@@ -21,7 +22,7 @@ impl VirtualMachine {
                 // `offset:` names where in the bytes the unpacking starts.
                 let mut positional = arguments;
                 let mut from = 0usize;
-                if let Some(Object::Dict(options)) = arguments.last() {
+                if let Some(View::Dict(options)) = arguments.last().view() {
                     let named = options.borrow().get(":offset").cloned();
                     if let Some(held) = named {
                         let counted: i64 = self
@@ -56,26 +57,29 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let format = match &arguments[0] {
-                    Object::String(format) => format.as_str().to_string(),
-                    other if self.responds_to(other, "to_str") => {
-                        match self.send_to_object(other.clone(), "to_str", vec![], position)? {
-                            Object::String(format) => format.as_str().to_string(),
+                let format = match arguments[0].view() {
+                    View::String(format) => format.as_str().to_string(),
+                    _ if self.responds_to(&arguments[0], "to_str") => {
+                        match self
+                            .send_to_object(arguments[0].clone(), "to_str", vec![], position)?
+                            .view()
+                        {
+                            View::String(format) => format.as_str().to_string(),
                             _ => {
                                 return Err(method_argument_type_error(
                                     method_name,
                                     "String",
-                                    other,
+                                    &arguments[0],
                                     position,
                                 ));
                             }
                         }
                     }
-                    other => {
+                    _ => {
                         return Err(method_argument_type_error(
                             method_name,
                             "String",
-                            other,
+                            &arguments[0],
                             position,
                         ));
                     }
@@ -86,8 +90,10 @@ impl VirtualMachine {
                 let bytes = binary_bytes(string_value);
                 let held = match crate::vm::native_methods::pack_format::bytes_to_string(
                     &bytes[from.min(bytes.len())..],
-                ) {
-                    Object::String(rest) => rest.as_str().to_string(),
+                )
+                .view()
+                {
+                    View::String(rest) => rest.as_str().to_string(),
                     _ => String::new(),
                 };
                 let read = self.string_unpack(&held, &format, string_value.pointer(), position)?;
@@ -143,14 +149,14 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let form = match arguments.first() {
+                let form = match arguments.first().view() {
                     None => "nfc".to_string(),
-                    Some(Object::Symbol(held) | Object::String(held)) => held.as_str().to_string(),
+                    Some(View::Symbol(held) | View::String(held)) => held.as_str().to_string(),
                     Some(other) => {
                         return Err(method_argument_type_error(
                             method_name,
                             "Symbol",
-                            other,
+                            &other.to_object(),
                             position,
                         ));
                     }

@@ -1,5 +1,6 @@
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -15,7 +16,7 @@ fn run(code: &str) -> Option<Object> {
 #[test]
 fn array_select_filters() {
     let result = run("[1, 2, 3, 4, 5].select { |x| x > 3 }");
-    if let Some(Object::Array(arr)) = result {
+    if let Some(View::Array(arr)) = result.view() {
         assert_eq!(arr.borrow().len(), 2);
     } else {
         panic!("expected array");
@@ -36,7 +37,7 @@ result.length
 #[test]
 fn array_partition_empty() {
     let result = run("[].partition { |x| x }");
-    if let Some(Object::Array(arr)) = result {
+    if let Some(View::Array(arr)) = result.view() {
         assert_eq!(arr.borrow().len(), 2);
     } else {
         panic!("expected array");

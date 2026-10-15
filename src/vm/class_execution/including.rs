@@ -1,6 +1,7 @@
 // Mixing a module into a class, and the hooks that fire when one is.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Execute include at statement level (outside class body).
@@ -25,15 +26,16 @@ impl VirtualMachine {
             .or_else(|| self.globals().get(module_name));
         // Run where `self` is an ordinary object, as in an instance method,
         // `include Mod` is a call of that object's own `include`.
-        if let Some(receiver @ Object::Instance(_)) = self.environment().get("self")
-            && !self.is_the_main_object(&receiver)
+        if let Some(receiver @ View::Instance(_)) = self.environment().get("self").view()
+            && !self.is_the_main_object(&receiver.to_object())
             && let Some(named) = module.clone()
         {
-            let answered = self.send_to_object(receiver, "include", vec![named], position)?;
+            let answered =
+                self.send_to_object(receiver.to_object(), "include", vec![named], position)?;
             return Ok(ControlFlow::Value(answered));
         }
-        let module_rc = match module {
-            Some(Object::Module(m)) => m,
+        let module_rc = match module.view() {
+            Some(View::Module(m)) => m,
             Some(_) => {
                 return Err(MetorexError::runtime_error(
                     format!("'{}' is not a module", module_name),
@@ -51,9 +53,9 @@ impl VirtualMachine {
         // makes `include X` inside a lambda invoked from a module body
         // mix into that module rather than into Object.
         if let Some(target) = self.def_scope_stack.last().cloned() {
-            self.apply_module_include(&target, &module_rc, position)?;
-        } else if let Some(Object::Class(object_class)) = self.globals().get("Object") {
-            object_class.add_mixin(module_rc);
+            self.apply_module_include(&target, module_rc, position)?;
+        } else if let Some(View::Class(object_class)) = self.globals().get("Object").view() {
+            object_class.add_mixin(module_rc.clone());
         }
         Ok(ControlFlow::Next)
     }
@@ -100,7 +102,7 @@ impl VirtualMachine {
         method_name: &str,
         position: Position,
     ) -> Result<Option<Rc<Class>>, MetorexError> {
-        if let Object::Module(module_rc) | Object::Class(module_rc) = argument
+        if let View::Module(module_rc) | View::Class(module_rc) = argument.view()
             && module_rc
                 .get_class_var(crate::vm::REFINEMENT_LABEL_KEY)
                 .is_some()
@@ -112,13 +114,13 @@ impl VirtualMachine {
                 message: msg,
             });
         }
-        match argument {
-            Object::Module(module_rc) => Ok(Some(Rc::clone(module_rc))),
-            Object::Instance(_) if self.is_module_subclass_instance(argument) => Ok(None),
-            other => Err(method_argument_type_error(
+        match argument.view() {
+            View::Module(module_rc) => Ok(Some(Rc::clone(module_rc))),
+            View::Instance(_) if self.is_module_subclass_instance(argument) => Ok(None),
+            _ => Err(method_argument_type_error(
                 method_name,
                 "Module",
-                other,
+                argument,
                 position,
             )),
         }
@@ -126,11 +128,12 @@ impl VirtualMachine {
 
     /// Whether `value` is an instance of a class that descends from Module.
     pub(crate) fn is_module_subclass_instance(&mut self, value: &Object) -> bool {
-        let Some(Object::Class(module_class)) = self.globals().get("Module") else {
+        let viewed = self.globals().get("Module");
+        let Some(View::Class(module_class)) = viewed.view() else {
             return false;
         };
         let value_class = self.builtins().class_of(value);
-        self.builtins().is_subclass_of(&value_class, &module_class)
+        self.builtins().is_subclass_of(&value_class, module_class)
     }
 
     /// Mix `module_rc` into `target` with full Ruby semantics: dispatch to a

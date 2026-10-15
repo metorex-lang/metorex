@@ -1,6 +1,7 @@
 // Matching a pattern against a string.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Matching a pattern against a string.
@@ -21,7 +22,7 @@ impl VirtualMachine {
                 }
                 // Ruby's String#match hands the work to the pattern, so a
                 // Regexp carrying a `match` of its own answers instead.
-                if matches!(arguments[0], Object::Regex(_, _))
+                if matches!(arguments[0].view(), View::Regex(_, _))
                     && let Some(class) = self.existing_singleton_class(&arguments[0])
                     && let Some(method) = class.find_method("match")
                     && !method.is_undefined
@@ -39,47 +40,44 @@ impl VirtualMachine {
                         .send_to_object(arguments[0].clone(), "match", passed, position)
                         .map(Some);
                 }
-                let (pattern, flags) = match &arguments[0] {
-                    Object::Regex(pattern, flags) => {
+                let (pattern, flags) = match arguments[0].view() {
+                    View::Regex(pattern, flags) => {
                         (pattern.as_str().to_string(), flags.as_str().to_string())
                     }
-                    Object::String(source) => (source.as_str().to_string(), String::new()),
+                    View::String(source) => (source.as_str().to_string(), String::new()),
                     // A pattern written as anything else is asked for the
                     // characters it stands for, which are read as a pattern.
-                    other if self.answers_to(other, "to_str", position)? => {
-                        match self.send_to_object(other.clone(), "to_str", vec![], position)? {
-                            Object::String(source) => (source.as_str().to_string(), String::new()),
-                            answered => {
-                                return Err(method_argument_type_error(
-                                    "match",
-                                    "Regexp or String",
-                                    &answered,
-                                    position,
-                                ));
-                            }
+                    _ if self.answers_to(&arguments[0], "to_str", position)? => match self
+                        .send_to_object(arguments[0].clone(), "to_str", vec![], position)?
+                        .view()
+                    {
+                        View::String(source) => (source.as_str().to_string(), String::new()),
+                        answered => {
+                            return Err(method_argument_type_error(
+                                "match",
+                                "Regexp or String",
+                                &answered.to_object(),
+                                position,
+                            ));
                         }
-                    }
-                    other => {
+                    },
+                    _ => {
                         return Err(method_argument_type_error(
                             "match",
                             "Regexp or String",
-                            other,
+                            &arguments[0],
                             position,
                         ));
                     }
                 };
-                if let Object::Regex(written, _) = &arguments[0] {
+                if let View::Regex(written, _) = arguments[0].view() {
                     self.prepare_match_subject(written, &flags, receiver, position)?;
                 }
                 let subject = crate::vm::native_methods::regexp_methods::match_text(string_value);
-                let start = match arguments.get(1) {
-                    Some(Object::Int(offset)) => {
+                let start = match arguments.get(1).view() {
+                    Some(View::Int(offset)) => {
                         let length = subject.chars().count() as i64;
-                        let resolved = if *offset < 0 {
-                            offset + length
-                        } else {
-                            *offset
-                        };
+                        let resolved = if offset < 0 { offset + length } else { offset };
                         if resolved < 0 || resolved > length {
                             return Ok(Some(Object::Nil));
                         }
@@ -93,8 +91,9 @@ impl VirtualMachine {
                 };
                 // The block is taken before the walk, since building the
                 // MatchData is itself a call and would consume it.
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => Some(block),
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(block)) => Some(block),
                     _ => None,
                 };
                 let found = self.regexp_match_data_in(
@@ -107,7 +106,7 @@ impl VirtualMachine {
                 )?;
                 match (found, block) {
                     (Some(data), Some(block)) => self
-                        .execute_block_callable(&block, vec![data], position)
+                        .execute_block_callable(block, vec![data], position)
                         .map(Some),
                     (Some(data), None) => Ok(Some(data)),
                     (None, _) => Ok(Some(Object::Nil)),
@@ -122,32 +121,28 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let (pattern, flags) = match &arguments[0] {
-                    Object::Regex(p, f) => (p.as_str().to_string(), f.as_str().to_string()),
-                    Object::String(s) => (s.as_str().to_string(), String::new()),
-                    other => {
+                let (pattern, flags) = match arguments[0].view() {
+                    View::Regex(p, f) => (p.as_str().to_string(), f.as_str().to_string()),
+                    View::String(s) => (s.as_str().to_string(), String::new()),
+                    _ => {
                         return Err(method_argument_type_error(
                             "match?",
                             "Regexp or String",
-                            other,
+                            &arguments[0],
                             position,
                         ));
                     }
                 };
-                if let Object::Regex(written, _) = &arguments[0] {
+                if let View::Regex(written, _) = arguments[0].view() {
                     self.prepare_match_subject(written, &flags, receiver, position)?;
                 }
                 // A second argument names the character offset to start at,
                 // counting from the end when negative.
                 let subject = string_value.as_ref();
-                let start = match arguments.get(1) {
-                    Some(Object::Int(offset)) => {
+                let start = match arguments.get(1).view() {
+                    Some(View::Int(offset)) => {
                         let length = subject.as_str().chars().count() as i64;
-                        let resolved = if *offset < 0 {
-                            offset + length
-                        } else {
-                            *offset
-                        };
+                        let resolved = if offset < 0 { offset + length } else { offset };
                         if resolved < 0 || resolved > length {
                             return Ok(Some(Object::Bool(false)));
                         }

@@ -2,6 +2,7 @@
 // against another as a set.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Searching the entries, flattening them out, and comparing one hash
@@ -45,11 +46,11 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let depth: i64 = match arguments.first() {
+                let depth: i64 = match arguments.first().view() {
                     None => 1,
-                    Some(Object::Int(level)) => *level,
+                    Some(View::Int(level)) => level,
                     Some(other) => self
-                        .coerce_integer_argument(other, position)?
+                        .coerce_integer_argument(&other.to_object(), position)?
                         .try_into()
                         .unwrap_or(1),
                 };
@@ -129,8 +130,9 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => Some(block),
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(block)) => Some(block),
                     _ => None,
                 };
                 // A pattern argument is matched with `===` against the
@@ -184,15 +186,15 @@ impl VirtualMachine {
                 }
                 // An operand that is not a Hash is asked for one, which is
                 // what `to_hash` answers.
-                let other = match &arguments[0] {
-                    Object::Dict(_) => arguments[0].clone(),
-                    other if self.responds_to(other, "to_hash") => {
-                        self.send_to_object(other.clone(), "to_hash", vec![], position)?
+                let other = match arguments[0].view() {
+                    View::Dict(_) => arguments[0].clone(),
+                    _ if self.responds_to(&arguments[0], "to_hash") => {
+                        self.send_to_object(arguments[0].clone(), "to_hash", vec![], position)?
                     }
-                    other => {
+                    _ => {
                         let message = format!(
                             "no implicit conversion of {} into Hash",
-                            crate::vm::errors::conversion_subject(other)
+                            crate::vm::errors::conversion_subject(&arguments[0])
                         );
                         return Err(crate::vm::errors::simple_exception(
                             "TypeError",
@@ -201,7 +203,7 @@ impl VirtualMachine {
                         ));
                     }
                 };
-                let Object::Dict(other_rc) = &other else {
+                let View::Dict(other_rc) = other.view() else {
                     let message = format!(
                         "no implicit conversion of {} into Hash",
                         crate::vm::errors::conversion_subject(&arguments[0])

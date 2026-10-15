@@ -2,6 +2,7 @@
 // the name is none of its own, and the next step is tried.
 
 use super::*;
+use crate::object::View;
 
 /// One step of the chain: every group of Hash methods reads the same
 /// arguments and answers the same way.
@@ -37,7 +38,7 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        let Object::Dict(dict_rc) = receiver else {
+        let View::Dict(dict_rc) = receiver.view() else {
             return Ok(None);
         };
         // ENV is a hash the process shares with the operating system, and a

@@ -6,6 +6,7 @@
 use crate::bytecode::chunk::Chunk;
 use crate::bytecode::opcode::OpCode;
 use crate::object::Object;
+use crate::object::View;
 
 /// Run all optimization passes on a chunk.
 /// Runs constant folding and peephole in a fixed-point loop (max 3 iterations)
@@ -109,26 +110,24 @@ fn is_foldable_binop(op: OpCode) -> bool {
 }
 
 fn fold_binary(a: &Object, b: &Object, op: OpCode) -> Option<Object> {
-    match (a, b, op) {
-        (Object::Int(a), Object::Int(b), OpCode::Add) => Some(Object::Int(a + b)),
-        (Object::Int(a), Object::Int(b), OpCode::Subtract) => Some(Object::Int(a - b)),
-        (Object::Int(a), Object::Int(b), OpCode::Multiply) => Some(Object::Int(a * b)),
-        (Object::Int(a), Object::Int(b), OpCode::Divide) if *b != 0 => Some(Object::Int(a / b)),
-        (Object::Int(a), Object::Int(b), OpCode::Modulo) if *b != 0 => Some(Object::Int(a % b)),
-        (Object::Float(a), Object::Float(b), OpCode::Add) => Some(Object::Float(a + b)),
-        (Object::Float(a), Object::Float(b), OpCode::Subtract) => Some(Object::Float(a - b)),
-        (Object::Float(a), Object::Float(b), OpCode::Multiply) => Some(Object::Float(a * b)),
-        (Object::Float(a), Object::Float(b), OpCode::Divide) if *b != 0.0 => {
-            Some(Object::Float(a / b))
-        }
+    match (a.view(), b.view(), op) {
+        (View::Int(a), View::Int(b), OpCode::Add) => Some(Object::Int(a + b)),
+        (View::Int(a), View::Int(b), OpCode::Subtract) => Some(Object::Int(a - b)),
+        (View::Int(a), View::Int(b), OpCode::Multiply) => Some(Object::Int(a * b)),
+        (View::Int(a), View::Int(b), OpCode::Divide) if b != 0 => Some(Object::Int(a / b)),
+        (View::Int(a), View::Int(b), OpCode::Modulo) if b != 0 => Some(Object::Int(a % b)),
+        (View::Float(a), View::Float(b), OpCode::Add) => Some(Object::Float(a + b)),
+        (View::Float(a), View::Float(b), OpCode::Subtract) => Some(Object::Float(a - b)),
+        (View::Float(a), View::Float(b), OpCode::Multiply) => Some(Object::Float(a * b)),
+        (View::Float(a), View::Float(b), OpCode::Divide) if b != 0.0 => Some(Object::Float(a / b)),
         _ => None,
     }
 }
 
 fn negate_constant(val: &Object) -> Option<Object> {
-    match val {
-        Object::Int(n) => Some(Object::Int(-n)),
-        Object::Float(f) => Some(Object::Float(-f)),
+    match val.view() {
+        View::Int(n) => Some(Object::Int(-n)),
+        View::Float(f) => Some(Object::Float(-f)),
         _ => None,
     }
 }

@@ -1,6 +1,7 @@
 // Writing elements into positions the array already has or grows to.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Writing elements into positions the array already has or grows to.
@@ -72,7 +73,7 @@ impl VirtualMachine {
                 // A Range start before the front is a RangeError, while the
                 // other forms report an IndexError.
                 let out_of_range_error =
-                    if arguments.len() == 2 && matches!(&first, Object::Range { .. }) {
+                    if arguments.len() == 2 && matches!(first.view(), View::Range { .. }) {
                         "RangeError"
                     } else {
                         "IndexError"
@@ -92,7 +93,7 @@ impl VirtualMachine {
                         ));
                     }
                     (start, Some(span))
-                } else if let Object::Range { .. } = &first {
+                } else if let View::Range { .. } = first.view() {
                     let (start, span) = self.range_bounds(&first, length, position)?;
                     (start, Some(span))
                 } else {
@@ -119,22 +120,20 @@ impl VirtualMachine {
                 // an Array subclass is taken as the array it already is.
                 let replacement = match &span {
                     None => Vec::new(),
-                    Some(_) => match &value {
-                        Object::Array(elements) => elements.borrow().clone(),
-                        other => match crate::vm::native_methods::array_subclass_value(other) {
-                            Some(Object::Array(elements)) => elements.borrow().clone(),
-                            _ if self.responds_to(other, "to_ary") => {
-                                match self.send_to_object(
-                                    other.clone(),
-                                    "to_ary",
-                                    vec![],
-                                    position,
-                                )? {
-                                    Object::Array(elements) => elements.borrow().clone(),
-                                    converted => vec![converted],
+                    Some(_) => match value.view() {
+                        View::Array(elements) => elements.borrow().clone(),
+                        _ => match crate::vm::native_methods::array_subclass_value(&value).view() {
+                            Some(View::Array(elements)) => elements.borrow().clone(),
+                            _ if self.responds_to(&value, "to_ary") => {
+                                match self
+                                    .send_to_object(value.clone(), "to_ary", vec![], position)?
+                                    .view()
+                                {
+                                    View::Array(elements) => elements.borrow().clone(),
+                                    converted => vec![converted.to_object()],
                                 }
                             }
-                            _ => vec![other.clone()],
+                            _ => vec![value.clone()],
                         },
                     },
                 };
@@ -170,11 +169,11 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let index: i64 = match &arguments[0] {
-                    Object::Int(index) => *index,
-                    Object::Float(index) => *index as i64,
-                    other => self
-                        .coerce_integer_argument(other, position)?
+                let index: i64 = match arguments[0].view() {
+                    View::Int(index) => index,
+                    View::Float(index) => index as i64,
+                    _ => self
+                        .coerce_integer_argument(&arguments[0], position)?
                         .try_into()
                         .unwrap_or(i64::MAX),
                 };

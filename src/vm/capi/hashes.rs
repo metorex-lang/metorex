@@ -6,6 +6,7 @@ use super::calls::{call, top_level_module};
 use super::handles::{QNIL, Value, objects_from, to_object, to_value};
 use super::{called_from, called_with_block, interpreter, or_raise, raise};
 use crate::object::Object;
+use crate::object::View;
 use num_bigint::{BigInt, Sign};
 
 const FIXNUM_MAX: i64 = i64::MAX >> 1;
@@ -18,12 +19,13 @@ const FIXNUM_MIN: i64 = i64::MIN >> 1;
 pub extern "C-unwind" fn rb_hash(object: Value) -> Value {
     let mut code = call(to_object(object), "hash", Vec::new());
     loop {
-        let number = match &code {
-            Object::Int(number) => BigInt::from(*number),
-            Object::BigInt(number) => (**number).clone(),
+        let number = match code.view() {
+            View::Int(number) => BigInt::from(number),
+            View::BigInt(number) => (**number).clone(),
             other => {
-                let converted =
-                    or_raise(interpreter().coerce_integer_argument(other, called_from()));
+                let converted = or_raise(
+                    interpreter().coerce_integer_argument(&other.to_object(), called_from()),
+                );
                 code = crate::vm::native_methods::from_big(converted);
                 continue;
             }
@@ -184,12 +186,13 @@ pub extern "C-unwind" fn rb_hash_foreach(
     argument: Value,
 ) {
     let held = to_object(hash);
-    let Object::Array(pairs) = call(held.clone(), "to_a", Vec::new()) else {
+    let viewed = call(held.clone(), "to_a", Vec::new());
+    let View::Array(pairs) = viewed.view() else {
         return;
     };
     let pairs = pairs.borrow().clone();
     for pair in pairs {
-        let Object::Array(pair) = pair else {
+        let View::Array(pair) = pair.view() else {
             continue;
         };
         let (key, value) = {

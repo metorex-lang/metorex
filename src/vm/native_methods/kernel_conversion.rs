@@ -4,6 +4,7 @@
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 use crate::vm::utils::position_to_location;
 use indexmap::IndexMap;
@@ -28,11 +29,11 @@ impl VirtualMachine {
         given: Option<&Object>,
         position: Position,
     ) -> Result<bool, MetorexError> {
-        match given {
+        match given.view() {
             None => Ok(true),
-            Some(Object::Bool(raises)) => Ok(*raises),
+            Some(View::Bool(raises)) => Ok(raises),
             Some(other) => {
-                let shown = self.get_inspect_representation(other, position)?;
+                let shown = self.get_inspect_representation(&other.to_object(), position)?;
                 Err(crate::vm::errors::simple_exception(
                     "ArgumentError",
                     &format!("expected true or false as exception: {shown}"),
@@ -47,7 +48,7 @@ impl VirtualMachine {
 pub(crate) fn split_conversion_keywords(
     arguments: &[Object],
 ) -> (Vec<Object>, IndexMap<String, Object>) {
-    if let Some(Object::Dict(dict_rc)) = arguments.last() {
+    if let Some(View::Dict(dict_rc)) = arguments.last().view() {
         let dict = dict_rc.borrow();
         if dict.contains_key("__MX_KWARGS__") {
             let keywords = dict
@@ -70,13 +71,14 @@ pub(crate) fn split_conversion_keywords(
 /// into nil, as opposed to an error raised by the object being converted.
 fn is_conversion_failure(error: &MetorexError) -> bool {
     match error {
-        MetorexError::UncaughtException {
-            exception: Object::Exception(cell),
-            ..
-        } => matches!(
-            cell.borrow().exception_type.as_str(),
-            "TypeError" | "ArgumentError" | "FloatDomainError"
-        ),
+        MetorexError::UncaughtException { exception, .. }
+            if let View::Exception(cell) = exception.view() =>
+        {
+            matches!(
+                cell.borrow().exception_type.as_str(),
+                "TypeError" | "ArgumentError" | "FloatDomainError"
+            )
+        }
         _ => false,
     }
 }
@@ -148,7 +150,7 @@ impl VirtualMachine {
             ));
         }
         let value = &arguments[0];
-        if matches!(value, Object::String(_)) || self.is_string_subclass_instance(value) {
+        if matches!(value.view(), View::String(_)) || self.is_string_subclass_instance(value) {
             return Ok(value.clone());
         }
 
@@ -156,12 +158,12 @@ impl VirtualMachine {
         // asked before `to_s`. Nil from it leaves `to_s` to answer.
         if self.responds_to(value, "to_str") {
             let converted = self.send_to_object(value.clone(), "to_str", vec![], position)?;
-            match converted {
-                Object::String(_) => return Ok(converted),
-                Object::Nil => {}
-                other => {
+            match converted.view() {
+                View::String(_) => return Ok(converted),
+                View::Nil => {}
+                _ => {
                     let source = self.conversion_class_name(value, position);
-                    let produced = self.conversion_class_name(&other, position);
+                    let produced = self.conversion_class_name(&converted, position);
                     return Err(type_error(
                         format!(
                             "can't convert {} to String ({}#to_str gives {})",
@@ -189,11 +191,11 @@ impl VirtualMachine {
         }
 
         let converted = self.string_via_to_s(value, position)?;
-        match converted {
-            Object::String(_) => Ok(converted),
-            other => {
+        match converted.view() {
+            View::String(_) => Ok(converted),
+            _ => {
                 let source = self.conversion_class_name(value, position);
-                let produced = self.conversion_class_name(&other, position);
+                let produced = self.conversion_class_name(&converted, position);
                 Err(type_error(
                     format!(
                         "can't convert {} to String ({}#to_s gives {})",
@@ -207,7 +209,7 @@ impl VirtualMachine {
 
     /// Whether `value` is an instance of a class descending from String.
     fn is_string_subclass_instance(&mut self, value: &Object) -> bool {
-        let Object::Instance(instance) = value else {
+        let View::Instance(instance) = value.view() else {
             return false;
         };
         let mut cursor = Some(Rc::clone(&instance.borrow().class));
@@ -317,7 +319,7 @@ impl VirtualMachine {
         imaginary: &Object,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let (Object::Int(real), Object::Int(imaginary)) = (real, imaginary) else {
+        let (View::Int(real), View::Int(imaginary)) = (real.view(), imaginary.view()) else {
             let message = format!(
                 "can't convert {} into Rational",
                 super::rational_methods::format_complex(real, imaginary)
@@ -346,20 +348,20 @@ impl VirtualMachine {
             complex_parts, format_complex, is_zero, parse_strict_rational_text, rational_parts,
         };
 
-        match value {
-            Object::Int(_) | Object::BigInt(_) => Ok((
+        match value.view() {
+            View::Int(_) | View::BigInt(_) => Ok((
                 value.as_big_integer().expect("integer-kinded"),
                 num_bigint::BigInt::from(1),
             )),
             // A Float is a binary fraction, and that exact value is the
             // Rational it stands for: `Rational(0.3)` is not (3/10).
-            Object::Float(number) if number.is_finite() => {
-                Ok(super::rational_methods::float_exact_fraction(*number))
+            View::Float(number) if number.is_finite() => {
+                Ok(super::rational_methods::float_exact_fraction(number))
             }
             // `Rational("1/3")` and `Rational(".52")` are exact; text that is
             // not wholly a rational is refused rather than read leniently the
             // way `String#to_r` reads it.
-            Object::String(text) => parse_strict_rational_text(&text.as_str()).ok_or_else(|| {
+            View::String(text) => parse_strict_rational_text(&text.as_str()).ok_or_else(|| {
                 argument_error(
                     format!("invalid value for convert(): {:?}", text.as_str()),
                     position,
@@ -367,21 +369,19 @@ impl VirtualMachine {
             }),
             // nil, symbols, and collections have no rational value at all,
             // and never reach a coercion method.
-            Object::Nil => Err(type_error(
+            View::Nil => Err(type_error(
                 "can't convert nil into Rational".to_string(),
                 position,
             )),
-            Object::Symbol(_)
-            | Object::Bool(_)
-            | Object::Array(_)
-            | Object::Dict(_)
-            | Object::Float(_) => Err(type_error(
-                format!(
-                    "can't convert {} into Rational",
-                    self.conversion_class_name(value, position)
-                ),
-                position,
-            )),
+            View::Symbol(_) | View::Bool(_) | View::Array(_) | View::Dict(_) | View::Float(_) => {
+                Err(type_error(
+                    format!(
+                        "can't convert {} into Rational",
+                        self.conversion_class_name(value, position)
+                    ),
+                    position,
+                ))
+            }
             _ => {
                 if let Some(parts) = rational_parts(value) {
                     return Ok(parts);
@@ -436,8 +436,12 @@ impl VirtualMachine {
                 position,
             ));
         }
-        match self.try_conversion_call(value, "to_int", position) {
-            Ok(Some(Object::Int(number))) => Ok((
+        match self
+            .try_conversion_call(value, "to_int", position)
+            .as_ref()
+            .map(|held| held.view())
+        {
+            Ok(Some(View::Int(number))) => Ok((
                 num_bigint::BigInt::from(number),
                 num_bigint::BigInt::from(1),
             )),
@@ -478,14 +482,14 @@ impl VirtualMachine {
         positional: &[Object],
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let base = match positional.get(1) {
+        let base = match positional.get(1).view() {
             None => None,
-            Some(Object::Int(base)) => Some(*base),
-            Some(other) => Some(self.coerce_to_integer_base(other, position)?),
+            Some(View::Int(base)) => Some(base),
+            Some(other) => Some(self.coerce_to_integer_base(&other.to_object(), position)?),
         };
 
-        match &positional[0] {
-            Object::String(text) => match parse_integer_literal(&text.as_str(), base) {
+        match positional[0].view() {
+            View::String(text) => match parse_integer_literal(&text.as_str(), base) {
                 Ok(value) => Ok(Object::integer(value)),
                 Err(ParseFailure::Malformed) => Err(argument_error(
                     format!("invalid value for Integer(): {:?}", text.as_str()),
@@ -496,12 +500,12 @@ impl VirtualMachine {
                 "base specified for non string value".to_string(),
                 position,
             )),
-            Object::Int(_) | Object::BigInt(_) => Ok(positional[0].clone()),
-            Object::Float(value) => {
+            View::Int(_) | View::BigInt(_) => Ok(positional[0].clone()),
+            View::Float(value) => {
                 if value.is_nan() || value.is_infinite() {
                     let label = if value.is_nan() {
                         "NaN".to_string()
-                    } else if *value > 0.0 {
+                    } else if value > 0.0 {
                         "Infinity".to_string()
                     } else {
                         "-Infinity".to_string()
@@ -514,11 +518,11 @@ impl VirtualMachine {
                 }
                 Ok(super::float_methods::float_to_integer(value.trunc()))
             }
-            Object::Nil => Err(type_error(
+            View::Nil => Err(type_error(
                 "can't convert nil into Integer".to_string(),
                 position,
             )),
-            other => self.integer_via_coercion(other, position),
+            _ => self.integer_via_coercion(&positional[0], position),
         }
     }
 
@@ -530,20 +534,20 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        if let Some(converted @ (Object::Int(_) | Object::BigInt(_))) =
-            self.try_conversion_call(value, "to_int", position)?
+        if let Some(converted @ (View::Int(_) | View::BigInt(_))) =
+            self.try_conversion_call(value, "to_int", position)?.view()
         {
-            return Ok(converted);
+            return Ok(converted.to_object());
         }
-        if let Some(text @ Object::String(_)) =
-            self.try_conversion_call(value, "to_str", position)?
+        if let Some(text @ View::String(_)) =
+            self.try_conversion_call(value, "to_str", position)?.view()
         {
-            return self.integer_conversion(&[text], position);
+            return self.integer_conversion(&[text.to_object()], position);
         }
-        if let Some(converted @ (Object::Int(_) | Object::BigInt(_))) =
-            self.try_conversion_call(value, "to_i", position)?
+        if let Some(converted @ (View::Int(_) | View::BigInt(_))) =
+            self.try_conversion_call(value, "to_i", position)?.view()
         {
-            return Ok(converted);
+            return Ok(converted.to_object());
         }
         Err(type_error(
             format!(
@@ -560,7 +564,8 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<i64, MetorexError> {
-        if let Some(Object::Int(number)) = self.try_conversion_call(value, "to_int", position)? {
+        if let Some(View::Int(number)) = self.try_conversion_call(value, "to_int", position)?.view()
+        {
             return Ok(number);
         }
         Err(type_error(
@@ -576,8 +581,12 @@ impl VirtualMachine {
     /// true, false, and nil name TrueClass, FalseClass, and NilClass rather
     /// than Object.
     fn conversion_class_name(&mut self, value: &Object, position: Position) -> String {
-        let class = match self.call_object_method(value, "class", &[], position) {
-            Ok(Some(Object::Class(class))) => class,
+        let class = match self
+            .call_object_method(value, "class", &[], position)
+            .as_ref()
+            .map(|held| held.view())
+        {
+            Ok(Some(View::Class(class))) => class.clone(),
             _ => self.builtins().class_of(value),
         };
         let named = class.ruby_name();
@@ -586,8 +595,12 @@ impl VirtualMachine {
         }
         // A class with no name is named by its inspection, as
         // `#<Class:0x...>`.
-        match self.send_to_object(Object::Class(class), "inspect", vec![], position) {
-            Ok(Object::String(text)) => text.as_str().to_string(),
+        match self
+            .send_to_object(Object::Class(class), "inspect", vec![], position)
+            .as_ref()
+            .map(Object::view)
+        {
+            Ok(View::String(text)) => text.as_str().to_string(),
             _ => named,
         }
     }
@@ -635,9 +648,9 @@ impl VirtualMachine {
             ));
         }
         let value = &arguments[0];
-        match value {
-            Object::Array(_) => return Ok(value.clone()),
-            Object::Nil => return Ok(Object::Array(Rc::new(RefCell::new(Vec::new())))),
+        match value.view() {
+            View::Array(_) => return Ok(value.clone()),
+            View::Nil => return Ok(Object::Array(Rc::new(RefCell::new(Vec::new())))),
             _ => {}
         }
         for conversion in ["to_ary", "to_a"] {
@@ -648,12 +661,12 @@ impl VirtualMachine {
                 continue;
             }
             let converted = self.invoke_method(class, method, value.clone(), vec![], position)?;
-            match converted {
-                Object::Array(_) => return Ok(converted),
-                Object::Nil => continue,
-                other => {
+            match converted.view() {
+                View::Array(_) => return Ok(converted),
+                View::Nil => continue,
+                _ => {
                     let source = self.conversion_class_name(value, position);
-                    let produced = self.conversion_class_name(&other, position);
+                    let produced = self.conversion_class_name(&converted, position);
                     return Err(type_error(
                         format!(
                             "can't convert {} to Array ({}#{} gives {})",
@@ -700,19 +713,19 @@ impl VirtualMachine {
         // An instance of a String subclass is read as the characters it holds
         // rather than through a `to_f` the subclass may have written, which
         // is what Ruby does with one.
-        let value = &match crate::vm::native_methods::string_subclass_value(value) {
-            Some(text @ Object::String(_)) => text,
+        let value = &match crate::vm::native_methods::string_subclass_value(value).view() {
+            Some(text @ View::String(_)) => text.to_object(),
             _ => value.clone(),
         };
-        match value {
-            Object::Float(_) => return Ok(value.clone()),
-            Object::Int(number) => return Ok(Object::Float(*number as f64)),
-            Object::BigInt(number) => {
+        match value.view() {
+            View::Float(_) => return Ok(value.clone()),
+            View::Int(number) => return Ok(Object::Float(number as f64)),
+            View::BigInt(number) => {
                 return Ok(Object::Float(
                     number.to_string().parse::<f64>().unwrap_or(f64::INFINITY),
                 ));
             }
-            Object::String(text) => {
+            View::String(text) => {
                 return match parse_strict_float_text(&text.as_str()) {
                     Some(number) => Ok(Object::Float(number)),
                     None => refuse(
@@ -722,7 +735,7 @@ impl VirtualMachine {
                     ),
                 };
             }
-            Object::Nil => {
+            View::Nil => {
                 return refuse(
                     self,
                     "TypeError",
@@ -756,10 +769,10 @@ impl VirtualMachine {
             );
         }
         let converted = self.invoke_conversion(value, "to_f", position)?;
-        match converted {
-            Object::Float(_) => Ok(converted),
-            other => {
-                let produced = self.conversion_class_name(&other, position);
+        match converted.view() {
+            View::Float(_) => Ok(converted),
+            _ => {
+                let produced = self.conversion_class_name(&converted, position);
                 refuse(
                     self,
                     "TypeError",
@@ -801,24 +814,24 @@ impl VirtualMachine {
             ));
         }
         let empty = || Object::Dict(Rc::new(RefCell::new(IndexMap::new())));
-        match &arguments[0] {
-            Object::Nil => Ok(empty()),
-            Object::Array(elements) if elements.borrow().is_empty() => Ok(empty()),
-            Object::Dict(_) => Ok(arguments[0].clone()),
-            other => {
-                let source = self.conversion_class_name(other, position);
-                let Some((class, method)) = self.lookup_method(other, "to_hash") else {
+        match arguments[0].view() {
+            View::Nil => Ok(empty()),
+            View::Array(elements) if elements.borrow().is_empty() => Ok(empty()),
+            View::Dict(_) => Ok(arguments[0].clone()),
+            _ => {
+                let source = self.conversion_class_name(&arguments[0], position);
+                let Some((class, method)) = self.lookup_method(&arguments[0], "to_hash") else {
                     return Err(type_error(
                         format!("can't convert {} into Hash", source),
                         position,
                     ));
                 };
                 let converted =
-                    self.invoke_method(class, method, other.clone(), vec![], position)?;
-                match converted {
-                    Object::Dict(_) => Ok(converted),
-                    other_result => {
-                        let produced = self.conversion_class_name(&other_result, position);
+                    self.invoke_method(class, method, arguments[0].clone(), vec![], position)?;
+                match converted.view() {
+                    View::Dict(_) => Ok(converted),
+                    _ => {
+                        let produced = self.conversion_class_name(&converted, position);
                         Err(type_error(
                             format!(
                                 "can't convert {} to Hash ({}#to_hash gives {})",

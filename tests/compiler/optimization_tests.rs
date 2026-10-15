@@ -8,6 +8,7 @@ use metorex::compiler::Compiler;
 use metorex::compiler::optimizer;
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::View;
 use metorex::parser::Parser;
 
 /// Helper: parse source, compile with optimizations, return the chunk.
@@ -236,7 +237,7 @@ fn detect_tail_call() {
     // Find the function's chunk
     let mut func_chunk = None;
     for i in 0..chunk.constants_count() {
-        if let Object::CompiledFunction(f) = chunk.get_constant(i) {
+        if let View::CompiledFunction(f) = chunk.get_constant(i).view() {
             func_chunk = Some(&f.chunk);
             break;
         }
@@ -259,7 +260,7 @@ fn detect_tail_call_with_explicit_return() {
     let chunk = compile("def g\n  return f\nend");
     let mut func_chunk = None;
     for i in 0..chunk.constants_count() {
-        if let Object::CompiledFunction(f) = chunk.get_constant(i) {
+        if let View::CompiledFunction(f) = chunk.get_constant(i).view() {
             func_chunk = Some(&f.chunk);
             break;
         }

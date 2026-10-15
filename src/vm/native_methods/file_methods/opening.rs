@@ -1,6 +1,7 @@
 // Opening a file by name.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Opening a file by name.
@@ -35,8 +36,8 @@ impl VirtualMachine {
                 }
                 // A number in the name's place is a descriptor the program
                 // already holds rather than a path.
-                if let Object::Int(number) = &held {
-                    if *number < 0 {
+                if let View::Int(number) = held.view() {
+                    if number < 0 {
                         return Err(crate::vm::errors::simple_exception(
                             "Errno::EBADF",
                             "Bad file descriptor",
@@ -53,9 +54,9 @@ impl VirtualMachine {
                         passed,
                         position,
                     )?;
-                    return match block {
-                        Some(Object::Block(block)) => {
-                            self.run_and_close(&block, opened, position).map(Some)
+                    return match block.view() {
+                        Some(View::Block(block)) => {
+                            self.run_and_close(block, opened, position).map(Some)
                         }
                         _ => Ok(Some(opened)),
                     };
@@ -68,33 +69,36 @@ impl VirtualMachine {
                 let path = path?;
                 // The options may name the mode instead of a second argument
                 // naming it, which is what `mode:` is for.
-                let named_mode = match arguments.last() {
-                    Some(Object::Dict(options)) => match options.borrow().get(":mode") {
-                        Some(Object::String(spelled)) => Some(spelled.as_str().to_string()),
+                let named_mode = match arguments.last().view() {
+                    Some(View::Dict(options)) => match options.borrow().get(":mode").view() {
+                        Some(View::String(spelled)) => Some(spelled.as_str().to_string()),
                         _ => None,
                     },
                     _ => None,
                 };
                 // The options may also name the flags a numeric mode would.
-                let named_flags = match arguments.last() {
-                    Some(Object::Dict(options)) => match options.borrow().get(":flags") {
-                        Some(Object::Int(bits)) => Some(*bits),
+                let named_flags = match arguments.last().view() {
+                    Some(View::Dict(options)) => match options.borrow().get(":flags").view() {
+                        Some(View::Int(bits)) => Some(bits),
                         _ => None,
                     },
                     _ => None,
                 };
-                let (mode, numeric) = match arguments.get(1) {
-                    Some(Object::String(s)) => (s.as_str().to_string(), None),
-                    Some(Object::Nil) => (named_mode.unwrap_or_else(|| "r".to_string()), None),
+                let (mode, numeric) = match arguments.get(1).view() {
+                    Some(View::String(s)) => (s.as_str().to_string(), None),
+                    Some(View::Nil) => (named_mode.unwrap_or_else(|| "r".to_string()), None),
                     // A number names the flags the file is opened with, which
                     // say the same as a mode written out.
-                    Some(Object::Int(bits)) => (mode_of_flags(*bits), Some(*bits)),
-                    Some(Object::Dict(_)) | None => {
+                    Some(View::Int(bits)) => (mode_of_flags(bits), Some(bits)),
+                    Some(View::Dict(_)) | None => {
                         (named_mode.unwrap_or_else(|| "r".to_string()), None)
                     }
                     Some(other) => {
                         return Err(method_argument_type_error(
-                            "open", "String", other, position,
+                            "open",
+                            "String",
+                            &other.to_object(),
+                            position,
                         ));
                     }
                 };
@@ -108,7 +112,7 @@ impl VirtualMachine {
                 // An encoding named in the mode may not be named again as an
                 // option.
                 if mode.contains(':')
-                    && let Some(Object::Dict(options)) = arguments.last()
+                    && let Some(View::Dict(options)) = arguments.last().view()
                     && [":encoding", ":external_encoding", ":internal_encoding"]
                         .iter()
                         .any(|key| options.borrow().contains_key(*key))
@@ -123,15 +127,15 @@ impl VirtualMachine {
                 // A stream read in an encoding that spells ASCII another way
                 // reads bytes it cannot split into lines unless it reads
                 // them as bytes.
-                let options = match arguments.last() {
-                    Some(Object::Dict(options)) => Some(options.borrow().clone()),
+                let options = match arguments.last().view() {
+                    Some(View::Dict(options)) => Some(options.borrow().clone()),
                     _ => None,
                 };
                 let option_named = |key: &str| {
                     options
                         .as_ref()
                         .and_then(|held| held.get(key).cloned())
-                        .filter(|held| !matches!(held, Object::Nil))
+                        .filter(|held| !matches!(held.view(), View::Nil))
                 };
                 let mut named_encodings = mode.split(':').skip(1).map(str::to_string);
                 let mut external = named_encodings.next();
@@ -170,7 +174,7 @@ impl VirtualMachine {
                     ));
                 }
                 if binary_mode
-                    && let Some(Object::Dict(options)) = arguments.last()
+                    && let Some(View::Dict(options)) = arguments.last().view()
                     && options.borrow().contains_key(":newline")
                 {
                     return Err(crate::vm::errors::simple_exception(
@@ -222,8 +226,8 @@ impl VirtualMachine {
                 // may be read and written by, less what the umask takes off.
                 // It is applied once the stream is open, so a file made
                 // read-only is still written through the stream that made it.
-                let allowed = match arguments.get(2) {
-                    Some(Object::Int(wanted)) if !there && creates => {
+                let allowed = match arguments.get(2).view() {
+                    Some(View::Int(wanted)) if !there && creates => {
                         // SAFETY: reading the mask means setting it and
                         // putting it straight back.
                         let masked = unsafe {
@@ -231,7 +235,7 @@ impl VirtualMachine {
                             libc::umask(held);
                             held
                         };
-                        Some((*wanted as u32) & !(masked as u32))
+                        Some((wanted as u32) & !(masked as u32))
                     }
                     _ => None,
                 };
@@ -244,7 +248,8 @@ impl VirtualMachine {
                     let _ = std::fs::write(&path, "");
                 }
                 // `File.new` hands nothing to a block, and says so.
-                if method_name == "new" && matches!(self.pending_block, Some(Object::Block(_))) {
+                if method_name == "new" && matches!(self.pending_block.view(), Some(View::Block(_)))
+                {
                     self.pending_block = None;
                     let file = self
                         .current_source_file
@@ -259,8 +264,8 @@ impl VirtualMachine {
                 let inst_rc = Instance::new(Rc::clone(class_rc));
                 // The name is kept as the program spelled it, tag and all, so
                 // `path` hands back a String in the same encoding.
-                let named = match &held {
-                    Object::String(spelled) => Object::String(Rc::clone(spelled)),
+                let named = match held.view() {
+                    View::String(spelled) => Object::String(Rc::clone(spelled)),
                     _ => Object::string(path.clone()),
                 };
                 inst_rc
@@ -278,12 +283,12 @@ impl VirtualMachine {
                 // `encoding: "UTF-8:ISO-8859-1"` names the encodings a file
                 // is read and written in, the way a mode string's own suffix
                 // does.
-                if let Some(held @ Object::Dict(options)) = arguments.last() {
+                if let Some(held @ View::Dict(options)) = arguments.last().view() {
                     // The rest of what the options say is read on the Ruby
                     // side, where the encodings they name are objects.
                     inst_rc
                         .borrow_mut()
-                        .set_var("__file_options".to_string(), held.clone());
+                        .set_var("__file_options".to_string(), held.to_object());
                     if let Some(named) = options.borrow().get(":encoding") {
                         inst_rc
                             .borrow_mut()
@@ -308,8 +313,8 @@ impl VirtualMachine {
                     let _ =
                         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(allowed));
                 }
-                if let Some(Object::Block(b)) = block {
-                    return self.run_and_close(&b, handle, position).map(Some);
+                if let Some(View::Block(b)) = block.view() {
+                    return self.run_and_close(b, handle, position).map(Some);
                 }
                 Ok(Some(handle))
             }
@@ -341,10 +346,9 @@ impl VirtualMachine {
 /// Whether an error is the IOError a stream raises for being closed already.
 fn reports_a_closed_stream(problem: &MetorexError) -> bool {
     match problem {
-        MetorexError::UncaughtException {
-            exception: Object::Exception(details),
-            ..
-        } => {
+        MetorexError::UncaughtException { exception, .. }
+            if let View::Exception(details) = exception.view() =>
+        {
             let details = details.borrow();
             details.exception_type == "IOError" && details.message == "closed stream"
         }

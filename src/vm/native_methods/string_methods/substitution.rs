@@ -1,6 +1,7 @@
 // Copying a string, and replacing what a pattern matches in it.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Copying a string, and replacing what a pattern matches in it.
@@ -25,7 +26,7 @@ impl VirtualMachine {
                 // The copy is written in the same encoding, and reads what
                 // it holds the same way.
                 let copy = Object::string(string_value.as_str().to_string());
-                if let Object::String(made) = &copy {
+                if let View::String(made) = copy.view() {
                     made.set_encoding(string_value.encoding_name());
                     if string_value.holds_bytes() {
                         made.mark_bytes();
@@ -111,8 +112,8 @@ impl VirtualMachine {
                     }
                 }
                 let last = reached.last().copied();
-                let answer = match self.pending_block.take() {
-                    Some(Object::Block(block)) => {
+                let answer = match self.pending_block.take().view() {
+                    Some(View::Block(block)) => {
                         for (index, item) in found.into_iter().enumerate() {
                             // `$~` and the readings taken from it name the
                             // match the block is being handed.
@@ -122,7 +123,7 @@ impl VirtualMachine {
                             )?;
                             // A match with groups arrives as one Array, which
                             // a block of several parameters spreads out.
-                            self.execute_block_callable(&block, vec![item], position)?;
+                            self.execute_block_callable(block, vec![item], position)?;
                         }
                         receiver.clone()
                     }

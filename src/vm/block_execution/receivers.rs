@@ -1,6 +1,7 @@
 // Running a block against a receiver of its own.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Run Ruby source with `self` bound to `receiver`, which is what the
@@ -93,9 +94,9 @@ impl VirtualMachine {
         // The code reads constants from the receiver's singleton class first
         // and from the receiver's own class next, ahead of the scopes the
         // caller was written in.
-        let receiver_class = match &receiver {
-            Object::Class(held) | Object::Module(held) => Some(std::rc::Rc::clone(held)),
-            Object::Instance(held) => Some(std::rc::Rc::clone(&held.borrow().class)),
+        let receiver_class = match receiver.view() {
+            View::Class(held) | View::Module(held) => Some(std::rc::Rc::clone(held)),
+            View::Instance(held) => Some(std::rc::Rc::clone(&held.borrow().class)),
             _ => None,
         };
         let mut opened = 1;
@@ -249,8 +250,8 @@ impl VirtualMachine {
                     .and_then(|nesting| nesting.last().cloned())
             })
             .or_else(|| self.def_scope_stack.last().cloned())
-            .or_else(|| match self.environment().get("self") {
-                Some(Object::Class(held) | Object::Module(held)) => Some(held),
+            .or_else(|| match self.environment().get("self").view() {
+                Some(View::Class(held) | View::Module(held)) => Some(held.clone()),
                 _ => None,
             });
 

@@ -8,6 +8,7 @@ use super::handles::{QNIL, QUNDEF, Value, to_object, to_value};
 use super::{called_from, called_with_block, interpreter, keywords_given, raise};
 use crate::error::MetorexError;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use std::ffi::{CStr, CString, c_char};
 
 fn error(class: &str, message: String) -> ! {
@@ -26,8 +27,8 @@ pub extern "C-unwind" fn rb_keyword_given_p() -> i32 {
 /// The block the C method running now was called with, as a Proc.
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_block_proc() -> Value {
-    match called_with_block() {
-        Some(block @ Object::Block(_)) => to_value(&block),
+    match called_with_block().view() {
+        Some(block @ View::Block(_)) => to_value(&block.to_object()),
         _ => error(
             "ArgumentError",
             "tried to create Proc object without a block".to_string(),
@@ -75,7 +76,7 @@ pub extern "C-unwind" fn rb_get_kwargs(
     // SAFETY: C hands over `required + optional` IDs at `names`.
     let names = unsafe { std::slice::from_raw_parts(names, total) };
     let hash = to_object(hash);
-    let has_hash = !matches!(hash, Object::Nil);
+    let has_hash = !matches!(hash.view(), View::Nil);
     let store = |index: usize, value: Value| {
         if !values.is_null() {
             // SAFETY: C hands over room for `required + optional` values.
@@ -115,8 +116,8 @@ pub extern "C-unwind" fn rb_get_kwargs(
         }
     }
     if !rest && has_hash {
-        let left = match call(hash.clone(), "keys", Vec::new()) {
-            Object::Array(keys) => keys.borrow().clone(),
+        let left = match call(hash.clone(), "keys", Vec::new()).view() {
+            View::Array(keys) => keys.borrow().clone(),
             _ => Vec::new(),
         };
         let allowed = if values.is_null() {

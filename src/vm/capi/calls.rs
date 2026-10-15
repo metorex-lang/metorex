@@ -5,6 +5,7 @@ use super::methods::CFunction;
 use super::symbols::symbol_name;
 use super::{interpreter, or_raise, raise};
 use crate::object::Object;
+use crate::object::{OptionView, View};
 
 /// Calls `name` on `receiver` the way Ruby code would, from the line that
 /// called into C. `Kernel#binding`
@@ -183,7 +184,7 @@ pub(super) fn arguments_with_keywords(
     if keywords != super::procs::PASS_KEYWORDS {
         return arguments;
     }
-    if matches!(arguments.last(), Some(Object::Dict(pairs)) if pairs.borrow().is_empty()) {
+    if matches!(arguments.last().view(), Some(View::Dict(pairs)) if pairs.borrow().is_empty()) {
         arguments.pop();
     } else {
         super::procs::pass_last_as_keywords(&mut arguments);
@@ -290,8 +291,8 @@ pub extern "C-unwind" fn rb_make_backtrace() -> Value {
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_metorex_category_warn(category: i32, message: Value) {
     if matches!(
-        interpreter().globals().get("VERBOSE"),
-        None | Some(Object::Nil)
+        interpreter().globals().get("VERBOSE").view(),
+        None | Some(View::Nil)
     ) {
         return;
     }
@@ -367,11 +368,11 @@ pub extern "C-unwind" fn rb_undefine_finalizer(object: Value) -> Value {
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_obj_as_string(object: Value) -> Value {
     let held = to_object(object);
-    if matches!(held, Object::String(_)) {
+    if matches!(held.view(), View::String(_)) {
         return object;
     }
     let written = call(held.clone(), "to_s", Vec::new());
-    if matches!(written, Object::String(_)) {
+    if matches!(written.view(), View::String(_)) {
         return to_value(&written);
     }
     let default = call(
@@ -392,7 +393,12 @@ pub extern "C-unwind" fn rb_inspect(object: Value) -> Value {
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_warn_message(message: Value, verbose_only: i32) {
     let machine = interpreter();
-    if verbose_only != 0 && !matches!(machine.globals().get("VERBOSE"), Some(Object::Bool(true))) {
+    if verbose_only != 0
+        && !matches!(
+            machine.globals().get("VERBOSE").view(),
+            Some(View::Bool(true))
+        )
+    {
         return;
     }
     let position = super::called_from();

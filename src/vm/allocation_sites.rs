@@ -3,6 +3,7 @@
 
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 use crate::vm::core::WeakTarget;
 use std::rc::Rc;
@@ -20,11 +21,11 @@ pub(crate) struct AllocationSite {
 /// The address an object lives at, for the kinds a program allocates. The
 /// immediate values and the symbols are never allocated, so they have none.
 fn allocated_address(object: &Object) -> Option<usize> {
-    match object {
-        Object::Instance(held) => Some(Rc::as_ptr(held) as *const u8 as usize),
-        Object::Array(held) => Some(Rc::as_ptr(held) as *const u8 as usize),
-        Object::Dict(held) => Some(Rc::as_ptr(held) as *const u8 as usize),
-        Object::String(held) => Some(Rc::as_ptr(held) as *const u8 as usize),
+    match object.view() {
+        View::Instance(held) => Some(Rc::as_ptr(held) as *const u8 as usize),
+        View::Array(held) => Some(Rc::as_ptr(held) as *const u8 as usize),
+        View::Dict(held) => Some(Rc::as_ptr(held) as *const u8 as usize),
+        View::String(held) => Some(Rc::as_ptr(held) as *const u8 as usize),
         _ => None,
     }
 }
@@ -78,8 +79,8 @@ impl VirtualMachine {
     /// nest by count, `:clear` forgets every record, and `:site` answers
     /// what was recorded for the second argument.
     pub(crate) fn allocation_tracing_command(&mut self, arguments: &[Object]) -> Object {
-        let command = match arguments.first() {
-            Some(Object::Symbol(name)) => name.as_str().to_string(),
+        let command = match arguments.first().view() {
+            Some(View::Symbol(name)) => name.as_str().to_string(),
             _ => String::new(),
         };
         match command.as_str() {

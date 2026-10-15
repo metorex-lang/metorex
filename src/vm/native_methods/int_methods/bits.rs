@@ -1,6 +1,7 @@
 // The bits of an integer read as a two's-complement run.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// The bits of an integer read as a two's-complement run.
@@ -13,10 +14,12 @@ impl VirtualMachine {
     ) -> Result<Option<Object>, MetorexError> {
         // Integer#[] reads the bits of the two's-complement representation:
         // one bit by position, or a run of them named by a length or a range.
-        if method_name == "[]" && matches!(receiver, Object::Int(_) | Object::BigInt(_)) {
+        if method_name == "[]" && matches!(receiver.view(), View::Int(_) | View::BigInt(_)) {
             // A bit position of a machine-word Integer is taken through
             // `to_int`, which names nil as any other value without one.
-            if let (Object::Int(_), [Object::Nil]) = (receiver, arguments) {
+            if let (View::Int(_), [lone]) = (receiver.view(), arguments)
+                && lone.is_nil()
+            {
                 return Err(crate::vm::errors::simple_exception(
                     "TypeError",
                     "no implicit conversion of nil into Integer",
@@ -35,7 +38,7 @@ impl VirtualMachine {
         // in the receiver. Both sides are compared as arbitrary-width integers,
         // so a bignum and a negative number answer the same way a fixnum does.
         if matches!(method_name, "allbits?" | "anybits?" | "nobits?")
-            && matches!(receiver, Object::Int(_) | Object::BigInt(_))
+            && matches!(receiver.view(), View::Int(_) | View::BigInt(_))
         {
             if arguments.len() != 1 {
                 return Err(method_argument_error(
@@ -59,7 +62,7 @@ impl VirtualMachine {
         if matches!(
             method_name,
             "numerator" | "denominator" | "to_r" | "rationalize"
-        ) && matches!(receiver, Object::Int(_) | Object::BigInt(_))
+        ) && matches!(receiver.view(), View::Int(_) | View::BigInt(_))
         {
             // `rationalize` takes an optional precision, which cannot move a
             // number that is already exact. The others take nothing at all.

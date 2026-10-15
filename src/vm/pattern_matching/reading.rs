@@ -1,6 +1,7 @@
 // What a pattern reads out of a value before matching it.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Whether the constant a pattern was written with covers the value, and
@@ -68,16 +69,16 @@ impl VirtualMachine {
             return Ok(None);
         }
         let held = self.send_pattern_method(value, "deconstruct", Vec::new(), position)?;
-        let elements = match crate::vm::native_methods::array_subclass_value(&held) {
-            Some(Object::Array(elements)) => elements.borrow().clone(),
-            _ => match &held {
-                Object::Array(elements) => elements.borrow().clone(),
-                other => {
+        let elements = match crate::vm::native_methods::array_subclass_value(&held).view() {
+            Some(View::Array(elements)) => elements.borrow().clone(),
+            _ => match held.view() {
+                View::Array(elements) => elements.borrow().clone(),
+                _ => {
                     return Err(crate::vm::errors::simple_exception(
                         "TypeError",
                         &format!(
                             "deconstruct must return Array, got {}",
-                            self.builtins().class_of(other).ruby_name()
+                            self.builtins().class_of(&held).ruby_name()
                         ),
                         position,
                     ));
@@ -174,13 +175,13 @@ impl VirtualMachine {
             ),
         };
         let held = self.send_pattern_method(value, "deconstruct_keys", vec![named], position)?;
-        match held {
-            Object::Dict(entries) => Ok(Some(entries.borrow().clone())),
-            other => Err(crate::vm::errors::simple_exception(
+        match held.view() {
+            View::Dict(entries) => Ok(Some(entries.borrow().clone())),
+            _ => Err(crate::vm::errors::simple_exception(
                 "TypeError",
                 &format!(
                     "deconstruct_keys must return Hash, got {}",
-                    self.builtins().class_of(&other).ruby_name()
+                    self.builtins().class_of(&held).ruby_name()
                 ),
                 position,
             )),

@@ -1,6 +1,7 @@
 // The scope a call sits in, and the methods defined at the top level.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// `binding` captures the frame that called it, not the receiver
@@ -47,8 +48,8 @@ impl VirtualMachine {
         let receiver = self
             .environment()
             .get("self")
-            .or_else(|| match self.globals().get("TOPLEVEL_BINDING") {
-                Some(Object::Binding(b)) => b.receiver.clone(),
+            .or_else(|| match self.globals().get("TOPLEVEL_BINDING").view() {
+                Some(View::Binding(b)) => b.receiver.clone(),
                 _ => None,
             })
             .unwrap_or(Object::Nil);
@@ -113,7 +114,7 @@ impl VirtualMachine {
         }
         self.call_stack.extend(inner_frames);
         let made = made.expect("making a binding raises nothing");
-        if let Object::Binding(held) = &made {
+        if let View::Binding(held) = made.view() {
             *held.source.borrow_mut() = Some((path, line));
         }
         made
@@ -132,9 +133,9 @@ impl VirtualMachine {
                 crate::vm::utils::position_to_location(position),
             ));
         }
-        let method_name = match &arguments[0] {
-            Object::Symbol(s) => s.as_str().to_string(),
-            Object::String(s) => s.as_str().to_string(),
+        let method_name = match arguments[0].view() {
+            View::Symbol(s) => s.as_str().to_string(),
+            View::String(s) => s.as_str().to_string(),
             other => {
                 return Err(MetorexError::runtime_error(
                     format!(
@@ -145,8 +146,9 @@ impl VirtualMachine {
                 ));
             }
         };
-        let block = match self.pending_block.take() {
-            Some(Object::Block(b)) => b,
+        let viewed = self.pending_block.take();
+        let block = match viewed.view() {
+            Some(View::Block(b)) => b,
             _ => {
                 return Err(MetorexError::runtime_error(
                     "define_method requires a block".to_string(),
@@ -170,10 +172,11 @@ impl VirtualMachine {
         let method_rc = Rc::new(method);
         // Install on current self if it's a Class/Module (e.g. inside class_eval),
         // otherwise on global Object (top-level `define_method` semantics).
-        let target = match self.environment().get("self") {
-            Some(Object::Class(c)) | Some(Object::Module(c)) => Some(c),
-            _ => match self.globals().get("Object") {
-                Some(Object::Class(c)) => Some(c),
+        let viewed = self.environment().get("self");
+        let target = match viewed.view() {
+            Some(View::Class(c)) | Some(View::Module(c)) => Some(c.clone()),
+            _ => match self.globals().get("Object").view() {
+                Some(View::Class(c)) => Some(c.clone()),
                 _ => None,
             },
         };

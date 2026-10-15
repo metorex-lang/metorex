@@ -1,6 +1,7 @@
 // The class an object alone has, and the modules mixed into it.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The class an object alone has, and the modules mixed into it.
@@ -14,14 +15,14 @@ impl VirtualMachine {
         match method_name {
             "singleton_class" => {
                 self.warn_chilled_string(receiver, position);
-                if let Some(sole) = match receiver {
-                    Object::Nil => Some("NilClass"),
-                    Object::Bool(true) => Some("TrueClass"),
-                    Object::Bool(false) => Some("FalseClass"),
+                if let Some(sole) = match receiver.view() {
+                    View::Nil => Some("NilClass"),
+                    View::Bool(true) => Some("TrueClass"),
+                    View::Bool(false) => Some("FalseClass"),
                     _ => None,
-                } && let Some(class @ Object::Class(_)) = self.globals().get(sole)
+                } && let Some(class @ View::Class(_)) = self.globals().get(sole).view()
                 {
-                    return Ok(Some(class));
+                    return Ok(Some(class.to_object()));
                 }
                 // One of the interned strings `String#-@` hands back stands
                 // for every use of that text, so it has no singleton class.
@@ -38,7 +39,7 @@ impl VirtualMachine {
                 // method can be added to it afterwards. Only an instance
                 // carries per-object frozen state; the immediates share one
                 // singleton class per type, which must stay writable.
-                if matches!(receiver, Object::Instance(_)) && self.object_is_frozen(receiver) {
+                if matches!(receiver.view(), View::Instance(_)) && self.object_is_frozen(receiver) {
                     singleton.freeze();
                 }
                 Ok(Some(Object::Class(singleton)))
@@ -60,9 +61,9 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let method = match &arguments[0] {
-                    Object::String(s) => s.as_str().to_string(),
-                    Object::Symbol(s) => s.as_str().to_string(),
+                let method = match arguments[0].view() {
+                    View::String(s) => s.as_str().to_string(),
+                    View::Symbol(s) => s.as_str().to_string(),
                     _ => {
                         return Err(MetorexError::runtime_error(
                             "no implicit conversion into String".to_string(),
@@ -112,14 +113,14 @@ impl VirtualMachine {
         }
         let mut modules = Vec::with_capacity(arguments.len());
         for argument in arguments {
-            match argument {
-                Object::Module(module) => modules.push(std::rc::Rc::clone(module)),
-                Object::Instance(instance) => {
+            match argument.view() {
+                View::Module(module) => modules.push(std::rc::Rc::clone(module)),
+                View::Instance(instance) => {
                     let named = instance.borrow().class.name().to_string();
                     return Err(not_a_module(&named, position));
                 }
-                other => {
-                    let named = crate::vm::native_methods::define_method::ruby_class_name(other);
+                _ => {
+                    let named = crate::vm::native_methods::define_method::ruby_class_name(argument);
                     return Err(not_a_module(named, position));
                 }
             }

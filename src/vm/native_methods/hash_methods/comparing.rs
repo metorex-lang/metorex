@@ -2,6 +2,7 @@
 // makes.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Whether two hashes hold the same entries, and the hash an inversion
@@ -41,14 +42,15 @@ impl VirtualMachine {
             // through `#hash` and `#eql?`. `eql?` compares the values the
             // same strict way; `==` asks them `==`.
             "==" | "eql?" if arguments.len() == 1 => {
-                let other = match &arguments[0] {
-                    held @ Object::Dict(_) => held.clone(),
-                    held => match crate::vm::native_methods::hash_subclass_value(held) {
-                        Some(backing @ Object::Dict(_)) => backing,
+                let other = match arguments[0].view() {
+                    View::Dict(_) => arguments[0].clone(),
+                    _ => match crate::vm::native_methods::hash_subclass_value(&arguments[0]).view()
+                    {
+                        Some(backing @ View::Dict(_)) => backing.to_object(),
                         _ => return Ok(Some(Object::Bool(false))),
                     },
                 };
-                let Object::Dict(other_rc) = &other else {
+                let View::Dict(other_rc) = other.view() else {
                     return Ok(Some(Object::Bool(false)));
                 };
                 if Rc::ptr_eq(dict_rc, other_rc) {

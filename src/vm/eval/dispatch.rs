@@ -1,6 +1,7 @@
 // Expression-evaluation dispatch: a thin `match` over `Expression` variants
 // that delegates each variant to a helper in the sibling modules.
 
+use crate::object::{OptionView, View};
 use std::rc::Rc;
 
 use crate::ast::{BinaryOp, Expression};
@@ -351,7 +352,7 @@ impl VirtualMachine {
                 // An object that defines `-@`, `+@`, or `!` names what the
                 // operator in front of it does, which is how a number a
                 // program writes negates and how a delegator passes `!` on.
-                if let Object::Instance(_) = &value
+                if let View::Instance(_) = value.view()
                     && let Some(name) = match op {
                         crate::ast::UnaryOp::Minus => Some("-@"),
                         crate::ast::UnaryOp::Plus => Some("+@"),
@@ -424,16 +425,16 @@ impl VirtualMachine {
                 }
                 let key = self.evaluate_expression(index)?;
                 // Block/Lambda [] call syntax: proc[args]
-                if let Object::Block(block) = &collection {
+                if let View::Block(block) = collection.view() {
                     return block.call(self, vec![key], *position);
                 }
                 // `native_fn [args]` — treat as a call with the bracketed array as a single argument.
                 // This matches Ruby's `private [:foo, :bar]` which passes an Array to `private`.
-                if let Object::NativeFunction(name) = &collection {
+                if let View::NativeFunction(name) = collection.view() {
                     return self.call_native_function(&name.clone(), vec![key], *position);
                 }
                 // Check for user-defined [] method on instances
-                if let Object::Instance(instance_rc) = &collection {
+                if let View::Instance(instance_rc) = collection.view() {
                     let class = Rc::clone(&instance_rc.borrow().class);
                     if let Some(method) = class.find_method("[]") {
                         return self.invoke_method(
@@ -465,10 +466,10 @@ impl VirtualMachine {
                 }
                 // A number reads its own bits by subscript, where a pair of
                 // arguments arrives as the Array the subscript gathered.
-                if matches!(collection, Object::Int(_) | Object::BigInt(_)) {
-                    let spread = match &key {
-                        Object::Array(gathered) => gathered.borrow().clone(),
-                        held => vec![held.clone()],
+                if matches!(collection.view(), View::Int(_) | View::BigInt(_)) {
+                    let spread = match key.view() {
+                        View::Array(gathered) => gathered.borrow().clone(),
+                        _ => vec![key.clone()],
                     };
                     return self.send_to_object(collection, "[]", spread, *position);
                 }
@@ -577,12 +578,12 @@ impl VirtualMachine {
             Expression::TopLevelConstant { name, position } => {
                 // `::Name` writes Object out as the scope, which a private
                 // constant refuses.
-                if let Some(Object::Class(object_class)) = self.globals().get("Object")
+                if let Some(View::Class(object_class)) = self.globals().get("Object").view()
                     && object_class.is_private_constant(name)
                 {
                     return self.private_constant_refused(
-                        &object_class,
-                        &object_class,
+                        object_class,
+                        object_class,
                         name,
                         *position,
                     );
@@ -602,8 +603,8 @@ impl VirtualMachine {
                 }
                 // A name registered as an autoload at the top level is loaded
                 // the first time it is written out with `::`.
-                if let Some(Object::Class(object_class)) = self.globals().get("Object")
-                    && let Some(value) = self.try_autoload_constant(&object_class, name)?
+                if let Some(View::Class(object_class)) = self.globals().get("Object").view()
+                    && let Some(value) = self.try_autoload_constant(object_class, name)?
                 {
                     return Ok(value);
                 }
@@ -671,7 +672,7 @@ impl VirtualMachine {
                 // Strings at its ends are frozen with it.
                 if written_at.is_some() {
                     for held in [&start_value, &end_value] {
-                        if let Object::String(text) = held {
+                        if let View::String(text) = held.view() {
                             text.freeze();
                         }
                     }
@@ -684,12 +685,12 @@ impl VirtualMachine {
                         .clone(),
                     None => std::rc::Rc::new(()),
                 };
-                Ok(Object::Range {
-                    start: Box::new(start_value),
-                    end: Box::new(end_value),
-                    exclusive: *exclusive,
+                Ok(Object::Range(
+                    Box::new(start_value),
+                    Box::new(end_value),
+                    *exclusive,
                     mark,
-                })
+                ))
             }
             Expression::Case {
                 expression,
@@ -705,8 +706,8 @@ impl VirtualMachine {
                 let ns_value = self.evaluate_expression(namespace)?;
                 let value = self.read_scoped_constant(ns_value.clone(), name, position)?;
                 if self.in_a_non_main_ractor() {
-                    let owner = match &ns_value {
-                        Object::Class(held) | Object::Module(held) => held.ruby_name(),
+                    let owner = match ns_value.view() {
+                        View::Class(held) | View::Module(held) => held.ruby_name(),
                         other => format!("{other}"),
                     };
                     self.refuse_unshareable_constant(
@@ -760,7 +761,7 @@ impl VirtualMachine {
         block_expr: &Expression,
     ) -> Result<Object, MetorexError> {
         let block = self.evaluate_expression(block_expr)?;
-        if let Object::Block(held) = &block {
+        if let View::Block(held) = block.view() {
             held.attached_call_running.set(true);
             self.attached_block_flags
                 .push(Rc::clone(&held.attached_call_running));
@@ -827,7 +828,7 @@ impl VirtualMachine {
         // native path already implements, and answering from there
         // would replace every built-in operator with its Ruby-level
         // spelling.
-        if !matches!(left_value, Object::Instance(_))
+        if !matches!(left_value.view(), View::Instance(_))
             && let Some(op_name) = binary_op_method_name(op)
             && let Some((class, method)) = self.lookup_own_operator_method(&left_value, op_name)
         {
@@ -843,7 +844,7 @@ impl VirtualMachine {
         // via lookup_method so per-instance singleton-class overrides
         // (used by mspec mocks, among other things) win over the
         // underlying class definition.
-        if let (Some(op_name), Object::Instance(_)) = (binary_op_method_name(op), &left_value) {
+        if let (Some(op_name), View::Instance(_)) = (binary_op_method_name(op), left_value.view()) {
             if let Some((class, method)) = self.lookup_method(&left_value, op_name)
                 && !method.is_undefined
             {
@@ -857,8 +858,8 @@ impl VirtualMachine {
             }
             // A generated struct class answers `==` from Struct's
             // native table, which the method map above does not hold.
-            let instance_class = match &left_value {
-                Object::Instance(instance) => Some(std::rc::Rc::clone(&instance.borrow().class)),
+            let instance_class = match left_value.view() {
+                View::Instance(instance) => Some(std::rc::Rc::clone(&instance.borrow().class)),
                 _ => None,
             };
             if let Some(class) = &instance_class
@@ -892,7 +893,8 @@ impl VirtualMachine {
             if matches!(
                 op,
                 BinaryOp::Less | BinaryOp::LessEqual | BinaryOp::Greater | BinaryOp::GreaterEqual
-            ) && (!matches!(left_value, Object::Instance(_)) || self.is_comparable(&left_value))
+            ) && (!matches!(left_value.view(), View::Instance(_))
+                || self.is_comparable(&left_value))
                 && let Some((class, spaceship)) = self.lookup_method(&left_value, "<=>")
             {
                 let cmp = self.invoke_method(
@@ -902,7 +904,7 @@ impl VirtualMachine {
                     vec![right_value.clone()],
                     *position,
                 )?;
-                if let Object::Int(c) = cmp {
+                if let View::Int(c) = cmp.view() {
                     let result = match op {
                         BinaryOp::Less => c < 0,
                         BinaryOp::LessEqual => c <= 0,
@@ -916,8 +918,8 @@ impl VirtualMachine {
         }
         // `1 / 2r` — an Integer or Float on the left of a Rational is
         // promoted so the Rational's own arithmetic runs.
-        if let (Some(op_name), Object::Int(_) | Object::Float(_)) =
-            (binary_op_method_name(op), &left_value)
+        if let (Some(op_name), View::Int(_) | View::Float(_)) =
+            (binary_op_method_name(op), left_value.view())
             && crate::vm::native_methods::rational_parts(&right_value).is_some()
         {
             let promoted = self.promote_to_rational(&left_value, *position)?;
@@ -941,8 +943,8 @@ impl VirtualMachine {
         name: &str,
         position: &crate::lexer::Position,
     ) -> Result<Object, MetorexError> {
-        match ns_value {
-            Object::Class(class_rc) | Object::Module(class_rc) => {
+        match ns_value.view() {
+            View::Class(class_rc) | View::Module(class_rc) => {
                 // Own constants first, then (like Ruby's qualified
                 // lookup) the ancestor chain — but not top-level
                 // constants, which a qualified reference must not
@@ -955,22 +957,22 @@ impl VirtualMachine {
                 {
                     self.globals()
                         .get(name)
-                        .filter(|held| !matches!(held, Object::NativeFunction(_)))
+                        .filter(|held| !matches!(held.view(), View::NativeFunction(_)))
                 } else {
                     None
                 };
                 let entry = match top_level {
-                    Some(held) => Some((Rc::clone(&class_rc), Some(held))),
-                    None => self.const_entry_on(&class_rc, name, true, false),
+                    Some(held) => Some((Rc::clone(class_rc), Some(held))),
+                    None => self.const_entry_on(class_rc, name, true, false),
                 };
                 let owner = match &entry {
                     Some((owner, _)) => Rc::clone(owner),
-                    None => Rc::clone(&class_rc),
+                    None => Rc::clone(class_rc),
                 };
                 let value = match entry {
                     Some((_, Some(v))) => Some(v),
                     Some((owner, None)) => self.try_autoload_constant(&owner, name)?,
-                    None => self.try_autoload_constant(&class_rc, name)?,
+                    None => self.try_autoload_constant(class_rc, name)?,
                 };
                 if let Some(v) = value {
                     // A private constant is read with its scope written out
@@ -981,21 +983,21 @@ impl VirtualMachine {
                             .iter()
                             .any(|open| Rc::ptr_eq(open, &owner))
                     {
-                        return self.private_constant_refused(&class_rc, &owner, name, *position);
+                        return self.private_constant_refused(class_rc, &owner, name, *position);
                     }
-                    self.warn_deprecated_constant(&class_rc, name, *position);
+                    self.warn_deprecated_constant(class_rc, name, *position);
                     return Ok(v);
                 }
                 // Uninitialized constants dispatch const_missing —
                 // the default implementation raises NameError.
                 // Autoload's "loaded but didn't define" path lands
                 // here too.
-                self.dispatch_const_missing(&class_rc, name, *position)
+                self.dispatch_const_missing(class_rc, name, *position)
             }
             // Only a class or module holds constants, so reading one
             // out of anything else is refused by its type.
-            held => {
-                let shown = self.get_inspect_representation(&held, *position)?;
+            _ => {
+                let shown = self.get_inspect_representation(&ns_value, *position)?;
                 Err(crate::vm::errors::simple_exception(
                     "TypeError",
                     &format!("{shown} is not a class/module"),
@@ -1101,7 +1103,7 @@ impl VirtualMachine {
         // is the backtrace that exception carries.
         if name == "@" {
             let raised = self.globals().get("!").unwrap_or(Object::Nil);
-            if matches!(raised, Object::Nil) {
+            if matches!(raised.view(), View::Nil) {
                 return Ok(Object::Nil);
             }
             return self.send_to_object(raised, "backtrace", Vec::new(), position);
@@ -1111,7 +1113,7 @@ impl VirtualMachine {
             None => {
                 // Reading a global nothing has set says so in
                 // verbose mode.
-                if matches!(self.globals().get("VERBOSE"), Some(Object::Bool(true))) {
+                if matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true))) {
                     let message = format!(
                         "{}global variable '${name}' not initialized\n",
                         self.warning_prefix(0, position)

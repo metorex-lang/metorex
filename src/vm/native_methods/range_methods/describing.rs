@@ -1,6 +1,7 @@
 // What a range reads back as, and whether two of them are the same.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// What a range reads back as, and whether two of them are the same.
@@ -11,30 +12,30 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        let Object::Range {
+        let View::Range {
             start,
             end,
             exclusive,
             ..
-        } = receiver
+        } = receiver.view()
         else {
             return Ok(None);
         };
         match method_name {
             "to_set" => {
-                if matches!(end.as_ref(), Object::Nil) {
+                if matches!(end.view(), View::Nil) {
                     return Err(crate::vm::errors::simple_exception(
                         "RangeError",
                         "cannot convert endless range to a set",
                         position,
                     ));
                 }
-                let elements = self.range_elements(start, end, *exclusive, position)?;
+                let elements = self.range_elements(start, end, exclusive, position)?;
                 let walked = Object::array(elements);
                 self.send_to_object(walked, "to_set", arguments.to_vec(), position)
                     .map(Some)
             }
-            "exclude_end?" => Ok(Some(Object::Bool(*exclusive))),
+            "exclude_end?" => Ok(Some(Object::Bool(exclusive))),
             // The endpoints render through their own `inspect`, and an
             // endless or beginless range leaves its side out.
             "to_s" | "inspect" => {
@@ -46,10 +47,10 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let separator = if *exclusive { "..." } else { ".." };
+                let separator = if exclusive { "..." } else { ".." };
                 if method_name == "to_s" {
-                    let render = |value: &Object| match value {
-                        Object::Nil => String::new(),
+                    let render = |value: &Object| match value.view() {
+                        View::Nil => String::new(),
                         other => format!("{}", other),
                     };
                     return Ok(Some(Object::string(format!(
@@ -62,14 +63,14 @@ impl VirtualMachine {
                 // A range with neither end shows both nils, where one open
                 // side alone shows nothing.
                 let both_open =
-                    matches!(start.as_ref(), Object::Nil) && matches!(end.as_ref(), Object::Nil);
-                let first = match start.as_ref() {
-                    Object::Nil if !both_open => String::new(),
-                    other => self.get_inspect_representation(other, position)?,
+                    matches!(start.view(), View::Nil) && matches!(end.view(), View::Nil);
+                let first = match start.view() {
+                    View::Nil if !both_open => String::new(),
+                    _ => self.get_inspect_representation(start, position)?,
                 };
-                let last = match end.as_ref() {
-                    Object::Nil if !both_open => String::new(),
-                    other => self.get_inspect_representation(other, position)?,
+                let last = match end.view() {
+                    View::Nil if !both_open => String::new(),
+                    _ => self.get_inspect_representation(end, position)?,
                 };
                 Ok(Some(Object::string(format!(
                     "{}{}{}",
@@ -82,12 +83,12 @@ impl VirtualMachine {
                 let Some(other) = arguments.first() else {
                     return Err(method_argument_error(method_name, 1, 0, position));
                 };
-                let Object::Range {
+                let View::Range {
                     start: other_start,
                     end: other_end,
                     exclusive: other_exclusive,
                     ..
-                } = other
+                } = other.view()
                 else {
                     return Ok(Some(Object::Bool(false)));
                 };
@@ -109,10 +110,10 @@ impl VirtualMachine {
                 }
                 // A range with no beginning or no end holds endlessly many
                 // values, which Ruby reports as Infinity.
-                if matches!(start.as_ref(), Object::Nil) || matches!(end.as_ref(), Object::Nil) {
+                if matches!(start.view(), View::Nil) || matches!(end.view(), View::Nil) {
                     return Ok(Some(Object::Float(f64::INFINITY)));
                 }
-                let elements = self.range_elements(start, end, *exclusive, position)?;
+                let elements = self.range_elements(start, end, exclusive, position)?;
                 Ok(Some(Object::Int(elements.len() as i64)))
             }
             _ => Ok(None),

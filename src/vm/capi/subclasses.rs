@@ -7,6 +7,7 @@ use super::handles::{QFALSE, QNIL, Value, objects_from, to_object, to_value};
 use super::{called_from, interpreter, or_raise, raise, running_method};
 use crate::class::Class;
 use crate::object::Object;
+use crate::object::View;
 use std::rc::Rc;
 
 fn type_error(message: &str) -> ! {
@@ -21,20 +22,21 @@ fn type_error(message: &str) -> ! {
 /// as MRI's `rb_class_new` does.
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_class_new(superclass: Value) -> Value {
-    let superclass = match to_object(superclass) {
-        Object::Class(class) => class,
-        other => type_error(&format!(
+    let viewed = to_object(superclass);
+    let superclass = match viewed.view() {
+        View::Class(class) => class,
+        _ => type_error(&format!(
             "superclass must be an instance of Class (given an instance of {})",
-            super::calls::class_name_of(other)
+            super::calls::class_name_of(viewed.clone())
         )),
     };
     if superclass.is_singleton_class() {
         type_error("can't make subclass of singleton class");
     }
-    if Object::Class(Rc::clone(&superclass)) == top_level_module("Class") {
+    if Object::Class(Rc::clone(superclass)) == top_level_module("Class") {
         type_error("can't make subclass of Class");
     }
-    let class = Class::new("", Some(Rc::clone(&superclass)));
+    let class = Class::new("", Some(Rc::clone(superclass)));
     superclass.add_subclass(&class);
     to_value(&Object::Class(class))
 }
@@ -64,8 +66,8 @@ pub extern "C-unwind" fn rb_class_superclass(klass: Value) -> Value {
 /// The superclass of `klass`, or false when it has none.
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_class_get_superclass(klass: Value) -> Value {
-    match to_object(klass) {
-        Object::Class(class) => class
+    match to_object(klass).view() {
+        View::Class(class) => class
             .superclass()
             .map_or(QFALSE, |above| to_value(&Object::Class(above))),
         _ => QFALSE,
@@ -135,12 +137,12 @@ fn ancestor_chain(receiver: &Object) -> Vec<Rc<Class>> {
         Some(singleton) => Object::Class(singleton),
         None => call(receiver.clone(), "class", Vec::new()),
     };
-    match call(start, "ancestors", Vec::new()) {
-        Object::Array(found) => found
+    match call(start, "ancestors", Vec::new()).view() {
+        View::Array(found) => found
             .borrow()
             .iter()
-            .filter_map(|held| match held {
-                Object::Class(class) | Object::Module(class) => Some(Rc::clone(class)),
+            .filter_map(|held| match held.view() {
+                View::Class(class) | View::Module(class) => Some(Rc::clone(class)),
                 _ => None,
             })
             .collect(),
@@ -262,19 +264,19 @@ pub extern "C-unwind" fn rb_type(object: Value) -> i32 {
     if super::data::is_data(&held) {
         return T_DATA;
     }
-    match held {
-        Object::Bool(true) => T_TRUE,
-        Object::Bool(false) => T_FALSE,
-        Object::Int(_) | Object::BigInt(_) => T_BIGNUM,
-        Object::Float(_) => T_FLOAT,
-        Object::String(_) => T_STRING,
-        Object::Symbol(_) => T_SYMBOL,
-        Object::Array(_) => T_ARRAY,
-        Object::Dict(_) => T_HASH,
-        Object::Class(_) => T_CLASS,
-        Object::Module(_) => T_MODULE,
-        Object::Range { .. } => T_STRUCT,
-        other => instance_type(other),
+    match held.view() {
+        View::Bool(true) => T_TRUE,
+        View::Bool(false) => T_FALSE,
+        View::Int(_) | View::BigInt(_) => T_BIGNUM,
+        View::Float(_) => T_FLOAT,
+        View::String(_) => T_STRING,
+        View::Symbol(_) => T_SYMBOL,
+        View::Array(_) => T_ARRAY,
+        View::Dict(_) => T_HASH,
+        View::Class(_) => T_CLASS,
+        View::Module(_) => T_MODULE,
+        View::Range { .. } => T_STRUCT,
+        _ => instance_type(held.clone()),
     }
 }
 

@@ -4,6 +4,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -87,7 +88,7 @@ answers = threads.map {{ |thread| thread.value }}
 #[test]
 fn every_thread_reads_a_module_the_load_finished_building() {
     let result = run(&racing_source(":Counted1, :Counted2", 4));
-    let Some(Object::Array(answered)) = result else {
+    let Some(View::Array(answered)) = result.view() else {
         panic!("Got: {:?}", result)
     };
     assert_eq!(answered.borrow()[0], Object::Bool(true));
@@ -96,7 +97,7 @@ fn every_thread_reads_a_module_the_load_finished_building() {
 #[test]
 fn the_file_is_loaded_once_for_each_name_it_was_registered_under() {
     let result = run(&racing_source(":Counted1, :Counted2, :Counted3", 3));
-    let Some(Object::Array(answered)) = result else {
+    let Some(View::Array(answered)) = result.view() else {
         panic!("Got: {:?}", result)
     };
     assert_eq!(answered.borrow()[1], Object::Int(3));

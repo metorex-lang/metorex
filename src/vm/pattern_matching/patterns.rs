@@ -1,6 +1,7 @@
 // Matching one pattern against one value.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// Match a pattern against a value and collect variable bindings.
@@ -16,10 +17,10 @@ impl VirtualMachine {
         // a module it includes, which no lookup by full path finds.
         if let Some((namespace, last)) = name.rsplit_once("::") {
             let holder = self.resolve_constant_in_scope(namespace)?;
-            let (Object::Class(class_rc) | Object::Module(class_rc)) = holder else {
+            let (View::Class(class_rc) | View::Module(class_rc)) = holder.view() else {
                 return None;
             };
-            let mut cursor = Some(class_rc);
+            let mut cursor = Some(class_rc.clone());
             while let Some(current) = cursor {
                 if let Some(found) = current.get_class_var(last) {
                     return Some(found);
@@ -34,9 +35,9 @@ impl VirtualMachine {
             return None;
         }
         let holder = self.environment().get("self")?;
-        let mut cursor = match &holder {
-            Object::Class(class_rc) | Object::Module(class_rc) => Some(Rc::clone(class_rc)),
-            Object::Instance(instance) => Some(Rc::clone(&instance.borrow().class)),
+        let mut cursor = match holder.view() {
+            View::Class(class_rc) | View::Module(class_rc) => Some(Rc::clone(class_rc)),
+            View::Instance(instance) => Some(Rc::clone(&instance.borrow().class)),
             _ => None,
         };
         while let Some(current) = cursor {
@@ -65,29 +66,29 @@ impl VirtualMachine {
         match pattern {
             // A number written as a pattern asks the value with `===`, which
             // counts an Integer and a Float of the same value as equal.
-            MatchPattern::IntLiteral(pattern_int) => match value {
-                Object::Int(value_int) => Ok(pattern_int == value_int),
-                Object::Float(value_float) => Ok(*pattern_int as f64 == *value_float),
+            MatchPattern::IntLiteral(pattern_int) => match value.view() {
+                View::Int(value_int) => Ok(*pattern_int == value_int),
+                View::Float(value_float) => Ok(*pattern_int as f64 == value_float),
                 _ => Ok(false),
             },
-            MatchPattern::FloatLiteral(pattern_float) => match value {
-                Object::Float(value_float) => Ok(pattern_float == value_float),
-                Object::Int(value_int) => Ok(*pattern_float == *value_int as f64),
+            MatchPattern::FloatLiteral(pattern_float) => match value.view() {
+                View::Float(value_float) => Ok(*pattern_float == value_float),
+                View::Int(value_int) => Ok(*pattern_float == value_int as f64),
                 _ => Ok(false),
             },
-            MatchPattern::StringLiteral(pattern_string) => match value {
-                Object::String(value_string) => Ok(pattern_string == value_string.as_ref()),
+            MatchPattern::StringLiteral(pattern_string) => match value.view() {
+                View::String(value_string) => Ok(pattern_string == value_string.as_ref()),
                 _ => Ok(false),
             },
-            MatchPattern::SymbolLiteral(pattern_name) => match value {
-                Object::Symbol(value_name) => Ok(pattern_name == value_name.as_ref()),
+            MatchPattern::SymbolLiteral(pattern_name) => match value.view() {
+                View::Symbol(value_name) => Ok(pattern_name == value_name.as_ref()),
                 _ => Ok(false),
             },
-            MatchPattern::BoolLiteral(pattern_bool) => match value {
-                Object::Bool(value_bool) => Ok(pattern_bool == value_bool),
+            MatchPattern::BoolLiteral(pattern_bool) => match value.view() {
+                View::Bool(value_bool) => Ok(*pattern_bool == value_bool),
                 _ => Ok(false),
             },
-            MatchPattern::NilLiteral => Ok(matches!(value, Object::Nil)),
+            MatchPattern::NilLiteral => Ok(matches!(value.view(), View::Nil)),
 
             // Identifier pattern - binds the value to a variable. The name is
             // readable by the rest of the same pattern, which is what lets
@@ -112,9 +113,9 @@ impl VirtualMachine {
                     unreachable!("guarded by the match above")
                 };
                 let spread = self.evaluate_expression(expression)?;
-                let choices = match spread {
-                    Object::Array(held) => held.borrow().clone(),
-                    other => vec![other],
+                let choices = match spread.view() {
+                    View::Array(held) => held.borrow().clone(),
+                    _ => vec![spread.clone()],
                 };
                 for choice in choices {
                     let matched = self.evaluate_binary_operation(
@@ -140,8 +141,8 @@ impl VirtualMachine {
             }
 
             // Array pattern - destructure arrays
-            MatchPattern::Array(patterns) => match value {
-                Object::Array(array_rc) => {
+            MatchPattern::Array(patterns) => match value.view() {
+                View::Array(array_rc) => {
                     let array = array_rc.borrow();
                     self.match_array_pattern(patterns, &array, bindings, position)
                 }
@@ -155,8 +156,8 @@ impl VirtualMachine {
             )),
 
             // Object pattern - destructure dictionaries
-            MatchPattern::Object(key_patterns) => match value {
-                Object::Dict(dict_rc) => {
+            MatchPattern::Object(key_patterns) => match value.view() {
+                View::Dict(dict_rc) => {
                     let dict = dict_rc.borrow();
                     self.match_object_pattern(key_patterns, &dict, bindings, position)
                 }
@@ -182,22 +183,22 @@ impl VirtualMachine {
                     // Ruby-style aliases
                     // A number too wide for a machine word is an Integer
                     // just the same, so both spellings answer here.
-                    "Integer" => matches!(value, Object::Int(_) | Object::BigInt(_)),
-                    "Float" => matches!(value, Object::Float(_)),
-                    "String" => matches!(value, Object::String(_)),
-                    "Array" => matches!(value, Object::Array(_)),
-                    "Hash" | "Dict" => matches!(value, Object::Dict(_)),
-                    "TrueClass" | "FalseClass" | "Boolean" => matches!(value, Object::Bool(_)),
-                    "NilClass" => matches!(value, Object::Nil),
-                    "Class" => matches!(value, Object::Class(_)),
-                    "Method" => matches!(value, Object::Method(_)),
-                    "Exception" => matches!(value, Object::Exception(_)),
-                    "Set" => matches!(value, Object::Set(_)),
-                    "Range" => matches!(value, Object::Range { .. }),
+                    "Integer" => matches!(value.view(), View::Int(_) | View::BigInt(_)),
+                    "Float" => matches!(value.view(), View::Float(_)),
+                    "String" => matches!(value.view(), View::String(_)),
+                    "Array" => matches!(value.view(), View::Array(_)),
+                    "Hash" | "Dict" => matches!(value.view(), View::Dict(_)),
+                    "TrueClass" | "FalseClass" | "Boolean" => matches!(value.view(), View::Bool(_)),
+                    "NilClass" => matches!(value.view(), View::Nil),
+                    "Class" => matches!(value.view(), View::Class(_)),
+                    "Method" => matches!(value.view(), View::Method(_)),
+                    "Exception" => matches!(value.view(), View::Exception(_)),
+                    "Set" => matches!(value.view(), View::Set(_)),
+                    "Range" => matches!(value.view(), View::Range { .. }),
 
                     // Check for class instances
                     _ => {
-                        if let Object::Instance(instance_rc) = value {
+                        if let View::Instance(instance_rc) = value.view() {
                             let instance = instance_rc.borrow();
                             instance.class_name() == *type_name
                         } else {
@@ -253,12 +254,12 @@ impl VirtualMachine {
                 else {
                     return Ok(false);
                 };
-                let range = Object::Range {
-                    start: Box::new(low),
-                    end: Box::new(high),
-                    exclusive: *exclusive,
-                    mark: std::rc::Rc::new(()),
-                };
+                let range = Object::Range(
+                    Box::new(low),
+                    Box::new(high),
+                    *exclusive,
+                    std::rc::Rc::new(()),
+                );
                 self.pattern_case_equal(&range, value, position)
             }
 

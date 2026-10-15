@@ -5,6 +5,7 @@ use super::calls::call;
 use super::handles::{Value, to_object, to_value};
 use super::{interpreter, or_raise, raise};
 use crate::object::Object;
+use crate::object::View;
 use crate::vm::native_methods::from_big;
 use num_bigint::{BigInt, Sign};
 
@@ -66,9 +67,11 @@ fn check_layout(word_count: usize, word_size: usize, nails: usize, flags: i32) {
 /// The Integer `rb_to_int` makes of a VALUE: an Integer itself, a Float cut
 /// toward zero, or what `to_int` answers.
 fn integer_from(value: Value) -> BigInt {
-    match to_object(value) {
-        Object::Float(number) if number.is_finite() => BigInt::from(number.trunc() as i128),
-        other => or_raise(interpreter().coerce_integer_argument(&other, super::called_from())),
+    match to_object(value).view() {
+        View::Float(number) if number.is_finite() => BigInt::from(number.trunc() as i128),
+        other => or_raise(
+            interpreter().coerce_integer_argument(&other.to_object(), super::called_from()),
+        ),
     }
 }
 

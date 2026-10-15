@@ -63,9 +63,9 @@ fn memory_run<const MODE: u8>(kernel: &kernels::Kernel) -> (String, Duration, us
 fn main() {
     println!(
         "Value sizes: `Object` {} bytes, tagged value {} bytes, `Option<Object>` {} bytes.\n",
-        std::mem::size_of::<metorex::object::Object>(),
+        std::mem::size_of::<enum_value::Object>(),
         std::mem::size_of::<tagged_value::Tagged>(),
-        std::mem::size_of::<Option<metorex::object::Object>>(),
+        std::mem::size_of::<Option<enum_value::Object>>(),
     );
 
     println!(

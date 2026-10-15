@@ -14,6 +14,7 @@ use super::strings::{
 };
 use super::{called_from, raise};
 use crate::object::Object;
+use crate::object::View;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ffi::{CStr, c_char};
@@ -488,8 +489,8 @@ pub extern "C-unwind" fn rb_str_encode(
 ) -> Value {
     const INVALID_REPLACE: i32 = 0x02;
     const UNDEF_REPLACE: i32 = 0x20;
-    let mut keywords: indexmap::IndexMap<String, Object> = match to_object(options) {
-        Object::Dict(pairs) => pairs.borrow().clone(),
+    let mut keywords: indexmap::IndexMap<String, Object> = match to_object(options).view() {
+        View::Dict(pairs) => pairs.borrow().clone(),
         _ => indexmap::IndexMap::new(),
     };
     if flags & INVALID_REPLACE != 0 {

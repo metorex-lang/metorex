@@ -3,6 +3,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -19,8 +20,8 @@ fn refused(code: &str) -> String {
         "begin\n{code}\n  \"nothing was raised\"\nrescue Exception => refused\n  \"#{{refused.class}}: #{{refused.message}}\"\nend\n"
     );
     let answered = run(&source);
-    match answered {
-        Some(Object::String(text)) => text.as_str().to_string(),
+    match answered.view() {
+        Some(View::String(text)) => text.as_str().to_string(),
         other => panic!("Got: {:?}", other),
     }
 }
@@ -153,7 +154,7 @@ rescue => refused
   [refused.data[:data], refused.message == held.to_s]
 end
 "#);
-    let Some(Object::Array(answered)) = answered else {
+    let Some(View::Array(answered)) = answered.view() else {
         panic!("Got something other than a pair")
     };
     assert_eq!(answered.borrow()[0], Object::Int(42));
@@ -176,7 +177,7 @@ class SaidNothing < StandardError
 end
 [SaidSo.new(1).message, SaidNothing.new("text").message]
 "#);
-    let Some(Object::Array(answered)) = answered else {
+    let Some(View::Array(answered)) = answered.view() else {
         panic!("Got something other than a pair")
     };
     assert_eq!(answered.borrow()[0], Object::string("from super"));

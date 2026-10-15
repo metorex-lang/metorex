@@ -78,12 +78,12 @@ fn class_of_set() {
 #[test]
 fn class_of_range() {
     let builtins = BuiltinClasses::new();
-    let class = builtins.class_of(&Object::Range {
-        start: Box::new(Object::Int(1)),
-        end: Box::new(Object::Int(10)),
-        exclusive: false,
-        mark: std::rc::Rc::new(()),
-    });
+    let class = builtins.class_of(&Object::Range(
+        Box::new(Object::Int(1)),
+        Box::new(Object::Int(10)),
+        false,
+        std::rc::Rc::new(()),
+    ));
     assert_eq!(class.name(), "Range");
 }
 

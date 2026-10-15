@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -205,7 +206,7 @@ rescue => ex
 end
 e
 "#);
-    assert!(matches!(result, Some(Object::String(_))));
+    assert!(matches!(result.view(), Some(View::String(_))));
 }
 
 #[test]

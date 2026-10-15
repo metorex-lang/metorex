@@ -5,6 +5,7 @@
 //   lexical scope, so method defs inside land on the singleton class.
 // - Returns the last expression value from the body (or nil).
 
+use crate::object::{OptionView, View};
 use std::rc::Rc;
 
 use crate::ast::{Expression, Statement};
@@ -19,25 +20,25 @@ use crate::vm::core::VirtualMachine;
 /// Symbol / String). Returns None for receivers that *do* own a slot —
 /// those cases are handled directly from the object.
 fn primitive_singleton_key(receiver: &Object) -> Option<String> {
-    match receiver {
-        Object::Nil => Some("__nil__".to_string()),
-        Object::Bool(true) => Some("__true__".to_string()),
-        Object::Bool(false) => Some("__false__".to_string()),
-        Object::Int(_) | Object::Float(_) => None,
+    match receiver.view() {
+        View::Nil => Some("__nil__".to_string()),
+        View::Bool(true) => Some("__true__".to_string()),
+        View::Bool(false) => Some("__false__".to_string()),
+        View::Int(_) | View::Float(_) => None,
         // A collection and a string are each held by reference, so every one
         // of them can carry methods of its own rather than sharing a table
         // with every other collection of its kind.
-        Object::Array(held) => Some(format!("__array_{:p}", Rc::as_ptr(held))),
-        Object::Dict(held) => Some(format!("__dict_{:p}", Rc::as_ptr(held))),
-        Object::Set(held) => Some(format!("__set_{:p}", Rc::as_ptr(held))),
-        Object::String(held) => Some(format!("__string_{:p}", Rc::as_ptr(held))),
+        View::Array(held) => Some(format!("__array_{:p}", Rc::as_ptr(held))),
+        View::Dict(held) => Some(format!("__dict_{:p}", Rc::as_ptr(held))),
+        View::Set(held) => Some(format!("__set_{:p}", Rc::as_ptr(held))),
+        View::String(held) => Some(format!("__string_{:p}", Rc::as_ptr(held))),
         // A Regexp is held by reference too, so each one carries its own
         // methods rather than sharing a table with every other pattern.
-        Object::Regex(pattern, _) => Some(format!("__regex_{:p}", Rc::as_ptr(pattern))),
+        View::Regex(pattern, _) => Some(format!("__regex_{:p}", Rc::as_ptr(pattern))),
         // A Proc, a Method and a Binding are each an object of their own.
-        Object::Block(held) => Some(format!("__block_{:p}", Rc::as_ptr(held))),
-        Object::Method(held) => Some(format!("__method_{:p}", Rc::as_ptr(held))),
-        Object::Binding(held) => Some(format!("__binding_{:p}", Rc::as_ptr(held))),
+        View::Block(held) => Some(format!("__block_{:p}", Rc::as_ptr(held))),
+        View::Method(held) => Some(format!("__method_{:p}", Rc::as_ptr(held))),
+        View::Binding(held) => Some(format!("__binding_{:p}", Rc::as_ptr(held))),
         _ => None,
     }
 }
@@ -46,12 +47,12 @@ fn primitive_singleton_key(receiver: &Object) -> Option<String> {
 /// classes as `#<Class:<target-inspect>>`; we approximate with a stable
 /// tag so ancestors/inspect output is predictable.
 fn singleton_class_display_name(receiver: &Object) -> String {
-    match receiver {
-        Object::Nil => "#<Class:NilClass>".to_string(),
-        Object::Bool(true) => "#<Class:TrueClass>".to_string(),
-        Object::Bool(false) => "#<Class:FalseClass>".to_string(),
-        Object::Class(c) => format!("#<Class:{}>", c.inspect_name()),
-        Object::Module(m) => format!("#<Class:{}>", m.inspect_name()),
+    match receiver.view() {
+        View::Nil => "#<Class:NilClass>".to_string(),
+        View::Bool(true) => "#<Class:TrueClass>".to_string(),
+        View::Bool(false) => "#<Class:FalseClass>".to_string(),
+        View::Class(c) => format!("#<Class:{}>", c.inspect_name()),
+        View::Module(m) => format!("#<Class:{}>", m.inspect_name()),
         // The attached object's own display, so the two agree.
         _ => format!("#<Class:{}>", receiver),
     }
@@ -62,8 +63,8 @@ impl VirtualMachine {
     /// The singleton class records its attached object via the `__attached__`
     /// class-variable so `attached_object` can return it later.
     pub(crate) fn singleton_class_of(&mut self, receiver: &Object) -> Rc<Class> {
-        match receiver {
-            Object::Instance(inst_rc) => {
+        match receiver.view() {
+            View::Instance(inst_rc) => {
                 let inst = inst_rc.borrow();
                 if let Some(existing) = inst.singleton_class.borrow().clone() {
                     return existing;
@@ -75,11 +76,11 @@ impl VirtualMachine {
                 *inst.singleton_class.borrow_mut() = Some(Rc::clone(&sc));
                 sc
             }
-            Object::Class(class_rc) | Object::Module(class_rc) => {
+            View::Class(class_rc) | View::Module(class_rc) => {
                 if let Some(existing) = class_rc.singleton_class_slot().clone() {
                     return existing;
                 }
-                let is_module = matches!(receiver, Object::Module(_));
+                let is_module = matches!(receiver.view(), View::Module(_));
                 // Per Ruby: the singleton class of a Class K has K's parent's
                 // singleton class as its superclass (not K's parent itself).
                 // Build that chain on demand by recursing through `superclass`.
@@ -91,14 +92,18 @@ impl VirtualMachine {
                 // superclass stay ungrounded to avoid unbounded lookup loops.
                 let parent_singleton = match class_rc.superclass() {
                     Some(sup) => Some(self.singleton_class_of(&Object::Class(sup))),
-                    None if class_rc.name() == "BasicObject" => match self.globals().get("Class") {
-                        Some(Object::Class(c)) => Some(c),
+                    None if class_rc.name() == "BasicObject" => {
+                        (match self.globals().get("Class").view() {
+                            Some(View::Class(c)) => Some(c),
+                            _ => None,
+                        })
+                        .cloned()
+                    }
+                    None if is_module => (match self.globals().get("Module").view() {
+                        Some(View::Class(c)) => Some(c),
                         _ => None,
-                    },
-                    None if is_module => match self.globals().get("Module") {
-                        Some(Object::Class(c)) => Some(c),
-                        _ => None,
-                    },
+                    })
+                    .cloned(),
                     None => None,
                 };
                 let sc = Class::new(singleton_class_display_name(receiver), parent_singleton);
@@ -108,20 +113,22 @@ impl VirtualMachine {
                 sc
             }
             other => {
-                let key = primitive_singleton_key(other).unwrap_or_else(|| match other {
-                    // An exception is a reference type, so each one gets its
-                    // own singleton class rather than sharing one per kind.
-                    Object::Exception(details) => {
-                        format!("__exception_{:p}", Rc::as_ptr(details))
+                let key = primitive_singleton_key(receiver).unwrap_or_else(|| {
+                    match other {
+                        // An exception is a reference type, so each one gets its
+                        // own singleton class rather than sharing one per kind.
+                        View::Exception(details) => {
+                            format!("__exception_{:p}", Rc::as_ptr(details))
+                        }
+                        _ => format!("__other_{}", other.type_name()),
                     }
-                    _ => format!("__other_{}", other.type_name()),
                 });
                 if let Some(existing) = self.primitive_singleton_classes.get(&key) {
                     return Rc::clone(existing);
                 }
-                let sc = Class::new(singleton_class_display_name(other), None);
+                let sc = Class::new(singleton_class_display_name(receiver), None);
                 sc.set_class_var("__singleton__", Object::Bool(true));
-                sc.set_class_var("__attached__", other.clone());
+                sc.set_class_var("__attached__", receiver.clone());
                 self.primitive_singleton_classes.insert(key, Rc::clone(&sc));
                 sc
             }
@@ -137,9 +144,9 @@ impl VirtualMachine {
         if self.primitive_singleton_classes.is_empty() {
             return None;
         }
-        let key = primitive_singleton_key(receiver).or_else(|| match receiver {
-            Object::Exception(details) => Some(format!("__exception_{:p}", Rc::as_ptr(details))),
-            Object::Instance(_) | Object::Class(_) | Object::Module(_) => None,
+        let key = primitive_singleton_key(receiver).or_else(|| match receiver.view() {
+            View::Exception(details) => Some(format!("__exception_{:p}", Rc::as_ptr(details))),
+            View::Instance(_) | View::Class(_) | View::Module(_) => None,
             other => Some(format!("__other_{}", other.type_name())),
         })?;
         self.primitive_singleton_classes.get(&key).map(Rc::clone)
@@ -147,10 +154,10 @@ impl VirtualMachine {
 
     /// Whether `receiver` was given a singleton class, without making one.
     pub(crate) fn singleton_given(&self, receiver: &Object) -> bool {
-        match receiver {
-            Object::Instance(held) => held.borrow().singleton_class.borrow().is_some(),
-            Object::Class(held) | Object::Module(held) => held.singleton_class_slot().is_some(),
-            other => self.existing_singleton_class(other).is_some(),
+        match receiver.view() {
+            View::Instance(held) => held.borrow().singleton_class.borrow().is_some(),
+            View::Class(held) | View::Module(held) => held.singleton_class_slot().is_some(),
+            _ => self.existing_singleton_class(receiver).is_some(),
         }
     }
 
@@ -186,22 +193,22 @@ impl VirtualMachine {
         // `true`, `false`, and `nil` each have exactly one instance, so the
         // class itself is the singleton class. A number or a symbol has no
         // singleton class at all.
-        match &target_obj {
-            Object::Bool(_) | Object::Nil => {
-                let named = match &target_obj {
-                    Object::Bool(true) => "TrueClass",
-                    Object::Bool(false) => "FalseClass",
+        match target_obj.view() {
+            View::Bool(_) | View::Nil => {
+                let named = match target_obj.view() {
+                    View::Bool(true) => "TrueClass",
+                    View::Bool(false) => "FalseClass",
                     _ => "NilClass",
                 };
-                if let Some(Object::Class(held)) = self.globals().get(named) {
-                    let singleton = Rc::clone(&held);
+                if let Some(View::Class(held)) = self.globals().get(named).view() {
+                    let singleton = Rc::clone(held);
                     if let Some(destination) = assign_to {
                         self.assign_value(destination, target_obj.clone())?;
                     }
                     return self.run_singleton_class_body(&singleton, body, position);
                 }
             }
-            Object::Int(_) | Object::BigInt(_) | Object::Float(_) | Object::Symbol(_) => {
+            View::Int(_) | View::BigInt(_) | View::Float(_) | View::Symbol(_) => {
                 return Err(crate::vm::errors::simple_exception(
                     "TypeError",
                     "can't define singleton",

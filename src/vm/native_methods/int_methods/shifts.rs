@@ -1,6 +1,7 @@
 // How far a shift moves.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     pub(crate) fn shift_count(
@@ -9,35 +10,37 @@ impl VirtualMachine {
         argument: &Object,
         position: crate::lexer::Position,
     ) -> Result<ShiftCount, crate::error::MetorexError> {
-        let held = match argument {
-            Object::Int(_) | Object::BigInt(_) => argument.clone(),
-            other if self.responds_to(other, "to_int") => {
-                match self.send_to_object(other.clone(), "to_int", vec![], position)? {
-                    answered @ (Object::Int(_) | Object::BigInt(_)) => answered,
-                    _ => {
-                        return Err(method_argument_type_error(
-                            method_name,
-                            "Integer",
-                            argument,
-                            position,
-                        ));
-                    }
+        let held = match argument.view() {
+            View::Int(_) | View::BigInt(_) => argument.clone(),
+            _ if self.responds_to(argument, "to_int") => (match self
+                .send_to_object(argument.clone(), "to_int", vec![], position)?
+                .view()
+            {
+                answered @ (View::Int(_) | View::BigInt(_)) => answered,
+                _ => {
+                    return Err(method_argument_type_error(
+                        method_name,
+                        "Integer",
+                        argument,
+                        position,
+                    ));
                 }
-            }
-            other => {
+            })
+            .to_object(),
+            _ => {
                 return Err(method_argument_type_error(
                     method_name,
                     "Integer",
-                    other,
+                    argument,
                     position,
                 ));
             }
         };
-        let negative = matches!(&held, Object::Int(count) if *count < 0)
-            || matches!(&held, Object::BigInt(count) if **count < num_bigint::BigInt::from(0));
-        let written = match held {
-            Object::Int(count) => Some(count),
-            Object::BigInt(count) => count.to_string().parse::<i64>().ok(),
+        let negative = matches!(held.view(), View::Int(count) if count < 0)
+            || matches!(held.view(), View::BigInt(count) if **count < num_bigint::BigInt::from(0));
+        let written = match held.view() {
+            View::Int(count) => Some(count),
+            View::BigInt(count) => count.to_string().parse::<i64>().ok(),
             _ => None,
         };
         Ok(ShiftCount { written, negative })

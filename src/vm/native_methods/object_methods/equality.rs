@@ -2,6 +2,7 @@
 // against a pattern.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Whether two objects count as equal, the copies of one, and matching
@@ -28,11 +29,11 @@ impl VirtualMachine {
                 }
                 // Object's own `eql?` is identity. Asking `values_eql` would
                 // send `eql?` back to this very method.
-                if let Object::Instance(instance) = receiver
+                if let View::Instance(instance) = receiver.view()
                     && crate::vm::native_methods::array_subclass_value(receiver).is_none()
                     && crate::vm::native_methods::string_subclass_value(receiver).is_none()
                 {
-                    let same = matches!(&arguments[0], Object::Instance(other) if std::rc::Rc::ptr_eq(instance, other));
+                    let same = matches!(arguments[0].view(), View::Instance(other) if std::rc::Rc::ptr_eq(instance, other));
                     return Ok(Some(Object::Bool(same)));
                 }
                 Ok(Some(Object::Bool(self.values_eql(
@@ -51,38 +52,38 @@ impl VirtualMachine {
                     ));
                 }
                 let other = &arguments[0];
-                let identity = match (receiver, other) {
-                    (Object::Instance(a), Object::Instance(b)) => std::rc::Rc::ptr_eq(a, b),
+                let identity = match (receiver.view(), other.view()) {
+                    (View::Instance(a), View::Instance(b)) => std::rc::Rc::ptr_eq(a, b),
                     // Two strings holding the same text are still two
                     // strings, which is what `equal?` tells apart.
-                    (Object::String(a), Object::String(b)) => std::rc::Rc::ptr_eq(a, b),
-                    (Object::Array(a), Object::Array(b)) => std::rc::Rc::ptr_eq(a, b),
-                    (Object::Dict(a), Object::Dict(b)) => std::rc::Rc::ptr_eq(a, b),
-                    (Object::Class(a), Object::Class(b)) => std::rc::Rc::ptr_eq(a, b),
-                    (Object::Module(a), Object::Module(b)) => std::rc::Rc::ptr_eq(a, b),
-                    (Object::Set(a), Object::Set(b)) => std::rc::Rc::ptr_eq(a, b),
-                    (Object::Exception(a), Object::Exception(b)) => std::rc::Rc::ptr_eq(a, b),
+                    (View::String(a), View::String(b)) => std::rc::Rc::ptr_eq(a, b),
+                    (View::Array(a), View::Array(b)) => std::rc::Rc::ptr_eq(a, b),
+                    (View::Dict(a), View::Dict(b)) => std::rc::Rc::ptr_eq(a, b),
+                    (View::Class(a), View::Class(b)) => std::rc::Rc::ptr_eq(a, b),
+                    (View::Module(a), View::Module(b)) => std::rc::Rc::ptr_eq(a, b),
+                    (View::Set(a), View::Set(b)) => std::rc::Rc::ptr_eq(a, b),
+                    (View::Exception(a), View::Exception(b)) => std::rc::Rc::ptr_eq(a, b),
                     // Two ranges over the same values are still two ranges,
                     // which the mark each carries tells apart.
-                    (Object::Range { mark: a, .. }, Object::Range { mark: b, .. }) => {
+                    (View::Range { mark: a, .. }, View::Range { mark: b, .. }) => {
                         std::rc::Rc::ptr_eq(a, b)
                     }
                     // An integer past the i64 range is its own object, so two
                     // of the same value are not identical.
-                    (Object::BigInt(a), Object::BigInt(b)) => std::rc::Rc::ptr_eq(a, b),
+                    (View::BigInt(a), View::BigInt(b)) => std::rc::Rc::ptr_eq(a, b),
                     // A block can close over itself, so comparing two of them
                     // structurally would never terminate. Ruby's identity
                     // check is the address anyway.
-                    (Object::Block(a), Object::Block(b)) => std::rc::Rc::ptr_eq(a, b),
+                    (View::Block(a), View::Block(b)) => std::rc::Rc::ptr_eq(a, b),
                     // A Method or an UnboundMethod compares `==` by what it
                     // names, so two copies of one are equal without being
                     // the same object.
-                    (Object::Method(a), Object::Method(b)) => std::rc::Rc::ptr_eq(a, b),
-                    (Object::Binding(a), Object::Binding(b)) => std::rc::Rc::ptr_eq(a, b),
+                    (View::Method(a), View::Method(b)) => std::rc::Rc::ptr_eq(a, b),
+                    (View::Binding(a), View::Binding(b)) => std::rc::Rc::ptr_eq(a, b),
                     // A Float is a value, so two of the same bits are the same
                     // object. That covers NaN, which is never `==` itself but
                     // is identical to itself.
-                    (Object::Float(a), Object::Float(b)) => a.to_bits() == b.to_bits(),
+                    (View::Float(a), View::Float(b)) => a.to_bits() == b.to_bits(),
                     // For value types, equal? is the same as ==
                     (a, b) => a == b,
                 };
@@ -105,7 +106,7 @@ impl VirtualMachine {
                 let copy = self.copy_for(receiver, position)?;
                 // `dup` answers a range that is not frozen, while `clone`
                 // keeps the frozen state the original carried.
-                if let Some(Object::Range { mark, .. }) = &copy
+                if let Some(View::Range { mark, .. }) = copy.view()
                     && (method_name == "dup" || matches!(freeze, Some(false)))
                 {
                     self.thawed_ranges
@@ -136,8 +137,8 @@ impl VirtualMachine {
             // Only a String, a Regexp, a Symbol and nil answer `=~`; Ruby no
             // longer gives every object one.
             "=~" if !matches!(
-                receiver,
-                Object::String(_) | Object::Regex(_, _) | Object::Symbol(_) | Object::Nil
+                receiver.view(),
+                View::String(_) | View::Regex(_, _) | View::Symbol(_) | View::Nil
             ) =>
             {
                 Ok(None)
@@ -150,7 +151,7 @@ impl VirtualMachine {
                 // A Symbol matches as its name, and text against text is no
                 // match at all.
                 let reads_as_text = |value: &Object| {
-                    matches!(value, Object::String(_) | Object::Symbol(_))
+                    matches!(value.view(), View::String(_) | View::Symbol(_))
                         || crate::vm::native_methods::string_subclass_value(value).is_some()
                 };
                 if reads_as_text(receiver) && reads_as_text(&arguments[0]) {
@@ -162,12 +163,12 @@ impl VirtualMachine {
                 }
                 // Text matched against anything but a pattern asks that
                 // object, with the text, the way `String#=~` does.
-                if let Object::String(_) | Object::Symbol(_) = receiver
-                    && !matches!(&arguments[0], Object::Regex(_, _))
+                if let View::String(_) | View::Symbol(_) = receiver.view()
+                    && !matches!(arguments[0].view(), View::Regex(_, _))
                 {
-                    let text = match receiver {
-                        Object::Symbol(name) => Object::string(name.as_str().to_string()),
-                        held => held.clone(),
+                    let text = match receiver.view() {
+                        View::Symbol(name) => Object::string(name.as_str().to_string()),
+                        _ => receiver.clone(),
                     };
                     return self
                         .send_to_object(arguments[0].clone(), "=~", vec![text], position)
@@ -178,11 +179,11 @@ impl VirtualMachine {
                 match (matchable_text(receiver), matchable_text(&arguments[0])) {
                     (Some(MatchSide::Pattern(pattern, flags)), Some(MatchSide::Text(text)))
                     | (Some(MatchSide::Text(text)), Some(MatchSide::Pattern(pattern, flags))) => {
-                        let (pattern_side, subject_side) = match receiver {
-                            Object::Regex(_, _) => (receiver, &arguments[0]),
+                        let (pattern_side, subject_side) = match receiver.view() {
+                            View::Regex(_, _) => (receiver, &arguments[0]),
                             _ => (&arguments[0], receiver),
                         };
-                        if let Object::Regex(written, _) = pattern_side {
+                        if let View::Regex(written, _) = pattern_side.view() {
                             self.prepare_match_subject(written, &flags, subject_side, position)?;
                         }
                         let encoding =
@@ -204,9 +205,9 @@ impl VirtualMachine {
                     // A string matched against anything but a pattern hands
                     // the match to that other object, and refuses outright
                     // when it is another string.
-                    (Some(MatchSide::Text(_)), _) if matches!(receiver, Object::String(_)) => {
+                    (Some(MatchSide::Text(_)), _) if matches!(receiver.view(), View::String(_)) => {
                         let other = &arguments[0];
-                        if matches!(other, Object::String(_))
+                        if matches!(other.view(), View::String(_))
                             || crate::vm::native_methods::string_subclass_value(other).is_some()
                         {
                             let named = self.builtins().class_of(other).name().to_string();

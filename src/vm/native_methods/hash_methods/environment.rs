@@ -1,6 +1,7 @@
 // ENV, the hash the process shares with the operating system.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The text an argument to an environment method names, refusing anything
@@ -10,12 +11,13 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<String, MetorexError> {
-        if let Object::String(text) = value {
+        if let View::String(text) = value.view() {
             return Ok(text.to_text());
         }
         if self.responds_to(value, "to_str")
-            && let Object::String(text) =
-                self.send_to_object(value.clone(), "to_str", vec![], position)?
+            && let View::String(text) = self
+                .send_to_object(value.clone(), "to_str", vec![], position)?
+                .view()
         {
             return Ok(text.to_text());
         }
@@ -33,7 +35,7 @@ impl VirtualMachine {
     /// The encoding the environment is read as: the one a program named, or
     /// the one the system is set to.
     pub(crate) fn environment_reading_encoding(&mut self) -> Option<String> {
-        if let Some(Object::Class(held)) = self.globals().get("__Encoding_default_internal") {
+        if let Some(View::Class(held)) = self.globals().get("__Encoding_default_internal").view() {
             return Some(held.name().to_string());
         }
         // With nothing named, the environment reads as the locale does,
@@ -78,8 +80,8 @@ impl VirtualMachine {
         // the entry, so `ENV["1"]` stays a name rather than a number.
         if !crate::vm::utils::is_primitive_key(&named) {
             let slot = "__MX_KEY_OBJECTS__".to_string();
-            let mut objects = match dict_rc.borrow().get(&slot) {
-                Some(Object::Dict(held)) => held.borrow().clone(),
+            let mut objects = match dict_rc.borrow().get(&slot).view() {
+                Some(View::Dict(held)) => held.borrow().clone(),
                 _ => indexmap::IndexMap::new(),
             };
             objects.insert(key.clone(), named.clone());
@@ -97,7 +99,7 @@ impl VirtualMachine {
         &self,
         dict_rc: &Rc<RefCell<indexmap::IndexMap<String, Object>>>,
     ) -> bool {
-        matches!(self.globals().get("ENV"), Some(Object::Dict(held)) if Rc::ptr_eq(&held, dict_rc))
+        matches!(self.globals().get("ENV").view(), Some(View::Dict(held)) if Rc::ptr_eq(held, dict_rc))
     }
 
     /// A write to ENV reaches the process environment too, so the C library
@@ -109,13 +111,14 @@ impl VirtualMachine {
         key: &Object,
         value: &Object,
     ) {
-        let Some(Object::Dict(environment)) = self.globals().get("ENV") else {
+        let viewed = self.globals().get("ENV");
+        let Some(View::Dict(environment)) = viewed.view() else {
             return;
         };
-        if !Rc::ptr_eq(&environment, dict_rc) {
+        if !Rc::ptr_eq(environment, dict_rc) {
             return;
         }
-        let Object::String(name) = key else {
+        let View::String(name) = key.view() else {
             return;
         };
         let Ok(name) = std::ffi::CString::new(name.as_str().as_bytes().to_vec()) else {
@@ -123,18 +126,18 @@ impl VirtualMachine {
         };
         // Ruby removes the entry outright when a name is set to nil, so the
         // name stops being one the environment holds at all.
-        if matches!(value, Object::Nil) {
+        if matches!(value.view(), View::Nil) {
             let mut held = dict_rc.borrow_mut();
             if let Some(key_text) = crate::vm::utils::object_to_dict_key(key) {
                 held.shift_remove(&key_text);
             }
         }
         unsafe {
-            match value {
-                Object::Nil => {
+            match value.view() {
+                View::Nil => {
                     libc::unsetenv(name.as_ptr());
                 }
-                Object::String(text) => {
+                View::String(text) => {
                     let Ok(setting) = std::ffi::CString::new(text.as_str().as_bytes().to_vec())
                     else {
                         return;

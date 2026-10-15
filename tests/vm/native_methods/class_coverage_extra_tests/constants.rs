@@ -1,6 +1,7 @@
 // The constants a class holds, and the autoloads on them.
 
 use super::*;
+use metorex::object::{OptionView, View};
 // ── `constants` on a class (lines 82-90) ─────────────────────────────────────
 
 #[test]
@@ -13,7 +14,7 @@ class Colors
 end
 Colors.constants.length
 "#);
-    if let Some(Object::Int(n)) = result {
+    if let Some(View::Int(n)) = result.view() {
         assert!(n >= 2, "Expected at least 2 constants, got {}", n);
     } else {
         panic!("expected Int, got {:?}", result);
@@ -27,7 +28,7 @@ class Empty
 end
 Empty.constants
 "#);
-    assert!(matches!(result, Some(Object::Array(_))));
+    assert!(matches!(result.view(), Some(View::Array(_))));
 }
 
 // ── `attached_object` on non-singleton class (lines 92-101) ─────────────────

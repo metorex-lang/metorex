@@ -1,6 +1,7 @@
 // The odds and ends the functions above are written against.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Call one method on a receiver by name, which native code needs when
@@ -37,7 +38,7 @@ impl VirtualMachine {
 
         // A single array argument is unpacked.
         let flat: Vec<Object> = if arguments.len() == 1 {
-            if let Object::Array(arr) = &arguments[0] {
+            if let View::Array(arr) = arguments[0].view() {
                 arr.borrow().clone()
             } else {
                 arguments.clone()
@@ -46,15 +47,16 @@ impl VirtualMachine {
             arguments.clone()
         };
 
-        let Some(Object::Class(object_class)) = self.globals().get("Object") else {
+        let viewed = self.globals().get("Object");
+        let Some(View::Class(object_class)) = viewed.view() else {
             return Ok(Object::Nil);
         };
 
         let mut names: Vec<String> = Vec::with_capacity(flat.len());
         for arg in &flat {
-            let n = match arg {
-                Object::Symbol(s) => s.as_str().to_string(),
-                Object::String(s) => s.as_str().to_string(),
+            let n = match arg.view() {
+                View::Symbol(s) => s.as_str().to_string(),
+                View::String(s) => s.as_str().to_string(),
                 _ => {
                     let exc = Object::exception(
                         "TypeError",
@@ -102,26 +104,26 @@ impl VirtualMachine {
 /// Symbol is only ever itself.
 pub(crate) fn throw_tags_match(live: &Object, thrown: &Object) -> bool {
     use std::rc::Rc;
-    match (live, thrown) {
-        (Object::String(a), Object::String(b)) => Rc::ptr_eq(a, b),
-        (Object::Instance(a), Object::Instance(b)) => Rc::ptr_eq(a, b),
-        (Object::Array(a), Object::Array(b)) => Rc::ptr_eq(a, b),
-        (Object::Dict(a), Object::Dict(b)) => Rc::ptr_eq(a, b),
-        (Object::Class(a), Object::Class(b)) => Rc::ptr_eq(a, b),
-        (Object::Module(a), Object::Module(b)) => Rc::ptr_eq(a, b),
-        (Object::Symbol(a), Object::Symbol(b)) => a == b,
-        (Object::Int(a), Object::Int(b)) => a == b,
-        (Object::Bool(a), Object::Bool(b)) => a == b,
-        (Object::Nil, Object::Nil) => true,
+    match (live.view(), thrown.view()) {
+        (View::String(a), View::String(b)) => Rc::ptr_eq(a, b),
+        (View::Instance(a), View::Instance(b)) => Rc::ptr_eq(a, b),
+        (View::Array(a), View::Array(b)) => Rc::ptr_eq(a, b),
+        (View::Dict(a), View::Dict(b)) => Rc::ptr_eq(a, b),
+        (View::Class(a), View::Class(b)) => Rc::ptr_eq(a, b),
+        (View::Module(a), View::Module(b)) => Rc::ptr_eq(a, b),
+        (View::Symbol(a), View::Symbol(b)) => a == b,
+        (View::Int(a), View::Int(b)) => a == b,
+        (View::Bool(a), View::Bool(b)) => a == b,
+        (View::Nil, View::Nil) => true,
         _ => false,
     }
 }
 
 /// The numeric value of a Range endpoint, when it has one.
 pub(crate) fn numeric_value(object: &Object) -> Option<f64> {
-    match object {
-        Object::Int(value) => Some(*value as f64),
-        Object::Float(value) => Some(*value),
+    match object.view() {
+        View::Int(value) => Some(value as f64),
+        View::Float(value) => Some(value),
         _ => None,
     }
 }

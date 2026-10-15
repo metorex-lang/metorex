@@ -1,5 +1,6 @@
 // Native function dispatch for the bytecode VM
 
+use crate::object::View;
 use std::rc::Rc;
 
 use crate::error::MetorexError;
@@ -40,9 +41,9 @@ impl BytecodeVm {
                 if args.is_empty() {
                     return Err(self.runtime_err("define_method requires at least one argument"));
                 }
-                let method_name = match &args[0] {
-                    Object::String(s) => s.to_string(),
-                    Object::Symbol(s) => s.to_string(),
+                let method_name = match args[0].view() {
+                    View::String(s) => s.to_string(),
+                    View::Symbol(s) => s.to_string(),
                     _ => {
                         return Err(self.runtime_err(
                             "define_method: first argument must be a String or Symbol",
@@ -56,8 +57,8 @@ impl BytecodeVm {
                         self.runtime_err("define_method requires a function as second argument")
                     );
                 }
-                let func = match &args[1] {
-                    Object::CompiledFunction(f) => Rc::clone(f),
+                let func = match args[1].view() {
+                    View::CompiledFunction(f) => Rc::clone(f),
                     _ => {
                         return Err(
                             self.runtime_err("define_method: second argument must be a function")
@@ -74,7 +75,7 @@ impl BytecodeVm {
                 // Look for a Class on the stack
                 let mut attached = false;
                 for val in self.stack.iter().rev() {
-                    if let Object::Class(class) = val {
+                    if let View::Class(class) = val.view() {
                         class.define_method(&method_name, method_rc.clone());
                         let key = format!("{}#{}", class.name(), method_name);
                         self.globals

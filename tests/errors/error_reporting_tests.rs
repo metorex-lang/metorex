@@ -521,7 +521,10 @@ fn test_self_outside_method_context_answers_main() {
     };
 
     let result = vm.execute_program(&[stmt]).expect("self answers main");
-    assert!(matches!(result, Some(metorex::object::Object::Instance(_))));
+    assert!(matches!(
+        result.as_ref().map(metorex::object::Object::view),
+        Some(metorex::object::View::Instance(_))
+    ));
 }
 
 #[test]
@@ -571,7 +574,7 @@ fn test_pattern_match_no_match_error() {
     let metorex::error::MetorexError::UncaughtException { exception, .. } = &error else {
         panic!("expected an uncaught exception, got {error}");
     };
-    let metorex::object::Object::Exception(raised) = exception else {
+    let metorex::object::View::Exception(raised) = exception.view() else {
         panic!("expected an exception object");
     };
     assert_eq!(raised.borrow().exception_type, "NoMatchingPatternError");

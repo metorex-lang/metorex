@@ -2,6 +2,7 @@
 // rooted at Object.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// Whether a name is private on a class or anywhere above it, which is
@@ -36,7 +37,7 @@ impl VirtualMachine {
         let made = Object::string(text);
         // One string answered over and over is frozen, since a program that
         // changed it would change what everyone else is handed.
-        if let Object::String(held) = &made {
+        if let View::String(held) = made.view() {
             held.freeze();
         }
         self.globals_mut().set(slot, made.clone());
@@ -48,7 +49,7 @@ impl VirtualMachine {
     /// Whether an object is one of the encodings, which metorex holds as a
     /// class of its own under `Encoding`.
     pub(crate) fn names_an_encoding(&self, receiver: &Object) -> bool {
-        let Object::Class(held) = receiver else {
+        let View::Class(held) = receiver.view() else {
             return false;
         };
         let Some(parent) = held.superclass() else {
@@ -83,7 +84,7 @@ pub(crate) fn basic_object_answers(method_name: &str) -> bool {
 /// what `define_method(:respond_to?, Kernel.instance_method(:respond_to?))`
 /// does, and the native implementation behind it answers then.
 pub(crate) fn class_defines(receiver: &Object, method_name: &str) -> bool {
-    let Object::Instance(instance) = receiver else {
+    let View::Instance(instance) = receiver.view() else {
         return false;
     };
     let class = std::rc::Rc::clone(&instance.borrow().class);

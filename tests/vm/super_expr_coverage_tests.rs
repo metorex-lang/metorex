@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -131,7 +132,10 @@ end
 s = SpaceShip.new
 s <=> s
 "#);
-    assert!(matches!(result, Some(Object::Int(0)) | Some(Object::Nil)));
+    assert!(matches!(
+        result.view(),
+        Some(View::Int(0)) | Some(View::Nil)
+    ));
 }
 
 #[test]

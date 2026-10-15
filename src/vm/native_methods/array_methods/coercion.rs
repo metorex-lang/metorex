@@ -2,6 +2,7 @@
 // subscript names.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The elements of an argument that stands for an array: one as it is, and
@@ -15,11 +16,11 @@ impl VirtualMachine {
         length: i64,
         position: Position,
     ) -> Result<i64, MetorexError> {
-        let index = match value {
-            Object::Int(index) => *index,
+        let index = match value.view() {
+            View::Int(index) => index,
             // A Float past the width of a machine word names no index at all.
-            Object::Float(index)
-                if !(-9.223_372_036_854_776e18..9.223_372_036_854_776e18).contains(index) =>
+            View::Float(index)
+                if !(-9.223_372_036_854_776e18..9.223_372_036_854_776e18).contains(&index) =>
             {
                 let message = format!("float {} out of range of integer", index);
                 return Err(crate::vm::errors::simple_exception(
@@ -28,9 +29,9 @@ impl VirtualMachine {
                     position,
                 ));
             }
-            Object::Float(index) => *index as i64,
-            other => {
-                let wide = self.coerce_integer_argument(other, position)?;
+            View::Float(index) => index as i64,
+            _ => {
+                let wide = self.coerce_integer_argument(value, position)?;
                 let Ok(index) = i64::try_from(&wide) else {
                     return Err(crate::vm::errors::simple_exception(
                         "RangeError",
@@ -52,24 +53,24 @@ impl VirtualMachine {
         length: i64,
         position: Position,
     ) -> Result<(i64, i64), MetorexError> {
-        let Object::Range {
+        let View::Range {
             start,
             end,
             exclusive,
             ..
-        } = range
+        } = range.view()
         else {
             return Ok((0, 0));
         };
-        let first = match start.as_ref() {
-            Object::Nil => 0,
-            bound => self.machine_index(bound, length, position)?,
+        let first = match start.view() {
+            View::Nil => 0,
+            _ => self.machine_index(start, length, position)?,
         };
-        let last = match end.as_ref() {
-            Object::Nil => length - 1,
-            bound => {
-                let resolved = self.machine_index(bound, length, position)?;
-                if *exclusive { resolved - 1 } else { resolved }
+        let last = match end.view() {
+            View::Nil => length - 1,
+            _ => {
+                let resolved = self.machine_index(end, length, position)?;
+                if exclusive { resolved - 1 } else { resolved }
             }
         };
         Ok((first, last.saturating_sub(first).saturating_add(1).max(0)))
@@ -84,11 +85,11 @@ impl VirtualMachine {
         length: i64,
         position: Position,
     ) -> Result<i64, MetorexError> {
-        let index: i64 = match value {
-            Object::Int(index) => *index,
-            Object::Float(index) => *index as i64,
-            other => self
-                .coerce_integer_argument(other, position)?
+        let index: i64 = match value.view() {
+            View::Int(index) => index,
+            View::Float(index) => index as i64,
+            _ => self
+                .coerce_integer_argument(value, position)?
                 .try_into()
                 .unwrap_or(i64::MAX),
         };
@@ -106,12 +107,13 @@ impl VirtualMachine {
         wanted: usize,
         position: Position,
     ) -> Result<Vec<Object>, MetorexError> {
-        if let Object::Array(elements) = value {
+        if let View::Array(elements) = value.view() {
             return Ok(elements.borrow().clone());
         }
         if self.answers_to(value, "to_ary", position)?
-            && let Object::Array(elements) =
-                self.send_to_object(value.clone(), "to_ary", vec![], position)?
+            && let View::Array(elements) = self
+                .send_to_object(value.clone(), "to_ary", vec![], position)?
+                .view()
         {
             return Ok(elements.borrow().clone());
         }
@@ -126,16 +128,16 @@ impl VirtualMachine {
             // lets an endless walk be zipped against a finite array.
             let taken =
                 self.send_to_object(walk, "first", vec![Object::Int(wanted as i64)], position)?;
-            if let Object::Array(elements) = taken {
+            if let View::Array(elements) = taken.view() {
                 return Ok(elements.borrow().clone());
             }
             return Ok(Vec::new());
         }
-        let named = match value {
-            Object::Bool(true) => "TrueClass".to_string(),
-            Object::Bool(false) => "FalseClass".to_string(),
-            Object::Nil => "NilClass".to_string(),
-            held => self.builtins().class_of(held).ruby_name().to_string(),
+        let named = match value.view() {
+            View::Bool(true) => "TrueClass".to_string(),
+            View::Bool(false) => "FalseClass".to_string(),
+            View::Nil => "NilClass".to_string(),
+            _ => self.builtins().class_of(value).ruby_name().to_string(),
         };
         let message = format!("wrong argument type {} (must respond to :each)", named);
         Err(crate::vm::errors::simple_exception(
@@ -150,13 +152,13 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<Vec<Object>, MetorexError> {
-        if let Object::Array(elements) = value {
+        if let View::Array(elements) = value.view() {
             return Ok(elements.borrow().clone());
         }
         // An instance of an Array subclass already is an Array, so its
         // elements are taken directly rather than through `to_ary`.
-        if let Some(Object::Array(elements)) =
-            crate::vm::native_methods::array_subclass_value(value)
+        if let Some(View::Array(elements)) =
+            crate::vm::native_methods::array_subclass_value(value).view()
         {
             return Ok(elements.borrow().clone());
         }
@@ -170,8 +172,11 @@ impl VirtualMachine {
         if !self.responds_to(value, "to_ary") {
             return Err(refuse(self));
         }
-        match self.send_to_object(value.clone(), "to_ary", vec![], position)? {
-            Object::Array(elements) => Ok(elements.borrow().clone()),
+        match self
+            .send_to_object(value.clone(), "to_ary", vec![], position)?
+            .view()
+        {
+            View::Array(elements) => Ok(elements.borrow().clone()),
             _ => Err(refuse(self)),
         }
     }
@@ -180,9 +185,9 @@ impl VirtualMachine {
 /// One index into an array, counted from the end when negative, and None when
 /// it names no element at all.
 pub(crate) fn normalize_index(value: &Object, length: i64) -> Option<usize> {
-    let index = match value {
-        Object::Int(index) => *index,
-        Object::Float(index) => *index as i64,
+    let index = match value.view() {
+        View::Int(index) => index,
+        View::Float(index) => index as i64,
         _ => return None,
     };
     let index = if index < 0 { index + length } else { index };

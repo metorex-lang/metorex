@@ -6,6 +6,7 @@
 use crate::error::MetorexError;
 use crate::lexer::{Lexer, Token, TokenKind};
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 
 /// One token with how deeply nested it sits: the depth before it and after
@@ -343,15 +344,15 @@ impl VirtualMachine {
         method_name: &str,
         arguments: &[Object],
     ) -> Result<Option<Object>, MetorexError> {
-        let (Some(Object::String(path)), Some(Object::Int(line))) =
-            (arguments.first(), arguments.get(1))
+        let (Some(View::String(path)), Some(View::Int(line))) =
+            (arguments.first().view(), arguments.get(1).view())
         else {
             return Ok(Some(Object::Nil));
         };
         let Ok(source) = std::fs::read_to_string(path.as_str().to_string()) else {
             return Ok(Some(Object::Nil));
         };
-        let line = *line as usize;
+        let line = line as usize;
         Ok(Some(match method_name {
             "__statement_lines__" => {
                 statement_lines(&source, line).map_or(Object::Nil, |(first, last)| {

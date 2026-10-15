@@ -1,6 +1,7 @@
 // Building an instance without running `initialize`.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// `allocate` and the classes that refuse it, whose instances are
@@ -17,8 +18,8 @@ impl VirtualMachine {
         // class or module body is not.
         if method_name == "using" && class_rc.name() == "Object" {
             let inside_body = matches!(
-                self.environment().get("self"),
-                Some(Object::Class(current) | Object::Module(current)) if current.name() != "Object"
+                self.environment().get("self").view(),
+                Some(View::Class(current) | View::Module(current)) if current.name() != "Object"
             );
             if inside_body {
                 let message = "main.using is permitted only at toplevel".to_string();
@@ -177,7 +178,7 @@ impl VirtualMachine {
         // given yet, which is what Marshal builds one back from.
         if self.is_exception_class(class_rc) {
             let made = Object::exception(class_rc.name(), String::new());
-            if let Object::Exception(details) = &made {
+            if let View::Exception(details) = made.view() {
                 let mut details = details.borrow_mut();
                 details.class = Some(Rc::clone(class_rc));
                 details.message_given = false;

@@ -1,6 +1,7 @@
 // The keys a hash keeps its own bookkeeping under.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 /// Sentinel key for storing the default proc on hashes created with Hash.new { ... }
 pub(crate) const DEFAULT_PROC_KEY: &str = "__MX_DEFAULT_PROC__";
@@ -32,7 +33,7 @@ pub(crate) fn is_internal_key(key: &str) -> bool {
 /// Reconstruct the original key Object from its string key, using the sentinel
 /// __MX_KEY_OBJECTS__ sub-map if present for non-primitive keys.
 pub(crate) fn reconstruct_key(dict: &indexmap::IndexMap<String, Object>, key_str: &str) -> Object {
-    if let Some(Object::Dict(key_objs)) = dict.get(KEY_OBJECTS_KEY)
+    if let Some(View::Dict(key_objs)) = dict.get(KEY_OBJECTS_KEY).view()
         && let Some(obj) = key_objs.borrow().get(key_str)
     {
         return obj.clone();

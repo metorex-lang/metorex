@@ -1,6 +1,7 @@
 // The assertions the test helpers are written against.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     pub(crate) fn assert_true(
@@ -77,8 +78,9 @@ impl VirtualMachine {
                 crate::vm::utils::position_to_location(position),
             ));
         }
-        let block = match self.pending_block.take() {
-            Some(Object::Block(b)) => b,
+        let viewed = self.pending_block.take();
+        let block = match viewed.view() {
+            Some(View::Block(b)) => b,
             _ => {
                 return Err(MetorexError::runtime_error(
                     "assert_raises requires a block",
@@ -86,7 +88,7 @@ impl VirtualMachine {
                 ));
             }
         };
-        match self.execute_block_body(&block, vec![]) {
+        match self.execute_block_body(block, vec![]) {
             Err(_) => Ok(Object::Bool(true)),
             Ok(_) => Err(MetorexError::runtime_error(
                 "Expected block to raise an error, but it did not",

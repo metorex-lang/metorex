@@ -1,6 +1,7 @@
 // Whether a value is frozen, and the error a write to one raises.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// The address a collection lives at, used to record that it is frozen.
@@ -16,21 +17,21 @@ impl VirtualMachine {
     }
 
     pub(crate) fn collection_address(receiver: &Object) -> Option<usize> {
-        match receiver {
-            Object::Array(items) => Some(Rc::as_ptr(items) as usize),
-            Object::Dict(entries) => Some(Rc::as_ptr(entries) as usize),
-            Object::Set(items) => Some(Rc::as_ptr(items) as usize),
+        match receiver.view() {
+            View::Array(items) => Some(Rc::as_ptr(items) as usize),
+            View::Dict(entries) => Some(Rc::as_ptr(entries) as usize),
+            View::Set(items) => Some(Rc::as_ptr(items) as usize),
             // A String keeps its instance variables the same way, since the
             // text itself has nowhere to put them.
-            Object::String(text) => Some(Rc::as_ptr(text) as usize),
+            View::String(text) => Some(Rc::as_ptr(text) as usize),
             // A callable and a Binding are the same: what they hold is the
             // code and the scope, with nowhere for a variable or a flag.
-            Object::Method(method) => Some(Rc::as_ptr(method) as usize),
-            Object::Block(block) => Some(Rc::as_ptr(block) as usize),
-            Object::Binding(binding) => Some(Rc::as_ptr(binding) as usize),
+            View::Method(method) => Some(Rc::as_ptr(method) as usize),
+            View::Block(block) => Some(Rc::as_ptr(block) as usize),
+            View::Binding(binding) => Some(Rc::as_ptr(binding) as usize),
             // A Regexp is known by the pattern it holds, which each one made
             // holds a copy of its own.
-            Object::Regex(pattern, _) => Some(Rc::as_ptr(pattern) as usize),
+            View::Regex(pattern, _) => Some(Rc::as_ptr(pattern) as usize),
             _ => None,
         }
     }
@@ -81,13 +82,13 @@ impl VirtualMachine {
         let mut message = format!("can't modify frozen {}: {}", class_name, rendered);
         // A run told to report where a literal was written names the place
         // the refused string came from.
-        if let Object::String(text) = receiver
+        if let View::String(text) = receiver.view()
             && let Some(written_at) = text.created_at()
         {
             message.push_str(&format!(", created at {}", written_at));
         }
         let exception = Object::exception("FrozenError", message.clone());
-        if let Object::Exception(details) = &exception {
+        if let View::Exception(details) = exception.view() {
             details.borrow_mut().receiver = Some(Box::new(receiver.clone()));
         }
         MetorexError::UncaughtException {
@@ -100,34 +101,34 @@ impl VirtualMachine {
     /// Whether `receiver` is frozen. Immediates are always frozen; instances
     /// and classes/modules carry their own flag.
     pub(crate) fn object_is_frozen(&self, receiver: &Object) -> bool {
-        match receiver {
-            Object::Bool(_)
-            | Object::Nil
-            | Object::Int(_)
-            | Object::BigInt(_)
-            | Object::Float(_)
-            | Object::Symbol(_) => true,
+        match receiver.view() {
+            View::Bool(_)
+            | View::Nil
+            | View::Int(_)
+            | View::BigInt(_)
+            | View::Float(_)
+            | View::Symbol(_) => true,
             // A string changes unless it has been frozen, so it carries the
             // flag itself rather than always answering yes.
-            Object::String(text) => text.is_frozen(),
+            View::String(text) => text.is_frozen(),
             // A range holds its ends and nothing else, and Ruby freezes every
             // one it builds. A copy made by `dup` is not frozen, and it is
             // told apart by the mark it carries. A subclass instance is an
             // ordinary object, so it is not reached here.
-            Object::Range { mark, .. } => !self
+            View::Range { mark, .. } => !self
                 .thawed_ranges
                 .contains_key(&(Rc::as_ptr(mark) as usize)),
-            Object::Class(c) | Object::Module(c) => c.is_frozen(),
-            Object::Array(_)
-            | Object::Dict(_)
-            | Object::Set(_)
-            | Object::Method(_)
-            | Object::Block(_)
-            | Object::Binding(_)
-            | Object::Regex(_, _) => Self::collection_address(receiver)
+            View::Class(c) | View::Module(c) => c.is_frozen(),
+            View::Array(_)
+            | View::Dict(_)
+            | View::Set(_)
+            | View::Method(_)
+            | View::Block(_)
+            | View::Binding(_)
+            | View::Regex(_, _) => Self::collection_address(receiver)
                 .is_some_and(|address| self.frozen_collections.contains_key(&address)),
             // Complex and Rational are value objects, frozen from birth.
-            Object::Instance(inst) => {
+            View::Instance(inst) => {
                 inst.borrow().frozen || matches!(inst.borrow().class.name(), "Complex" | "Rational")
             }
             _ => false,
@@ -136,10 +137,10 @@ impl VirtualMachine {
 
     /// Freezes `receiver`. Immediates and ranges are frozen already.
     pub(crate) fn freeze_object(&mut self, receiver: &Object) {
-        match receiver {
-            Object::Class(c) | Object::Module(c) => c.freeze(),
-            Object::String(text) => text.freeze(),
-            Object::Instance(inst) => {
+        match receiver.view() {
+            View::Class(c) | View::Module(c) => c.freeze(),
+            View::String(text) => text.freeze(),
+            View::Instance(inst) => {
                 inst.borrow_mut().frozen = true;
                 // Freezing an object freezes its singleton class, so
                 // no singleton method can be added afterwards.
@@ -160,10 +161,10 @@ impl VirtualMachine {
 
     /// Lets `receiver` change again. Immediates and ranges stay frozen.
     pub(crate) fn thaw_object(&mut self, receiver: &Object) {
-        match receiver {
-            Object::String(text) => text.thaw(),
-            Object::Class(c) | Object::Module(c) => c.thaw(),
-            Object::Instance(inst) => inst.borrow_mut().frozen = false,
+        match receiver.view() {
+            View::String(text) => text.thaw(),
+            View::Class(c) | View::Module(c) => c.thaw(),
+            View::Instance(inst) => inst.borrow_mut().frozen = false,
             _ => {
                 if let Some(address) = Self::collection_address(receiver) {
                     self.frozen_collections.remove(&address);

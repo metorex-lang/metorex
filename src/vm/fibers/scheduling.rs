@@ -1,6 +1,7 @@
 // The scheduler a thread hands the waits of its non-blocking fibers to.
 
 use super::*;
+use crate::object::View;
 use crate::vm::ractors::moved_address;
 
 /// The methods a scheduler has to answer before a thread will take it.
@@ -31,7 +32,7 @@ impl VirtualMachine {
         scheduler: Object,
         position: Position,
     ) -> Result<(), MetorexError> {
-        if !matches!(scheduler, Object::Nil) {
+        if !matches!(scheduler.view(), View::Nil) {
             for wanted in SCHEDULER_METHODS {
                 if !self.responds_to(&scheduler, wanted) {
                     return Err(crate::vm::errors::simple_exception(
@@ -50,7 +51,7 @@ impl VirtualMachine {
             }
         }
         self.close_thread_scheduler(position)?;
-        if !matches!(scheduler, Object::Nil) {
+        if !matches!(scheduler.view(), View::Nil) {
             let thread = moved_address(&self.running_thread()).unwrap_or(0);
             self.thread_schedulers.insert(thread, scheduler);
         }

@@ -1,6 +1,7 @@
 // The constants registered against a file that defines them.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Return the autoload path registered for `name` on `class_rc` (walking
@@ -34,9 +35,9 @@ impl VirtualMachine {
             .unwrap_or(Object::Nil);
         for (cls, n, loader) in &self.autoload_loading {
             if Rc::ptr_eq(cls, class_rc) && n == name {
-                let same_thread = match (loader, &current) {
-                    (Object::Nil, Object::Nil) => true,
-                    (Object::Instance(a), Object::Instance(b)) => Rc::ptr_eq(a, b),
+                let same_thread = match (loader.view(), current.view()) {
+                    (View::Nil, View::Nil) => true,
+                    (View::Instance(a), View::Instance(b)) => Rc::ptr_eq(a, b),
                     _ => false,
                 };
                 if same_thread {
@@ -82,9 +83,9 @@ impl VirtualMachine {
             .unwrap_or(Object::Nil);
         for (cls, n, loader) in &self.autoload_loading {
             if Rc::ptr_eq(cls, class_rc) && n == name {
-                let same_thread = match (loader, &current) {
-                    (Object::Nil, Object::Nil) => true,
-                    (Object::Instance(a), Object::Instance(b)) => Rc::ptr_eq(a, b),
+                let same_thread = match (loader.view(), current.view()) {
+                    (View::Nil, View::Nil) => true,
+                    (View::Instance(a), View::Instance(b)) => Rc::ptr_eq(a, b),
                     _ => false,
                 };
                 return !same_thread;
@@ -115,10 +116,10 @@ impl VirtualMachine {
                 None => return false,
             },
         };
-        if let Some(Object::Array(arr)) = self.globals().get("\"") {
+        if let Some(View::Array(arr)) = self.globals().get("\"").view() {
             arr.borrow()
                 .iter()
-                .any(|o| matches!(o, Object::String(s) if *s.as_str() == *canonical))
+                .any(|o| matches!(o.view(), View::String(s) if *s.as_str() == *canonical))
         } else {
             false
         }
@@ -131,14 +132,15 @@ impl VirtualMachine {
         &mut self,
         wrapper: &Rc<crate::class::Class>,
     ) -> Option<Object> {
-        let Some(Object::Instance(main)) = self.globals().get("__main__") else {
+        let viewed = self.globals().get("__main__");
+        let Some(View::Instance(main)) = viewed.view() else {
             return None;
         };
         let object_class = Rc::clone(&main.borrow().class);
         let stand_in = Object::Instance(crate::object::Instance::new(object_class));
         // The copy is a main of the program's own, which is what decides
         // whether `using` written on it is allowed.
-        if let Object::Instance(held) = &stand_in {
+        if let View::Instance(held) = stand_in.view() {
             held.borrow_mut()
                 .set_var(MAIN_STAND_IN.to_string(), Object::Bool(true));
         }
@@ -168,11 +170,11 @@ impl VirtualMachine {
 
     /// Whether `named` is listed in `$LOADED_FEATURES` as it stands.
     pub(crate) fn feature_is_listed(&self, named: &str) -> bool {
-        match self.globals().get("\"") {
-            Some(Object::Array(features)) => features
+        match self.globals().get("\"").view() {
+            Some(View::Array(features)) => features
                 .borrow()
                 .iter()
-                .any(|held| matches!(held, Object::String(text) if *text.as_str() == *named)),
+                .any(|held| matches!(held.view(), View::String(text) if *text.as_str() == *named)),
             _ => false,
         }
     }
@@ -346,9 +348,9 @@ impl VirtualMachine {
             if let Some(canonical) = canonical_str {
                 self.unmark_file_loaded(&PathBuf::from(canonical));
             }
-            if let Some(Object::Array(arr)) = self.globals().get("\"") {
+            if let Some(View::Array(arr)) = self.globals().get("\"").view() {
                 arr.borrow_mut()
-                    .retain(|o| !matches!(o, Object::String(s) if *s.as_str() == *path));
+                    .retain(|o| !matches!(o.view(), View::String(s) if *s.as_str() == *path));
             }
             reloading = true;
         }
@@ -386,8 +388,8 @@ impl VirtualMachine {
         let main_require = self
             .globals()
             .get("TOPLEVEL_BINDING")
-            .and_then(|tb| match tb {
-                Object::Binding(b) => b.receiver.clone(),
+            .and_then(|tb| match tb.view() {
+                View::Binding(b) => b.receiver.clone(),
                 _ => None,
             })
             .and_then(|main| {
@@ -462,7 +464,8 @@ impl VirtualMachine {
         // under `$VERBOSE = true`; routed through `$stderr` so the
         // mspec `complain` matcher (which swaps `$stderr` for an
         // `IOStub`) captures it.
-        if value.is_none() && matches!(self.globals().get("VERBOSE"), Some(Object::Bool(true))) {
+        if value.is_none() && matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true)))
+        {
             let mod_name = if class_rc.name().is_empty() {
                 "main".to_string()
             } else {
@@ -487,7 +490,7 @@ impl VirtualMachine {
             vec![Object::string(feature.to_string())],
             crate::lexer::Position::default(),
         );
-        let Ok(Object::Array(found)) = resolved else {
+        let Ok(View::Array(found)) = resolved.as_ref().map(Object::view) else {
             return None;
         };
         found.borrow().get(1).map(|held| held.to_string())
@@ -527,11 +530,11 @@ pub(crate) const AUTOLOAD_WAIT_CEILING: std::time::Duration = std::time::Duratio
 
 /// Whether two values name the same Thread.
 pub(crate) fn on_the_same_thread(one: &Object, other: &Object) -> bool {
-    match (one, other) {
-        (Object::Instance(held), Object::Instance(here)) => Rc::ptr_eq(held, here),
+    match (one.view(), other.view()) {
+        (View::Instance(held), View::Instance(here)) => Rc::ptr_eq(held, here),
         // Neither names a thread of its own, so both are the thread the
         // program started on.
-        (Object::Nil, Object::Nil) => true,
+        (View::Nil, View::Nil) => true,
         _ => false,
     }
 }

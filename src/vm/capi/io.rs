@@ -6,6 +6,7 @@ use super::calls::call;
 use super::handles::{QFALSE, QNIL, QTRUE, Value, objects_from, to_object, to_value};
 use super::{called_from, interpreter, keeping_call_state, raise};
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::c_char;
@@ -67,8 +68,8 @@ fn descriptor(io: Value) -> i32 {
         io_error("closed stream");
     }
     let answered = super::control::caught(|| call(to_object(io), "fileno", Vec::new()));
-    match answered {
-        Ok(Object::Int(number)) => number as i32,
+    match answered.as_ref().map(Object::view) {
+        Ok(View::Int(number)) => number as i32,
         _ => io_error("uninitialized stream"),
     }
 }
@@ -106,30 +107,32 @@ pub extern "C-unwind" fn rb_io_mode(io: Value) -> i32 {
 /// or the mode string it was opened with: add to its end, bring it into
 /// being, or cut it down.
 fn opening_flags(io: &Object) -> i32 {
-    let Object::Instance(held) = io else {
+    let View::Instance(held) = io.view() else {
         return 0;
     };
     let held = held.borrow();
-    let (appends, creates, truncates) =
-        match (held.get_var("__file_flags"), held.get_var("__file_mode")) {
-            (Some(Object::Int(bits)), _) => {
-                let bits = *bits as libc::c_int;
-                (
-                    bits & libc::O_APPEND != 0,
-                    bits & libc::O_CREAT != 0,
-                    bits & libc::O_TRUNC != 0,
-                )
-            }
-            (_, Some(Object::String(mode))) => {
-                let access = mode.as_str().chars().next();
-                (
-                    access == Some('a'),
-                    matches!(access, Some('a' | 'w')),
-                    access == Some('w'),
-                )
-            }
-            _ => (false, false, false),
-        };
+    let (appends, creates, truncates) = match (
+        held.get_var("__file_flags").view(),
+        held.get_var("__file_mode").view(),
+    ) {
+        (Some(View::Int(bits)), _) => {
+            let bits = bits as libc::c_int;
+            (
+                bits & libc::O_APPEND != 0,
+                bits & libc::O_CREAT != 0,
+                bits & libc::O_TRUNC != 0,
+            )
+        }
+        (_, Some(View::String(mode))) => {
+            let access = mode.as_str().chars().next();
+            (
+                access == Some('a'),
+                matches!(access, Some('a' | 'w')),
+                access == Some('w'),
+            )
+        }
+        _ => (false, false, false),
+    };
     [
         (appends, FMODE_APPEND),
         (creates, FMODE_CREATE),

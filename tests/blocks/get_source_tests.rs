@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -67,7 +68,7 @@ Foo.new.get_source(:to_s)
     // The test verifies it doesn't crash and returns a result.
     let result = eval(source);
     // Either nil or a method stub - should not panic
-    assert!(result == Some(Object::Nil) || matches!(result, Some(Object::Method(_))));
+    assert!(result == Some(Object::Nil) || matches!(result.view(), Some(View::Method(_))));
 }
 
 #[test]

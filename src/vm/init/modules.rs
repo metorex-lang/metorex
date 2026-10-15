@@ -1,6 +1,7 @@
 // Registering the core modules.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 /// Register built-in modules (Comparable, Enumerable, Kernel, etc.).
 pub(crate) fn register_builtin_modules(globals: &mut GlobalRegistry, builtins: &BuiltinClasses) {
@@ -11,7 +12,7 @@ pub(crate) fn register_builtin_modules(globals: &mut GlobalRegistry, builtins: &
     // Integer and Float reach Comparable through Numeric, so only the classes
     // Ruby mixes it into directly carry it.
     for name in ["Numeric", "String", "Symbol"] {
-        if let Some(Object::Class(class)) = globals.get(name) {
+        if let Some(View::Class(class)) = globals.get(name).view() {
             class.add_mixin(Rc::clone(&comparable));
         }
     }
@@ -21,7 +22,7 @@ pub(crate) fn register_builtin_modules(globals: &mut GlobalRegistry, builtins: &
     // walked, which is what `Array.include?(Enumerable)` reports.
     let enumerable = Class::new_module("Enumerable");
     for name in ["Array", "Hash", "Range", "Set", "Struct", "Enumerator"] {
-        if let Some(Object::Class(class)) = globals.get(name) {
+        if let Some(View::Class(class)) = globals.get(name).view() {
             class.add_mixin(Rc::clone(&enumerable));
         }
     }
@@ -61,7 +62,7 @@ pub(crate) fn register_builtin_modules(globals: &mut GlobalRegistry, builtins: &
         if let Some(found) = built.get(display)
             && !listed
                 .iter()
-                .any(|held| matches!(held, Object::Class(class) if Rc::ptr_eq(class, found)))
+                .any(|held| matches!(held.view(), View::Class(class) if Rc::ptr_eq(class, found)))
         {
             listed.push(Object::Class(Rc::clone(found)));
         }
@@ -73,7 +74,7 @@ pub(crate) fn register_builtin_modules(globals: &mut GlobalRegistry, builtins: &
     globals.set("Encoding", Object::Class(encoding));
 
     // The open flags `File.open` and `Kernel#open` accept in `flags:`.
-    if let Some(Object::Class(file_class)) = globals.get("File") {
+    if let Some(View::Class(file_class)) = globals.get("File").view() {
         for (name, value) in FILE_OPEN_FLAGS {
             file_class.set_class_var(name, Object::Int(value));
             globals.set(format!("File::{}", name), Object::Int(value));
@@ -82,7 +83,7 @@ pub(crate) fn register_builtin_modules(globals: &mut GlobalRegistry, builtins: &
 
     // File::Constants carries the open and match flags, and File includes it,
     // which is where `File.include?(File::Constants)` reads them from.
-    if let Some(Object::Class(file_class)) = globals.get("File") {
+    if let Some(View::Class(file_class)) = globals.get("File").view() {
         let constants = Class::new_module("File::Constants");
         for (name, value) in FILE_OPEN_FLAGS {
             constants.set_class_var(name, Object::Int(value));
@@ -94,21 +95,21 @@ pub(crate) fn register_builtin_modules(globals: &mut GlobalRegistry, builtins: &
 
     // A file reads as a sequence of lines, so File carries Enumerable the way
     // IO does.
-    if let (Some(Object::Class(file_class)), Some(Object::Module(enumerable))) =
-        (globals.get("File"), globals.get("Enumerable"))
+    if let (Some(View::Class(file_class)), Some(View::Module(enumerable))) =
+        (globals.get("File").view(), globals.get("Enumerable").view())
     {
-        file_class.add_mixin(enumerable);
+        file_class.add_mixin(enumerable.clone());
     }
 
     // The path that discards everything written to it.
-    if let Some(Object::Class(file_class)) = globals.get("File") {
+    if let Some(View::Class(file_class)) = globals.get("File").view() {
         let null = Object::string("/dev/null");
         file_class.set_class_var("NULL", null.clone());
         globals.set("File::NULL", null);
     }
 
     // File::Separator and its aliases, which a path built by hand uses.
-    if let Some(Object::Class(file_class)) = globals.get("File") {
+    if let Some(View::Class(file_class)) = globals.get("File").view() {
         for name in ["Separator", "SEPARATOR"] {
             let separator = Object::string("/");
             file_class.set_class_var(name, separator.clone());
@@ -180,11 +181,11 @@ pub(crate) fn register_builtin_modules(globals: &mut GlobalRegistry, builtins: &
     let io = Rc::clone(&builtins.io_class);
     // An IO reads as a sequence of lines, and it answers the open flags under
     // its own name, both of which Ruby arranges by including these two.
-    if let Some(Object::Module(constants)) = globals.get("File::Constants") {
-        io.add_mixin(constants);
+    if let Some(View::Module(constants)) = globals.get("File::Constants").view() {
+        io.add_mixin(constants.clone());
     }
-    if let Some(Object::Module(enumerable)) = globals.get("Enumerable") {
-        io.add_mixin(enumerable);
+    if let Some(View::Module(enumerable)) = globals.get("Enumerable").view() {
+        io.add_mixin(enumerable.clone());
     }
     globals.set("IO", Object::Class(io));
 

@@ -2,6 +2,7 @@
 // the name is none of its own, and the next step is tried.
 
 use super::*;
+use crate::object::View;
 
 /// One step of the chain: every group of String methods reads the same
 /// arguments and answers the same way.
@@ -40,7 +41,7 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        let Object::String(string_value) = receiver else {
+        let View::String(string_value) = receiver.view() else {
             return Ok(None);
         };
         for step in STEPS {

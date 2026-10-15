@@ -3,6 +3,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -18,8 +19,8 @@ fn run(code: &str) -> Option<Object> {
 fn on_a_pipe(code: &str) -> String {
     match run(&format!(
         "reading, writing = IO.pipe\nbegin\n  ({code}).inspect\nrescue ArgumentError, TypeError, IOError => error\n  [error.class, error.message].inspect\nend"
-    )) {
-        Some(Object::String(text)) => text.as_str().to_string(),
+    )).view() {
+        Some(View::String(text)) => text.as_str().to_string(),
         other => panic!("expected an inspection, got {other:?}"),
     }
 }

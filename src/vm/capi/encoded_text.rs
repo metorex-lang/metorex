@@ -10,6 +10,7 @@ use super::encodings::{
 use super::handles::{Value, to_object, to_value};
 use super::{called_from, interpreter, raise};
 use crate::object::Object;
+use crate::object::View;
 use std::ffi::c_char;
 
 const CODERANGE_7BIT: i32 = 0x100000;
@@ -138,7 +139,7 @@ pub extern "C-unwind" fn rb_enc_get_index(object: Value) -> i32 {
 pub extern "C-unwind" fn rb_enc_set_index(object: Value, index: i32) {
     let held = to_object(object);
     let encoding = encoding_object(rb_enc_from_index(index));
-    if let Object::Regex(pattern, _) = &held {
+    if let View::Regex(pattern, _) = held.view() {
         let name = call(encoding, "name", Vec::new()).to_string();
         interpreter().force_pattern_encoding(pattern, name);
         return;
@@ -184,9 +185,9 @@ pub extern "C-unwind" fn rb_obj_encoding(object: Value) -> Value {
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_enc_compatible(first: Value, second: Value) -> *const RbEncoding {
     let arguments = vec![to_object(first), to_object(second)];
-    match call(top_level_module("Encoding"), "compatible?", arguments) {
-        Object::Nil => std::ptr::null(),
-        encoding => encoding_struct(encoding),
+    match call(top_level_module("Encoding"), "compatible?", arguments).view() {
+        View::Nil => std::ptr::null(),
+        encoding => encoding_struct(encoding.to_object()),
     }
 }
 

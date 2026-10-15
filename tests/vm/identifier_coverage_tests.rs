@@ -4,6 +4,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -175,7 +176,7 @@ end
 Foo.config
 "#);
     assert!(result.is_some());
-    assert!(!matches!(result, Some(Object::Nil)));
+    assert!(!matches!(result.view(), Some(View::Nil)));
 }
 
 // ── Identifier resolution: class constants from instance methods ──────────
@@ -298,7 +299,7 @@ def check
 end
 check
 "#);
-    assert!(matches!(result, Some(Object::Class(_))));
+    assert!(matches!(result.view(), Some(View::Class(_))));
 }
 
 #[test]

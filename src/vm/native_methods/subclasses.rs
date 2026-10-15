@@ -1,6 +1,7 @@
 // The value an instance of a core-class subclass holds behind it.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 /// Instance variable a String subclass keeps its characters in.
 pub(crate) const STRING_SUBCLASS_VAR: &str = "__string__";
@@ -22,7 +23,7 @@ pub(crate) const RANGE_SUBCLASS_VAR: &str = "__range__";
 /// The backing range an instance of a Range subclass holds, or None when
 /// `receiver` is not one.
 pub(crate) fn range_subclass_value(receiver: &Object) -> Option<Object> {
-    let Object::Instance(instance) = receiver else {
+    let View::Instance(instance) = receiver.view() else {
         return None;
     };
     instance
@@ -36,11 +37,11 @@ pub(crate) fn range_subclass_value(receiver: &Object) -> Option<Object> {
 /// of a Range subclass, which is what lets a subclass stand wherever a range
 /// is expected.
 pub(crate) fn as_range(value: &Object) -> Option<Object> {
-    if matches!(value, Object::Range { .. }) {
+    if matches!(value.view(), View::Range { .. }) {
         return Some(value.clone());
     }
-    match range_subclass_value(value) {
-        Some(held @ Object::Range { .. }) => Some(held),
+    match range_subclass_value(value).view() {
+        Some(held @ View::Range { .. }) => Some(held.to_object()),
         _ => None,
     }
 }
@@ -50,7 +51,7 @@ pub(crate) const REGEXP_SUBCLASS_VAR: &str = "__regexp__";
 
 /// The pattern behind an instance of a Regexp subclass.
 pub(crate) fn regexp_subclass_value(receiver: &Object) -> Option<Object> {
-    let Object::Instance(instance) = receiver else {
+    let View::Instance(instance) = receiver.view() else {
         return None;
     };
     instance
@@ -62,7 +63,7 @@ pub(crate) fn regexp_subclass_value(receiver: &Object) -> Option<Object> {
 
 /// The characters behind an instance of a String subclass.
 pub(crate) fn string_subclass_value(receiver: &Object) -> Option<Object> {
-    let Object::Instance(instance) = receiver else {
+    let View::Instance(instance) = receiver.view() else {
         return None;
     };
     instance
@@ -75,7 +76,7 @@ pub(crate) fn string_subclass_value(receiver: &Object) -> Option<Object> {
 /// `receiver` is not one. The Rc is shared, so a mutation through it is
 /// visible to the instance.
 pub(crate) fn array_subclass_value(receiver: &Object) -> Option<Object> {
-    let Object::Instance(instance) = receiver else {
+    let View::Instance(instance) = receiver.view() else {
         return None;
     };
     instance
@@ -90,7 +91,7 @@ pub(crate) fn array_subclass_value(receiver: &Object) -> Option<Object> {
 /// The block an instance of a Proc subclass stands for, or None when
 /// `receiver` is not one.
 pub(crate) fn proc_subclass_value(receiver: &Object) -> Option<Object> {
-    let Object::Instance(instance) = receiver else {
+    let View::Instance(instance) = receiver.view() else {
         return None;
     };
     instance
@@ -101,7 +102,7 @@ pub(crate) fn proc_subclass_value(receiver: &Object) -> Option<Object> {
 }
 
 pub(crate) fn set_subclass_value(receiver: &Object) -> Option<Object> {
-    let Object::Instance(instance) = receiver else {
+    let View::Instance(instance) = receiver.view() else {
         return None;
     };
     instance
@@ -114,7 +115,7 @@ pub(crate) fn set_subclass_value(receiver: &Object) -> Option<Object> {
 /// `receiver` is not one. The Rc is shared, so a change through it is visible
 /// to the instance.
 pub(crate) fn hash_subclass_value(receiver: &Object) -> Option<Object> {
-    let Object::Instance(instance) = receiver else {
+    let View::Instance(instance) = receiver.view() else {
         return None;
     };
     instance
@@ -126,11 +127,11 @@ pub(crate) fn hash_subclass_value(receiver: &Object) -> Option<Object> {
 /// The dictionary behind a value: a Hash itself, or the one an instance of a
 /// Hash subclass keeps.
 pub(crate) fn as_dict(value: &Object) -> Option<Object> {
-    if matches!(value, Object::Dict(_)) {
+    if matches!(value.view(), View::Dict(_)) {
         return Some(value.clone());
     }
-    match hash_subclass_value(value) {
-        Some(held @ Object::Dict(_)) => Some(held),
+    match hash_subclass_value(value).view() {
+        Some(held @ View::Dict(_)) => Some(held.to_object()),
         _ => None,
     }
 }

@@ -1,6 +1,7 @@
 // Making a fiber, handing control to one, and suspending it again.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Make a fiber that runs `block` when it is first resumed. The number it
@@ -491,9 +492,9 @@ impl VirtualMachine {
             None => None,
         };
         let running_on = self.thread_current_stack.last();
-        let same = match (made_on, running_on) {
+        let same = match (made_on.view(), running_on.view()) {
             (None, None) => true,
-            (Some(Object::Instance(made)), Some(Object::Instance(running))) => {
+            (Some(View::Instance(made)), Some(View::Instance(running))) => {
                 std::rc::Rc::ptr_eq(made, running)
             }
             _ => false,
@@ -570,8 +571,8 @@ impl VirtualMachine {
         // `rescue` and `ensure` blocks it is inside run the way they would
         // had the exception been raised there.
         if let Some(raised) = self.fibers[frame_handle].raising.take() {
-            let message = match &raised {
-                Object::Exception(details) => details.borrow().message.clone(),
+            let message = match raised.view() {
+                View::Exception(details) => details.borrow().message.clone(),
                 other => format!("{other}"),
             };
             return Err(MetorexError::UncaughtException {

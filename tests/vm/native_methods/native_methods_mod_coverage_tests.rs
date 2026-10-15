@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -64,8 +65,8 @@ module InspMod
 end
 InspMod.inspect
 "#);
-    match result {
-        Some(Object::String(s)) => assert!(s.as_str().contains("InspMod")),
+    match result.view() {
+        Some(View::String(s)) => assert!(s.as_str().contains("InspMod")),
         other => panic!("expected String, got {:?}", other),
     }
 }
@@ -264,5 +265,5 @@ b = lambda { }.binding
 b.receiver
 "#);
     // For a top-level lambda, receiver is not bound to an Instance, so returns Nil.
-    assert!(matches!(result, Some(Object::Nil) | Some(_)));
+    assert!(matches!(result.view(), Some(View::Nil) | Some(_)));
 }

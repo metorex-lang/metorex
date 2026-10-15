@@ -2,6 +2,7 @@ use metorex::ast::{BinaryOp, Expression, InterpolationPart, Statement, UnaryOp};
 use metorex::error::MetorexError;
 use metorex::lexer::Position;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::vm::VirtualMachine;
 
 fn pos(line: usize, column: usize) -> Position {
@@ -68,8 +69,8 @@ fn promotes_integer_and_float_in_binary_ops() {
     };
 
     vm.execute_program(&[assignment]).expect("execution failed");
-    match vm.environment().get("mixed") {
-        Some(Object::Float(result)) => assert!((result - 3.5).abs() < 1e-9),
+    match vm.environment().get("mixed").view() {
+        Some(View::Float(result)) => assert!((result - 3.5).abs() < 1e-9),
         other => panic!("expected float result, got {:?}", other),
     }
 }
@@ -142,8 +143,8 @@ fn creates_array_literal_with_values() {
 
     vm.execute_program(&[assignment]).expect("execution failed");
     let array_obj = vm.environment().get("arr").expect("missing array");
-    match array_obj {
-        Object::Array(array_rc) => {
+    match array_obj.view() {
+        View::Array(array_rc) => {
             let arr = array_rc.borrow();
             assert_eq!(arr.len(), 3);
             assert_eq!(arr[0], Object::Int(1));
@@ -177,8 +178,8 @@ fn creates_dictionary_literal_with_entries() {
 
     vm.execute_program(&[assignment]).expect("execution failed");
     let dict_obj = vm.environment().get("dict").expect("missing dict");
-    match dict_obj {
-        Object::Dict(dict_rc) => {
+    match dict_obj.view() {
+        View::Dict(dict_rc) => {
             let dict = dict_rc.borrow();
             assert_eq!(
                 dict.get("name"),

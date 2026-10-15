@@ -1,6 +1,7 @@
 // What a refused constant read or write reports.
 
 use super::*;
+use metorex::object::{OptionView, View};
 // ── Dir methods (mod.rs lines 60-116) ────────────────────────────────────
 
 #[test]
@@ -30,8 +31,8 @@ fn dir_mkdir_non_string_arg_errors() {
 #[test]
 fn dir_pwd_returns_string() {
     let result = run("Dir.pwd");
-    match result {
-        Some(Object::String(s)) => assert!(!s.as_str().is_empty()),
+    match result.view() {
+        Some(View::String(s)) => assert!(!s.as_str().is_empty()),
         other => panic!("expected String, got {:?}", other),
     }
 }
@@ -39,8 +40,8 @@ fn dir_pwd_returns_string() {
 #[test]
 fn dir_getwd_returns_string() {
     let result = run("Dir.getwd");
-    match result {
-        Some(Object::String(s)) => assert!(!s.as_str().is_empty()),
+    match result.view() {
+        Some(View::String(s)) => assert!(!s.as_str().is_empty()),
         other => panic!("expected String, got {:?}", other),
     }
 }
@@ -70,8 +71,8 @@ fn dir_mkdir_and_delete() {
 #[test]
 fn dir_glob_returns_array() {
     let result = run(r#"Dir.glob("/tmp")"#);
-    match result {
-        Some(Object::Array(_)) => {}
+    match result.view() {
+        Some(View::Array(_)) => {}
         other => panic!("expected Array, got {:?}", other),
     }
 }
@@ -111,8 +112,8 @@ MathUtils.double(5)
 #[test]
 fn process_pid_returns_integer() {
     let result = run("Process.pid");
-    match result {
-        Some(Object::Int(n)) => assert!(n > 0),
+    match result.view() {
+        Some(View::Int(n)) => assert!(n > 0),
         other => panic!("expected Int, got {:?}", other),
     }
 }
@@ -123,7 +124,7 @@ fn process_ppid_returns_integer() {
     // the zero a stub would answer.
     let result = run("Process.ppid");
     assert!(
-        matches!(result, Some(Object::Int(parent)) if parent > 0),
+        matches!(result.view(), Some(View::Int(parent)) if parent > 0),
         "unexpected parent process id: {:?}",
         result
     );
@@ -188,8 +189,8 @@ fn objectspace_each_object_leaves_out_the_singleton_class_of_a_singleton_class()
 #[test]
 fn file_expand_path_nonexistent_path() {
     let result = run(r#"File.expand_path("/tmp/nonexistent_xyz_abc/subdir")"#);
-    match result {
-        Some(Object::String(s)) => assert!(s.as_str().contains("nonexistent_xyz_abc")),
+    match result.view() {
+        Some(View::String(s)) => assert!(s.as_str().contains("nonexistent_xyz_abc")),
         other => panic!("expected String, got {:?}", other),
     }
 }
@@ -339,8 +340,8 @@ fn a_signal_caught_on_one_thread_is_handled_there_and_not_where_it_arrives() {
             .expect("handling failed");
         vm.execute_program(&program("Signal.trap(:WINCH, \"SYSTEM_DEFAULT\")"))
             .expect("restoring failed");
-        match handled {
-            Some(Object::Int(count)) => count,
+        match handled.view() {
+            Some(View::Int(count)) => count,
             other => panic!("expected a count, got {other:?}"),
         }
     });

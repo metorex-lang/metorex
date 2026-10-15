@@ -1,6 +1,7 @@
 // Running one statement, and the statements of a scope.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 /// How long a thread runs before it hands the turn to the others, which is
 /// how often MRI's timer marks a turn as spent.
@@ -136,9 +137,9 @@ impl VirtualMachine {
                     }
                     None => {
                         let gathered = self.evaluate_array_literal(values)?;
-                        let each = match &gathered {
-                            Object::Array(elements) => elements.borrow().clone(),
-                            held => vec![held.clone()],
+                        let each = match gathered.view() {
+                            View::Array(elements) => elements.borrow().clone(),
+                            _ => vec![gathered.clone()],
                         };
                         (gathered, each)
                     }
@@ -405,7 +406,7 @@ impl VirtualMachine {
         position: crate::lexer::Position,
     ) {
         // `$VERBOSE = nil` silences warnings of every kind.
-        if matches!(self.globals().get("VERBOSE"), Some(Object::Nil)) {
+        if matches!(self.globals().get("VERBOSE").view(), Some(View::Nil)) {
             return;
         }
         let named = owner.ruby_name();

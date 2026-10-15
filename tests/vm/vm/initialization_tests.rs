@@ -1,4 +1,5 @@
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::vm::{CallFrame, VirtualMachine};
 use std::path::PathBuf;
 
@@ -152,7 +153,7 @@ fn execute_file_makes_variables_accessible() {
     // Variable should be accessible in the environment
     let var = vm.environment().get("global_var");
     assert!(var.is_some());
-    if let Some(Object::String(s)) = var {
+    if let Some(View::String(s)) = var.view() {
         assert_eq!(s.as_ref(), "from file");
     } else {
         panic!("Expected string variable");

@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 use std::path::Path;
@@ -338,7 +339,7 @@ fn block_execution_with_captured_variables() {
 x = 10
 [1, 2, 3].map { |n| n + x }
 "#);
-    if let Some(Object::Array(arr)) = result {
+    if let Some(View::Array(arr)) = result.view() {
         let arr = arr.borrow();
         assert_eq!(arr[0], Object::Int(11));
         assert_eq!(arr[1], Object::Int(12));

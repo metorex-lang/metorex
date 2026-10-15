@@ -5,6 +5,7 @@
 
 use super::chunk::Chunk;
 use super::opcode::OpCode;
+use crate::object::View;
 
 /// Disassemble an entire chunk, returning the formatted output.
 pub fn disassemble(chunk: &Chunk, name: &str) -> String {
@@ -118,14 +119,13 @@ fn word_instruction(chunk: &Chunk, op: OpCode, offset: usize, line_str: &str) ->
 
 /// Format a constant value for display in disassembly.
 fn format_constant(obj: &crate::object::Object) -> String {
-    use crate::object::Object;
-    match obj {
-        Object::Int(i) => i.to_string(),
-        Object::Float(f) => f.to_string(),
-        Object::String(s) => format!("\"{}\"", s),
-        Object::Symbol(s) => format!(":{}", s),
-        Object::Bool(b) => b.to_string(),
-        Object::Nil => "nil".to_string(),
+    match obj.view() {
+        View::Int(i) => i.to_string(),
+        View::Float(f) => f.to_string(),
+        View::String(s) => format!("\"{}\"", s),
+        View::Symbol(s) => format!(":{}", s),
+        View::Bool(b) => b.to_string(),
+        View::Nil => "nil".to_string(),
         _ => format!("{:?}", obj),
     }
 }

@@ -6,6 +6,7 @@ use super::handles::{QNIL, Value, objects_from, to_object, to_value};
 use super::strings::check_string;
 use super::{ERROR_INFO, called_from, raise};
 use crate::object::Object;
+use crate::object::View;
 use std::cell::RefCell;
 use std::ffi::{CStr, c_char};
 
@@ -46,10 +47,11 @@ pub extern "C-unwind" fn rb_set_errinfo(exception: Value) {
             exception.clone(),
             "is_a?",
             vec![top_level_module("Exception")]
-        ),
-        Object::Bool(true)
+        )
+        .view(),
+        View::Bool(true)
     );
-    if !matches!(exception, Object::Nil) && !is_exception {
+    if !matches!(exception.view(), View::Nil) && !is_exception {
         type_error("assigning non-exception to $!");
     }
     ERROR_INFO.with(|held| *held.borrow_mut() = exception);
@@ -109,7 +111,7 @@ pub extern "C-unwind" fn rb_error_frozen_object(object: Value) -> ! {
         class_name_of(to_object(object)),
         frozen_inspection(object)
     );
-    if let Object::String(string) = to_object(object)
+    if let View::String(string) = to_object(object).view()
         && let Some(written_at) = string.created_at()
     {
         message.push_str(&format!(", created at {}", written_at));
@@ -156,7 +158,7 @@ pub extern "C-unwind" fn rb_make_exception(count: i32, values: *const Value) -> 
     }
     let first = arguments[0].clone();
     if arguments.len() == 1
-        && !matches!(first, Object::Nil)
+        && !matches!(first.view(), View::Nil)
         && let Some(message) = check_string(first.clone())
     {
         return to_value(&call(
@@ -174,8 +176,8 @@ pub extern "C-unwind" fn rb_make_exception(count: i32, values: *const Value) -> 
         arguments[1..arguments.len().min(2)].to_vec(),
     );
     let is_exception = matches!(
-        call(made.clone(), "is_a?", vec![top_level_module("Exception")]),
-        Object::Bool(true)
+        call(made.clone(), "is_a?", vec![top_level_module("Exception")]).view(),
+        View::Bool(true)
     );
     if !is_exception {
         type_error("exception object expected");

@@ -3,6 +3,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -24,8 +25,8 @@ fn ran(code: &str) -> VirtualMachine {
 /// How many times the class named `class_name` walked its ancestry for
 /// `method_name`.
 fn walks(vm: &VirtualMachine, class_name: &str, method_name: &str) -> u64 {
-    match vm.globals().get(class_name) {
-        Some(Object::Class(class)) => class.method_lookup_walks(method_name),
+    match vm.globals().get(class_name).view() {
+        Some(View::Class(class)) => class.method_lookup_walks(method_name),
         other => panic!("expected a class named {class_name}, got {other:?}"),
     }
 }

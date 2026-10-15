@@ -1,6 +1,7 @@
 // Turning a value into the String or status a function needs.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Coerce `abort`'s argument to a String the way Ruby does: a String is
@@ -14,7 +15,7 @@ impl VirtualMachine {
         argument: &Object,
         position: Position,
     ) -> Result<String, MetorexError> {
-        if let Object::String(path) = argument {
+        if let View::String(path) = argument.view() {
             return Ok(path.as_str().to_string());
         }
         let refuse = |vm: &mut Self, value: &Object| {
@@ -31,7 +32,7 @@ impl VirtualMachine {
         let mut value = argument.clone();
         if self.responds_to(&value, "to_path") {
             value = self.invoke_named_conversion(&value, "to_path", position)?;
-            if let Object::String(path) = &value {
+            if let View::String(path) = value.view() {
                 return Ok(path.as_str().to_string());
             }
         }
@@ -39,9 +40,9 @@ impl VirtualMachine {
             return Err(refuse(self, &value));
         }
         let converted = self.invoke_named_conversion(&value, "to_str", position)?;
-        match converted {
-            Object::String(path) => Ok(path.as_str().to_string()),
-            other => Err(refuse(self, &other)),
+        match converted.view() {
+            View::String(path) => Ok(path.as_str().to_string()),
+            _ => Err(refuse(self, &converted)),
         }
     }
 
@@ -68,33 +69,33 @@ impl VirtualMachine {
         let Some(argument) = argument else {
             return Ok(0);
         };
-        match argument {
-            Object::Int(status) => Ok(*status),
-            Object::Bool(success) => Ok(if *success { 0 } else { 1 }),
-            Object::Float(status) => Ok(status.trunc() as i64),
+        match argument.view() {
+            View::Int(status) => Ok(status),
+            View::Bool(success) => Ok(if success { 0 } else { 1 }),
+            View::Float(status) => Ok(status.trunc() as i64),
             other => {
-                let source = self.builtins().class_of(other).name().to_string();
+                let source = self.builtins().class_of(argument).name().to_string();
                 let refuse = |message: String| MetorexError::UncaughtException {
                     exception: Object::exception("TypeError", message.clone()),
                     location: crate::vm::utils::position_to_location(position),
                     message,
                 };
-                let Some((class, method)) = self.lookup_method(other, "to_int") else {
-                    return Err(refuse(if matches!(other, Object::Nil) {
+                let Some((class, method)) = self.lookup_method(argument, "to_int") else {
+                    return Err(refuse(if matches!(other, View::Nil) {
                         "no implicit conversion from nil to integer".to_string()
                     } else {
                         format!("no implicit conversion of {} into Integer", source)
                     }));
                 };
                 let converted =
-                    self.invoke_method(class, method, other.clone(), Vec::new(), position)?;
-                match converted {
-                    Object::Int(status) => Ok(status),
-                    produced => Err(refuse(format!(
+                    self.invoke_method(class, method, argument.clone(), Vec::new(), position)?;
+                match converted.view() {
+                    View::Int(status) => Ok(status),
+                    _ => Err(refuse(format!(
                         "can't convert {} to Integer ({}#to_int gives {})",
                         source,
                         source,
-                        self.builtins().class_of(&produced).name()
+                        self.builtins().class_of(&converted).name()
                     ))),
                 }
             }
@@ -108,7 +109,7 @@ impl VirtualMachine {
         argument: &Object,
         position: Position,
     ) -> Result<String, MetorexError> {
-        if let Object::String(text) = argument {
+        if let View::String(text) = argument.view() {
             return Ok(text.as_str().to_string());
         }
         let source = self.builtins().class_of(argument).name().to_string();
@@ -122,10 +123,10 @@ impl VirtualMachine {
         };
         let converted =
             self.invoke_method(class, method, argument.clone(), Vec::new(), position)?;
-        match converted {
-            Object::String(text) => Ok(text.as_str().to_string()),
-            other => {
-                let produced = self.builtins().class_of(&other).name().to_string();
+        match converted.view() {
+            View::String(text) => Ok(text.as_str().to_string()),
+            _ => {
+                let produced = self.builtins().class_of(&converted).name().to_string();
                 let message = format!(
                     "can't convert {} to String ({}#to_str gives {})",
                     source, source, produced
@@ -147,15 +148,15 @@ impl VirtualMachine {
     ) -> Result<String, MetorexError> {
         self.refuse_moved_conversion(obj, "to_s", position)?;
         // First try to_s, then inspect, then fall back to Display
-        match obj {
+        match obj.view() {
             // `:name.to_s` is the bare name; only `inspect` keeps the colon.
-            Object::Symbol(name) => Ok(name.as_str().to_string()),
-            Object::Instance(_) => {
+            View::Symbol(name) => Ok(name.as_str().to_string()),
+            View::Instance(_) => {
                 // Try to_s first
                 if let Some((class, method)) = self.lookup_method(obj, "to_s") {
                     let result =
                         self.invoke_method(class, method, obj.clone(), vec![], position)?;
-                    if let Object::String(s) = result {
+                    if let View::String(s) = result.view() {
                         return Ok(s.to_string());
                     }
                 }
@@ -163,15 +164,16 @@ impl VirtualMachine {
                 if let Some((class, method)) = self.lookup_method(obj, "inspect") {
                     let result =
                         self.invoke_method(class, method, obj.clone(), vec![], position)?;
-                    if let Object::String(s) = result {
+                    if let View::String(s) = result.view() {
                         return Ok(s.to_string());
                     }
                 }
                 // Classes whose `to_s` is native, such as Rational, have no
                 // entry in any method map for the lookups above to find.
                 let class = self.builtins().class_of(obj);
-                if let Some(Object::String(rendered)) =
-                    self.call_native_method(&class, obj, "to_s", &[], position)?
+                if let Some(View::String(rendered)) = self
+                    .call_native_method(&class, obj, "to_s", &[], position)?
+                    .view()
                 {
                     return Ok(rendered.to_string());
                 }
@@ -191,7 +193,7 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         let rendered = self.inspect_object(obj, position)?;
-        let Object::String(text) = &rendered else {
+        let View::String(text) = rendered.view() else {
             return Ok(rendered);
         };
         let writing = self.inspect_result_encoding();
@@ -218,8 +220,8 @@ impl VirtualMachine {
     ) -> Result<String, MetorexError> {
         self.refuse_moved_conversion(obj, "inspect", position)?;
         let rendered = self.inspect_object(obj, position)?;
-        Ok(match &rendered {
-            Object::String(text) => text.to_string(),
+        Ok(match rendered.view() {
+            View::String(text) => text.to_string(),
             other => format!("{}", other),
         })
     }
@@ -231,7 +233,7 @@ impl VirtualMachine {
             && !method.is_undefined
         {
             let result = self.invoke_method(class, method, obj.clone(), vec![], position)?;
-            if matches!(result, Object::String(_)) {
+            if matches!(result.view(), View::String(_)) {
                 return Ok(result);
             }
             // Ruby asks whatever `inspect` answered for its own `to_s`, and
@@ -242,7 +244,7 @@ impl VirtualMachine {
             {
                 let spelled =
                     self.invoke_method(class, method, result.clone(), vec![], position)?;
-                if matches!(spelled, Object::String(_)) {
+                if matches!(spelled.view(), View::String(_)) {
                     return Ok(spelled);
                 }
                 return Ok(Object::string(format!("{}", spelled)));
@@ -251,25 +253,27 @@ impl VirtualMachine {
         }
         // An object below BasicObject alone has no `inspect`, so the call
         // goes to its `method_missing`, as any other call it lacks does.
-        if let Object::Instance(instance) = obj {
+        if let View::Instance(instance) = obj.view() {
             let class = instance.borrow().class.clone();
             if !crate::vm::method_invocation::descends_from(&class, "Object") {
                 return self.send_to_object(obj.clone(), "inspect", Vec::new(), position);
             }
         }
         let class = self.builtins().class_of(obj);
-        if let Some(rendered @ Object::String(_)) =
-            self.call_native_method(&class, obj, "inspect", &[], position)?
+        if let Some(rendered @ View::String(_)) = self
+            .call_native_method(&class, obj, "inspect", &[], position)?
+            .view()
         {
-            return Ok(rendered);
+            return Ok(rendered.to_object());
         }
         // The per-class tables answer for the classes they know. Everything
         // else falls to Object's own, which is where an instance of a class
         // the program wrote is written out with the variables it holds.
-        if let Some(rendered @ Object::String(_)) =
-            self.call_object_method(obj, "inspect", &[], position)?
+        if let Some(rendered @ View::String(_)) = self
+            .call_object_method(obj, "inspect", &[], position)?
+            .view()
         {
-            return Ok(rendered);
+            return Ok(rendered.to_object());
         }
         Ok(Object::string(format!("{}", obj)))
     }
@@ -279,7 +283,7 @@ impl VirtualMachine {
         argument: &Object,
         position: Position,
     ) -> Result<String, MetorexError> {
-        if let Object::String(text) = argument {
+        if let View::String(text) = argument.view() {
             return Ok(text.as_str().to_string());
         }
         if let Some((class, method)) = self.lookup_method(argument, "to_str")
@@ -287,7 +291,7 @@ impl VirtualMachine {
         {
             let converted =
                 self.invoke_method(class, method, argument.clone(), vec![], position)?;
-            if let Object::String(text) = converted {
+            if let View::String(text) = converted.view() {
                 return Ok(text.as_str().to_string());
             }
         }

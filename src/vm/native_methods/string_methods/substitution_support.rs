@@ -1,6 +1,7 @@
 // The work behind `sub`, `gsub` and a walk over lines.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// `sub` and `gsub`: the string with the first match, or every match,
@@ -13,10 +14,11 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let held_block = match self.pending_block.take() {
-            Some(Object::Block(block)) => Some(block),
+        let viewed = self.pending_block.take();
+        let held_block = match viewed.view() {
+            Some(View::Block(block)) => Some(block),
             other => {
-                self.pending_block = other;
+                self.pending_block = other.map(View::to_object);
                 None
             }
         };
@@ -103,7 +105,7 @@ impl VirtualMachine {
             let (piece, piece_encoding) = self.replacement_text(
                 receiver,
                 arguments.get(1),
-                block.as_ref(),
+                block,
                 &subject,
                 &captured,
                 position,
@@ -232,16 +234,16 @@ impl VirtualMachine {
             })
             .collect();
         let pending = self.pending_block.take();
-        if method_name == "lines" && !matches!(pending, Some(Object::Block(_))) {
+        if method_name == "lines" && !matches!(pending.view(), Some(View::Block(_))) {
             return Ok(Some(Object::array(pieces)));
         }
-        let Some(Object::Block(block)) = pending else {
+        let Some(View::Block(block)) = pending.view() else {
             return self
                 .make_enumerator(receiver, method_name, arguments, position)
                 .map(Some);
         };
         for piece in pieces {
-            self.execute_block_callable(&block, vec![piece], position)?;
+            self.execute_block_callable(block, vec![piece], position)?;
         }
         Ok(Some(receiver.clone()))
     }
@@ -258,7 +260,7 @@ impl VirtualMachine {
         let mut positional = arguments;
         let mut chomp = false;
         if let Some(last) = arguments.last()
-            && let Object::Dict(pairs) = last
+            && let View::Dict(pairs) = last.view()
             && pairs.borrow().contains_key("__MX_KWARGS__")
         {
             chomp = pairs
@@ -275,15 +277,15 @@ impl VirtualMachine {
                 position,
             ));
         }
-        let separator = match positional.first() {
-            None => match self.globals().get("/") {
-                Some(Object::String(text)) => Some(text.as_str().to_string()),
-                Some(Object::Nil) => None,
+        let separator = match positional.first().view() {
+            None => match self.globals().get("/").view() {
+                Some(View::String(text)) => Some(text.as_str().to_string()),
+                Some(View::Nil) => None,
                 _ => Some("\n".to_string()),
             },
-            Some(Object::Nil) => None,
+            Some(View::Nil) => None,
             Some(other) => Some(
-                self.string_needle(method_name, other, position)?
+                self.string_needle(method_name, &other.to_object(), position)?
                     .as_str()
                     .to_string(),
             ),
@@ -314,10 +316,10 @@ impl VirtualMachine {
             return self.text_of(answered, position);
         }
         let held = replacement.expect("a replacement or a block was given");
-        if let Some(Object::Dict(_)) = crate::vm::native_methods::as_dict(held) {
+        if let Some(View::Dict(_)) = crate::vm::native_methods::as_dict(held).view() {
             let key = Object::string(whole.as_str().to_string());
             let found = self.send_to_object(held.clone(), "[]", vec![key], position)?;
-            if matches!(found, Object::Nil) {
+            if matches!(found.view(), View::Nil) {
                 return Ok((
                     String::new(),
                     crate::object::string_value::DEFAULT_ENCODING.to_string(),
@@ -337,10 +339,13 @@ impl VirtualMachine {
         held: Object,
         position: Position,
     ) -> Result<(String, String), MetorexError> {
-        match held {
-            Object::String(text) => Ok((text.as_str().to_string(), text.encoding_name())),
-            other => match self.send_to_object(other, "to_s", vec![], position)? {
-                Object::String(text) => Ok((text.as_str().to_string(), text.encoding_name())),
+        match held.view() {
+            View::String(text) => Ok((text.as_str().to_string(), text.encoding_name())),
+            _ => match self
+                .send_to_object(held.clone(), "to_s", vec![], position)?
+                .view()
+            {
+                View::String(text) => Ok((text.as_str().to_string(), text.encoding_name())),
                 shown => Ok((
                     shown.to_string(),
                     crate::object::string_value::DEFAULT_ENCODING.to_string(),

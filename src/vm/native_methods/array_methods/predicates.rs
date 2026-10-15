@@ -2,6 +2,7 @@
 // converts into.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Whether the block holds for the elements, and the values an array
@@ -33,7 +34,7 @@ impl VirtualMachine {
                     self.warn_unused_block(position)?;
                 }
                 let block = self.pending_block.take();
-                let truthy = |v: &Object| !matches!(v, Object::Bool(false) | Object::Nil);
+                let truthy = |v: &Object| !matches!(v.view(), View::Bool(false) | View::Nil);
                 let mut any_true = false;
                 let mut all_true = true;
                 let mut true_count = 0usize;
@@ -53,14 +54,14 @@ impl VirtualMachine {
                     };
                     index += 1;
                     let element = &element;
-                    let result = match (&pattern, &block) {
+                    let result = match (&pattern, block.view()) {
                         (Some(pattern), _) => self.evaluate_binary_operation(
                             &crate::ast::BinaryOp::CaseEqual,
                             pattern.clone(),
                             element.clone(),
                             position,
                         )?,
-                        (None, Some(Object::Block(b))) => {
+                        (None, Some(View::Block(b))) => {
                             let args = vec![element.clone()];
                             self.execute_block_callable(b, args, position)?
                         }
@@ -88,10 +89,10 @@ impl VirtualMachine {
                 // is the object the call answers.
                 let mut arguments = arguments;
                 let mut buffer = None;
-                if let Some(Object::Dict(entries)) = arguments.last()
+                if let Some(View::Dict(entries)) = arguments.last().view()
                     && let Some(named) = entries.borrow().get(":buffer").cloned()
                 {
-                    if !matches!(named, Object::String(_)) {
+                    if !matches!(named.view(), View::String(_)) {
                         let holds = self.builtins().class_of(&named).ruby_name();
                         return Err(simple_exception(
                             "TypeError",
@@ -110,26 +111,29 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let format = match &arguments[0] {
-                    Object::String(format) => format.as_str().to_string(),
-                    other if self.responds_to(other, "to_str") => {
-                        match self.send_to_object(other.clone(), "to_str", vec![], position)? {
-                            Object::String(format) => format.as_str().to_string(),
+                let format = match arguments[0].view() {
+                    View::String(format) => format.as_str().to_string(),
+                    _ if self.responds_to(&arguments[0], "to_str") => {
+                        match self
+                            .send_to_object(arguments[0].clone(), "to_str", vec![], position)?
+                            .view()
+                        {
+                            View::String(format) => format.as_str().to_string(),
                             _ => {
                                 return Err(method_argument_type_error(
                                     method_name,
                                     "String",
-                                    other,
+                                    &arguments[0],
                                     position,
                                 ));
                             }
                         }
                     }
-                    other => {
+                    _ => {
                         return Err(method_argument_type_error(
                             method_name,
                             "String",
-                            other,
+                            &arguments[0],
                             position,
                         ));
                     }
@@ -168,8 +172,8 @@ impl VirtualMachine {
                 }
                 // A class given as the first argument builds the set instead
                 // of Set itself, which Ruby warns about.
-                let set_class = match arguments.first() {
-                    Some(named @ Object::Class(_)) => {
+                let set_class = match arguments.first().view() {
+                    Some(named @ View::Class(_)) => {
                         let file = self
                             .current_source_file
                             .clone()
@@ -179,12 +183,13 @@ impl VirtualMachine {
                             file, position.line
                         );
                         self.warn_through_warning_module(message, position)?;
-                        Some(named.clone())
+                        Some(named)
                     }
                     _ => None,
                 };
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => Some(block),
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(block)) => Some(block),
                     _ => None,
                 };
                 let mut collected = Vec::new();
@@ -197,7 +202,7 @@ impl VirtualMachine {
                     });
                 }
                 let set_class = match set_class {
-                    Some(named) => named,
+                    Some(named) => named.to_object(),
                     None => match self.globals().get("Set") {
                         Some(found) => found,
                         None => return Ok(None),

@@ -5,6 +5,7 @@ use crate::class::Class;
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::{BlockStatement, Method, Object};
+use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 use crate::vm::utils::position_to_location;
 use std::rc::Rc;
@@ -55,8 +56,8 @@ impl VirtualMachine {
             },
         };
 
-        let method = match &body_source {
-            Object::Block(block) => {
+        let method = match body_source.view() {
+            View::Block(block) => {
                 let mut made = self.method_from_block(&method_name, block);
                 // The method stands where the block was written, which is what
                 // `source_location` reports for one built this way.
@@ -74,15 +75,15 @@ impl VirtualMachine {
                 }
                 made
             }
-            Object::Method(source) => {
+            View::Method(source) => {
                 self.rebindable_method(class_rc, &method_name, source, position)?
             }
-            other => {
+            _ => {
                 return Err(raise(
                     "TypeError",
                     &format!(
                         "wrong argument type {} (expected Proc/Method/UnboundMethod)",
-                        ruby_class_name(other)
+                        ruby_class_name(&body_source)
                     ),
                     position,
                 ));
@@ -253,8 +254,8 @@ impl VirtualMachine {
             "initialize" | "initialize_copy" | "initialize_clone" | "initialize_dup"
         );
         let defined_in_target = matches!(
-            self.environment().get("self"),
-            Some(Object::Class(ref current)) | Some(Object::Module(ref current))
+            self.environment().get("self").view(),
+            Some(View::Class(current)) | Some(View::Module(current))
                 if Rc::ptr_eq(current, class_rc)
         );
 
@@ -301,8 +302,8 @@ fn singleton_of_descendant(target: &Rc<Class>, owner: &Rc<Class>) -> bool {
 
 /// The class or module a singleton class was created for, if it has one.
 fn attached_class(singleton: &Rc<Class>) -> Option<Rc<Class>> {
-    match singleton.get_class_var("__attached__") {
-        Some(Object::Class(attached)) | Some(Object::Module(attached)) => Some(attached),
+    match singleton.get_class_var("__attached__").view() {
+        Some(View::Class(attached)) | Some(View::Module(attached)) => Some(attached.clone()),
         _ => None,
     }
 }
@@ -318,22 +319,22 @@ fn raise(class_name: &str, message: &str, position: Position) -> MetorexError {
 
 /// Ruby-visible class name, used wherever a message names an object's class.
 pub(crate) fn ruby_class_name(object: &Object) -> &'static str {
-    match object {
-        Object::Nil => "NilClass",
-        Object::Bool(true) => "TrueClass",
-        Object::Bool(false) => "FalseClass",
-        Object::Int(_) | Object::BigInt(_) => "Integer",
-        Object::Float(_) => "Float",
-        Object::String(_) => "String",
-        Object::Symbol(_) => "Symbol",
-        Object::Array(_) => "Array",
-        Object::Dict(_) => "Hash",
-        Object::Set(_) => "Set",
-        Object::Range { .. } => "Range",
-        Object::Class(_) => "Class",
-        Object::Module(_) => "Module",
-        Object::Exception(_) => "Exception",
-        Object::Regex(_, _) => "Regexp",
+    match object.view() {
+        View::Nil => "NilClass",
+        View::Bool(true) => "TrueClass",
+        View::Bool(false) => "FalseClass",
+        View::Int(_) | View::BigInt(_) => "Integer",
+        View::Float(_) => "Float",
+        View::String(_) => "String",
+        View::Symbol(_) => "Symbol",
+        View::Array(_) => "Array",
+        View::Dict(_) => "Hash",
+        View::Set(_) => "Set",
+        View::Range { .. } => "Range",
+        View::Class(_) => "Class",
+        View::Module(_) => "Module",
+        View::Exception(_) => "Exception",
+        View::Regex(_, _) => "Regexp",
         _ => "Object",
     }
 }

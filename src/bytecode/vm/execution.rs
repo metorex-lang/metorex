@@ -1,5 +1,6 @@
 // Main execution loop for the bytecode VM
 
+use crate::object::{OptionView, View};
 use indexmap::IndexMap;
 use std::rc::Rc;
 
@@ -82,9 +83,9 @@ impl BytecodeVm {
 
                 OpCode::Negate => {
                     let val = self.pop()?;
-                    let result = match val {
-                        Object::Int(n) => Object::Int(-n),
-                        Object::Float(f) => Object::Float(-f),
+                    let result = match val.view() {
+                        View::Int(n) => Object::Int(-n),
+                        View::Float(f) => Object::Float(-f),
                         _ => {
                             return Err(self.runtime_err("Cannot negate non-numeric value"));
                         }
@@ -181,8 +182,8 @@ impl BytecodeVm {
                     let arg_count = self.current_frame_mut()?.read_byte() as usize;
                     let callee_idx = self.stack.len() - 1 - arg_count;
                     let callee = self.stack[callee_idx].clone();
-                    match callee {
-                        Object::CompiledFunction(func) => {
+                    match callee.view() {
+                        View::CompiledFunction(func) => {
                             if func.arity as usize != arg_count {
                                 return Err(self.runtime_err(&format!(
                                     "Expected {} arguments but got {}",
@@ -190,28 +191,28 @@ impl BytecodeVm {
                                 )));
                             }
                             // Look up closure upvalues by function pointer address
-                            let key = Rc::as_ptr(&func) as usize;
-                            let mut frame = CallFrame::new(func, callee_idx + 1);
+                            let key = Rc::as_ptr(func) as usize;
+                            let mut frame = CallFrame::new(func.clone(), callee_idx + 1);
                             if let Some(upvalues) = self.closure_upvalues.get(&key) {
                                 frame.upvalues = upvalues.clone();
                             }
                             self.push_frame(frame);
                         }
-                        Object::NativeFunction(name) => {
+                        View::NativeFunction(name) => {
                             let args: Vec<Object> = self.stack.drain(callee_idx + 1..).collect();
-                            let result = self.call_native(&name, &args)?;
+                            let result = self.call_native(name, &args)?;
                             self.stack.truncate(callee_idx);
                             self.push(result);
                         }
-                        Object::Class(class) => {
+                        View::Class(class) => {
                             // Calling a class as a function creates an instance
                             let args: Vec<Object> = self.stack.drain(callee_idx + 1..).collect();
-                            let inst_rc = Instance::new(Rc::clone(&class));
+                            let inst_rc = Instance::new(Rc::clone(class));
 
                             // Call initialize if it exists
                             let init_key = format!("{}#initialize", class.name());
-                            if let Some(Object::CompiledFunction(init_func)) =
-                                self.globals.get(&init_key).cloned()
+                            if let Some(View::CompiledFunction(init_func)) =
+                                self.globals.get(&init_key).cloned().view()
                             {
                                 // Push instance as receiver, then args
                                 self.stack.truncate(callee_idx);
@@ -220,7 +221,7 @@ impl BytecodeVm {
                                     self.push(arg.clone());
                                 }
                                 let slot = callee_idx;
-                                let frame = CallFrame::new(init_func, slot);
+                                let frame = CallFrame::new(init_func.clone(), slot);
                                 self.push_frame(frame);
                                 // After init returns, the instance will be on the stack
                                 // We store it so Return can put it back
@@ -251,8 +252,8 @@ impl BytecodeVm {
                     let items: Vec<Object> = self.stack.drain(start..).collect();
                     let mut map = IndexMap::new();
                     for pair in items.chunks(2) {
-                        let key = match &pair[0] {
-                            Object::String(s) => s.to_string(),
+                        let key = match pair[0].view() {
+                            View::String(s) => s.to_string(),
                             other => other.to_string(),
                         };
                         map.insert(key, pair[1].clone());
@@ -280,8 +281,8 @@ impl BytecodeVm {
                     let uv_count = self.current_frame_mut()?.read_byte() as usize;
                     // The function is on top of the stack
                     let func_val = self.peek(0)?.clone();
-                    let func = match func_val {
-                        Object::CompiledFunction(f) => f,
+                    let func = match func_val.view() {
+                        View::CompiledFunction(f) => f,
                         _ => return Err(self.runtime_err("Expected function for closure")),
                     };
 
@@ -310,7 +311,7 @@ impl BytecodeVm {
                     // Store the upvalues keyed by the Rc pointer address of the function.
                     // When this function is later called (even after being stored in a
                     // global and retrieved), the upvalues are looked up by this key.
-                    let key = Rc::as_ptr(&func) as usize;
+                    let key = Rc::as_ptr(func) as usize;
                     self.closure_upvalues.insert(key, upvalues);
                 }
 
@@ -362,8 +363,8 @@ impl BytecodeVm {
                     // Stack: [..., class, compiled_function]
                     let func_val = self.pop()?;
                     let class_val = self.peek(0)?;
-                    match (class_val, func_val) {
-                        (Object::Class(class), Object::CompiledFunction(func)) => {
+                    match (class_val.view(), func_val.view()) {
+                        (View::Class(class), View::CompiledFunction(func)) => {
                             let method = Method::new(name.clone(), vec![], vec![]);
                             // Store the compiled function in the method's closure vars
                             // so the VM can look it up when calling
@@ -373,7 +374,7 @@ impl BytecodeVm {
                             class.define_method(&name, method_rc);
                             // Also store the compiled function for bytecode execution
                             let key = format!("{}#{}", class.name(), name);
-                            self.define_global(key, Object::CompiledFunction(func));
+                            self.define_global(key, Object::CompiledFunction(func.clone()));
                         }
                         _ => {
                             return Err(
@@ -392,12 +393,12 @@ impl BytecodeVm {
                     // The receiver is below the arguments on the stack
                     let receiver = self.peek(arg_count)?.clone();
 
-                    match &receiver {
-                        Object::Instance(inst) => {
+                    match receiver.view() {
+                        View::Instance(inst) => {
                             let class_name = inst.borrow().class_name().to_string();
                             let key = format!("{}#{}", class_name, method_name);
-                            if let Some(Object::CompiledFunction(func)) =
-                                self.globals.get(&key).cloned()
+                            if let Some(View::CompiledFunction(func)) =
+                                self.globals.get(&key).cloned().view()
                             {
                                 if func.arity as usize != arg_count {
                                     return Err(self.runtime_err(&format!(
@@ -406,7 +407,7 @@ impl BytecodeVm {
                                     )));
                                 }
                                 let callee_idx = self.stack.len() - 1 - arg_count;
-                                let frame = CallFrame::new(func, callee_idx + 1);
+                                let frame = CallFrame::new(func.clone(), callee_idx + 1);
                                 self.push_frame(frame);
                             } else {
                                 return Err(self.runtime_err(&format!(
@@ -415,7 +416,7 @@ impl BytecodeVm {
                                 )));
                             }
                         }
-                        Object::Class(class) => {
+                        View::Class(class) => {
                             // Calling ClassName() — instantiation
                             if method_name == "new" || method_name == class.name() {
                                 let instance = Instance::new(Rc::clone(class));
@@ -452,8 +453,8 @@ impl BytecodeVm {
                     let offset = self.current_frame()?.slot_offset;
                     if offset < self.stack.len() {
                         let receiver = self.stack[offset].clone();
-                        match receiver {
-                            Object::Instance(inst) => {
+                        match receiver.view() {
+                            View::Instance(inst) => {
                                 let val =
                                     inst.borrow().get_var(&name).cloned().unwrap_or(Object::Nil);
                                 self.push(val);
@@ -476,8 +477,8 @@ impl BytecodeVm {
                     let offset = self.current_frame()?.slot_offset;
                     if offset < self.stack.len() {
                         let receiver = self.stack[offset].clone();
-                        match receiver {
-                            Object::Instance(inst) => {
+                        match receiver.view() {
+                            View::Instance(inst) => {
                                 inst.borrow_mut().set_var(name, value);
                             }
                             _ => {

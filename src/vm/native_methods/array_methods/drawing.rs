@@ -1,6 +1,7 @@
 // Drawing elements at random.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The count and the `random:` source `Array#sample` was called with.
@@ -12,7 +13,7 @@ impl VirtualMachine {
     ) -> Result<(Option<i64>, Option<Object>), MetorexError> {
         let mut positional = arguments;
         let mut source = None;
-        if let Some(Object::Dict(entries)) = arguments.last() {
+        if let Some(View::Dict(entries)) = arguments.last().view() {
             let named = entries.borrow().get(":random").cloned();
             if let Some(named) = named {
                 source = Some(named);
@@ -27,11 +28,11 @@ impl VirtualMachine {
                 position,
             ));
         }
-        let count = match positional.first() {
+        let count = match positional.first().view() {
             None => None,
-            Some(Object::Int(count)) => Some(*count),
+            Some(View::Int(count)) => Some(count),
             Some(other) => {
-                let counted = self.coerce_integer_argument(other, position)?;
+                let counted = self.coerce_integer_argument(&other.to_object(), position)?;
                 Some(counted.try_into().unwrap_or(i64::MAX))
             }
         };
@@ -55,11 +56,11 @@ impl VirtualMachine {
         }
         let drawn =
             self.send_to_object(source.clone(), "rand", vec![Object::Int(limit)], position)?;
-        let index = match drawn {
-            Object::Int(index) => index,
-            Object::Float(index) => index.trunc() as i64,
-            other => {
-                let drawn = self.coerce_integer_argument(&other, position)?;
+        let index = match drawn.view() {
+            View::Int(index) => index,
+            View::Float(index) => index.trunc() as i64,
+            _ => {
+                let drawn = self.coerce_integer_argument(&drawn, position)?;
                 drawn.try_into().unwrap_or(i64::MAX)
             }
         };

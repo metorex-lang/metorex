@@ -1,6 +1,7 @@
 // Cutting a string into lines and taking pieces out of it.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Cutting a string into lines and taking pieces out of it.
@@ -47,20 +48,20 @@ impl VirtualMachine {
                 };
                 // Without a pattern of its own, the one `$;` holds decides,
                 // and Ruby says so when it holds one.
-                let given = match arguments.first() {
-                    None | Some(Object::Nil) => match self.globals().get(";") {
-                        Some(Object::Nil) | None => None,
+                let given = match arguments.first().view() {
+                    None | Some(View::Nil) => match self.globals().get(";").view() {
+                        Some(View::Nil) | None => None,
                         Some(held) => {
                             let message = "warning: $; is set to non-nil value\n".to_string();
                             self.warn_through_warning_module(message, position)?;
-                            Some(held)
+                            Some(held.to_object())
                         }
                     },
-                    Some(held) => Some(held.clone()),
+                    Some(held) => Some(held.to_object()),
                 };
-                let separator = match &given {
+                let separator = match given.view() {
                     None => Separator::Whitespace,
-                    Some(Object::Regex(pattern, flags)) => {
+                    Some(View::Regex(pattern, flags)) => {
                         match crate::vm::native_methods::regexp_methods::compile(pattern, flags) {
                             Some(built) => Separator::Pattern(built),
                             // A pattern that is nothing but a look-ahead cuts
@@ -77,7 +78,7 @@ impl VirtualMachine {
                             },
                         }
                     }
-                    Some(Object::String(held)) => {
+                    Some(View::String(held)) => {
                         if !holds_valid_text(held) {
                             return Err(crate::vm::errors::simple_exception(
                                 "ArgumentError",
@@ -88,7 +89,8 @@ impl VirtualMachine {
                         separator_of(&held.as_str())
                     }
                     Some(other) => {
-                        let spelled = self.string_argument(method_name, other, position)?;
+                        let spelled =
+                            self.string_argument(method_name, &other.to_object(), position)?;
                         separator_of(&spelled)
                     }
                 };
@@ -104,9 +106,9 @@ impl VirtualMachine {
                     .collect();
                 // With a block each piece is handed over and the string
                 // itself is the answer.
-                if let Some(Object::Block(block)) = self.pending_block.take() {
+                if let Some(View::Block(block)) = self.pending_block.take().view() {
                     for piece in made {
-                        self.execute_block_callable(&block, vec![piece], position)?;
+                        self.execute_block_callable(block, vec![piece], position)?;
                     }
                     return Ok(Some(receiver.clone()));
                 }
@@ -118,14 +120,19 @@ impl VirtualMachine {
                 if arguments.len() == 1 {
                     // An object that is neither of the shapes a subscript
                     // reads names a place through `to_int`.
-                    let chosen = match &arguments[0] {
-                        held @ Object::Instance(_)
-                            if crate::vm::native_methods::string_subclass_value(held).is_none()
-                                && self.answers_to(held, "to_int", position)? =>
+                    let chosen = match arguments[0].view() {
+                        View::Instance(_)
+                            if crate::vm::native_methods::string_subclass_value(&arguments[0])
+                                .is_none()
+                                && self.answers_to(&arguments[0], "to_int", position)? =>
                         {
-                            Object::Int(self.coerce_slice_number(held, method_name, position)?)
+                            Object::Int(self.coerce_slice_number(
+                                &arguments[0],
+                                method_name,
+                                position,
+                            )?)
                         }
-                        held => held.clone(),
+                        _ => arguments[0].clone(),
                     };
                     return self
                         .evaluate_index_operation(receiver.clone(), chosen, position)
@@ -141,14 +148,14 @@ impl VirtualMachine {
                 }
                 // `held[pattern, group]` answers the group the pattern's
                 // match holds, named by number or by name.
-                if let Object::Regex(_, _) = &arguments[0] {
+                if let View::Regex(_, _) = arguments[0].view() {
                     let matched = self.send_to_object(
                         arguments[0].clone(),
                         "match",
                         vec![receiver.clone()],
                         position,
                     )?;
-                    if matches!(matched, Object::Nil) {
+                    if matches!(matched.view(), View::Nil) {
                         return Ok(Some(Object::Nil));
                     }
                     return self

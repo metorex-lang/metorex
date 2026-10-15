@@ -4,6 +4,7 @@ use crate::ast::Expression;
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use std::rc::Rc;
 
 use crate::class::Class;
@@ -39,7 +40,7 @@ impl VirtualMachine {
             None => self
                 .environment()
                 .get("__block__")
-                .filter(|held| matches!(held, Object::Block(_))),
+                .filter(|held| matches!(held.view(), View::Block(_))),
         };
         // Get the current method name from the call stack.
         // The call stack stores method names as "Class#method".
@@ -83,13 +84,11 @@ impl VirtualMachine {
         // method was mixed in (e.g. `class << F; include M; end`), the defining
         // class may not be self's class itself; walking from self's immediate
         // superclass handles that case.
-        if let Some(self_object @ (Object::Class(_) | Object::Module(_))) =
-            self.environment().get("self")
+        if let Some(self_object) = self.environment().get("self")
+            && let View::Class(self_class) | View::Module(self_class) = self_object.view()
         {
-            let (Object::Class(self_class) | Object::Module(self_class)) = &self_object else {
-                unreachable!("the match above admits only classes and modules")
-            };
-            let self_class = Rc::clone(self_class);
+            let self_class = self_class.clone();
+            let self_class = Rc::clone(&self_class);
             let evaluated_args =
                 self.super_arguments(arguments, forward_args, &super_block, position)?;
             // A module extended with another module reaches that module's
@@ -106,16 +105,17 @@ impl VirtualMachine {
                         .is_some_and(|own| Rc::ptr_eq(&own, running))
                 });
             if running_its_own_class_method
-                && let Some(Object::Method(extended)) =
-                    self_class.get_class_var(&format!("__ext__{}", method_name))
+                && let Some(View::Method(extended)) = self_class
+                    .get_class_var(&format!("__ext__{}", method_name))
+                    .view()
                 && !self
                     .method_running_stack
                     .last()
-                    .is_some_and(|running| Rc::ptr_eq(running, &extended))
+                    .is_some_and(|running| Rc::ptr_eq(running, extended))
             {
                 return self.invoke_method(
                     Rc::clone(&self_class),
-                    extended,
+                    extended.clone(),
                     self_object,
                     evaluated_args,
                     position,
@@ -140,7 +140,7 @@ impl VirtualMachine {
                             return self.invoke_method(
                                 next,
                                 method,
-                                self_object,
+                                self_object.clone(),
                                 evaluated_args,
                                 position,
                             );
@@ -189,7 +189,7 @@ impl VirtualMachine {
                     return self.invoke_method(
                         Rc::clone(&cls),
                         method,
-                        self_object,
+                        self_object.clone(),
                         evaluated_args,
                         position,
                     );
@@ -200,8 +200,8 @@ impl VirtualMachine {
             // no-op ones: `super` from an override performs the default.
             match method_name.as_str() {
                 "append_features" | "prepend_features" => {
-                    if let Some(Object::Class(target) | Object::Module(target)) =
-                        evaluated_args.first()
+                    if let Some(View::Class(target) | View::Module(target)) =
+                        evaluated_args.first().view()
                     {
                         let target = Rc::clone(target);
                         self.default_append_features(&target, &self_class, position)?;
@@ -244,7 +244,7 @@ impl VirtualMachine {
             }
             // An override of `new` on a class reaches the core library's,
             // which allocates the instance and runs `initialize`.
-            if method_name == "new" && matches!(self_object, Object::Class(_)) {
+            if method_name == "new" && matches!(self_object.view(), View::Class(_)) {
                 return self.invoke_class(Rc::clone(&self_class), evaluated_args, position);
             }
             // Any other class method the core library writes natively
@@ -258,7 +258,11 @@ impl VirtualMachine {
             // Kernel, whose methods metorex writes natively.
             if crate::vm::native_methods::is_native_kernel_method(&method_name) {
                 if method_name == "warn" {
-                    return self.kernel_warn_for(Some(&self_object), evaluated_args, position);
+                    return self.kernel_warn_for(
+                        Some(&self_object.clone()),
+                        evaluated_args,
+                        position,
+                    );
                 }
                 return self.call_native_function(&method_name, evaluated_args, position);
             }
@@ -273,19 +277,19 @@ impl VirtualMachine {
         }
 
         // Get the current self (must be an instance)
-        let instance = match self.environment().get("self") {
-            Some(Object::Instance(instance_rc)) => instance_rc,
+        let instance = match self.environment().get("self").view() {
+            Some(View::Instance(instance_rc)) => instance_rc.clone(),
             // An exception's `initialize_copy` has nothing left to reach. Its
             // `initialize` goes on to a parent's written in Ruby, and past
             // those to Exception#initialize, as any other built-in does.
-            Some(Object::Exception(_)) if method_name == "initialize_copy" => {
+            Some(View::Exception(_)) if method_name == "initialize_copy" => {
                 return Ok(Object::Nil);
             }
             // `self` is a built-in value, so the running method was written
             // on a reopened core class or on a module prepended to one.
             Some(other) => {
                 return self.eval_super_on_builtin(
-                    other,
+                    other.to_object(),
                     &class_name,
                     &method_name,
                     SuperCall {
@@ -350,9 +354,9 @@ impl VirtualMachine {
         let refined_at = running_owner
             .as_ref()
             .and_then(|owner| owner.get_class_var(crate::vm::native_methods::REFINEMENT_TARGET_KEY))
-            .and_then(|target| match target {
-                Object::Class(refined) | Object::Module(refined) => {
-                    chain.iter().position(|c| Rc::ptr_eq(c, &refined))
+            .and_then(|target| match target.view() {
+                View::Class(refined) | View::Module(refined) => {
+                    chain.iter().position(|c| Rc::ptr_eq(c, refined))
                 }
                 _ => None,
             });
@@ -433,8 +437,8 @@ impl VirtualMachine {
                     let self_val = self.environment().get("self").unwrap_or(Object::Nil);
                     if let Some(other) = evaluated_args.first() {
                         let same = matches!(
-                            (&self_val, other),
-                            (Object::Instance(a), Object::Instance(b)) if Rc::ptr_eq(a, b)
+                            (self_val.view(), other.view()),
+                            (View::Instance(a), View::Instance(b)) if Rc::ptr_eq(a, b)
                         );
                         return Ok(if same { Object::Int(0) } else { Object::Nil });
                     }
@@ -466,8 +470,8 @@ impl VirtualMachine {
                 let self_val = self.environment().get("self").unwrap_or(Object::Nil);
                 if let Some(other) = evaluated_args.first() {
                     let same = matches!(
-                        (&self_val, other),
-                        (Object::Instance(a), Object::Instance(b)) if Rc::ptr_eq(a, b)
+                        (self_val.view(), other.view()),
+                        (View::Instance(a), View::Instance(b)) if Rc::ptr_eq(a, b)
                     );
                     return Ok(if same { Object::Int(0) } else { Object::Nil });
                 }
@@ -555,8 +559,8 @@ impl VirtualMachine {
             return Ok(result);
         }
         if matches!(
-            self.globals().get(method_name),
-            Some(Object::NativeFunction(_))
+            self.globals().get(method_name).view(),
+            Some(View::NativeFunction(_))
         ) {
             return self.call_native_function(method_name, evaluated_args, position);
         }
@@ -564,9 +568,9 @@ impl VirtualMachine {
         // BasicObject's, whose whole job is to raise NoMethodError
         // naming the method that was called.
         if method_name == "method_missing" {
-            let missing = match evaluated_args.first() {
-                Some(Object::Symbol(name)) => name.as_str().to_string(),
-                Some(Object::String(name)) => name.as_str().to_string(),
+            let missing = match evaluated_args.first().view() {
+                Some(View::Symbol(name)) => name.as_str().to_string(),
+                Some(View::String(name)) => name.as_str().to_string(),
                 Some(other) => other.to_string(),
                 None => "method_missing".to_string(),
             };
@@ -611,7 +615,7 @@ impl VirtualMachine {
         // native method through here would find this same method
         // again.
         let backing = self.builtins().class_of(&self_val);
-        if matches!(self_val, Object::Instance(_))
+        if matches!(self_val.view(), View::Instance(_))
             && let Some(result) = self.call_native_method(
                 backing.as_ref(),
                 &self_val,
@@ -692,13 +696,13 @@ impl VirtualMachine {
             let local = crate::vm::param_binding::parameter_local(&method.parameters, index);
             let value = self.environment().get(&local);
             match (&method.variadic_param, value) {
-                (Some((at, _)), value) if *at == index => match value {
-                    Some(Object::Array(items)) => {
+                (Some((at, _)), value) if *at == index => match value.view() {
+                    Some(View::Array(items)) => {
                         tail_from_splat =
                             index + 1 == method.parameters.len() && !items.borrow().is_empty();
                         handed.extend(items.borrow().iter().cloned())
                     }
-                    Some(other) => handed.push(other),
+                    Some(other) => handed.push(other.to_object()),
                     None => {}
                 },
                 (_, value) => handed.push(value.unwrap_or(Object::Nil)),
@@ -708,7 +712,7 @@ impl VirtualMachine {
         // order Ruby hands them on in.
         let mut keywords = indexmap::IndexMap::new();
         if let Some(rest) = &method.keyword_rest_parameter
-            && let Some(Object::Dict(held)) = self.environment().get(rest)
+            && let Some(View::Dict(held)) = self.environment().get(rest).view()
         {
             for (key, value) in held.borrow().iter() {
                 if key != crate::vm::param_binding::KWARGS_MARKER {
@@ -724,7 +728,7 @@ impl VirtualMachine {
         // gathered, goes on as the keywords it was gathered from.
         if keywords.is_empty()
             && tail_from_splat
-            && let Some(Object::Dict(entries)) = handed.last()
+            && let Some(View::Dict(entries)) = handed.last().view()
             && entries
                 .borrow()
                 .contains_key(crate::vm::native_methods::hash_methods::RUBY2_KEYWORDS_KEY)
@@ -862,7 +866,7 @@ impl VirtualMachine {
         position: crate::lexer::Position,
     ) -> Result<Object, MetorexError> {
         let receiver = self.environment().get("self").unwrap_or(Object::Nil);
-        if let Object::Instance(instance) = &receiver
+        if let View::Instance(instance) = receiver.view()
             && instance
                 .borrow()
                 .instance_vars
@@ -875,7 +879,7 @@ impl VirtualMachine {
             );
             return Ok(Object::Nil);
         }
-        if matches!(receiver, Object::Exception(_)) {
+        if matches!(receiver.view(), View::Exception(_)) {
             return self.exception_initialize(&receiver, arguments, position);
         }
         Self::object_initialize(arguments, position)
@@ -889,24 +893,24 @@ impl VirtualMachine {
         arguments: &[Object],
         position: crate::lexer::Position,
     ) -> Result<Object, MetorexError> {
-        let Object::Exception(details) = receiver else {
+        let View::Exception(details) = receiver.view() else {
             return Ok(Object::Nil);
         };
-        match arguments.first() {
+        match arguments.first().view() {
             None => {}
-            Some(Object::Nil) => {
+            Some(View::Nil) => {
                 let mut held = details.borrow_mut();
                 held.message = String::new();
                 held.message_given = false;
             }
             Some(given) => {
-                let spelled = self.coerce_name_argument(given, position)?;
+                let spelled = self.coerce_name_argument(&given.to_object(), position)?;
                 let mut held = details.borrow_mut();
                 held.message = spelled;
                 held.message_given = true;
-                if matches!(given, Object::String(_)) {
+                if matches!(given, View::String(_)) {
                     held.instance_vars
-                        .insert(crate::vm::MESSAGE_STRING_KEY.to_string(), given.clone());
+                        .insert(crate::vm::MESSAGE_STRING_KEY.to_string(), given.to_object());
                 }
             }
         }
@@ -989,8 +993,8 @@ impl VirtualMachine {
             return false;
         };
         let (class_name, method_name) = (&frame[..separator], &frame[separator + 1..]);
-        match self.environment().get("self") {
-            Some(Object::Class(self_class) | Object::Module(self_class)) => {
+        match self.environment().get("self").view() {
+            Some(View::Class(self_class) | View::Module(self_class)) => {
                 let class_method_key = format!("__class__{}", method_name);
                 let mut current = self_class.superclass();
                 while let Some(class) = current {
@@ -1006,7 +1010,7 @@ impl VirtualMachine {
                 }
                 false
             }
-            Some(Object::Instance(instance)) => {
+            Some(View::Instance(instance)) => {
                 let borrowed = instance.borrow();
                 let mut chain = Vec::new();
                 if let Some(singleton) = borrowed.singleton_class.borrow().clone() {

@@ -1,6 +1,7 @@
 // What an object reports about itself.
 
 use super::*;
+use metorex::object::{OptionView, View};
 // ── frozen? on Class / Module (line 142) ─────────────────────────────────────
 
 #[test]
@@ -64,7 +65,7 @@ class IdCls
 end
 IdCls.object_id
 "#);
-    assert!(matches!(result, Some(Object::Int(_))));
+    assert!(matches!(result.view(), Some(View::Int(_))));
 }
 
 #[test]
@@ -74,7 +75,7 @@ module IdMod
 end
 IdMod.object_id
 "#);
-    assert!(matches!(result, Some(Object::Int(_))));
+    assert!(matches!(result.view(), Some(View::Int(_))));
 }
 
 #[test]

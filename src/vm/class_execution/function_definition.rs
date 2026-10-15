@@ -1,6 +1,7 @@
 // Running a `def` written outside a class body.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Execute function definition - create a Method object and register it in the environment as a function.
@@ -83,18 +84,18 @@ impl VirtualMachine {
         function.definee = self
             .running_method_def_scope()
             .or_else(|| self.def_scope_stack.last().cloned())
-            .or_else(|| match self.globals().get("Object") {
-                Some(Object::Class(object_class)) => Some(object_class),
+            .or_else(|| match self.globals().get("Object").view() {
+                Some(View::Class(object_class)) => Some(object_class.clone()),
                 _ => None,
             });
         // A `def` written outside every class belongs to Object, which is the
         // name a backtrace gives it however it is reached.
         if singleton_class.is_none()
             && self.def_scope_stack.is_empty()
-            && let Some(Object::Class(object_class)) = self.globals().get("Object")
+            && let Some(View::Class(object_class)) = self.globals().get("Object").view()
         {
             function.owner = Some(object_class.name().to_string());
-            function.owner_class = Some(object_class);
+            function.owner_class = Some(object_class.clone());
         }
         let function = Rc::new(function);
 
@@ -123,14 +124,14 @@ impl VirtualMachine {
                     .or_else(|| self.globals().get(receiver_name))
             };
             if sole_instance_receiver.is_some() {
-                match resolved {
-                    Some(Object::Class(target_class)) => {
+                match resolved.view() {
+                    Some(View::Class(target_class)) => {
                         target_class.define_method(name, Rc::clone(&function));
                     }
                     // A `def self.name` written where `self` is an object
                     // rather than a class names that object alone.
-                    Some(receiver @ Object::Instance(_)) => {
-                        let singleton = self.singleton_class_of(&receiver);
+                    Some(receiver @ View::Instance(_)) => {
+                        let singleton = self.singleton_class_of(&receiver.to_object());
                         singleton.define_method(name, Rc::clone(&function));
                         self.invoke_class_hook(
                             &singleton,
@@ -143,11 +144,11 @@ impl VirtualMachine {
                 }
                 return Ok(ControlFlow::Value(Object::symbol(name)));
             }
-            match resolved {
+            match resolved.view() {
                 // `def Klass.name` / `def mod.name` defines a singleton
                 // method, stored under the same `__class__` convention as
                 // `def self.name` inside the body.
-                Some(Object::Class(target_class)) | Some(Object::Module(target_class)) => {
+                Some(View::Class(target_class)) | Some(View::Module(target_class)) => {
                     // A singleton method is written on the singleton class,
                     // so either one being frozen refuses it.
                     let singleton_frozen = target_class
@@ -156,20 +157,15 @@ impl VirtualMachine {
                         .is_some_and(|singleton| singleton.is_frozen());
                     if singleton_frozen {
                         let receiver = if target_class.is_module() {
-                            Object::Module(Rc::clone(&target_class))
+                            Object::Module(Rc::clone(target_class))
                         } else {
-                            Object::Class(Rc::clone(&target_class))
+                            Object::Class(Rc::clone(target_class))
                         };
                         return Err(self.frozen_modification_error(&receiver, position));
                     }
-                    self.refuse_frozen_definee(&target_class, position)?;
+                    self.refuse_frozen_definee(target_class, position)?;
                     target_class.define_method(format!("__class__{}", name), Rc::clone(&function));
-                    self.invoke_class_hook(
-                        &target_class,
-                        "singleton_method_added",
-                        name,
-                        position,
-                    )?;
+                    self.invoke_class_hook(target_class, "singleton_method_added", name, position)?;
                 }
                 // `def obj.name` installs on the object's singleton class,
                 // the same place `define_singleton_method` and `class << obj`
@@ -178,21 +174,21 @@ impl VirtualMachine {
                 // `def obj.name` installs on any receiver's singleton class,
                 // exceptions included.
                 Some(
-                    receiver @ (Object::Instance(_)
-                    | Object::Exception(_)
-                    | Object::Array(_)
-                    | Object::Dict(_)
-                    | Object::Set(_)
-                    | Object::String(_)
-                    | Object::Regex(_, _)
-                    | Object::Block(_)
-                    | Object::Method(_)
-                    | Object::Binding(_)),
+                    receiver @ (View::Instance(_)
+                    | View::Exception(_)
+                    | View::Array(_)
+                    | View::Dict(_)
+                    | View::Set(_)
+                    | View::String(_)
+                    | View::Regex(_, _)
+                    | View::Block(_)
+                    | View::Method(_)
+                    | View::Binding(_)),
                 ) => {
-                    if self.object_is_frozen(&receiver) {
-                        return Err(self.frozen_modification_error(&receiver, position));
+                    if self.object_is_frozen(&receiver.to_object()) {
+                        return Err(self.frozen_modification_error(&receiver.to_object(), position));
                     }
-                    let singleton = self.singleton_class_of(&receiver);
+                    let singleton = self.singleton_class_of(&receiver.to_object());
                     singleton.define_method(name, Rc::clone(&function));
                     self.invoke_class_hook(&singleton, "singleton_method_added", name, position)?;
                 }
@@ -200,15 +196,12 @@ impl VirtualMachine {
                 // wherever they turn up, so none of them can carry a method
                 // of its own.
                 Some(
-                    receiver @ (Object::Int(_)
-                    | Object::BigInt(_)
-                    | Object::Float(_)
-                    | Object::Symbol(_)),
+                    receiver @ (View::Int(_) | View::BigInt(_) | View::Float(_) | View::Symbol(_)),
                 ) => {
                     let message = format!(
                         "can't define singleton method \"{}\" for {}",
                         name,
-                        self.builtins().class_of(&receiver).name()
+                        self.builtins().class_of(&receiver.to_object()).name()
                     );
                     return Err(MetorexError::UncaughtException {
                         exception: Object::exception("TypeError", message.clone()),
@@ -254,7 +247,7 @@ impl VirtualMachine {
             if module_function_is_active(&definee) {
                 self.copy_to_module_function(&definee, name, position)?;
             }
-        } else if let Some(Object::Class(object_class)) = self.globals().get("Object") {
+        } else if let Some(View::Class(object_class)) = self.globals().get("Object").view() {
             object_class.define_method(name, Rc::clone(&function));
             // A method defined in top-level code is private unless `public`
             // was called there. One defined when a method runs is public.

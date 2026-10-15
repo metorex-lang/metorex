@@ -1,6 +1,7 @@
 // Reading and checking the arguments a class method was given.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The elements `Array.new` builds from its arguments and block, which is
@@ -32,7 +33,7 @@ impl VirtualMachine {
         }
         // `Array.new { ... }` names no size, so the block has nothing to
         // fill and Ruby says it went unused.
-        if arguments.is_empty() && matches!(self.pending_block, Some(Object::Block(_))) {
+        if arguments.is_empty() && matches!(self.pending_block.view(), Some(View::Block(_))) {
             self.pending_block = None;
             let file = self
                 .current_source_file
@@ -47,20 +48,22 @@ impl VirtualMachine {
         // A lone array names the elements rather than a size, and anything
         // that reads as one through `to_ary` names them the same way. A
         // default alongside it has nothing to fill.
-        let read_as_array = match arguments.first() {
-            Some(held @ Object::Array(_)) => Some(held.clone()),
-            Some(held) if crate::vm::native_methods::array_subclass_value(held).is_some() => {
-                crate::vm::native_methods::array_subclass_value(held)
+        let read_as_array = match arguments.first().view() {
+            Some(held @ View::Array(_)) => Some(held.to_object()),
+            Some(held)
+                if crate::vm::native_methods::array_subclass_value(&held.to_object()).is_some() =>
+            {
+                crate::vm::native_methods::array_subclass_value(&held.to_object())
             }
             Some(held)
-                if !matches!(held, Object::Int(_) | Object::Nil)
-                    && self.responds_to(held, "to_ary") =>
+                if !matches!(held, View::Int(_) | View::Nil)
+                    && self.responds_to(&held.to_object(), "to_ary") =>
             {
-                Some(self.send_to_object(held.clone(), "to_ary", vec![], position)?)
+                Some(self.send_to_object(held.to_object(), "to_ary", vec![], position)?)
             }
             _ => None,
         };
-        if let Some(Object::Array(held)) = read_as_array {
+        if let Some(View::Array(held)) = read_as_array.view() {
             if arguments.len() > 1 {
                 return Err(crate::vm::errors::simple_exception(
                     "TypeError",
@@ -72,27 +75,30 @@ impl VirtualMachine {
             elements.extend(held.borrow().iter().cloned());
             return Ok(());
         }
-        let size = match arguments.first() {
+        let size = match arguments.first().view() {
             None => 0_i64,
-            Some(Object::Int(n)) => *n,
+            Some(View::Int(n)) => n,
             // A count past the widest array Ruby builds is refused rather
             // than attempted.
-            Some(Object::BigInt(_)) => return Err(array_size_too_big(position)),
-            Some(Object::Nil) => {
+            Some(View::BigInt(_)) => return Err(array_size_too_big(position)),
+            Some(View::Nil) => {
                 return Err(crate::vm::errors::simple_exception(
                     "TypeError",
                     "no implicit conversion from nil to integer",
                     position,
                 ));
             }
-            Some(other) if self.responds_to(other, "to_int") => {
-                match self.send_to_object(other.clone(), "to_int", vec![], position)? {
-                    Object::Int(held) => held,
+            Some(other) if self.responds_to(&other.to_object(), "to_int") => {
+                match self
+                    .send_to_object(other.to_object(), "to_int", vec![], position)?
+                    .view()
+                {
+                    View::Int(held) => held,
                     _ => {
                         return Err(method_argument_type_error(
                             "Array.new",
                             "Integer",
-                            other,
+                            &other.to_object(),
                             position,
                         ));
                     }
@@ -102,7 +108,7 @@ impl VirtualMachine {
                 return Err(method_argument_type_error(
                     "Array.new",
                     "Integer",
-                    other,
+                    &other.to_object(),
                     position,
                 ));
             }
@@ -121,7 +127,7 @@ impl VirtualMachine {
         let block = self.pending_block.take();
         // A block fills every place, so a default named alongside it has
         // nothing left to fill and Ruby says so.
-        if matches!(block, Some(Object::Block(_))) && arguments.len() > 1 {
+        if matches!(block.view(), Some(View::Block(_))) && arguments.len() > 1 {
             let file = self
                 .current_source_file
                 .clone()
@@ -132,7 +138,7 @@ impl VirtualMachine {
             );
             self.warn_through_warning_module(message, position)?;
         }
-        if let Some(Object::Block(body)) = block {
+        if let Some(View::Block(body)) = block.view() {
             // The block may take 0 args (`Array.new(10) { rand }`) or 1
             // (`Array.new(10) { |i| ... }`). Match metorex's strict arity
             // check by only passing the index when the block declares a
@@ -147,7 +153,7 @@ impl VirtualMachine {
                 } else {
                     vec![]
                 };
-                let value = self.execute_block_callable(&body, block_arguments, position)?;
+                let value = self.execute_block_callable(body, block_arguments, position)?;
                 elements.push(value);
             }
         } else {
@@ -167,28 +173,34 @@ impl VirtualMachine {
         arg: &Object,
         position: Position,
     ) -> Result<String, MetorexError> {
-        match arg {
-            Object::Symbol(s) => Ok(s.as_str().to_string()),
-            Object::String(s) => Ok(crate::vm::native_methods::name_text(s)),
+        match arg.view() {
+            View::Symbol(s) => Ok(s.as_str().to_string()),
+            View::String(s) => Ok(crate::vm::native_methods::name_text(s)),
             other => {
-                let other_obj = other.clone();
-                let source_class = self.builtins().class_of(other).name().to_string();
-                let converted =
-                    if let Some((cls, method)) = self.lookup_method(&other_obj, "to_str") {
-                        self.invoke_method(cls, method, other_obj, Vec::new(), position)?
-                    } else {
-                        let msg = format!("no implicit conversion of {} into String", source_class);
-                        let exc = Object::exception("TypeError", msg.clone());
-                        return Err(MetorexError::UncaughtException {
-                            exception: exc,
-                            location: position_to_location(position),
-                            message: msg,
-                        });
-                    };
-                match converted {
-                    Object::String(s) => Ok(s.as_str().to_string()),
-                    other => {
-                        let converted_class = self.builtins().class_of(&other).name().to_string();
+                let other_obj = other;
+                let source_class = self
+                    .builtins()
+                    .class_of(&other.to_object())
+                    .name()
+                    .to_string();
+                let converted = if let Some((cls, method)) =
+                    self.lookup_method(&other_obj.to_object(), "to_str")
+                {
+                    self.invoke_method(cls, method, other_obj.to_object(), Vec::new(), position)?
+                } else {
+                    let msg = format!("no implicit conversion of {} into String", source_class);
+                    let exc = Object::exception("TypeError", msg.clone());
+                    return Err(MetorexError::UncaughtException {
+                        exception: exc,
+                        location: position_to_location(position),
+                        message: msg,
+                    });
+                };
+                match converted.view() {
+                    View::String(s) => Ok(s.as_str().to_string()),
+                    _ => {
+                        let converted_class =
+                            self.builtins().class_of(&converted).name().to_string();
                         let msg = format!("can't convert {} to String", converted_class);
                         let exc = Object::exception("TypeError", msg.clone());
                         Err(MetorexError::UncaughtException {
@@ -255,7 +267,7 @@ impl VirtualMachine {
         held: &Object,
         position: Position,
     ) -> Result<Vec<Object>, MetorexError> {
-        if let Object::Array(elements) = held {
+        if let View::Array(elements) = held.view() {
             return Ok(elements.borrow().clone());
         }
         let named = self.builtins().class_of(held).ruby_name().to_string();
@@ -267,10 +279,10 @@ impl VirtualMachine {
             ));
         }
         let answered = self.send_to_object(held.clone(), "to_a", vec![], position)?;
-        match answered {
-            Object::Array(elements) => Ok(elements.borrow().clone()),
-            other => {
-                let gives = self.builtins().class_of(&other).ruby_name().to_string();
+        match answered.view() {
+            View::Array(elements) => Ok(elements.borrow().clone()),
+            _ => {
+                let gives = self.builtins().class_of(&answered).ruby_name().to_string();
                 Err(crate::vm::errors::simple_exception(
                     "TypeError",
                     &format!("can't convert {named} into Array ({named}#to_a gives {gives})"),
@@ -286,10 +298,10 @@ impl VirtualMachine {
         held: &Object,
         position: Position,
     ) -> Result<i64, MetorexError> {
-        let counted: i64 = match held {
-            Object::Int(counted) => *counted,
-            other => {
-                let named = self.coerce_integer_argument(other, position)?;
+        let counted: i64 = match held.view() {
+            View::Int(counted) => counted,
+            _ => {
+                let named = self.coerce_integer_argument(held, position)?;
                 named.try_into().unwrap_or(i64::MAX)
             }
         };
@@ -334,30 +346,33 @@ impl VirtualMachine {
         argument: &Object,
         position: Position,
     ) -> Result<String, MetorexError> {
-        match argument {
-            Object::String(path) => Ok(path.as_str().to_string()),
+        match argument.view() {
+            View::String(path) => Ok(path.as_str().to_string()),
             // A path may be named by an object that answers `to_path`, and
             // by one that answers `to_str` the way any String argument may.
-            other if self.responds_to(other, "to_path") || self.responds_to(other, "to_str") => {
-                let asked = if self.responds_to(other, "to_path") {
+            _ if self.responds_to(argument, "to_path") || self.responds_to(argument, "to_str") => {
+                let asked = if self.responds_to(argument, "to_path") {
                     "to_path"
                 } else {
                     "to_str"
                 };
-                match self.send_to_object(other.clone(), asked, vec![], position)? {
-                    Object::String(path) => Ok(path.as_str().to_string()),
+                match self
+                    .send_to_object(argument.clone(), asked, vec![], position)?
+                    .view()
+                {
+                    View::String(path) => Ok(path.as_str().to_string()),
                     converted => Err(method_argument_type_error(
                         method_name,
                         "String",
-                        &converted,
+                        &converted.to_object(),
                         position,
                     )),
                 }
             }
-            other => Err(method_argument_type_error(
+            _ => Err(method_argument_type_error(
                 method_name,
                 "String",
-                other,
+                argument,
                 position,
             )),
         }

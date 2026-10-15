@@ -1,6 +1,7 @@
 // The frames a backtrace reads, and the names they carry.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The places the frames running stand, innermost first, the way an
@@ -57,11 +58,11 @@ impl VirtualMachine {
     /// `unresolved_caller_location_objects`, which resolving a path on disk
     /// gives it.
     fn resolve_location_path(&mut self, location: &Object) {
-        let Object::Instance(location) = location else {
+        let View::Instance(location) = location.view() else {
             return;
         };
-        let path = match location.borrow().get_var("path") {
-            Some(Object::String(path)) => path.as_str().to_string(),
+        let path = match location.borrow().get_var("path").view() {
+            Some(View::String(path)) => path.as_str().to_string(),
             _ => return,
         };
         let absolute = match self.absolute_path_for(&path) {
@@ -211,23 +212,23 @@ impl VirtualMachine {
         let refuse = |message: String| {
             crate::vm::errors::simple_exception("ArgumentError", &message, position)
         };
-        let (skip, length) = match arguments.first() {
+        let (skip, length) = match arguments.first().view() {
             None => (default_skip, None),
-            Some(range @ Object::Range { .. }) if arguments.len() == 1 => {
-                match self.range_bounds_for(range, total, position)? {
+            Some(range @ View::Range { .. }) if arguments.len() == 1 => {
+                match self.range_bounds_for(&range.to_object(), total, position)? {
                     Some(bounds) => bounds,
                     None => return Ok(None),
                 }
             }
             Some(start) => {
-                let start = self.backtrace_number(start, position)?;
+                let start = self.backtrace_number(&start.to_object(), position)?;
                 if start < 0 {
                     return Err(refuse(format!("negative level ({start})")));
                 }
-                let length = match arguments.get(1) {
-                    None | Some(Object::Nil) => None,
+                let length = match arguments.get(1).view() {
+                    None | Some(View::Nil) => None,
                     Some(limit) => {
-                        let limit = self.backtrace_number(limit, position)?;
+                        let limit = self.backtrace_number(&limit.to_object(), position)?;
                         if limit < 0 {
                             return Err(refuse(format!("negative size ({limit})")));
                         }
@@ -251,11 +252,11 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<i64, MetorexError> {
-        match value {
-            Object::Int(number) => Ok(*number),
-            Object::Float(number) => Ok(number.trunc() as i64),
-            other => {
-                let number = self.coerce_integer_argument(other, position)?;
+        match value.view() {
+            View::Int(number) => Ok(number),
+            View::Float(number) => Ok(number.trunc() as i64),
+            _ => {
+                let number = self.coerce_integer_argument(value, position)?;
                 Ok(i64::try_from(number).unwrap_or(i64::MAX))
             }
         }
@@ -269,18 +270,18 @@ impl VirtualMachine {
         total: usize,
         position: Position,
     ) -> Result<Option<(usize, Option<usize>)>, MetorexError> {
-        let Object::Range {
+        let View::Range {
             start,
             end,
             exclusive,
             ..
-        } = value
+        } = value.view()
         else {
             return Ok(None);
         };
-        let first = match start.as_ref() {
-            Object::Nil => 0,
-            bound => self.backtrace_number(bound, position)?,
+        let first = match start.view() {
+            View::Nil => 0,
+            _ => self.backtrace_number(start, position)?,
         };
         let first = if first < 0 {
             (total as i64 + first).max(0)
@@ -290,12 +291,12 @@ impl VirtualMachine {
         if first > total {
             return Ok(None);
         }
-        let last = match end.as_ref() {
-            Object::Nil => total as i64 - 1,
-            bound => {
-                let last = self.backtrace_number(bound, position)?;
+        let last = match end.view() {
+            View::Nil => total as i64 - 1,
+            _ => {
+                let last = self.backtrace_number(end, position)?;
                 let last = if last < 0 { total as i64 + last } else { last };
-                if *exclusive { last - 1 } else { last }
+                if exclusive { last - 1 } else { last }
             }
         };
         let length = (last - first as i64 + 1).max(0) as usize;

@@ -1,6 +1,7 @@
 // What a name stands for, and how large it is.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// What a name stands for, and how large it is.
@@ -21,13 +22,13 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let path = match &arguments[0] {
-                    Object::String(s) => path_text(s),
-                    other => {
+                let path = match arguments[0].view() {
+                    View::String(s) => path_text(s),
+                    _ => {
                         return Err(method_argument_type_error(
                             "directory?",
                             "String",
-                            other,
+                            &arguments[0],
                             position,
                         ));
                     }
@@ -44,13 +45,13 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let path = match &arguments[0] {
-                    Object::String(held) => path_text(held),
-                    other => {
+                let path = match arguments[0].view() {
+                    View::String(held) => path_text(held),
+                    _ => {
                         return Err(method_argument_type_error(
                             method_name,
                             "String",
-                            other,
+                            &arguments[0],
                             position,
                         ));
                     }
@@ -77,11 +78,14 @@ impl VirtualMachine {
                 if arguments.len() != 1 {
                     return Err(method_argument_error("file?", 1, arguments.len(), position));
                 }
-                let path = match &arguments[0] {
-                    Object::String(s) => path_text(s),
-                    other => {
+                let path = match arguments[0].view() {
+                    View::String(s) => path_text(s),
+                    _ => {
                         return Err(method_argument_type_error(
-                            "file?", "String", other, position,
+                            "file?",
+                            "String",
+                            &arguments[0],
+                            position,
                         ));
                     }
                 };
@@ -98,13 +102,13 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let path = match &arguments[0] {
-                    Object::String(s) => path_text(s),
-                    other => {
+                let path = match arguments[0].view() {
+                    View::String(s) => path_text(s),
+                    _ => {
                         return Err(method_argument_type_error(
                             "executable?",
                             "String",
-                            other,
+                            &arguments[0],
                             position,
                         ));
                     }

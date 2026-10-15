@@ -1,5 +1,6 @@
 // `defined?` introspection: returns a description string or nil.
 
+use crate::object::{OptionView, View};
 use std::rc::Rc;
 
 use crate::ast::{BinaryOp, Expression, Statement, UnaryOp};
@@ -15,7 +16,7 @@ impl VirtualMachine {
         Ok(match self.defined_description(expression)? {
             Some(description) => {
                 let answer = Object::string(description.to_string());
-                if let Object::String(text) = &answer {
+                if let View::String(text) = answer.view() {
                     text.freeze();
                 }
                 answer
@@ -58,11 +59,11 @@ impl VirtualMachine {
                 .defined_global(name, expression)?
                 .then_some("global-variable"),
             Expression::TopLevelConstant { name, .. } => {
-                let private = matches!(self.globals().get("Object"),
-                    Some(Object::Class(object_class)) if object_class.is_private_constant(name));
-                let autoloaded = match self.globals().get("Object") {
-                    Some(Object::Class(object_class)) => {
-                        self.effective_autoload(&object_class, name).is_some()
+                let private = matches!(self.globals().get("Object").view(),
+                    Some(View::Class(object_class)) if object_class.is_private_constant(name));
+                let autoloaded = match self.globals().get("Object").view() {
+                    Some(View::Class(object_class)) => {
+                        self.effective_autoload(object_class, name).is_some()
                     }
                     _ => false,
                 };
@@ -176,13 +177,11 @@ impl VirtualMachine {
             .then_some("constant");
         }
         if let Some(value) = self.environment().get(name) {
-            return Some(match value {
-                Object::Class(_) | Object::Module(_) if name.starts_with(char::is_uppercase) => {
+            return Some(match value.view() {
+                View::Class(_) | View::Module(_) if name.starts_with(char::is_uppercase) => {
                     "constant"
                 }
-                Object::Method(_) | Object::NativeFunction(_) | Object::CompiledFunction(_) => {
-                    "method"
-                }
+                View::Method(_) | View::NativeFunction(_) | View::CompiledFunction(_) => "method",
                 _ => "local-variable",
             });
         }
@@ -200,8 +199,8 @@ impl VirtualMachine {
     /// autoload for the name, which `defined?` reports without running it.
     fn lexically_autoloaded(&mut self, name: &str) -> bool {
         let mut scopes: Vec<_> = self.def_scope_stack.iter().rev().cloned().collect();
-        if let Some(Object::Class(object_class)) = self.globals().get("Object") {
-            scopes.push(object_class);
+        if let Some(View::Class(object_class)) = self.globals().get("Object").view() {
+            scopes.push(object_class.clone());
         }
         scopes
             .iter()
@@ -223,14 +222,17 @@ impl VirtualMachine {
         }
         self.responds_to(&receiver, name)
             || self.method_is_restricted(&receiver, name)
-            || matches!(self.globals().get(name), Some(Object::NativeFunction(_)))
+            || matches!(
+                self.globals().get(name).view(),
+                Some(View::NativeFunction(_))
+            )
     }
 
     /// Whether an instance variable of `self` has been assigned.
     fn instance_variable_is_set(&self, name: &str) -> bool {
-        match self.environment().get("self") {
-            Some(Object::Instance(instance)) => instance.borrow().get_var(name).is_some(),
-            Some(Object::Class(class) | Object::Module(class)) => {
+        match self.environment().get("self").view() {
+            Some(View::Instance(instance)) => instance.borrow().get_var(name).is_some(),
+            Some(View::Class(class) | View::Module(class)) => {
                 class.get_class_var(&format!("@{}", name)).is_some()
             }
             _ => false,
@@ -251,8 +253,10 @@ impl VirtualMachine {
             || (!name.is_empty() && name.bytes().all(|digit| digit.is_ascii_digit()));
         if read_from_last_match {
             return Ok(!matches!(
-                self.evaluate_expression(expression),
-                Ok(Object::Nil) | Err(_)
+                self.evaluate_expression(expression)
+                    .as_ref()
+                    .map(Object::view),
+                Ok(View::Nil) | Err(_)
             ));
         }
         let name = self
@@ -274,12 +278,13 @@ impl VirtualMachine {
         if self.defined_description(namespace)?.is_none() {
             return Ok(None);
         }
-        let (Ok(Object::Class(scope)) | Ok(Object::Module(scope))) =
-            self.evaluate_expression(namespace)
+        let evaluated = self.evaluate_expression(namespace);
+        let (Ok(View::Class(scope)) | Ok(View::Module(scope))) =
+            evaluated.as_ref().map(Object::view)
         else {
             return Ok(None);
         };
-        let refused = match self.const_entry_on(&scope, name, true, false) {
+        let refused = match self.const_entry_on(scope, name, true, false) {
             Some((owner, _)) => {
                 owner.is_private_constant(name)
                     && !self
@@ -294,9 +299,9 @@ impl VirtualMachine {
             && (self.object_constant(name).is_some() || self.globals().constant(name).is_some());
         let held = top_level
             || scope.get_class_var(name).is_some()
-            || self.effective_autoload(&scope, name).is_some()
+            || self.effective_autoload(scope, name).is_some()
             || matches!(
-                self.const_entry_on(&scope, name, true, false),
+                self.const_entry_on(scope, name, true, false),
                 Some((_, Some(_)))
             );
         Ok((!refused && held).then_some("constant"))
@@ -382,7 +387,7 @@ impl VirtualMachine {
             if owner.is_method_protected(method) {
                 let caller = self.environment().get("self").unwrap_or(Object::Nil);
                 return self.builtins().class_of(&caller).has_ancestor(&owner)
-                    || matches!(&caller, Object::Instance(instance)
+                    || matches!(caller.view(), View::Instance(instance)
                         if instance.borrow().class.has_ancestor(&owner));
             }
             return true;

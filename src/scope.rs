@@ -2,6 +2,7 @@
 // This module implements lexical scoping with scope chain traversal
 
 use crate::object::Object;
+use crate::object::View;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -535,11 +536,11 @@ impl Default for Scope {
 /// `module` statement names. A lowercase local may hold a class as any
 /// other value.
 pub fn names_a_definition_under(name: &str, value: &Object) -> bool {
-    match value {
-        Object::Class(_) | Object::Module(_) => {
+    match value.view() {
+        View::Class(_) | View::Module(_) => {
             name.starts_with(|first: char| !first.is_lowercase() && first != '_')
         }
-        other => names_a_definition(other),
+        _ => names_a_definition(value),
     }
 }
 
@@ -547,11 +548,11 @@ pub fn names_a_definition_under(name: &str, value: &Object) -> bool {
 /// class, or a module reached by name is not one of a scope's locals.
 pub fn names_a_definition(value: &Object) -> bool {
     matches!(
-        value,
-        Object::Method(_)
-            | Object::Class(_)
-            | Object::Module(_)
-            | Object::NativeFunction(_)
-            | Object::CompiledFunction(_)
+        value.view(),
+        View::Method(_)
+            | View::Class(_)
+            | View::Module(_)
+            | View::NativeFunction(_)
+            | View::CompiledFunction(_)
     )
 }

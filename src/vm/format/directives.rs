@@ -1,6 +1,7 @@
 // The text one directive writes, padded to its width.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// The text one directive writes, already padded to its width.
@@ -38,9 +39,9 @@ impl VirtualMachine {
             'p' | 's' => {
                 let value = self.directive_value(directive, arguments, position)?;
                 let asked = if spec == 'p' { "inspect" } else { "to_s" };
-                let (text, encoding) = match (&value, spec) {
-                    (Object::Nil, 's') => (String::new(), format_encoding.to_string()),
-                    (Object::Nil, _) => ("nil".to_string(), format_encoding.to_string()),
+                let (text, encoding) = match (value.view(), spec) {
+                    (View::Nil, 's') => (String::new(), format_encoding.to_string()),
+                    (View::Nil, _) => ("nil".to_string(), format_encoding.to_string()),
                     _ => self.text_through(value, asked, wrote_bytes, position)?,
                 };
                 let text = cut_to_precision(&text, directive.precision);
@@ -62,11 +63,14 @@ impl VirtualMachine {
         wrote_bytes: &mut bool,
         position: Position,
     ) -> Result<String, MetorexError> {
-        let held = match &value {
-            Object::String(text) => Some(text.as_str().to_string()),
+        let held = match value.view() {
+            View::String(text) => Some(text.as_str().to_string()),
             _ if self.responds_to(&value, "to_str") => {
-                match self.send_to_object(value.clone(), "to_str", vec![], position)? {
-                    Object::String(text) => Some(text.as_str().to_string()),
+                match self
+                    .send_to_object(value.clone(), "to_str", vec![], position)?
+                    .view()
+                {
+                    View::String(text) => Some(text.as_str().to_string()),
                     _ => {
                         return Err(type_error(
                             format!("can't convert {} into String", self.class_name_of(&value)),
@@ -126,8 +130,8 @@ impl VirtualMachine {
         wrote_bytes: &mut bool,
         position: Position,
     ) -> Result<(String, String), MetorexError> {
-        match self.send_to_object(value, asked, vec![], position)? {
-            Object::String(text) => {
+        match self.send_to_object(value, asked, vec![], position)?.view() {
+            View::String(text) => {
                 if text.holds_bytes() {
                     *wrote_bytes = true;
                 }
@@ -148,24 +152,24 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<BigInt, MetorexError> {
-        match value {
-            Object::Int(held) => return Ok(BigInt::from(*held)),
-            Object::BigInt(held) => return Ok((**held).clone()),
-            Object::Float(held) => {
+        match value.view() {
+            View::Int(held) => return Ok(BigInt::from(held)),
+            View::BigInt(held) => return Ok((**held).clone()),
+            View::Float(held) => {
                 return Ok(BigInt::from(held.trunc() as i64));
             }
-            Object::String(text) => {
+            View::String(text) => {
                 let written = Object::string(text.as_str().to_string());
-                return match self.kernel_integer(&[written], position)? {
-                    Object::Int(held) => Ok(BigInt::from(held)),
-                    Object::BigInt(held) => Ok((*held).clone()),
+                return match self.kernel_integer(&[written], position)?.view() {
+                    View::Int(held) => Ok(BigInt::from(held)),
+                    View::BigInt(held) => Ok(num_bigint::BigInt::clone(held)),
                     other => Err(type_error(
                         format!("can't convert {} into Integer", other.type_name()),
                         position,
                     )),
                 };
             }
-            Object::Nil => {
+            View::Nil => {
                 return Err(type_error(
                     "no implicit conversion of nil into Integer".to_string(),
                     position,
@@ -177,9 +181,12 @@ impl VirtualMachine {
             if !self.responds_to(value, asked) {
                 continue;
             }
-            return match self.send_to_object(value.clone(), asked, vec![], position)? {
-                Object::Int(held) => Ok(BigInt::from(held)),
-                Object::BigInt(held) => Ok((*held).clone()),
+            return match self
+                .send_to_object(value.clone(), asked, vec![], position)?
+                .view()
+            {
+                View::Int(held) => Ok(BigInt::from(held)),
+                View::BigInt(held) => Ok(num_bigint::BigInt::clone(held)),
                 _ => Err(type_error(
                     format!("can't convert {} into Integer", self.class_name_of(value)),
                     position,
@@ -202,24 +209,24 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<f64, MetorexError> {
-        match value {
-            Object::Float(held) => return Ok(*held),
-            Object::Int(held) => return Ok(*held as f64),
-            Object::BigInt(held) => {
+        match value.view() {
+            View::Float(held) => return Ok(held),
+            View::Int(held) => return Ok(held as f64),
+            View::BigInt(held) => {
                 return Ok(held.to_string().parse::<f64>().unwrap_or(f64::INFINITY));
             }
-            Object::String(text) => {
+            View::String(text) => {
                 let written = Object::string(text.as_str().to_string());
-                return match self.kernel_float(&[written], position)? {
-                    Object::Float(held) => Ok(held),
-                    Object::Int(held) => Ok(held as f64),
+                return match self.kernel_float(&[written], position)?.view() {
+                    View::Float(held) => Ok(held),
+                    View::Int(held) => Ok(held as f64),
                     other => Err(type_error(
                         format!("can't convert {} into Float", other.type_name()),
                         position,
                     )),
                 };
             }
-            Object::Nil => {
+            View::Nil => {
                 return Err(type_error(
                     "can't convert nil into Float".to_string(),
                     position,
@@ -228,9 +235,12 @@ impl VirtualMachine {
             _ => {}
         }
         if self.responds_to(value, "to_f") {
-            return match self.send_to_object(value.clone(), "to_f", vec![], position)? {
-                Object::Float(held) => Ok(held),
-                Object::Int(held) => Ok(held as f64),
+            return match self
+                .send_to_object(value.clone(), "to_f", vec![], position)?
+                .view()
+            {
+                View::Float(held) => Ok(held),
+                View::Int(held) => Ok(held as f64),
                 _ => Err(type_error(
                     format!("can't convert {} into Float", self.class_name_of(value)),
                     position,

@@ -2,6 +2,7 @@
 // array.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Folding the elements into one value, and pairing them with another
@@ -24,13 +25,14 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(b)) => b,
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(b)) => b,
                     Some(other) => {
                         return Err(method_argument_type_error(
                             method_name,
                             "Block",
-                            &other,
+                            &other.to_object(),
                             position,
                         ));
                     }
@@ -46,8 +48,8 @@ impl VirtualMachine {
                 let mut falsy = Vec::new();
                 for element in array.iter() {
                     let args = vec![element.clone()];
-                    let value = self.execute_block_callable(&block, args, position)?;
-                    if !matches!(value, Object::Bool(false) | Object::Nil) {
+                    let value = self.execute_block_callable(block, args, position)?;
+                    if !matches!(value.view(), View::Bool(false) | View::Nil) {
                         truthy.push(element.clone());
                     } else {
                         falsy.push(element.clone());
@@ -67,8 +69,9 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => Some(block),
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(block)) => Some(block),
                     _ => None,
                 };
                 // The last argument names an operator when there are two of
@@ -143,9 +146,9 @@ impl VirtualMachine {
                 }
                 // With a block the rows are handed over one at a time and
                 // nothing is answered.
-                if let Some(Object::Block(block)) = self.pending_block.take() {
+                if let Some(View::Block(block)) = self.pending_block.take().view() {
                     for row in results {
-                        self.execute_block_callable(&block, vec![row], position)?;
+                        self.execute_block_callable(block, vec![row], position)?;
                     }
                     return Ok(Some(Object::Nil));
                 }

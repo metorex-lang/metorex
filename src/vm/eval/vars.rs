@@ -3,6 +3,7 @@
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 
 use crate::vm::core::VirtualMachine;
 use crate::vm::errors::undefined_self_error;
@@ -16,8 +17,8 @@ impl VirtualMachine {
         }
         // At the top level `self` is `main`, which is what TOPLEVEL_BINDING
         // was built around.
-        match self.globals().get("TOPLEVEL_BINDING") {
-            Some(Object::Binding(binding)) => binding
+        match self.globals().get("TOPLEVEL_BINDING").view() {
+            Some(View::Binding(binding)) => binding
                 .receiver
                 .clone()
                 .ok_or_else(|| undefined_self_error(position)),
@@ -36,26 +37,26 @@ impl VirtualMachine {
         // At the top level `self` is `main`, which carries the program's own
         // instance variables the way any other object does.
         let held = self.environment().get("self").or_else(|| {
-            match self.globals().get("TOPLEVEL_BINDING") {
-                Some(Object::Binding(binding)) => binding.receiver.clone(),
+            match self.globals().get("TOPLEVEL_BINDING").view() {
+                Some(View::Binding(binding)) => binding.receiver.clone(),
                 _ => None,
             }
         });
-        match held {
-            Some(Object::Instance(instance_rc)) => {
+        match held.view() {
+            Some(View::Instance(instance_rc)) => {
                 let instance = instance_rc.borrow();
                 Ok(instance.get_var(name).cloned().unwrap_or(Object::Nil))
             }
-            Some(Object::Exception(details)) => Ok(details
+            Some(View::Exception(details)) => Ok(details
                 .borrow()
                 .instance_vars
                 .get(name)
                 .cloned()
                 .unwrap_or(Object::Nil)),
-            Some(Object::Class(class_rc)) => Ok(class_rc
+            Some(View::Class(class_rc)) => Ok(class_rc
                 .get_class_var(&format!("@{}", name))
                 .unwrap_or(Object::Nil)),
-            Some(Object::Module(module_rc)) => Ok(module_rc
+            Some(View::Module(module_rc)) => Ok(module_rc
                 .get_class_var(&format!("@{}", name))
                 .unwrap_or(Object::Nil)),
             // Immediates (Int/Float/Symbol/Bool/Nil/etc.) and other non-instance
@@ -63,7 +64,7 @@ impl VirtualMachine {
             // immediates default to nil even if no writer ever ran.
             // A collection or a String keeps its instance variables aside,
             // where `instance_variable_set` puts them too.
-            Some(other) => Ok(Self::collection_address(&other)
+            Some(other) => Ok(Self::collection_address(&other.to_object())
                 .and_then(|address| self.collection_variables.get(&address))
                 .and_then(|held| held.get(name))
                 .cloned()
@@ -96,10 +97,10 @@ impl VirtualMachine {
         // A singleton class holds no class variables of its own: one written
         // there belongs to the class it stands for.
         if cref.get_class_var("__singleton__").is_some()
-            && let Some(Object::Class(attached) | Object::Module(attached)) =
-                cref.get_class_var("__attached__")
+            && let Some(View::Class(attached) | View::Module(attached)) =
+                cref.get_class_var("__attached__").view()
         {
-            return Some(attached);
+            return Some(attached.clone());
         }
         Some(std::rc::Rc::clone(cref))
     }
@@ -187,7 +188,7 @@ fn uninitialized_class_var_error(
         class.inspect_name()
     );
     let exception = Object::exception("NameError", message.clone());
-    if let Object::Exception(details) = &exception {
+    if let View::Exception(details) = exception.view() {
         let mut details = details.borrow_mut();
         details.name = Some(format!("@@{}", name));
         details.receiver = Some(Box::new(Object::Class(std::rc::Rc::clone(class))));

@@ -354,23 +354,23 @@ fn format_object_dict() {
 
 #[test]
 fn format_object_range_inclusive() {
-    let range = Object::Range {
-        start: Box::new(Object::Int(1)),
-        end: Box::new(Object::Int(10)),
-        exclusive: false,
-        mark: std::rc::Rc::new(()),
-    };
+    let range = Object::Range(
+        Box::new(Object::Int(1)),
+        Box::new(Object::Int(10)),
+        false,
+        std::rc::Rc::new(()),
+    );
     assert_eq!(ReplCore::format_object(&range), "1..10");
 }
 
 #[test]
 fn format_object_range_exclusive() {
-    let range = Object::Range {
-        start: Box::new(Object::Int(1)),
-        end: Box::new(Object::Int(10)),
-        exclusive: true,
-        mark: std::rc::Rc::new(()),
-    };
+    let range = Object::Range(
+        Box::new(Object::Int(1)),
+        Box::new(Object::Int(10)),
+        true,
+        std::rc::Rc::new(()),
+    );
     assert_eq!(ReplCore::format_object(&range), "1...10");
 }
 

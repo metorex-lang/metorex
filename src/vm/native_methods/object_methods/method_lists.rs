@@ -1,6 +1,7 @@
 // The method names an object answers, by visibility.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The method names an object answers, by visibility.
@@ -21,16 +22,16 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let target_class = match &arguments[0] {
-                    Object::Class(c) => c,
+                let target_class = match arguments[0].view() {
+                    View::Class(c) => c,
                     // An object is never an instance *of* a module, so a
                     // module argument is simply false rather than an error.
-                    Object::Module(_) => return Ok(Some(Object::Bool(false))),
-                    other => {
+                    View::Module(_) => return Ok(Some(Object::Bool(false))),
+                    _ => {
                         return Err(method_argument_type_error(
                             method_name,
                             "Class",
-                            other,
+                            &arguments[0],
                             position,
                         ));
                     }
@@ -40,7 +41,7 @@ impl VirtualMachine {
                 // `instance_of?` should match against that type rather than
                 // the broad `Exception` class so `e.instance_of?(NameError)`
                 // works for a rescued NameError.
-                if let Object::Exception(exc) = receiver {
+                if let View::Exception(exc) = receiver.view() {
                     let actual = exc.borrow().exception_type.clone();
                     return Ok(Some(Object::Bool(actual == target_class.name())));
                 }
@@ -52,10 +53,10 @@ impl VirtualMachine {
                 // A Class is an instance of Class and a Module of Module,
                 // which `class_of` does not report: it answers Object for
                 // both so `is_a?` can walk the inheritance chain.
-                let actual_name = match receiver {
-                    Object::Class(_) => "Class".to_string(),
-                    Object::Module(_) => "Module".to_string(),
-                    other => self.builtins().class_of(other).name().to_string(),
+                let actual_name = match receiver.view() {
+                    View::Class(_) => "Class".to_string(),
+                    View::Module(_) => "Module".to_string(),
+                    _ => self.builtins().class_of(receiver).name().to_string(),
                 };
                 Ok(Some(Object::Bool(actual_name == target_class.name())))
             }
@@ -73,8 +74,8 @@ impl VirtualMachine {
                     ));
                 }
                 let include_super = !matches!(
-                    arguments.first(),
-                    Some(Object::Bool(false)) | Some(Object::Nil)
+                    arguments.first().view(),
+                    Some(View::Bool(false)) | Some(View::Nil)
                 );
                 let mut names = match method_name {
                     "public_methods" => self.public_method_names_for(receiver, include_super),
@@ -98,7 +99,7 @@ impl VirtualMachine {
                             .is_some_and(|(_, method)| written_by_program(&method))
                     });
                 } else if method_name == "public_methods"
-                    && let Object::Class(held) | Object::Module(held) = receiver
+                    && let View::Class(held) | View::Module(held) = receiver.view()
                 {
                     // A core class or module answers the methods it defines
                     // on itself, and those its own class, Class or Module,
@@ -142,7 +143,7 @@ impl VirtualMachine {
                 // walk over inherited methods is skipped — but the receiver's
                 // own methods are still collected. Mirrors Ruby's
                 // `obj.methods(false)`.
-                let include_super = !matches!(arguments.first(), Some(Object::Bool(false)));
+                let include_super = !matches!(arguments.first().view(), Some(View::Bool(false)));
                 // `obj.methods(false)` is the singleton methods alone: those
                 // defined with `def obj.name` and any on the singleton class.
                 if !include_super {
@@ -150,8 +151,8 @@ impl VirtualMachine {
                 }
                 // The methods an object carries of its own come first, which
                 // is where a module's `module_function` names live.
-                let mut names: Vec<String> = match self.singleton_method_names(receiver) {
-                    Object::Array(held) => held
+                let mut names: Vec<String> = match self.singleton_method_names(receiver).view() {
+                    View::Array(held) => held
                         .borrow()
                         .iter()
                         .map(|name| name.to_string().trim_start_matches(':').to_string())
@@ -184,7 +185,7 @@ impl VirtualMachine {
                 // class. The ancestor walk covers the modules it includes and
                 // prepends as well as its superclasses, which is the same
                 // chain a call travels.
-                if let Object::Instance(inst_rc) = receiver {
+                if let View::Instance(inst_rc) = receiver.view() {
                     let own_class = std::rc::Rc::clone(&inst_rc.borrow().class);
                     let mut chain = Vec::new();
                     let mut seen = Vec::new();
@@ -196,7 +197,7 @@ impl VirtualMachine {
                         chain.push(Object::Class(own_class));
                     }
                     for ancestor in &chain {
-                        let (Object::Class(carrier) | Object::Module(carrier)) = ancestor else {
+                        let (View::Class(carrier) | View::Module(carrier)) = ancestor.view() else {
                             continue;
                         };
                         for name in carrier.method_names() {
@@ -212,7 +213,7 @@ impl VirtualMachine {
                 // inherits from Class → Module → Object). This also lets
                 // `define_method` at TOPLEVEL_BINDING be observable via
                 // `Object.methods.include?(...)`.
-                if let Object::Class(c) | Object::Module(c) = receiver {
+                if let View::Class(c) | View::Module(c) = receiver.view() {
                     for name in self.metaclass_method_names(c) {
                         if !names.contains(&name) {
                             names.push(name);
@@ -221,13 +222,13 @@ impl VirtualMachine {
                     // Past its singleton classes, a class answers what Class
                     // and its ancestors define for their instances, and a
                     // module what Module does.
-                    let kind = if matches!(receiver, Object::Class(_)) {
+                    let kind = if matches!(receiver.view(), View::Class(_)) {
                         "Class"
                     } else {
                         "Module"
                     };
-                    let mut cursor = match self.globals().get(kind) {
-                        Some(Object::Class(held)) => Some(held),
+                    let mut cursor = match self.globals().get(kind).view() {
+                        Some(View::Class(held)) => Some(held.clone()),
                         _ => None,
                     };
                     while let Some(current) = cursor {
@@ -249,21 +250,21 @@ impl VirtualMachine {
                 }
                 // `def self.name` is stored under the `__class__` convention;
                 // it belongs to the class object, not to its instances.
-                if matches!(receiver, Object::Instance(_)) {
+                if matches!(receiver.view(), View::Instance(_)) {
                     names.retain(|name| !name.starts_with("__class__"));
                 }
                 // A tombstone left by `undef_method` is not a method any more.
-                let lookup_class = match receiver {
-                    Object::Class(c) | Object::Module(c) => Some(std::rc::Rc::clone(c)),
-                    Object::Instance(inst) => Some(std::rc::Rc::clone(&inst.borrow().class)),
+                let lookup_class = match receiver.view() {
+                    View::Class(c) | View::Module(c) => Some(std::rc::Rc::clone(c)),
+                    View::Instance(inst) => Some(std::rc::Rc::clone(&inst.borrow().class)),
                     _ => None,
                 };
                 if let Some(class) = lookup_class {
                     names.retain(|n| class.find_method(n).is_none_or(|m| !m.is_undefined));
                 }
-                let singleton = match receiver {
-                    Object::Class(c) | Object::Module(c) => c.singleton_class_slot().clone(),
-                    Object::Instance(inst) => inst.borrow().singleton_class.borrow().clone(),
+                let singleton = match receiver.view() {
+                    View::Class(c) | View::Module(c) => c.singleton_class_slot().clone(),
+                    View::Instance(inst) => inst.borrow().singleton_class.borrow().clone(),
                     _ => None,
                 };
                 if let Some(singleton_class) = singleton {
@@ -354,8 +355,8 @@ impl VirtualMachine {
             // that of a module from Module.
             None => {
                 let root = if base.is_module() { "Module" } else { "Class" };
-                match self.globals().get(root) {
-                    Some(Object::Class(held)) => Some((held, depth - 1)),
+                match self.globals().get(root).view() {
+                    Some(View::Class(held)) => Some((held.clone(), depth - 1)),
                     _ => None,
                 }
             }
@@ -370,8 +371,8 @@ fn attached_class(
     if !class.is_singleton_class() {
         return None;
     }
-    match class.get_class_var("__attached__") {
-        Some(Object::Class(held) | Object::Module(held)) => Some(held),
+    match class.get_class_var("__attached__").view() {
+        Some(View::Class(held) | View::Module(held)) => Some(held.clone()),
         _ => None,
     }
 }
@@ -493,12 +494,12 @@ impl VirtualMachine {
                 Vec::new(),
                 position,
             )?;
-            match ancestors {
-                Object::Array(held) => held
+            match ancestors.view() {
+                View::Array(held) => held
                     .borrow()
                     .iter()
-                    .filter_map(|ancestor| match ancestor {
-                        Object::Class(module) | Object::Module(module) => Some(module.ruby_name()),
+                    .filter_map(|ancestor| match ancestor.view() {
+                        View::Class(module) | View::Module(module) => Some(module.ruby_name()),
                         _ => None,
                     })
                     .collect(),
@@ -570,18 +571,18 @@ impl VirtualMachine {
             "Float" => Object::Float(0.0),
             "Array" => Object::array(Vec::new()),
             "Hash" => Object::empty_dict(),
-            "Range" => Object::Range {
-                start: Box::new(Object::Int(0)),
-                end: Box::new(Object::Int(0)),
-                exclusive: false,
-                mark: std::rc::Rc::new(()),
-            },
+            "Range" => Object::Range(
+                Box::new(Object::Int(0)),
+                Box::new(Object::Int(0)),
+                false,
+                std::rc::Rc::new(()),
+            ),
             "NilClass" => Object::Nil,
             "TrueClass" => Object::Bool(true),
             "FalseClass" => Object::Bool(false),
             _ if self.is_exception_class(class) => {
                 let made = Object::exception(class.name(), "");
-                if let Object::Exception(details) = &made {
+                if let View::Exception(details) = made.view() {
                     details.borrow_mut().class = Some(std::rc::Rc::clone(class));
                 }
                 made
@@ -623,14 +624,14 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Vec<String>, MetorexError> {
         let ancestors = self.send_to_object(class_object, "ancestors", Vec::new(), position)?;
-        let Object::Array(held) = ancestors else {
+        let View::Array(held) = ancestors.view() else {
             return Ok(Vec::new());
         };
         let names = held
             .borrow()
             .iter()
-            .filter_map(|ancestor| match ancestor {
-                Object::Class(module) | Object::Module(module) => Some(module.ruby_name()),
+            .filter_map(|ancestor| match ancestor.view() {
+                View::Class(module) | View::Module(module) => Some(module.ruby_name()),
                 _ => None,
             })
             .collect();
@@ -719,7 +720,8 @@ impl VirtualMachine {
         let Some(named) = crate::vm::method_lookup::reopened_class_name(receiver) else {
             return Vec::new();
         };
-        let Some(Object::Class(reopened)) = self.globals().get(named) else {
+        let viewed = self.globals().get(named);
+        let Some(View::Class(reopened)) = viewed.view() else {
             return Vec::new();
         };
         reopened

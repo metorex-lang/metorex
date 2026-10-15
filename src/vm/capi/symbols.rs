@@ -6,6 +6,7 @@ use super::encodings::{RbEncoding, encoding_object};
 use super::handles::{Value, to_object, to_value};
 use super::raise;
 use crate::object::Object;
+use crate::object::View;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::{CString, c_char};
@@ -19,13 +20,13 @@ thread_local! {
 /// The name of the Symbol an ID or a Symbol VALUE stands for, refusing a
 /// VALUE that is no Symbol.
 pub(super) fn symbol_name(value: Value) -> String {
-    match to_object(value) {
-        Object::Symbol(name) => name.as_str().to_string(),
+    match to_object(value).view() {
+        View::Symbol(name) => name.as_str().to_string(),
         other => raise(crate::vm::errors::simple_exception(
             "TypeError",
             &format!(
                 "wrong argument type {} (expected symbol)",
-                class_name_of(other)
+                class_name_of(other.to_object())
             ),
             super::called_from(),
         )),
@@ -125,7 +126,7 @@ pub extern "C-unwind" fn rb_sym2str(symbol: Value) -> Value {
 
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_symbol_p(value: Value) -> i32 {
-    matches!(to_object(value), Object::Symbol(_)) as i32
+    matches!(to_object(value).view(), View::Symbol(_)) as i32
 }
 
 #[unsafe(no_mangle)]
@@ -168,7 +169,7 @@ fn is_identifier(name: &str) -> bool {
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_to_symbol(value: Value) -> Value {
     let object = to_object(value);
-    if matches!(object, Object::Symbol(_)) {
+    if matches!(object.view(), View::Symbol(_)) {
         return value;
     }
     match super::strings::check_string(object.clone()) {

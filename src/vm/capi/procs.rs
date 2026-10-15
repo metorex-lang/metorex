@@ -6,6 +6,7 @@ use super::fibers::block_function_method;
 use super::handles::{QFALSE, QNIL, QTRUE, Value, objects_from, to_object, to_value};
 use super::{called_from, interpreter, raise};
 use crate::object::Object;
+use crate::object::View;
 use crate::vm::program::proc_for_c_function;
 
 /// What `RB_PASS_KEYWORDS` asks for: the last argument is the keyword Hash.
@@ -18,8 +19,8 @@ pub extern "C-unwind" fn rb_proc_new(function: *const (), data: Value) -> Value 
 
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_proc_arity(procedure: Value) -> i32 {
-    match call(to_object(procedure), "arity", Vec::new()) {
-        Object::Int(arity) => arity as i32,
+    match call(to_object(procedure), "arity", Vec::new()).view() {
+        View::Int(arity) => arity as i32,
         _ => 0,
     }
 }
@@ -27,7 +28,7 @@ pub extern "C-unwind" fn rb_proc_arity(procedure: Value) -> i32 {
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_obj_is_proc(value: Value) -> Value {
     let object = to_object(value);
-    let is_proc = matches!(object, Object::Block(_))
+    let is_proc = matches!(object.view(), View::Block(_))
         || call(object, "is_a?", vec![top_level_module("Proc")]).is_truthy();
     if is_proc { QTRUE } else { QFALSE }
 }
@@ -64,13 +65,13 @@ fn call_proc(procedure: Value, mut arguments: Vec<Object>, keywords: i32, block:
 
 /// The elements of the Array `values` as arguments.
 fn array_arguments(values: Value) -> Vec<Object> {
-    match to_object(values) {
-        Object::Array(elements) => elements.borrow().clone(),
+    match to_object(values).view() {
+        View::Array(elements) => elements.borrow().clone(),
         other => raise(crate::vm::errors::simple_exception(
             "TypeError",
             &format!(
                 "wrong argument type {} (expected Array)",
-                class_name_of(other)
+                class_name_of(other.to_object())
             ),
             called_from(),
         )),

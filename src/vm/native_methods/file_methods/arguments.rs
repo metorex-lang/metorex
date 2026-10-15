@@ -1,6 +1,7 @@
 // The moment, the name, and the path an argument stands for.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The moment a value names, in seconds since the epoch. A Time keeps
@@ -12,18 +13,21 @@ impl VirtualMachine {
         now: f64,
         position: Position,
     ) -> Result<f64, MetorexError> {
-        match value {
-            Object::Nil => Ok(now),
-            Object::Int(held) => Ok(*held as f64),
-            Object::Float(held) => Ok(*held),
-            other if self.responds_to(other, "to_f") => {
-                match self.send_to_object(other.clone(), "to_f", vec![], position)? {
-                    Object::Float(held) => Ok(held),
-                    Object::Int(held) => Ok(held as f64),
+        match value.view() {
+            View::Nil => Ok(now),
+            View::Int(held) => Ok(held as f64),
+            View::Float(held) => Ok(held),
+            _ if self.responds_to(value, "to_f") => {
+                match self
+                    .send_to_object(value.clone(), "to_f", vec![], position)?
+                    .view()
+                {
+                    View::Float(held) => Ok(held),
+                    View::Int(held) => Ok(held as f64),
                     _ => Ok(0.0),
                 }
             }
-            other => Ok(self_seconds(other).unwrap_or(0.0)),
+            _ => Ok(self_seconds(value).unwrap_or(0.0)),
         }
     }
 
@@ -35,7 +39,7 @@ impl VirtualMachine {
         given: &Object,
         position: Position,
     ) -> Result<String, MetorexError> {
-        if let Object::String(text) = given {
+        if let View::String(text) = given.view() {
             return Ok(path_text(text));
         }
         if self
@@ -48,7 +52,7 @@ impl VirtualMachine {
             .is_truthy()
         {
             let named = self.send_to_object(given.clone(), "to_path", Vec::new(), position)?;
-            if let Object::String(text) = &named {
+            if let View::String(text) = named.view() {
                 return Ok(path_text(text));
             }
         }
@@ -72,7 +76,7 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         let made = Object::string(text);
-        let Object::String(given) = argument else {
+        let View::String(given) = argument.view() else {
             return Ok(made);
         };
         let named = given.encoding_name();
@@ -105,7 +109,7 @@ impl VirtualMachine {
         for name in ["to_path", "to_str"] {
             if self.responds_to(candidate, name) {
                 let named = self.send_to_object(candidate.clone(), name, vec![], position)?;
-                if matches!(named, Object::String(_)) {
+                if matches!(named.view(), View::String(_)) {
                     return Ok(Some(named));
                 }
             }
@@ -114,22 +118,22 @@ impl VirtualMachine {
         // predicates read when they are handed one.
         if self.responds_to(candidate, "to_io") {
             let named = self.send_to_object(candidate.clone(), "to_io", vec![], position)?;
-            if let Object::Instance(_) = &named
+            if let View::Instance(_) = named.view()
                 && self.responds_to(&named, "fileno")
             {
                 // A stream opened over a file names that file. One opened
                 // over anything else is named by its descriptor, which the
                 // system carries under a directory of its own.
                 let path = self.send_to_object(named.clone(), "path", vec![], position)?;
-                if matches!(path, Object::String(_)) {
+                if matches!(path.view(), View::String(_)) {
                     return Ok(Some(path));
                 }
                 let number = self.send_to_object(named.clone(), "fileno", vec![], position)?;
-                if let Object::Int(held) = number {
+                if let View::Int(held) = number.view() {
                     return Ok(Some(Object::string(format!("/dev/fd/{held}"))));
                 }
             }
-            if matches!(named, Object::String(_) | Object::Instance(_)) {
+            if matches!(named.view(), View::String(_) | View::Instance(_)) {
                 return Ok(Some(named));
             }
         }
@@ -140,7 +144,7 @@ impl VirtualMachine {
 /// The seconds a Time stands for, read off the object rather than through a
 /// method call, so `File.utime` takes one without asking the virtual machine.
 fn self_seconds(value: &Object) -> Option<f64> {
-    let Object::Instance(instance) = value else {
+    let View::Instance(instance) = value.view() else {
         return None;
     };
     let instance = instance.borrow();
@@ -149,14 +153,14 @@ fn self_seconds(value: &Object) -> Option<f64> {
     }
     // A Time keeps the whole seconds apart from the part of a second, and
     // both are needed for a file to be given the time it names.
-    let whole = match instance.instance_vars.get("seconds") {
-        Some(Object::Int(held)) => *held as f64,
-        Some(Object::Float(held)) => *held,
+    let whole = match instance.instance_vars.get("seconds").view() {
+        Some(View::Int(held)) => held as f64,
+        Some(View::Float(held)) => held,
         _ => return None,
     };
-    let fraction = match instance.instance_vars.get("fraction") {
-        Some(Object::Int(held)) => *held as f64,
-        Some(Object::Float(held)) => *held,
+    let fraction = match instance.instance_vars.get("fraction").view() {
+        Some(View::Int(held)) => held as f64,
+        Some(View::Float(held)) => held,
         _ => 0.0,
     };
     Some(whole + fraction)
@@ -267,7 +271,7 @@ pub(crate) fn mode_of_flags(bits: i64) -> String {
 /// Whether an argument is the hash of keywords a call carries rather than one
 /// the program wrote out as an argument of its own.
 pub(crate) fn names_keywords(given: &Object) -> bool {
-    let Object::Dict(entries) = given else {
+    let View::Dict(entries) = given.view() else {
         return false;
     };
     entries

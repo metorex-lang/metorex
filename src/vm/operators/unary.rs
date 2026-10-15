@@ -1,6 +1,7 @@
 // The `+` and `-` written in front of a value.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// The method a program of its own put on Integer or Float for an
@@ -29,12 +30,15 @@ impl VirtualMachine {
         right: Object,
         position: Position,
     ) -> Option<Result<Object, MetorexError>> {
-        if !matches!(left, Object::Int(_) | Object::BigInt(_) | Object::Float(_)) {
+        if !matches!(left.view(), View::Int(_) | View::BigInt(_) | View::Float(_)) {
             return None;
         }
         // Anything but a number on the right is asked to `coerce`, which is
         // the ordinary dispatch rather than the arithmetic underneath.
-        if !matches!(right, Object::Int(_) | Object::BigInt(_) | Object::Float(_)) {
+        if !matches!(
+            right.view(),
+            View::Int(_) | View::BigInt(_) | View::Float(_)
+        ) {
             return None;
         }
         match named {
@@ -56,13 +60,13 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         match op {
-            UnaryOp::Plus => match value {
+            UnaryOp::Plus => match value.view() {
                 // Numeric `+x` is a no-op identity.
-                Object::Int(_) | Object::BigInt(_) | Object::Float(_) => Ok(value),
+                View::Int(_) | View::BigInt(_) | View::Float(_) => Ok(value),
                 // `+str` asks for a string that changes, so a frozen one and
                 // one carrying notice that it will be frozen both answer a
                 // copy, and any other answers itself.
-                Object::String(ref text) => {
+                View::String(text) => {
                     if !text.is_frozen() && !text.is_chilled() {
                         return Ok(value.clone());
                     }
@@ -75,19 +79,19 @@ impl VirtualMachine {
                 }
                 _ => Err(unary_type_error(op, &value, position)),
             },
-            UnaryOp::Minus => match value {
+            UnaryOp::Minus => match value.view() {
                 // Negating i64::MIN needs the wider type.
-                Object::Int(v) => Ok(Object::integer(-num_bigint::BigInt::from(v))),
-                Object::BigInt(v) => Ok(Object::integer(-(*v).clone())),
-                Object::Float(v) => Ok(Object::Float(-v)),
+                View::Int(v) => Ok(Object::integer(-num_bigint::BigInt::from(v))),
+                View::BigInt(v) => Ok(Object::integer(-num_bigint::BigInt::clone(v))),
+                View::Float(v) => Ok(Object::Float(-v)),
                 // `-str` is `String#-@`, which hands back the one frozen copy
                 // every equal string shares.
-                Object::String(_) => self.send_to_object(value, "-@", vec![], position),
+                View::String(_) => self.send_to_object(value, "-@", vec![], position),
                 _ => Err(unary_type_error(op, &value, position)),
             },
             UnaryOp::Not => Ok(Object::Bool(matches!(
-                value,
-                Object::Bool(false) | Object::Nil
+                value.view(),
+                View::Bool(false) | View::Nil
             ))),
         }
     }

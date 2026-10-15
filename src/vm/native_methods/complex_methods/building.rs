@@ -1,6 +1,7 @@
 // Building a Complex from what `Complex()` was given.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// `Complex(real)` / `Complex(real, imaginary)`. A String is read as a
@@ -26,7 +27,7 @@ impl VirtualMachine {
         // Text spelling a number must be text the numbers can be read from,
         // which text in an encoding without ASCII is not.
         for held in positional.iter() {
-            if let Object::String(text) = held {
+            if let View::String(text) = held.view() {
                 let named = text.encoding_name();
                 if crate::vm::native_methods::string_methods::wide_encoding(&named).is_some() {
                     let message = format!("ASCII incompatible encoding: {named}");
@@ -46,7 +47,7 @@ impl VirtualMachine {
         }
         // A String stands for the number it spells, which is read out rather
         // than taken as a part of its own.
-        let spelled = |held: &Object| matches!(held, Object::String(_));
+        let spelled = |held: &Object| matches!(held.view(), View::String(_));
         // With two arguments both must be real numbers. The imaginary one is
         // checked first, since a bad one there is an error `exception: false`
         // swallows, where a first argument that is not a number at all is
@@ -62,7 +63,7 @@ impl VirtualMachine {
         };
         if !spelled(&positional[1])
             && !self.is_real_operand(&positional[1])
-            && !matches!(positional[1], Object::Nil)
+            && !matches!(positional[1].view(), View::Nil)
         {
             if !raise {
                 return Ok(Object::Nil);
@@ -71,7 +72,7 @@ impl VirtualMachine {
         }
         if !spelled(&positional[0])
             && !self.is_real_operand(&positional[0])
-            && !matches!(positional[0], Object::Nil)
+            && !matches!(positional[0].view(), View::Nil)
         {
             return Err(not_a_real(self));
         }
@@ -186,7 +187,7 @@ impl VirtualMachine {
         if complex_parts(value).is_some() {
             return Ok(value.clone());
         }
-        if !matches!(value, Object::Nil)
+        if !matches!(value.view(), View::Nil)
             && self.value_is_numeric(value)
             && self.responds_to(value, "real?")
         {
@@ -197,7 +198,7 @@ impl VirtualMachine {
             return self.make_complex(value.clone(), Object::Int(0), position);
         }
         if !self.is_real_operand(value)
-            && !matches!(value, Object::Nil | Object::String(_))
+            && !matches!(value.view(), View::Nil | View::String(_))
             && self.responds_to(value, "to_c")
         {
             return self.invoke_named_method(value, "to_c", &[], position);
@@ -225,7 +226,7 @@ impl VirtualMachine {
     /// Whether a value is a Numeric the program defined rather than one of
     /// metorex's own number kinds.
     pub(crate) fn is_foreign_numeric(&mut self, value: &Object) -> bool {
-        matches!(value, Object::Instance(_))
+        matches!(value.view(), View::Instance(_))
             && complex_parts(value).is_none()
             && crate::vm::native_methods::rational_methods::rational_parts(value).is_none()
             && self.value_is_numeric(value)
@@ -234,8 +235,8 @@ impl VirtualMachine {
     /// Whether a value is a real number metorex can use as a component.
     pub(crate) fn is_real_operand(&mut self, value: &Object) -> bool {
         if matches!(
-            value,
-            Object::Int(_) | Object::BigInt(_) | Object::Float(_) | Object::String(_)
+            value.view(),
+            View::Int(_) | View::BigInt(_) | View::Float(_) | View::String(_)
         ) {
             return true;
         }
@@ -270,14 +271,14 @@ impl VirtualMachine {
                 message,
             })
         };
-        match value {
-            Object::Int(_) | Object::BigInt(_) | Object::Float(_) => {
+        match value.view() {
+            View::Int(_) | View::BigInt(_) | View::Float(_) => {
                 Ok(Some((value.clone(), Object::Int(0))))
             }
             _ if crate::vm::native_methods::rational_methods::rational_parts(value).is_some() => {
                 Ok(Some((value.clone(), Object::Int(0))))
             }
-            Object::String(text) => {
+            View::String(text) => {
                 if text.as_str().contains('\0') {
                     if !raise {
                         return Ok(None);
@@ -308,9 +309,9 @@ impl VirtualMachine {
                 Ok(Some((real, imaginary)))
             }
             _ if self.value_is_numeric(value) => Ok(Some((value.clone(), Object::Int(0)))),
-            Object::Nil => convert_error(self, "nil".to_string()),
-            other => {
-                let name = self.builtins().class_of(other).name().to_string();
+            View::Nil => convert_error(self, "nil".to_string()),
+            _ => {
+                let name = self.builtins().class_of(value).name().to_string();
                 convert_error(self, name)
             }
         }
@@ -328,11 +329,11 @@ impl VirtualMachine {
     ) -> Result<Object, MetorexError> {
         // A shortcut is only safe when it keeps the kind of number Ruby would
         // have produced, and adding a Float zero answers a Float.
-        let exact_zero = |value: &Object| is_zero(value) && !matches!(value, Object::Float(_));
-        if exact_zero(right) && !matches!(left, Object::Float(_)) {
+        let exact_zero = |value: &Object| is_zero(value) && !matches!(value.view(), View::Float(_));
+        if exact_zero(right) && !matches!(left.view(), View::Float(_)) {
             return Ok(left.clone());
         }
-        if exact_zero(left) && operator == "+" && !matches!(right, Object::Float(_)) {
+        if exact_zero(left) && operator == "+" && !matches!(right.view(), View::Float(_)) {
             return Ok(right.clone());
         }
         let operation = match operator {
@@ -344,11 +345,12 @@ impl VirtualMachine {
 
     /// Whether a value's class descends from Numeric.
     pub(crate) fn value_is_numeric(&mut self, value: &Object) -> bool {
-        let Some(Object::Class(numeric)) = self.globals().get("Numeric") else {
+        let viewed = self.globals().get("Numeric");
+        let Some(View::Class(numeric)) = viewed.view() else {
             return false;
         };
         let value_class = self.builtins().class_of(value);
-        self.builtins().is_subclass_of(&value_class, &numeric)
+        self.builtins().is_subclass_of(&value_class, numeric)
     }
 
     /// Call a method by name on a value, however it is defined.
@@ -377,12 +379,15 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<f64, MetorexError> {
-        match value {
-            Object::Int(number) => Ok(*number as f64),
-            Object::Float(number) => Ok(*number),
-            other => match self.invoke_named_method(other, "to_f", &[], position)? {
-                Object::Float(number) => Ok(number),
-                Object::Int(number) => Ok(number as f64),
+        match value.view() {
+            View::Int(number) => Ok(number as f64),
+            View::Float(number) => Ok(number),
+            _ => match self
+                .invoke_named_method(value, "to_f", &[], position)?
+                .view()
+            {
+                View::Float(number) => Ok(number),
+                View::Int(number) => Ok(number as f64),
                 _ => Ok(0.0),
             },
         }
@@ -400,12 +405,12 @@ impl VirtualMachine {
         if is_zero(&modulus) || is_zero(&argument) {
             return Ok((modulus, Object::Float(0.0)));
         }
-        match argument {
-            Object::Float(turn) if turn == std::f64::consts::PI => {
+        match argument.view() {
+            View::Float(turn) if turn == std::f64::consts::PI => {
                 let negated = self.send_to_object(modulus, "-@", Vec::new(), position)?;
                 return Ok((negated, Object::Float(0.0)));
             }
-            Object::Float(turn) if turn == std::f64::consts::FRAC_PI_2 => {
+            View::Float(turn) if turn == std::f64::consts::FRAC_PI_2 => {
                 return Ok((Object::Float(0.0), modulus));
             }
             _ => {}
@@ -441,7 +446,7 @@ impl VirtualMachine {
         right: &Object,
         position: Position,
     ) -> Result<bool, MetorexError> {
-        if let (Object::Int(left), Object::Int(right)) = (left, right) {
+        if let (View::Int(left), View::Int(right)) = (left.view(), right.view()) {
             return Ok(left == right);
         }
         let answer = self.evaluate_binary_operation(

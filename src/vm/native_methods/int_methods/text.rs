@@ -1,6 +1,7 @@
 // The character a code names, and the digits a number reads back as.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The character a code names, and the digits a number reads back as.
@@ -28,9 +29,9 @@ impl VirtualMachine {
                 }
                 // A number too wide for a machine word names no character in
                 // any encoding.
-                let code = match receiver {
-                    Object::Int(code) => *code,
-                    Object::BigInt(_) => {
+                let code = match receiver.view() {
+                    View::Int(code) => code,
+                    View::BigInt(_) => {
                         return Err(crate::vm::errors::simple_exception(
                             "RangeError",
                             "bignum out of char range",
@@ -48,9 +49,9 @@ impl VirtualMachine {
                 }
                 let named = match arguments.first() {
                     Some(held) => {
-                        let written = match held {
-                            Object::String(text) => text.to_text(),
-                            other => self.get_string_representation(other, position)?,
+                        let written = match held.view() {
+                            View::String(text) => text.to_text(),
+                            _ => self.get_string_representation(held, position)?,
                         };
                         Some(
                             crate::vm::native_methods::string_methods::canonical_encoding_name(
@@ -68,10 +69,11 @@ impl VirtualMachine {
                         if (128..=255).contains(&code) {
                             return Ok(Some(one_byte_string(code as u8, "ASCII-8BIT")));
                         }
-                        match self.globals().get("__Encoding_default_internal") {
-                            Some(Object::Nil) | None => return Err(out_of_range()),
+                        match self.globals().get("__Encoding_default_internal").view() {
+                            Some(View::Nil) | None => return Err(out_of_range()),
                             Some(held) => {
-                                let written = self.get_string_representation(&held, position)?;
+                                let written =
+                                    self.get_string_representation(&held.to_object(), position)?;
                                 Some(
                                     crate::vm::native_methods::string_methods::canonical_encoding_name(
                                         &written,
@@ -98,7 +100,7 @@ impl VirtualMachine {
                 }
                 // A base of its own writes the digits of that base, so
                 // `255.to_s(16)` is "ff".
-                let Object::Int(base) = arguments[0] else {
+                let View::Int(base) = arguments[0].view() else {
                     return Err(method_argument_type_error(
                         method_name,
                         "Integer",

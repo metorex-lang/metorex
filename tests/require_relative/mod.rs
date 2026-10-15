@@ -1,6 +1,7 @@
 // Tests for require_relative native function
 
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::vm::VirtualMachine;
 
 #[test]
@@ -8,7 +9,7 @@ fn require_relative_is_registered_globally() {
     let vm = VirtualMachine::new();
     let func = vm.environment().get("require_relative");
     assert!(func.is_some());
-    if let Some(Object::NativeFunction(name)) = func {
+    if let Some(View::NativeFunction(name)) = func.view() {
         assert_eq!(name.as_str(), "require_relative");
     } else {
         panic!("require_relative should be a NativeFunction");

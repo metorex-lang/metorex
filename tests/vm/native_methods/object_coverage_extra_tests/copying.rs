@@ -1,6 +1,7 @@
 // The copies an object hands back, and the blocks it runs.
 
 use super::*;
+use metorex::object::{OptionView, View};
 // ── send / public_send arg errors ────────────────────────────────────────────
 
 #[test]
@@ -142,8 +143,8 @@ end
 GS.new.get_source(:foo)
 "#);
     assert!(matches!(
-        result,
-        Some(Object::Method(_)) | Some(Object::Nil)
+        result.view(),
+        Some(View::Method(_)) | Some(View::Nil)
     ));
 }
 

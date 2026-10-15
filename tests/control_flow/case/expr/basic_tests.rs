@@ -2,6 +2,7 @@ use metorex::ast::node::ExprMatchCase;
 use metorex::ast::{BinaryOp, Expression, MatchPattern, Statement};
 use metorex::lexer::Position;
 use metorex::object::Object;
+use metorex::object::View;
 use metorex::vm::VirtualMachine;
 
 fn pos() -> Position {
@@ -139,7 +140,7 @@ fn test_case_expression_no_match_returns_nil() {
     };
 
     let result = execute_case_expr(&mut vm, case_expr);
-    assert!(matches!(result, Object::Nil));
+    assert!(matches!(result.view(), View::Nil));
 }
 
 #[test]

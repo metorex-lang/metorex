@@ -1,6 +1,7 @@
 // Reading Ruby source and running it.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     pub(crate) fn parse_source(
@@ -14,8 +15,8 @@ impl VirtualMachine {
                 crate::vm::utils::position_to_location(position),
             ));
         }
-        let code = match &arguments[0] {
-            Object::String(s) => s.as_str().to_string(),
+        let code = match arguments[0].view() {
+            View::String(s) => s.as_str().to_string(),
             other => {
                 return Err(MetorexError::runtime_error(
                     format!(
@@ -61,20 +62,22 @@ impl VirtualMachine {
         // A value of the program's own stands in for source when it
         // says how to read itself as a String.
         let mut arguments = arguments;
-        if !matches!(arguments[0], Object::String(_)) && self.responds_to(&arguments[0], "to_str") {
+        if !matches!(arguments[0].view(), View::String(_))
+            && self.responds_to(&arguments[0], "to_str")
+        {
             let spelled = self.send_to_object(arguments[0].clone(), "to_str", vec![], position)?;
             arguments[0] = spelled;
         }
         // Only a Binding says where code runs. A Proc names a scope
         // of its own but is not one.
         if let Some(held) = arguments.get(1)
-            && !matches!(held, Object::Binding(_) | Object::Nil)
+            && !matches!(held.view(), View::Binding(_) | View::Nil)
         {
             // Ruby names a callable by what it is rather than by its
             // class, so a Proc reads as `proc` here.
-            let named = match held {
-                Object::Block(_) => "proc".to_string(),
-                other => self.builtins().class_of(other).name().to_string(),
+            let named = match held.view() {
+                View::Block(_) => "proc".to_string(),
+                _ => self.builtins().class_of(held).name().to_string(),
             };
             let message = format!("wrong argument type {named} (expected binding)");
             return Err(MetorexError::UncaughtException {
@@ -83,13 +86,13 @@ impl VirtualMachine {
                 message,
             });
         }
-        let (code, code_encoding) = match &arguments[0] {
+        let (code, code_encoding) = match arguments[0].view() {
             // Source written in an encoding of its own is read back
             // through that encoding before it is lexed. A magic
             // comment names the encoding the source was written in,
             // whatever the string carrying it is tagged with, so
             // binary source that says UTF-8 is read as UTF-8.
-            Object::String(s) => {
+            View::String(s) => {
                 let tagged = s.encoding_name();
                 let carried = crate::vm::native_methods::name_text(s);
                 match crate::lexer::named_source_encoding(&carried).map(|named| {
@@ -121,15 +124,15 @@ impl VirtualMachine {
         // Optional filename (arg 3) and lineno (arg 4) shape the
         // positions recorded for code inside the eval'd string
         // (`__LINE__`, const_source_location, backtraces).
-        let filename = match arguments.get(2) {
-            Some(Object::String(s)) => Some(s.as_str().to_string()),
+        let filename = match arguments.get(2).view() {
+            Some(View::String(s)) => Some(s.as_str().to_string()),
             _ => None,
         };
         // The line the code is counted from, which a program may
         // name as anything, negative included: it shapes the numbers
         // a backtrace and a syntax error report.
-        let named_lineno = match arguments.get(3) {
-            Some(Object::Int(n)) => *n,
+        let named_lineno = match arguments.get(3).view() {
+            Some(View::Int(n)) => n,
             _ => 1,
         };
         let lineno = named_lineno.max(1) as usize;
@@ -139,8 +142,8 @@ impl VirtualMachine {
             ))
             .tokenize();
         // The code is read with the locals of the scope it runs in.
-        let outer_locals = match arguments.get(1) {
-            Some(Object::Binding(held)) => held
+        let outer_locals = match arguments.get(1).view() {
+            Some(View::Binding(held)) => held
                 .keys()
                 .into_iter()
                 .filter(|name| name != "self")
@@ -246,7 +249,7 @@ impl VirtualMachine {
         }
         // What reading the code found to warn about, which a verbose run
         // reports under the name the code runs as.
-        if matches!(self.globals().get("VERBOSE"), Some(Object::Bool(true))) {
+        if matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true))) {
             let named = filename.clone().unwrap_or_else(|| "(eval)".to_string());
             for (at, warning) in &source_warnings {
                 let line = (at.line as i64) - (lineno as i64) + named_lineno;
@@ -259,7 +262,7 @@ impl VirtualMachine {
         // A `frozen_string_literal` comment written after code names
         // nothing, and a verbose run says so.
         if crate::lexer::frozen_string_literal_after_a_token(&code)
-            && matches!(self.globals().get("VERBOSE"), Some(Object::Bool(true)))
+            && matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true)))
         {
             self.emit_warning_to_stderr(
                 "warning: `frozen_string_literal' is ignored after any tokens",
@@ -289,18 +292,20 @@ impl VirtualMachine {
         // A Binding argument re-establishes the frame it captured:
         // its locals (shared cells, so assignment through the eval is
         // visible to a later one) and the `self` in force there.
-        let binding = match arguments.get(1) {
-            Some(Object::Binding(b)) => Some(std::rc::Rc::clone(b)),
+        let binding = match arguments.get(1).view() {
+            Some(View::Binding(b)) => Some(std::rc::Rc::clone(b)),
             _ => None,
         };
         // Code run through a binding sees the class the binding was
         // taken in, which is what a class variable written there
         // belongs to.
-        let carried_cref = binding.as_ref().and_then(|held| match &held.receiver {
-            Some(Object::Class(class) | Object::Module(class)) => Some(Rc::clone(class)),
-            Some(Object::Instance(instance)) => Some(Rc::clone(&instance.borrow().class)),
-            _ => None,
-        });
+        let carried_cref = binding
+            .as_ref()
+            .and_then(|held| match held.receiver.view() {
+                Some(View::Class(class) | View::Module(class)) => Some(Rc::clone(class)),
+                Some(View::Instance(instance)) => Some(Rc::clone(&instance.borrow().class)),
+                _ => None,
+            });
         let carried_cref_pushed = carried_cref.is_some();
         // A class opened in the eval'd code is nested where the
         // binding was taken, so `class Inside; end` run through a
@@ -442,9 +447,9 @@ impl VirtualMachine {
         // The eval'd string runs in the caller's body, so it sees the
         // visibility state in force there. A toggle it sets belongs to
         // the eval and is restored afterwards.
-        let enclosing = match self.environment().get("self") {
-            Some(Object::Class(class) | Object::Module(class)) => {
-                Some((Rc::clone(&class), class.current_visibility()))
+        let enclosing = match self.environment().get("self").view() {
+            Some(View::Class(class) | View::Module(class)) => {
+                Some((Rc::clone(class), class.current_visibility()))
             }
             _ => None,
         };
@@ -572,9 +577,9 @@ impl VirtualMachine {
         }
         // `load(path, true)` runs the file inside a fresh anonymous
         // module, and `load(path, SomeModule)` inside that one.
-        let wrapper: Option<Rc<crate::class::Class>> = match arguments.get(1) {
-            Some(Object::Bool(true)) => Some(crate::class::Class::new_module("")),
-            Some(Object::Module(module) | Object::Class(module)) => Some(Rc::clone(module)),
+        let wrapper: Option<Rc<crate::class::Class>> = match arguments.get(1).view() {
+            Some(View::Bool(true)) => Some(crate::class::Class::new_module("")),
+            Some(View::Module(module) | View::Class(module)) => Some(Rc::clone(module)),
             _ => None,
         };
         let wrap = wrapper.is_some();
@@ -692,11 +697,14 @@ impl VirtualMachine {
             ],
             position,
         )?;
-        let Object::Array(pair) = report else {
+        let View::Array(pair) = report.view() else {
             return Ok(None);
         };
         let pair = pair.borrow().clone();
-        let [Object::String(class), Object::String(message)] = pair.as_slice() else {
+        let [class, message] = pair.as_slice() else {
+            return Ok(None);
+        };
+        let (View::String(class), View::String(message)) = (class.view(), message.view()) else {
             return Ok(None);
         };
         let message = message.as_str().to_string();

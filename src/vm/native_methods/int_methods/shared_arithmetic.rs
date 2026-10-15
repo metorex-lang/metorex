@@ -1,6 +1,7 @@
 // The methods that read the same whichever width the receiver is.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// The methods that read the same whichever width the receiver is.
@@ -13,7 +14,7 @@ impl VirtualMachine {
     ) -> Result<Option<Object>, MetorexError> {
         // Integer#size — the bytes the machine representation takes: a word
         // for a number that fits in one, and the bytes a wider one needs.
-        if method_name == "size" && matches!(receiver, Object::Int(_) | Object::BigInt(_)) {
+        if method_name == "size" && matches!(receiver.view(), View::Int(_) | View::BigInt(_)) {
             if !arguments.is_empty() {
                 return Err(method_argument_error(
                     method_name,
@@ -28,7 +29,7 @@ impl VirtualMachine {
         }
         // Integer#digits — the place values of the number in a given base,
         // least significant first.
-        if method_name == "digits" && matches!(receiver, Object::Int(_) | Object::BigInt(_)) {
+        if method_name == "digits" && matches!(receiver.view(), View::Int(_) | View::BigInt(_)) {
             if arguments.len() > 1 {
                 return Err(method_argument_error(
                     method_name,
@@ -45,7 +46,7 @@ impl VirtualMachine {
         }
         // Integer#coerce — the pair Ruby applies an operator to, which is two
         // Integers when the argument is one and two Floats otherwise.
-        if method_name == "coerce" && matches!(receiver, Object::Int(_) | Object::BigInt(_)) {
+        if method_name == "coerce" && matches!(receiver.view(), View::Int(_) | View::BigInt(_)) {
             if arguments.len() != 1 {
                 return Err(method_argument_error(
                     method_name,
@@ -69,7 +70,7 @@ impl VirtualMachine {
         }
         // Integer#divmod — the floored quotient and the modulus that pairs
         // with it, whatever the widths of the two numbers.
-        if method_name == "divmod" && matches!(receiver, Object::Int(_) | Object::BigInt(_)) {
+        if method_name == "divmod" && matches!(receiver.view(), View::Int(_) | View::BigInt(_)) {
             if arguments.len() != 1 {
                 return Err(method_argument_error(
                     method_name,
@@ -89,7 +90,7 @@ impl VirtualMachine {
         // Float and `remainder` taking the sign of the receiver.
         // `ceildiv` rounds the quotient up, which is the floored division of
         // the negated receiver, negated back.
-        if method_name == "ceildiv" && matches!(receiver, Object::Int(_) | Object::BigInt(_)) {
+        if method_name == "ceildiv" && matches!(receiver.view(), View::Int(_) | View::BigInt(_)) {
             if arguments.len() != 1 {
                 return Err(method_argument_error(
                     method_name,
@@ -110,7 +111,7 @@ impl VirtualMachine {
             return Ok(Some(Object::integer(-quotient)));
         }
         if matches!(method_name, "div" | "modulo" | "fdiv" | "remainder")
-            && matches!(receiver, Object::Int(_) | Object::BigInt(_))
+            && matches!(receiver.view(), View::Int(_) | View::BigInt(_))
         {
             if arguments.len() != 1 {
                 return Err(method_argument_error(
@@ -128,7 +129,7 @@ impl VirtualMachine {
         // the smallest multiple they agree on. Both answers are positive
         // whatever the signs of the two numbers.
         if matches!(method_name, "gcd" | "lcm" | "gcdlcm")
-            && matches!(receiver, Object::Int(_) | Object::BigInt(_))
+            && matches!(receiver.view(), View::Int(_) | View::BigInt(_))
         {
             if arguments.len() != 1 {
                 return Err(method_argument_error(
@@ -140,14 +141,14 @@ impl VirtualMachine {
             }
             // Ruby takes an Integer here and nothing else, so a Float is
             // refused rather than truncated.
-            let other = match &arguments[0] {
-                argument @ (Object::Int(_) | Object::BigInt(_)) => {
+            let other = match arguments[0].view() {
+                argument @ (View::Int(_) | View::BigInt(_)) => {
                     argument.as_big_integer().expect("integer-kinded")
                 }
-                other => {
+                _ => {
                     let message = format!(
                         "not an integer: {}",
-                        crate::vm::native_methods::array_methods::inspect_element(other)
+                        crate::vm::native_methods::array_methods::inspect_element(&arguments[0])
                     );
                     return Err(MetorexError::UncaughtException {
                         exception: Object::exception("TypeError", message.clone()),
@@ -174,7 +175,7 @@ impl VirtualMachine {
         // more answers the receiver itself, and a negative one rounds to a
         // multiple of that power of ten.
         if matches!(method_name, "ceil" | "floor" | "truncate" | "round")
-            && matches!(receiver, Object::Int(_) | Object::BigInt(_))
+            && matches!(receiver.view(), View::Int(_) | View::BigInt(_))
         {
             return self
                 .round_to_precision(receiver, method_name, arguments, position)

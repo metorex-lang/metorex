@@ -1,6 +1,7 @@
 // Applying a visibility modifier written without a receiver.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// enclosing class or module; at the top level it applies to Object.
@@ -29,14 +30,15 @@ impl VirtualMachine {
         // constant/. `public_constant` is the inverse, and
         // `deprecate_constant` says a read of the name warns.
         self.pending_block.take();
-        let target = match self.environment().get("self") {
-            Some(Object::Class(c)) | Some(Object::Module(c)) => c,
+        let viewed = self.environment().get("self");
+        let target = match viewed.view() {
+            Some(View::Class(c)) | Some(View::Module(c)) => c,
             _ => return Ok(Object::Nil),
         };
         for arg in &arguments {
-            let const_name = match arg {
-                Object::Symbol(s) => s.as_str().to_string(),
-                Object::String(s) => s.as_str().to_string(),
+            let const_name = match arg.view() {
+                View::Symbol(s) => s.as_str().to_string(),
+                View::String(s) => s.as_str().to_string(),
                 _ => continue,
             };
             match name {
@@ -60,7 +62,7 @@ impl VirtualMachine {
             .current_definee()
             .map(Object::Module)
             .unwrap_or(Object::Nil);
-        if let Object::Class(class) | Object::Module(class) = &current_self {
+        if let View::Class(class) | View::Module(class) = current_self.view() {
             if arguments.is_empty() {
                 class.set_current_visibility(crate::vm::native_methods::MODULE_FUNCTION_VISIBILITY);
                 return Ok(Object::Nil);
@@ -93,7 +95,7 @@ impl VirtualMachine {
             .current_definee()
             .map(Object::Module)
             .unwrap_or(Object::Nil);
-        if let Object::Class(class) | Object::Module(class) = &current_self {
+        if let View::Class(class) | View::Module(class) = current_self.view() {
             let class = Rc::clone(class);
             if let Some(result) = self.call_class_methods(&class, name, &arguments, position)? {
                 return Ok(result);

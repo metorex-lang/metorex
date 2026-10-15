@@ -1,6 +1,7 @@
 // Whether two values count as the same element.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// Whether two values are `eql?`, which is stricter than `==`: 1 and 1.0
@@ -41,7 +42,7 @@ impl VirtualMachine {
         // An object of the program's own making answers `eql?` itself. Only
         // the receiver decides, so a mock on the right of an Array is never
         // asked, which is what Ruby does.
-        if matches!(left, Object::Instance(_))
+        if matches!(left.view(), View::Instance(_))
             && crate::vm::native_methods::array_subclass_value(left).is_none()
             && crate::vm::native_methods::string_subclass_value(left).is_none()
         {
@@ -69,18 +70,20 @@ impl VirtualMachine {
             .unwrap_or_else(|| elements_of(left).unwrap_or_else(|| left.clone()));
         let right = &crate::vm::native_methods::string_subclass_value(right)
             .unwrap_or_else(|| elements_of(right).unwrap_or_else(|| right.clone()));
-        if let (Object::String(text), Object::String(other)) = (left, right) {
+        if let (View::String(text), View::String(other)) = (left.view(), right.view()) {
             use crate::vm::native_methods::string_methods::{binary_bytes, strings_comparable};
             return Ok((binary_bytes(text) == binary_bytes(other)
                 || *text.as_str() == *other.as_str())
                 && strings_comparable(text, other));
         }
-        match (left, right) {
-            (Object::Array(_), Object::Array(_)) => {}
-            (Object::Array(_), _) | (_, Object::Array(_)) => return Ok(false),
+        match (left.view(), right.view()) {
+            (View::Array(_), View::Array(_)) => {}
+            (View::Array(_), _) | (_, View::Array(_)) => return Ok(false),
             _ => {}
         }
-        if let (Object::Array(left_elements), Object::Array(right_elements)) = (left, right) {
+        if let (View::Array(left_elements), View::Array(right_elements)) =
+            (left.view(), right.view())
+        {
             let pair = (
                 Rc::as_ptr(left_elements) as usize,
                 Rc::as_ptr(right_elements) as usize,
@@ -103,10 +106,10 @@ impl VirtualMachine {
             in_flight.pop();
             return Ok(true);
         }
-        let same_kind = match (left, right) {
-            (Object::Float(_), other) => matches!(other, Object::Float(_)),
-            (Object::Int(_) | Object::BigInt(_), other) => {
-                matches!(other, Object::Int(_) | Object::BigInt(_))
+        let same_kind = match (left.view(), right) {
+            (View::Float(_), other) => matches!(other.view(), View::Float(_)),
+            (View::Int(_) | View::BigInt(_), other) => {
+                matches!(other.view(), View::Int(_) | View::BigInt(_))
             }
             _ => true,
         };
@@ -121,7 +124,9 @@ impl VirtualMachine {
         candidate: &Object,
         position: Position,
     ) -> Result<bool, MetorexError> {
-        if matches!(element, Object::Instance(_)) || matches!(candidate, Object::Instance(_)) {
+        if matches!(element.view(), View::Instance(_))
+            || matches!(candidate.view(), View::Instance(_))
+        {
             let answer = self.evaluate_binary_operation(
                 &crate::ast::BinaryOp::Equal,
                 element.clone(),
@@ -140,7 +145,7 @@ impl VirtualMachine {
         in_flight: &mut Vec<(usize, usize)>,
         position: Position,
     ) -> Result<bool, MetorexError> {
-        let (Object::Array(one), Object::Array(other)) = (left, right) else {
+        let (View::Array(one), View::Array(other)) = (left.view(), right.view()) else {
             return Ok(false);
         };
         let pair = (Rc::as_ptr(one) as usize, Rc::as_ptr(other) as usize);
@@ -158,7 +163,10 @@ impl VirtualMachine {
             if identical(item, counterpart) {
                 continue;
             }
-            let matched = if matches!((item, counterpart), (Object::Array(_), Object::Array(_))) {
+            let matched = if matches!(
+                (item.view(), counterpart.view()),
+                (View::Array(_), View::Array(_))
+            ) {
                 self.arrays_equal_within(item, counterpart, in_flight, position)?
             } else {
                 self.evaluate_binary_operation(
@@ -181,13 +189,13 @@ impl VirtualMachine {
 
 /// Whether two values are the same object, which is what `equal?` reports.
 pub(crate) fn identical(left: &Object, right: &Object) -> bool {
-    match (left, right) {
-        (Object::Instance(one), Object::Instance(other)) => Rc::ptr_eq(one, other),
-        (Object::Array(one), Object::Array(other)) => Rc::ptr_eq(one, other),
-        (Object::Dict(one), Object::Dict(other)) => Rc::ptr_eq(one, other),
+    match (left.view(), right.view()) {
+        (View::Instance(one), View::Instance(other)) => Rc::ptr_eq(one, other),
+        (View::Array(one), View::Array(other)) => Rc::ptr_eq(one, other),
+        (View::Dict(one), View::Dict(other)) => Rc::ptr_eq(one, other),
         // A float is its own bits, which is how an array holding NaN equals
         // another holding the same NaN even though NaN equals nothing.
-        (Object::Float(one), Object::Float(other)) => one.to_bits() == other.to_bits(),
+        (View::Float(one), View::Float(other)) => one.to_bits() == other.to_bits(),
         _ => false,
     }
 }

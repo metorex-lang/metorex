@@ -1,6 +1,7 @@
 // Defining, removing and renaming the methods of a class.
 
 use super::*;
+use metorex::object::{OptionView, View};
 #[test]
 fn thread_report_on_exception_returns_true() {
     let result = run(r#"Thread.report_on_exception"#);
@@ -53,7 +54,7 @@ class C
 end
 C.public_instance_method(:greet)
 "#);
-    assert!(matches!(result, Some(Object::Method(_))));
+    assert!(matches!(result.view(), Some(View::Method(_))));
 }
 
 #[test]
@@ -208,7 +209,7 @@ class Locked
 end
 Locked.send(:private_class_method, :secret)
 "#);
-    assert!(matches!(result, Some(Object::Class(_))));
+    assert!(matches!(result.view(), Some(View::Class(_))));
 }
 
 #[test]
@@ -252,7 +253,7 @@ class Rev
 end
 Rev.method_back
 "#);
-    assert!(matches!(result, Some(Object::Symbol(_))));
+    assert!(matches!(result.view(), Some(View::Symbol(_))));
 }
 
 // ── `remove_const` (lines 591-613) ───────────────────────────────────────────

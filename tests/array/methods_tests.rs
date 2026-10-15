@@ -1,5 +1,6 @@
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -346,7 +347,7 @@ fn array_length_error_with_args() {
 #[test]
 fn array_push_no_args_returns_self() {
     let result = run("[1, 2, 3].push");
-    if let Some(Object::Array(arr)) = result {
+    if let Some(View::Array(arr)) = result.view() {
         assert_eq!(arr.borrow().len(), 3);
     }
 }

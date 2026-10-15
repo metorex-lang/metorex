@@ -1,11 +1,12 @@
 // The block a call is handed, and the names a method reads inside one.
 
 use super::*;
+use metorex::object::{OptionView, View};
 
 #[test]
 fn symbol_to_proc_in_map() {
     let result = run("[1, 2, 3].map(&:to_s)");
-    if let Some(Object::Array(arr)) = &result {
+    if let Some(View::Array(arr)) = result.view() {
         let items: Vec<_> = arr.borrow().iter().map(|o| format!("{}", o)).collect();
         assert_eq!(items, vec!["1", "2", "3"]);
     } else {

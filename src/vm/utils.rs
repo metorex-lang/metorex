@@ -5,6 +5,7 @@
 use crate::error::SourceLocation;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::View;
 
 /// Convert a lexer position into a runtime source location.
 pub(super) fn position_to_location(position: Position) -> SourceLocation {
@@ -13,8 +14,8 @@ pub(super) fn position_to_location(position: Position) -> SourceLocation {
 
 /// Format an exception object for display.
 pub(super) fn format_exception(exception: &Object) -> String {
-    match exception {
-        Object::Exception(ex) => {
+    match exception.view() {
+        View::Exception(ex) => {
             let exc = ex.borrow();
             // Ruby reports a RuntimeError with an empty message, which a bare
             // `raise` produces, as "unhandled exception".
@@ -29,22 +30,22 @@ pub(super) fn format_exception(exception: &Object) -> String {
 
 /// Convert an object into a dictionary key string representation.
 pub(super) fn object_to_dict_key(value: &Object) -> Option<String> {
-    match value {
+    match value.view() {
         // A String that reads as a number, a boolean or nil takes a slot of
         // its own, so `"1"` and `1` are different keys, as `eql?` makes
         // them. The key object kept beside the entry reads it back.
-        Object::String(s) if reads_as_another_kind(&s.as_str()) => {
+        View::String(s) if reads_as_another_kind(&s.as_str()) => {
             Some(format!("{AMBIGUOUS_STRING_PREFIX}{}", s.as_str()))
         }
-        Object::String(s) => Some(s.as_str().to_string()),
-        Object::Symbol(s) => Some(format!(":{}", s)),
-        Object::Int(i) => Some(i.to_string()),
+        View::String(s) => Some(s.as_str().to_string()),
+        View::Symbol(s) => Some(format!(":{}", s)),
+        View::Int(i) => Some(i.to_string()),
         // A Float key keeps its fraction, so 4.0 and 4 are different keys the
         // way Ruby's `eql?` makes them.
-        Object::Float(f) if f.fract() == 0.0 && f.is_finite() => Some(format!("{:.1}", f)),
-        Object::Float(f) => Some(f.to_string()),
-        Object::Bool(b) => Some(b.to_string()),
-        Object::Nil => Some("nil".to_string()),
+        View::Float(f) if f.fract() == 0.0 && f.is_finite() => Some(format!("{:.1}", f)),
+        View::Float(f) => Some(f.to_string()),
+        View::Bool(b) => Some(b.to_string()),
+        View::Nil => Some("nil".to_string()),
         other => Some(format!("{}", other)),
     }
 }
@@ -66,19 +67,19 @@ fn reads_as_another_kind(text: &str) -> bool {
 pub(super) fn is_primitive_key(value: &Object) -> bool {
     // A String that reads back as some other kind is not reconstructible from
     // its text, so `{"1" => x}` keeps the key object beside the entry.
-    if let Object::String(text) = value {
+    if let View::String(text) = value.view() {
         return !reads_as_another_kind(&text.as_str());
     }
     // A name standing for the bytes an encoding spells it with is not
     // reconstructible from its text either, so the object is kept beside the
     // entry and answers with the encoding it was made under.
-    if let Object::Symbol(name) = value {
+    if let View::Symbol(name) = value.view() {
         return !name.holds_bytes()
             && name.encoding_name() == crate::object::string_value::DEFAULT_ENCODING;
     }
     matches!(
-        value,
-        Object::Int(_) | Object::Float(_) | Object::Bool(_) | Object::Nil
+        value.view(),
+        View::Int(_) | View::Float(_) | View::Bool(_) | View::Nil
     )
 }
 
@@ -108,5 +109,5 @@ pub(super) fn dict_key_to_object(key_str: &str) -> Object {
 /// Determine if a value is truthy for conditional statements.
 /// In Metorex, only `false` and `nil` are falsy; everything else is truthy.
 pub(super) fn is_truthy(value: &Object) -> bool {
-    !matches!(value, Object::Bool(false) | Object::Nil)
+    !matches!(value.view(), View::Bool(false) | View::Nil)
 }

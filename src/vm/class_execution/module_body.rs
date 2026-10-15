@@ -1,6 +1,7 @@
 // The statements a module body is made of.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     pub(crate) fn module_body_statements(
@@ -245,8 +246,8 @@ impl VirtualMachine {
                     position: inc_pos,
                 } => {
                     let resolved = self.resolve_constant_with_autoload(inc_name)?;
-                    if let Some(Object::Module(inc_module)) = resolved {
-                        self.apply_module_include(module, &inc_module, *inc_pos)?;
+                    if let Some(View::Module(inc_module)) = resolved.view() {
+                        self.apply_module_include(module, inc_module, *inc_pos)?;
                     }
                 }
                 Statement::Extend {
@@ -260,7 +261,7 @@ impl VirtualMachine {
                     } else {
                         self.resolve_constant_with_autoload(ext_name)?
                     };
-                    if let Some(Object::Module(ext_module)) = resolved {
+                    if let Some(View::Module(ext_module)) = resolved.view() {
                         for method_name in ext_module.method_names() {
                             if let Some(method) = ext_module.find_method(&method_name) {
                                 module.set_class_var(
@@ -269,12 +270,12 @@ impl VirtualMachine {
                                 );
                                 module.set_class_var(
                                     format!("__ext_from__{}", method_name),
-                                    Object::Module(Rc::clone(&ext_module)),
+                                    Object::Module(Rc::clone(ext_module)),
                                 );
                             }
                         }
                         let target = Object::Module(Rc::clone(module));
-                        self.apply_module_extend(&target, &ext_module, *ext_pos)?;
+                        self.apply_module_extend(&target, ext_module, *ext_pos)?;
                     }
                 }
                 // `alias $new $old` names a global, wherever it is written.

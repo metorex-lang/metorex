@@ -1,6 +1,7 @@
 // The statements a class body is made of.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     pub(crate) fn apply_class_body(
@@ -334,8 +335,8 @@ impl VirtualMachine {
                     // variable attaches to the lexical enclosing class, not the
                     // singleton itself. Redirect to the attached class/module.
                     if class.get_class_var("__singleton__").is_some()
-                        && let Some(Object::Class(attached) | Object::Module(attached)) =
-                            class.get_class_var("__attached__")
+                        && let Some(View::Class(attached) | View::Module(attached)) =
+                            class.get_class_var("__attached__").view()
                     {
                         attached.set_class_var(var_name, initial_value);
                     } else {
@@ -503,9 +504,9 @@ impl VirtualMachine {
                     // so user overrides on the module's singleton class fire,
                     // and so cyclic/frozen checks run.
                     let resolved = self.resolve_constant_with_autoload(module_name)?;
-                    match resolved {
-                        Some(Object::Module(module)) => {
-                            self.apply_module_include(class, &module, *position)?;
+                    match resolved.view() {
+                        Some(View::Module(module)) => {
+                            self.apply_module_include(class, module, *position)?;
                         }
                         Some(_) => {
                             return Err(MetorexError::runtime_error(
@@ -540,8 +541,8 @@ impl VirtualMachine {
                     } else {
                         self.resolve_constant_in_scope(module_name)
                     };
-                    match resolved {
-                        Some(Object::Module(module)) => {
+                    match resolved.view() {
+                        Some(View::Module(module)) => {
                             for method_name in module.method_names() {
                                 if let Some(method) = module.find_method(&method_name) {
                                     class.set_class_var(
@@ -550,12 +551,12 @@ impl VirtualMachine {
                                     );
                                     class.set_class_var(
                                         format!("__ext_from__{}", method_name),
-                                        Object::Module(Rc::clone(&module)),
+                                        Object::Module(Rc::clone(module)),
                                     );
                                 }
                             }
                             let target = Object::Class(Rc::clone(class));
-                            self.apply_module_extend(&target, &module, *position)?;
+                            self.apply_module_extend(&target, module, *position)?;
                         }
                         Some(_) => {
                             return Err(MetorexError::runtime_error(
@@ -661,14 +662,14 @@ impl VirtualMachine {
                         && call_args.len() == 2
                     {
                         handled = true;
-                        let new_name = match self.evaluate_expression(&call_args[0])? {
-                            Object::String(s) => s.as_str().to_string(),
-                            Object::Symbol(s) => s.as_str().to_string(),
+                        let new_name = match self.evaluate_expression(&call_args[0])?.view() {
+                            View::String(s) => s.as_str().to_string(),
+                            View::Symbol(s) => s.as_str().to_string(),
                             _ => String::new(),
                         };
-                        let old_name = match self.evaluate_expression(&call_args[1])? {
-                            Object::String(s) => s.as_str().to_string(),
-                            Object::Symbol(s) => s.as_str().to_string(),
+                        let old_name = match self.evaluate_expression(&call_args[1])?.view() {
+                            View::String(s) => s.as_str().to_string(),
+                            View::Symbol(s) => s.as_str().to_string(),
                             _ => String::new(),
                         };
                         if !new_name.is_empty() && !old_name.is_empty() {
@@ -760,7 +761,7 @@ impl VirtualMachine {
                             } => {
                                 let v = self.evaluate_expression(expression)?;
                                 if matches!(expression, Expression::Identifier { .. })
-                                    && matches!(v, Object::Method(_))
+                                    && matches!(v.view(), View::Method(_))
                                 {
                                     last_value = self.invoke_callable(v, vec![], *expr_pos)?;
                                 } else {

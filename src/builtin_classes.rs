@@ -2,6 +2,7 @@
 // Defines the hierarchy and methods for core classes like Object, String, Integer, etc.
 
 use crate::class::Class;
+use crate::object::View;
 use crate::object::{Method, Object};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -116,30 +117,30 @@ impl BuiltinClasses {
 
     /// Get the class for a given object
     pub fn class_of(&self, obj: &Object) -> Rc<Class> {
-        match obj {
-            Object::Nil => Rc::clone(&self.object_class),
-            Object::Bool(_) => Rc::clone(&self.object_class),
-            Object::Int(_) | Object::BigInt(_) => Rc::clone(&self.integer_class),
-            Object::Float(_) => Rc::clone(&self.float_class),
-            Object::String(_) => Rc::clone(&self.string_class),
-            Object::Symbol(_) => Rc::clone(&self.symbol_class),
-            Object::Array(_) => Rc::clone(&self.array_class),
-            Object::Dict(_) => Rc::clone(&self.hash_class),
-            Object::Set(_) => Rc::clone(&self.set_class),
-            Object::Instance(inst) => Rc::clone(&inst.borrow().class),
-            Object::Class(_) | Object::Module(_) => Rc::clone(&self.object_class),
+        match obj.view() {
+            View::Nil => Rc::clone(&self.object_class),
+            View::Bool(_) => Rc::clone(&self.object_class),
+            View::Int(_) | View::BigInt(_) => Rc::clone(&self.integer_class),
+            View::Float(_) => Rc::clone(&self.float_class),
+            View::String(_) => Rc::clone(&self.string_class),
+            View::Symbol(_) => Rc::clone(&self.symbol_class),
+            View::Array(_) => Rc::clone(&self.array_class),
+            View::Dict(_) => Rc::clone(&self.hash_class),
+            View::Set(_) => Rc::clone(&self.set_class),
+            View::Instance(inst) => Rc::clone(&inst.borrow().class),
+            View::Class(_) | View::Module(_) => Rc::clone(&self.object_class),
             // `Method#to_proc` answers a callable attached to the object the
             // method was taken from, which Ruby reports as a Proc.
-            Object::Method(method) if method.reads_as_proc => Rc::clone(&self.proc_class),
-            Object::Method(_) => Rc::clone(&self.method_class),
-            Object::Block(_) => Rc::clone(&self.proc_class),
-            Object::Binding(_) => Rc::clone(&self.binding_class),
-            Object::Exception(_) => Rc::clone(&self.exception_class),
-            Object::Result(_) => Rc::clone(&self.object_class),
-            Object::NativeFunction(_) => Rc::clone(&self.object_class),
-            Object::Range { .. } => Rc::clone(&self.range_class),
-            Object::CompiledFunction(_) => Rc::clone(&self.object_class),
-            Object::Regex(_, _) => Rc::clone(&self.regexp_class),
+            View::Method(method) if method.reads_as_proc => Rc::clone(&self.proc_class),
+            View::Method(_) => Rc::clone(&self.method_class),
+            View::Block(_) => Rc::clone(&self.proc_class),
+            View::Binding(_) => Rc::clone(&self.binding_class),
+            View::Exception(_) => Rc::clone(&self.exception_class),
+            View::Result(_) => Rc::clone(&self.object_class),
+            View::NativeFunction(_) => Rc::clone(&self.object_class),
+            View::Range { .. } => Rc::clone(&self.range_class),
+            View::CompiledFunction(_) => Rc::clone(&self.object_class),
+            View::Regex(_, _) => Rc::clone(&self.regexp_class),
         }
     }
 
@@ -154,11 +155,11 @@ impl BuiltinClasses {
         if self.is_subclass_of(&obj_class, class) {
             return true;
         }
-        let singleton = match obj {
-            Object::Instance(inst_rc) => inst_rc.borrow().singleton_class.borrow().clone(),
+        let singleton = match obj.view() {
+            View::Instance(inst_rc) => inst_rc.borrow().singleton_class.borrow().clone(),
             // A class or module extended with a module carries it on its own
             // singleton class, the same as any other object.
-            Object::Class(c) | Object::Module(c) => c.singleton_class_slot().clone(),
+            View::Class(c) | View::Module(c) => c.singleton_class_slot().clone(),
             _ => None,
         };
         if let Some(sc) = singleton
@@ -286,10 +287,10 @@ impl BuiltinClasses {
 /// The class nil, true, and false answer to. All three are backed by Object
 /// internally, so their own class cannot be reported by `class_of`.
 pub fn value_class_name(obj: &Object) -> Option<&'static str> {
-    match obj {
-        Object::Nil => Some("NilClass"),
-        Object::Bool(true) => Some("TrueClass"),
-        Object::Bool(false) => Some("FalseClass"),
+    match obj.view() {
+        View::Nil => Some("NilClass"),
+        View::Bool(true) => Some("TrueClass"),
+        View::Bool(false) => Some("FalseClass"),
         _ => None,
     }
 }

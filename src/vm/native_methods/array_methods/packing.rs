@@ -1,6 +1,7 @@
 // Writing elements out as bytes.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// Write a packed result into the String a `buffer:` keyword named. The
@@ -13,15 +14,15 @@ impl VirtualMachine {
         packed: &Object,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let Object::String(held) = &buffer else {
+        let View::String(held) = buffer.view() else {
             return Ok(buffer);
         };
         if held.is_frozen() {
             return Err(self.frozen_modification_error(&buffer, position));
         }
         let existing = crate::vm::native_methods::pack_format::string_to_bytes(&held.as_str());
-        let written = match packed {
-            Object::String(text) => {
+        let written = match packed.view() {
+            View::String(text) => {
                 crate::vm::native_methods::pack_format::string_to_bytes(&text.as_str())
             }
             _ => Vec::new(),

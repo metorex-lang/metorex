@@ -1,6 +1,7 @@
 // Running a block or a string against a class as its body.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Evaluate a block with `self` bound to the given class/module, executing
@@ -262,7 +263,7 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         // Block form wins when a block is present.
-        if let Some(Object::Block(block)) = self.pending_block.take() {
+        if let Some(View::Block(block)) = self.pending_block.take().view() {
             if !arguments.is_empty() {
                 return Err(self.arg_count_error(
                     format!(
@@ -272,7 +273,7 @@ impl VirtualMachine {
                     position,
                 ));
             }
-            return self.apply_block_as_class_body_with_self(class_rc, &block, position, self_obj);
+            return self.apply_block_as_class_body_with_self(class_rc, block, position, self_obj);
         }
 
         // String form expects 1..3 positional arguments.
@@ -307,8 +308,8 @@ impl VirtualMachine {
                 format!("(eval at {}:{})", caller, position.line)
             }
         };
-        let lineno = match arguments.get(2) {
-            Some(Object::Int(n)) => (*n).max(1) as usize,
+        let lineno = match arguments.get(2).view() {
+            Some(View::Int(n)) => n.max(1) as usize,
             _ => 1,
         };
 
@@ -355,10 +356,10 @@ impl VirtualMachine {
                 } else {
                     cumulative = format!("{}::{}", cumulative, segment);
                 }
-                if let Some(Object::Module(m) | Object::Class(m)) =
-                    self.resolve_constant_in_scope(&cumulative)
+                if let Some(View::Module(m) | View::Class(m)) =
+                    self.resolve_constant_in_scope(&cumulative).view()
                 {
-                    self.def_scope_stack.push(m);
+                    self.def_scope_stack.push(m.clone());
                     enclosing_pushed += 1;
                 }
             }
@@ -424,18 +425,18 @@ impl VirtualMachine {
         arg: &Object,
         position: Position,
     ) -> Result<String, MetorexError> {
-        if let Object::String(s) = arg {
+        if let View::String(s) = arg.view() {
             return Ok(s.as_str().to_string());
         }
-        let class_name = match arg {
-            Object::Class(_) | Object::Module(_) => "Module".to_string(),
-            other => self.builtins().class_of(other).name().to_string(),
+        let class_name = match arg.view() {
+            View::Class(_) | View::Module(_) => "Module".to_string(),
+            _ => self.builtins().class_of(arg).name().to_string(),
         };
         if let Some((cls, m)) = self.lookup_method(arg, "to_str")
             && !m.is_undefined
         {
             let result = self.invoke_method(cls, m, arg.clone(), vec![], position)?;
-            if let Object::String(s) = result {
+            if let View::String(s) = result.view() {
                 return Ok(s.as_str().to_string());
             }
             let msg = format!("can't convert {} into String", class_name);

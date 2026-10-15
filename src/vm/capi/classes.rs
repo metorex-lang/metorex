@@ -5,6 +5,7 @@
 use super::handles::{QNIL, Value, to_value};
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 
 /// MRI's `fatal`, the exception that ends the interpreter, which Ruby code
@@ -291,12 +292,13 @@ thread_local! {
 impl VirtualMachine {
     /// The `fatal` exception class, made once as a subclass of Exception.
     pub(crate) fn fatal_class(&mut self) -> Object {
-        let Some(Object::Class(exception)) = self.globals().get("Exception") else {
+        let viewed = self.globals().get("Exception");
+        let Some(View::Class(exception)) = viewed.view() else {
             return Object::Nil;
         };
         FATAL.with(|held| {
             held.get_or_init(|| {
-                let made = crate::class::Class::new("fatal", Some(std::rc::Rc::clone(&exception)));
+                let made = crate::class::Class::new("fatal", Some(std::rc::Rc::clone(exception)));
                 exception.add_subclass(&made);
                 Object::Class(made)
             })

@@ -2,6 +2,7 @@
 // multiples goes.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// `Integer#ceil` / `#floor` / `#truncate` / `#round`, which differ only in
@@ -112,10 +113,10 @@ impl VirtualMachine {
         half: Option<Object>,
         position: Position,
     ) -> Result<RoundingMode, MetorexError> {
-        let named = match half {
-            None | Some(Object::Nil) => return Ok(RoundingMode::Up),
-            Some(Object::Symbol(name) | Object::String(name)) => name.as_str().to_string(),
-            Some(other) => self.coerce_name_argument(&other, position)?,
+        let named = match half.view() {
+            None | Some(View::Nil) => return Ok(RoundingMode::Up),
+            Some(View::Symbol(name) | View::String(name)) => name.as_str().to_string(),
+            Some(other) => self.coerce_name_argument(&other.to_object(), position)?,
         };
         match named.as_str() {
             "up" => Ok(RoundingMode::Up),
@@ -143,7 +144,7 @@ pub(crate) enum RoundingMode {
 
 /// Peel the `half:` keyword off a `round` argument list.
 pub(crate) fn split_rounding_mode(arguments: &[Object]) -> (&[Object], Option<Object>) {
-    let Some(Object::Dict(entries)) = arguments.last() else {
+    let Some(View::Dict(entries)) = arguments.last().view() else {
         return (arguments, None);
     };
     let entries = entries.borrow();

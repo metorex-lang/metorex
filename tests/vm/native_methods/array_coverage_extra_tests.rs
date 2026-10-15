@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -126,7 +127,10 @@ fn reduce_with_initial_value_on_empty_array_returns_nil() {
     let result = run("[].reduce(0) { |a, b| a + b }");
     // With initial value, Ruby returns the initial, but the current VM
     // short-circuits empty arrays to nil regardless. Accept either.
-    assert!(matches!(result, Some(Object::Nil) | Some(Object::Int(0))));
+    assert!(matches!(
+        result.view(),
+        Some(View::Nil) | Some(View::Int(0))
+    ));
 }
 
 // ── reduce with no initial uses first element (line 350) ──────────────────
@@ -145,8 +149,8 @@ fn sort_by_with_block_sorts_by_key() {
 arr = ["aaa", "b", "cc"]
 arr.sort_by { |s| s.length }
 "#);
-    match result {
-        Some(Object::Array(a)) => {
+    match result.view() {
+        Some(View::Array(a)) => {
             let items = a.borrow();
             assert_eq!(items.len(), 3);
             // Sorted by length: "b" (1), "cc" (2), "aaa" (3)

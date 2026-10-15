@@ -7,12 +7,13 @@ use super::handles::{Value, to_object, to_value};
 use super::interpreter;
 use super::strings::string_value;
 use crate::object::Object;
+use crate::object::View;
 use std::ffi::c_char;
 
 /// The String a path argument stands for: a String itself, or what the
 /// object answers to `to_path`, or the object, converted through `to_str`.
 fn path_from(object: Object) -> Object {
-    if let Object::String(_) = object {
+    if let View::String(_) = object.view() {
         return object;
     }
     if answers(&object, "to_path") {

@@ -4,6 +4,7 @@
 use super::calls::{call, top_level_module};
 use super::handles::{QNIL, Value, to_object, to_value};
 use super::interpreter;
+use crate::object::View;
 use crate::object::{Object, StringValue};
 use crate::vm::native_methods::regexp_methods::LAST_MATCH;
 use std::rc::Rc;
@@ -50,8 +51,8 @@ pub extern "C-unwind" fn rb_reg_regcomp(source: Value) -> Value {
 
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_reg_options(regexp: Value) -> i32 {
-    match call(to_object(regexp), "options", Vec::new()) {
-        Object::Int(options) => options as i32,
+    match call(to_object(regexp), "options", Vec::new()).view() {
+        View::Int(options) => options as i32,
         _ => 0,
     }
 }
@@ -72,7 +73,7 @@ pub extern "C-unwind" fn rb_reg_nth_match(nth: i32, matched: Value) -> Value {
         return QNIL;
     }
     let matched = to_object(matched);
-    let Object::Int(group_count) = call(matched.clone(), "size", Vec::new()) else {
+    let View::Int(group_count) = call(matched.clone(), "size", Vec::new()).view() else {
         return QNIL;
     };
     let mut nth = i64::from(nth);

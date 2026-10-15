@@ -2,6 +2,7 @@
 // is built on.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 /// The text `dlerror` holds for the call that just failed.
 fn last_loader_error() -> String {
@@ -51,16 +52,16 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let command = match arguments.first() {
-            Some(Object::Symbol(name)) => name.as_str().to_string(),
+        let command = match arguments.first().view() {
+            Some(View::Symbol(name)) => name.as_str().to_string(),
             _ => String::new(),
         };
-        let number = |at: usize| match arguments.get(at) {
-            Some(Object::Int(held)) => *held,
+        let number = |at: usize| match arguments.get(at).view() {
+            Some(View::Int(held)) => held,
             _ => 0,
         };
-        let text = |at: usize| match arguments.get(at) {
-            Some(Object::String(held)) => Some(held.as_str().to_string()),
+        let text = |at: usize| match arguments.get(at).view() {
+            Some(View::String(held)) => Some(held.as_str().to_string()),
             _ => None,
         };
         match command.as_str() {
@@ -239,8 +240,8 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let address = match arguments.get(1) {
-            Some(Object::Int(held)) if *held != 0 => *held,
+        let address = match arguments.get(1).view() {
+            Some(View::Int(held)) if held != 0 => held,
             _ => {
                 return Err(simple_exception(
                     "Fiddle::DLError",
@@ -249,16 +250,16 @@ impl VirtualMachine {
                 ));
             }
         };
-        let kinds = match arguments.get(2) {
-            Some(Object::Array(held)) => held.borrow().clone(),
+        let kinds = match arguments.get(2).view() {
+            Some(View::Array(held)) => held.borrow().clone(),
             _ => Vec::new(),
         };
-        let answer_kind = match arguments.get(3) {
-            Some(Object::Int(held)) => *held,
+        let answer_kind = match arguments.get(3).view() {
+            Some(View::Int(held)) => held,
             _ => TYPE_VOID,
         };
-        let values = match arguments.get(4) {
-            Some(Object::Array(held)) => held.borrow().clone(),
+        let values = match arguments.get(4).view() {
+            Some(View::Array(held)) => held.borrow().clone(),
             _ => Vec::new(),
         };
 
@@ -277,21 +278,21 @@ impl VirtualMachine {
             )
         };
         for (kind, value) in kinds.iter().zip(values.iter()) {
-            let kind = match kind {
-                Object::Int(held) => *held,
+            let kind = match kind.view() {
+                View::Int(held) => held,
                 _ => TYPE_VOIDP,
             };
             match kind {
                 TYPE_FLOAT | TYPE_DOUBLE => {
-                    let number = match value {
-                        Object::Float(held) => *held,
-                        Object::Int(held) => *held as f64,
-                        other => {
+                    let number = match value.view() {
+                        View::Float(held) => held,
+                        View::Int(held) => held as f64,
+                        _ => {
                             return Err(simple_exception(
                                 "TypeError",
                                 &format!(
                                     "can't convert {} into Float",
-                                    self.builtins().class_of(other).name()
+                                    self.builtins().class_of(value).name()
                                 ),
                                 position,
                             ));
@@ -315,15 +316,15 @@ impl VirtualMachine {
                     ));
                 }
                 _ => {
-                    let passed = match value {
-                        Object::Int(held) => *held,
-                        Object::BigInt(held) => {
+                    let passed = match value.view() {
+                        View::Int(held) => held,
+                        View::BigInt(held) => {
                             let (_, digits) = held.to_u64_digits();
                             digits.first().copied().unwrap_or(0) as i64
                         }
-                        Object::Bool(held) => *held as i64,
-                        Object::Nil => 0,
-                        Object::String(held) => {
+                        View::Bool(held) => held as i64,
+                        View::Nil => 0,
+                        View::String(held) => {
                             let mut bytes =
                                 crate::vm::native_methods::string_methods::binary_bytes(held);
                             bytes.push(0);
@@ -333,12 +334,12 @@ impl VirtualMachine {
                             });
                             0
                         }
-                        other => {
+                        _ => {
                             return Err(simple_exception(
                                 "TypeError",
                                 &format!(
                                     "no implicit conversion of {} into Integer",
-                                    self.builtins().class_of(other).name()
+                                    self.builtins().class_of(value).name()
                                 ),
                                 position,
                             ));
@@ -359,9 +360,9 @@ impl VirtualMachine {
             kinds
                 .iter()
                 .zip(values.iter())
-                .filter(|(kind, _)| !matches!(kind, Object::Int(TYPE_FLOAT | TYPE_DOUBLE))),
+                .filter(|(kind, _)| !matches!(kind.view(), View::Int(TYPE_FLOAT | TYPE_DOUBLE))),
         ) {
-            if let (_, Object::String(_)) = value
+            if let (_, View::String(_)) = (value.0, value.1.view())
                 && let Some(buffer) = next_buffer.next()
             {
                 *slot = buffer.bytes.as_mut_ptr() as i64;

@@ -1,6 +1,7 @@
 // The methods a Mutex answers.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 /// How many locks a thread takes in one turn before it hands the turn over.
 const LOCKS_PER_TURN: usize = 100;
@@ -16,18 +17,18 @@ impl VirtualMachine {
         _arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        let Object::Instance(inst) = receiver else {
+        let View::Instance(inst) = receiver.view() else {
             return Ok(None);
         };
         let inst = Rc::clone(inst);
         let held = matches!(
-            inst.borrow().get_var("__mutex_locked"),
-            Some(Object::Bool(true))
+            inst.borrow().get_var("__mutex_locked").view(),
+            Some(View::Bool(true))
         );
         match method_name {
             "synchronize" => {
                 let block = self.pending_block.take();
-                let Some(Object::Block(body)) = block else {
+                let Some(View::Block(body)) = block.view() else {
                     return Err(crate::vm::errors::simple_exception(
                         "ArgumentError",
                         "Mutex#synchronize requires a block",
@@ -64,8 +65,8 @@ impl VirtualMachine {
                 // scheduler, which holds it until the lock is let go.
                 if let Some(scheduler) = self.current_scheduler() {
                     while matches!(
-                        inst.borrow().get_var("__mutex_locked"),
-                        Some(Object::Bool(true))
+                        inst.borrow().get_var("__mutex_locked").view(),
+                        Some(View::Bool(true))
                     ) {
                         self.scheduler_block(scheduler.clone(), receiver, Object::Nil, position)?;
                     }
@@ -85,8 +86,8 @@ impl VirtualMachine {
                 let mut waited = Ok(());
                 let mut last_round = None;
                 while matches!(
-                    inst.borrow().get_var("__mutex_locked"),
-                    Some(Object::Bool(true))
+                    inst.borrow().get_var("__mutex_locked").view(),
+                    Some(View::Bool(true))
                 ) {
                     if let Some(before) = last_round
                         && let Err(stuck) = self.check_for_deadlock(before, position)
@@ -105,8 +106,8 @@ impl VirtualMachine {
                 // A thread told to stop while it waited takes the lock when it
                 // is free, so whatever unwinds next still holds it.
                 if !matches!(
-                    inst.borrow().get_var("__mutex_locked"),
-                    Some(Object::Bool(true))
+                    inst.borrow().get_var("__mutex_locked").view(),
+                    Some(View::Bool(true))
                 ) {
                     self.mark_mutex_held(&inst);
                 }
@@ -143,9 +144,9 @@ impl VirtualMachine {
             // `Mutex#sleep` lets the lock go, waits to be woken, and takes
             // the lock again, which is what a condition variable waits on.
             "sleep" => {
-                let wanted = match _arguments.first() {
-                    None | Some(Object::Nil) => None,
-                    Some(given) => Some(self.float_value_of(given, position)?),
+                let wanted = match _arguments.first().view() {
+                    None | Some(View::Nil) => None,
+                    Some(given) => Some(self.float_value_of(&given.to_object(), position)?),
                 };
                 if wanted.is_some_and(|seconds| seconds < 0.0) {
                     return Err(crate::vm::errors::simple_exception(

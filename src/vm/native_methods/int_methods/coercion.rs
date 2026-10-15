@@ -1,6 +1,7 @@
 // The number an argument stands for.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// An Integer argument: one as it stands, and anything else through
@@ -21,7 +22,7 @@ impl VirtualMachine {
             message,
         };
         let Some((class, method)) = self.lookup_method(argument, "to_int") else {
-            if matches!(argument, Object::Nil) {
+            if matches!(argument.view(), View::Nil) {
                 return Err(refuse(
                     "no implicit conversion from nil to integer".to_string(),
                 ));
@@ -56,7 +57,7 @@ impl VirtualMachine {
             location: crate::vm::utils::position_to_location(position),
             message,
         };
-        if matches!(argument, Object::Float(value) if !value.is_finite()) {
+        if matches!(argument.view(), View::Float(value) if !value.is_finite()) {
             return Err(refuse(
                 "RangeError",
                 "float infinity out of range of integer".to_string(),
@@ -82,26 +83,29 @@ impl VirtualMachine {
             return Ok(None);
         }
         let pair = self.send_to_object(value.clone(), "coerce", vec![Object::Int(1)], position)?;
-        let Object::Array(parts) = pair else {
+        let View::Array(parts) = pair.view() else {
             return Ok(None);
         };
         let parts = parts.borrow().clone();
         if parts.len() != 2 {
             return Ok(None);
         }
-        match self.send_to_object(parts[1].clone(), "to_f", vec![], position)? {
-            Object::Float(number) => Ok(Some(number)),
-            Object::Int(number) => Ok(Some(number as f64)),
+        match self
+            .send_to_object(parts[1].clone(), "to_f", vec![], position)?
+            .view()
+        {
+            View::Float(number) => Ok(Some(number)),
+            View::Int(number) => Ok(Some(number as f64)),
             _ => Ok(None),
         }
     }
 
     /// The TypeError Ruby raises for an operand that cannot become a number.
     pub(crate) fn uncoercible(&mut self, value: &Object, position: Position) -> MetorexError {
-        let named = match value {
-            Object::Nil => "nil".to_string(),
-            Object::Bool(held) => held.to_string(),
-            other => self.builtins().class_of(other).name().to_string(),
+        let named = match value.view() {
+            View::Nil => "nil".to_string(),
+            View::Bool(held) => held.to_string(),
+            _ => self.builtins().class_of(value).name().to_string(),
         };
         let message = format!("{named} can't be coerced into Integer");
         MetorexError::UncaughtException {

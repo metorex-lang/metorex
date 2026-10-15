@@ -1,6 +1,7 @@
 // Instance Tests - method dispatch and variable tests
 
 use metorex::object::{Class, Instance, Method, Object};
+use metorex::object::{OptionView, View};
 use std::rc::Rc;
 
 #[test]
@@ -131,8 +132,8 @@ fn test_instance_multiple_vars() {
     assert_eq!(instance.get_var("bool_var"), Some(&Object::Bool(true)));
     assert_eq!(instance.get_var("nil_var"), Some(&Object::Nil));
     assert!(matches!(
-        instance.get_var("array_var"),
-        Some(Object::Array(_))
+        instance.get_var("array_var").view(),
+        Some(View::Array(_))
     ));
 }
 
@@ -157,7 +158,7 @@ fn test_instance_with_object_wrapper() {
     let class = Class::new("TestClass", None);
     let obj = Object::instance(Rc::clone(&class));
 
-    if let Object::Instance(inst) = obj {
+    if let View::Instance(inst) = obj.view() {
         let mut instance = inst.borrow_mut();
         instance.set_var("test".to_string(), Object::Int(100));
 

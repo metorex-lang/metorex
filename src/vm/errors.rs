@@ -8,6 +8,7 @@ use crate::ast::{BinaryOp, Expression, Statement, UnaryOp};
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 
 // ============================================================================
 // Control Flow Errors
@@ -58,14 +59,14 @@ pub(super) fn undefined_variable_error(
     let msg = if name.starts_with(char::is_uppercase) {
         format!("uninitialized constant {name}")
     } else {
-        let named = match &receiver {
-            Some(Object::Nil) | None => "main".to_string(),
-            Some(held) => receiver_wording(held),
+        let named = match receiver.view() {
+            Some(View::Nil) | None => "main".to_string(),
+            Some(held) => receiver_wording(&held.to_object()),
         };
         format!("undefined local variable or method '{name}' for {named}")
     };
     let exc = crate::object::Object::exception("NameError", msg.clone());
-    if let Object::Exception(details) = &exc {
+    if let View::Exception(details) = exc.view() {
         let mut details = details.borrow_mut();
         details.name = Some(name.to_string());
         details.receiver = receiver.map(Box::new);
@@ -86,7 +87,7 @@ pub(super) fn invalid_name_error(
     position: Position,
 ) -> MetorexError {
     let exception = Object::exception("NameError", message.clone());
-    if let Object::Exception(details) = &exception {
+    if let View::Exception(details) = exception.view() {
         let mut details = details.borrow_mut();
         details
             .instance_vars
@@ -145,13 +146,13 @@ pub(super) fn undefined_method_error_worded(
 /// instance of its class. A class with no name of its own is named by the
 /// form it writes itself in.
 fn receiver_wording(receiver: &Object) -> String {
-    match receiver {
-        Object::Nil => "nil".to_string(),
-        Object::Bool(true) => "true".to_string(),
-        Object::Bool(false) => "false".to_string(),
-        Object::Class(class_rc) => format!("class {}", named_or_written(class_rc, receiver)),
-        Object::Module(module_rc) => format!("module {}", named_or_written(module_rc, receiver)),
-        Object::Instance(instance) => {
+    match receiver.view() {
+        View::Nil => "nil".to_string(),
+        View::Bool(true) => "true".to_string(),
+        View::Bool(false) => "false".to_string(),
+        View::Class(class_rc) => format!("class {}", named_or_written(class_rc, receiver)),
+        View::Module(module_rc) => format!("module {}", named_or_written(module_rc, receiver)),
+        View::Instance(instance) => {
             // An object carrying methods of its own is named as itself, since
             // its class is a singleton the program never wrote down.
             if instance.borrow().singleton_class.borrow().is_some()
@@ -163,9 +164,9 @@ fn receiver_wording(receiver: &Object) -> String {
             let written = Object::Class(std::rc::Rc::clone(&class));
             format!("an instance of {}", named_or_written(&class, &written))
         }
-        Object::Int(_) | Object::BigInt(_) => "an instance of Integer".to_string(),
-        Object::Dict(_) => "an instance of Hash".to_string(),
-        Object::Block(_) => "an instance of Proc".to_string(),
+        View::Int(_) | View::BigInt(_) => "an instance of Integer".to_string(),
+        View::Dict(_) => "an instance of Hash".to_string(),
+        View::Block(_) => "an instance of Proc".to_string(),
         other => format!("an instance of {}", other.type_name()),
     }
 }
@@ -187,11 +188,10 @@ impl crate::vm::VirtualMachine {
         private_call: bool,
         position: Position,
     ) {
-        let Err(MetorexError::UncaughtException {
-            exception: Object::Exception(details),
-            ..
-        }) = result
-        else {
+        let Err(MetorexError::UncaughtException { exception, .. }) = result else {
+            return;
+        };
+        let View::Exception(details) = exception.view() else {
             return;
         };
         {
@@ -220,11 +220,9 @@ impl crate::vm::VirtualMachine {
         if self.is_the_main_object(receiver) {
             return "main".to_string();
         }
-        let named = match receiver {
-            Object::Class(class) | Object::Module(class) => {
-                self.written_class_name(class, position)
-            }
-            Object::Instance(instance) => {
+        let named = match receiver.view() {
+            View::Class(class) | View::Module(class) => self.written_class_name(class, position),
+            View::Instance(instance) => {
                 let has_singleton = instance.borrow().singleton_class.borrow().is_some()
                     || !instance.borrow().singleton_methods.borrow().is_empty();
                 if has_singleton {
@@ -236,10 +234,10 @@ impl crate::vm::VirtualMachine {
             }
             _ => None,
         };
-        match (receiver, named) {
-            (Object::Class(_), Some(name)) => format!("class {}", name),
-            (Object::Module(_), Some(name)) => format!("module {}", name),
-            (Object::Instance(_), Some(name)) => format!("an instance of {}", name),
+        match (receiver.view(), named) {
+            (View::Class(_), Some(name)) => format!("class {}", name),
+            (View::Module(_), Some(name)) => format!("module {}", name),
+            (View::Instance(_), Some(name)) => format!("an instance of {}", name),
             _ => receiver_wording(receiver),
         }
     }
@@ -262,8 +260,12 @@ impl crate::vm::VirtualMachine {
         if !holds_name {
             return None;
         }
-        match self.send_to_object(receiver, "name", Vec::new(), position) {
-            Ok(Object::String(text)) => Some(text.as_str().to_string()),
+        match self
+            .send_to_object(receiver, "name", Vec::new(), position)
+            .as_ref()
+            .map(Object::view)
+        {
+            Ok(View::String(text)) => Some(text.as_str().to_string()),
             _ => None,
         }
     }
@@ -288,7 +290,7 @@ pub(super) fn no_method_error(
     args: &[Object],
 ) -> Object {
     let exception = Object::exception("NoMethodError", message);
-    if let Object::Exception(details) = &exception {
+    if let View::Exception(details) = exception.view() {
         let mut details = details.borrow_mut();
         details.name = Some(method.to_string());
         details.receiver = Some(Box::new(receiver.clone()));
@@ -354,22 +356,22 @@ pub(super) fn argument_count_error(
 /// How a value that cannot be converted is named in the error: nil, true
 /// and false by their values, and anything else by its class.
 pub(crate) fn conversion_subject(value: &Object) -> String {
-    match value {
-        Object::Nil => "nil".to_string(),
-        Object::Bool(held) => held.to_string(),
-        Object::Instance(held) => held.borrow().class.ruby_name(),
-        other => crate::vm::native_methods::define_method::ruby_class_name(other).to_string(),
+    match value.view() {
+        View::Nil => "nil".to_string(),
+        View::Bool(held) => held.to_string(),
+        View::Instance(held) => held.borrow().class.ruby_name(),
+        _ => crate::vm::native_methods::define_method::ruby_class_name(value).to_string(),
     }
 }
 
 /// The TypeError for a value used where an index or a count is read as an
 /// Integer, which names nil apart.
 pub(crate) fn integer_conversion_error(value: &Object, position: Position) -> MetorexError {
-    let message = match value {
-        Object::Nil => "no implicit conversion from nil to integer".to_string(),
-        other => format!(
+    let message = match value.view() {
+        View::Nil => "no implicit conversion from nil to integer".to_string(),
+        _ => format!(
             "no implicit conversion of {} into Integer",
-            conversion_subject(other)
+            conversion_subject(value)
         ),
     };
     simple_exception("TypeError", &message, position)
@@ -426,12 +428,12 @@ pub(super) fn unary_type_error(op: &UnaryOp, value: &Object, position: Position)
 /// How a value a number cannot work with is named in the error: nil, true,
 /// false and a Symbol by their values, and anything else by its class.
 pub(crate) fn coercion_subject(value: &Object) -> String {
-    match value {
-        Object::Nil => "nil".to_string(),
-        Object::Bool(held) => held.to_string(),
-        Object::Symbol(name) => format!(":{name}"),
-        Object::Instance(held) => held.borrow().class.ruby_name(),
-        other => crate::vm::native_methods::define_method::ruby_class_name(other).to_string(),
+    match value.view() {
+        View::Nil => "nil".to_string(),
+        View::Bool(held) => held.to_string(),
+        View::Symbol(name) => format!(":{name}"),
+        View::Instance(held) => held.borrow().class.ruby_name(),
+        _ => crate::vm::native_methods::define_method::ruby_class_name(value).to_string(),
     }
 }
 
@@ -449,26 +451,27 @@ pub(super) fn binary_type_error(
         op,
         BinaryOp::BitwiseOr | BinaryOp::BitwiseAnd | BinaryOp::Xor
     );
-    let instance_class = match left {
-        Object::Instance(held) => Some(held.borrow().class.name().to_string()),
+    let instance_class = match left.view() {
+        View::Instance(held) => Some(held.borrow().class.name().to_string()),
         _ => None,
     };
     let numeric_instance = matches!(instance_class.as_deref(), Some("Rational" | "Complex"));
-    if (matches!(left, Object::Nil | Object::Bool(_) | Object::Regex(..))
-        || (bitwise && (matches!(left, Object::String(_) | Object::Float(_)) || numeric_instance)))
+    if (matches!(left.view(), View::Nil | View::Bool(_) | View::Regex(..))
+        || (bitwise
+            && (matches!(left.view(), View::String(_) | View::Float(_)) || numeric_instance)))
         && let Some(named) = crate::vm::eval::binary_op_method_name(&op)
     {
         return undefined_method_error(named, left, std::slice::from_ref(right), position);
     }
     // An Array or a String takes the other side as one of its own kind, or
     // as a count for `*`, and says when it has no implicit conversion.
-    let wanted = match (left, &op) {
+    let wanted = match (left.view(), &op) {
         (
-            Object::Array(_),
+            View::Array(_),
             BinaryOp::Add | BinaryOp::Subtract | BinaryOp::BitwiseAnd | BinaryOp::BitwiseOr,
         ) => Some("Array"),
-        (Object::String(_), BinaryOp::Add) => Some("String"),
-        (Object::Array(_) | Object::String(_), BinaryOp::Multiply) => Some("Integer"),
+        (View::String(_), BinaryOp::Add) => Some("String"),
+        (View::Array(_) | View::String(_), BinaryOp::Multiply) => Some("Integer"),
         _ => None,
     };
     if let Some(wanted) = wanted {
@@ -485,9 +488,9 @@ pub(super) fn binary_type_error(
     // A number told to work with something that is not one asks it to
     // coerce itself, and reports what it was handed by its value when that
     // is nil, true, false or a Symbol, and by its class otherwise.
-    let left_class = match left {
-        Object::Int(_) | Object::BigInt(_) => Some("Integer"),
-        Object::Float(_) => Some("Float"),
+    let left_class = match left.view() {
+        View::Int(_) | View::BigInt(_) => Some("Integer"),
+        View::Float(_) => Some("Float"),
         _ => match instance_class.as_deref() {
             Some("Rational") => Some("Rational"),
             Some("Complex") => Some("Complex"),
@@ -537,7 +540,7 @@ pub(super) fn binary_type_error(
 /// answers.
 pub(crate) fn load_error(message: String, feature: &str) -> Object {
     let exception = Object::exception("LoadError", message);
-    if let Object::Exception(details) = &exception {
+    if let View::Exception(details) = exception.view() {
         details.borrow_mut().instance_vars.insert(
             crate::vm::EXCEPTION_PATH_KEY.to_string(),
             Object::string(feature),
@@ -560,7 +563,7 @@ pub(super) fn syntax_error(
     position: Position,
 ) -> MetorexError {
     let exception = Object::exception("SyntaxError", message.clone());
-    if let (Object::Exception(details), Some(path)) = (&exception, path) {
+    if let (View::Exception(details), Some(path)) = (exception.view(), path) {
         details.borrow_mut().instance_vars.insert(
             crate::vm::EXCEPTION_PATH_KEY.to_string(),
             Object::string(path),

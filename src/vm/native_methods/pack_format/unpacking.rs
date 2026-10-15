@@ -1,6 +1,7 @@
 // `String#unpack`: reading the bytes back as the directives describe them.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// `String#unpack` — read the bytes back as the directives describe them.
@@ -42,7 +43,7 @@ impl VirtualMachine {
                         out.push(Object::Nil);
                         continue;
                     };
-                    let Object::String(held) = held else {
+                    let View::String(held) = held.view() else {
                         out.push(Object::Nil);
                         continue;
                     };

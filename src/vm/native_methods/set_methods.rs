@@ -3,6 +3,7 @@
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::{Object, ObjectHash};
+use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 use crate::vm::errors::*;
 use crate::vm::utils::position_to_location;
@@ -18,7 +19,7 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        let Object::Set(set_rc) = receiver else {
+        let View::Set(set_rc) = receiver.view() else {
             return Ok(None);
         };
         match method_name {
@@ -185,13 +186,14 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => block,
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(block)) => block,
                     Some(other) => {
                         return Err(method_argument_type_error(
                             method_name,
                             "Block",
-                            &other,
+                            &other.to_object(),
                             position,
                         ));
                     }
@@ -213,7 +215,7 @@ impl VirtualMachine {
                 let walk = (|vm: &mut Self| -> Result<Option<Object>, MetorexError> {
                     for elem in elements {
                         let args = vec![elem.value.clone()];
-                        match vm.execute_block_with_control_flow(&block, args, position)? {
+                        match vm.execute_block_with_control_flow(block, args, position)? {
                             super::super::ControlFlow::Next
                             | super::super::ControlFlow::Value(_)
                             | super::super::ControlFlow::Redo { .. }
@@ -371,7 +373,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let Some(Object::Set(other_rc)) = arguments.first() else {
+                let Some(View::Set(other_rc)) = arguments.first().view() else {
                     return Ok(Some(Object::Nil));
                 };
                 let mine = set_rc.borrow();
@@ -455,8 +457,8 @@ impl VirtualMachine {
                 };
                 // Two sets that place their elements differently are not the
                 // same set, however alike the elements look.
-                let alike = match other {
-                    Object::Set(theirs) => {
+                let alike = match other.view() {
+                    View::Set(theirs) => {
                         self.set_by_identity(set_rc) == self.set_by_identity(theirs)
                     }
                     _ => !self.set_by_identity(set_rc),
@@ -477,7 +479,8 @@ impl VirtualMachine {
             // answers and hand back the set itself.
             "delete_if" | "keep_if" | "select!" | "filter!" | "reject!" | "map!" | "collect!" => {
                 self.refuse_mutation_during_iteration(set_rc, method_name, position)?;
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     return self
                         .build_enumerator(receiver.clone(), method_name, vec![], None, position)
                         .map(Some);
@@ -487,7 +490,7 @@ impl VirtualMachine {
                 let mut changed = false;
                 for held in elements {
                     let answer =
-                        self.execute_block_callable(&block, vec![held.value.clone()], position)?;
+                        self.execute_block_callable(block, vec![held.value.clone()], position)?;
                     let mut kept = kept_rc.borrow_mut();
                     match method_name {
                         "map!" | "collect!" => {
@@ -553,7 +556,7 @@ impl VirtualMachine {
                 let elements = replacement.borrow().clone();
                 *set_rc.borrow_mut() = elements;
                 // A Set handed over brings the way it places its elements.
-                if matches!(arguments[0], Object::Set(_)) {
+                if matches!(arguments[0].view(), View::Set(_)) {
                     let key = Rc::as_ptr(set_rc) as usize;
                     if self.set_by_identity(&replacement) {
                         self.identity_sets.insert(key, receiver.clone());
@@ -667,7 +670,7 @@ impl VirtualMachine {
         argument: &Object,
         position: Position,
     ) -> Result<Rc<RefCell<indexmap::IndexSet<ObjectHash>>>, MetorexError> {
-        if let Object::Set(other) = argument {
+        if let View::Set(other) = argument.view() {
             return Ok(Rc::clone(other));
         }
         let elements = self.enumerable_elements(argument, position)?;
@@ -680,17 +683,17 @@ impl VirtualMachine {
         argument: &Object,
         position: Position,
     ) -> Result<Vec<Object>, MetorexError> {
-        let walked = match argument {
-            Object::Array(elements) => return Ok(elements.borrow().clone()),
-            Object::Set(elements) => {
+        let walked = match argument.view() {
+            View::Array(elements) => return Ok(elements.borrow().clone()),
+            View::Set(elements) => {
                 return Ok(elements
                     .borrow()
                     .iter()
                     .map(|held| held.value.clone())
                     .collect());
             }
-            other if self.responds_to(other, "to_a") => {
-                self.send_to_object(other.clone(), "to_a", vec![], position)?
+            _ if self.responds_to(argument, "to_a") => {
+                self.send_to_object(argument.clone(), "to_a", vec![], position)?
             }
             _ => {
                 let message = "value must be enumerable".to_string();
@@ -701,8 +704,8 @@ impl VirtualMachine {
                 });
             }
         };
-        match walked {
-            Object::Array(elements) => Ok(elements.borrow().clone()),
+        match walked.view() {
+            View::Array(elements) => Ok(elements.borrow().clone()),
             _ => Ok(Vec::new()),
         }
     }
@@ -725,7 +728,7 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<Option<indexmap::IndexSet<ObjectHash>>, MetorexError> {
-        if let Object::Set(held) = value {
+        if let View::Set(held) = value.view() {
             return Ok(Some(held.borrow().clone()));
         }
         let Some(set_class) = self.globals().get("Set") else {
@@ -736,7 +739,7 @@ impl VirtualMachine {
             return Ok(None);
         }
         let listed = self.send_to_object(value.clone(), "to_a", vec![], position)?;
-        let Object::Array(elements) = listed else {
+        let View::Array(elements) = listed.view() else {
             return Ok(None);
         };
         let elements = elements.borrow().clone();
@@ -778,7 +781,7 @@ impl VirtualMachine {
         object: &Object,
         position: Position,
     ) -> Result<Option<ObjectHash>, MetorexError> {
-        if !matches!(object, Object::Instance(_)) {
+        if !matches!(object.view(), View::Instance(_)) {
             return Ok(ObjectHash::from_object(object));
         }
         let slot = self.hashed_slot(object, position, |candidate| {

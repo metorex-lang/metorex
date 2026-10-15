@@ -1,6 +1,7 @@
 // Walking the entries, and the values a walk builds.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Walking the entries, and the values a walk builds.
@@ -25,7 +26,8 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     return Err(MetorexError::runtime_error(
                         format!("{} requires a block", method_name),
                         position_to_location(position),
@@ -54,7 +56,7 @@ impl VirtualMachine {
                     } else {
                         vec![Object::array(vec![key, value])]
                     };
-                    mapped.push(self.execute_block_callable(&block, given, position)?);
+                    mapped.push(self.execute_block_callable(block, given, position)?);
                 }
                 Ok(Some(Object::Array(Rc::new(std::cell::RefCell::new(
                     mapped,
@@ -69,13 +71,14 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(b)) => b,
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(b)) => b,
                     Some(other) => {
                         return Err(method_argument_type_error(
                             method_name,
                             "Block",
-                            &other,
+                            &other.to_object(),
                             position,
                         ));
                     }
@@ -90,7 +93,7 @@ impl VirtualMachine {
                     // Ruby yields one `[key, value]` array, which a block of
                     // two parameters spreads across them.
                     let args = vec![Object::array(vec![key, value])];
-                    match self.execute_block_with_control_flow(&block, args, position)? {
+                    match self.execute_block_with_control_flow(block, args, position)? {
                         crate::vm::ControlFlow::Next
                         | crate::vm::ControlFlow::Value(_)
                         | crate::vm::ControlFlow::Redo { .. }
@@ -182,7 +185,8 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     return self
                         .make_enumerator(receiver, method_name, arguments, position)
                         .map(Some);
@@ -199,7 +203,7 @@ impl VirtualMachine {
                     } else {
                         value
                     };
-                    self.execute_block_callable(&block, vec![yielded], position)?;
+                    self.execute_block_callable(block, vec![yielded], position)?;
                 }
                 Ok(Some(receiver.clone()))
             }

@@ -4,6 +4,7 @@ use super::super::VirtualMachine;
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::vm::utils::*;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -16,11 +17,11 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<bool>, MetorexError> {
-        match keyword_argument(arguments, "highlight") {
-            Some(Object::Bool(asked)) => Ok(Some(asked)),
-            Some(Object::Nil) | None => Ok(None),
+        match keyword_argument(arguments, "highlight").view() {
+            Some(View::Bool(asked)) => Ok(Some(asked)),
+            Some(View::Nil) | None => Ok(None),
             Some(other) => {
-                let shown = self.get_inspect_representation(&other, position)?;
+                let shown = self.get_inspect_representation(&other.to_object(), position)?;
                 Err(crate::vm::errors::simple_exception(
                     "ArgumentError",
                     &format!("expected true or false as highlight: {shown}"),
@@ -35,7 +36,7 @@ impl VirtualMachine {
     /// What Ruby prints for an exception nothing rescued: the place it was
     /// raised, its message and class, and the frames under it.
     pub fn uncaught_report(&mut self, exception: &Object) -> Option<String> {
-        if let Object::Exception(held) = exception
+        if let View::Exception(held) = exception.view()
             && held.borrow().exception_type == "SystemExit"
         {
             // `exit` ends the program rather than failing it, so there is
@@ -46,13 +47,17 @@ impl VirtualMachine {
         keywords.insert("__MX_KWARGS__".to_string(), Object::Bool(true));
         keywords.insert(":highlight".to_string(), Object::Bool(false));
         let arguments = vec![Object::Dict(Rc::new(RefCell::new(keywords)))];
-        match self.send_to_object(
-            exception.clone(),
-            "full_message",
-            arguments,
-            Position::default(),
-        ) {
-            Ok(Object::String(text)) => Some(text.as_str().to_string()),
+        match self
+            .send_to_object(
+                exception.clone(),
+                "full_message",
+                arguments,
+                Position::default(),
+            )
+            .as_ref()
+            .map(Object::view)
+        {
+            Ok(View::String(text)) => Some(text.as_str().to_string()),
             _ => None,
         }
     }
@@ -72,13 +77,17 @@ impl VirtualMachine {
         keywords.insert("__MX_KWARGS__".to_string(), Object::Bool(true));
         keywords.insert(":highlight".to_string(), Object::Bool(false));
         let arguments = vec![Object::Dict(Rc::new(RefCell::new(keywords)))];
-        match self.send_to_object(
-            exception,
-            "detailed_message",
-            arguments,
-            Position::default(),
-        ) {
-            Ok(Object::String(text)) => text.as_str().to_string(),
+        match self
+            .send_to_object(
+                exception,
+                "detailed_message",
+                arguments,
+                Position::default(),
+            )
+            .as_ref()
+            .map(Object::view)
+        {
+            Ok(View::String(text)) => text.as_str().to_string(),
             _ => plain,
         }
     }
@@ -91,11 +100,11 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        let exception = match receiver {
-            Object::Exception(exc) => exc,
+        let exception = match receiver.view() {
+            View::Exception(exc) => exc,
             // The Exception class object itself is not an exception, so its
             // methods are looked up elsewhere.
-            Object::Class(_) | Object::Module(_) => return Ok(None),
+            View::Class(_) | View::Module(_) => return Ok(None),
             _ => {
                 return Err(MetorexError::runtime_error(
                     format!("Expected Exception, got {:?}", receiver),
@@ -123,13 +132,13 @@ impl VirtualMachine {
             // What Marshal reads back for the message and the cause.
             "__restore_message__" => {
                 let mut details = exception.borrow_mut();
-                match arguments.first() {
-                    Some(given @ Object::String(text)) => {
+                match arguments.first().view() {
+                    Some(given @ View::String(text)) => {
                         details.message = text.as_str().to_string();
                         details.message_given = true;
                         details
                             .instance_vars
-                            .insert(crate::vm::MESSAGE_STRING_KEY.to_string(), given.clone());
+                            .insert(crate::vm::MESSAGE_STRING_KEY.to_string(), given.to_object());
                     }
                     _ => {
                         details.message = String::new();
@@ -141,8 +150,8 @@ impl VirtualMachine {
             // A NameError's name and a NoMethodError's arguments, which
             // Marshal reads back under names that are not instance variables.
             "__restore_attribute__" => {
-                let key = match arguments.first() {
-                    Some(Object::Symbol(named)) if &*named.as_str() == "args" => {
+                let key = match arguments.first().view() {
+                    Some(View::Symbol(named)) if &*named.as_str() == "args" => {
                         crate::vm::NO_METHOD_ARGS_KEY
                     }
                     _ => crate::vm::NAME_ERROR_NAME_KEY,
@@ -156,9 +165,9 @@ impl VirtualMachine {
             }
             "__restore_cause__" => {
                 let mut details = exception.borrow_mut();
-                details.cause = match arguments.first() {
-                    None | Some(Object::Nil) => None,
-                    Some(held) => Some(Box::new(held.clone())),
+                details.cause = match arguments.first().view() {
+                    None | Some(View::Nil) => None,
+                    Some(held) => Some(Box::new(held.to_object())),
                 };
                 details.cause_settled = true;
                 Ok(Some(Object::Nil))
@@ -397,32 +406,32 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let (trace, kept) = match &arguments[0] {
-                    Object::Nil => (None, None),
-                    Object::String(line) => (Some(vec![line.as_str().to_string()]), None),
-                    Object::Array(entries) => {
+                let (trace, kept) = match arguments[0].view() {
+                    View::Nil => (None, None),
+                    View::String(line) => (Some(vec![line.as_str().to_string()]), None),
+                    View::Array(entries) => {
                         let mut lines = Vec::with_capacity(entries.borrow().len());
                         let mut sites = Vec::with_capacity(entries.borrow().len());
                         for entry in entries.borrow().iter() {
-                            match entry {
-                                Object::String(line) => lines.push(line.as_str().to_string()),
+                            match entry.view() {
+                                View::String(line) => lines.push(line.as_str().to_string()),
                                 // Ruby 3.4 also accepts Location objects, and
                                 // reports them through both accessors.
-                                Object::Instance(instance)
+                                View::Instance(instance)
                                     if instance.borrow().class.name()
                                         == "Thread::Backtrace::Location" =>
                                 {
                                     let borrowed = instance.borrow();
-                                    let path = match borrowed.get_var("path") {
-                                        Some(Object::String(path)) => path.as_str().to_string(),
+                                    let path = match borrowed.get_var("path").view() {
+                                        Some(View::String(path)) => path.as_str().to_string(),
                                         _ => String::new(),
                                     };
-                                    let line = match borrowed.get_var("lineno") {
-                                        Some(Object::Int(line)) => *line as usize,
+                                    let line = match borrowed.get_var("lineno").view() {
+                                        Some(View::Int(line)) => line as usize,
                                         _ => 0,
                                     };
-                                    let label = match borrowed.get_var("label") {
-                                        Some(Object::String(label)) => label.as_str().to_string(),
+                                    let label = match borrowed.get_var("label").view() {
+                                        Some(View::String(label)) => label.as_str().to_string(),
                                         _ => String::new(),
                                     };
                                     lines.push(if label.is_empty() {
@@ -432,7 +441,9 @@ impl VirtualMachine {
                                     });
                                     sites.push((path, line, label));
                                 }
-                                other => return Err(backtrace_type_error(other, position)),
+                                _ => {
+                                    return Err(backtrace_type_error(entry, position));
+                                }
                             }
                         }
                         let given_locations = !sites.is_empty();
@@ -454,7 +465,7 @@ impl VirtualMachine {
                         };
                         (Some(lines), kept)
                     }
-                    other => return Err(backtrace_type_error(other, position)),
+                    _ => return Err(backtrace_type_error(&arguments[0], position)),
                 };
                 let mut details = exception.borrow_mut();
                 details.backtrace = trace;
@@ -465,11 +476,13 @@ impl VirtualMachine {
             // whatever `to_s` answers, and as the class name alone when that
             // is empty.
             "inspect" => {
-                let rendered =
-                    match self.send_to_object(receiver.clone(), "to_s", vec![], position)? {
-                        Object::String(text) => text.as_str().to_string(),
-                        other => other.to_string(),
-                    };
+                let rendered = match self
+                    .send_to_object(receiver.clone(), "to_s", vec![], position)?
+                    .view()
+                {
+                    View::String(text) => text.as_str().to_string(),
+                    other => other.to_string(),
+                };
                 let class_name = {
                     let details = exception.borrow();
                     match &details.class {
@@ -495,8 +508,8 @@ impl VirtualMachine {
                     None => unsafe { libc::isatty(2) == 1 },
                 };
                 let bottom_first = matches!(
-                    keyword_argument(arguments, "order"),
-                    Some(Object::Symbol(order)) if *order.as_str() == *"bottom"
+                    keyword_argument(arguments, "order").view(),
+                    Some(View::Symbol(order)) if *order.as_str() == *"bottom"
                 );
                 // Through `send` so a class that overrides `detailed_message`
                 // decides how its own message reads. Every keyword this call
@@ -504,7 +517,7 @@ impl VirtualMachine {
                 // settled first.
                 let mut keywords = indexmap::IndexMap::new();
                 keywords.insert("__MX_KWARGS__".to_string(), Object::Bool(true));
-                if let Some(Object::Dict(given)) = arguments.last() {
+                if let Some(View::Dict(given)) = arguments.last().view() {
                     for (name, value) in given.borrow().iter() {
                         if name == "__MX_KWARGS__" || name == ":order" || name == ":highlight" {
                             continue;
@@ -523,15 +536,18 @@ impl VirtualMachine {
                     .lookup_method(receiver, "detailed_message")
                     .is_some_and(|(_, held)| held.is_undefined);
                 let detail = if answers {
-                    match self.send_to_object(
-                        receiver.clone(),
-                        "detailed_message",
-                        detail_arguments,
-                        position,
-                    )? {
-                        Object::String(text) => text.as_str().to_string(),
-                        Object::Nil => stand_in,
-                        other => self.message_text_of(other, position)?,
+                    match self
+                        .send_to_object(
+                            receiver.clone(),
+                            "detailed_message",
+                            detail_arguments,
+                            position,
+                        )?
+                        .view()
+                    {
+                        View::String(text) => text.as_str().to_string(),
+                        View::Nil => stand_in,
+                        other => self.message_text_of(other.to_object(), position)?,
                     }
                 } else {
                     stand_in
@@ -586,16 +602,14 @@ impl VirtualMachine {
                 let mut cause = exception.borrow().cause.clone();
                 while let Some(next) = cause {
                     let next = *next;
-                    let Object::Exception(details) = &next else {
+                    let View::Exception(details) = next.view() else {
                         break;
                     };
-                    let reported = match self.send_to_object(
-                        next.clone(),
-                        "detailed_message",
-                        vec![],
-                        position,
-                    )? {
-                        Object::String(text) => text.as_str().to_string(),
+                    let reported = match self
+                        .send_to_object(next.clone(), "detailed_message", vec![], position)?
+                        .view()
+                    {
+                        View::String(text) => text.as_str().to_string(),
                         other => other.to_string(),
                     };
                     // A cause is reported the way the exception itself is:
@@ -701,11 +715,11 @@ impl VirtualMachine {
                     return Ok(Some(number.clone()));
                 }
                 let exception_type = exception.borrow().exception_type.clone();
-                let Some(Object::Class(class)) = self
+                let viewed = self
                     .globals()
                     .get(&exception_type)
-                    .or_else(|| self.resolve_qualified_constant(&exception_type))
-                else {
+                    .or_else(|| self.resolve_qualified_constant(&exception_type));
+                let Some(View::Class(class)) = viewed.view() else {
                     return Ok(Some(Object::Nil));
                 };
                 Ok(Some(class.get_class_var("Errno").unwrap_or(Object::Nil)))
@@ -781,11 +795,11 @@ impl VirtualMachine {
                 // encoding and bytes and all, while the message still reads
                 // the same.
                 if exc.message_given
-                    && let Some(given @ Object::String(text)) =
-                        exc.instance_vars.get(crate::vm::MESSAGE_STRING_KEY)
+                    && let Some(given @ View::String(text)) =
+                        exc.instance_vars.get(crate::vm::MESSAGE_STRING_KEY).view()
                     && *text.as_str() == *exc.message
                 {
-                    return Ok(Some(given.clone()));
+                    return Ok(Some(given.to_object()));
                 }
                 let rendered = if exc.message_given {
                     exc.message.clone()
@@ -818,7 +832,7 @@ impl VirtualMachine {
             ("SystemExit", &["status", "success?"]),
             ("UncaughtThrowError", &["tag", "value"]),
         ];
-        let Object::Exception(exception) = receiver else {
+        let View::Exception(exception) = receiver.view() else {
             return false;
         };
         BY_CLASS.iter().any(|(class, names)| {
@@ -829,17 +843,20 @@ impl VirtualMachine {
     /// The class an exception is an instance of: the one it carries, or the
     /// one its class name resolves to for an exception the interpreter raised.
     pub(crate) fn exception_class(&self, receiver: &Object) -> Option<Rc<crate::class::Class>> {
-        let Object::Exception(details) = receiver else {
+        let View::Exception(details) = receiver.view() else {
             return None;
         };
         let details = details.borrow();
         if let Some(class) = &details.class {
             return Some(Rc::clone(class));
         }
-        match self.globals().get(&details.exception_type) {
-            Some(Object::Class(class)) => Some(class),
-            _ => match self.resolve_qualified_constant(&details.exception_type) {
-                Some(Object::Class(class)) => Some(class),
+        match self.globals().get(&details.exception_type).view() {
+            Some(View::Class(class)) => Some(class.clone()),
+            _ => match self
+                .resolve_qualified_constant(&details.exception_type)
+                .view()
+            {
+                Some(View::Class(class)) => Some(class.clone()),
                 _ => None,
             },
         }
@@ -857,13 +874,13 @@ impl VirtualMachine {
         if let Some(class) = &details.class {
             return crate::vm::method_invocation::descends_from(class, ancestor);
         }
-        let named = match self.globals().get(&details.exception_type) {
-            Some(class @ Object::Class(_)) => Some(class),
+        let named = match self.globals().get(&details.exception_type).view() {
+            Some(class @ View::Class(_)) => Some(class.to_object()),
             _ => self.resolve_qualified_constant(&details.exception_type),
         };
-        match named {
-            Some(Object::Class(class)) => {
-                crate::vm::method_invocation::descends_from(&class, ancestor)
+        match named.view() {
+            Some(View::Class(class)) => {
+                crate::vm::method_invocation::descends_from(class, ancestor)
             }
             _ => details.exception_type == ancestor,
         }
@@ -896,13 +913,14 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<String, MetorexError> {
         if self.responds_to(&held, "to_str")
-            && let Object::String(text) =
-                self.send_to_object(held.clone(), "to_str", vec![], position)?
+            && let View::String(text) = self
+                .send_to_object(held.clone(), "to_str", vec![], position)?
+                .view()
         {
             return Ok(text.as_str().to_string());
         }
-        match self.send_to_object(held, "to_s", vec![], position)? {
-            Object::String(text) => Ok(text.as_str().to_string()),
+        match self.send_to_object(held, "to_s", vec![], position)?.view() {
+            View::String(text) => Ok(text.as_str().to_string()),
             other => Ok(other.to_string()),
         }
     }
@@ -960,7 +978,7 @@ pub(crate) const NATIVE_EXCEPTION_METHODS: &[&str] = &[
 
 /// One keyword argument from a trailing keyword Hash, when the call had one.
 fn keyword_argument(arguments: &[Object], name: &str) -> Option<Object> {
-    let Some(Object::Dict(entries)) = arguments.last() else {
+    let Some(View::Dict(entries)) = arguments.last().view() else {
         return None;
     };
     entries.borrow().get(&format!(":{}", name)).cloned()

@@ -38,7 +38,9 @@ the memory management decision's.
 `prototypes/values` runs one stack interpreter over both values: the same
 instructions, the same frames, and the same object body, a reference-counted
 vector of slots, so the value is the only difference. The `Object` side uses
-`metorex::object::Object` itself. Its kernels are the inner loops of
+a copy of the enum `Object` was before it became the tagged value: its
+numeric and Array variants, and its Range variant, which gave it its 32
+bytes. Its kernels are the inner loops of
 ruby-bench benchmarks, written in the prototype's instructions.
 
 ```sh
@@ -102,12 +104,26 @@ The handle table also keeps every object a C extension was ever handed until
 the extension releases it. Under the tagged value, what keeps such an object
 alive is the memory management decision's.
 
-## How it lands
+## In Metorex
 
-`Object` is used through its variants 6,990 times in 387 files under `src/`.
-The change is one step in the Groundwork section of `ROADMAP.md`, before the
-instruction set: `Object` becomes the 8-byte value, and code that matches on
-it matches on `object.view()`, an enum of the value's parts borrowed from it,
-which is never stored. Constructors such as `Object::Int(number)` become
-functions such as `Object::int(number)`. The instruction set, the frames,
-and the C API are written against the 8-byte value from the start.
+`Object`, in `src/object/types.rs`, is the 8-byte value described above.
+
+- Code reads a value by matching on `object.view()`, a `View` of the value's
+  parts borrowed from it. `View`'s variants have the names `Object`'s
+  variants had, and the functions that make a value have them too, so
+  `Object::Int(number)` makes an Integer as it did before.
+- A heap value points at a `Body` held by an `Rc`. The `Body` holds the
+  part's own `Rc`, such as the `Rc<Class>` or `Rc<RefCell<Vec<Object>>>`
+  that code across `src/` keeps and shares, so a heap value takes two
+  allocations. The memory management decision gives each object a header of
+  its own, which removes the second.
+- Copies of a value share one `Body`, so the count of a part's `Rc` does not
+  count them. `Object::references` counts the copies and every other holder
+  of the part. The C API's collection reads it to tell whether anything
+  besides the handle table reaches a Data object, and a Hash reads it before
+  writing in place to the record of its key objects that its copies share.
+- A Symbol is its id over the tag `0x0c`. The id indexes a table of names
+  kept for each thread, and a name stays in the table for the life of the
+  thread, where CRuby frees a Symbol made at runtime once nothing refers to
+  it.
+- An Integer that fits in an i64 and not in 63 bits is held on the heap.

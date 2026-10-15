@@ -1,6 +1,7 @@
 // The Math module, and the Float each of its functions reads.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The Math module's functions. Each takes its arguments as Floats, which
@@ -10,7 +11,7 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let Some(Object::Symbol(name) | Object::String(name)) = arguments.first() else {
+        let Some(View::Symbol(name) | View::String(name)) = arguments.first().view() else {
             return Err(MetorexError::runtime_error(
                 "__math_function__ expects the function name first",
                 crate::vm::utils::position_to_location(position),
@@ -22,19 +23,19 @@ impl VirtualMachine {
             // `ldexp` scales by a whole number of powers of two, so its second
             // argument is read the way `Integer()` reads one.
             if name == "ldexp" && index == 1 {
-                let exponent = match argument {
-                    Object::Float(number) => *number,
-                    other => self
-                        .integer_class_method("try_convert", other, position)
+                let exponent = match argument.view() {
+                    View::Float(number) => number,
+                    _ => self
+                        .integer_class_method("try_convert", argument, position)
                         .ok()
-                        .and_then(|converted| match converted {
-                            Object::Int(number) => Some(number as f64),
+                        .and_then(|converted| match converted.view() {
+                            View::Int(number) => Some(number as f64),
                             _ => None,
                         })
                         .ok_or_else(|| {
                             let message = format!(
                                 "can't convert {} into Integer",
-                                self.builtins().class_of(other).name()
+                                self.builtins().class_of(argument).name()
                             );
                             MetorexError::UncaughtException {
                                 exception: Object::exception("TypeError", message.clone()),
@@ -251,16 +252,20 @@ impl VirtualMachine {
     /// A Math argument as a Float. Ruby reads it the way `Float()` does, so a
     /// String or an object that is not a number is refused.
     fn math_argument(&mut self, value: &Object, position: Position) -> Result<f64, MetorexError> {
-        match value {
-            Object::Int(number) => Ok(*number as f64),
-            Object::BigInt(number) => Ok(crate::vm::operators::big_to_float(number)),
-            Object::Float(number) => Ok(*number),
+        match value.view() {
+            View::Int(number) => Ok(number as f64),
+            View::BigInt(number) => Ok(crate::vm::operators::big_to_float(number)),
+            View::Float(number) => Ok(number),
             other => {
                 let message = format!(
                     "can't convert {} into Float",
                     match other {
-                        Object::Nil => "nil".to_string(),
-                        _ => self.builtins().class_of(other).name().to_string(),
+                        View::Nil => "nil".to_string(),
+                        _ => self
+                            .builtins()
+                            .class_of(&other.to_object())
+                            .name()
+                            .to_string(),
                     }
                 );
                 let refuse = MetorexError::UncaughtException {
@@ -270,14 +275,17 @@ impl VirtualMachine {
                 };
                 // Only a number answers `to_f` here: a String has one too, and
                 // Ruby refuses it all the same.
-                let numeric = matches!(other, Object::Instance(instance)
+                let numeric = matches!(other, View::Instance(instance)
                     if crate::vm::method_invocation::descends_from(&instance.borrow().class, "Numeric"));
                 if !numeric {
                     return Err(refuse);
                 }
-                match self.send_to_object(other.clone(), "to_f", vec![], position)? {
-                    Object::Float(number) => Ok(number),
-                    Object::Int(number) => Ok(number as f64),
+                match self
+                    .send_to_object(other.to_object(), "to_f", vec![], position)?
+                    .view()
+                {
+                    View::Float(number) => Ok(number),
+                    View::Int(number) => Ok(number as f64),
                     _ => Err(refuse),
                 }
             }
@@ -350,8 +358,8 @@ pub(crate) fn split_float(value: f64) -> (f64, i64) {
 /// cannot hold: the bit length gives the whole part and the leading bits the
 /// fraction, so `Math.log2(2 ** 10001)` is 10001.0 rather than an infinity.
 pub(crate) fn exact_log2(value: &Object) -> Option<f64> {
-    let value = match value {
-        Object::BigInt(number) => (*number).clone(),
+    let value = match value.view() {
+        View::BigInt(number) => (*number).clone(),
         _ => return None,
     };
     if *value <= num_bigint::BigInt::from(0) {

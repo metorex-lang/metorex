@@ -5,6 +5,7 @@
 
 use crate::error::MetorexError;
 use crate::lexer::Position;
+use crate::object::View;
 use crate::object::{Object, StringValue};
 use crate::vm::VirtualMachine;
 use crate::vm::errors::*;
@@ -33,12 +34,12 @@ impl VirtualMachine {
         let units = crate::vm::native_methods::string_methods::character_units(target);
         let letters = units.len() as i64;
         let (start, width, value) = match arguments {
-            [pattern @ Object::Regex(..), value] => {
+            [pattern, value] if matches!(pattern.view(), View::Regex(..)) => {
                 let (start, width) =
                     self.matched_group_span(receiver, pattern, &Object::Int(0), position)?;
                 (start, width, value)
             }
-            [pattern @ Object::Regex(..), group, value] => {
+            [pattern, group, value] if matches!(pattern.view(), View::Regex(..)) => {
                 let (start, width) = self.matched_group_span(receiver, pattern, group, position)?;
                 (start, width, value)
             }
@@ -47,7 +48,7 @@ impl VirtualMachine {
                 let count = self.coerce_slice_number(count, METHOD_NAME, position)?;
                 (index, count, value)
             }
-            [Object::String(wanted), value] => {
+            [wanted, value] if let View::String(wanted) = wanted.view() => {
                 let wanted = wanted.to_text();
                 let Some(byte_offset) = held.find(&wanted) else {
                     return Err(index_error("string not matched", position));
@@ -124,15 +125,16 @@ impl VirtualMachine {
     ) -> Result<(i64, i64), MetorexError> {
         let matched =
             self.send_to_object(pattern.clone(), "match", vec![receiver.clone()], position)?;
-        if matches!(matched, Object::Nil) {
+        if matches!(matched.view(), View::Nil) {
             return Err(index_error("regexp not matched", position));
         }
-        let group = match group {
-            Object::String(_) | Object::Symbol(_) => group.clone(),
-            other => {
-                let mut nth = self.coerce_slice_number(other, METHOD_NAME, position)?;
-                let Object::Int(groups) =
-                    self.send_to_object(matched.clone(), "size", vec![], position)?
+        let group = match group.view() {
+            View::String(_) | View::Symbol(_) => group.clone(),
+            _ => {
+                let mut nth = self.coerce_slice_number(group, METHOD_NAME, position)?;
+                let View::Int(groups) = self
+                    .send_to_object(matched.clone(), "size", vec![], position)?
+                    .view()
                 else {
                     unreachable!("MatchData#size answers an Integer")
                 };
@@ -146,13 +148,16 @@ impl VirtualMachine {
             }
         };
         let begin = self.send_to_object(matched.clone(), "begin", vec![group.clone()], position)?;
-        let Object::Int(begin) = begin else {
+        let View::Int(begin) = begin.view() else {
             return Err(index_error(
                 &format!("regexp group {group} not matched"),
                 position,
             ));
         };
-        let Object::Int(end) = self.send_to_object(matched, "end", vec![group], position)? else {
+        let View::Int(end) = self
+            .send_to_object(matched, "end", vec![group], position)?
+            .view()
+        else {
             unreachable!("a group that begins also ends")
         };
         Ok((begin, end - begin))
@@ -167,31 +172,30 @@ impl VirtualMachine {
         letters: i64,
         position: Position,
     ) -> Result<(i64, i64), MetorexError> {
-        let Object::Range {
+        let View::Range {
             start,
             end,
             exclusive,
             ..
-        } = range
+        } = range.view()
         else {
             unreachable!("as_range answers only a Range")
         };
-        let mut first = match start.as_ref() {
-            Object::Nil => 0,
-            other => self.coerce_slice_number(other, METHOD_NAME, position)?,
+        let mut first = match start.view() {
+            View::Nil => 0,
+            _ => self.coerce_slice_number(start, METHOD_NAME, position)?,
         };
         // An endless range runs through the last character.
-        let (mut last, exclusive) = match end.as_ref() {
-            Object::Nil => (-1, false),
-            other => (
-                self.coerce_slice_number(other, METHOD_NAME, position)?,
-                *exclusive,
+        let (mut last, exclusive) = match end.view() {
+            View::Nil => (-1, false),
+            _ => (
+                self.coerce_slice_number(end, METHOD_NAME, position)?,
+                exclusive,
             ),
         };
         let out_of_range = |vm: &mut Self| -> Result<MetorexError, MetorexError> {
-            let Object::String(spelled) =
-                vm.send_to_object(range.clone(), "inspect", vec![], position)?
-            else {
+            let inspected = vm.send_to_object(range.clone(), "inspect", vec![], position)?;
+            let View::String(spelled) = inspected.view() else {
                 unreachable!("Range#inspect answers a String")
             };
             Ok(simple_exception(
@@ -226,14 +230,15 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<Rc<StringValue>, MetorexError> {
-        if let Object::String(text) = value {
+        if let View::String(text) = value.view() {
             return Ok(Rc::clone(text));
         }
         if self.responds_to(value, "to_str")
-            && let Object::String(text) =
-                self.send_to_object(value.clone(), "to_str", vec![], position)?
+            && let View::String(text) = self
+                .send_to_object(value.clone(), "to_str", vec![], position)?
+                .view()
         {
-            return Ok(text);
+            return Ok(text.clone());
         }
         let message = format!(
             "no implicit conversion of {} into String",

@@ -1,6 +1,7 @@
 // The halving search `bsearch` runs.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// Whether a value falls between the ends of a range, without walking it.
@@ -12,7 +13,7 @@ impl VirtualMachine {
         end: &Object,
         position: Position,
     ) -> Result<(), MetorexError> {
-        if matches!(start, Object::Nil) || matches!(end, Object::Nil) {
+        if matches!(start.view(), View::Nil) || matches!(end.view(), View::Nil) {
             return Ok(());
         }
         let order = self.evaluate_binary_operation(
@@ -21,7 +22,7 @@ impl VirtualMachine {
             end.clone(),
             position,
         )?;
-        if matches!(order, Object::Int(_)) {
+        if matches!(order.view(), View::Int(_)) {
             return Ok(());
         }
         Err(crate::vm::errors::simple_exception(
@@ -39,7 +40,7 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<bool, MetorexError> {
-        if !matches!(start, Object::Nil) {
+        if !matches!(start.view(), View::Nil) {
             // Ruby asks the start where the value stands, so a value that
             // knows how to coerce the start is asked to.
             let order = self.evaluate_binary_operation(
@@ -48,12 +49,12 @@ impl VirtualMachine {
                 value.clone(),
                 position,
             )?;
-            match order {
-                Object::Int(order) if order <= 0 => {}
+            match order.view() {
+                View::Int(order) if order <= 0 => {}
                 _ => return Ok(false),
             }
         }
-        if matches!(end, Object::Nil) {
+        if matches!(end.view(), View::Nil) {
             return Ok(true);
         }
         let order = self.evaluate_binary_operation(
@@ -62,9 +63,9 @@ impl VirtualMachine {
             end.clone(),
             position,
         )?;
-        Ok(match order {
-            Object::Int(order) if exclusive => order < 0,
-            Object::Int(order) => order <= 0,
+        Ok(match order.view() {
+            View::Int(order) if exclusive => order < 0,
+            View::Int(order) => order <= 0,
             _ => false,
         })
     }
@@ -77,7 +78,7 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<bool, MetorexError> {
-        if matches!(end, Object::Nil) || matches!(value, Object::Nil) {
+        if matches!(end.view(), View::Nil) || matches!(value.view(), View::Nil) {
             return Ok(false);
         }
         let order = self.evaluate_binary_operation(
@@ -86,9 +87,9 @@ impl VirtualMachine {
             value.clone(),
             position,
         )?;
-        Ok(match order {
-            Object::Int(order) if exclusive => order <= 0,
-            Object::Int(order) => order < 0,
+        Ok(match order.view() {
+            View::Int(order) if exclusive => order <= 0,
+            View::Int(order) => order < 0,
             _ => false,
         })
     }
@@ -226,18 +227,18 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<SearchAnswer, MetorexError> {
         let answer = self.execute_block_callable(block, vec![element.clone()], position)?;
-        Ok(match answer {
-            Object::Bool(true) => SearchAnswer {
+        Ok(match answer.view() {
+            View::Bool(true) => SearchAnswer {
                 smaller: true,
                 settled: None,
                 satisfied: true,
             },
-            Object::Bool(false) | Object::Nil => SearchAnswer {
+            View::Bool(false) | View::Nil => SearchAnswer {
                 smaller: false,
                 settled: None,
                 satisfied: false,
             },
-            Object::Int(number) => {
+            View::Int(number) => {
                 if number == 0 {
                     SearchAnswer {
                         smaller: false,
@@ -252,7 +253,7 @@ impl VirtualMachine {
                     }
                 }
             }
-            Object::Float(number) => {
+            View::Float(number) => {
                 if number == 0.0 {
                     SearchAnswer {
                         smaller: false,
@@ -267,10 +268,10 @@ impl VirtualMachine {
                     }
                 }
             }
-            other => {
+            _ => {
                 let message = format!(
                     "wrong argument type {} (must be numeric, true, false or nil)",
-                    self.builtins().class_of(&other).name()
+                    self.builtins().class_of(&answer).name()
                 );
                 return Err(crate::vm::errors::simple_exception(
                     "TypeError",
@@ -285,20 +286,20 @@ impl VirtualMachine {
 /// The first whole value at or above a numeric range's start, which is what
 /// counting one begins from.
 pub(crate) fn numeric_floor(value: &Object) -> Option<i64> {
-    match value {
-        Object::Int(number) => Some(*number),
-        Object::BigInt(number) => i64::try_from(number.as_ref()).ok(),
-        Object::Float(number) => Some(number.ceil() as i64),
+    match value.view() {
+        View::Int(number) => Some(number),
+        View::BigInt(number) => i64::try_from(number.as_ref()).ok(),
+        View::Float(number) => Some(number.ceil() as i64),
         _ => None,
     }
 }
 
 /// The last whole value at or below a numeric range's end.
 pub(crate) fn numeric_ceiling(value: &Object) -> Option<i64> {
-    match value {
-        Object::Int(number) => Some(*number),
-        Object::BigInt(number) => i64::try_from(number.as_ref()).ok(),
-        Object::Float(number) => Some(number.floor() as i64),
+    match value.view() {
+        View::Int(number) => Some(number),
+        View::BigInt(number) => i64::try_from(number.as_ref()).ok(),
+        View::Float(number) => Some(number.floor() as i64),
         _ => None,
     }
 }
@@ -306,9 +307,9 @@ pub(crate) fn numeric_ceiling(value: &Object) -> Option<i64> {
 /// Whether an end is a whole number, which decides whether an exclusive range
 /// loses its last value.
 pub(crate) fn end_is_whole(value: &Object) -> bool {
-    match value {
-        Object::Int(_) | Object::BigInt(_) => true,
-        Object::Float(number) => number.fract() == 0.0,
+    match value.view() {
+        View::Int(_) | View::BigInt(_) => true,
+        View::Float(number) => number.fract() == 0.0,
         _ => false,
     }
 }
@@ -316,9 +317,9 @@ pub(crate) fn end_is_whole(value: &Object) -> bool {
 /// Ruby treats a range end as numeric when it is an Integer, a Float, or one
 /// of the Numeric classes the prelude defines as instances.
 pub(crate) fn counts_as_a_number(held: &Object) -> bool {
-    match held {
-        Object::Int(_) | Object::BigInt(_) | Object::Float(_) => true,
-        Object::Instance(instance) => {
+    match held.view() {
+        View::Int(_) | View::BigInt(_) | View::Float(_) => true,
+        View::Instance(instance) => {
             matches!(instance.borrow().class.name(), "Complex" | "Rational")
         }
         _ => false,
@@ -360,25 +361,25 @@ impl SearchBounds {
         position: Position,
     ) -> Result<Self, MetorexError> {
         let refuse = |held: &Object| {
-            let named = match held {
-                Object::String(_) => "String",
-                Object::Symbol(_) => "Symbol",
-                Object::Instance(instance) => {
+            let named = match held.view() {
+                View::String(_) => "String",
+                View::Symbol(_) => "Symbol",
+                View::Instance(instance) => {
                     return refuse_binary_search(instance.borrow().class.name(), position);
                 }
                 other => other.type_name(),
             };
             refuse_binary_search(named, position)
         };
-        let whole_of = |held: &Object| match held {
-            Object::Nil => Ok(None),
-            Object::Int(number) => Ok(Some(Some(*number))),
+        let whole_of = |held: &Object| match held.view() {
+            View::Nil => Ok(None),
+            View::Int(number) => Ok(Some(Some(number))),
             _ => Err(()),
         };
-        let fraction_of = |held: &Object| match held {
-            Object::Nil => Ok(None),
-            Object::Int(number) => Ok(Some(*number as f64)),
-            Object::Float(number) => Ok(Some(*number)),
+        let fraction_of = |held: &Object| match held.view() {
+            View::Nil => Ok(None),
+            View::Int(number) => Ok(Some(number as f64)),
+            View::Float(number) => Ok(Some(number)),
             _ => Err(()),
         };
         if let (Ok(low), Ok(high)) = (whole_of(start), whole_of(end)) {

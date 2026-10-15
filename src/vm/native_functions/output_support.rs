@@ -1,6 +1,7 @@
 // Writing one value out, and the streams a write goes to.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// What a command wrote, as a String in the encoding this process reads
@@ -9,8 +10,12 @@ impl VirtualMachine {
         let held = self.globals().get("__Encoding_default_external");
         let named = match held {
             Some(setting) => {
-                match self.send_to_object(setting, "name", Vec::new(), Position::default()) {
-                    Ok(Object::String(text)) => text.as_str().to_string(),
+                match self
+                    .send_to_object(setting, "name", Vec::new(), Position::default())
+                    .as_ref()
+                    .map(Object::view)
+                {
+                    Ok(View::String(text)) => text.as_str().to_string(),
                     _ => "UTF-8".to_string(),
                 }
             }
@@ -34,7 +39,7 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<(), MetorexError> {
-        if let Object::Array(elements) = value {
+        if let View::Array(elements) = value.view() {
             let elements = elements.borrow().clone();
             // An empty Array still writes a line, as `puts []` does.
             if elements.is_empty() {
@@ -72,11 +77,11 @@ impl VirtualMachine {
     /// which is what both `caller_locations` and
     /// `Exception#backtrace_locations` hand out.
     pub(crate) fn backtrace_location_class(&mut self) -> std::rc::Rc<crate::class::Class> {
-        if let Some(Object::Class(thread)) = self.globals().get("Thread")
-            && let Some(Object::Class(backtrace)) = thread.get_class_var("Backtrace")
-            && let Some(Object::Class(location)) = backtrace.get_class_var("Location")
+        if let Some(View::Class(thread)) = self.globals().get("Thread").view()
+            && let Some(View::Class(backtrace)) = thread.get_class_var("Backtrace").view()
+            && let Some(View::Class(location)) = backtrace.get_class_var("Location").view()
         {
-            return location;
+            return location.clone();
         }
         crate::class::Class::new("Thread::Backtrace::Location", None)
     }
@@ -105,7 +110,7 @@ impl VirtualMachine {
         }
         // A stream reassigned to a File handle answers `write` natively, with
         // no entry in a method table to find.
-        if let Object::Instance(_) = &target {
+        if let View::Instance(_) = target.view() {
             let argument = Object::string(text.to_string());
             let class = self.builtins().class_of(&target);
             if self

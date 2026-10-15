@@ -2,6 +2,7 @@
 // encodings can be read together.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// The encoding a setting was given. A name is looked up, and anything
@@ -14,16 +15,16 @@ impl VirtualMachine {
     ) -> Result<Object, MetorexError> {
         // An Encoding stands for itself, and so does nil. Anything else is a
         // name, which an object of the program's own spells through `to_str`.
-        let named = match value {
-            Object::String(_) => value.clone(),
-            Object::Nil | Object::Class(_) | Object::Module(_) => return Ok(value.clone()),
-            other if self.responds_to(other, "to_str") => {
-                Object::string(self.coerce_name_argument(other, position)?)
+        let named = match value.view() {
+            View::String(_) => value.clone(),
+            View::Nil | View::Class(_) | View::Module(_) => return Ok(value.clone()),
+            _ if self.responds_to(value, "to_str") => {
+                Object::string(self.coerce_name_argument(value, position)?)
             }
-            other => {
+            _ => {
                 let message = format!(
                     "no implicit conversion of {} into String",
-                    crate::vm::errors::conversion_subject(other)
+                    crate::vm::errors::conversion_subject(value)
                 );
                 return Err(crate::vm::errors::simple_exception(
                     "TypeError",
@@ -72,8 +73,8 @@ impl VirtualMachine {
         }
         let first_text = as_encoded_text(first);
         let second_text = as_encoded_text(second);
-        let first_is_string = matches!(first, Object::String(_));
-        let second_is_string = matches!(second, Object::String(_));
+        let first_is_string = matches!(first.view(), View::String(_));
+        let second_is_string = matches!(second.view(), View::String(_));
         if let Some(text) = &second_text
             && second_is_string
             && text.as_str().is_empty()
@@ -115,7 +116,7 @@ impl VirtualMachine {
         } else {
             (second, first, second_encoding, first_encoding, false)
         };
-        if !matches!(left, Object::String(_)) {
+        if !matches!(left.view(), View::String(_)) {
             return None;
         }
         let left_ascii = holds_only_ascii(left);
@@ -145,17 +146,17 @@ impl VirtualMachine {
 
     /// The encoding an object reports, or None for one that carries none.
     pub(crate) fn encoding_name_of(&mut self, value: &Object) -> Option<String> {
-        match value {
-            Object::String(text) => Some(text.encoding_name()),
+        match value.view() {
+            View::String(text) => Some(text.encoding_name()),
             // A symbol named in ASCII is written in ASCII, whatever the
             // source naming it was written in.
-            Object::Symbol(text) => Some(if text.as_str().is_ascii() {
+            View::Symbol(text) => Some(if text.as_str().is_ascii() {
                 "US-ASCII".to_string()
             } else {
                 text.encoding_name()
             }),
-            Object::Regex(pattern, flags) => Some(self.pattern_encoding_name(pattern, flags)),
-            Object::Class(class_rc)
+            View::Regex(pattern, flags) => Some(self.pattern_encoding_name(pattern, flags)),
+            View::Class(class_rc)
                 if class_rc
                     .superclass()
                     .is_some_and(|parent| parent.name() == "Encoding") =>
@@ -270,8 +271,8 @@ impl VirtualMachine {
 /// The text behind a String or a Symbol, which is what an encoding
 /// negotiation reads.
 fn as_encoded_text(value: &Object) -> Option<Rc<crate::object::StringValue>> {
-    match value {
-        Object::String(text) | Object::Symbol(text) => Some(Rc::clone(text)),
+    match value.view() {
+        View::String(text) | View::Symbol(text) => Some(Rc::clone(text)),
         _ => None,
     }
 }

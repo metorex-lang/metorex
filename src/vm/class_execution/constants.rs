@@ -2,6 +2,7 @@
 // was written in outwards.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Whether an unqualified constant may fall through to the top level.
@@ -53,8 +54,8 @@ impl VirtualMachine {
             let head = parts.next()?;
             let mut current = self.resolve_constant_in_scope(head)?;
             for part in parts {
-                let class_rc = match &current {
-                    Object::Class(c) | Object::Module(c) => Rc::clone(c),
+                let class_rc = match current.view() {
+                    View::Class(c) | View::Module(c) => Rc::clone(c),
                     _ => return None,
                 };
                 current = class_rc.get_class_var(part)?;
@@ -102,8 +103,8 @@ impl VirtualMachine {
                 None => return Ok(None),
             };
             for part in parts {
-                let class_rc = match &current {
-                    Object::Class(c) | Object::Module(c) => Rc::clone(c),
+                let class_rc = match current.view() {
+                    View::Class(c) | View::Module(c) => Rc::clone(c),
                     _ => return Ok(None),
                 };
                 if let Some(v) = class_rc.get_class_var(part) {
@@ -123,8 +124,8 @@ impl VirtualMachine {
         // does, is loaded now, innermost module first.
         let mut scopes: Vec<Rc<crate::class::Class>> =
             self.def_scope_stack.iter().rev().cloned().collect();
-        if let Some(Object::Class(object)) = self.globals().get("Object") {
-            scopes.push(object);
+        if let Some(View::Class(object)) = self.globals().get("Object").view() {
+            scopes.push(object.clone());
         }
         for scope in scopes {
             if scope.lookup_autoload(name).is_some()
@@ -146,8 +147,8 @@ impl VirtualMachine {
             .get(head)
             .or_else(|| self.globals().get(head))?;
         for part in parts {
-            let class_rc = match &current {
-                Object::Class(c) | Object::Module(c) => Rc::clone(c),
+            let class_rc = match current.view() {
+                View::Class(c) | View::Module(c) => Rc::clone(c),
                 _ => return None,
             };
             current = class_rc.get_class_var(part)?;

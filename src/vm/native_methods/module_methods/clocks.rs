@@ -1,6 +1,7 @@
 // What a clock reads, and the limits a resource carries.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// What a clock reads, in nanoseconds. A clock is named by the number the
@@ -10,7 +11,7 @@ impl VirtualMachine {
         clock: &Object,
         position: Position,
     ) -> Result<f64, MetorexError> {
-        let Object::Int(number) = clock else {
+        let View::Int(number) = clock.view() else {
             return Err(crate::vm::errors::simple_exception(
                 "ArgumentError",
                 &format!("unexpected clock: {}", clock.type_name()),
@@ -22,7 +23,7 @@ impl VirtualMachine {
             tv_nsec: 0,
         };
         // SAFETY: `clock_gettime` only writes through the pointer given.
-        if unsafe { libc::clock_gettime(*number as libc::clockid_t, &mut held) } != 0 {
+        if unsafe { libc::clock_gettime(number as libc::clockid_t, &mut held) } != 0 {
             return Err(crate::vm::errors::simple_exception(
                 "Errno::EINVAL",
                 "Invalid argument - clock_gettime",
@@ -40,7 +41,7 @@ impl VirtualMachine {
         clock: &Object,
         position: Position,
     ) -> Result<f64, MetorexError> {
-        if let Object::Symbol(named) = clock {
+        if let View::Symbol(named) = clock.view() {
             return Ok(match &*named.as_str() {
                 "GETTIMEOFDAY_BASED_CLOCK_REALTIME"
                 | "GETRUSAGE_BASED_CLOCK_PROCESS_CPUTIME_ID" => 1_000.0,
@@ -55,7 +56,7 @@ impl VirtualMachine {
                 }
             });
         }
-        let Object::Int(number) = clock else {
+        let View::Int(number) = clock.view() else {
             return Err(crate::vm::errors::simple_exception(
                 "ArgumentError",
                 &format!("unexpected clock: {}", clock.type_name()),
@@ -67,7 +68,7 @@ impl VirtualMachine {
             tv_nsec: 0,
         };
         // SAFETY: `clock_getres` only writes through the pointer given.
-        if unsafe { libc::clock_getres(*number as libc::clockid_t, &mut held) } != 0 {
+        if unsafe { libc::clock_getres(number as libc::clockid_t, &mut held) } != 0 {
             return Err(crate::vm::errors::simple_exception(
                 "Errno::EINVAL",
                 "Invalid argument - clock_getres",
@@ -85,13 +86,16 @@ impl VirtualMachine {
         argument: Option<&Object>,
         position: Position,
     ) -> Result<crate::vm::RlimitResource, MetorexError> {
-        let named = match argument {
-            Some(Object::Int(number)) => return Ok(*number as crate::vm::RlimitResource),
-            Some(Object::Symbol(name)) => Some(name.as_str().to_string()),
-            Some(Object::String(name)) => Some(name.as_str().to_string()),
-            Some(other) if self.answers_to(other, "to_str", position)? => {
-                match self.send_to_object(other.clone(), "to_str", vec![], position)? {
-                    Object::String(name) => Some(name.as_str().to_string()),
+        let named = match argument.view() {
+            Some(View::Int(number)) => return Ok(number as crate::vm::RlimitResource),
+            Some(View::Symbol(name)) => Some(name.as_str().to_string()),
+            Some(View::String(name)) => Some(name.as_str().to_string()),
+            Some(other) if self.answers_to(&other.to_object(), "to_str", position)? => {
+                match self
+                    .send_to_object(other.to_object(), "to_str", vec![], position)?
+                    .view()
+                {
+                    View::String(name) => Some(name.as_str().to_string()),
                     _ => None,
                 }
             }
@@ -120,18 +124,27 @@ impl VirtualMachine {
         argument: Option<&Object>,
         position: Position,
     ) -> Result<libc::rlim_t, MetorexError> {
-        match argument {
-            Some(Object::Int(number)) => Ok(*number as libc::rlim_t),
-            Some(other) if self.answers_to(other, "to_int", position)? => {
-                match self.send_to_object(other.clone(), "to_int", vec![], position)? {
-                    Object::Int(number) => Ok(number as libc::rlim_t),
+        match argument.view() {
+            Some(View::Int(number)) => Ok(number as libc::rlim_t),
+            Some(other) if self.answers_to(&other.to_object(), "to_int", position)? => {
+                match self
+                    .send_to_object(other.to_object(), "to_int", vec![], position)?
+                    .view()
+                {
+                    View::Int(number) => Ok(number as libc::rlim_t),
                     converted => Err(method_argument_type_error(
-                        "Process", "Integer", &converted, position,
+                        "Process",
+                        "Integer",
+                        &converted.to_object(),
+                        position,
                     )),
                 }
             }
             Some(other) => Err(method_argument_type_error(
-                "Process", "Integer", other, position,
+                "Process",
+                "Integer",
+                &other.to_object(),
+                position,
             )),
             None => Err(method_argument_error("setrlimit", 2, 1, position)),
         }

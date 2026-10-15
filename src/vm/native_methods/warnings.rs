@@ -1,6 +1,7 @@
 // Writing a warning out, and the name a refusal calls a value by.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Emit a warning line. If `$stderr` has been reassigned to an object that
@@ -10,7 +11,7 @@ impl VirtualMachine {
     /// Write the warnings reading `named` gave, each with its line, unless
     /// `-W0` turned warnings off.
     pub fn report_parse_warnings(&mut self, named: &str, warnings: &[(Position, String)]) {
-        if matches!(self.globals().get("VERBOSE"), Some(Object::Nil)) {
+        if matches!(self.globals().get("VERBOSE").view(), Some(View::Nil)) {
             return;
         }
         for (at, warning) in warnings {
@@ -27,8 +28,8 @@ impl VirtualMachine {
         }
         let stderr_obj = self.globals().get("stderr");
         let placeholder = matches!(
-            &stderr_obj,
-            Some(Object::String(s)) if *s.as_str() == *"$stderr"
+            stderr_obj.view(),
+            Some(View::String(s)) if *s.as_str() == *"$stderr"
         );
         if !placeholder && let Some(obj) = stderr_obj {
             let line = format!("{}\n", msg);
@@ -46,11 +47,11 @@ impl VirtualMachine {
     /// The name a conversion error calls a value by. Ruby names `nil`,
     /// `true` and `false` outright, and everything else by its class.
     pub(crate) fn conversion_name(&self, value: &Object) -> String {
-        match value {
-            Object::Nil => "nil".to_string(),
-            Object::Bool(true) => "true".to_string(),
-            Object::Bool(false) => "false".to_string(),
-            other => self.builtins().class_of(other).name().to_string(),
+        match value.view() {
+            View::Nil => "nil".to_string(),
+            View::Bool(true) => "true".to_string(),
+            View::Bool(false) => "false".to_string(),
+            _ => self.builtins().class_of(value).name().to_string(),
         }
     }
 
@@ -66,21 +67,21 @@ impl VirtualMachine {
         caller: &str,
         position: Position,
     ) -> Result<String, MetorexError> {
-        match arg {
+        match arg.view() {
             // A name spelled with bytes that are no characters names no
             // method, as no Symbol could be made of it.
-            Object::String(s) => {
+            View::String(s) => {
                 self.interned_symbol(s, position)?;
                 Ok(name_text(s))
             }
-            Object::Symbol(s) => Ok(s.as_str().to_string()),
+            View::Symbol(s) => Ok(s.as_str().to_string()),
             _ => {
                 if let Some((cls, m)) = self.lookup_method(arg, "to_str")
                     && !m.is_undefined
                 {
                     let result = self.invoke_method(cls, m, arg.clone(), vec![], position)?;
-                    if let Object::String(s) = result {
-                        self.interned_symbol(&s, position)?;
+                    if let View::String(s) = result.view() {
+                        self.interned_symbol(s, position)?;
                         return Ok(s.as_str().to_string());
                     }
                     let source_class = self.builtins().class_of(arg).name().to_string();
@@ -95,8 +96,8 @@ impl VirtualMachine {
                 }
                 let msg = format!(
                     "{} is not a symbol nor a string",
-                    match arg {
-                        Object::Instance(inst) => format!("#<{}>", inst.borrow().class.name()),
+                    match arg.view() {
+                        View::Instance(inst) => format!("#<{}>", inst.borrow().class.name()),
                         _ => arg.to_string(),
                     }
                 );

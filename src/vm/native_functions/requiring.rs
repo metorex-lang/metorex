@@ -1,6 +1,7 @@
 // Loading a feature by name.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// What `$LOAD_PATH.resolve_feature_path` answers: the kind of file a
@@ -277,9 +278,9 @@ impl VirtualMachine {
         // left in it, names the same file as the path it expands to,
         // which is what decides whether the file is loaded already.
         let standing_for = expanded_feature_path(&resolved);
-        let was_already_loaded = match self.globals().get("\"") {
-            Some(Object::Array(features)) => features.borrow().iter().any(|feature| {
-                let Object::String(name) = feature else {
+        let was_already_loaded = match self.globals().get("\"").view() {
+            Some(View::Array(features)) => features.borrow().iter().any(|feature| {
+                let View::String(name) = feature.view() else {
                     return false;
                 };
                 *name.as_str() == *canonical_str
@@ -296,8 +297,9 @@ impl VirtualMachine {
         if names_a_native_extension(&resolved) {
             self.mark_file_loaded(canonical_path.clone());
             let listed = standing_for.to_string_lossy().into_owned();
-            let features = match self.globals().get("\"") {
-                Some(Object::Array(features)) => Some(features),
+            let viewed = self.globals().get("\"");
+            let features = match viewed.view() {
+                Some(View::Array(features)) => Some(features),
                 _ => None,
             };
             if let Some(features) = &features {
@@ -307,7 +309,7 @@ impl VirtualMachine {
                 self.unmark_file_loaded(&canonical_path);
                 if let Some(features) = &features {
                     features.borrow_mut().retain(
-                        |feature| !matches!(feature, Object::String(held) if *held.as_str() == *listed),
+                        |feature| !matches!(feature.view(), View::String(held) if *held.as_str() == *listed),
                     );
                 }
                 return Err(error);
@@ -435,9 +437,9 @@ impl VirtualMachine {
         let listed = crate::vm::loading::without_dot_components(&actual_path)
             .display()
             .to_string();
-        let was_already_loaded = match self.globals().get("\"") {
-            Some(Object::Array(features)) => features.borrow().iter().any(
-                |feature| matches!(feature, Object::String(name) if *name.as_str() == *listed),
+        let was_already_loaded = match self.globals().get("\"").view() {
+            Some(View::Array(features)) => features.borrow().iter().any(
+                |feature| matches!(feature.view(), View::String(name) if *name.as_str() == *listed),
             ),
             _ => self.is_file_loaded(&canonical_path),
         };

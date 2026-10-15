@@ -1,6 +1,7 @@
 // What a refused class or method definition reports.
 
 use super::*;
+use metorex::object::{OptionView, View};
 // ══════════════════════════════════════════════════════════════════════════════
 // Native methods mod.rs - dispatch fallthrough (lines 160-162, 224)
 // ══════════════════════════════════════════════════════════════════════════════
@@ -78,7 +79,7 @@ B.ancestors.length
 "#);
     // B and A in ancestors
     assert!(result.is_some());
-    if let Some(Object::Int(n)) = result {
+    if let Some(View::Int(n)) = result.view() {
         assert!(n >= 2, "Expected at least 2 ancestors, got {}", n);
     }
 }
@@ -166,7 +167,7 @@ fn file_expand_path_non_string_base_errors() {
 #[test]
 fn file_expand_path_with_absolute_base() {
     let result = run(r#"File.expand_path("a.txt", "/tmp")"#);
-    if let Some(Object::String(s)) = result {
+    if let Some(View::String(s)) = result.view() {
         assert!(s.as_str().contains("a.txt"));
     } else {
         panic!("expected string, got {:?}", result);

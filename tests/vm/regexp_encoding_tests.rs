@@ -3,6 +3,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -218,8 +219,8 @@ fn warnings_from(code: &str) -> String {
     let wrapped = format!(
         "gathered = []\ncollector = Object.new\ncollector.define_singleton_method(:write) {{ |text| gathered << text }}\n$stderr = collector\n{code}\n$stderr = STDERR\ngathered.join"
     );
-    match run(&wrapped) {
-        Some(Object::String(written)) => written.as_str().to_string(),
+    match run(&wrapped).view() {
+        Some(View::String(written)) => written.as_str().to_string(),
         other => panic!("expected the warnings, got {other:?}"),
     }
 }

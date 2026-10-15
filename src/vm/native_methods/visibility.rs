@@ -1,6 +1,7 @@
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 use crate::vm::utils::position_to_location;
 use std::rc::Rc;
@@ -20,7 +21,7 @@ impl VirtualMachine {
             return Ok(Object::Nil);
         }
         let flat: Vec<Object> = if arguments.len() == 1 {
-            if let Object::Array(arr) = &arguments[0] {
+            if let View::Array(arr) = arguments[0].view() {
                 arr.borrow().clone()
             } else {
                 arguments.to_vec()
@@ -31,9 +32,9 @@ impl VirtualMachine {
         let mut names: Vec<String> = Vec::with_capacity(flat.len());
         let mut to_mark: Vec<String> = Vec::with_capacity(flat.len());
         for arg in &flat {
-            let n = match arg {
-                Object::Symbol(s) => s.as_str().to_string(),
-                Object::String(s) => s.as_str().to_string(),
+            let n = match arg.view() {
+                View::Symbol(s) => s.as_str().to_string(),
+                View::String(s) => s.as_str().to_string(),
                 _ => {
                     let exc = Object::exception(
                         "TypeError",
@@ -68,14 +69,14 @@ impl VirtualMachine {
             }
             if class_rc.find_method(&n).is_none() {
                 let on_object = matches!(
-                    self.globals().get("Object"),
-                    Some(Object::Class(object_class)) if object_class.find_method(&n).is_some()
+                    self.globals().get("Object").view(),
+                    Some(View::Class(object_class)) if object_class.find_method(&n).is_some()
                 );
                 // Kernel methods such as `puts` and `abort` are registered as
                 // global native functions rather than entries in Object's
                 // method table, so a visibility declaration naming one still
                 // has a method to talk about.
-                let on_kernel = matches!(self.globals().get(&n), Some(Object::NativeFunction(_)))
+                let on_kernel = matches!(self.globals().get(&n).view(), Some(View::NativeFunction(_)))
                     // Object's own methods are native rather than table
                     // entries, so `private :hash` names one that exists.
                     || crate::vm::native_methods::is_native_kernel_method(&n);
@@ -84,8 +85,8 @@ impl VirtualMachine {
                 // is the one specs redeclare, to make a class uninstantiable.
                 let on_metaclass = n == "new"
                     && matches!(
-                        class_rc.get_class_var("__attached__"),
-                        Some(Object::Class(_))
+                        class_rc.get_class_var("__attached__").view(),
+                        Some(View::Class(_))
                     );
                 if !on_object && !on_kernel && !on_metaclass {
                     let msg = format!("undefined method '{}' for class '{}'", n, class_rc.name());

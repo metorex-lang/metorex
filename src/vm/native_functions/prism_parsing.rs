@@ -2,6 +2,7 @@
 // functions prism's Ruby library is handed its serialized results by.
 
 use super::*;
+use crate::object::{OptionView, View};
 use std::os::raw::{c_char, c_int, c_void};
 
 type FgetsCallback = unsafe extern "C" fn(*mut c_char, c_int, *mut c_void) -> *mut c_char;
@@ -106,14 +107,19 @@ unsafe extern "C" fn read_stream_line(
         return std::ptr::null_mut();
     }
     let asked = Object::Int(i64::from(size - 1));
-    match reading.vm.send_to_object(
-        reading.stream.clone(),
-        "gets",
-        vec![asked],
-        reading.position,
-    ) {
-        Ok(Object::String(line)) => {
-            let bytes = crate::vm::native_methods::string_methods::binary_bytes(&line);
+    match reading
+        .vm
+        .send_to_object(
+            reading.stream.clone(),
+            "gets",
+            vec![asked],
+            reading.position,
+        )
+        .as_ref()
+        .map(Object::view)
+    {
+        Ok(View::String(line)) => {
+            let bytes = crate::vm::native_methods::string_methods::binary_bytes(line);
             let length = bytes.len().min(size as usize - 1);
             unsafe {
                 std::ptr::copy_nonoverlapping(bytes.as_ptr(), string.cast::<u8>(), length);
@@ -124,7 +130,7 @@ unsafe extern "C" fn read_stream_line(
         }
         Ok(_) => std::ptr::null_mut(),
         Err(error) => {
-            reading.error = Some(error);
+            reading.error = Some(error.clone());
             std::ptr::null_mut()
         }
     }
@@ -159,8 +165,8 @@ fn options_pointer(options: &[u8]) -> *const c_char {
 
 /// The bytes of a String argument.
 fn string_bytes(argument: Option<&Object>, position: Position) -> Result<Vec<u8>, MetorexError> {
-    match argument {
-        Some(Object::String(text)) => Ok(crate::vm::native_methods::string_methods::binary_bytes(
+    match argument.view() {
+        Some(View::String(text)) => Ok(crate::vm::native_methods::string_methods::binary_bytes(
             text,
         )),
         other => {
@@ -190,8 +196,8 @@ impl VirtualMachine {
             // `__prism_serialize__(kind, source, options)` answers what
             // Prism's serializer writes for one of its four readings.
             "__prism_serialize__" => {
-                let kind = match arguments.first() {
-                    Some(Object::Symbol(kind)) => kind.as_str().to_string(),
+                let kind = match arguments.first().view() {
+                    Some(View::Symbol(kind)) => kind.as_str().to_string(),
                     _ => String::new(),
                 };
                 let serialize = match kind.as_str() {
@@ -264,8 +270,8 @@ impl VirtualMachine {
             // `__prism_string_query__(kind, string, encoding_name)` answers 1
             // for true, 0 for false and -1 for an encoding Prism cannot read.
             "__prism_string_query__" => {
-                let query = match arguments.first() {
-                    Some(Object::Symbol(kind)) => match kind.as_str().as_ref() {
+                let query = match arguments.first().view() {
+                    Some(View::Symbol(kind)) => match kind.as_str().as_ref() {
                         "local" => pm_string_query_local,
                         "constant" => pm_string_query_constant,
                         _ => pm_string_query_method_name,
@@ -386,13 +392,15 @@ impl VirtualMachine {
                 Position::default(),
             )
             .ok()?;
-        let Object::Array(pair) = report else {
+        let View::Array(pair) = report.view() else {
             return None;
         };
         let pair = pair.borrow().clone();
         match pair.as_slice() {
-            [Object::String(class), Object::String(message)]
-                if &*class.as_str() == "SyntaxError" =>
+            [class, message]
+                if let (View::String(class), View::String(message)) =
+                    (class.view(), message.view())
+                    && &*class.as_str() == "SyntaxError" =>
             {
                 Some(message.as_str().to_string())
             }

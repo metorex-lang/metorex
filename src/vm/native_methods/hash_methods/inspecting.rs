@@ -1,6 +1,7 @@
 // What a hash and its entries read back as.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// One `key => value` entry as `inspect` shows it. A Symbol key reads as
@@ -12,7 +13,7 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<(String, String), MetorexError> {
         let (rendered_value, _) = self.rendered_with_encoding(value, position)?;
-        if let Object::Symbol(name) = key {
+        if let View::Symbol(name) = key.view() {
             let spelled = Object::String(Rc::clone(name));
             let (quoted, writing) = self.rendered_with_encoding(&spelled, position)?;
             // A symbol that is a plain name prints without quotes, as long as
@@ -50,8 +51,8 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<(String, String), MetorexError> {
         let rendered = self.inspected_object(obj, position)?;
-        Ok(match &rendered {
-            Object::String(text) => (text.to_string(), text.encoding_name()),
+        Ok(match rendered.view() {
+            View::String(text) => (text.to_string(), text.encoding_name()),
             other => (format!("{}", other), "US-ASCII".to_string()),
         })
     }
@@ -62,7 +63,7 @@ impl VirtualMachine {
 /// A String frozen where it stands, which is how the environment hands back
 /// what it holds.
 pub(crate) fn frozen_text(value: Object) -> Object {
-    let Object::String(text) = &value else {
+    let View::String(text) = value.view() else {
         return value;
     };
     let copy = crate::object::StringValue::with_encoding(text.to_text(), text.encoding_name());
@@ -71,7 +72,7 @@ pub(crate) fn frozen_text(value: Object) -> Object {
 }
 
 pub(crate) fn retagged(value: Object, named: &Option<String>) -> Object {
-    let (Object::String(text), Some(named)) = (&value, named) else {
+    let (View::String(text), Some(named)) = (value.view(), named) else {
         return value;
     };
     // Bytes that do not read as the encoding the environment is named in

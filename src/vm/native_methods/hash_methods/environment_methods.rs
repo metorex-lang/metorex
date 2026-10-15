@@ -1,6 +1,7 @@
 // The methods ENV answers differently from any other hash.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// What ENV answers for a name the operating system keeps, or `None`
@@ -21,14 +22,14 @@ impl VirtualMachine {
                 // refuses and points at the hash it will make instead. The
                 // keywords are read first, so a bad one is reported as such.
                 "dup" | "clone" => {
-                    if let Some(Object::Dict(entries)) = arguments.first() {
+                    if let Some(View::Dict(entries)) = arguments.first().view() {
                         for (name, value) in entries.borrow().iter() {
                             let name = name.trim_start_matches(':');
                             if name.starts_with("__MX_") {
                                 continue;
                             }
-                            let refused =
-                                name != "freeze" || !matches!(value, Object::Bool(_) | Object::Nil);
+                            let refused = name != "freeze"
+                                || !matches!(value.view(), View::Bool(_) | View::Nil);
                             if refused {
                                 let message = if name == "freeze" {
                                     "unexpected value for freeze: Integer".to_string()
@@ -67,7 +68,7 @@ impl VirtualMachine {
                         arguments
                     };
                     for argument in keys {
-                        if !matches!(argument, Object::String(_))
+                        if !matches!(argument.view(), View::String(_))
                             && !self.responds_to(argument, "to_str")
                         {
                             return Err(crate::vm::errors::simple_exception(
@@ -87,7 +88,7 @@ impl VirtualMachine {
                 // as nothing simply matches nothing.
                 name if ENVIRONMENT_TEXT_ARGUMENT.contains(&name)
                     && arguments.len() == 1
-                    && !matches!(arguments[0], Object::String(_)) =>
+                    && !matches!(arguments[0].view(), View::String(_)) =>
                 {
                     if self.responds_to(&arguments[0], "to_str") {
                         let named =
@@ -112,7 +113,7 @@ impl VirtualMachine {
                     let key = self.environment_text(&arguments[0], position)?;
                     // Setting a name to nil takes it away, and a name the
                     // environment could never hold simply has nothing to take.
-                    if matches!(arguments[1], Object::Nil) {
+                    if matches!(arguments[1].view(), View::Nil) {
                         let named = Object::string(key);
                         self.record_environment_change(dict_rc, &named, &Object::Nil);
                         return Ok(Some(Object::Nil));
@@ -188,7 +189,7 @@ impl VirtualMachine {
                 // Every name and value a whole hash brings is read as text
                 // first, so a bad one stops the change before it starts.
                 "replace" | "merge!" | "update" if arguments.len() == 1 => {
-                    let Some(Object::Dict(given)) = arguments.first() else {
+                    let Some(View::Dict(given)) = arguments.first().view() else {
                         let message = format!(
                             "no implicit conversion of {} into Hash",
                             self.builtins()
@@ -226,14 +227,14 @@ impl VirtualMachine {
                         let key = self.environment_text(&key, position)?;
                         self.refuse_bad_variable_name(&key, position)?;
                         // A block settles a name both sides hold.
-                        if let Some(Object::Block(block)) = &block
+                        if let Some(View::Block(block)) = block.view()
                             && let Some(held) = dict_rc.borrow().get(&key).cloned()
                         {
                             let given = vec![Object::string(key.clone()), held, value];
                             value = self.execute_block_callable(block, given, position)?;
                         }
                         // A name merged with nil is taken away, as `ENV[name] = nil` does.
-                        if matches!(value, Object::Nil) {
+                        if matches!(value.view(), View::Nil) {
                             self.record_environment_change(
                                 dict_rc,
                                 &Object::string(key),
@@ -250,9 +251,10 @@ impl VirtualMachine {
                 // the program asked for, when it asked for one.
                 "each" | "each_pair"
                     if arguments.is_empty()
-                        && matches!(self.pending_block, Some(Object::Block(_))) =>
+                        && matches!(self.pending_block.view(), Some(View::Block(_))) =>
                 {
-                    let Some(Object::Block(block)) = self.pending_block.take() else {
+                    let viewed = self.pending_block.take();
+                    let Some(View::Block(block)) = viewed.view() else {
                         return Ok(None);
                     };
                     let named = self.environment_reading_encoding();
@@ -260,7 +262,7 @@ impl VirtualMachine {
                         let key = retagged(key, &named);
                         let value = retagged(value, &named);
                         let pair = Object::array(vec![key, value]);
-                        match self.execute_block_with_control_flow(&block, vec![pair], position)? {
+                        match self.execute_block_with_control_flow(block, vec![pair], position)? {
                             // `break` ends the walk and answers what it carried,
                             // which is what the call reports.
                             crate::vm::ControlFlow::Break { value, .. } => {

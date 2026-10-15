@@ -1,6 +1,7 @@
 // Targeted coverage tests for uncovered lines in src/vm/loading.rs.
 
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::vm::VirtualMachine;
 use std::path::Path;
 
@@ -32,7 +33,7 @@ fn require_library_ignores_non_string_load_path_entries() {
     let mut vm = VirtualMachine::new();
     // Inject a non-string into $LOAD_PATH so filter_map's `_ => None`
     // branch (line 51) is exercised.
-    if let Some(Object::Array(arr)) = vm.globals().get(":") {
+    if let Some(View::Array(arr)) = vm.globals().get(":").view() {
         arr.borrow_mut().insert(0, Object::Int(42));
     }
     vm.prepend_load_path("tests/_examples/require/lib".to_string());
@@ -81,11 +82,11 @@ fn execute_file_nonexistent_path_errors() {
 fn prepend_load_path_adds_to_front() {
     let mut vm = VirtualMachine::new();
     vm.prepend_load_path("/my_custom_path_abc".to_string());
-    match vm.globals().get(":") {
-        Some(Object::Array(arr)) => {
+    match vm.globals().get(":").view() {
+        Some(View::Array(arr)) => {
             let first = arr.borrow().first().cloned();
-            match first {
-                Some(Object::String(s)) => assert_eq!(s.as_ref(), "/my_custom_path_abc"),
+            match first.view() {
+                Some(View::String(s)) => assert_eq!(s.as_ref(), "/my_custom_path_abc"),
                 other => panic!("expected first to be String, got {:?}", other),
             }
         }

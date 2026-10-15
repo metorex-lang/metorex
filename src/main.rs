@@ -386,10 +386,8 @@ fn real_main_after_inline(cli: Cli) {
         vm.trace_uncaught_error(&err);
         // `abort` and `exit` raise SystemExit: it ends the program with the
         // status it carries, having already reported anything it wanted to.
-        if let metorex::error::MetorexError::UncaughtException {
-            exception: exception @ metorex::object::Object::Exception(exc),
-            ..
-        } = &err
+        if let metorex::error::MetorexError::UncaughtException { exception, .. } = &err
+            && let metorex::object::View::Exception(exc) = exception.view()
             && exc.borrow().is_system_exit()
         {
             let status = exc.borrow().status.unwrap_or(0) as i32;
@@ -399,10 +397,8 @@ fn real_main_after_inline(cli: Cli) {
         // A SignalException nothing caught ends the program the way the
         // signal itself would have, so the exit status names the signal
         // rather than a plain failure.
-        if let metorex::error::MetorexError::UncaughtException {
-            exception: metorex::object::Object::Exception(exc),
-            ..
-        } = &err
+        if let metorex::error::MetorexError::UncaughtException { exception, .. } = &err
+            && let metorex::object::View::Exception(exc) = exception.view()
             && let Some(number) = metorex::vm::signals::signal_number_of(&exc.borrow())
         {
             let ending = err_exception(&err);
@@ -436,10 +432,8 @@ fn real_main_after_inline(cli: Cli) {
 /// signal itself would, and everything else is reported and leaves with 1.
 fn finish_with_error(vm: &mut VirtualMachine, err: &metorex::error::MetorexError) -> ! {
     vm.trace_uncaught_error(err);
-    if let metorex::error::MetorexError::UncaughtException {
-        exception: exception @ metorex::object::Object::Exception(exc),
-        ..
-    } = err
+    if let metorex::error::MetorexError::UncaughtException { exception, .. } = err
+        && let metorex::object::View::Exception(exc) = exception.view()
         && exc.borrow().is_system_exit()
     {
         let status = exc.borrow().status.unwrap_or(0) as i32;
@@ -447,10 +441,11 @@ fn finish_with_error(vm: &mut VirtualMachine, err: &metorex::error::MetorexError
         process::exit(vm.run_at_exit_handlers(status, Some(ending)));
     }
     let signalled = match err {
-        metorex::error::MetorexError::UncaughtException {
-            exception: metorex::object::Object::Exception(exc),
-            ..
-        } => metorex::vm::signals::signal_number_of(&exc.borrow()),
+        metorex::error::MetorexError::UncaughtException { exception, .. }
+            if let metorex::object::View::Exception(exc) = exception.view() =>
+        {
+            metorex::vm::signals::signal_number_of(&exc.borrow())
+        }
         _ => None,
     };
     if let Some(number) = signalled {

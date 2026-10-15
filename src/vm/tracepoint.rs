@@ -4,6 +4,7 @@
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 use std::rc::Rc;
 
@@ -49,8 +50,8 @@ impl VirtualMachine {
     /// interpreter's list into line with it.
     pub(crate) fn register_tracepoint(&mut self, tracepoint: &Object) {
         let switched_on = matches!(
-            self.read_instance_var(tracepoint, "enabled"),
-            Some(Object::Bool(true))
+            self.read_instance_var(tracepoint, "enabled").view(),
+            Some(View::Bool(true))
         );
         self.tracepoints
             .retain(|held| !same_tracepoint(held, tracepoint));
@@ -175,8 +176,8 @@ impl VirtualMachine {
         let (mut listening, targeted): (Vec<Object>, Vec<Object>) =
             self.tracepoints.iter().cloned().partition(|held| {
                 matches!(
-                    self.read_instance_var(held, "target_place"),
-                    None | Some(Object::Nil)
+                    self.read_instance_var(held, "target_place").view(),
+                    None | Some(View::Nil)
                 )
             });
         listening.extend(targeted.into_iter().rev());
@@ -188,7 +189,7 @@ impl VirtualMachine {
                 vec![name.clone()],
                 position,
             )?;
-            if !matches!(wants, Object::Bool(true)) {
+            if !matches!(wants.view(), View::Bool(true)) {
                 continue;
             }
             let details = self.event_details(event, position, extra);
@@ -299,7 +300,7 @@ impl VirtualMachine {
 
     /// One instance variable off an object, where it has one.
     fn read_instance_var(&self, holder: &Object, name: &str) -> Option<Object> {
-        let Object::Instance(instance) = holder else {
+        let View::Instance(instance) = holder.view() else {
             return None;
         };
         instance.borrow().get_var(name).cloned()
@@ -308,15 +309,15 @@ impl VirtualMachine {
 
 /// Sets an instance variable of a tracepoint, which is always an instance.
 fn write_instance_var(holder: &Object, name: &str, value: Object) {
-    if let Object::Instance(instance) = holder {
+    if let View::Instance(instance) = holder.view() {
         instance.borrow_mut().set_var(name.to_string(), value);
     }
 }
 
 /// Whether two references name the same tracepoint.
 fn same_tracepoint(one: &Object, other: &Object) -> bool {
-    match (one, other) {
-        (Object::Instance(a), Object::Instance(b)) => Rc::ptr_eq(a, b),
+    match (one.view(), other.view()) {
+        (View::Instance(a), View::Instance(b)) => Rc::ptr_eq(a, b),
         _ => false,
     }
 }

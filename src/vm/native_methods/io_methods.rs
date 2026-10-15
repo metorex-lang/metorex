@@ -2,6 +2,7 @@ use crate::class::Class;
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::{Instance, Method, Object};
+use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 use crate::vm::utils::position_to_location;
 use std::rc::Rc;
@@ -48,11 +49,11 @@ impl VirtualMachine {
         arguments: &[Object],
         _position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        let Object::Instance(instance) = receiver else {
+        let View::Instance(instance) = receiver.view() else {
             return Ok(None);
         };
-        let raw = match instance.borrow().get_var(STATUS_RAW) {
-            Some(Object::Int(raw)) => *raw as libc::c_int,
+        let raw = match instance.borrow().get_var(STATUS_RAW).view() {
+            Some(View::Int(raw)) => raw as libc::c_int,
             _ => 0,
         };
         let pid = instance
@@ -96,11 +97,11 @@ impl VirtualMachine {
                 let Some(other) = arguments.first() else {
                     return Ok(Some(Object::Bool(false)));
                 };
-                Object::Bool(match other {
-                    Object::Int(number) => *number == raw as i64,
-                    Object::Instance(held) => matches!(
-                        held.borrow().get_var(STATUS_RAW),
-                        Some(Object::Int(number)) if *number == raw as i64
+                Object::Bool(match other.view() {
+                    View::Int(number) => number == raw as i64,
+                    View::Instance(held) => matches!(
+                        held.borrow().get_var(STATUS_RAW).view(),
+                        Some(View::Int(number)) if number == raw as i64
                     ),
                     _ => false,
                 })
@@ -211,8 +212,11 @@ impl VirtualMachine {
             ],
             position,
         )?;
-        let pid = match self.send_to_object(status.clone(), "pid", Vec::new(), position)? {
-            Object::Int(pid) => pid as i32,
+        let pid = match self
+            .send_to_object(status.clone(), "pid", Vec::new(), position)?
+            .view()
+        {
+            View::Int(pid) => pid as i32,
             _ => 0,
         };
         self.globals_mut().set(LAST_STATUS_GLOBAL, status.clone());
@@ -243,16 +247,17 @@ impl VirtualMachine {
     /// A class built once and kept in globals, so every instance of it shares
     /// one method table and compares equal by class.
     fn memoized_class(&mut self, global: &str, name: &str, methods: &[&str]) -> Rc<Class> {
-        if let Some(Object::Class(existing)) = self.globals().get(global) {
-            return existing;
+        if let Some(View::Class(existing)) = self.globals().get(global).view() {
+            return existing.clone();
         }
         // The class descends from the one it stands for, so the methods
         // written for that class in the core library answer for it as well.
-        let parent = match self.globals().get(name) {
-            Some(Object::Class(found)) => Some(found),
+        let viewed = self.globals().get(name);
+        let parent = match viewed.view() {
+            Some(View::Class(found)) => Some(found),
             _ => None,
         };
-        let class = Class::new(name, parent);
+        let class = Class::new(name, parent.cloned());
         for method in methods {
             class.define_method(
                 *method,

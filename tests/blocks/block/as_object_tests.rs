@@ -4,6 +4,7 @@
 use metorex::ast::{BinaryOp, Expression, Parameter, Statement};
 use metorex::lexer::Position;
 use metorex::object::Object;
+use metorex::object::View;
 use metorex::vm::VirtualMachine;
 
 fn pos(line: usize, column: usize) -> Position {
@@ -850,7 +851,7 @@ fn test_array_map_with_block() {
     vm.execute_program(&program).expect("execution failed");
 
     let doubled = vm.environment().get("doubled").expect("doubled not found");
-    if let Object::Array(arr) = doubled {
+    if let View::Array(arr) = doubled.view() {
         let arr = arr.borrow();
         assert_eq!(arr.len(), 3);
         assert_eq!(arr[0], Object::Int(2));
@@ -917,7 +918,7 @@ fn test_range_map_with_block() {
     vm.execute_program(&program).expect("execution failed");
 
     let doubled = vm.environment().get("doubled").expect("doubled not found");
-    if let Object::Array(arr) = doubled {
+    if let View::Array(arr) = doubled.view() {
         let arr = arr.borrow();
         assert_eq!(arr.len(), 5);
         assert_eq!(arr[0], Object::Int(0));

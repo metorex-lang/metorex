@@ -2,6 +2,7 @@
 // block it walks with.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The Enumerator a method answers when it is called without the block it
@@ -14,7 +15,8 @@ impl VirtualMachine {
         arguments: &[Object],
         position: crate::lexer::Position,
     ) -> Result<Object, crate::error::MetorexError> {
-        let Some(enumerator @ Object::Class(_)) = self.globals().get("Enumerator") else {
+        let viewed = self.globals().get("Enumerator");
+        let Some(enumerator @ View::Class(_)) = viewed.view() else {
             return Err(crate::error::MetorexError::runtime_error(
                 "Enumerator is not defined",
                 crate::vm::utils::position_to_location(position),
@@ -24,10 +26,10 @@ impl VirtualMachine {
         // collection is how many elements it holds. A search reports none,
         // since how far it runs depends on what it finds.
         let counted = !matches!(method_name, "rindex" | "index" | "find_index");
-        let size = match receiver {
-            Object::Array(elements) if counted => Object::Int(elements.borrow().len() as i64),
+        let size = match receiver.view() {
+            View::Array(elements) if counted => Object::Int(elements.borrow().len() as i64),
             // A Hash counts its pairs, not the entries it keeps for itself.
-            Object::Dict(entries) if counted => Object::Int(
+            View::Dict(entries) if counted => Object::Int(
                 entries
                     .borrow()
                     .keys()
@@ -42,7 +44,7 @@ impl VirtualMachine {
             Object::array(arguments.to_vec()),
             size,
         ];
-        self.send_to_object(enumerator, "over", call, position)
+        self.send_to_object(enumerator.to_object(), "over", call, position)
     }
 
     /// Whether an object answers to a name, asking it with `respond_to?` when
@@ -57,7 +59,7 @@ impl VirtualMachine {
         if self.responds_to(held, name) {
             return Ok(true);
         }
-        if !matches!(held, Object::Instance(_)) {
+        if !matches!(held.view(), View::Instance(_)) {
             return Ok(false);
         }
         // Ruby asks after a private method too when it is looking for the
@@ -101,7 +103,7 @@ pub(crate) fn carry_string_encoding(
     ) {
         return answer;
     }
-    let Object::String(source) = receiver else {
+    let View::String(source) = receiver.view() else {
         return answer;
     };
     let held = source.encoding_name();
@@ -121,14 +123,14 @@ pub(crate) fn carry_string_encoding(
             derived.mark_bytes();
         }
     };
-    match &answer {
-        Some(Object::String(derived)) => carry(derived),
+    match answer.view() {
+        Some(View::String(derived)) => carry(derived),
         // The pieces a string was cut into read the way the whole one did.
         // A split around a separator hands that separator back as it was
         // written, so its own reading stands.
-        Some(Object::Array(pieces)) if !matches!(method_name, "partition" | "rpartition") => {
+        Some(View::Array(pieces)) if !matches!(method_name, "partition" | "rpartition") => {
             for piece in pieces.borrow().iter() {
-                if let Object::String(derived) = piece {
+                if let View::String(derived) = piece.view() {
                     carry(derived);
                 }
             }

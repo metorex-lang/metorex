@@ -1,6 +1,7 @@
 // Walking an array while a block may be changing it.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// Walk `array_rc` and keep the elements the block answers for, writing
@@ -61,7 +62,7 @@ impl VirtualMachine {
 /// for, which is what a `method_missing` that passes the call along raises.
 pub(crate) fn refused_the_call(problem: &MetorexError) -> bool {
     matches!(problem, MetorexError::UncaughtException { exception, .. }
-        if matches!(exception, Object::Exception(held)
+        if matches!(exception.view(), View::Exception(held)
             if held.borrow().exception_type == "NoMethodError"))
 }
 

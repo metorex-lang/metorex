@@ -1,6 +1,7 @@
 // Finding a constant on a class, and the hook for one that is missing.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Where a bare `autoload` registers: the scope the call sits in. A class
@@ -105,10 +106,10 @@ impl VirtualMachine {
             && class_rc.superclass().is_none()
             && class_rc.name() != "Object"
             && class_rc.name() != "BasicObject"
-            && let Some(Object::Class(object_class)) = self.globals().get("Object")
-            && !seen.contains(&Rc::as_ptr(&object_class))
+            && let Some(View::Class(object_class)) = self.globals().get("Object").view()
+            && !seen.contains(&Rc::as_ptr(object_class))
         {
-            return self.const_entry_on(&object_class, name, inherit, object_fallback);
+            return self.const_entry_on(object_class, name, inherit, object_fallback);
         }
         None
     }
@@ -136,14 +137,18 @@ impl VirtualMachine {
         if !own("name") && !own("inspect") {
             return Ok(module_rc.ruby_name());
         }
-        if let Object::String(named) =
-            self.send_to_object(module.clone(), "name", vec![], position)?
+        if let View::String(named) = self
+            .send_to_object(module.clone(), "name", vec![], position)?
+            .view()
             && !named.as_str().is_empty()
         {
             return Ok(named.as_str().to_string());
         }
-        match self.send_to_object(module, "inspect", vec![], position)? {
-            Object::String(inspected) => Ok(inspected.as_str().to_string()),
+        match self
+            .send_to_object(module, "inspect", vec![], position)?
+            .view()
+        {
+            View::String(inspected) => Ok(inspected.as_str().to_string()),
             _ => Ok(module_rc.ruby_name()),
         }
     }
@@ -164,7 +169,7 @@ impl VirtualMachine {
         let owner_name = self.module_name_for_message(owner, position)?;
         let message = format!("private constant {owner_name}::{name} referenced");
         let exception = Object::exception("NameError", message.clone());
-        if let Object::Exception(details) = &exception {
+        if let View::Exception(details) = exception.view() {
             let mut details = details.borrow_mut();
             details.name = Some(name.to_string());
             details.receiver = Some(Box::new(if owner.is_module() {
@@ -207,7 +212,7 @@ impl VirtualMachine {
         };
         let msg = format!("uninitialized constant {}", qualified);
         let exc = Object::exception("NameError", msg.clone());
-        if let Object::Exception(e) = &exc {
+        if let View::Exception(e) = exc.view() {
             let mut details = e.borrow_mut();
             details.name = Some(name.to_string());
             details.receiver = Some(Box::new(if module_rc.is_module() {

@@ -2,6 +2,7 @@
 // last touched.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// Who owns a file, what it may be read and written by, and when it was
@@ -31,21 +32,24 @@ impl VirtualMachine {
                     unsafe { libc::umask(held) };
                     return Ok(Some(Object::Int(held as i64)));
                 };
-                let asked = match wanted {
-                    Object::Int(value) => *value,
-                    Object::BigInt(_) => {
+                let asked = match wanted.view() {
+                    View::Int(value) => value,
+                    View::BigInt(_) => {
                         return Err(crate::vm::errors::simple_exception(
                             "RangeError",
                             "bignum too big to convert into 'long'",
                             position,
                         ));
                     }
-                    other => {
-                        match self.send_to_object(other.clone(), "to_int", Vec::new(), position)? {
-                            Object::Int(value) => value,
+                    _ => {
+                        match self
+                            .send_to_object(wanted.clone(), "to_int", Vec::new(), position)?
+                            .view()
+                        {
+                            View::Int(value) => value,
                             _ => {
                                 return Err(method_argument_type_error(
-                                    "umask", "Integer", other, position,
+                                    "umask", "Integer", wanted, position,
                                 ));
                             }
                         }
@@ -76,26 +80,26 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let owner = match &arguments[0] {
-                    Object::Int(held) => *held as libc::uid_t,
-                    Object::Nil => libc::uid_t::MAX,
-                    other => {
+                let owner = match arguments[0].view() {
+                    View::Int(held) => held as libc::uid_t,
+                    View::Nil => libc::uid_t::MAX,
+                    _ => {
                         return Err(method_argument_type_error(
                             method_name,
                             "Integer",
-                            other,
+                            &arguments[0],
                             position,
                         ));
                     }
                 };
-                let group = match &arguments[1] {
-                    Object::Int(held) => *held as libc::gid_t,
-                    Object::Nil => libc::gid_t::MAX,
-                    other => {
+                let group = match arguments[1].view() {
+                    View::Int(held) => held as libc::gid_t,
+                    View::Nil => libc::gid_t::MAX,
+                    _ => {
                         return Err(method_argument_type_error(
                             method_name,
                             "Integer",
-                            other,
+                            &arguments[1],
                             position,
                         ));
                     }
@@ -142,8 +146,8 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let (Object::String(existing), Object::String(added)) =
-                    (&arguments[0], &arguments[1])
+                let (View::String(existing), View::String(added)) =
+                    (arguments[0].view(), arguments[1].view())
                 else {
                     return Err(method_argument_type_error(
                         method_name,

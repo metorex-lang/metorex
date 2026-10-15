@@ -1,6 +1,7 @@
 // Joining strings, and cutting whitespace off either end.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// Joining strings, and cutting whitespace off either end.
@@ -24,23 +25,23 @@ impl VirtualMachine {
                 }
                 // Anything that spells itself as text is joined as the text
                 // it spells, which is what `to_str` is asked for.
-                let given = match &arguments[0] {
-                    held @ Object::String(_) => held.clone(),
-                    other if self.responds_to(other, "to_str") => {
-                        self.send_to_object(other.clone(), "to_str", vec![], position)?
+                let given = match arguments[0].view() {
+                    View::String(_) => arguments[0].clone(),
+                    _ if self.responds_to(&arguments[0], "to_str") => {
+                        self.send_to_object(arguments[0].clone(), "to_str", vec![], position)?
                     }
-                    other => {
+                    _ => {
                         return Err(crate::vm::errors::simple_exception(
                             "TypeError",
                             &format!(
                                 "no implicit conversion of {} into String",
-                                crate::vm::errors::conversion_subject(other)
+                                crate::vm::errors::conversion_subject(&arguments[0])
                             ),
                             position,
                         ));
                     }
                 };
-                let Object::String(rhs) = &given else {
+                let View::String(rhs) = given.view() else {
                     return Err(method_argument_type_error(
                         method_name,
                         "String",
@@ -65,7 +66,7 @@ impl VirtualMachine {
                 let mut combined = string_value.as_str().to_string();
                 combined.push_str(&rhs.as_str());
                 let made = Object::string(combined);
-                if let Object::String(built) = &made {
+                if let View::String(built) = made.view() {
                     built.set_encoding(joined_encoding);
                 }
                 Ok(Some(made))

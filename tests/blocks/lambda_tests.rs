@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -23,7 +24,7 @@ l.call
     let result = vm.execute_program(&statements).expect("Execution failed");
 
     assert!(result.is_some());
-    if let Some(Object::Int(val)) = result {
+    if let Some(View::Int(val)) = result.view() {
         assert_eq!(val, 42);
     } else {
         panic!("Expected Int(42), got {:?}", result);
@@ -48,7 +49,7 @@ l.call(5)
     let result = vm.execute_program(&statements).expect("Execution failed");
 
     assert!(result.is_some());
-    if let Some(Object::Int(val)) = result {
+    if let Some(View::Int(val)) = result.view() {
         assert_eq!(val, 10);
     } else {
         panic!("Expected Int(10), got {:?}", result);
@@ -77,7 +78,7 @@ double.call(5)
     let result = vm.execute_program(&statements).expect("Execution failed");
 
     assert!(result.is_some());
-    if let Some(Object::Int(val)) = result {
+    if let Some(View::Int(val)) = result.view() {
         assert_eq!(val, 10);
     } else {
         panic!("Expected Int(10), got {:?}", result);
@@ -102,7 +103,7 @@ l.call(3, 4)
     let result = vm.execute_program(&statements).expect("Execution failed");
 
     assert!(result.is_some());
-    if let Some(Object::Int(val)) = result {
+    if let Some(View::Int(val)) = result.view() {
         assert_eq!(val, 7);
     } else {
         panic!("Expected Int(7), got {:?}", result);
@@ -125,7 +126,7 @@ l.call
     let result = vm.execute_program(&statements).expect("Execution failed");
 
     assert!(result.is_some());
-    if let Some(Object::Int(val)) = result {
+    if let Some(View::Int(val)) = result.view() {
         assert_eq!(val, 42);
     } else {
         panic!("Expected Int(42), got {:?}", result);
@@ -148,7 +149,7 @@ double.call(5)
     let result = vm.execute_program(&statements).expect("Execution failed");
 
     assert!(result.is_some());
-    if let Some(Object::Int(val)) = result {
+    if let Some(View::Int(val)) = result.view() {
         assert_eq!(val, 10);
     } else {
         panic!("Expected Int(10), got {:?}", result);
@@ -171,7 +172,7 @@ add_ten.call(5)
     let result = vm.execute_program(&statements).expect("Execution failed");
 
     assert!(result.is_some());
-    if let Some(Object::Int(val)) = result {
+    if let Some(View::Int(val)) = result.view() {
         assert_eq!(val, 15);
     } else {
         panic!("Expected Int(15), got {:?}", result);
@@ -194,7 +195,7 @@ add.call(3, 4)
     let result = vm.execute_program(&statements).expect("Execution failed");
 
     assert!(result.is_some());
-    if let Some(Object::Int(val)) = result {
+    if let Some(View::Int(val)) = result.view() {
         assert_eq!(val, 7);
     } else {
         panic!("Expected Int(7), got {:?}", result);
@@ -217,7 +218,7 @@ sum.call(1, 2, 3)
     let result = vm.execute_program(&statements).expect("Execution failed");
 
     assert!(result.is_some());
-    if let Some(Object::Int(val)) = result {
+    if let Some(View::Int(val)) = result.view() {
         assert_eq!(val, 6);
     } else {
         panic!("Expected Int(6), got {:?}", result);
@@ -240,7 +241,7 @@ l.call
     let result = vm.execute_program(&statements).expect("Execution failed");
 
     assert!(result.is_some());
-    if let Some(Object::Int(val)) = result {
+    if let Some(View::Int(val)) = result.view() {
         assert_eq!(val, 42);
     } else {
         panic!("Expected Int(42), got {:?}", result);
@@ -263,7 +264,7 @@ double.call(5)
     let result = vm.execute_program(&statements).expect("Execution failed");
 
     assert!(result.is_some());
-    if let Some(Object::Int(val)) = result {
+    if let Some(View::Int(val)) = result.view() {
         assert_eq!(val, 10);
     } else {
         panic!("Expected Int(10), got {:?}", result);
@@ -286,7 +287,7 @@ add.call(3, 7)
     let result = vm.execute_program(&statements).expect("Execution failed");
 
     assert!(result.is_some());
-    if let Some(Object::Int(val)) = result {
+    if let Some(View::Int(val)) = result.view() {
         assert_eq!(val, 10);
     } else {
         panic!("Expected Int(10), got {:?}", result);
@@ -312,7 +313,7 @@ result
 
     // Standalone blocks create lambda objects
     assert!(result.is_some());
-    assert!(matches!(result, Some(Object::Block(_))));
+    assert!(matches!(result.view(), Some(View::Block(_))));
 }
 
 #[test]
@@ -336,7 +337,7 @@ result
 
     // Standalone blocks create lambda objects
     assert!(result.is_some());
-    assert!(matches!(result, Some(Object::Block(_))));
+    assert!(matches!(result.view(), Some(View::Block(_))));
 }
 
 #[test]
@@ -364,7 +365,7 @@ count
     let result = vm.execute_program(&statements).expect("Execution failed");
 
     assert!(result.is_some());
-    if let Some(Object::Int(val)) = result {
+    if let Some(View::Int(val)) = result.view() {
         assert_eq!(val, 3);
     } else {
         panic!("Expected Int(3), got {:?}", result);

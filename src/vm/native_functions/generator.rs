@@ -1,6 +1,7 @@
 // The Mersenne Twister `rand` draws from.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// The Integer `srand` seeds with, kept at its full width so the next
@@ -11,14 +12,14 @@ impl VirtualMachine {
         given: &Object,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        match given {
-            Object::Int(_) | Object::BigInt(_) => Ok(given.clone()),
-            Object::Float(seed) => Ok(Object::Int(*seed as i64)),
-            other => {
-                let Some((class, method)) = self.lookup_method(other, "to_int") else {
+        match given.view() {
+            View::Int(_) | View::BigInt(_) => Ok(given.clone()),
+            View::Float(seed) => Ok(Object::Int(seed as i64)),
+            _ => {
+                let Some((class, method)) = self.lookup_method(given, "to_int") else {
                     let message = format!(
                         "no implicit conversion of {} into Integer",
-                        crate::vm::errors::conversion_subject(other)
+                        crate::vm::errors::conversion_subject(given)
                     );
                     return Err(MetorexError::UncaughtException {
                         exception: Object::exception("TypeError", message.clone()),
@@ -27,7 +28,7 @@ impl VirtualMachine {
                     });
                 };
                 let converted =
-                    self.invoke_method(class, method, other.clone(), vec![], position)?;
+                    self.invoke_method(class, method, given.clone(), vec![], position)?;
                 self.coerce_to_seed(&converted, position)
             }
         }
@@ -45,8 +46,8 @@ impl VirtualMachine {
             return Ok(());
         };
         for hook in hooks {
-            match hook {
-                Object::String(code) => {
+            match hook.view() {
+                View::String(code) => {
                     let tokens = crate::lexer::Lexer::new(&code.as_str()).tokenize();
                     let statements =
                         crate::parser::Parser::new(tokens)
@@ -68,8 +69,8 @@ impl VirtualMachine {
                         self.execute_statement(statement)?;
                     }
                 }
-                callable => {
-                    self.invoke_callable(callable, vec![value.clone()], position)?;
+                _ => {
+                    self.invoke_callable(hook.clone(), vec![value.clone()], position)?;
                 }
             }
         }
@@ -258,22 +259,22 @@ impl VirtualMachine {
         limit: Object,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        match limit {
+        match limit.view() {
             // Ruby ignores the sign, and a bound of zero means "no bound",
             // which draws a Float instead.
-            Object::Int(bound) => match bound.unsigned_abs() {
+            View::Int(bound) => match bound.unsigned_abs() {
                 0 => Ok(Object::Float(self.next_random_float())),
                 magnitude => Ok(Object::Int(self.next_random_int(magnitude as i64))),
             },
             // A Float bound truncates. `rand(0.999)` truncates to zero, so it
             // draws a Float the way `rand(0)` does.
-            Object::Float(bound) => match bound.abs().trunc() as i64 {
+            View::Float(bound) => match bound.abs().trunc() as i64 {
                 0 => Ok(Object::Float(self.next_random_float())),
                 magnitude => Ok(Object::Int(self.next_random_int(magnitude))),
             },
             // A bound past the machine word is drawn word by word, since
             // there is no single draw wide enough to cover it.
-            Object::BigInt(ref bound) => {
+            View::BigInt(bound) => {
                 let magnitude = if **bound < num_bigint::BigInt::from(0) {
                     -(**bound).clone()
                 } else {
@@ -284,18 +285,18 @@ impl VirtualMachine {
                 }
                 Ok(Object::integer(self.next_random_big(&magnitude)))
             }
-            Object::Range {
-                ref start,
-                ref end,
+            View::Range {
+                start,
+                end,
                 exclusive,
                 ..
             } => self.random_in_range(start, end, exclusive, position),
-            other => {
+            _ => {
                 // Anything else is asked for an Integer bound.
-                let Some((class, method)) = self.lookup_method(&other, "to_int") else {
+                let Some((class, method)) = self.lookup_method(&limit, "to_int") else {
                     let message = format!(
                         "no implicit conversion of {} into Integer",
-                        crate::vm::errors::conversion_subject(&other)
+                        crate::vm::errors::conversion_subject(&limit)
                     );
                     return Err(MetorexError::UncaughtException {
                         exception: Object::exception("TypeError", message.clone()),
@@ -303,7 +304,8 @@ impl VirtualMachine {
                         message,
                     });
                 };
-                let converted = self.invoke_method(class, method, other, vec![], position)?;
+                let converted =
+                    self.invoke_method(class, method, limit.clone(), vec![], position)?;
                 self.random_below(converted, position)
             }
         }
@@ -318,7 +320,7 @@ impl VirtualMachine {
         exclusive: bool,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        if let (Object::Int(low), Object::Int(high)) = (start, end) {
+        if let (View::Int(low), View::Int(high)) = (start.view(), end.view()) {
             let span = if exclusive {
                 high - low
             } else {
@@ -354,13 +356,17 @@ impl VirtualMachine {
         let width = self
             .apply_named_method(end, "-", vec![start.clone()], position)
             .map_err(|_| bad_range_value(position))?;
-        let drawn = match &width {
-            Object::Float(measured) => Object::Float(self.next_random_float() * measured),
+        let drawn = match width.view() {
+            View::Float(measured) => Object::Float(self.next_random_float() * measured),
             _ => {
-                let counted = match &width {
-                    Object::Int(counted) => *counted,
-                    _ => match self.apply_named_method(&width, "to_int", vec![], position) {
-                        Ok(Object::Int(counted)) => counted,
+                let counted = match width.view() {
+                    View::Int(counted) => counted,
+                    _ => match self
+                        .apply_named_method(&width, "to_int", vec![], position)
+                        .as_ref()
+                        .map(Object::view)
+                    {
+                        Ok(View::Int(counted)) => counted,
                         _ => return Err(bad_range_value(position)),
                     },
                 };
@@ -384,8 +390,8 @@ pub(crate) const MT_STEP: usize = 397;
 
 #[allow(dead_code)]
 pub(crate) fn seed_low_bits(seed: &Object) -> u64 {
-    match seed {
-        Object::BigInt(wide) => {
+    match seed.view() {
+        View::BigInt(wide) => {
             let (sign, digits) = wide.to_u64_digits();
             let magnitude = digits.first().copied().unwrap_or(0);
             if matches!(sign, num_bigint::Sign::Minus) {
@@ -394,14 +400,14 @@ pub(crate) fn seed_low_bits(seed: &Object) -> u64 {
                 magnitude
             }
         }
-        Object::Int(narrow) => *narrow as u64,
+        View::Int(narrow) => narrow as u64,
         _ => 0,
     }
 }
 
 pub(crate) fn global_name_from(named: &Object) -> String {
-    let text = match named {
-        Object::Symbol(name) | Object::String(name) => name.as_str().to_string(),
+    let text = match named.view() {
+        View::Symbol(name) | View::String(name) => name.as_str().to_string(),
         other => other.to_string(),
     };
     text.strip_prefix('$').unwrap_or(&text).to_string()

@@ -1,17 +1,18 @@
 // Drawing a number, waiting, and seeding the generator.
 
 use super::*;
+use metorex::object::{OptionView, View};
 
 #[test]
 fn rand_no_args_returns_float() {
     let result = run("rand()");
-    assert!(matches!(result, Some(Object::Float(_))));
+    assert!(matches!(result.view(), Some(View::Float(_))));
 }
 
 #[test]
 fn rand_with_int_arg() {
     let result = run("rand(100)");
-    assert!(matches!(result, Some(Object::Int(_))));
+    assert!(matches!(result.view(), Some(View::Int(_))));
 }
 
 #[test]
@@ -34,7 +35,7 @@ fn sleep_with_zero() {
 #[test]
 fn srand_returns_int() {
     let result = run("srand()");
-    assert!(matches!(result, Some(Object::Int(_))));
+    assert!(matches!(result.view(), Some(View::Int(_))));
 }
 
 // ── load function ────────────────────────────────────────────────────────────

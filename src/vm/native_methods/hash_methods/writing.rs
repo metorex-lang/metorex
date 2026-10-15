@@ -1,6 +1,7 @@
 // Writing entries in, and what a hash reads back as.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Writing entries in, and what a hash reads back as.
@@ -82,13 +83,14 @@ impl VirtualMachine {
             // `to_h` answers the hash itself, or what the block makes of
             // each pair.
             "to_h" => {
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     return Ok(Some(receiver.clone()));
                 };
                 let mut built = indexmap::IndexMap::new();
                 for (key, value) in self.hash_pairs(dict_rc) {
                     let produced =
-                        self.execute_block_callable(&block, vec![key, value], position)?;
+                        self.execute_block_callable(block, vec![key, value], position)?;
                     let (new_key, new_value) = self.pair_from_block_result(produced, position)?;
                     let rendered =
                         crate::vm::utils::object_to_dict_key(&new_key).unwrap_or_default();
@@ -113,21 +115,23 @@ impl VirtualMachine {
                 if self.object_is_frozen(receiver) {
                     return Err(self.frozen_modification_error(receiver, position));
                 }
-                let other = match &arguments[0] {
-                    Object::Dict(_) => arguments[0].clone(),
+                let other = match arguments[0].view() {
+                    View::Dict(_) => arguments[0].clone(),
                     // An instance of a Hash subclass is read by the entries it
                     // holds, whatever `to_hash` it was given.
-                    other if crate::vm::native_methods::hash_subclass_value(other).is_some() => {
-                        crate::vm::native_methods::hash_subclass_value(other)
+                    _ if crate::vm::native_methods::hash_subclass_value(&arguments[0])
+                        .is_some() =>
+                    {
+                        crate::vm::native_methods::hash_subclass_value(&arguments[0])
                             .expect("a hash subclass carries its entries")
                     }
-                    other if self.responds_to(other, "to_hash") => {
-                        self.send_to_object(other.clone(), "to_hash", vec![], position)?
+                    _ if self.responds_to(&arguments[0], "to_hash") => {
+                        self.send_to_object(arguments[0].clone(), "to_hash", vec![], position)?
                     }
-                    other => {
+                    _ => {
                         let message = format!(
                             "no implicit conversion of {} into Hash",
-                            crate::vm::errors::conversion_subject(other)
+                            crate::vm::errors::conversion_subject(&arguments[0])
                         );
                         return Err(crate::vm::errors::simple_exception(
                             "TypeError",
@@ -136,7 +140,7 @@ impl VirtualMachine {
                         ));
                     }
                 };
-                let Object::Dict(other_rc) = &other else {
+                let View::Dict(other_rc) = other.view() else {
                     return Ok(Some(receiver.clone()));
                 };
                 // A Hash written as `replace(c: -1)` arrives carrying the
@@ -149,11 +153,12 @@ impl VirtualMachine {
             // The bang forms of the transforms change the receiver.
             "transform_values!" => {
                 if self.object_is_frozen(receiver)
-                    && matches!(self.pending_block, Some(Object::Block(_)))
+                    && matches!(self.pending_block.view(), Some(View::Block(_)))
                 {
                     return Err(self.frozen_modification_error(receiver, position));
                 }
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     return self
                         .make_enumerator(receiver, method_name, arguments, position)
                         .map(Some);
@@ -175,18 +180,18 @@ impl VirtualMachine {
                     } else {
                         key.clone()
                     };
-                    let answered =
-                        match self.execute_block_callable(&block, vec![subject], position) {
-                            Ok(answered) => answered,
-                            Err(MetorexError::BlockBreak {
-                                value: broke_value, ..
-                            }) => {
-                                broke_with = Some(broke_value);
-                                keep_pair(&mut built, key, value);
-                                break;
-                            }
-                            Err(error) => return Err(error),
-                        };
+                    let answered = match self.execute_block_callable(block, vec![subject], position)
+                    {
+                        Ok(answered) => answered,
+                        Err(MetorexError::BlockBreak {
+                            value: broke_value, ..
+                        }) => {
+                            broke_with = Some(broke_value);
+                            keep_pair(&mut built, key, value);
+                            break;
+                        }
+                        Err(error) => return Err(error),
+                    };
                     let (new_key, new_value) = if transforming_values {
                         (key, answered)
                     } else {

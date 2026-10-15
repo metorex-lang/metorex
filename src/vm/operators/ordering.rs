@@ -1,6 +1,7 @@
 // How two values order against each other.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Evaluate comparison operations on numeric operands.
@@ -11,12 +12,12 @@ impl VirtualMachine {
         right: Object,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        if matches!(left, Object::Class(_) | Object::Module(_)) {
+        if matches!(left.view(), View::Class(_) | View::Module(_)) {
             return self.evaluate_module_comparison(op, left, right, position);
         }
 
         // Two Symbols order by their names, as Symbol's Comparable does.
-        if let (Object::Symbol(a), Object::Symbol(b)) = (&left, &right) {
+        if let (View::Symbol(a), View::Symbol(b)) = (left.view(), right.view()) {
             let (a, b) = (a.as_str().to_string(), b.as_str().to_string());
             let result = match op {
                 BinaryOp::Less => a < b,
@@ -30,8 +31,8 @@ impl VirtualMachine {
 
         // Two exact integers compare exactly, without the rounding a Float
         // conversion would introduce at large magnitudes.
-        if matches!(left, Object::Int(_) | Object::BigInt(_))
-            && matches!(right, Object::Int(_) | Object::BigInt(_))
+        if matches!(left.view(), View::Int(_) | View::BigInt(_))
+            && matches!(right.view(), View::Int(_) | View::BigInt(_))
         {
             let a = left.as_big_integer().expect("integer-kinded");
             let b = right.as_big_integer().expect("integer-kinded");
@@ -47,18 +48,16 @@ impl VirtualMachine {
 
         // A bignum against a Float is ordered exactly, since rounding the
         // bignum to a Float would lose the digits the answer turns on.
-        let exact = match (&left, &right) {
-            (Object::BigInt(value), Object::Float(float)) => {
-                compare_integer_to_float(value, *float)
-            }
-            (Object::Float(float), Object::BigInt(value)) => {
-                compare_integer_to_float(value, *float).map(|order| order.reverse())
+        let exact = match (left.view(), right.view()) {
+            (View::BigInt(value), View::Float(float)) => compare_integer_to_float(value, float),
+            (View::Float(float), View::BigInt(value)) => {
+                compare_integer_to_float(value, float).map(|order| order.reverse())
             }
             _ => None,
         };
         if matches!(
-            (&left, &right),
-            (Object::BigInt(_), Object::Float(_)) | (Object::Float(_), Object::BigInt(_))
+            (left.view(), right.view()),
+            (View::BigInt(_), View::Float(_)) | (View::Float(_), View::BigInt(_))
         ) {
             use std::cmp::Ordering;
             // Nothing compares against NaN, which every ordering reports as
@@ -77,13 +76,13 @@ impl VirtualMachine {
         }
 
         // Numeric comparisons
-        let numeric_result = match (&left, &right) {
-            (Object::Int(a), Object::Int(b)) => Some((*a as f64, *b as f64)),
-            (Object::Float(a), Object::Float(b)) => Some((*a, *b)),
-            (Object::Int(a), Object::Float(b)) => Some((*a as f64, *b)),
-            (Object::Float(a), Object::Int(b)) => Some((*a, *b as f64)),
+        let numeric_result = match (left.view(), right.view()) {
+            (View::Int(a), View::Int(b)) => Some((a as f64, b as f64)),
+            (View::Float(a), View::Float(b)) => Some((a, b)),
+            (View::Int(a), View::Float(b)) => Some((a as f64, b)),
+            (View::Float(a), View::Int(b)) => Some((a, b as f64)),
             // String comparison
-            (Object::String(a), Object::String(b)) => {
+            (View::String(a), View::String(b)) => {
                 let result = match op {
                     BinaryOp::Less => **a < **b,
                     BinaryOp::Greater => **a > **b,
@@ -109,7 +108,7 @@ impl VirtualMachine {
 
         // A user-defined comparison operator wins over the Comparable
         // protocol, the way `==` already dispatches to its own definition.
-        if matches!(left, Object::Instance(_))
+        if matches!(left.view(), View::Instance(_))
             && let Some(operator) = comparison_operator_name(op)
             && let Some((class, method)) = self.lookup_method(&left, operator)
             && !method.is_undefined
@@ -120,7 +119,7 @@ impl VirtualMachine {
         // An object that is not Comparable has no comparison operator, so
         // the call is offered to `method_missing`, as any other missing
         // method would be.
-        if matches!(left, Object::Instance(_))
+        if matches!(left.view(), View::Instance(_))
             && let Some(operator) = comparison_operator_name(op)
             && !self.is_comparable(&left)
             && let Some((class, method)) = self.lookup_method(&left, "method_missing")
@@ -133,7 +132,7 @@ impl VirtualMachine {
         // Object defines no comparison operators; Comparable adds them on top
         // of `<=>`. An object of the program's own that is not Comparable has
         // no such method at all.
-        if matches!(left, Object::Instance(_))
+        if matches!(left.view(), View::Instance(_))
             && let Some(operator) = comparison_operator_name(op)
             && !self.is_comparable(&left)
         {
@@ -152,9 +151,9 @@ impl VirtualMachine {
             let left_type = self.class_name_for_comparison(&left, position);
             let right_type = self.comparison_subject(&right, position);
             let cmp_result = self.invoke_method(class, method, left, vec![right], position)?;
-            let cmp_value: Option<f64> = match &cmp_result {
-                Object::Int(n) => Some(*n as f64),
-                Object::Float(f) => Some(*f),
+            let cmp_value: Option<f64> = match cmp_result.view() {
+                View::Int(n) => Some(n as f64),
+                View::Float(f) => Some(f),
                 _ => None,
             };
             if let Some(n) = cmp_value {
@@ -169,7 +168,7 @@ impl VirtualMachine {
             }
             // A nil names the two values compared. Anything else is compared
             // with 0, which a value that is not a number refuses.
-            let message = if matches!(cmp_result, Object::Nil) {
+            let message = if matches!(cmp_result.view(), View::Nil) {
                 format!("comparison of {} with {} failed", left_type, right_type)
             } else {
                 format!(
@@ -187,13 +186,10 @@ impl VirtualMachine {
 
         // A value whose class orders nothing has no such operator at all.
         let orders_values = matches!(
-            left,
-            Object::Int(_)
-                | Object::BigInt(_)
-                | Object::Float(_)
-                | Object::String(_)
-                | Object::Symbol(_)
-        ) || (matches!(left, Object::Instance(_)) && self.is_comparable(&left));
+            left.view(),
+            View::Int(_) | View::BigInt(_) | View::Float(_) | View::String(_) | View::Symbol(_)
+        ) || (matches!(left.view(), View::Instance(_))
+            && self.is_comparable(&left));
         if !orders_values && let Some(operator) = comparison_operator_name(op) {
             return Err(crate::vm::errors::undefined_method_error(
                 operator,
@@ -206,13 +202,13 @@ impl VirtualMachine {
         // Ruby's format: "comparison of <LeftClass> with <right_value> failed",
         // where nil, true, false, a Symbol and a number are written as
         // themselves and anything else by its class.
-        let right_repr = match &right {
-            Object::Int(n) => n.to_string(),
-            Object::Float(f) => f.to_string(),
-            Object::Nil => "nil".to_string(),
-            Object::Bool(true) => "true".to_string(),
-            Object::Bool(false) => "false".to_string(),
-            Object::Symbol(name) => format!(":{name}"),
+        let right_repr = match right.view() {
+            View::Int(n) => n.to_string(),
+            View::Float(f) => f.to_string(),
+            View::Nil => "nil".to_string(),
+            View::Bool(true) => "true".to_string(),
+            View::Bool(false) => "false".to_string(),
+            View::Symbol(name) => format!(":{name}"),
             _ => named_class_of(&right),
         };
         let msg = format!(
@@ -276,9 +272,9 @@ impl VirtualMachine {
             )?;
             // The first result that is not zero is what the whole comparison
             // answers, whatever kind of value it is.
-            match order {
-                Object::Int(0) => continue,
-                other => return Ok(other),
+            match order.view() {
+                View::Int(0) => continue,
+                _ => return Ok(order.clone()),
             }
         }
         Ok(Object::Int(
@@ -294,8 +290,8 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         // Two exact integers order exactly, whatever their magnitude.
-        if matches!(left, Object::Int(_) | Object::BigInt(_))
-            && matches!(right, Object::Int(_) | Object::BigInt(_))
+        if matches!(left.view(), View::Int(_) | View::BigInt(_))
+            && matches!(right.view(), View::Int(_) | View::BigInt(_))
         {
             let a = left.as_big_integer().expect("integer-kinded");
             let b = right.as_big_integer().expect("integer-kinded");
@@ -303,38 +299,36 @@ impl VirtualMachine {
         }
         // Nothing compares against a value that is not a number, which is
         // what a NaN on either side makes the answer.
-        if matches!(&left, Object::Float(held) if held.is_nan())
-            || matches!(&right, Object::Float(held) if held.is_nan())
+        if matches!(left.view(), View::Float(held) if held.is_nan())
+            || matches!(right.view(), View::Float(held) if held.is_nan())
         {
             return Ok(Object::Nil);
         }
-        match (&left, &right) {
-            (Object::Int(a), Object::Int(b)) => Ok(Object::Int(a.cmp(b) as i64)),
+        match (left.view(), right.view()) {
+            (View::Int(a), View::Int(b)) => Ok(Object::Int(a.cmp(&b) as i64)),
             // A bignum carries more digits than a Float has, so the two are
             // ordered exactly rather than by rounding the bignum.
-            (Object::BigInt(a), Object::Float(b)) => {
-                Ok(compare_or_nil(compare_integer_to_float(a, *b)))
-            }
-            (Object::Float(a), Object::BigInt(b)) => Ok(compare_or_nil(
-                compare_integer_to_float(b, *a).map(std::cmp::Ordering::reverse),
+            (View::BigInt(a), View::Float(b)) => Ok(compare_or_nil(compare_integer_to_float(a, b))),
+            (View::Float(a), View::BigInt(b)) => Ok(compare_or_nil(
+                compare_integer_to_float(b, a).map(std::cmp::Ordering::reverse),
             )),
-            (Object::Float(a), Object::Float(b)) => Ok(compare_or_nil(a.partial_cmp(b))),
-            (Object::Int(a), Object::Float(b)) => {
-                let a = *a as f64;
-                Ok(compare_or_nil(a.partial_cmp(b)))
+            (View::Float(a), View::Float(b)) => Ok(compare_or_nil(a.partial_cmp(&b))),
+            (View::Int(a), View::Float(b)) => {
+                let a = a as f64;
+                Ok(compare_or_nil(a.partial_cmp(&b)))
             }
-            (Object::Float(a), Object::Int(b)) => {
-                let b = *b as f64;
+            (View::Float(a), View::Int(b)) => {
+                let b = b as f64;
                 Ok(Object::Int(a.partial_cmp(&b).map_or(0, |o| o as i64)))
             }
-            (Object::String(a), Object::String(b)) => Ok(Object::Int(a.cmp(b) as i64)),
+            (View::String(a), View::String(b)) => Ok(Object::Int(a.cmp(b) as i64)),
             // A Symbol orders by its name, the way its String does.
-            (Object::Symbol(a), Object::Symbol(b)) => Ok(Object::Int(a.cmp(b) as i64)),
+            (View::Symbol(a), View::Symbol(b)) => Ok(Object::Int(a.cmp(b) as i64)),
             // Module#<=>: compares the ancestry relationship of two modules or
             // classes. -1 when the left is a descendant/includer of the right,
             // +1 when it's an ancestor/included-by, 0 when they're the same,
             // and nil when they're unrelated.
-            (Object::Class(a) | Object::Module(a), Object::Class(b) | Object::Module(b)) => {
+            (View::Class(a) | View::Module(a), View::Class(b) | View::Module(b)) => {
                 let left_below_right = self.builtins().is_subclass_of(a, b);
                 let right_below_left = self.builtins().is_subclass_of(b, a);
                 Ok(match (left_below_right, right_below_left) {
@@ -346,7 +340,7 @@ impl VirtualMachine {
             }
             // Module#<=> against a non-module argument returns nil rather than
             // raising.
-            (Object::Class(_) | Object::Module(_), _) => Ok(Object::Nil),
+            (View::Class(_) | View::Module(_), _) => Ok(Object::Nil),
             // Two values of unrelated kinds have no ordering, and Ruby reports
             // that as nil rather than as an error. `sort` and friends turn it
             // into the ArgumentError a caller sees.
@@ -365,17 +359,18 @@ impl VirtualMachine {
         right: &Object,
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        let Object::String(text) = left else {
+        let View::String(text) = left.view() else {
             return Ok(None);
         };
         // An instance of a String subclass orders by the characters behind it,
         // so a subclass compares equal to the string it was built from.
-        let other = match right {
-            Object::String(other) => Some(Rc::clone(other)),
-            held => match crate::vm::native_methods::string_subclass_value(held) {
-                Some(Object::String(other)) => Some(other),
+        let other = match right.view() {
+            View::String(other) => Some(Rc::clone(other)),
+            _ => (match crate::vm::native_methods::string_subclass_value(right).view() {
+                Some(View::String(other)) => Some(other),
                 _ => None,
-            },
+            })
+            .cloned(),
         };
         if let Some(other) = other {
             return Ok(Some(order_two_strings(text, &other)));
@@ -384,8 +379,8 @@ impl VirtualMachine {
         // as, which is what `to_str` answers.
         if self.responds_to(right, "to_str") {
             let read = self.send_to_object(right.clone(), "to_str", vec![], position)?;
-            if let Object::String(other) = read {
-                return Ok(Some(order_two_strings(text, &other)));
+            if let View::String(other) = read.view() {
+                return Ok(Some(order_two_strings(text, other)));
             }
             return Ok(Some(Object::Nil));
         }
@@ -403,8 +398,8 @@ impl VirtualMachine {
         INVERSE_COMPARISONS.with(|held| {
             held.borrow_mut().pop();
         });
-        Ok(Some(match answered? {
-            Object::Int(order) => Object::Int(-order),
+        Ok(Some(match answered?.view() {
+            View::Int(order) => Object::Int(-order),
             _ => Object::Nil,
         }))
     }
@@ -420,7 +415,7 @@ impl VirtualMachine {
         // Object#<=> answers 0 for the same object or when #== says
         // so, and nil otherwise. It never consults #eql?. A class that
         // defines its own #<=> is dispatched before reaching here.
-        if let Object::Instance(inst_rc) = &left {
+        if let View::Instance(inst_rc) = left.view() {
             // A class of the program's own answers for itself, which
             // is what a walk over elements reaches here.
             if let Some((class, method)) = self.lookup_method(&left, "<=>")
@@ -429,7 +424,7 @@ impl VirtualMachine {
             {
                 return self.invoke_method(class, method, left.clone(), vec![right], position);
             }
-            if let Object::Instance(rhs) = &right
+            if let View::Instance(rhs) = right.view()
                 && Rc::ptr_eq(inst_rc, rhs)
             {
                 return Ok(Object::Int(0));
@@ -443,7 +438,7 @@ impl VirtualMachine {
         }
         // Two arrays order element by element, and each element is
         // sent `<=>` so one of the program's own answers for itself.
-        if let Object::Array(left_elements) = &left {
+        if let View::Array(left_elements) = left.view() {
             let left_elements = Rc::clone(left_elements);
             if let Some(right_elements) = self.as_array_operand(&right, position)? {
                 return self.order_arrays(&left_elements, &right_elements, position);
@@ -453,29 +448,29 @@ impl VirtualMachine {
         // An endless Float orders against anything that reports
         // which end it stands at, and against a finite value it is
         // simply greater.
-        if let Object::Float(held) = &left
+        if let View::Float(held) = left.view()
             && held.is_infinite()
-            && matches!(right, Object::Instance(_))
+            && matches!(right.view(), View::Instance(_))
             && self.responds_to(&right, "infinite?")
         {
             let reported = self.send_to_object(right.clone(), "infinite?", Vec::new(), position)?;
-            let theirs = match reported {
-                Object::Int(held) => held,
+            let theirs = match reported.view() {
+                View::Int(held) => held,
                 _ => 0,
             };
-            let mine = if *held > 0.0 { 1 } else { -1 };
+            let mine = if held > 0.0 { 1 } else { -1 };
             return Ok(Object::Int(mine.cmp(&theirs) as i64));
         }
         // A String orders against anything that reads as one, then
         // against anything that orders itself, and has no order at
         // all with anything else.
-        if matches!(&left, Object::String(_))
+        if matches!(left.view(), View::String(_))
             && let Some(order) = self.order_string_against(&left, &right, position)?
         {
             return Ok(order);
         }
         let ordered = self.evaluate_spaceship(left.clone(), right.clone(), position)?;
-        if !matches!(ordered, Object::Nil) {
+        if !matches!(ordered.view(), View::Nil) {
             return Ok(ordered);
         }
         // Object#<=> answers 0 for two values `==` calls the same and
@@ -485,8 +480,8 @@ impl VirtualMachine {
         // written for an operand of another kind.
         if is_number(&left)
             || matches!(
-                left,
-                Object::String(_) | Object::Symbol(_) | Object::Array(_)
+                left.view(),
+                View::String(_) | View::Symbol(_) | View::Array(_)
             )
         {
             return Ok(Object::Nil);
@@ -511,11 +506,11 @@ thread_local! {
 /// The address an object is known by while an inverse comparison runs. A value
 /// with no address of its own stands for itself.
 fn object_identity(held: &Object) -> usize {
-    match held {
-        Object::String(text) => Rc::as_ptr(text) as usize,
-        Object::Instance(instance) => Rc::as_ptr(instance) as usize,
-        Object::Array(elements) => Rc::as_ptr(elements) as usize,
-        Object::Dict(entries) => Rc::as_ptr(entries) as usize,
+    match held.view() {
+        View::String(text) => Rc::as_ptr(text) as usize,
+        View::Instance(instance) => Rc::as_ptr(instance) as usize,
+        View::Array(elements) => Rc::as_ptr(elements) as usize,
+        View::Dict(entries) => Rc::as_ptr(entries) as usize,
         _ => 0,
     }
 }
@@ -601,10 +596,11 @@ impl VirtualMachine {
     /// Whether the object is a kind of Comparable, through its class or a
     /// module it was extended with.
     pub(crate) fn is_comparable(&self, object: &Object) -> bool {
-        let Some(Object::Module(comparable)) = self.globals().get("Comparable") else {
+        let viewed = self.globals().get("Comparable");
+        let Some(View::Module(comparable)) = viewed.view() else {
             return false;
         };
-        self.builtins().is_instance_of(object, &comparable)
+        self.builtins().is_instance_of(object, comparable)
     }
 
     /// The name of the object's class, as a failed comparison names it.
@@ -619,26 +615,26 @@ impl VirtualMachine {
     /// does: an immediate value or a Float by its `inspect`, anything else by
     /// its class.
     fn comparison_subject(&mut self, object: &Object, position: Position) -> String {
-        match object {
-            Object::Nil
-            | Object::Bool(_)
-            | Object::Int(_)
-            | Object::Symbol(_)
-            | Object::Float(_) => {
-                match self.send_to_object(object.clone(), "inspect", Vec::new(), position) {
-                    Ok(Object::String(text)) => text.as_str().to_string(),
+        match object.view() {
+            View::Nil | View::Bool(_) | View::Int(_) | View::Symbol(_) | View::Float(_) => {
+                match self
+                    .send_to_object(object.clone(), "inspect", Vec::new(), position)
+                    .as_ref()
+                    .map(Object::view)
+                {
+                    Ok(View::String(text)) => text.as_str().to_string(),
                     _ => object.to_string(),
                 }
             }
-            other => self.class_name_for_comparison(other, position),
+            _ => self.class_name_for_comparison(object, position),
         }
     }
 }
 
 /// The name of the class a value is an instance of, as an error names it.
 fn named_class_of(value: &Object) -> String {
-    match value {
-        Object::Instance(held) => held.borrow().class.ruby_name(),
-        other => crate::vm::native_methods::define_method::ruby_class_name(other).to_string(),
+    match value.view() {
+        View::Instance(held) => held.borrow().class.ruby_name(),
+        _ => crate::vm::native_methods::define_method::ruby_class_name(value).to_string(),
     }
 }

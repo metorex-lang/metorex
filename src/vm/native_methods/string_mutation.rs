@@ -7,6 +7,7 @@
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 use crate::vm::errors::*;
 use crate::vm::native_methods::as_range;
@@ -65,7 +66,7 @@ impl VirtualMachine {
         if !MUTATING_STRING_METHODS.contains(&method_name) {
             return Ok(None);
         }
-        let Object::String(target) = receiver else {
+        let View::String(target) = receiver.view() else {
             return Ok(None);
         };
         // Saying that something else is reading the string is not itself a
@@ -116,11 +117,11 @@ impl VirtualMachine {
                 }
                 let mut added = String::new();
                 for argument in arguments {
-                    match argument {
+                    match argument.view() {
                         // Text written in an encoding this one cannot be read
                         // alongside is refused, and text that goes with it
                         // carries its own reading into the result.
-                        Object::String(other) => {
+                        View::String(other) => {
                             // Text that stands for bytes carries that over,
                             // so a byte the encoding cannot read stays the
                             // byte it was rather than being written out.
@@ -144,7 +145,7 @@ impl VirtualMachine {
                         }
                         // A number names a codepoint, which has to be one the
                         // string's own encoding can spell.
-                        Object::Int(_) | Object::BigInt(_) => {
+                        View::Int(_) | View::BigInt(_) => {
                             let (letter, binary) = self.appended_codepoint(
                                 &target.encoding_name(),
                                 argument,
@@ -156,7 +157,7 @@ impl VirtualMachine {
                             }
                             added.push(letter);
                         }
-                        other => added.push_str(&self.one_string_value("<<", other, position)?),
+                        _ => added.push_str(&self.one_string_value("<<", argument, position)?),
                     }
                 }
                 target.append_text(&added);
@@ -166,8 +167,8 @@ impl VirtualMachine {
                 let text = self.one_string_argument(method_name, arguments, position)?;
                 // The replacement's encoding comes with its text, and so does
                 // whether that text is held as bytes.
-                let holds_bytes = match arguments.first() {
-                    Some(Object::String(source)) => {
+                let holds_bytes = match arguments.first().view() {
+                    Some(View::String(source)) => {
                         target.set_encoding(source.encoding_name());
                         source.holds_bytes()
                     }
@@ -202,7 +203,7 @@ impl VirtualMachine {
                 // Text written in an encoding this one cannot be read
                 // alongside is refused, and text that goes with it carries
                 // its own reading into the result.
-                if let Object::String(other) = &arguments[1] {
+                if let View::String(other) = arguments[1].view() {
                     if crate::vm::native_methods::string_methods::encodings_clash(target, other) {
                         return Err(
                             crate::vm::native_methods::string_methods::clashing_encodings_error(
@@ -252,20 +253,20 @@ impl VirtualMachine {
             "append_as_bytes" => {
                 let mut bytes = super::string_methods::binary_bytes(target);
                 for given in arguments {
-                    match given {
-                        Object::String(text) => {
+                    match given.view() {
+                        View::String(text) => {
                             bytes.extend(super::string_methods::binary_bytes(text));
                         }
-                        Object::Int(number) => bytes.push(number.rem_euclid(256) as u8),
-                        Object::BigInt(number) => {
+                        View::Int(number) => bytes.push(number.rem_euclid(256) as u8),
+                        View::BigInt(number) => {
                             let wrapped = ((number.as_ref() % 256u32) + 256u32) % 256u32;
                             let digits = wrapped.to_u32_digits().1;
                             bytes.push(digits.first().copied().unwrap_or(0) as u8);
                         }
-                        other => {
+                        _ => {
                             let message = format!(
                                 "wrong argument type {} (expected String or Integer)",
-                                self.builtins().class_of(other).name()
+                                self.builtins().class_of(given).name()
                             );
                             return Err(crate::vm::errors::simple_exception(
                                 "TypeError",
@@ -306,7 +307,7 @@ impl VirtualMachine {
                     ));
                 }
                 bytes[at as usize] = (value.rem_euclid(256)) as u8;
-                if let Object::String(made) = super::pack_format::bytes_to_string(&bytes) {
+                if let View::String(made) = super::pack_format::bytes_to_string(&bytes).view() {
                     target.replace_text(made.to_text());
                     // The bytes written may not spell a letter in the string's
                     // encoding any more, so what it holds stands for bytes.
@@ -324,7 +325,7 @@ impl VirtualMachine {
             "encode!" | "scrub!" | "unicode_normalize!" => {
                 let plain = method_name.trim_end_matches('!');
                 let answered = self.call_string_method(receiver, plain, arguments, position)?;
-                if let Some(Object::String(made)) = answered {
+                if let Some(View::String(made)) = answered.view() {
                     // A string already reading the way it was asked to is
                     // left alone, so a frozen one that needs no change is
                     // not refused.
@@ -352,7 +353,7 @@ impl VirtualMachine {
                 let outcome = self.call_string_method(receiver, plain, arguments, position);
                 target.set_borrowed(false);
                 let answered = outcome?;
-                let Some(Object::String(made)) = answered else {
+                let Some(View::String(made)) = answered.view() else {
                     // A pattern on its own answers an Enumerator over the
                     // matches rather than a string.
                     return Ok(Some(answered.unwrap_or(Object::Nil)));
@@ -374,7 +375,7 @@ impl VirtualMachine {
                 let plain = method_name.trim_end_matches('!');
                 let before = target.to_text();
                 let answered = self.call_string_method(receiver, plain, arguments, position)?;
-                let Some(Object::String(made)) = answered else {
+                let Some(View::String(made)) = answered.view() else {
                     return Ok(Some(Object::Nil));
                 };
                 let after = made.to_text();
@@ -409,10 +410,9 @@ impl VirtualMachine {
                 position,
             )
         };
-        let Object::Int(code) = argument else {
+        let View::Int(code) = argument.view() else {
             return Err(refuse(&argument.to_string()));
         };
-        let code = *code;
         if code < 0 {
             return Err(refuse(&code.to_string()));
         }
@@ -451,12 +451,12 @@ impl VirtualMachine {
         argument: &Object,
         position: Position,
     ) -> Result<String, MetorexError> {
-        if let Object::String(text) = argument {
+        if let View::String(text) = argument.view() {
             return Ok(text.to_text());
         }
         if self.responds_to(argument, "to_str") {
             let named = self.send_to_object(argument.clone(), "to_str", vec![], position)?;
-            if let Object::String(text) = named {
+            if let View::String(text) = named.view() {
                 return Ok(text.to_text());
             }
         }
@@ -493,35 +493,39 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        let Object::String(target) = receiver else {
+        let View::String(target) = receiver.view() else {
             return Ok(None);
         };
         let held = target.to_text();
         let taken = self.call_string_method(receiver, "slice", arguments, position)?;
-        let Some(Object::String(cut)) = taken.clone() else {
+        let viewed = taken.clone();
+        let Some(View::String(cut)) = viewed.view() else {
             return Ok(Some(Object::Nil));
         };
         let removed = cut.to_text();
         // Where the part sits decides what is left, and only an index form
         // says outright where that is.
         let letters: Vec<char> = held.chars().collect();
-        let start = match arguments.first() {
-            Some(Object::Int(index)) => {
-                let at = if *index < 0 {
-                    *index + letters.len() as i64
+        let start = match arguments.first().view() {
+            Some(View::Int(index)) => {
+                let at = if index < 0 {
+                    index + letters.len() as i64
                 } else {
-                    *index
+                    index
                 };
                 usize::try_from(at).unwrap_or(0)
             }
-            Some(Object::Range { start, .. }) => {
+            Some(View::Range { start, .. }) => {
                 // An end written as something that answers `to_int` names a
                 // place the same way a number does.
-                let index = match start.as_ref() {
-                    Object::Int(index) => Some(*index),
-                    held if self.answers_to(held, "to_int", position)? => {
-                        match self.send_to_object(held.clone(), "to_int", vec![], position)? {
-                            Object::Int(index) => Some(index),
+                let index = match start.view() {
+                    View::Int(index) => Some(index),
+                    _ if self.answers_to(start, "to_int", position)? => {
+                        match self
+                            .send_to_object(start.clone(), "to_int", vec![], position)?
+                            .view()
+                        {
+                            View::Int(index) => Some(index),
                             _ => None,
                         }
                     }
@@ -560,7 +564,7 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        let Object::String(target) = receiver else {
+        let View::String(target) = receiver.view() else {
             return Ok(None);
         };
         // The three shapes Ruby accepts: a range and a string, a range with
@@ -598,7 +602,7 @@ impl VirtualMachine {
                 ));
             }
         };
-        let Object::String(source) = replacement else {
+        let View::String(source) = replacement.view() else {
             let message = format!(
                 "no implicit conversion of {} into String",
                 crate::vm::errors::conversion_subject(replacement)
@@ -674,12 +678,13 @@ impl VirtualMachine {
                 Ok((at as usize, wanted.min(total - at) as usize))
             }
             SpliceSpan::Whole(value) => {
-                let Some(Object::Range {
+                let range = as_range(value);
+                let Some(View::Range {
                     start,
                     end,
                     exclusive,
                     ..
-                }) = as_range(value)
+                }) = range.view()
                 else {
                     let message = format!(
                         "wrong argument type {} (expected Range)",
@@ -691,7 +696,7 @@ impl VirtualMachine {
                         position,
                     ));
                 };
-                let opening = match self.span_end_index(start.as_ref(), position)? {
+                let opening = match self.span_end_index(start, position)? {
                     Some(number) if number < 0 => number + total,
                     Some(number) => number,
                     None => 0,
@@ -704,7 +709,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let closing = match self.span_end_index(end.as_ref(), position)? {
+                let closing = match self.span_end_index(end, position)? {
                     Some(number) => {
                         let placed = if number < 0 { number + total } else { number };
                         if exclusive { placed } else { placed + 1 }

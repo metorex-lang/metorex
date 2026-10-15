@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -129,7 +130,7 @@ arr = []
 end
 arr
 "#);
-    if let Some(Object::Array(arr)) = result {
+    if let Some(View::Array(arr)) = result.view() {
         let arr = arr.borrow();
         assert_eq!(arr.len(), 3);
         assert_eq!(arr[0], Object::Int(0));
@@ -164,8 +165,8 @@ count
 #[test]
 fn int_times_no_block_returns_range_array() {
     let result = run("5.times");
-    let arr = match result {
-        Some(Object::Array(a)) => a,
+    let arr = match result.view() {
+        Some(View::Array(a)) => a,
         other => panic!("expected array, got {other:?}"),
     };
     let expected: Vec<Object> = (0..5).map(Object::Int).collect();

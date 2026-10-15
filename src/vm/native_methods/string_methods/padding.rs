@@ -2,6 +2,7 @@
 // STDERR answer while they are held as strings.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Padding a string out to a width, and the stream methods STDOUT and
@@ -28,21 +29,21 @@ impl VirtualMachine {
                 let pad = if arguments.len() == 2 {
                     // Anything that spells itself as text pads with those
                     // characters, which is what `to_str` is asked for.
-                    let given = match &arguments[1] {
-                        held @ Object::String(_) => held.clone(),
-                        other if self.responds_to(other, "to_str") => {
-                            self.send_to_object(other.clone(), "to_str", vec![], position)?
+                    let given = match arguments[1].view() {
+                        View::String(_) => arguments[1].clone(),
+                        _ if self.responds_to(&arguments[1], "to_str") => {
+                            self.send_to_object(arguments[1].clone(), "to_str", vec![], position)?
                         }
-                        other => {
+                        _ => {
                             return Err(method_argument_type_error(
                                 method_name,
                                 "String",
-                                other,
+                                &arguments[1],
                                 position,
                             ));
                         }
                     };
-                    let Object::String(text) = &given else {
+                    let View::String(text) = given.view() else {
                         return Err(method_argument_type_error(
                             method_name,
                             "String",
@@ -88,7 +89,7 @@ impl VirtualMachine {
                 // The padded string is written in whichever of the two
                 // encodings holds both, which is the pattern's when the
                 // padding brought characters the receiver's cannot spell.
-                if let Object::String(built) = &made {
+                if let View::String(built) = made.view() {
                     let wider = match &pad_encoding {
                         Some(name)
                             if *name != string_value.encoding_name() && !padding.is_ascii() =>
@@ -134,15 +135,16 @@ impl VirtualMachine {
                 let bytes = binary_bytes(string_value);
                 // With no separator named, the one `$/` holds decides, and
                 // without a value of its own that is the line ending.
-                let named = match arguments.first() {
-                    None => match self.globals().get("/") {
-                        Some(Object::String(held)) => Some(held.to_text()),
+                let named = match arguments.first().view() {
+                    None => match self.globals().get("/").view() {
+                        Some(View::String(held)) => Some(held.to_text()),
                         _ => Some("\n".to_string()),
                     },
-                    Some(Object::Nil) => None,
-                    Some(Object::String(held)) => Some(held.to_text()),
+                    Some(View::Nil) => None,
+                    Some(View::String(held)) => Some(held.to_text()),
                     Some(other) => {
-                        let spelled = self.string_argument(method_name, other, position)?;
+                        let spelled =
+                            self.string_argument(method_name, &other.to_object(), position)?;
                         Some(spelled)
                     }
                 };

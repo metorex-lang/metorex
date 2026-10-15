@@ -1,6 +1,7 @@
 // The pieces `encode` and `inspect` are built from.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 /// What an `encode` was told to do with bytes the source encoding cannot
 /// read and characters the destination cannot spell.
@@ -25,23 +26,23 @@ pub(crate) fn encode_options(arguments: &[Object]) -> (&[Object], EncodeOptions)
         newline: None,
         newline_flags: Vec::new(),
     };
-    let Some(Object::Dict(pairs)) = arguments.last() else {
+    let Some(View::Dict(pairs)) = arguments.last().view() else {
         return (arguments, options);
     };
     let held = pairs.borrow();
     if !held.contains_key("__MX_KWARGS__") {
         return (arguments, options);
     }
-    let asks_replace = |key: &str| matches!(held.get(key), Some(Object::Symbol(named)) if &*named.as_str() == "replace");
+    let asks_replace = |key: &str| matches!(held.get(key).view(), Some(View::Symbol(named)) if &*named.as_str() == "replace");
     options.invalid_replace = asks_replace(":invalid");
     options.undef_replace = asks_replace(":undef");
-    if let Some(Object::String(text)) = held.get(":replace") {
+    if let Some(View::String(text)) = held.get(":replace").view() {
         options.replace = Some(text.as_str().to_string());
     }
     options.fallback = held.get(":fallback").cloned();
     options.newline = held
         .get(":newline")
-        .filter(|named| !matches!(named, Object::Nil))
+        .filter(|named| !matches!(named.view(), View::Nil))
         .cloned();
     for flag in ["universal_newline", "crlf_newline", "cr_newline"] {
         if held.get(&format!(":{flag}")).is_some_and(Object::is_truthy) {
@@ -50,7 +51,7 @@ pub(crate) fn encode_options(arguments: &[Object]) -> (&[Object], EncodeOptions)
     }
     options.xml = held
         .get(":xml")
-        .filter(|named| !matches!(named, Object::Nil))
+        .filter(|named| !matches!(named.view(), View::Nil))
         .cloned();
     drop(held);
     (&arguments[..arguments.len() - 1], options)
@@ -146,10 +147,8 @@ pub(crate) fn invalid_bytes_error(
 
 /// Set an instance variable of the exception an error carries.
 pub(crate) fn set_exception_attribute(error: &MetorexError, name: &str, value: Object) {
-    if let MetorexError::UncaughtException {
-        exception: Object::Exception(details),
-        ..
-    } = error
+    if let MetorexError::UncaughtException { exception, .. } = error
+        && let View::Exception(details) = exception.view()
     {
         details
             .borrow_mut()
@@ -382,14 +381,14 @@ impl VirtualMachine {
         named: &Object,
         position: Position,
     ) -> Result<String, MetorexError> {
-        let named = match named {
-            Object::Class(_) | Object::String(_) => named.clone(),
-            other if self.responds_to(other, "to_str") => {
-                self.send_to_object(other.clone(), "to_str", vec![], position)?
+        let named = match named.view() {
+            View::Class(_) | View::String(_) => named.clone(),
+            _ if self.responds_to(named, "to_str") => {
+                self.send_to_object(named.clone(), "to_str", vec![], position)?
             }
-            other => other.clone(),
+            _ => named.clone(),
         };
-        let Object::String(text) = &named else {
+        let View::String(text) = named.view() else {
             return self.encoding_name_argument(&named, position);
         };
         let written = text.to_text();
@@ -532,19 +531,22 @@ impl VirtualMachine {
                 vec![Object::string(character.to_string())],
                 position,
             )?;
-            let stands_in = match &answered {
-                Object::Nil => {
+            let stands_in = match answered.view() {
+                View::Nil => {
                     written.push(character);
                     continue;
                 }
-                Object::String(text) => text.to_text(),
-                other if self.responds_to(other, "to_str") => {
-                    match self.send_to_object(other.clone(), "to_str", vec![], position)? {
-                        Object::String(text) => text.to_text(),
-                        _ => return Err(self.string_conversion_error(other, position)),
+                View::String(text) => text.to_text(),
+                _ if self.responds_to(&answered, "to_str") => {
+                    match self
+                        .send_to_object(answered.clone(), "to_str", vec![], position)?
+                        .view()
+                    {
+                        View::String(text) => text.to_text(),
+                        _ => return Err(self.string_conversion_error(&answered, position)),
                     }
                 }
-                other => return Err(self.string_conversion_error(other, position)),
+                _ => return Err(self.string_conversion_error(&answered, position)),
             };
             if !stands_in
                 .chars()
@@ -572,10 +574,10 @@ pub(crate) enum XmlEscape {
 
 /// What `xml:` names, refusing anything but `:text` and `:attr`.
 pub(crate) fn xml_escape(named: &Object, position: Position) -> Result<XmlEscape, MetorexError> {
-    let message = match named {
-        Object::Symbol(held) if &*held.as_str() == "text" => return Ok(XmlEscape::Text),
-        Object::Symbol(held) if &*held.as_str() == "attr" => return Ok(XmlEscape::Attribute),
-        Object::Symbol(held) => format!("unexpected value for xml option: {}", held.as_str()),
+    let message = match named.view() {
+        View::Symbol(held) if &*held.as_str() == "text" => return Ok(XmlEscape::Text),
+        View::Symbol(held) if &*held.as_str() == "attr" => return Ok(XmlEscape::Attribute),
+        View::Symbol(held) => format!("unexpected value for xml option: {}", held.as_str()),
         _ => "unexpected value for xml option".to_string(),
     };
     Err(crate::vm::errors::simple_exception(
@@ -624,8 +626,8 @@ pub(crate) fn newline_conversion(
     position: Position,
 ) -> Result<Option<NewlineConversion>, MetorexError> {
     if let Some(named) = &options.newline {
-        let message = match named {
-            Object::Symbol(held) => match &*held.as_str() {
+        let message = match named.view() {
+            View::Symbol(held) => match &*held.as_str() {
                 "universal" | "lf" => return Ok(Some(NewlineConversion::Universal)),
                 "crlf" => return Ok(Some(NewlineConversion::Crlf)),
                 "cr" => return Ok(Some(NewlineConversion::Cr)),

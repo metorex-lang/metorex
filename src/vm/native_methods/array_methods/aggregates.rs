@@ -1,6 +1,7 @@
 // The smallest, largest and how many, and the sets two arrays make.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The smallest, largest and how many, and the sets two arrays make.
@@ -35,14 +36,15 @@ impl VirtualMachine {
                     }
                     return Ok(Some(Object::Int(counted)));
                 }
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     return Ok(Some(Object::Int(array_rc.borrow().len() as i64)));
                 };
                 let mut counted = 0;
                 let mut index = 0;
                 while let Some(element) = element_at(array_rc, index) {
                     index += 1;
-                    let verdict = self.execute_block_callable(&block, vec![element], position)?;
+                    let verdict = self.execute_block_callable(block, vec![element], position)?;
                     if verdict.is_truthy() {
                         counted += 1;
                     }
@@ -60,7 +62,8 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     return self
                         .make_enumerator(receiver, method_name, arguments, position)
                         .map(Some);
@@ -69,7 +72,7 @@ impl VirtualMachine {
                 let mut index = 0;
                 while let Some(element) = element_at(array_rc, index) {
                     let verdict =
-                        self.execute_block_callable(&block, vec![element.clone()], position)?;
+                        self.execute_block_callable(block, vec![element.clone()], position)?;
                     if !verdict.is_truthy() {
                         break;
                     }
@@ -129,8 +132,9 @@ impl VirtualMachine {
                 // The block is set aside first, since coercing the index runs
                 // `to_int` on an object of the program's own, which would
                 // otherwise take the block for itself.
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => Some(block),
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(block)) => Some(block),
                     _ => None,
                 };
                 let index: i64 = self
@@ -153,7 +157,7 @@ impl VirtualMachine {
                 }
                 if let Some(block) = block {
                     return self
-                        .execute_block_callable(&block, vec![arguments[0].clone()], position)
+                        .execute_block_callable(block, vec![arguments[0].clone()], position)
                         .map(Some);
                 }
                 if let Some(fallback) = arguments.get(1) {
@@ -172,8 +176,9 @@ impl VirtualMachine {
             // `fetch_values(*indexes)` fetches each one, so a missing index
             // raises unless the block says what to answer for it.
             "fetch_values" => {
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => Some(block),
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(block)) => Some(block),
                     _ => None,
                 };
                 let mut fetched = Vec::with_capacity(arguments.len());

@@ -4,6 +4,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -52,8 +53,8 @@ fn stabby_lambda_postfix_class_method() {
     // `.class` on a lambda returns Proc. The important thing for coverage is
     // reaching line 219's `TokenKind::Class` arm inside parse_postfix_calls.
     let result = run("-> { 1 }.class.name");
-    match result {
-        Some(Object::String(s)) => assert_eq!(&*s.as_str(), "Proc"),
+    match result.view() {
+        Some(View::String(s)) => assert_eq!(&*s.as_str(), "Proc"),
         other => panic!("expected 'Proc', got {:?}", other),
     }
 }
@@ -108,8 +109,8 @@ fn stabby_lambda_postfix_bad_method_errors() {
 #[test]
 fn stabby_lambda_chained_postfix_calls() {
     let result = run("-> { 5 }.call.class.name");
-    match result {
-        Some(Object::String(s)) => assert_eq!(&*s.as_str(), "Integer"),
+    match result.view() {
+        Some(View::String(s)) => assert_eq!(&*s.as_str(), "Integer"),
         other => panic!("expected 'Integer', got {:?}", other),
     }
 }

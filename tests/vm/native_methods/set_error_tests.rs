@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -81,7 +82,7 @@ def test_set_return
 end
 test_set_return
 "#);
-    assert!(matches!(result, Some(Object::String(_))));
+    assert!(matches!(result.view(), Some(View::String(_))));
 }
 
 #[test]

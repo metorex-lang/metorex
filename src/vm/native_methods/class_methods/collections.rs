@@ -1,6 +1,7 @@
 // Building an Array, Hash or Set from a class method.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// `Array[]`, `Hash[]`, `Set[]` and the `new` each of them answers.
@@ -40,8 +41,8 @@ impl VirtualMachine {
                     position,
                 ));
             }
-            let Some(Object::Dict(pairs)) = crate::vm::native_methods::as_dict(&arguments[0])
-            else {
+            let viewed = crate::vm::native_methods::as_dict(&arguments[0]);
+            let Some(View::Dict(pairs)) = viewed.view() else {
                 let message = format!(
                     "wrong argument type {} (expected Hash)",
                     self.builtins().class_of(&arguments[0]).name()
@@ -59,7 +60,7 @@ impl VirtualMachine {
             }
             let copy = self.call_object_method(&arguments[0], "dup", &[], position)?;
             let made = copy.unwrap_or_else(|| arguments[0].clone());
-            if let Some(Object::Dict(copied)) = crate::vm::native_methods::as_dict(&made) {
+            if let Some(View::Dict(copied)) = crate::vm::native_methods::as_dict(&made).view() {
                 // The copy is a Hash of its own, not the keywords the call
                 // handed over.
                 copied
@@ -76,7 +77,7 @@ impl VirtualMachine {
             let mut entries: Vec<(Object, Object)> = Vec::new();
             match arguments {
                 [] => {}
-                [Object::Dict(source)] => {
+                [source] if let View::Dict(source) = source.view() => {
                     for (key, value) in source.borrow().iter() {
                         if key.starts_with("__MX_") {
                             continue;
@@ -85,25 +86,26 @@ impl VirtualMachine {
                     }
                     let mut built = indexmap::IndexMap::new();
                     for (key, value) in entries {
-                        let Object::String(rendered) = key else {
+                        let View::String(rendered) = key.view() else {
                             continue;
                         };
                         built.insert(rendered.as_str().to_string(), value);
                     }
                     return Ok(Answered(hash_of_class(class_rc, built)));
                 }
-                [Object::Array(rows)] => {
+                [rows] if let View::Array(rows) = rows.view() => {
                     let held = rows.borrow().clone();
                     for (at, row) in held.iter().enumerate() {
                         // Every element names a pair, so anything that is not
                         // one, and any pair with the wrong number of parts,
                         // is refused where it stands.
-                        let Object::Array(pair) = row else {
+                        let View::Array(pair) = row.view() else {
                             let message = format!(
                                 "wrong element type {} at {} (expected array)",
-                                match row {
-                                    Object::Nil => "nil".to_string(),
-                                    other => self.builtins().class_of(other).ruby_name(),
+                                match row.view() {
+                                    View::Nil => "nil".to_string(),
+                                    other =>
+                                        self.builtins().class_of(&other.to_object()).ruby_name(),
                                 },
                                 at
                             );
@@ -141,7 +143,7 @@ impl VirtualMachine {
                 // A single argument that reads as a hash, or as an array of
                 // pairs, is read as one before anything else is tried.
                 [single]
-                    if !matches!(single, Object::Dict(_) | Object::Array(_))
+                    if !matches!(single.view(), View::Dict(_) | View::Array(_))
                         && (self.responds_to(single, "to_hash")
                             || self.responds_to(single, "to_ary")) =>
                 {
@@ -200,22 +202,23 @@ impl VirtualMachine {
             let mut set: indexmap::IndexSet<ObjectHash> = indexmap::IndexSet::new();
             // The block is the one `Set.new` was given, taken before the seed
             // is walked so the walk does not take it.
-            let block = match self.pending_block.take() {
-                Some(Object::Block(block)) => Some(block),
+            let viewed = self.pending_block.take();
+            let block = match viewed.view() {
+                Some(View::Block(block)) => Some(block),
                 _ => None,
             };
             if arguments.len() == 1 {
                 // An Array is taken as it is, and anything else that walks is
                 // asked for one.
-                let items = match &arguments[0] {
-                    Object::Array(elements) => elements.borrow().clone(),
-                    Object::Nil => Vec::new(),
+                let items = match arguments[0].view() {
+                    View::Array(elements) => elements.borrow().clone(),
+                    View::Nil => Vec::new(),
                     // Ruby walks the seed with `each_entry`, falling back to
                     // `each`, and refuses anything that answers neither.
-                    other => {
-                        let walked = if self.responds_to(other, "each_entry") {
+                    _ => {
+                        let walked = if self.responds_to(&arguments[0], "each_entry") {
                             "each_entry"
-                        } else if self.responds_to(other, "each") {
+                        } else if self.responds_to(&arguments[0], "each") {
                             "each"
                         } else {
                             return Err(crate::vm::errors::simple_exception(
@@ -225,13 +228,13 @@ impl VirtualMachine {
                             ));
                         };
                         let walk = self.send_to_object(
-                            other.clone(),
+                            arguments[0].clone(),
                             "to_enum",
                             vec![Object::symbol(walked.to_string())],
                             position,
                         )?;
-                        match self.send_to_object(walk, "to_a", vec![], position)? {
-                            Object::Array(elements) => elements.borrow().clone(),
+                        match self.send_to_object(walk, "to_a", vec![], position)?.view() {
+                            View::Array(elements) => elements.borrow().clone(),
                             _ => Vec::new(),
                         }
                     }

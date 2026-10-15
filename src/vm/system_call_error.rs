@@ -4,6 +4,7 @@ use crate::class::Class;
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 use crate::vm::native_methods::rational_methods::complex_parts;
 use crate::vm::utils::position_to_location;
@@ -46,7 +47,7 @@ impl VirtualMachine {
         }
         // A lone number is the errno rather than the message.
         let numeric_only_argument = arguments.len() == 1
-            && (matches!(arguments[0], Object::Int(_) | Object::Float(_))
+            && (matches!(arguments[0].view(), View::Int(_) | View::Float(_))
                 || complex_parts(&arguments[0]).is_some());
         let errno_argument = match numeric_only_argument {
             true => Some(&arguments[0]),
@@ -62,15 +63,15 @@ impl VirtualMachine {
             // given and nothing else.
             let message = custom.unwrap_or_else(|| "unknown error".to_string());
             let exception = Object::exception(class.name(), message);
-            if let Object::Exception(details) = &exception {
+            if let View::Exception(details) = exception.view() {
                 details.borrow_mut().class = Some(Rc::clone(class));
             }
             return Ok(exception);
         };
         let number = self.coerce_errno(errno_argument, position)?;
         let target = self.errno_class_for_number(number).unwrap_or_else(|| {
-            match self.globals().get("SystemCallError") {
-                Some(Object::Class(system_call_error)) => system_call_error,
+            match self.globals().get("SystemCallError").view() {
+                Some(View::Class(system_call_error)) => system_call_error.clone(),
                 _ => Rc::clone(class),
             }
         });
@@ -93,7 +94,7 @@ impl VirtualMachine {
             (Some(custom), Some(location)) => format!("{} @ {} - {}", default, location, custom),
         };
         let exception = Object::exception(class.name(), message);
-        if let Object::Exception(details) = &exception {
+        if let View::Exception(details) = exception.view() {
             let mut details = details.borrow_mut();
             details.class = Some(class);
             details
@@ -108,7 +109,7 @@ impl VirtualMachine {
     pub(crate) fn declared_errno(class: &Rc<Class>) -> Option<i64> {
         let mut cursor = Some(Rc::clone(class));
         while let Some(current) = cursor {
-            if let Some(Object::Int(number)) = current.get_class_var("Errno") {
+            if let Some(View::Int(number)) = current.get_class_var("Errno").view() {
                 return Some(number);
             }
             cursor = current.superclass();
@@ -121,8 +122,9 @@ impl VirtualMachine {
     fn errno_message(class: &Rc<Class>, number: i64) -> String {
         let mut cursor = Some(Rc::clone(class));
         while let Some(current) = cursor {
-            if let Some(Object::String(message)) =
-                current.get_class_var(crate::vm::init::ERRNO_MESSAGE_KEY)
+            if let Some(View::String(message)) = current
+                .get_class_var(crate::vm::init::ERRNO_MESSAGE_KEY)
+                .view()
             {
                 return message.as_str().to_string();
             }
@@ -136,20 +138,20 @@ impl VirtualMachine {
 
     /// The `Errno::EXXX` class carrying `number`, when one does.
     fn errno_class_for_number(&self, number: i64) -> Option<Rc<Class>> {
-        let Some(Object::Module(errno) | Object::Class(errno)) = self.globals().get("Errno") else {
+        let viewed = self.globals().get("Errno");
+        let Some(View::Module(errno) | View::Class(errno)) = viewed.view() else {
             return None;
         };
-        errno
-            .class_var_names()
-            .into_iter()
-            .find_map(|name| match errno.get_class_var(&name) {
-                Some(Object::Class(class))
+        errno.class_var_names().into_iter().find_map(|name| {
+            match errno.get_class_var(&name).view() {
+                Some(View::Class(class))
                     if class.get_class_var("Errno") == Some(Object::Int(number)) =>
                 {
-                    Some(class)
+                    Some(class.clone())
                 }
                 _ => None,
-            })
+            }
+        })
     }
 
     /// A custom message argument: a String as it stands, nil as if it were
@@ -159,12 +161,16 @@ impl VirtualMachine {
         argument: Option<&Object>,
         position: Position,
     ) -> Result<Option<String>, MetorexError> {
-        match argument {
-            None | Some(Object::Nil) => Ok(None),
-            Some(Object::String(text)) => Ok(Some(text.as_str().to_string())),
+        match argument.view() {
+            None | Some(View::Nil) => Ok(None),
+            Some(View::String(text)) => Ok(Some(text.as_str().to_string())),
             Some(other) => {
-                let source = self.builtins().class_of(other).name().to_string();
-                let Some((class, method)) = self.lookup_method(other, "to_str") else {
+                let source = self
+                    .builtins()
+                    .class_of(&other.to_object())
+                    .name()
+                    .to_string();
+                let Some((class, method)) = self.lookup_method(&other.to_object(), "to_str") else {
                     let message = format!("no implicit conversion of {} into String", source);
                     return Err(MetorexError::UncaughtException {
                         exception: Object::exception("TypeError", message.clone()),
@@ -172,14 +178,17 @@ impl VirtualMachine {
                         message,
                     });
                 };
-                match self.invoke_method(class, method, other.clone(), Vec::new(), position)? {
-                    Object::String(text) => Ok(Some(text.as_str().to_string())),
+                match self
+                    .invoke_method(class, method, other.to_object(), Vec::new(), position)?
+                    .view()
+                {
+                    View::String(text) => Ok(Some(text.as_str().to_string())),
                     produced => {
                         let message = format!(
                             "can't convert {} to String ({}#to_str gives {})",
                             source,
                             source,
-                            self.builtins().class_of(&produced).name()
+                            self.builtins().class_of(&produced.to_object()).name()
                         );
                         Err(MetorexError::UncaughtException {
                             exception: Object::exception("TypeError", message.clone()),
@@ -198,10 +207,12 @@ impl VirtualMachine {
         argument: Option<&Object>,
         position: Position,
     ) -> Result<Option<String>, MetorexError> {
-        match argument {
-            None | Some(Object::Nil) => Ok(None),
-            Some(Object::String(text)) => Ok(Some(text.as_str().to_string())),
-            Some(other) => Ok(Some(self.coerce_name_argument(other, position)?)),
+        match argument.view() {
+            None | Some(View::Nil) => Ok(None),
+            Some(View::String(text)) => Ok(Some(text.as_str().to_string())),
+            Some(other) => Ok(Some(
+                self.coerce_name_argument(&other.to_object(), position)?,
+            )),
         }
     }
 
@@ -214,15 +225,15 @@ impl VirtualMachine {
             location: position_to_location(position),
             message,
         };
-        match argument {
-            Object::Int(number) => Ok(*number),
-            Object::Float(number) => Ok(number.trunc() as i64),
+        match argument.view() {
+            View::Int(number) => Ok(number),
+            View::Float(number) => Ok(number.trunc() as i64),
             _ => {
                 if let Some((real, imaginary)) = complex_parts(argument) {
                     let rendered = self.render_object(argument, position)?;
-                    let real = match (&real, &imaginary) {
-                        (Object::Int(real), Object::Int(0)) => Some(*real),
-                        (Object::Float(real), Object::Int(0)) => Some(real.trunc() as i64),
+                    let real = match (real.view(), imaginary.view()) {
+                        (View::Int(real), View::Int(0)) => Some(real),
+                        (View::Float(real), View::Int(0)) => Some(real.trunc() as i64),
                         _ => None,
                     };
                     return real.ok_or_else(|| {
@@ -239,15 +250,18 @@ impl VirtualMachine {
                         format!("no implicit conversion of {} into Integer", source),
                     ));
                 };
-                match self.invoke_method(class, method, argument.clone(), Vec::new(), position)? {
-                    Object::Int(number) => Ok(number),
+                match self
+                    .invoke_method(class, method, argument.clone(), Vec::new(), position)?
+                    .view()
+                {
+                    View::Int(number) => Ok(number),
                     produced => Err(refuse(
                         "TypeError",
                         format!(
                             "can't convert {} to Integer ({}#to_int gives {})",
                             source,
                             source,
-                            self.builtins().class_of(&produced).name()
+                            self.builtins().class_of(&produced.to_object()).name()
                         ),
                     )),
                 }
@@ -261,8 +275,11 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<String, MetorexError> {
-        match self.send_to_object(value.clone(), "to_s", vec![], position)? {
-            Object::String(text) => Ok(text.as_str().to_string()),
+        match self
+            .send_to_object(value.clone(), "to_s", vec![], position)?
+            .view()
+        {
+            View::String(text) => Ok(text.as_str().to_string()),
             rendered => Ok(rendered.to_string()),
         }
     }

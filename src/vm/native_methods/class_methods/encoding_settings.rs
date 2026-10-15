@@ -1,6 +1,7 @@
 // The Encoding class methods.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 thread_local! {
     /// The names of the dummy encodings defined while the program runs.
@@ -54,7 +55,7 @@ impl VirtualMachine {
                 };
                 // The external encoding always names one, so nothing stands
                 // for "no encoding" there.
-                if matches!(value, Object::Nil) {
+                if matches!(value.view(), View::Nil) {
                     return Err(crate::vm::errors::simple_exception(
                         "ArgumentError",
                         "default external cannot be nil",
@@ -201,10 +202,10 @@ impl VirtualMachine {
             )))));
         }
         if class_rc.name() == "Encoding" && matches!(method_name, "find" | "[]") {
-            let wanted = match arguments.first() {
+            let wanted = match arguments.first().view() {
                 // A name written in an encoding that does not spell ASCII,
                 // such as UTF-16, names nothing.
-                Some(Object::String(held))
+                Some(View::String(held))
                     if !crate::vm::native_methods::string_methods::encoding_is_ascii_compatible(
                         &held.encoding_name(),
                     ) =>
@@ -215,30 +216,30 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                Some(Object::String(held)) => held.as_str().to_string(),
-                Some(Object::Class(held)) if held.name().contains('-') => {
+                Some(View::String(held)) => held.as_str().to_string(),
+                Some(View::Class(held)) if held.name().contains('-') => {
                     return Ok(Answered(arguments[0].clone()));
                 }
                 // An encoding is named by a String, and a Symbol is not one.
                 // Anything that spells itself out names one all the same.
-                Some(other @ Object::Symbol(_)) => {
+                Some(other @ View::Symbol(_)) => {
                     return Err(method_argument_type_error(
                         method_name,
                         "String",
-                        other,
+                        &other.to_object(),
                         position,
                     ));
                 }
-                Some(other) if self.responds_to(other, "to_str") => {
+                Some(other) if self.responds_to(&other.to_object(), "to_str") => {
                     let spelled =
-                        self.send_to_object(other.clone(), "to_str", Vec::new(), position)?;
-                    match spelled {
-                        Object::String(held) => held.as_str().to_string(),
-                        held => {
+                        self.send_to_object(other.to_object(), "to_str", Vec::new(), position)?;
+                    match spelled.view() {
+                        View::String(held) => held.as_str().to_string(),
+                        _ => {
                             return Err(method_argument_type_error(
                                 method_name,
                                 "String",
-                                &held,
+                                &spelled,
                                 position,
                             ));
                         }
@@ -254,12 +255,12 @@ impl VirtualMachine {
                         let named = Object::Class(Rc::clone(class_rc));
                         let charmap =
                             self.send_to_object(named, "locale_charmap", Vec::new(), position)?;
-                        if let charmap @ Object::String(_) = charmap {
+                        if let charmap @ View::String(_) = charmap.view() {
                             return self
                                 .call_class_methods(
                                     class_rc,
                                     "find",
-                                    std::slice::from_ref(&charmap),
+                                    std::slice::from_ref(&charmap.to_object()),
                                     position,
                                 )
                                 .map(nested_answer);
@@ -340,9 +341,9 @@ impl VirtualMachine {
             })
             .unwrap_or_else(|| wanted.to_string());
         let mut found = None;
-        if let Some(Object::Array(listed)) = self.globals().get("__Encoding_list") {
+        if let Some(View::Array(listed)) = self.globals().get("__Encoding_list").view() {
             found = listed.borrow().iter().find(|held| {
-                matches!(held, Object::Class(class) if class.name().eq_ignore_ascii_case(&named))
+                matches!(held.view(), View::Class(class) if class.name().eq_ignore_ascii_case(&named))
             }).cloned();
         }
         found

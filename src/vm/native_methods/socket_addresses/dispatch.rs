@@ -2,6 +2,7 @@
 // method of its own, grouped into the modules beside this one.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// `Socket.__net__(action, handle, text, port)` — opening, accepting,
@@ -11,23 +12,23 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let Some(Object::String(action)) = arguments.first() else {
+        let Some(View::String(action)) = arguments.first().view() else {
             return Err(crate::vm::errors::argument_count_error(
                 crate::vm::errors::Arity::AtLeast(1),
                 arguments.len(),
                 position,
             ));
         };
-        let handle = match arguments.get(1) {
-            Some(Object::Int(held)) => *held as u64,
+        let handle = match arguments.get(1).view() {
+            Some(View::Int(held)) => held as u64,
             _ => 0,
         };
-        let text = match arguments.get(2) {
-            Some(Object::String(held)) => held.as_str().to_string(),
+        let text = match arguments.get(2).view() {
+            Some(View::String(held)) => held.as_str().to_string(),
             _ => String::new(),
         };
-        let port = match arguments.get(3) {
-            Some(Object::Int(held)) => *held,
+        let port = match arguments.get(3).view() {
+            Some(View::Int(held)) => held,
             _ => 0,
         };
         match &*action.as_str() {

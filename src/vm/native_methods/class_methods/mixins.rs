@@ -1,6 +1,7 @@
 // Including and prepending modules.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// Mixing a module into a class, and asking which modules a class holds.
@@ -34,7 +35,7 @@ impl VirtualMachine {
         // `Klass.include?(Mod)` — whether Mod appears in the ancestors,
         // excluding the receiver itself. A class argument is a TypeError.
         if method_name == "include?" && arguments.len() == 1 {
-            let Object::Module(queried) = &arguments[0] else {
+            let View::Module(queried) = arguments[0].view() else {
                 return Err(method_argument_type_error(
                     method_name,
                     "Module",
@@ -45,8 +46,8 @@ impl VirtualMachine {
             let mut chain: Vec<Object> = Vec::new();
             let mut seen: Vec<*const Class> = Vec::new();
             push_class_ancestors(class_rc, &mut chain, &mut seen);
-            let found = chain.iter().any(|ancestor| match ancestor {
-                Object::Class(c) | Object::Module(c) => {
+            let found = chain.iter().any(|ancestor| match ancestor.view() {
+                View::Class(c) | View::Module(c) => {
                     Rc::ptr_eq(c, queried) && !Rc::ptr_eq(c, class_rc)
                 }
                 _ => false,
@@ -109,19 +110,19 @@ impl VirtualMachine {
                 return Ok(Deferred);
             }
             for arg in arguments {
-                match arg {
-                    Object::Module(t) | Object::Class(t) => {
+                match arg.view() {
+                    View::Module(t) | View::Class(t) => {
                         if method_name == "prepend_features" {
                             self.default_prepend_features(t, class_rc, position)?;
                         } else {
                             self.default_append_features(t, class_rc, position)?;
                         }
                     }
-                    other => {
+                    _ => {
                         return Err(method_argument_type_error(
                             method_name,
                             "Module",
-                            other,
+                            arg,
                             position,
                         ));
                     }

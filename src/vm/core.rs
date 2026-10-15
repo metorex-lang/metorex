@@ -8,6 +8,7 @@
 //   - vm/eval/*:      per-variant expression evaluation helpers + dispatch
 // Operator/statement/method-call helpers live in their own existing modules.
 
+use crate::object::{OptionView, View};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -771,7 +772,9 @@ impl VirtualMachine {
     /// Give `raised` the exception it followed as its `#cause`. Ruby sets it
     /// once, and never to the exception itself.
     pub(crate) fn record_cause(raised: &Object, cause: &Object) {
-        let (Object::Exception(raised_ref), Object::Exception(cause_ref)) = (raised, cause) else {
+        let (View::Exception(raised_ref), View::Exception(cause_ref)) =
+            (raised.view(), cause.view())
+        else {
             return;
         };
         if Rc::ptr_eq(raised_ref, cause_ref)
@@ -787,8 +790,8 @@ impl VirtualMachine {
     /// that handled an exception leaves the one it interrupted in place, so
     /// an outer handler still names what it is handling.
     pub(crate) fn restore_current_exception(&mut self, exception: Object) {
-        let backtrace = match &exception {
-            Object::Exception(details) => details
+        let backtrace = match exception.view() {
+            View::Exception(details) => details
                 .borrow()
                 .backtrace
                 .as_ref()
@@ -821,7 +824,7 @@ impl VirtualMachine {
         if location.line == 0 {
             return;
         }
-        if let Object::Exception(details) = exception {
+        if let View::Exception(details) = exception.view() {
             let mut held = details.borrow_mut();
             if held.location.is_none() && held.backtrace.is_none() {
                 let named = location
@@ -841,7 +844,7 @@ impl VirtualMachine {
     pub(crate) fn set_current_exception(&mut self, exception: Object) {
         // The word that a thread or fiber is being stopped is not the
         // program's to see, so it never becomes `$!`.
-        if let Object::Exception(details) = &exception
+        if let View::Exception(details) = exception.view()
             && details.borrow().exception_type == crate::vm::fibers::FIBER_KILLED
         {
             return;
@@ -849,11 +852,11 @@ impl VirtualMachine {
         // An exception reaching a rescue clause takes the one that was active
         // as its `#cause`, which is how an error raised inside a rescue body
         // records what it followed. Set once, and never to itself.
-        if let Object::Exception(details) = &exception
+        if let View::Exception(details) = exception.view()
             && details.borrow().cause.is_none()
             && !details.borrow().cause_settled
             && let Some(active) = self.globals().get("!")
-            && let Object::Exception(active_ref) = &active
+            && let View::Exception(active_ref) = active.view()
             && !Rc::ptr_eq(details, active_ref)
         {
             details.borrow_mut().cause = Some(Box::new(active.clone()));
@@ -861,8 +864,8 @@ impl VirtualMachine {
         // An exception raised by the interpreter itself carries no backtrace
         // of its own, and one being handled has to report where it came from,
         // so the stack it was raised on is recorded here.
-        let exception = match &exception {
-            Object::Exception(details) if details.borrow().backtrace.is_none() => {
+        let exception = match exception.view() {
+            View::Exception(details) if details.borrow().backtrace.is_none() => {
                 let position = details
                     .borrow()
                     .location
@@ -877,8 +880,8 @@ impl VirtualMachine {
             .global_scope()
             .borrow_mut()
             .define("$!".to_string(), exception.clone());
-        let backtrace = match &exception {
-            Object::Exception(details) => details
+        let backtrace = match exception.view() {
+            View::Exception(details) => details
                 .borrow()
                 .backtrace
                 .as_ref()
@@ -962,10 +965,10 @@ impl VirtualMachine {
         };
         for entry in scope {
             for key in &entry.classes {
-                if let Some(Object::Class(holder) | Object::Module(holder)) =
-                    entry.module.get_class_var(key)
+                if let Some(View::Class(holder) | View::Module(holder)) =
+                    entry.module.get_class_var(key).view()
                 {
-                    refinements.push(Object::Module(holder));
+                    refinements.push(Object::Module(holder.clone()));
                 }
             }
         }
@@ -990,8 +993,8 @@ impl VirtualMachine {
                 if !entry.classes.contains(target_key) {
                     continue;
                 }
-                if let Some(Object::Class(holder) | Object::Module(holder)) =
-                    entry.module.get_class_var(target_key)
+                if let Some(View::Class(holder) | View::Module(holder)) =
+                    entry.module.get_class_var(target_key).view()
                     && let Some(m) = holder.find_method(method_name)
                 {
                     return Some(m);
@@ -1122,11 +1125,14 @@ impl VirtualMachine {
 
     pub(crate) fn trace_error_leaving_frame(&mut self, error: &crate::error::MetorexError) {
         let crate::error::MetorexError::UncaughtException {
-            exception: exception @ Object::Exception(details),
+            exception,
             location,
             ..
         } = error
         else {
+            return;
+        };
+        let View::Exception(details) = exception.view() else {
             return;
         };
         if details.borrow().backtrace.is_some() || location.line == 0 {
@@ -1154,7 +1160,7 @@ impl VirtualMachine {
             return false;
         }
         // MRI runs a Proc without a frame for the call that ran it.
-        if matches!(receiver, Some(Object::Block(_)))
+        if matches!(receiver.view(), Some(View::Block(_)))
             && matches!(name, "call" | "()" | "[]" | "yield" | "===")
         {
             return false;
@@ -1222,10 +1228,11 @@ impl VirtualMachine {
         }
         if position.prelude
             && let Err(crate::error::MetorexError::UncaughtException {
-                exception: exception @ Object::Exception(details),
+                exception,
                 location,
                 ..
             }) = answered
+            && let View::Exception(details) = exception.view()
             && details.borrow().backtrace.is_none()
             && location.line != 0
         {
@@ -1355,7 +1362,7 @@ impl Drop for VirtualMachine {
             waiting.push(class);
         }
         for (_, held) in self.globals.iter() {
-            if let Object::Class(class) | Object::Module(class) = held {
+            if let View::Class(class) | View::Module(class) = held.view() {
                 waiting.push(Rc::clone(class));
             }
         }
@@ -1374,8 +1381,8 @@ impl Drop for VirtualMachine {
                 waiting.push(singleton);
             }
             for held in class.class_variable_values() {
-                if let Object::Class(inner) | Object::Module(inner) = held {
-                    waiting.push(inner);
+                if let View::Class(inner) | View::Module(inner) = held.view() {
+                    waiting.push(inner.clone());
                 }
             }
             found.push(class);
@@ -1399,12 +1406,12 @@ pub(crate) enum WeakTarget {
 
 impl WeakTarget {
     pub(crate) fn of(object: &Object) -> Self {
-        match object {
-            Object::Instance(held) => WeakTarget::Instance(Rc::downgrade(held)),
-            Object::Array(held) => WeakTarget::Array(Rc::downgrade(held)),
-            Object::Dict(held) => WeakTarget::Dict(Rc::downgrade(held)),
-            Object::String(held) => WeakTarget::String(Rc::downgrade(held)),
-            other => WeakTarget::Held(other.clone()),
+        match object.view() {
+            View::Instance(held) => WeakTarget::Instance(Rc::downgrade(held)),
+            View::Array(held) => WeakTarget::Array(Rc::downgrade(held)),
+            View::Dict(held) => WeakTarget::Dict(Rc::downgrade(held)),
+            View::String(held) => WeakTarget::String(Rc::downgrade(held)),
+            _ => WeakTarget::Held(object.clone()),
         }
     }
 

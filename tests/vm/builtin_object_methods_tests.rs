@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -30,8 +31,8 @@ fn run(code: &str) -> Option<Object> {
 #[test]
 fn array_class() {
     let result = run("[1, 2, 3].class");
-    assert!(matches!(result, Some(Object::Class(_))));
-    if let Some(Object::Class(c)) = result {
+    assert!(matches!(result.view(), Some(View::Class(_))));
+    if let Some(View::Class(c)) = result.view() {
         assert_eq!(c.name(), "Array");
     }
 }
@@ -39,8 +40,8 @@ fn array_class() {
 #[test]
 fn string_class() {
     let result = run(r#""hello".class"#);
-    assert!(matches!(result, Some(Object::Class(_))));
-    if let Some(Object::Class(c)) = result {
+    assert!(matches!(result.view(), Some(View::Class(_))));
+    if let Some(View::Class(c)) = result.view() {
         assert_eq!(c.name(), "String");
     }
 }
@@ -48,8 +49,8 @@ fn string_class() {
 #[test]
 fn integer_class() {
     let result = run("42.class");
-    assert!(matches!(result, Some(Object::Class(_))));
-    if let Some(Object::Class(c)) = result {
+    assert!(matches!(result.view(), Some(View::Class(_))));
+    if let Some(View::Class(c)) = result.view() {
         assert_eq!(c.name(), "Integer");
     }
 }
@@ -57,8 +58,8 @@ fn integer_class() {
 #[test]
 fn float_class() {
     let result = run("3.14.class");
-    assert!(matches!(result, Some(Object::Class(_))));
-    if let Some(Object::Class(c)) = result {
+    assert!(matches!(result.view(), Some(View::Class(_))));
+    if let Some(View::Class(c)) = result.view() {
         assert_eq!(c.name(), "Float");
     }
 }
@@ -66,8 +67,8 @@ fn float_class() {
 #[test]
 fn bool_class() {
     let result = run("true.class");
-    assert!(matches!(result, Some(Object::Class(_))));
-    if let Some(Object::Class(c)) = result {
+    assert!(matches!(result.view(), Some(View::Class(_))));
+    if let Some(View::Class(c)) = result.view() {
         assert_eq!(c.name(), "TrueClass");
     }
 }
@@ -75,8 +76,8 @@ fn bool_class() {
 #[test]
 fn nil_class() {
     let result = run("nil.class");
-    assert!(matches!(result, Some(Object::Class(_))));
-    if let Some(Object::Class(c)) = result {
+    assert!(matches!(result.view(), Some(View::Class(_))));
+    if let Some(View::Class(c)) = result.view() {
         assert_eq!(c.name(), "NilClass");
     }
 }
@@ -84,8 +85,8 @@ fn nil_class() {
 #[test]
 fn range_class() {
     let result = run("(1..5).class");
-    assert!(matches!(result, Some(Object::Class(_))));
-    if let Some(Object::Class(c)) = result {
+    assert!(matches!(result.view(), Some(View::Class(_))));
+    if let Some(View::Class(c)) = result.view() {
         assert_eq!(c.name(), "Range");
     }
 }
@@ -93,8 +94,8 @@ fn range_class() {
 #[test]
 fn hash_class() {
     let result = run(r#"{"a" => 1}.class"#);
-    assert!(matches!(result, Some(Object::Class(_))));
-    if let Some(Object::Class(c)) = result {
+    assert!(matches!(result.view(), Some(View::Class(_))));
+    if let Some(View::Class(c)) = result.view() {
         assert_eq!(c.name(), "Hash");
     }
 }
@@ -102,8 +103,8 @@ fn hash_class() {
 #[test]
 fn set_class() {
     let result = run("Set.new.class");
-    assert!(matches!(result, Some(Object::Class(_))));
-    if let Some(Object::Class(c)) = result {
+    assert!(matches!(result.view(), Some(View::Class(_))));
+    if let Some(View::Class(c)) = result.view() {
         assert_eq!(c.name(), "Set");
     }
 }
@@ -115,8 +116,8 @@ class Dog
 end
 Dog.new.class
 "#);
-    assert!(matches!(result, Some(Object::Class(_))));
-    if let Some(Object::Class(c)) = result {
+    assert!(matches!(result.view(), Some(View::Class(_))));
+    if let Some(View::Class(c)) = result.view() {
         assert_eq!(c.name(), "Dog");
     }
 }
@@ -436,7 +437,7 @@ m.include?(:speak)
 #[test]
 fn object_methods_returns_array() {
     let result = run(r#"42.methods"#);
-    assert!(matches!(result, Some(Object::Array(_))));
+    assert!(matches!(result.view(), Some(View::Array(_))));
 }
 
 // ── object_methods.rs: send with non-String/Symbol method name error (lines 368) ─

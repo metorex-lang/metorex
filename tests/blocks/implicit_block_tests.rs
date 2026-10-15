@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -145,8 +146,8 @@ fn test_array_map_with_trailing_brace_block() {
 [1, 2, 3].map { |n| n * 2 }
 "#;
     let result = eval(source);
-    match result {
-        Some(Object::Array(arr)) => {
+    match result.view() {
+        Some(View::Array(arr)) => {
             let arr = arr.borrow();
             assert_eq!(arr.len(), 3);
             assert_eq!(arr[0], Object::Int(2));
@@ -165,8 +166,8 @@ fn test_array_map_with_trailing_do_end_block() {
 end
 "#;
     let result = eval(source);
-    match result {
-        Some(Object::Array(arr)) => {
+    match result.view() {
+        Some(View::Array(arr)) => {
             let arr = arr.borrow();
             assert_eq!(arr.len(), 3);
             assert_eq!(arr[0], Object::Int(11));
@@ -196,8 +197,8 @@ fn test_range_map_with_trailing_brace_block() {
 (1..3).map { |i| i * i }
 "#;
     let result = eval(source);
-    match result {
-        Some(Object::Array(arr)) => {
+    match result.view() {
+        Some(View::Array(arr)) => {
             let arr = arr.borrow();
             assert_eq!(arr.len(), 3);
             assert_eq!(arr[0], Object::Int(1));
@@ -216,8 +217,8 @@ result = [1, 2, 3].map { |n| n * factor }
 result
 "#;
     let result = eval(source);
-    match result {
-        Some(Object::Array(arr)) => {
+    match result.view() {
+        Some(View::Array(arr)) => {
             let arr = arr.borrow();
             assert_eq!(arr[0], Object::Int(3));
             assert_eq!(arr[1], Object::Int(6));
@@ -284,8 +285,8 @@ fn test_select_with_trailing_brace_block() {
 [1, 2, 3, 4, 5, 6].select { |n| n % 2 == 0 }
 "#;
     let result = eval(source);
-    match result {
-        Some(Object::Array(arr)) => {
+    match result.view() {
+        Some(View::Array(arr)) => {
             let arr = arr.borrow();
             assert_eq!(arr.len(), 3);
             assert_eq!(arr[0], Object::Int(2));

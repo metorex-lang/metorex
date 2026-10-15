@@ -1,6 +1,7 @@
 // Running a `module` body.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Execute module definition - create a Module object and register it.
@@ -15,8 +16,8 @@ impl VirtualMachine {
         // namespace expression must resolve to a Class or Module.
         let explicit_ns: Option<Rc<Class>> = if let Some(expr) = namespace {
             let value = self.evaluate_expression(expr)?;
-            match value {
-                Object::Class(c) | Object::Module(c) => Some(c),
+            match value.view() {
+                View::Class(c) | View::Module(c) => Some(c.clone()),
                 other => {
                     return Err(MetorexError::runtime_error(
                         format!(
@@ -90,53 +91,53 @@ impl VirtualMachine {
             } else {
                 self.try_autoload_constant(parent, name)?
             };
-            match resolved {
-                Some(Object::Module(existing)) => (existing, false, false),
+            match resolved.view() {
+                Some(View::Module(existing)) => (existing.clone(), false, false),
                 Some(
-                    Object::Class(_)
-                    | Object::Instance(_)
-                    | Object::String(_)
-                    | Object::Int(_)
-                    | Object::Float(_)
-                    | Object::Bool(_)
-                    | Object::Symbol(_)
-                    | Object::Array(_)
-                    | Object::Nil,
+                    View::Class(_)
+                    | View::Instance(_)
+                    | View::String(_)
+                    | View::Int(_)
+                    | View::Float(_)
+                    | View::Bool(_)
+                    | View::Symbol(_)
+                    | View::Array(_)
+                    | View::Nil,
                 ) => {
                     let defined_at = parent.get_const_location(name);
                     return Err(not_a_module(name, defined_at, position));
                 }
                 _ => (new_module(), false, true),
             }
-        } else if let Some(Object::Module(existing)) = self.globals().get(name) {
+        } else if let Some(View::Module(existing)) = self.globals().get(name).view() {
             // A top-level constant naming a module reopens that module,
             // whichever name the module was first given, as `RSpec = Rex`
             // followed by `module RSpec` reopens Rex.
-            (existing, false, false)
-        } else if let Some(Object::Module(existing)) = self.environment().get(name)
+            (existing.clone(), false, false)
+        } else if let Some(View::Module(existing)) = self.environment().get(name).view()
             && existing.ruby_name() == full_name
         {
-            (existing, false, false)
-        } else if let Some(Object::Class(_)) = self.globals().get(name) {
+            (existing.clone(), false, false)
+        } else if let Some(View::Class(_)) = self.globals().get(name).view() {
             return Err(not_a_module(
                 &full_name,
                 self.top_level_constant_location(name),
                 position,
             ));
-        } else if let Some(Object::Class(existing)) = self.environment().get(name) {
-            (existing, true, false)
+        } else if let Some(View::Class(existing)) = self.environment().get(name).view() {
+            (existing.clone(), true, false)
         } else {
             // A top-level name registered as an autoload is loaded first,
             // so the body reopens the module the file defines.
-            let autoloaded = match self.globals().get("Object") {
-                Some(Object::Class(object_class)) => {
-                    self.try_autoload_constant(&object_class, name)?
+            let autoloaded = match self.globals().get("Object").view() {
+                Some(View::Class(object_class)) => {
+                    self.try_autoload_constant(object_class, name)?
                 }
                 _ => None,
             };
-            match autoloaded {
-                Some(Object::Module(existing)) => (existing, false, false),
-                Some(Object::Class(_)) => {
+            match autoloaded.view() {
+                Some(View::Module(existing)) => (existing.clone(), false, false),
+                Some(View::Class(_)) => {
                     let defined_at = self.top_level_constant_location(name);
                     return Err(not_a_module(name, defined_at, position));
                 }
@@ -181,7 +182,7 @@ impl VirtualMachine {
                 .unwrap_or_default();
             if let Some(parent) = parent_scope.as_ref() {
                 parent.set_const_location(name, module_def_file, position.line as i64);
-            } else if let Some(Object::Class(object_class)) = self.globals().get("Object") {
+            } else if let Some(View::Class(object_class)) = self.globals().get("Object").view() {
                 object_class.set_const_location(name, module_def_file, position.line as i64);
             }
         }

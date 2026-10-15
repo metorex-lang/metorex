@@ -1,6 +1,7 @@
 // Walking the elements, and the arrays a walk builds.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Walking the elements, and the arrays a walk builds.
@@ -22,13 +23,14 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(b)) => b,
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(b)) => b,
                     Some(other) => {
                         return Err(method_argument_type_error(
                             method_name,
                             "Block",
-                            &other,
+                            &other.to_object(),
                             position,
                         ));
                     }
@@ -46,7 +48,7 @@ impl VirtualMachine {
                 while let Some(element) = element_at(array_rc, index) {
                     index += 1;
                     let args = vec![element];
-                    match self.execute_block_with_control_flow(&block, args, position)? {
+                    match self.execute_block_with_control_flow(block, args, position)? {
                         crate::vm::ControlFlow::Next
                         | crate::vm::ControlFlow::Value(_)
                         | crate::vm::ControlFlow::Redo { .. }
@@ -91,13 +93,14 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(b)) => b,
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(b)) => b,
                     Some(other) => {
                         return Err(method_argument_type_error(
                             method_name,
                             "Block",
-                            &other,
+                            &other.to_object(),
                             position,
                         ));
                     }
@@ -111,7 +114,7 @@ impl VirtualMachine {
                 let mut index = 0;
                 while let Some(element) = element_at(array_rc, index) {
                     index += 1;
-                    let value = self.execute_block_callable(&block, vec![element], position)?;
+                    let value = self.execute_block_callable(block, vec![element], position)?;
                     results.push(value);
                 }
                 Ok(Some(Object::Array(Rc::new(RefCell::new(results)))))
@@ -125,13 +128,14 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(b)) => b,
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(b)) => b,
                     Some(other) => {
                         return Err(method_argument_type_error(
                             method_name,
                             "Block",
-                            &other,
+                            &other.to_object(),
                             position,
                         ));
                     }
@@ -147,8 +151,8 @@ impl VirtualMachine {
                 while let Some(element) = element_at(array_rc, index) {
                     index += 1;
                     let value =
-                        self.execute_block_callable(&block, vec![element.clone()], position)?;
-                    let is_truthy = !matches!(value, Object::Bool(false) | Object::Nil);
+                        self.execute_block_callable(block, vec![element.clone()], position)?;
+                    let is_truthy = !matches!(value.view(), View::Bool(false) | View::Nil);
                     if is_truthy != reject {
                         results.push(element);
                     }
@@ -166,8 +170,9 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(b)) => Some(b),
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(b)) => Some(b),
                     _ => None,
                 };
                 let inverted = method_name == "grep_v";

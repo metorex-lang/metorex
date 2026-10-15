@@ -5,6 +5,7 @@
 use super::calls::{call, class_name_of, top_level_module};
 use super::handles::{Value, to_object, to_value};
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::{CString, c_char};
@@ -58,8 +59,8 @@ fn is_a_core(object: &Object, name: &str) -> bool {
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_enc_get(object: Value) -> *const RbEncoding {
     let object = to_object(object);
-    let encoding = match &object {
-        Object::String(_) | Object::Symbol(_) | Object::Regex(_, _) => {
+    let encoding = match object.view() {
+        View::String(_) | View::Symbol(_) | View::Regex(_, _) => {
             call(object, "encoding", Vec::new())
         }
         _ if class_name_of(object.clone()) == "Encoding" => object,
@@ -67,16 +68,16 @@ pub extern "C-unwind" fn rb_enc_get(object: Value) -> *const RbEncoding {
             call(object, "encoding", Vec::new())
         }
         _ if is_a_core(&object, "IO") => {
-            match call(object.clone(), "internal_encoding", Vec::new()) {
-                Object::Nil => call(object, "external_encoding", Vec::new()),
-                inner => inner,
+            match call(object.clone(), "internal_encoding", Vec::new()).view() {
+                View::Nil => call(object, "external_encoding", Vec::new()),
+                inner => inner.to_object(),
             }
         }
         _ => Object::Nil,
     };
-    match encoding {
-        Object::Nil => std::ptr::null(),
-        encoding => encoding_struct(encoding),
+    match encoding.view() {
+        View::Nil => std::ptr::null(),
+        _ => encoding_struct(encoding.clone()),
     }
 }
 
@@ -229,9 +230,9 @@ pub extern "C-unwind" fn rb_filesystem_encindex() -> i32 {
 }
 
 fn default_encoding(name: &str) -> *const RbEncoding {
-    match call(top_level_module("Encoding"), name, Vec::new()) {
-        Object::Nil => std::ptr::null(),
-        encoding => encoding_struct(encoding),
+    match call(top_level_module("Encoding"), name, Vec::new()).view() {
+        View::Nil => std::ptr::null(),
+        encoding => encoding_struct(encoding.to_object()),
     }
 }
 
@@ -283,7 +284,7 @@ pub extern "C-unwind" fn rb_define_dummy_encoding(name: *const c_char) -> i32 {
     let made = crate::class::Class::new(&name, Some(encoding_class));
     crate::vm::native_methods::class_methods::add_dummy_encoding(&name);
     let interpreter = super::interpreter();
-    if let Some(Object::Array(held)) = interpreter.globals().get("__Encoding_list") {
+    if let Some(View::Array(held)) = interpreter.globals().get("__Encoding_list").view() {
         held.borrow_mut().push(Object::Class(made));
     }
     listed.len() as i32

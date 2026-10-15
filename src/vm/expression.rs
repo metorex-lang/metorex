@@ -11,6 +11,7 @@ use crate::ast::{Expression, InterpolationPart, Statement};
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use indexmap::IndexMap;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -121,44 +122,44 @@ impl VirtualMachine {
                             Vec::new(),
                             expr.position(),
                         )?;
-                        match written {
-                            Object::String(text) => buffer.push_str(&text.as_str()),
+                        match written.view() {
+                            View::String(text) => buffer.push_str(&text.as_str()),
                             other => buffer.push_str(&other.to_string()),
                         }
                         continue;
                     }
-                    match &value {
-                        Object::Symbol(s) => buffer.push_str(&s.as_str()),
+                    match value.view() {
+                        View::Symbol(s) => buffer.push_str(&s.as_str()),
                         // `nil.to_s` is the empty string, so `"#{nil}"` adds
                         // nothing rather than the `nil` inspect form.
-                        Object::Nil => {}
+                        View::Nil => {}
                         // An object of the program's own is asked for its own
                         // `to_s`, which is the text Ruby puts in the hole, and
                         // so is an exception, whose `to_s` is its message.
-                        Object::Instance(_) | Object::Exception(_) => {
+                        View::Instance(_) | View::Exception(_) => {
                             let written = self.send_to_object(
                                 value.clone(),
                                 "to_s",
                                 Vec::new(),
                                 expr.position(),
                             )?;
-                            match written {
-                                Object::String(text) => buffer.push_str(&text.as_str()),
+                            match written.view() {
+                                View::String(text) => buffer.push_str(&text.as_str()),
                                 other => buffer.push_str(&other.to_string()),
                             }
                         }
                         // A pattern writes itself as the group it stands
                         // for, which is what `Regexp#to_s` answers, and an
                         // Array or a Hash as its `inspect` form.
-                        Object::Regex(_, _) | Object::Array(_) | Object::Dict(_) => {
+                        View::Regex(_, _) | View::Array(_) | View::Dict(_) => {
                             let written = self.send_to_object(
                                 value.clone(),
                                 "to_s",
                                 Vec::new(),
                                 expr.position(),
                             )?;
-                            match written {
-                                Object::String(text) => buffer.push_str(&text.as_str()),
+                            match written.view() {
+                                View::String(text) => buffer.push_str(&text.as_str()),
                                 other => buffer.push_str(&other.to_string()),
                             }
                         }
@@ -166,7 +167,7 @@ impl VirtualMachine {
                     }
                     // A UTF-16 or UTF-32 piece spells even ASCII text in bytes
                     // of its own, so its encoding carries whatever it holds.
-                    if let Object::String(spelled) = &value
+                    if let View::String(spelled) = value.view()
                         && (!spelled.as_str().is_ascii()
                             || crate::vm::native_methods::string_methods::wide_encoding(
                                 &spelled.encoding_name(),
@@ -197,7 +198,7 @@ impl VirtualMachine {
                             carried = Some((spelled.encoding_name(), spelled.holds_bytes()));
                         }
                     }
-                    if let Object::String(spelled) = &value
+                    if let View::String(spelled) = value.view()
                         && spelled.holds_bytes()
                     {
                         any_bytes = true;
@@ -245,18 +246,22 @@ impl VirtualMachine {
         value: Object,
         position: crate::lexer::Position,
     ) -> Result<Vec<Object>, MetorexError> {
-        match value {
-            Object::Array(items) => Ok(items.borrow().clone()),
-            Object::Nil => Ok(Vec::new()),
-            held => match crate::vm::native_methods::subclasses::array_subclass_value(&held) {
-                Some(Object::Array(items)) => Ok(items.borrow().clone()),
-                // Anything else that answers `to_a` spreads into what that
-                // gives, which is what `[*"a".."z"]` names.
-                _ => Ok(match self.splat_through_to_a(held, position)? {
-                    Ok(items) => items,
-                    Err(held) => vec![held],
-                }),
-            },
+        match value.view() {
+            View::Array(items) => Ok(items.borrow().clone()),
+            View::Nil => Ok(Vec::new()),
+            held => {
+                match crate::vm::native_methods::subclasses::array_subclass_value(&held.to_object())
+                    .view()
+                {
+                    Some(View::Array(items)) => Ok(items.borrow().clone()),
+                    // Anything else that answers `to_a` spreads into what that
+                    // gives, which is what `[*"a".."z"]` names.
+                    _ => Ok(match self.splat_through_to_a(held.to_object(), position)? {
+                        Ok(items) => items,
+                        Err(held) => vec![held],
+                    }),
+                }
+            }
         }
     }
 
@@ -273,12 +278,15 @@ impl VirtualMachine {
         }
         // `to_a` answering nil leaves the value whole, and answering anything
         // else but an Array is refused.
-        match self.send_to_object(value.clone(), "to_a", vec![], position)? {
-            Object::Array(items) => Ok(Ok(items.borrow().clone())),
-            Object::Nil => Ok(Err(value)),
+        match self
+            .send_to_object(value.clone(), "to_a", vec![], position)?
+            .view()
+        {
+            View::Array(items) => Ok(Ok(items.borrow().clone())),
+            View::Nil => Ok(Err(value)),
             answered => {
                 let named = self.builtins().class_of(&value).ruby_name();
-                let gives = self.builtins().class_of(&answered).ruby_name();
+                let gives = self.builtins().class_of(&answered.to_object()).ruby_name();
                 Err(crate::vm::errors::simple_exception(
                     "TypeError",
                     &format!("can't convert {named} to Array ({named}#to_a gives {gives})"),
@@ -311,8 +319,9 @@ impl VirtualMachine {
                     continue;
                 };
                 let pairs = pairs.borrow();
-                if let Some(Object::Dict(objects)) =
-                    pairs.get(crate::vm::native_methods::hash_methods::KEY_OBJECTS_KEY)
+                if let Some(View::Dict(objects)) = pairs
+                    .get(crate::vm::native_methods::hash_methods::KEY_OBJECTS_KEY)
+                    .view()
                 {
                     for (slot, held) in objects.borrow().iter() {
                         key_objs.insert(slot.clone(), held.clone());
@@ -333,11 +342,11 @@ impl VirtualMachine {
             // The interpreter's own bookkeeping keys are left as they are, and
             // so is a key spelled `:name`, which is how the parser writes the
             // Symbol keys of the keywords a call passes.
-            let program_string_key = matches!(&key_value, Object::String(text)
+            let program_string_key = matches!(key_value.view(), View::String(text)
                 if !crate::vm::native_methods::hash_methods::is_internal_key(&text.as_str())
                     && !text.as_str().starts_with(':'));
-            let key_value = match &key_value {
-                Object::String(text) if program_string_key && !text.is_frozen() => {
+            let key_value = match key_value.view() {
+                View::String(text) if program_string_key && !text.is_frozen() => {
                     let copy = crate::object::StringValue::clone(text);
                     copy.freeze();
                     Object::String(Rc::new(copy))
@@ -387,19 +396,22 @@ impl VirtualMachine {
         value: Object,
         position: crate::lexer::Position,
     ) -> Result<Option<SharedPairs>, MetorexError> {
-        match value {
-            Object::Dict(pairs) => Ok(Some(pairs)),
-            Object::Nil => Ok(None),
-            other if self.lookup_method(&other, "to_hash").is_some() => {
-                let class_name = self.conversion_name(&other);
-                match self.send_to_object(other, "to_hash", vec![], position)? {
-                    Object::Dict(pairs) => Ok(Some(pairs)),
+        match value.view() {
+            View::Dict(pairs) => Ok(Some(pairs.clone())),
+            View::Nil => Ok(None),
+            _ if self.lookup_method(&value, "to_hash").is_some() => {
+                let class_name = self.conversion_name(&value);
+                match self
+                    .send_to_object(value.clone(), "to_hash", vec![], position)?
+                    .view()
+                {
+                    View::Dict(pairs) => Ok(Some(pairs.clone())),
                     answered => {
                         let message = format!(
                             "can't convert {} to Hash ({}#to_hash gives {})",
                             class_name,
                             class_name,
-                            self.conversion_name(&answered)
+                            self.conversion_name(&answered.to_object())
                         );
                         Err(crate::vm::errors::simple_exception(
                             "TypeError",
@@ -409,10 +421,10 @@ impl VirtualMachine {
                     }
                 }
             }
-            other => {
+            _ => {
                 let message = format!(
                     "no implicit conversion of {} into Hash",
-                    self.conversion_name(&other)
+                    self.conversion_name(&value)
                 );
                 Err(crate::vm::errors::simple_exception(
                     "TypeError",
@@ -467,21 +479,24 @@ impl VirtualMachine {
         edge: &Object,
         position: Position,
     ) -> Result<Option<i64>, MetorexError> {
-        match edge {
-            Object::Nil => Ok(None),
-            Object::Int(number) => Ok(Some(*number)),
-            Object::Float(number) => Ok(Some(*number as i64)),
+        match edge.view() {
+            View::Nil => Ok(None),
+            View::Int(number) => Ok(Some(number)),
+            View::Float(number) => Ok(Some(number as i64)),
             // A number past what a machine word holds names no place in a
             // collection, which Ruby reports as a range rather than a type.
-            Object::BigInt(_) => Err(crate::vm::errors::simple_exception(
+            View::BigInt(_) => Err(crate::vm::errors::simple_exception(
                 "RangeError",
                 "bignum too big to convert into 'long'",
                 position,
             )),
-            other if self.answers_to(other, "to_int", position)? => {
-                match self.send_to_object(other.clone(), "to_int", vec![], position)? {
-                    Object::Int(number) => Ok(Some(number)),
-                    Object::Float(number) => Ok(Some(number as i64)),
+            _ if self.answers_to(edge, "to_int", position)? => {
+                match self
+                    .send_to_object(edge.clone(), "to_int", vec![], position)?
+                    .view()
+                {
+                    View::Int(number) => Ok(Some(number)),
+                    View::Float(number) => Ok(Some(number as i64)),
                     _ => Ok(None),
                 }
             }
@@ -497,7 +512,7 @@ impl VirtualMachine {
     ) -> Result<Object, MetorexError> {
         // The environment names its variables in text, so a lookup reads what
         // it was handed as text first.
-        if let Object::Dict(dict_rc) = &collection
+        if let View::Dict(dict_rc) = collection.view()
             && self.dict_is_environment(dict_rc)
         {
             let held = Object::Dict(Rc::clone(dict_rc));
@@ -510,9 +525,9 @@ impl VirtualMachine {
                     )
                 });
         }
-        match collection {
-            Object::Array(elements_rc) => match key {
-                Object::Int(index) => {
+        match collection.view() {
+            View::Array(elements_rc) => match key.view() {
+                View::Int(index) => {
                     let elements = elements_rc.borrow();
                     // A negative index counts back from the end, and one past
                     // either end answers nil rather than raising.
@@ -531,30 +546,30 @@ impl VirtualMachine {
                 // nil the way Ruby's does.
                 // A range over Integers is read here, and one over anything
                 // else is left to the method, which converts its ends.
-                Object::Range {
+                View::Range {
                     ref start,
                     ref end,
                     exclusive,
                     ..
-                } if [start.as_ref(), end.as_ref()]
+                } if [start, end]
                     .iter()
-                    .all(|bound| matches!(bound, Object::Int(_) | Object::Nil)) =>
+                    .all(|bound| matches!(bound.view(), View::Int(_) | View::Nil)) =>
                 {
                     let elements = elements_rc.borrow();
                     let length = elements.len() as i64;
-                    let resolve = |bound: &Object| match bound {
-                        Object::Int(value) if *value < 0 => value + length,
-                        Object::Int(value) => *value,
+                    let resolve = |bound: &Object| match bound.view() {
+                        View::Int(value) if value < 0 => value + length,
+                        View::Int(value) => value,
                         _ => 0,
                     };
-                    let from = match start.as_ref() {
-                        Object::Nil => 0,
-                        bound => resolve(bound),
+                    let from = match start.view() {
+                        View::Nil => 0,
+                        _ => resolve(start),
                     };
-                    let mut to = match end.as_ref() {
-                        Object::Nil => length,
-                        bound => {
-                            let resolved = resolve(bound);
+                    let mut to = match end.view() {
+                        View::Nil => length,
+                        _ => {
+                            let resolved = resolve(end);
                             if exclusive { resolved } else { resolved + 1 }
                         }
                     };
@@ -571,8 +586,13 @@ impl VirtualMachine {
                 // subclass — is settled by the method itself.
                 other => {
                     let named = other.type_name().to_string();
-                    let held = Object::Array(Rc::clone(&elements_rc));
-                    match self.call_array_method(&held, "[]", &[other], position)? {
+                    let held = Object::Array(Rc::clone(elements_rc));
+                    match self.call_array_method(
+                        &held,
+                        "[]",
+                        std::slice::from_ref(&key),
+                        position,
+                    )? {
                         Some(found) => Ok(found),
                         None => Err(MetorexError::type_error(
                             format!("Array index must be an Integer, found {}", named),
@@ -581,8 +601,8 @@ impl VirtualMachine {
                     }
                 }
             },
-            Object::Dict(dict_rc) => {
-                let (fresh, held) = self.hash_locate_key(&dict_rc, &key, position)?;
+            View::Dict(dict_rc) => {
+                let (fresh, held) = self.hash_locate_key(dict_rc, &key, position)?;
                 let key_string = held.unwrap_or(fresh);
 
                 let dict = dict_rc.borrow();
@@ -592,13 +612,15 @@ impl VirtualMachine {
                     // `Hash.new(default)` answers that value for a key it has
                     // no entry for, without storing anything.
                     Ok(default.clone())
-                } else if let Some(Object::Block(default_proc)) = dict.get("__MX_DEFAULT_PROC__") {
+                } else if let Some(View::Block(default_proc)) =
+                    dict.get("__MX_DEFAULT_PROC__").view()
+                {
                     // Auto-vivify: call the default block with (hash, key)
                     // The block typically does h[k] = default_value, which sets
                     // the value directly in the hash.
                     let block = default_proc.clone();
                     drop(dict);
-                    let hash_obj = Object::Dict(Rc::clone(&dict_rc));
+                    let hash_obj = Object::Dict(Rc::clone(dict_rc));
                     let block_result =
                         self.execute_block_body(&block, vec![hash_obj, key.clone()])?;
                     // The block may have set the key directly (h[k] = val), or
@@ -617,38 +639,35 @@ impl VirtualMachine {
             }
 
             // Symbol#[] mirrors String#[] on the symbol's name.
-            Object::Symbol(s) => {
+            View::Symbol(s) => {
                 let as_string = Object::string(s.as_str().to_string());
                 self.evaluate_index_operation(as_string, key, position)
             }
 
             // A String reads its own `[]`, which keeps one reading of the
             // characters for both the index form and the method call.
-            Object::String(s) => {
+            View::String(s) => {
                 // A Float or an object that names an index arrives as one,
                 // and a Range subclass stands for the span it holds.
-                let key = match &key {
-                    Object::Int(_)
-                    | Object::Range { .. }
-                    | Object::String(_)
-                    | Object::Regex(_, _) => key,
-                    Object::Float(number) => Object::Int(*number as i64),
-                    other => match crate::vm::native_methods::as_range(other) {
+                let key = match key.view() {
+                    View::Int(_) | View::Range { .. } | View::String(_) | View::Regex(_, _) => key,
+                    View::Float(number) => Object::Int(number as i64),
+                    _ => match crate::vm::native_methods::as_range(&key) {
                         Some(span) => span,
-                        None if self.responds_to(other, "to_int") => {
-                            self.send_to_object(other.clone(), "to_int", vec![], position)?
+                        None if self.responds_to(&key, "to_int") => {
+                            self.send_to_object(key.clone(), "to_int", vec![], position)?
                         }
                         None => key,
                     },
                 };
-                let made = match key {
-                    Object::Int(i) => {
+                let made = match key.view() {
+                    View::Int(i) => {
                         let as_text =
-                            crate::vm::native_methods::string_methods::characters_are_text(&s);
+                            crate::vm::native_methods::string_methods::characters_are_text(s);
                         let chars = if as_text {
                             Vec::new()
                         } else {
-                            crate::vm::native_methods::string_methods::character_units(&s)
+                            crate::vm::native_methods::string_methods::character_units(s)
                         };
                         let len = if as_text {
                             s.character_count()
@@ -665,25 +684,25 @@ impl VirtualMachine {
                             Ok(Object::string(chars[idx as usize].clone()))
                         }
                     }
-                    Object::Range {
+                    View::Range {
                         start,
                         end,
                         exclusive,
                         ..
                     } => {
                         let as_text =
-                            crate::vm::native_methods::string_methods::characters_are_text(&s);
+                            crate::vm::native_methods::string_methods::characters_are_text(s);
                         let chars = if as_text {
                             Vec::new()
                         } else {
-                            crate::vm::native_methods::string_methods::character_units(&s)
+                            crate::vm::native_methods::string_methods::character_units(s)
                         };
                         let len = if as_text {
                             s.character_count()
                         } else {
                             chars.len()
                         } as i64;
-                        let from = match self.span_end_index(start.as_ref(), position)? {
+                        let from = match self.span_end_index(start, position)? {
                             Some(number) => {
                                 let placed = if number < 0 { len + number } else { number };
                                 if placed < 0 || placed > len {
@@ -693,7 +712,7 @@ impl VirtualMachine {
                             }
                             None => 0,
                         };
-                        let last = match self.span_end_index(end.as_ref(), position)? {
+                        let last = match self.span_end_index(end, position)? {
                             Some(number) => {
                                 let placed = if number < 0 { len + number } else { number };
                                 if exclusive { placed - 1 } else { placed }
@@ -711,7 +730,7 @@ impl VirtualMachine {
                     }
                     // `text[other]` answers the other string when it appears,
                     // which is how Ruby looks a substring up.
-                    Object::String(ref wanted) => {
+                    View::String(wanted) => {
                         if s.as_str().contains(&*wanted.as_str()) {
                             Ok(Object::string(wanted.as_str().to_string()))
                         } else {
@@ -720,7 +739,7 @@ impl VirtualMachine {
                     }
                     // `text[pattern]` answers what the pattern matched, and
                     // the match is recorded so `$~` names it afterwards.
-                    Object::Regex(ref pattern, ref flags) => {
+                    View::Regex(pattern, flags) => {
                         let (pattern, flags) =
                             (pattern.as_str().to_string(), flags.as_str().to_string());
                         let subject = s.as_str().to_string();
@@ -733,7 +752,7 @@ impl VirtualMachine {
                     }
                     // A number too wide to count characters with names no
                     // place in the string.
-                    Object::BigInt(_) => Err(crate::vm::errors::simple_exception(
+                    View::BigInt(_) => Err(crate::vm::errors::simple_exception(
                         "RangeError",
                         "bignum too big to convert into 'long'",
                         position,
@@ -741,9 +760,9 @@ impl VirtualMachine {
                     // An instance of a String subclass carries its characters
                     // in an instance variable, and names a substring the same
                     // way a plain String does.
-                    Object::Instance(_) => {
-                        match crate::vm::native_methods::string_subclass_value(&key) {
-                            Some(Object::String(wanted)) => {
+                    View::Instance(_) => {
+                        match crate::vm::native_methods::string_subclass_value(&key).view() {
+                            Some(View::String(wanted)) => {
                                 if s.as_str().contains(&*wanted.as_str()) {
                                     Ok(Object::string(wanted.as_str().to_string()))
                                 } else {
@@ -757,7 +776,7 @@ impl VirtualMachine {
                 }?;
                 // A piece of a string is written in the same encoding, and
                 // its characters stand for what the whole one's stood for.
-                if let Object::String(piece) = &made
+                if let View::String(piece) = made.view()
                     && piece.encoding_name() == crate::object::string_value::DEFAULT_ENCODING
                 {
                     piece.set_encoding(s.encoding_name());
@@ -768,7 +787,7 @@ impl VirtualMachine {
                 Ok(made)
             }
 
-            Object::Class(_) | Object::Module(_) | Object::Instance(_) => {
+            View::Class(_) | View::Module(_) | View::Instance(_) => {
                 // A user-defined `[]` wins: on a class or module that is
                 // `def self.[]`, stored under the `__class__` prefix.
                 if let Some((owner, method)) = self.lookup_method(&collection, "[]")
@@ -820,7 +839,7 @@ impl VirtualMachine {
             }
             // Any other receiver, such as an exception whose class defines
             // `[]`, is sent the call.
-            other => self.send_to_object(other, "[]", vec![key], position),
+            _ => self.send_to_object(collection.clone(), "[]", vec![key], position),
         }
     }
 
@@ -858,7 +877,7 @@ impl VirtualMachine {
             let pattern = self.evaluate_expression(condition)?;
             let line = self.globals().get("_").unwrap_or(Object::Nil);
             let matched = self.send_to_object(pattern, "=~", vec![line], *position)?;
-            return Ok(Object::Bool(!matches!(matched, Object::Nil)));
+            return Ok(Object::Bool(!matches!(matched.view(), View::Nil)));
         }
         let Expression::Range {
             start,
@@ -884,7 +903,7 @@ impl VirtualMachine {
         // meant, so Ruby says so about it.
         if !self.flip_flops.contains_key(&site) {
             self.flip_flops.insert(site.clone(), false);
-            let speaks_up = matches!(self.globals().get("VERBOSE"), Some(Object::Bool(true)));
+            let speaks_up = matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true)));
             for side in [start.as_ref(), end.as_ref()] {
                 if speaks_up && matches!(side, Expression::IntLiteral { .. }) {
                     self.emit_warning_to_stderr("warning: integer literal in flip-flop", *position);
@@ -924,7 +943,7 @@ impl VirtualMachine {
         let held = self.globals().get(".").unwrap_or(Object::Int(0));
         let _ = position;
         Ok(Object::Bool(
-            matches!(held, Object::Int(read) if read == *value),
+            matches!(held.view(), View::Int(read) if read == *value),
         ))
     }
 

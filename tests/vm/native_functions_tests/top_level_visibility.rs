@@ -1,6 +1,7 @@
 // Visibility set at the top level rather than in a class body.
 
 use super::*;
+use metorex::object::{OptionView, View};
 
 #[test]
 fn top_level_private_no_args() {
@@ -22,7 +23,7 @@ def foo
 end
 private :foo
 "#);
-    assert!(matches!(result, Some(Object::Symbol(_))));
+    assert!(matches!(result.view(), Some(View::Symbol(_))));
 }
 
 #[test]
@@ -36,7 +37,7 @@ def bar
 end
 private :foo, :bar
 "#);
-    assert!(matches!(result, Some(Object::Array(_))));
+    assert!(matches!(result.view(), Some(View::Array(_))));
 }
 
 #[test]

@@ -1,6 +1,7 @@
 // The per-fiber store a `Fiber[]` reads and writes.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// The name a fiber keeps a value under. Ruby takes a Symbol, reads a
@@ -10,12 +11,15 @@ impl VirtualMachine {
         given: &Object,
         position: Position,
     ) -> Result<String, MetorexError> {
-        match given {
-            Object::Symbol(name) => Ok(format!(":{name}")),
-            Object::String(name) => Ok(format!(":{}", name.as_str())),
-            other if self.responds_to(other, "to_str") => {
-                match self.send_to_object(other.clone(), "to_str", vec![], position)? {
-                    Object::String(name) => Ok(format!(":{}", name.as_str())),
+        match given.view() {
+            View::Symbol(name) => Ok(format!(":{name}")),
+            View::String(name) => Ok(format!(":{}", name.as_str())),
+            _ if self.responds_to(given, "to_str") => {
+                match self
+                    .send_to_object(given.clone(), "to_str", vec![], position)?
+                    .view()
+                {
+                    View::String(name) => Ok(format!(":{}", name.as_str())),
                     _ => Err(crate::vm::errors::simple_exception(
                         "TypeError",
                         "wrong argument type (expected a Symbol)",
@@ -38,7 +42,7 @@ impl VirtualMachine {
         given: &Object,
         position: Position,
     ) -> Result<(), MetorexError> {
-        let Object::Dict(entries) = given else {
+        let View::Dict(entries) = given.view() else {
             return Err(crate::vm::errors::simple_exception(
                 "TypeError",
                 &format!(
@@ -59,7 +63,7 @@ impl VirtualMachine {
                 .collect()
         };
         for key in named {
-            if !matches!(key, Object::Symbol(_)) {
+            if !matches!(key.view(), View::Symbol(_)) {
                 return Err(crate::vm::errors::simple_exception(
                     "TypeError",
                     "wrong argument type (expected a Symbol)",

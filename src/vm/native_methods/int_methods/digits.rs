@@ -1,6 +1,7 @@
 // The place values of a number in a base.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// The place values of an integer in `base`, least significant first.
@@ -52,10 +53,10 @@ impl VirtualMachine {
     ) -> Result<f64, MetorexError> {
         // nil, true and false are refused by name rather than asked for the
         // `to_f` nil has.
-        if let Some(named) = match argument {
-            Object::Nil => Some("nil"),
-            Object::Bool(true) => Some("true"),
-            Object::Bool(false) => Some("false"),
+        if let Some(named) = match argument.view() {
+            View::Nil => Some("nil"),
+            View::Bool(true) => Some("true"),
+            View::Bool(false) => Some("false"),
             _ => None,
         } {
             return Err(crate::vm::errors::simple_exception(
@@ -64,7 +65,7 @@ impl VirtualMachine {
                 position,
             ));
         }
-        if let Object::String(text) = argument {
+        if let View::String(text) = argument.view() {
             return text.as_str().trim().parse::<f64>().map_err(|_| {
                 let message = format!("invalid value for Float(): {:?}", text.as_str());
                 MetorexError::UncaughtException {
@@ -74,12 +75,13 @@ impl VirtualMachine {
                 }
             });
         }
-        if let Object::Float(value) = argument {
-            return Ok(*value);
+        if let View::Float(value) = argument.view() {
+            return Ok(value);
         }
         if self.responds_to(argument, "to_f")
-            && let Object::Float(value) =
-                self.send_to_object(argument.clone(), "to_f", vec![], position)?
+            && let View::Float(value) = self
+                .send_to_object(argument.clone(), "to_f", vec![], position)?
+                .view()
         {
             return Ok(value);
         }

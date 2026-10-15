@@ -1,6 +1,7 @@
 // Descending into nested arrays.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 /// Copy `elements` into `flat`, descending into nested arrays until `depth`
 /// levels have been unwrapped. A negative depth descends all the way.
@@ -16,8 +17,8 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<(), MetorexError> {
         for element in elements {
-            match element {
-                Object::Array(nested) if depth != 0 => {
+            match element.view() {
+                View::Array(nested) if depth != 0 => {
                     let address = Rc::as_ptr(nested) as usize;
                     if in_flight.contains(&address) {
                         return Err(crate::vm::errors::simple_exception(
@@ -31,13 +32,13 @@ impl VirtualMachine {
                     self.flatten_into(&inner, depth - 1, in_flight, flat, position)?;
                     in_flight.pop();
                 }
-                other if depth != 0 => match self.array_for_flatten(other, position)? {
+                _ if depth != 0 => match self.array_for_flatten(element, position)? {
                     Some(inner) => {
                         self.flatten_into(&inner, depth - 1, in_flight, flat, position)?
                     }
-                    None => flat.push(other.clone()),
+                    None => flat.push(element.clone()),
                 },
-                other => flat.push(other.clone()),
+                _ => flat.push(element.clone()),
             }
         }
         Ok(())
@@ -51,11 +52,11 @@ impl VirtualMachine {
         element: &Object,
         position: Position,
     ) -> Result<Option<Vec<Object>>, MetorexError> {
-        if !matches!(element, Object::Instance(_)) {
+        if !matches!(element.view(), View::Instance(_)) {
             return Ok(None);
         }
         if let Some(held) = crate::vm::native_methods::array_subclass_value(element) {
-            if let Object::Array(items) = held {
+            if let View::Array(items) = held.view() {
                 return Ok(Some(items.borrow().clone()));
             }
             return Ok(None);
@@ -110,15 +111,15 @@ impl VirtualMachine {
                 }
             }
         };
-        if let Object::Array(items) = &answered {
+        if let View::Array(items) = answered.view() {
             return Ok(Some(items.borrow().clone()));
         }
-        if let Some(Object::Array(items)) =
-            crate::vm::native_methods::array_subclass_value(&answered)
+        if let Some(View::Array(items)) =
+            crate::vm::native_methods::array_subclass_value(&answered).view()
         {
             return Ok(Some(items.borrow().clone()));
         }
-        if matches!(answered, Object::Nil) {
+        if matches!(answered.view(), View::Nil) {
             return Ok(None);
         }
         let message = format!(

@@ -5,6 +5,7 @@ use metorex::bytecode::opcode::OpCode;
 use metorex::compiler::Compiler;
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::View;
 use metorex::parser::Parser;
 
 fn compile(source: &str) -> metorex::bytecode::chunk::Chunk {
@@ -246,8 +247,8 @@ fn compile_self_in_method_body() {
     for i in 0..256 {
         let constant =
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| chunk.get_constant(i)));
-        match constant {
-            Ok(Object::CompiledFunction(f)) if f.name == "me" => {
+        match constant.map(Object::view) {
+            Ok(View::CompiledFunction(f)) if f.name == "me" => {
                 let body_ops = opcodes(&f.chunk);
                 assert!(
                     body_ops.contains(&OpCode::GetLocal),

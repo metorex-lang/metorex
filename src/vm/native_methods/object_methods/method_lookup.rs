@@ -2,6 +2,7 @@
 // at all.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// A method held as an object, and whether the receiver answers a name
@@ -22,7 +23,7 @@ impl VirtualMachine {
                 // public_method` of its own owns the name; the class-method
                 // table records it under the `__class__` convention, which
                 // the caller checks after this returns None.
-                if let Object::Class(class_rc) | Object::Module(class_rc) = receiver
+                if let View::Class(class_rc) | View::Module(class_rc) = receiver.view()
                     && class_rc
                         .find_method(&format!("__class__{}", method_name))
                         .is_some()
@@ -87,7 +88,7 @@ impl VirtualMachine {
                     && self
                         .lookup_method(receiver, &name_str)
                         .is_none_or(|(_, found)| found.body.is_empty())
-                    && let Some(Object::Class(owner)) = self.globals().get(named)
+                    && let Some(View::Class(owner)) = self.globals().get(named).view()
                 {
                     let mut stub = crate::object::Method::new(
                         name_str.clone(),
@@ -97,7 +98,7 @@ impl VirtualMachine {
                     stub.receiver = Some(Box::new(receiver.clone()));
                     stub.owner = Some(owner.ruby_name());
                     stub.original_name = Some(name_str.clone());
-                    stub.owner_class = Some(owner);
+                    stub.owner_class = Some(owner.clone());
                     return Ok(Some(Object::Method(std::rc::Rc::new(stub))));
                 }
                 if let Some((resolved_class, method)) = self
@@ -149,7 +150,7 @@ impl VirtualMachine {
                 // Module and Class instance methods are implemented natively
                 // rather than living in a method table, so hand out a stub
                 // carrying the right parameter list.
-                if matches!(receiver, Object::Class(_) | Object::Module(_))
+                if matches!(receiver.view(), View::Class(_) | View::Module(_))
                     && let Some(mut stub) =
                         crate::vm::native_methods::class_methods::native_module_method_stub(
                             &name_str,
@@ -208,8 +209,8 @@ impl VirtualMachine {
                 // `Klass.method(:new)` is Class#new, which takes any
                 // arguments and hands them to `initialize`.
                 if name_str == "new"
-                    && let Object::Class(_) = receiver
-                    && let Some(Object::Class(class_class)) = self.globals().get("Class")
+                    && let View::Class(_) = receiver.view()
+                    && let Some(View::Class(class_class)) = self.globals().get("Class").view()
                 {
                     let mut stub = crate::object::Method::new(
                         name_str.clone(),
@@ -221,7 +222,7 @@ impl VirtualMachine {
                     stub.owner = Some("Class".to_string());
                     stub.original_name = Some(name_str.clone());
                     stub.native_alias = Some(name_str.clone());
-                    stub.owner_class = Some(class_class);
+                    stub.owner_class = Some(class_class.clone());
                     return Ok(Some(Object::Method(std::rc::Rc::new(stub))));
                 }
                 if is_operator || self.responds_to(receiver, &name_str) {
@@ -258,10 +259,10 @@ impl VirtualMachine {
                 }
                 // A class or module is an object too, so Kernel's private
                 // functions, such as `puts`, are methods it has.
-                if matches!(receiver, Object::Class(_) | Object::Module(_))
+                if matches!(receiver.view(), View::Class(_) | View::Module(_))
                     && !public_only
                     && crate::vm::native_methods::is_kernel_private_function(&name_str)
-                    && let Some(Object::Module(kernel)) = self.globals().get("Kernel")
+                    && let Some(View::Module(kernel)) = self.globals().get("Kernel").view()
                 {
                     let mut stub = crate::object::Method::new(
                         name_str.clone(),
@@ -271,7 +272,7 @@ impl VirtualMachine {
                     stub.receiver = Some(Box::new(receiver.clone()));
                     stub.owner = Some("Kernel".to_string());
                     stub.original_name = Some(name_str.clone());
-                    stub.owner_class = Some(kernel);
+                    stub.owner_class = Some(kernel.clone());
                     return Ok(Some(Object::Method(std::rc::Rc::new(stub))));
                 }
                 let cls = self.builtins().class_of(receiver);
@@ -346,7 +347,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                Ok(Some(Object::Bool(matches!(receiver, Object::Nil))))
+                Ok(Some(Object::Bool(matches!(receiver.view(), View::Nil))))
             }
             "get_source" => {
                 if arguments.len() != 1 {
@@ -357,14 +358,14 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let query = match &arguments[0] {
-                    Object::String(s) => s.as_str().to_string(),
-                    Object::Symbol(s) => s.as_str().to_string(),
-                    other => {
+                let query = match arguments[0].view() {
+                    View::String(s) => s.as_str().to_string(),
+                    View::Symbol(s) => s.as_str().to_string(),
+                    _ => {
                         return Err(method_argument_type_error(
                             method_name,
                             "String or Symbol",
-                            other,
+                            &arguments[0],
                             position,
                         ));
                     }

@@ -1,6 +1,7 @@
 // Registering the exception classes.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 /// Register standard Ruby exception class hierarchy as stubs.
 pub(crate) fn register_exception_classes(globals: &mut GlobalRegistry) {
@@ -8,8 +9,8 @@ pub(crate) fn register_exception_classes(globals: &mut GlobalRegistry) {
     // add the remaining subclasses that specs and mspec reference.
     // Exception descends from Object, the way every other class does, and it
     // has to be the same Object the rest of the world sees.
-    let object_class = match globals.get("Object") {
-        Some(Object::Class(object_class)) => object_class,
+    let object_class = match globals.get("Object").view() {
+        Some(View::Class(object_class)) => object_class.clone(),
         _ => Class::new("Object", None),
     };
     let exception = Class::new("Exception", Some(object_class));
@@ -93,7 +94,7 @@ pub(crate) fn register_exception_classes(globals: &mut GlobalRegistry) {
     globals.set("Errno", Object::Module(errno_module));
     // The errors Encoding raises are constants on it, and each one is an
     // EncodingError, which is what lets a rescue name them all at once.
-    if let Some(Object::Class(encoding)) = globals.get("Encoding") {
+    if let Some(View::Class(encoding)) = globals.get("Encoding").view() {
         for name in [
             "CompatibilityError",
             "ConverterNotFoundError",
@@ -127,7 +128,7 @@ pub(crate) fn register_exception_classes(globals: &mut GlobalRegistry) {
     );
     // The Math module holds it as a constant too, which is how the qualified
     // name resolves. Math itself was registered with the other modules first.
-    if let Some(Object::Module(math) | Object::Class(math)) = globals.get("Math") {
+    if let Some(View::Module(math) | View::Class(math)) = globals.get("Math").view() {
         math.set_class_var("DomainError", Object::Class(math_domain_error));
     }
 }

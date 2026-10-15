@@ -1,6 +1,7 @@
 // The names a directory holds, walked or gathered or matched.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The names a directory holds, walked or gathered or matched.
@@ -16,7 +17,7 @@ impl VirtualMachine {
         if class_rc.name() == "Dir" && (method_name == "foreach" || method_name == "each_child") {
             let named: Vec<Object> = arguments
                 .iter()
-                .filter(|held| !matches!(held, Object::Dict(_)))
+                .filter(|held| !matches!(held.view(), View::Dict(_)))
                 .cloned()
                 .collect();
             if named.len() != 1 {
@@ -25,7 +26,7 @@ impl VirtualMachine {
             let block = self.pending_block.take();
             // Without a block the walk is handed back as an Enumerator, and
             // the path is left untouched so `to_path` is asked for once.
-            let Some(Object::Block(block)) = block else {
+            let Some(View::Block(block)) = block.view() else {
                 return self
                     .build_enumerator(
                         Object::Class(Rc::clone(class_rc)),
@@ -41,7 +42,7 @@ impl VirtualMachine {
             let listing =
                 self.directory_names(&path, method_name == "foreach", encoding, position)?;
             for name in listing {
-                self.execute_block_body(&block, vec![name])?;
+                self.execute_block_body(block, vec![name])?;
             }
             return Ok(Some(Object::Nil));
         }
@@ -64,11 +65,11 @@ impl VirtualMachine {
                 // `Dir.mkdir` takes the mode the directory is created with,
                 // which is where a sticky or setgid bit comes from. Anything
                 // but an Integer has to answer `to_int` for it.
-                let mode = match arguments.get(1) {
-                    None | Some(Object::Nil) => None,
-                    Some(Object::Int(mode)) => Some(*mode),
+                let mode = match arguments.get(1).view() {
+                    None | Some(View::Nil) => None,
+                    Some(View::Int(mode)) => Some(mode),
                     Some(other) => {
-                        let held = self.coerce_integer_argument(other, position)?;
+                        let held = self.coerce_integer_argument(&other.to_object(), position)?;
                         Some(i64::try_from(held).unwrap_or(0))
                     }
                 };
@@ -101,24 +102,24 @@ impl VirtualMachine {
             // string here is read in already.
             let named: Vec<&Object> = arguments
                 .iter()
-                .filter(|held| !matches!(held, Object::Dict(_)))
+                .filter(|held| !matches!(held.view(), View::Dict(_)))
                 .collect();
             if named.len() != 1 {
                 return Err(method_argument_error(method_name, 1, named.len(), position));
             }
-            let path = match named[0] {
-                Object::String(held) => path_text(held),
-                other => {
+            let path = match named[0].view() {
+                View::String(held) => path_text(held),
+                _ => {
                     // Anything else names a path through `to_path`.
                     let converted =
-                        self.send_to_object(other.clone(), "to_path", vec![], position)?;
-                    match converted {
-                        Object::String(held) => path_text(&held),
+                        self.send_to_object(named[0].clone(), "to_path", vec![], position)?;
+                    match converted.view() {
+                        View::String(held) => path_text(held),
                         _ => {
                             return Err(method_argument_type_error(
                                 method_name,
                                 "String",
-                                other,
+                                named[0],
                                 position,
                             ));
                         }

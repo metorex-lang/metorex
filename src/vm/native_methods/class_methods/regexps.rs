@@ -1,6 +1,7 @@
 // The Regexp class methods.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Building a pattern, escaping a string into one, and the match the
@@ -21,8 +22,8 @@ impl VirtualMachine {
             && arguments.len() == 1
         {
             let source = self.coerce_name_argument(&arguments[0], position)?;
-            let named = match &arguments[0] {
-                Object::String(held) => held.encoding_name(),
+            let named = match arguments[0].view() {
+                View::String(held) => held.encoding_name(),
                 _ => "US-ASCII".to_string(),
             };
             let escaped = quoted_for_pattern(&source);
@@ -36,7 +37,7 @@ impl VirtualMachine {
             let made = crate::object::StringValue::with_encoding(escaped, tagged);
             // Characters standing for bytes go on standing for them in the
             // pattern built out of them.
-            if matches!(&arguments[0], Object::String(held) if held.holds_bytes()) {
+            if matches!(arguments[0].view(), View::String(held) if held.holds_bytes()) {
                 made.mark_bytes();
             }
             return Ok(Answered(Object::String(Rc::new(made))));
@@ -50,7 +51,7 @@ impl VirtualMachine {
                 .unwrap_or(Object::Nil);
             return match arguments.first() {
                 None => Ok(Answered(last)),
-                Some(_) if matches!(last, Object::Nil) => Ok(Answered(Object::Nil)),
+                Some(_) if matches!(last.view(), View::Nil) => Ok(Answered(Object::Nil)),
                 Some(index) => self
                     .send_to_object(last, "[]", vec![index.clone()], position)
                     .map(Answered),
@@ -67,8 +68,8 @@ impl VirtualMachine {
             let written_out = method_name == "__literal__";
             // A pattern written with `o` is built once and stands for every
             // time the line it is written on is reached again.
-            let built_once = match arguments.get(2) {
-                Some(Object::String(site)) => Some(site.as_str().to_string()),
+            let built_once = match arguments.get(2).view() {
+                Some(View::String(site)) => Some(site.as_str().to_string()),
                 _ => None,
             };
             if let Some(site) = &built_once
@@ -76,15 +77,15 @@ impl VirtualMachine {
             {
                 return Ok(Answered(held.clone()));
             }
-            let source_encoding = match arguments.first() {
-                Some(Object::String(text)) => Some(text.encoding_name()),
+            let source_encoding = match arguments.first().view() {
+                Some(View::String(text)) => Some(text.encoding_name()),
                 _ => None,
             };
-            let source = match arguments.first() {
-                Some(Object::Regex(pattern, flags)) => {
+            let source = match arguments.first().view() {
+                Some(View::Regex(pattern, flags)) => {
                     // A pattern built from another one keeps that one's flags,
                     // and says so about any written alongside it.
-                    if arguments.len() > 1 && !matches!(arguments[1], Object::Nil) {
+                    if arguments.len() > 1 && !matches!(arguments[1].view(), View::Nil) {
                         self.emit_warning_to_stderr("warning: flags ignored", position);
                     }
                     let made = Object::Regex(Rc::clone(pattern), Rc::clone(flags));
@@ -103,7 +104,7 @@ impl VirtualMachine {
                 // pattern: a Symbol names no source. UTF-8 held as bytes is
                 // read as the text it spells, and refused where it spells
                 // none.
-                Some(Object::String(text))
+                Some(View::String(text))
                     if text.holds_bytes() && text.encoding_name() == "UTF-8" =>
                 {
                     let bytes = crate::vm::native_methods::string_methods::binary_bytes(text);
@@ -128,10 +129,14 @@ impl VirtualMachine {
                         }
                     }
                 }
-                Some(Object::String(text)) => text.as_str().to_string(),
+                Some(View::String(text)) => text.as_str().to_string(),
                 Some(argument) => {
-                    let named = self.builtins().class_of(argument).name().to_string();
-                    if !self.answers_to(argument, "to_str", position)? {
+                    let named = self
+                        .builtins()
+                        .class_of(&argument.to_object())
+                        .name()
+                        .to_string();
+                    if !self.answers_to(&argument.to_object(), "to_str", position)? {
                         let message = format!("no implicit conversion of {} into String", named);
                         return Err(crate::vm::errors::simple_exception(
                             "TypeError",
@@ -139,8 +144,11 @@ impl VirtualMachine {
                             position,
                         ));
                     }
-                    match self.send_to_object(argument.clone(), "to_str", vec![], position)? {
-                        Object::String(text) => text.as_str().to_string(),
+                    match self
+                        .send_to_object(argument.to_object(), "to_str", vec![], position)?
+                        .view()
+                    {
+                        View::String(text) => text.as_str().to_string(),
                         _ => {
                             let message = format!("can\'t convert {} into String", named);
                             return Err(crate::vm::errors::simple_exception(
@@ -157,8 +165,8 @@ impl VirtualMachine {
             };
             refuse_bad_pattern(&source, position)?;
             let mut flags = String::new();
-            match arguments.get(1) {
-                Some(Object::Int(options)) => {
+            match arguments.get(1).view() {
+                Some(View::Int(options)) => {
                     if options & 1 != 0 {
                         flags.push('i');
                     }
@@ -183,7 +191,7 @@ impl VirtualMachine {
                 // written with, which are the three that change how the
                 // pattern reads and the two that name the encoding it
                 // matches in.
-                Some(Object::String(written)) => {
+                Some(View::String(written)) => {
                     let spelling = written.as_str().to_string();
                     if spelling.chars().any(|held| {
                         !(matches!(held, 'i' | 'm' | 'x')
@@ -204,15 +212,16 @@ impl VirtualMachine {
                         }
                     }
                 }
-                Some(Object::Bool(true)) => flags.push('i'),
-                Some(Object::Bool(false)) | Some(Object::Nil) | None => {}
+                Some(View::Bool(true)) => flags.push('i'),
+                Some(View::Bool(false)) | Some(View::Nil) | None => {}
                 // A keyword hash in that place names `timeout:`, which is
                 // read below rather than as an ignorecase argument.
-                Some(Object::Dict(_)) => {}
+                Some(View::Dict(_)) => {}
                 Some(other) => {
                     // Anything else is read as a plain truth, which Ruby says
                     // so about rather than asking it for a number.
-                    let shown = self.send_to_object(other.clone(), "inspect", vec![], position)?;
+                    let shown =
+                        self.send_to_object(other.to_object(), "inspect", vec![], position)?;
                     let message =
                         format!("warning: expected true or false as ignorecase: {}", shown);
                     self.emit_warning_to_stderr(&message, position);
@@ -221,18 +230,18 @@ impl VirtualMachine {
             }
             // `timeout:` says how long a match of this pattern may take,
             // which stands in place of what the class names.
-            if let Some(Object::Dict(options)) = arguments.get(1).or(arguments.get(2))
+            if let Some(View::Dict(options)) = arguments.get(1).or(arguments.get(2)).view()
                 && let Some(named) = options.borrow().get(":timeout")
             {
-                let held = match named {
-                    Object::Nil => None,
-                    other => {
-                        let seconds = self.float_value_of(other, position)?;
+                let held = match named.view() {
+                    View::Nil => None,
+                    _ => {
+                        let seconds = self.float_value_of(named, position)?;
                         if seconds <= 0.0 {
                             let shown =
-                                self.send_to_object(other.clone(), "to_s", vec![], position)?;
-                            let message = match &shown {
-                                Object::String(held) => {
+                                self.send_to_object(named.clone(), "to_s", vec![], position)?;
+                            let message = match shown.view() {
+                                View::String(held) => {
                                     format!("invalid timeout: {}", held.as_str())
                                 }
                                 held => format!("invalid timeout: {held}"),
@@ -285,13 +294,13 @@ impl VirtualMachine {
                 && !method.is_undefined
                 && !method.body.is_empty()
             {
-                if let Object::Instance(held) = &built {
+                if let View::Instance(held) = built.view() {
                     held.borrow_mut()
                         .set_var("__building_regexp__".to_string(), Object::Bool(true));
                 }
                 let outcome =
                     self.invoke_method(owner, method, built.clone(), arguments.to_vec(), position);
-                if let Object::Instance(held) = &built {
+                if let View::Instance(held) = built.view() {
                     held.borrow_mut()
                         .instance_vars
                         .shift_remove("__building_regexp__");
@@ -357,7 +366,7 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         let parts: Vec<Object> = match arguments {
-            [Object::Array(array)] => array.borrow().clone(),
+            [array] if let View::Array(array) = array.view() => array.borrow().clone(),
             _ => arguments.to_vec(),
         };
         if parts.is_empty() {
@@ -377,18 +386,18 @@ impl VirtualMachine {
         let mut ascii_only = false;
         let mut sources = Vec::with_capacity(parts.len());
         for part in &parts {
-            let (source, standing) = match self.union_pattern_argument(part, position)? {
-                Some(Object::Regex(pattern, flags)) => {
-                    let named = self.pattern_encoding_name(&pattern, &flags);
+            let (source, standing) = match self.union_pattern_argument(part, position)?.view() {
+                Some(View::Regex(pattern, flags)) => {
+                    let named = self.pattern_encoding_name(pattern, flags);
                     let standing = if !encoding_reads_alongside_ascii(&named) {
                         UnionEncoding::AsciiIncompatible(named)
-                    } else if self.pattern_fixes_encoding(&pattern, &flags) {
+                    } else if self.pattern_fixes_encoding(pattern, flags) {
                         UnionEncoding::Fixed(named)
                     } else {
                         UnionEncoding::AsciiOnly
                     };
                     let written = self.send_to_object(
-                        Object::Regex(pattern, flags),
+                        Object::Regex(pattern.clone(), flags.clone()),
                         "to_s",
                         vec![],
                         position,
@@ -463,12 +472,15 @@ impl VirtualMachine {
         part: &Object,
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        match part {
-            Object::Regex(..) => Ok(Some(part.clone())),
-            Object::String(_) | Object::Symbol(_) => Ok(None),
-            other if self.responds_to(other, "to_regexp") => {
-                match self.send_to_object(other.clone(), "to_regexp", vec![], position)? {
-                    converted @ Object::Regex(..) => Ok(Some(converted)),
+        match part.view() {
+            View::Regex(..) => Ok(Some(part.clone())),
+            View::String(_) | View::Symbol(_) => Ok(None),
+            _ if self.responds_to(part, "to_regexp") => {
+                match self
+                    .send_to_object(part.clone(), "to_regexp", vec![], position)?
+                    .view()
+                {
+                    converted @ View::Regex(..) => Ok(Some(converted.to_object())),
                     _ => Ok(None),
                 }
             }
@@ -483,15 +495,18 @@ impl VirtualMachine {
         part: &Object,
         position: Position,
     ) -> Result<Rc<crate::object::StringValue>, MetorexError> {
-        match part {
-            Object::String(text) | Object::Symbol(text) => Ok(Rc::clone(text)),
-            other if self.responds_to(other, "to_str") => {
-                match self.send_to_object(other.clone(), "to_str", vec![], position)? {
-                    Object::String(text) => Ok(text),
-                    _ => Err(self.string_conversion_error(other, position)),
+        match part.view() {
+            View::String(text) | View::Symbol(text) => Ok(Rc::clone(text)),
+            _ if self.responds_to(part, "to_str") => {
+                match self
+                    .send_to_object(part.clone(), "to_str", vec![], position)?
+                    .view()
+                {
+                    View::String(text) => Ok(text.clone()),
+                    _ => Err(self.string_conversion_error(part, position)),
                 }
             }
-            other => Err(self.string_conversion_error(other, position)),
+            _ => Err(self.string_conversion_error(part, position)),
         }
     }
 }

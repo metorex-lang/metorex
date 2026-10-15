@@ -1,6 +1,7 @@
 // Building the text a `join` answers.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The pieces an array joins from, each with the encoding it is written
@@ -29,19 +30,20 @@ impl VirtualMachine {
         written: &mut Vec<(String, String)>,
         position: Position,
     ) -> Result<(), MetorexError> {
-        match element {
-            Object::Symbol(name) | Object::String(name) => {
+        match element.view() {
+            View::Symbol(name) | View::String(name) => {
                 written.push((name.as_str().to_string(), name.encoding_name()));
                 return Ok(());
             }
             _ => {}
         }
-        let nested = match element {
-            Object::Array(held) => Some(Rc::clone(held)),
-            other => match crate::vm::native_methods::array_subclass_value(other) {
-                Some(Object::Array(held)) => Some(held),
+        let nested = match element.view() {
+            View::Array(held) => Some(Rc::clone(held)),
+            _ => (match crate::vm::native_methods::array_subclass_value(element).view() {
+                Some(View::Array(held)) => Some(held),
                 _ => None,
-            },
+            })
+            .cloned(),
         };
         if let Some(held) = nested {
             let address = Rc::as_ptr(&held) as usize;
@@ -67,14 +69,14 @@ impl VirtualMachine {
             // Only an array answered by `to_ary` joins as one. Anything else
             // it answers leaves the element for `to_s` to spell.
             if name == "to_ary" {
-                if matches!(&answered, Object::Array(_))
+                if matches!(answered.view(), View::Array(_))
                     || crate::vm::native_methods::array_subclass_value(&answered).is_some()
                 {
                     return self.join_element_into(&answered, in_flight, written, position);
                 }
                 continue;
             }
-            if let Object::String(text) = answered {
+            if let View::String(text) = answered.view() {
                 written.push((text.as_str().to_string(), text.encoding_name()));
                 return Ok(());
             }

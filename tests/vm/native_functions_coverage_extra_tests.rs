@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -118,7 +119,7 @@ require "{}"
     ));
     // First require returns true for newly loaded.
     std::fs::remove_file(&path).ok();
-    assert!(matches!(result, Some(Object::Bool(true))));
+    assert!(matches!(result.view(), Some(View::Bool(true))));
 }
 
 // ── require with file that has runtime error (lines 329-331) ─────────────

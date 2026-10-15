@@ -1,6 +1,7 @@
 // Whether a hash holds a key, and the entry it keeps for one.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Whether a hash holds a key, and the entry it keeps for one.
@@ -90,8 +91,9 @@ impl VirtualMachine {
                 if self.object_is_frozen(receiver) {
                     return Err(self.frozen_modification_error(receiver, position));
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => Some(block),
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(block)) => Some(block),
                     _ => None,
                 };
                 let found = self.hash_find_key(dict_rc, &arguments[0], position)?;
@@ -100,7 +102,7 @@ impl VirtualMachine {
                     // which decides what `delete` answers.
                     return match block {
                         Some(block) => self
-                            .execute_block_callable(&block, vec![arguments[0].clone()], position)
+                            .execute_block_callable(block, vec![arguments[0].clone()], position)
                             .map(Some),
                         None => Ok(Some(Object::Nil)),
                     };
@@ -117,10 +119,10 @@ impl VirtualMachine {
                 // `default(key)` runs the default proc for that key, while
                 // `default` on its own answers the stored value.
                 let proc = dict_rc.borrow().get(DEFAULT_PROC_KEY).cloned();
-                if let (Some(key), Some(Object::Block(block))) = (arguments.first(), proc) {
+                if let (Some(key), Some(View::Block(block))) = (arguments.first(), proc.view()) {
                     return self
                         .execute_block_callable(
-                            &block,
+                            block,
                             vec![receiver.clone(), key.clone()],
                             position,
                         )

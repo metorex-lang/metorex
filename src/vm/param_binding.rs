@@ -6,6 +6,7 @@
 use crate::ast::Expression;
 use crate::error::MetorexError;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use indexmap::IndexMap;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -29,7 +30,7 @@ pub(crate) fn positional_arg_count(arguments: &[Object]) -> usize {
 /// parameters. A callee that declares none takes a trailing keyword hash as an
 /// ordinary positional argument, which is what Ruby counts it as.
 pub(crate) fn positional_arg_count_for(arguments: &[Object], takes_keywords: bool) -> usize {
-    if takes_keywords && let Some(Object::Dict(dict_rc)) = arguments.last() {
+    if takes_keywords && let Some(View::Dict(dict_rc)) = arguments.last().view() {
         let dict = dict_rc.borrow();
         if dict.contains_key(KWARGS_MARKER) {
             return arguments.len() - 1;
@@ -227,7 +228,7 @@ pub(crate) fn split_keyword_args_for(
     keeps_keywords: bool,
 ) -> (Vec<Object>, IndexMap<String, Object>) {
     // Only split if the trailing dict carries the parser-emitted kwargs marker.
-    if let Some(Object::Dict(dict_rc)) = arguments.last() {
+    if let Some(View::Dict(dict_rc)) = arguments.last().view() {
         let dict = dict_rc.borrow();
         if dict.contains_key("__MX_KWARGS__") {
             if !has_keyword_params {

@@ -1,6 +1,7 @@
 // Attribute accessors, and whether a name resolves to a method.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The accessors `attr_reader` and friends define, and whether a name
@@ -28,15 +29,15 @@ impl VirtualMachine {
                 let mut want_writer = matches!(method_name, "attr_writer" | "attr_accessor");
                 let names_slice: &[Object] = if method_name == "attr"
                     && arguments.len() == 2
-                    && matches!(&arguments[1], Object::Bool(_))
+                    && matches!(arguments[1].view(), View::Bool(_))
                 {
-                    if matches!(self.globals().get("VERBOSE"), Some(Object::Bool(true))) {
+                    if matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true))) {
                         self.emit_warning_to_stderr(
                             "warning: optional boolean argument is obsoleted",
                             position,
                         );
                     }
-                    want_writer = matches!(&arguments[1], Object::Bool(true));
+                    want_writer = matches!(arguments[1].view(), View::Bool(true));
                     &arguments[..1]
                 } else {
                     arguments
@@ -125,8 +126,8 @@ impl VirtualMachine {
                     ));
                 }
                 let name = self.coerce_method_name(&arguments[0], method_name, position)?;
-                let include_super = match arguments.get(1) {
-                    Some(Object::Bool(b)) => *b,
+                let include_super = match arguments.get(1).view() {
+                    Some(View::Bool(b)) => b,
                     _ => true,
                 };
                 let found = if include_super {
@@ -168,8 +169,8 @@ impl VirtualMachine {
                 if found.is_none()
                     && class_rc.is_singleton_class()
                     && matches!(
-                        class_rc.get_class_var("__attached__"),
-                        Some(Object::Module(held) | Object::Class(held)) if held.ruby_name() == "Kernel"
+                        class_rc.get_class_var("__attached__").view(),
+                        Some(View::Module(held) | View::Class(held)) if held.ruby_name() == "Kernel"
                     )
                     && (KERNEL_PRIVATE_FUNCTIONS.contains(&name.as_str())
                         || crate::vm::native_methods::is_native_kernel_method(&name))

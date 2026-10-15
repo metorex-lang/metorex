@@ -1,6 +1,7 @@
 // The copy `dup` and `clone` hand back, and what it carries over.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The copy `dup` and `clone` hand back, before any frozen state or
@@ -9,7 +10,7 @@ impl VirtualMachine {
     /// BasicObject without passing through Object. Only such an object is
     /// limited to BasicObject's own methods.
     pub(crate) fn rooted_at_basic_object(&self, receiver: &Object) -> bool {
-        let Object::Instance(instance) = receiver else {
+        let View::Instance(instance) = receiver.view() else {
             return false;
         };
         let mut walked = Some(std::rc::Rc::clone(&instance.borrow().class));
@@ -38,15 +39,15 @@ impl VirtualMachine {
         receiver: &Object,
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        match receiver {
+        match receiver.view() {
             // Complex and Rational are value objects: there is nothing
             // to copy, so Ruby answers the receiver itself.
-            Object::Instance(inst_rc)
+            View::Instance(inst_rc)
                 if matches!(inst_rc.borrow().class.name(), "Complex" | "Rational") =>
             {
                 Ok(Some(receiver.clone()))
             }
-            Object::Instance(inst_rc) => {
+            View::Instance(inst_rc) => {
                 let copy = {
                     let inst = inst_rc.borrow();
                     let new_inst = crate::object::Instance::new(std::rc::Rc::clone(&inst.class));
@@ -54,10 +55,10 @@ impl VirtualMachine {
                         // The characters or elements behind a subclass of a
                         // primitive belong to the instance, so the copy gets
                         // its own rather than sharing them.
-                        let held = match (k.as_str(), v) {
+                        let held = match (k.as_str(), v.view()) {
                             (
                                 crate::vm::native_methods::STRING_SUBCLASS_VAR,
-                                Object::String(text),
+                                View::String(text),
                             ) => {
                                 let made = crate::object::StringValue::with_encoding(
                                     text.to_text(),
@@ -70,14 +71,14 @@ impl VirtualMachine {
                             }
                             (
                                 crate::vm::native_methods::ARRAY_SUBCLASS_VAR,
-                                Object::Array(elements),
+                                View::Array(elements),
                             ) => Object::array(elements.borrow().clone()),
-                            (crate::vm::native_methods::HASH_SUBCLASS_VAR, Object::Dict(pairs)) => {
+                            (crate::vm::native_methods::HASH_SUBCLASS_VAR, View::Dict(pairs)) => {
                                 Object::Dict(std::rc::Rc::new(std::cell::RefCell::new(
                                     pairs.borrow().clone(),
                                 )))
                             }
-                            (crate::vm::native_methods::SET_SUBCLASS_VAR, Object::Set(held)) => {
+                            (crate::vm::native_methods::SET_SUBCLASS_VAR, View::Set(held)) => {
                                 Object::Set(std::rc::Rc::new(std::cell::RefCell::new(
                                     held.borrow().clone(),
                                 )))
@@ -110,7 +111,7 @@ impl VirtualMachine {
             // instance variables. `dup` leaves the singleton class
             // behind, so a method defined on the original is not on
             // the copy.
-            Object::Exception(details) => {
+            View::Exception(details) => {
                 let copy = {
                     // The backtrace Array is shared with the original,
                     // the way Ruby's copy shares it.
@@ -134,7 +135,7 @@ impl VirtualMachine {
             }
             // A copy of a string holds its own characters, so changing one
             // of them leaves the other alone.
-            Object::String(text) => {
+            View::String(text) => {
                 let made =
                     crate::object::StringValue::with_encoding(text.to_text(), text.encoding_name());
                 if text.holds_bytes() {
@@ -142,33 +143,33 @@ impl VirtualMachine {
                 }
                 Ok(Some(Object::String(std::rc::Rc::new(made))))
             }
-            Object::Array(arr_rc) => {
+            View::Array(arr_rc) => {
                 let arr = arr_rc.borrow().clone();
                 let copy = Object::Array(std::rc::Rc::new(std::cell::RefCell::new(arr)));
                 self.carry_collection_variables(receiver, &copy);
                 Ok(Some(copy))
             }
-            Object::Dict(dict_rc) => {
+            View::Dict(dict_rc) => {
                 let dict = dict_rc.borrow().clone();
                 let copy = Object::Dict(std::rc::Rc::new(std::cell::RefCell::new(dict)));
                 self.carry_collection_variables(receiver, &copy);
                 Ok(Some(copy))
             }
-            Object::Set(set_rc) => {
+            View::Set(set_rc) => {
                 let elements = set_rc.borrow().clone();
                 let copy = Object::Set(std::rc::Rc::new(std::cell::RefCell::new(elements)));
                 self.carry_collection_variables(receiver, &copy);
                 // A set that places its elements by identity hands that on to
                 // the copy, which holds the same elements.
                 if self.set_by_identity(set_rc)
-                    && let Object::Set(made) = &copy
+                    && let View::Set(made) = copy.view()
                 {
                     self.identity_sets
                         .insert(std::rc::Rc::as_ptr(made) as usize, copy.clone());
                 }
                 Ok(Some(copy))
             }
-            Object::Class(class_rc) => {
+            View::Class(class_rc) => {
                 if class_rc.name() == "BasicObject" {
                     let msg = "can't copy the root class".to_string();
                     let exc = Object::exception("TypeError", msg.clone());
@@ -182,7 +183,7 @@ impl VirtualMachine {
                 copy.take_ownership_of_methods_from(class_rc);
                 Ok(Some(Object::Class(copy)))
             }
-            Object::Module(mod_rc) => {
+            View::Module(mod_rc) => {
                 let copy = std::rc::Rc::new(crate::class::Class::duplicate(mod_rc));
                 copy.take_ownership_of_methods_from(mod_rc);
                 Ok(Some(Object::Module(copy)))
@@ -192,28 +193,28 @@ impl VirtualMachine {
             // instance variables the original carried.
             // A copy of a range is a range of its own, which `equal?` tells
             // apart from the one it was cut from.
-            Object::Range {
+            View::Range {
                 start,
                 end,
                 exclusive,
                 ..
-            } => Ok(Some(Object::Range {
-                start: start.clone(),
-                end: end.clone(),
-                exclusive: *exclusive,
-                mark: std::rc::Rc::new(()),
-            })),
-            Object::Method(method) => {
+            } => Ok(Some(Object::Range(
+                Box::new(start.clone()),
+                Box::new(end.clone()),
+                exclusive,
+                std::rc::Rc::new(()),
+            ))),
+            View::Method(method) => {
                 let copy = Object::Method(std::rc::Rc::new((**method).clone()));
                 self.carry_collection_variables(receiver, &copy);
                 Ok(Some(copy))
             }
-            Object::Block(block) => {
+            View::Block(block) => {
                 let copy = Object::Block(std::rc::Rc::new((**block).clone()));
                 self.carry_collection_variables(receiver, &copy);
                 Ok(Some(copy))
             }
-            Object::Binding(binding) => {
+            View::Binding(binding) => {
                 let copy = Object::Binding(std::rc::Rc::new((**binding).clone()));
                 self.carry_collection_variables(receiver, &copy);
                 Ok(Some(copy))
@@ -226,11 +227,11 @@ impl VirtualMachine {
     /// Whether any finalizer has been registered at all, which is what
     /// makes a clone worth asking ObjectSpace about.
     fn has_finalizers(&self) -> bool {
-        let Some(Object::Module(space) | Object::Class(space)) = self.globals().get("ObjectSpace")
-        else {
+        let viewed = self.globals().get("ObjectSpace");
+        let Some(View::Module(space) | View::Class(space)) = viewed.view() else {
             return false;
         };
-        matches!(space.get_class_var("@finalizers"), Some(Object::Dict(held)) if !held.borrow().is_empty())
+        matches!(space.get_class_var("@finalizers").view(), Some(View::Dict(held)) if !held.borrow().is_empty())
     }
 
     /// Give the copy the instance variables the original was carrying, for
@@ -255,20 +256,20 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<bool>, MetorexError> {
-        let Some(Object::Dict(entries)) = arguments.first() else {
+        let Some(View::Dict(entries)) = arguments.first().view() else {
             if arguments.is_empty() {
                 return Ok(None);
             }
             return Err(method_argument_error("clone", 0, arguments.len(), position));
         };
         let value = entries.borrow().get(":freeze").cloned();
-        match value {
-            None | Some(Object::Nil) => Ok(None),
-            Some(Object::Bool(freeze)) => Ok(Some(freeze)),
+        match value.view() {
+            None | Some(View::Nil) => Ok(None),
+            Some(View::Bool(freeze)) => Ok(Some(freeze)),
             Some(other) => {
                 let message = format!(
                     "unexpected value for freeze: {}",
-                    self.builtins().class_of(&other).name()
+                    self.builtins().class_of(&other.to_object()).name()
                 );
                 Err(MetorexError::UncaughtException {
                     exception: Object::exception("ArgumentError", message.clone()),
@@ -291,7 +292,7 @@ impl VirtualMachine {
     ) -> Result<(), MetorexError> {
         // A string handed back with notice that it will be frozen carries that
         // notice into a clone, the way Ruby's does.
-        if let (Object::String(original), Object::String(copied)) = (receiver, copy)
+        if let (View::String(original), View::String(copied)) = (receiver.view(), copy.view())
             && original.is_chilled()
         {
             let notice = original.take_chill();
@@ -302,7 +303,7 @@ impl VirtualMachine {
         }
         // A singleton class travels with a clone, so a method defined on the
         // original answers on the copy too.
-        if let (Object::Instance(original), Object::Instance(copied)) = (receiver, copy) {
+        if let (View::Instance(original), View::Instance(copied)) = (receiver.view(), copy.view()) {
             let singleton = original.borrow().singleton_class.borrow().clone();
             if let Some(singleton) = singleton {
                 let copied_singleton = std::rc::Rc::new(crate::class::Class::duplicate(&singleton));
@@ -320,7 +321,7 @@ impl VirtualMachine {
         }
         // A collection keeps its singleton methods against its address, so
         // they are carried across the same way a class's are.
-        if !matches!(receiver, Object::Instance(_)) {
+        if !matches!(receiver.view(), View::Instance(_)) {
             self.copy_singleton_methods(receiver, copy);
         }
         if let Some((class, method)) = self.lookup_method(copy, "initialize_clone")
@@ -348,17 +349,17 @@ impl VirtualMachine {
             None => self.object_is_frozen(receiver),
         };
         if frozen {
-            match copy {
-                Object::Class(class) | Object::Module(class) => class.freeze(),
-                Object::Instance(instance) => instance.borrow_mut().frozen = true,
-                Object::String(text) => text.freeze(),
-                Object::Array(_)
-                | Object::Dict(_)
-                | Object::Set(_)
-                | Object::Method(_)
-                | Object::Block(_)
-                | Object::Binding(_)
-                | Object::Regex(_, _) => {
+            match copy.view() {
+                View::Class(class) | View::Module(class) => class.freeze(),
+                View::Instance(instance) => instance.borrow_mut().frozen = true,
+                View::String(text) => text.freeze(),
+                View::Array(_)
+                | View::Dict(_)
+                | View::Set(_)
+                | View::Method(_)
+                | View::Block(_)
+                | View::Binding(_)
+                | View::Regex(_, _) => {
                     if let Some(address) = Self::collection_address(copy) {
                         self.frozen_collections.insert(address, copy.clone());
                     }

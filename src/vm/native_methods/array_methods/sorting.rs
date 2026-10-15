@@ -1,6 +1,7 @@
 // Putting elements in order, with the block when one is given.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// The elements in order, each pair ordered with the block when one is
@@ -85,7 +86,7 @@ impl VirtualMachine {
             None => {
                 // A class with no `<=>` at all cannot be ordered, and Ruby
                 // reports the missing method rather than a failed comparison.
-                if matches!(left, Object::Instance(_)) && !self.responds_to(left, "<=>") {
+                if matches!(left.view(), View::Instance(_)) && !self.responds_to(left, "<=>") {
                     let wording = self.receiver_wording_for(left, position);
                     return Err(crate::vm::errors::undefined_method_error_worded(
                         "<=>",
@@ -98,16 +99,14 @@ impl VirtualMachine {
                 self.send_to_object(left.clone(), "<=>", vec![right.clone()], position)?
             }
         };
-        match answer {
-            Object::Int(order) => Ok(order),
-            Object::Float(order) => Ok(order as i64),
+        match answer.view() {
+            View::Int(order) => Ok(order),
+            View::Float(order) => Ok(order as i64),
             // A bignum answers only by its sign, and an object of the
             // program's own is asked how it compares to zero, which is what
             // Ruby reduces a block result to.
-            Object::BigInt(ref value) => {
-                Ok(num_bigint::BigInt::from(0).cmp(value).reverse() as i64)
-            }
-            Object::Instance(_) => {
+            View::BigInt(value) => Ok(num_bigint::BigInt::from(0).cmp(value).reverse() as i64),
+            View::Instance(_) => {
                 // Ruby asks a value that is not already a number which side
                 // of zero it falls on, reading `>` first and then `<`.
                 for (named, order) in [(">", 1), ("<", -1)] {
@@ -163,9 +162,9 @@ impl VirtualMachine {
 pub(crate) fn comparison_failed(left: &Object, right: &Object, position: Position) -> MetorexError {
     // An instance reports its own class; every other kind reports the class
     // Ruby names it with, which `class_of` does not know for true and nil.
-    let name_of = |value: &Object| match value {
-        Object::Instance(instance) => instance.borrow().class.ruby_name(),
-        other => crate::vm::native_methods::define_method::ruby_class_name(other).to_string(),
+    let name_of = |value: &Object| match value.view() {
+        View::Instance(instance) => instance.borrow().class.ruby_name(),
+        _ => crate::vm::native_methods::define_method::ruby_class_name(value).to_string(),
     };
     let message = format!(
         "comparison of {} with {} failed",

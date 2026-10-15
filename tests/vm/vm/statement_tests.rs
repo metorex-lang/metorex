@@ -2,6 +2,7 @@ use metorex::ast::{Expression, Statement};
 use metorex::error::MetorexError;
 use metorex::lexer::Position;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::vm::VirtualMachine;
 
 fn pos(line: usize, column: usize) -> Position {
@@ -25,7 +26,10 @@ fn expression_statement_executes_without_error() {
     }];
 
     let result = vm.execute_program(&statements);
-    assert!(matches!(result, Ok(Some(Object::Int(5)))));
+    assert!(matches!(
+        result.as_ref().map(|held| held.view()),
+        Ok(Some(View::Int(5)))
+    ));
 }
 
 #[test]
@@ -101,7 +105,10 @@ fn return_statement_halts_execution_and_returns_value() {
     ];
 
     let result = vm.execute_program(&statements);
-    assert!(matches!(result, Ok(Some(Object::Int(99)))));
+    assert!(matches!(
+        result.as_ref().map(|held| held.view()),
+        Ok(Some(View::Int(99)))
+    ));
     // The name is reserved the way Ruby's parser reserves one it sees
     // assigned, and the assignment never ran, so it reads as nil.
     assert_eq!(vm.environment().get("after"), Some(Object::Nil));
@@ -118,7 +125,10 @@ fn return_without_value_yields_nil() {
     }];
 
     let result = vm.execute_program(&statements);
-    assert!(matches!(result, Ok(Some(Object::Nil))));
+    assert!(matches!(
+        result.as_ref().map(|held| held.view()),
+        Ok(Some(View::Nil))
+    ));
 }
 
 #[test]

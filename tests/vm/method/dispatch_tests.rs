@@ -2,6 +2,7 @@ use metorex::ast::{Expression, Statement};
 use metorex::error::MetorexError;
 use metorex::lexer::Position;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::vm::VirtualMachine;
 
 fn pos(line: usize, column: usize) -> Position {
@@ -119,8 +120,8 @@ fn array_push_and_pop_updates_collection() {
     vm.execute_program(&[setup, push_call, pop_assign])
         .expect("execution failed");
 
-    match vm.environment().get("items") {
-        Some(Object::Array(array_rc)) => {
+    match vm.environment().get("items").view() {
+        Some(View::Array(array_rc)) => {
             let array = array_rc.borrow();
             assert_eq!(array.len(), 2);
             assert_eq!(array[0], Object::Int(1));
@@ -165,8 +166,8 @@ fn array_append_adds_element() {
     vm.execute_program(&[setup, append_call])
         .expect("execution failed");
 
-    match vm.environment().get("items") {
-        Some(Object::Array(array_rc)) => {
+    match vm.environment().get("items").view() {
+        Some(View::Array(array_rc)) => {
             let array = array_rc.borrow();
             assert_eq!(array.len(), 3);
             assert_eq!(array[0], Object::Int(1));
@@ -272,8 +273,8 @@ fn string_chars_returns_array_of_characters() {
 
     vm.execute_program(&[assign]).expect("execution failed");
 
-    match vm.environment().get("chars") {
-        Some(Object::Array(array_rc)) => {
+    match vm.environment().get("chars").view() {
+        Some(View::Array(array_rc)) => {
             let array = array_rc.borrow();
             assert_eq!(array.len(), 2);
             assert_eq!(array[0], Object::string("H".to_string()));
@@ -304,8 +305,8 @@ fn string_bytes_returns_array_of_byte_values() {
 
     vm.execute_program(&[assign]).expect("execution failed");
 
-    match vm.environment().get("bytes") {
-        Some(Object::Array(array_rc)) => {
+    match vm.environment().get("bytes").view() {
+        Some(View::Array(array_rc)) => {
             let array = array_rc.borrow();
             assert_eq!(array.len(), 2);
             assert_eq!(array[0], Object::Int(65)); // 'A'

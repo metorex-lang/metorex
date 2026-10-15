@@ -1,6 +1,7 @@
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::parser::{ANONYMOUS_BLOCK, ANONYMOUS_KWREST, ANONYMOUS_SPLAT};
 use crate::vm::VirtualMachine;
 use crate::vm::utils::position_to_location;
@@ -24,7 +25,7 @@ impl VirtualMachine {
         }
         // A class method records the class it was written in as its owner,
         // and binds to any class that stands under that one.
-        if matches!(target, Object::Class(_) | Object::Module(_)) {
+        if matches!(target.view(), View::Class(_) | View::Module(_)) {
             return Ok(());
         }
         let owner = Rc::clone(owner);
@@ -52,7 +53,7 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        if let Object::Method(method_obj) = receiver {
+        if let View::Method(method_obj) = receiver.view() {
             match method_name {
                 "bind" => {
                     let target = arguments.first().cloned().unwrap_or(Object::Nil);
@@ -98,7 +99,7 @@ impl VirtualMachine {
                     if matches!(
                         method_obj.name.as_str(),
                         "append_features" | "prepend_features" | "extend_object"
-                    ) && matches!(&bound, Object::Class(_))
+                    ) && matches!(bound.view(), View::Class(_))
                     {
                         let msg = format!(
                             "bind argument must be an instance of Module: {}",
@@ -184,8 +185,11 @@ impl VirtualMachine {
                             } else {
                                 Object::Class(Rc::clone(held))
                             };
-                            match self.send_to_object(shown, "inspect", Vec::new(), position)? {
-                                Object::String(text) => text.as_str().to_string(),
+                            match self
+                                .send_to_object(shown, "inspect", Vec::new(), position)?
+                                .view()
+                            {
+                                View::String(text) => text.as_str().to_string(),
                                 other => other.to_string(),
                             }
                         }
@@ -216,29 +220,30 @@ impl VirtualMachine {
                             let on_singleton =
                                 method_obj.owner_class.as_ref().is_some_and(|owner| {
                                     matches!(
-                                        owner.get_class_var("__singleton__"),
-                                        Some(Object::Bool(true))
+                                        owner.get_class_var("__singleton__").view(),
+                                        Some(View::Bool(true))
                                     )
                                 });
-                            let shown = match &bound {
-                                Object::Class(_) | Object::Module(_) => {
-                                    match self.send_to_object(
-                                        bound.clone(),
-                                        "inspect",
-                                        Vec::new(),
-                                        position,
-                                    )? {
-                                        Object::String(text) => text.as_str().to_string(),
+                            let shown = match bound.view() {
+                                View::Class(_) | View::Module(_) => {
+                                    match self
+                                        .send_to_object(
+                                            bound.clone(),
+                                            "inspect",
+                                            Vec::new(),
+                                            position,
+                                        )?
+                                        .view()
+                                    {
+                                        View::String(text) => text.as_str().to_string(),
                                         other => other.to_string(),
                                     }
                                 }
-                                _ if on_singleton => match self.send_to_object(
-                                    bound.clone(),
-                                    "inspect",
-                                    Vec::new(),
-                                    position,
-                                )? {
-                                    Object::String(text) => text.as_str().to_string(),
+                                _ if on_singleton => match self
+                                    .send_to_object(bound.clone(), "inspect", Vec::new(), position)?
+                                    .view()
+                                {
+                                    View::String(text) => text.as_str().to_string(),
                                     other => other.to_string(),
                                 },
                                 _ => String::new(),
@@ -249,8 +254,8 @@ impl VirtualMachine {
                                 // A class or module is reached through its own
                                 // singleton class, which is what a method
                                 // taken from one names.
-                                let from = match &bound {
-                                    Object::Class(_) | Object::Module(_) => {
+                                let from = match bound.view() {
+                                    View::Class(_) | View::Module(_) => {
                                         format!("#<Class:{}>", shown)
                                     }
                                     _ => self.builtins().class_of(&bound).ruby_name().to_string(),
@@ -319,8 +324,9 @@ impl VirtualMachine {
                                     "lambda?",
                                     vec![],
                                     position
-                                )?,
-                                Object::Bool(true)
+                                )?
+                                .view(),
+                                View::Bool(true)
                             )
                     };
                     let composed = self.send_to_object(
@@ -410,10 +416,10 @@ impl VirtualMachine {
                     let owner_name = method_obj.owner.as_deref().unwrap_or("main");
                     // A native stub records its owner by name; answer the
                     // module itself when that name resolves to one.
-                    if let Some(owner @ (Object::Class(_) | Object::Module(_))) =
-                        self.globals().get(owner_name)
+                    if let Some(owner @ (View::Class(_) | View::Module(_))) =
+                        self.globals().get(owner_name).view()
                     {
-                        return Ok(Some(owner));
+                        return Ok(Some(owner.to_object()));
                     }
                     return Ok(Some(Object::string(owner_name.to_string())));
                 }
@@ -452,7 +458,7 @@ impl VirtualMachine {
             }
         }
 
-        if let Object::Block(block_obj) = receiver {
+        if let View::Block(block_obj) = receiver.view() {
             match method_name {
                 "statements" => {
                     return Ok(Some(super::ast_methods::serialize_statements(
@@ -472,9 +478,9 @@ impl VirtualMachine {
                     }
                     // `parameters(lambda: true)` counts the named arguments
                     // the way a lambda does, whatever this proc is.
-                    let strict = match arguments.first() {
-                        Some(Object::Dict(entries)) => match entries.borrow().get(":lambda") {
-                            Some(Object::Nil) | None => None,
+                    let strict = match arguments.first().view() {
+                        Some(View::Dict(entries)) => match entries.borrow().get(":lambda").view() {
+                            Some(View::Nil) | None => None,
                             Some(held) => Some(held.is_truthy()),
                         },
                         _ => None,
@@ -1079,7 +1085,7 @@ impl VirtualMachine {
             owner
         };
         let owner_in_chain = chain.iter().any(|ancestor| {
-            matches!(ancestor, Object::Class(current) | Object::Module(current)
+            matches!(ancestor.view(), View::Class(current) | View::Module(current)
                 if Rc::ptr_eq(current, &owner))
         });
         // An alias carries the body of whatever the name it was cut from
@@ -1091,7 +1097,7 @@ impl VirtualMachine {
         let mut past_source = lookup == method_obj.name;
         let mut past_owner = !owner_in_chain;
         for ancestor in &chain {
-            let (Object::Class(current) | Object::Module(current)) = ancestor else {
+            let (View::Class(current) | View::Module(current)) = ancestor.view() else {
                 continue;
             };
             if !past_owner {

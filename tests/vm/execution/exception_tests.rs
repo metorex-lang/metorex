@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -366,13 +367,13 @@ h["foo"]
 #[test]
 fn rational_construction() {
     let result = run("Rational(3, 4)");
-    assert!(matches!(result, Some(Object::Instance(_))));
+    assert!(matches!(result.view(), Some(View::Instance(_))));
 }
 
 #[test]
 fn complex_construction() {
     let result = run("Complex(1, 2)");
-    assert!(matches!(result, Some(Object::Instance(_))));
+    assert!(matches!(result.view(), Some(View::Instance(_))));
 }
 
 // ── Refinement captured in method ───────────────────────────────────────────

@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -221,7 +222,7 @@ fn range_to_a_inclusive_returns_array() {
 (1..5).to_a
 "#);
     assert!(result.is_some());
-    if let Some(Object::Array(arr)) = result {
+    if let Some(View::Array(arr)) = result.view() {
         assert_eq!(arr.borrow().len(), 5);
     }
 }
@@ -232,7 +233,7 @@ fn range_to_a_exclusive_returns_shorter_array() {
 (1...5).to_a
 "#);
     assert!(result.is_some());
-    if let Some(Object::Array(arr)) = result {
+    if let Some(View::Array(arr)) = result.view() {
         assert_eq!(arr.borrow().len(), 4);
     }
 }

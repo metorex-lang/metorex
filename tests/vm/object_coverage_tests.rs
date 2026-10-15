@@ -3,6 +3,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -389,13 +390,13 @@ fn freeze_returns_self() {
 #[test]
 fn symbol_to_sym() {
     let result = run(":foo.to_sym");
-    assert!(matches!(result, Some(Object::Symbol(_))));
+    assert!(matches!(result.view(), Some(View::Symbol(_))));
 }
 
 #[test]
 fn string_to_sym() {
     let result = run("'bar'.to_sym");
-    assert!(matches!(result, Some(Object::Symbol(_))));
+    assert!(matches!(result.view(), Some(View::Symbol(_))));
 }
 
 // ── object_id / __id__ ──────────────────────────────────────────────────────
@@ -424,19 +425,19 @@ fn nil_object_id() {
 #[test]
 fn instance_object_id() {
     let result = run("Object.new.object_id");
-    assert!(matches!(result, Some(Object::Int(_))));
+    assert!(matches!(result.view(), Some(View::Int(_))));
 }
 
 #[test]
 fn array_object_id() {
     let result = run("[1,2].object_id");
-    assert!(matches!(result, Some(Object::Int(_))));
+    assert!(matches!(result.view(), Some(View::Int(_))));
 }
 
 #[test]
 fn dict_object_id() {
     let result = run("{}.object_id");
-    assert!(matches!(result, Some(Object::Int(_))));
+    assert!(matches!(result.view(), Some(View::Int(_))));
 }
 
 // ── clamp ───────────────────────────────────────────────────────────────────
@@ -733,7 +734,7 @@ fn clamp_with_incomparable_types_errors_or_returns_self() {
     // clamp passes through self (matches aren't triggered).
     let result = run("[1].clamp(0, 100)");
     // The result should be the array unchanged (cmp is None for both bounds).
-    assert!(matches!(result, Some(Object::Array(_))));
+    assert!(matches!(result.view(), Some(View::Array(_))));
 }
 
 // ── coerce_method_name paths are exercised through module/class-level

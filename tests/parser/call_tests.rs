@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -73,7 +74,7 @@ fn should_parse_as_arg_returns_false_for_non_ident_before_colon() {
 #[test]
 fn no_paren_call_not_triggered_before_rbrace() {
     let result = run("x = {\"a\" => 1}\nx");
-    if let Some(Object::Dict(_)) = result {
+    if let Some(View::Dict(_)) = result.view() {
     } else {
         panic!("Expected dict");
     }

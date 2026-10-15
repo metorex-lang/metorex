@@ -1,6 +1,7 @@
 // Threads, fibers and the objects they hand values through.
 
 use super::*;
+use crate::object::{OptionView, View};
 use crate::vm::ractors::RACTOR_VAR;
 
 /// Where `Thread.report_on_exception=` keeps what it was set to.
@@ -86,7 +87,7 @@ impl VirtualMachine {
             let inst_rc = Instance::new(Rc::clone(class_rc));
             let obj = Object::Instance(Rc::clone(&inst_rc));
             // A thread belongs to the Ractor of the thread that made it.
-            if let Object::Instance(maker) = self.running_thread()
+            if let View::Instance(maker) = self.running_thread().view()
                 && let Some(ractor) = maker.borrow().get_var(RACTOR_VAR).cloned()
             {
                 inst_rc.borrow_mut().set_var(RACTOR_VAR.to_string(), ractor);
@@ -103,9 +104,9 @@ impl VirtualMachine {
             };
             match own_initialize {
                 Some((defined_in, method)) => {
-                    self.pending_block = match block {
-                        Object::Nil => None,
-                        held => Some(held),
+                    self.pending_block = match block.view() {
+                        View::Nil => None,
+                        _ => Some(block.clone()),
                     };
                     self.invoke_method(
                         defined_in,
@@ -119,7 +120,7 @@ impl VirtualMachine {
                     // A thread has to be given something to run. `new`
                     // reports that as a ThreadError, where `start` and `fork`
                     // report it the way any method missing its block does.
-                    if matches!(block, Object::Nil) {
+                    if matches!(block.view(), View::Nil) {
                         return Err(crate::vm::errors::simple_exception(
                             if method_name == "new" {
                                 "ThreadError"
@@ -147,7 +148,8 @@ impl VirtualMachine {
         // first resumed.
         if method_name == "new" && class_named_in_chain(class_rc, "Fiber") {
             use crate::object::Instance;
-            let Some(Object::Block(block)) = self.pending_block.take() else {
+            let viewed = self.pending_block.take();
+            let Some(View::Block(block)) = viewed.view() else {
                 return Err(crate::vm::errors::simple_exception(
                     "ArgumentError",
                     "tried to create a Fiber without a block",
@@ -156,8 +158,8 @@ impl VirtualMachine {
             };
             // `Fiber.new(blocking: true)` asks for a fiber that blocks when
             // it waits rather than handing control to a scheduler.
-            let blocking = match arguments.last() {
-                Some(Object::Dict(options)) => options
+            let blocking = match arguments.last().view() {
+                Some(View::Dict(options)) => options
                     .borrow()
                     .get(":blocking")
                     .is_some_and(|held| held.is_truthy()),
@@ -165,30 +167,30 @@ impl VirtualMachine {
             };
             // `storage:` names what the fiber keeps for itself. Without it
             // the fiber inherits what the one making it held.
-            let named = match arguments.last() {
-                Some(Object::Dict(options)) => options.borrow().get(":storage").cloned(),
+            let named = match arguments.last().view() {
+                Some(View::Dict(options)) => options.borrow().get(":storage").cloned(),
                 _ => None,
             };
-            let storage = match named {
+            let storage = match named.view() {
                 // A fiber inherits a copy of what the one making it keeps, so
                 // writing a name in the new fiber leaves the old one alone.
                 None => {
                     let holder = self.fiber_current_handle();
-                    match self.fiber_storage_if_held(holder) {
-                        Some(Object::Dict(held)) => {
+                    match self.fiber_storage_if_held(holder).view() {
+                        Some(View::Dict(held)) => {
                             let copied = held.borrow().clone();
                             Some(Object::Dict(Rc::new(std::cell::RefCell::new(copied))))
                         }
-                        other => other,
+                        other => other.map(View::to_object),
                     }
                 }
-                Some(Object::Nil) => None,
+                Some(View::Nil) => None,
                 Some(held) => {
-                    self.check_fiber_storage(&held, position)?;
-                    Some(held)
+                    self.check_fiber_storage(&held.to_object(), position)?;
+                    Some(View::to_object(held))
                 }
             };
-            let handle = self.fiber_create(block, blocking, storage);
+            let handle = self.fiber_create(block.clone(), blocking, storage);
             let inst_rc = Instance::new(Rc::clone(class_rc));
             inst_rc
                 .borrow_mut()
@@ -245,13 +247,14 @@ impl VirtualMachine {
                 // `Fiber.blocking { |f| ... }` runs the block with the
                 // running fiber blocking, and puts back what it was after.
                 "blocking" if self.pending_block.is_some() => {
-                    let Some(Object::Block(block)) = self.pending_block.take() else {
+                    let viewed = self.pending_block.take();
+                    let Some(View::Block(block)) = viewed.view() else {
                         return Ok(Answered(Object::Nil));
                     };
                     let held = self.fiber_current_handle();
                     let was = self.fiber_set_blocking(held, true);
                     let current = self.fiber_current();
-                    let answered = self.execute_block_body(&block, vec![current]);
+                    let answered = self.execute_block_body(block, vec![current]);
                     self.fiber_set_blocking(held, was);
                     return answered.map(Answered);
                 }
@@ -260,7 +263,8 @@ impl VirtualMachine {
                 "[]" if arguments.len() == 1 => {
                     let named = self.fiber_storage_name(&arguments[0], position)?;
                     let running = self.fiber_current_handle();
-                    let Some(Object::Dict(held)) = self.fiber_storage_if_held(running) else {
+                    let viewed = self.fiber_storage_if_held(running);
+                    let Some(View::Dict(held)) = viewed.view() else {
                         return Ok(Answered(Object::Nil));
                     };
                     let found = held.borrow().get(&named).cloned();
@@ -269,11 +273,12 @@ impl VirtualMachine {
                 "[]=" if arguments.len() == 2 => {
                     let named = self.fiber_storage_name(&arguments[0], position)?;
                     let running = self.fiber_current_handle();
-                    let Object::Dict(held) = self.fiber_storage(running) else {
+                    let viewed = self.fiber_storage(running);
+                    let View::Dict(held) = viewed.view() else {
                         return Ok(Answered(arguments[1].clone()));
                     };
                     // A name given nil is dropped rather than kept as nil.
-                    if matches!(arguments[1], Object::Nil) {
+                    if matches!(arguments[1].view(), View::Nil) {
                         held.borrow_mut().shift_remove(&named);
                     } else {
                         held.borrow_mut().insert(named, arguments[1].clone());
@@ -337,13 +342,13 @@ impl VirtualMachine {
                     }
                     let mut living = vec![self.running_thread()];
                     let main = self.globals().get("__Thread_main").unwrap_or(Object::Nil);
-                    if !matches!(main, Object::Nil)
+                    if !matches!(main.view(), View::Nil)
                         && !living.iter().any(|held| same_object(held, &main))
                     {
                         living.push(main);
                     }
                     for thread in self.pending_threads.clone() {
-                        let over = matches!(&thread, Object::Instance(held)
+                        let over = matches!(thread.view(), View::Instance(held)
                             if held.borrow().get_var("__thread_value").is_some());
                         if !over && !living.iter().any(|held| same_object(held, &thread)) {
                             living.push(thread);
@@ -405,9 +410,9 @@ impl VirtualMachine {
                 }
                 "respond_to?" => {
                     if let Some(arg) = arguments.first() {
-                        let n = match arg {
-                            Object::String(s) => s.as_str().to_string(),
-                            Object::Symbol(s) => s.as_str().to_string(),
+                        let n = match arg.view() {
+                            View::String(s) => s.as_str().to_string(),
+                            View::Symbol(s) => s.as_str().to_string(),
                             _ => return Ok(Answered(Object::Bool(false))),
                         };
                         let known = matches!(

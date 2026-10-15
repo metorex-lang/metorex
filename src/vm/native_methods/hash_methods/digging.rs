@@ -2,6 +2,7 @@
 // another hash brings.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Reading a key that may be missing, one nested inside, and the entries
@@ -41,7 +42,7 @@ impl VirtualMachine {
                 if arguments.len() == 1 {
                     return Ok(Some(value));
                 }
-                if matches!(value, Object::Nil) {
+                if matches!(value.view(), View::Nil) {
                     return Ok(Some(Object::Nil));
                 }
                 self.dig_into(&value, &arguments[1..], position).map(Some)
@@ -56,8 +57,9 @@ impl VirtualMachine {
                 }
                 // The block is set aside first, since looking the key up may
                 // run code of the program's own that would otherwise take it.
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => Some(block),
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(block)) => Some(block),
                     _ => None,
                 };
                 let found = self.hash_find_key(dict_rc, &arguments[0], position)?;
@@ -76,7 +78,7 @@ impl VirtualMachine {
                         self.warn_hash_block_supersedes(position)?;
                     }
                     return self
-                        .execute_block_callable(&block, vec![arguments[0].clone()], position)
+                        .execute_block_callable(block, vec![arguments[0].clone()], position)
                         .map(Some);
                 }
                 if arguments.len() == 2 {
@@ -99,29 +101,28 @@ impl VirtualMachine {
                 if in_place && self.object_is_frozen(receiver) {
                     return Err(self.frozen_modification_error(receiver, position));
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => Some(block),
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(block)) => Some(block),
                     _ => None,
                 };
                 let mut merged = dict_rc.borrow().clone();
                 for argument in arguments {
-                    let other = match argument {
-                        Object::Dict(_) => argument.clone(),
+                    let other = match argument.view() {
+                        View::Dict(_) => argument.clone(),
                         // An instance of a Hash subclass is merged by the
                         // entries it holds, without `to_hash` being asked for.
-                        other
-                            if crate::vm::native_methods::hash_subclass_value(other).is_some() =>
-                        {
-                            crate::vm::native_methods::hash_subclass_value(other)
+                        _ if crate::vm::native_methods::hash_subclass_value(argument).is_some() => {
+                            crate::vm::native_methods::hash_subclass_value(argument)
                                 .expect("a hash subclass carries its entries")
                         }
-                        other if self.responds_to(other, "to_hash") => {
-                            self.send_to_object(other.clone(), "to_hash", vec![], position)?
+                        _ if self.responds_to(argument, "to_hash") => {
+                            self.send_to_object(argument.clone(), "to_hash", vec![], position)?
                         }
-                        other => {
+                        _ => {
                             let message = format!(
                                 "no implicit conversion of {} into Hash",
-                                crate::vm::errors::conversion_subject(other)
+                                crate::vm::errors::conversion_subject(argument)
                             );
                             return Err(crate::vm::errors::simple_exception(
                                 "TypeError",
@@ -130,7 +131,7 @@ impl VirtualMachine {
                             ));
                         }
                     };
-                    let Object::Dict(other_rc) = &other else {
+                    let View::Dict(other_rc) = other.view() else {
                         continue;
                     };
                     let incoming: Vec<(String, Object)> = other_rc
@@ -160,9 +161,11 @@ impl VirtualMachine {
                     if other_rc.borrow().contains_key(RENDERED_OBJECTS_KEY) {
                         merged.insert(RENDERED_OBJECTS_KEY.to_string(), Object::Bool(true));
                     }
-                    if let Some(Object::Dict(other_keys)) = other_rc.borrow().get(KEY_OBJECTS_KEY) {
-                        let mut ours = match merged.get(KEY_OBJECTS_KEY) {
-                            Some(Object::Dict(existing)) => existing.borrow().clone(),
+                    if let Some(View::Dict(other_keys)) =
+                        other_rc.borrow().get(KEY_OBJECTS_KEY).view()
+                    {
+                        let mut ours = match merged.get(KEY_OBJECTS_KEY).view() {
+                            Some(View::Dict(existing)) => existing.borrow().clone(),
                             _ => indexmap::IndexMap::new(),
                         };
                         for (key, object) in other_keys.borrow().iter() {

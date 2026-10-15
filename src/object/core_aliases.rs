@@ -268,7 +268,7 @@ fn core_definition(method: &super::Method) -> Option<(String, Vec<String>)> {
     };
     let mut places = Vec::new();
     if let Some(receiver) = &method.receiver
-        && let super::Object::Class(class) | super::Object::Module(class) = receiver.as_ref()
+        && let super::View::Class(class) | super::View::Module(class) = receiver.view()
     {
         places.push(format!("{}.", place(class)));
     }

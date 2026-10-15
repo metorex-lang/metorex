@@ -9,6 +9,7 @@ use super::{interpreter, or_raise};
 use crate::class::Class;
 use crate::error::MetorexError;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 use std::ffi::c_char;
 use std::rc::Rc;
@@ -73,7 +74,7 @@ impl VirtualMachine {
         name: &str,
     ) -> Result<Option<Object>, MetorexError> {
         if !crate::vm::native_methods::is_valid_constant_name(name) {
-            let (Object::Class(held_by) | Object::Module(held_by)) = outer else {
+            let (View::Class(held_by) | View::Module(held_by)) = outer.view() else {
                 return Ok(None);
             };
             return Ok(held_by.get_class_var(name));
@@ -112,14 +113,14 @@ impl VirtualMachine {
         } else {
             format!("{}::{}", outer, name)
         };
-        match self.constant_held_by(&outer, name)? {
-            Some(Object::Class(existing)) => {
+        match self.constant_held_by(&outer, name)?.view() {
+            Some(View::Class(existing)) => {
                 let same_superclass = superclass != 0
                     && existing
                         .superclass()
                         .is_some_and(|held| Object::Class(held) == to_object(superclass));
                 if same_superclass {
-                    return Ok(existing);
+                    return Ok(existing.clone());
                 }
                 let message = if at_top {
                     format!("superclass mismatch for class {}", name)
@@ -139,7 +140,7 @@ impl VirtualMachine {
                 ))
             }
             Some(other) => {
-                let class_name = self.held_class_name(&other)?;
+                let class_name = self.held_class_name(&other.to_object())?;
                 Err(crate::vm::errors::simple_exception(
                     "TypeError",
                     &format!("{} is not a class ({})", full_name, class_name),
@@ -154,16 +155,17 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let Object::Class(class) = to_object(super::subclasses::rb_class_new(superclass))
-                else {
+                let viewed = to_object(super::subclasses::rb_class_new(superclass));
+                let View::Class(class) = viewed.view() else {
                     unreachable!("rb_class_new answers a class")
                 };
-                let Object::Class(superclass) = to_object(superclass) else {
+                let viewed = to_object(superclass);
+                let View::Class(superclass) = viewed.view() else {
                     unreachable!("rb_class_new accepted only a class")
                 };
-                self.bind_class_constant(&outer, name, &class, position)?;
-                self.trigger_inherited_hook(&superclass, Rc::clone(&class), position)?;
-                Ok(class)
+                self.bind_class_constant(&outer, name, class, position)?;
+                self.trigger_inherited_hook(superclass, Rc::clone(class), position)?;
+                Ok(class.clone())
             }
         }
     }
@@ -183,7 +185,7 @@ impl VirtualMachine {
             self.send_to_object(outer.clone(), "const_set", arguments, position)?;
             return Ok(());
         }
-        let (Object::Class(outer_class) | Object::Module(outer_class)) = outer else {
+        let (View::Class(outer_class) | View::Module(outer_class)) = outer.view() else {
             unreachable!("a class is defined under a class or module")
         };
         self.assign_constant(outer_class, name, value, position)
@@ -191,10 +193,10 @@ impl VirtualMachine {
 
     fn define_module_from_c(&mut self, outer: Object, name: &str) -> Result<Object, MetorexError> {
         let position = super::called_from();
-        match self.constant_held_by(&outer, name)? {
-            Some(existing @ Object::Module(_)) => Ok(existing),
+        match self.constant_held_by(&outer, name)?.view() {
+            Some(existing @ View::Module(_)) => Ok(existing.to_object()),
             Some(other) => {
-                let class_name = self.held_class_name(&other)?;
+                let class_name = self.held_class_name(&other.to_object())?;
                 Err(crate::vm::errors::simple_exception(
                     "TypeError",
                     &format!("{} is not a module ({})", name, class_name),

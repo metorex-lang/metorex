@@ -1,6 +1,7 @@
 // Class variables, and the flags a method carries.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// The class variables a module holds, and the flags a method carries.
@@ -177,7 +178,7 @@ impl VirtualMachine {
             // signature and gets a warning; a name with no method raises.
             "ruby2_keywords" => {
                 for argument in arguments {
-                    if !matches!(argument, Object::Symbol(_) | Object::String(_)) {
+                    if !matches!(argument.view(), View::Symbol(_) | View::String(_)) {
                         let shown =
                             self.send_to_object(argument.clone(), "inspect", vec![], position)?;
                         let message = format!("{} is not a symbol nor a string", shown);

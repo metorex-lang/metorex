@@ -8,6 +8,7 @@ use crate::class::Class;
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::{Instance, Object};
+use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -39,14 +40,12 @@ struct DataSlot {
     data: *mut c_void,
 }
 
-/// A wrapped pointer, the type it was wrapped with when it is typed, the
-/// VALUE C knows the object by, and the object itself, held weakly so the
-/// references to it can be counted.
+/// A wrapped pointer, the type it was wrapped with when it is typed, and the
+/// VALUE C knows the object by.
 struct Wrapped {
     slot: Box<DataSlot>,
     data_type: Option<*const DataType>,
     value: Value,
-    instance: std::rc::Weak<RefCell<Instance>>,
 }
 
 /// A mark or free function, which C hands the wrapped pointer.
@@ -66,7 +65,7 @@ impl Wrapped {
             data: self.slot.data,
             // The handle table holds one reference, and every other one is
             // something reaching the object.
-            outside: self.instance.strong_count().saturating_sub(1),
+            outside: super::handles::references_to(self.value).saturating_sub(1),
         }
     }
 
@@ -183,8 +182,8 @@ thread_local! {
 }
 
 fn instance_key(object: &Object) -> Option<usize> {
-    match object {
-        Object::Instance(instance) => Some(Rc::as_ptr(instance) as usize),
+    match object.view() {
+        View::Instance(instance) => Some(Rc::as_ptr(instance) as usize),
         _ => None,
     }
 }
@@ -224,8 +223,8 @@ fn wrap(
     data_type: Option<*const DataType>,
 ) -> Value {
     let class = match klass {
-        0 => match super::calls::top_level_module("Object") {
-            Object::Class(class) => class,
+        0 => match super::calls::top_level_module("Object").view() {
+            View::Class(class) => class.clone(),
             _ => unreachable!("Object is a class"),
         },
         _ => super::exports::class_from(klass),
@@ -248,7 +247,6 @@ fn wrap(
                 slot,
                 data_type,
                 value,
-                instance: Rc::downgrade(&instance),
             },
         )
     });
@@ -364,11 +362,11 @@ pub extern "C-unwind" fn rb_typeddata_is_kind_of(object: Value, data_type: *cons
 
 /// The class a TypeError names for `object`, or `nil`, `true` or `false`.
 fn displayed_class(object: &Object) -> String {
-    match object {
-        Object::Nil => "nil".to_string(),
-        Object::Bool(true) => "true".to_string(),
-        Object::Bool(false) => "false".to_string(),
-        other => super::calls::class_name_of(other.clone()),
+    match object.view() {
+        View::Nil => "nil".to_string(),
+        View::Bool(true) => "true".to_string(),
+        View::Bool(false) => "false".to_string(),
+        _ => super::calls::class_name_of(object.clone()),
     }
 }
 
@@ -474,8 +472,8 @@ pub extern "C-unwind" fn rb_define_alloc_func(klass: Value, allocator: *const ()
 /// The address of the allocator C gave `class` or a superclass, 0 for one
 /// it took away, or None when C gave none.
 pub(super) fn allocator_of(class: &Rc<Class>) -> Option<i64> {
-    match class.lookup_class_var(ALLOCATOR_VAR) {
-        Some(Object::Int(address)) => Some(address),
+    match class.lookup_class_var(ALLOCATOR_VAR).view() {
+        Some(View::Int(address)) => Some(address),
         _ => None,
     }
 }

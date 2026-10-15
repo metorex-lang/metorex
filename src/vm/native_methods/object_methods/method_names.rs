@@ -2,6 +2,7 @@
 // how far up the lookup path the walk goes.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// Private method names reachable on `receiver`.
@@ -48,15 +49,15 @@ impl VirtualMachine {
         };
 
         // `class << obj` with `private`, and the modules `extend` attached.
-        let singleton = match receiver {
-            Object::Class(c) | Object::Module(c) => c.singleton_class_slot().clone(),
-            Object::Instance(inst) => inst.borrow().singleton_class.borrow().clone(),
+        let singleton = match receiver.view() {
+            View::Class(c) | View::Module(c) => c.singleton_class_slot().clone(),
+            View::Instance(inst) => inst.borrow().singleton_class.borrow().clone(),
             _ => None,
         };
         if let Some(singleton_class) = singleton {
             // A class object's singleton chain stands in for its own class,
             // so it is walked even without `include_super`.
-            let walk_chain = matches!(receiver, Object::Class(_) | Object::Module(_));
+            let walk_chain = matches!(receiver.view(), View::Class(_) | View::Module(_));
             let mut current = Some(singleton_class);
             while let Some(class) = current {
                 for name in select(&class) {
@@ -74,7 +75,7 @@ impl VirtualMachine {
         // `def self.name` lands in the class's own table under the
         // `__class__` convention. Those belong to the class object, so they
         // count here and are reported under the name Ruby shows.
-        if let Object::Class(class_rc) | Object::Module(class_rc) = receiver {
+        if let View::Class(class_rc) | View::Module(class_rc) = receiver.view() {
             let mut current = Some(std::rc::Rc::clone(class_rc));
             while let Some(class) = current {
                 for name in select(&class) {
@@ -89,10 +90,10 @@ impl VirtualMachine {
             }
         }
 
-        let own_class = match receiver {
-            Object::Instance(inst) => Some(std::rc::Rc::clone(&inst.borrow().class)),
-            Object::Class(_) | Object::Module(_) => None,
-            other => Some(self.builtins().class_of(other)),
+        let own_class = match receiver.view() {
+            View::Instance(inst) => Some(std::rc::Rc::clone(&inst.borrow().class)),
+            View::Class(_) | View::Module(_) => None,
+            _ => Some(self.builtins().class_of(receiver)),
         };
         if let Some(class) = own_class {
             // A class's `__class__` entries describe the class object, not
@@ -142,15 +143,15 @@ impl VirtualMachine {
     ) -> Option<(std::rc::Rc<Class>, std::rc::Rc<crate::object::Method>)> {
         // `def self.name` records the method in the class's own table under
         // the `__class__` convention rather than on the singleton class.
-        if let Object::Class(class_rc) | Object::Module(class_rc) = receiver
+        if let View::Class(class_rc) | View::Module(class_rc) = receiver.view()
             && let Some(found) = class_rc.find_method(&format!("__class__{}", name))
             && !found.is_undefined
         {
             return Some((std::rc::Rc::clone(class_rc), found));
         }
-        let singleton = match receiver {
-            Object::Class(c) | Object::Module(c) => c.singleton_class_slot().clone(),
-            Object::Instance(inst) => inst.borrow().singleton_class.borrow().clone(),
+        let singleton = match receiver.view() {
+            View::Class(c) | View::Module(c) => c.singleton_class_slot().clone(),
+            View::Instance(inst) => inst.borrow().singleton_class.borrow().clone(),
             _ => None,
         }?;
         if let Some(found) = singleton.find_own_method(name)
@@ -192,15 +193,15 @@ impl VirtualMachine {
     ) -> Vec<String> {
         let mut names: Vec<String> = Vec::new();
         // `def obj.name` records the method on the instance itself.
-        if let Object::Instance(inst) = receiver {
+        if let View::Instance(inst) = receiver.view() {
             for name in inst.borrow().singleton_methods.borrow().keys() {
                 names.push(name.clone());
             }
         }
-        let singleton = match receiver {
-            Object::Class(c) | Object::Module(c) => c.singleton_class_slot().clone(),
-            Object::Instance(inst) => inst.borrow().singleton_class.borrow().clone(),
-            other => self.existing_singleton_class(other),
+        let singleton = match receiver.view() {
+            View::Class(c) | View::Module(c) => c.singleton_class_slot().clone(),
+            View::Instance(inst) => inst.borrow().singleton_class.borrow().clone(),
+            _ => self.existing_singleton_class(receiver),
         };
         let Some(singleton_class) = singleton else {
             return names;
@@ -222,7 +223,7 @@ impl VirtualMachine {
             singleton_class
                 .find_own_method(name)
                 .is_none_or(|method| !method.is_undefined)
-                && !matches!(receiver, Object::Class(attached) | Object::Module(attached)
+                && !matches!(receiver.view(), View::Class(attached) | View::Module(attached)
                     if attached
                         .find_own_method(&format!("__class__{name}"))
                         .is_some_and(|method| method.is_undefined))
@@ -265,6 +266,6 @@ impl VirtualMachine {
             Object::Bool(include_private),
         ];
         let answer = self.invoke_method(class, method, receiver.clone(), arguments, position)?;
-        Ok(!matches!(answer, Object::Nil | Object::Bool(false)))
+        Ok(!matches!(answer.view(), View::Nil | View::Bool(false)))
     }
 }

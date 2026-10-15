@@ -1,6 +1,7 @@
 // The arithmetic a Complex answers, part by part.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// `+`, `-`, `*`, and `/` between a Complex and whatever it was handed,
@@ -43,7 +44,7 @@ impl VirtualMachine {
                 // A divisor that stands on the real line divides each part on
                 // its own, so dividing by zero answers infinities rather than
                 // the NaN the conjugate form would give.
-                if matches!(other_imaginary, Object::Int(0)) {
+                if matches!(other_imaginary.view(), View::Int(0)) {
                     let new_real = self.divide_parts(real, &other_real, position)?;
                     let new_imaginary = self.divide_parts(imaginary, &other_real, position)?;
                     return self.make_complex(new_real, new_imaginary, position);
@@ -73,7 +74,7 @@ impl VirtualMachine {
         exponent: &Object,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let Object::Int(exponent) = exponent else {
+        let View::Int(exponent) = exponent.view() else {
             // Anything that is not a whole power is taken in polar form,
             // where `z ** w` is `exp(w * log z)`.
             if complex_parts(exponent).is_some() || self.is_real_operand(exponent) {
@@ -94,7 +95,7 @@ impl VirtualMachine {
             }
             let base = self.make_complex(real.clone(), imaginary.clone(), position)?;
             let coerced = self.send_to_object(exponent.clone(), "coerce", vec![base], position)?;
-            let Object::Array(pair) = coerced else {
+            let View::Array(pair) = coerced.view() else {
                 let message = refused;
                 return Err(crate::vm::errors::simple_exception(
                     "TypeError",
@@ -118,7 +119,7 @@ impl VirtualMachine {
         for _ in 0..exponent.unsigned_abs() {
             answer = self.send_to_object(answer, "*", vec![base.clone()], position)?;
         }
-        if *exponent < 0 {
+        if exponent < 0 {
             let one = self.make_complex(Object::Int(1), Object::Int(0), position)?;
             return self.send_to_object(one, "/", vec![answer], position);
         }
@@ -227,8 +228,8 @@ impl VirtualMachine {
         right: &Object,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        if matches!(left, Object::Int(_) | Object::BigInt(_))
-            && matches!(right, Object::Int(_) | Object::BigInt(_))
+        if matches!(left.view(), View::Int(_) | View::BigInt(_))
+            && matches!(right.view(), View::Int(_) | View::BigInt(_))
         {
             return self.send_to_object(left.clone(), "quo", vec![right.clone()], position);
         }

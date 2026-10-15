@@ -1,6 +1,7 @@
 // The Kernel conversion functions.
 
 use super::*;
+use metorex::object::{OptionView, View};
 
 #[test]
 fn integer_conversion_from_int() {
@@ -61,8 +62,8 @@ fn string_conversion_from_nil() {
 #[test]
 fn array_conversion_from_array_returns_self() {
     let result = run("Array([1, 2, 3])");
-    match result {
-        Some(Object::Array(arr)) => assert_eq!(arr.borrow().len(), 3),
+    match result.view() {
+        Some(View::Array(arr)) => assert_eq!(arr.borrow().len(), 3),
         other => panic!("expected Array, got {:?}", other),
     }
 }
@@ -70,8 +71,8 @@ fn array_conversion_from_array_returns_self() {
 #[test]
 fn array_conversion_from_nil_returns_empty() {
     let result = run("Array(nil)");
-    match result {
-        Some(Object::Array(arr)) => assert!(arr.borrow().is_empty()),
+    match result.view() {
+        Some(View::Array(arr)) => assert!(arr.borrow().is_empty()),
         other => panic!("expected Array, got {:?}", other),
     }
 }
@@ -79,8 +80,8 @@ fn array_conversion_from_nil_returns_empty() {
 #[test]
 fn array_conversion_from_string_wraps() {
     let result = run(r#"Array("hi")"#);
-    match result {
-        Some(Object::Array(arr)) => assert_eq!(arr.borrow().len(), 1),
+    match result.view() {
+        Some(View::Array(arr)) => assert_eq!(arr.borrow().len(), 1),
         other => panic!("expected Array, got {:?}", other),
     }
 }

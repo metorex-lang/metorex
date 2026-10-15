@@ -1,6 +1,7 @@
 // A method held as an object, and a constant registered against a file.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     pub(crate) fn method_object(
@@ -18,9 +19,9 @@ impl VirtualMachine {
 
         // A name may be written as a Symbol or as a String, which is
         // what `method("hello")` passes.
-        let method_name = match &arguments[0] {
-            Object::Symbol(name) => name.as_str(),
-            Object::String(name) => name.as_str(),
+        let method_name = match arguments[0].view() {
+            View::Symbol(name) => name.as_str(),
+            View::String(name) => name.as_str(),
             _ => {
                 return Err(MetorexError::runtime_error(
                     format!(
@@ -45,7 +46,7 @@ impl VirtualMachine {
         let here = self.eval_self(position).ok();
         // Look up the method in the current environment
         if let Some(obj) = self.environment().get(&method_name) {
-            if let Object::Method(held) = &obj {
+            if let View::Method(held) = obj.view() {
                 if held.owner_class.is_none() {
                     if let Some(found) = written_on_object {
                         return Ok(bound_to(found, here.as_ref()));
@@ -111,15 +112,16 @@ impl VirtualMachine {
         // through the nesting it captured.
         let owner = match self.autoload_definee() {
             Some(enclosing) => enclosing,
-            None => match self.globals().get("Object") {
-                Some(Object::Class(object_class)) => object_class,
+            None => (match self.globals().get("Object").view() {
+                Some(View::Class(object_class)) => object_class,
                 _ => {
                     return Err(MetorexError::runtime_error(
                         "Object is not defined",
                         crate::vm::utils::position_to_location(position),
                     ));
                 }
-            },
+            })
+            .clone(),
         };
         self.call_class_methods(&owner, name, &arguments, position)
             .map(|result| result.unwrap_or(Object::Nil))
@@ -129,8 +131,8 @@ impl VirtualMachine {
 /// A Method that carries no receiver, bound to `receiver`, which is the
 /// object a top-level `method(:name)` was asked of.
 fn bound_to(found: Object, receiver: Option<&Object>) -> Object {
-    match (&found, receiver) {
-        (Object::Method(method), Some(receiver)) if method.receiver.is_none() => {
+    match (found.view(), receiver) {
+        (View::Method(method), Some(receiver)) if method.receiver.is_none() => {
             let mut bound = (**method).clone();
             bound.receiver = Some(Box::new(receiver.clone()));
             Object::Method(std::rc::Rc::new(bound))

@@ -4,6 +4,7 @@ use crate::ast::Expression;
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 
 use crate::vm::core::VirtualMachine;
 
@@ -57,11 +58,11 @@ impl VirtualMachine {
         if let Expression::Identifier { name, .. } = callee
             && let Some(held) = self.environment().get(name)
             && !matches!(
-                held,
-                Object::Method(_)
-                    | Object::Block(_)
-                    | Object::NativeFunction(_)
-                    | Object::CompiledFunction(_)
+                held.view(),
+                View::Method(_)
+                    | View::Block(_)
+                    | View::NativeFunction(_)
+                    | View::CompiledFunction(_)
             )
         {
             let receiver_defines = self.eval_self(position).ok().is_some_and(|receiver| {
@@ -69,7 +70,7 @@ impl VirtualMachine {
                     .is_some_and(|(_, found)| !found.is_undefined)
             });
             if !receiver_defines
-                && let Some(Object::NativeFunction(native)) = self.globals().get(name)
+                && let Some(View::NativeFunction(native)) = self.globals().get(name).view()
             {
                 let evaluated_args = self.evaluate_arguments(arguments)?;
                 let has_block = trailing_block.is_some();
@@ -77,7 +78,7 @@ impl VirtualMachine {
                     self.pending_block = Some(self.attach_trailing_block(block_expr)?);
                     self.pending_block_from_ampersand = false;
                 }
-                return match self.call_native_function(&native, evaluated_args, position) {
+                return match self.call_native_function(native, evaluated_args, position) {
                     Err(MetorexError::BlockBreak { value, .. }) if has_block => Ok(value),
                     other => other,
                 };
@@ -101,28 +102,28 @@ impl VirtualMachine {
             && self.environment().get("self").is_some()
         {
             let env_val = self.environment().get(name);
-            let dispatch_to_self = match &env_val {
+            let dispatch_to_self = match env_val.view() {
                 None => true,
                 // `define_method`, `private`, `public` live in globals as
                 // top-level conveniences, but inside a class/module body or
                 // class_eval they should resolve to the receiver's method so
                 // `private :foo` marks Tally#foo (not Object#foo) as private.
-                Some(Object::NativeFunction(fn_name))
+                Some(View::NativeFunction(fn_name))
                     if matches!(
                         fn_name.as_str(),
                         "define_method" | "private" | "public" | "protected" | "module_function"
                     ) =>
                 {
                     matches!(
-                        self.environment().get("self"),
-                        Some(Object::Class(_)) | Some(Object::Module(_))
+                        self.environment().get("self").view(),
+                        Some(View::Class(_)) | Some(View::Module(_))
                     )
                 }
                 // A `def` registers its name in the environment as a Method
                 // so the function is reachable. A call form written with
                 // arguments names that method, so it dispatches rather than
                 // calling whatever the bare name would answer.
-                Some(held) if self.name_is_a_definition(name, held) => true,
+                Some(held) if self.name_is_a_definition(name, &held.to_object()) => true,
                 _ => false,
             };
             if dispatch_to_self {
@@ -141,7 +142,7 @@ impl VirtualMachine {
         // directly with the evaluated args.
         if let Expression::Identifier { name, .. } = callee
             && name == "using"
-            && let Some(Object::NativeFunction(fn_name)) = self.environment().get("using")
+            && let Some(View::NativeFunction(fn_name)) = self.environment().get("using").view()
             && fn_name == "using"
         {
             let evaluated_args = self.evaluate_arguments(arguments)?;
@@ -203,7 +204,7 @@ impl VirtualMachine {
                     | "throw"
                     | "binding"
             )
-            && let Some(Object::NativeFunction(native_name)) = self.named_native_function(name)
+            && let Some(View::NativeFunction(native_name)) = self.named_native_function(name).view()
         {
             let evaluated_args = self.evaluate_arguments(arguments)?;
             // `proc { }` and friends take a literal block, so attach it
@@ -212,7 +213,7 @@ impl VirtualMachine {
                 self.pending_block = Some(self.attach_trailing_block(block_expr)?);
                 self.pending_block_from_ampersand = false;
             }
-            return self.call_native_function(&native_name, evaluated_args, position);
+            return self.call_native_function(native_name, evaluated_args, position);
         }
 
         // A Kernel function named by a call form is reached even where a
@@ -222,24 +223,24 @@ impl VirtualMachine {
                 self.environment().get(name),
                 Some(held)
                     if !matches!(
-                        held,
-                        Object::Block(_)
-                            | Object::Method(_)
-                            | Object::NativeFunction(_)
-                            | Object::CompiledFunction(_)
-                            | Object::Class(_)
-                            | Object::Module(_)
+                        held.view(),
+                        View::Block(_)
+                            | View::Method(_)
+                            | View::NativeFunction(_)
+                            | View::CompiledFunction(_)
+                            | View::Class(_)
+                            | View::Module(_)
                     )
             )
             && !self.self_defines_method(name)
-            && let Some(Object::NativeFunction(native_name)) = self.named_native_function(name)
+            && let Some(View::NativeFunction(native_name)) = self.named_native_function(name).view()
         {
             let evaluated_args = self.evaluate_arguments(arguments)?;
             if let Some(block_expr) = trailing_block {
                 self.pending_block = Some(self.attach_trailing_block(block_expr)?);
                 self.pending_block_from_ampersand = false;
             }
-            return self.call_native_function(&native_name, evaluated_args, position);
+            return self.call_native_function(native_name, evaluated_args, position);
         }
 
         // A call form written with arguments or a block names a method. A
@@ -256,14 +257,14 @@ impl VirtualMachine {
                 self.environment().get(name),
                 Some(held)
                     if !matches!(
-                        held,
-                        Object::Block(_)
-                            | Object::Method(_)
-                            | Object::NativeFunction(_)
+                        held.view(),
+                        View::Block(_)
+                            | View::Method(_)
+                            | View::NativeFunction(_)
                             // A name holding a class or a module is the name
                             // of that class, and a call form on it builds one.
-                            | Object::Class(_)
-                            | Object::Module(_)
+                            | View::Class(_)
+                            | View::Module(_)
                     )
             )
         {
@@ -320,8 +321,8 @@ impl VirtualMachine {
         // own `lambda` must have it reached by a receiverless call too.
         if let Expression::Identifier { name, .. } = callee
             && matches!(
-                self.environment().get(name),
-                Some(Object::NativeFunction(_))
+                self.environment().get(name).view(),
+                Some(View::NativeFunction(_))
             )
             && let Some(current_self) = self.environment().get("self")
             && let Some((_, method)) = self.lookup_method(&current_self, name)
@@ -340,8 +341,8 @@ impl VirtualMachine {
         // be reached here with the arguments the call carries, since
         // evaluating the name on its own would run it with none.
         if let Expression::Identifier { name, .. } = callee
-            && let Some(Object::NativeFunction(native)) = self.named_native_function(name)
-            && (crate::vm::eval::identifier::runs_when_named_bare(&native)
+            && let Some(View::NativeFunction(native)) = self.named_native_function(name).view()
+            && (crate::vm::eval::identifier::runs_when_named_bare(native)
                 || matches!(
                     native.as_str(),
                     "private" | "public" | "protected" | "module_function"
@@ -353,7 +354,7 @@ impl VirtualMachine {
                 self.pending_block = Some(self.attach_trailing_block(block_expr)?);
                 self.pending_block_from_ampersand = false;
             }
-            return match self.call_native_function(&native, evaluated_args, position) {
+            return match self.call_native_function(native, evaluated_args, position) {
                 Err(MetorexError::BlockBreak { value, .. }) if has_block => Ok(value),
                 other => other,
             };
@@ -385,7 +386,7 @@ impl VirtualMachine {
         // shares one with the URI module. A call form reaches the method
         // rather than trying to call what the constant holds.
         if let Expression::Identifier { name, .. } = callee
-            && let Ok(Object::Class(_) | Object::Module(_)) = &callable
+            && let Ok(View::Class(_) | View::Module(_)) = callable.as_ref().map(Object::view)
         {
             let current = self.evaluate_expression(&Expression::SelfExpr { position })?;
             if matches!(
@@ -442,9 +443,9 @@ impl VirtualMachine {
     /// anything else.
     fn named_native_function(&self, name: &str) -> Option<Object> {
         match self.environment().get(name) {
-            held @ Some(Object::NativeFunction(_)) => held,
+            Some(held) if matches!(held.view(), View::NativeFunction(_)) => Some(held),
             _ => match self.globals().get(name) {
-                held @ Some(Object::NativeFunction(_)) => held,
+                Some(held) if matches!(held.view(), View::NativeFunction(_)) => Some(held),
                 _ => None,
             },
         }

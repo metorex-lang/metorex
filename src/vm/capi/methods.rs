@@ -5,6 +5,7 @@ use super::handles::{QNIL, Value, to_object, to_value};
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 
 /// The C function behind a method, and the arity `rb_define_method` gave it:
@@ -200,13 +201,13 @@ impl VirtualMachine {
 /// C sees a plain Hash, and whether there was one.
 fn without_keyword_marker(mut arguments: Vec<Object>) -> (Vec<Object>, bool) {
     let marked = matches!(
-        arguments.last(),
-        Some(Object::Dict(pairs)) if pairs.borrow().contains_key("__MX_KWARGS__")
+        arguments.last().view(),
+        Some(View::Dict(pairs)) if pairs.borrow().contains_key("__MX_KWARGS__")
     );
     if !marked {
         return (arguments, false);
     }
-    if let Some(Object::Dict(pairs)) = arguments.pop() {
+    if let Some(View::Dict(pairs)) = arguments.pop().view() {
         let mut plain = pairs.borrow().clone();
         plain.shift_remove("__MX_KWARGS__");
         arguments.push(Object::Dict(std::rc::Rc::new(std::cell::RefCell::new(

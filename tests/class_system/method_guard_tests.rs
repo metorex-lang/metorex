@@ -3,7 +3,7 @@
 
 use metorex::class::{MethodGuard, method_state};
 use metorex::lexer::Lexer;
-use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 use std::cell::Cell;
@@ -18,8 +18,8 @@ fn run(vm: &mut VirtualMachine, code: &str) {
 
 /// The method `Ledger#total` the program holds now.
 fn ledger_total(vm: &VirtualMachine) -> Rc<metorex::object::Method> {
-    match vm.globals().get("Ledger") {
-        Some(Object::Class(class)) => class.find_method("total").expect("Ledger#total"),
+    match vm.globals().get("Ledger").view() {
+        Some(View::Class(class)) => class.find_method("total").expect("Ledger#total"),
         other => panic!("expected the Ledger class, got {other:?}"),
     }
 }

@@ -31,7 +31,7 @@ pub use exception::{Exception, SourceLocation};
 pub use hash::ObjectHash;
 pub use instance::Instance;
 pub use method::Method;
-pub use types::Object;
+pub use types::{Object, OptionView, View};
 
 // Re-export from callable and class modules
 pub use crate::callable::Callable;

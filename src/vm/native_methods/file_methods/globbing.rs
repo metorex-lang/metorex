@@ -1,6 +1,7 @@
 // Every path a glob pattern names.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// `Dir.glob` and `Dir[]`: every path the patterns name, read against the
@@ -23,31 +24,31 @@ impl VirtualMachine {
         // A `flags:` keyword decides the flags, and a positional one beside
         // it is not read.
         let flags_keyword = arguments.iter().any(|argument| {
-            matches!(argument, Object::Dict(held) if held.borrow().contains_key(":flags"))
+            matches!(argument.view(), View::Dict(held) if held.borrow().contains_key(":flags"))
         });
         for (index, argument) in arguments.iter().enumerate() {
-            match argument {
-                Object::Dict(_) => {}
+            match argument.view() {
+                View::Dict(_) => {}
                 _ if method_name == "glob" && index == 1 && flags_keyword => continue,
-                Object::Int(_) | Object::Array(_) => {}
+                View::Int(_) | View::Array(_) => {}
                 // A second argument to `glob` is its flags, which only a
                 // whole number names.
-                other if method_name == "glob" && index == 1 => {
-                    flags =
-                        i64::try_from(self.coerce_integer_argument(other, position)?).unwrap_or(0);
+                _ if method_name == "glob" && index == 1 => {
+                    flags = i64::try_from(self.coerce_integer_argument(argument, position)?)
+                        .unwrap_or(0);
                     continue;
                 }
                 _ => {}
             }
-            match argument {
-                Object::Array(held) => {
+            match argument.view() {
+                View::Array(held) => {
                     listed = true;
                     for one in held.borrow().iter().cloned().collect::<Vec<Object>>() {
                         patterns.push((self.glob_pattern_text(&one, position)?, one));
                     }
                 }
-                Object::Int(held) if index > 0 => flags = *held,
-                Object::Dict(held) if names_keywords(argument) || method_name == "glob" => {
+                View::Int(held) if index > 0 => flags = held,
+                View::Dict(held) if names_keywords(argument) || method_name == "glob" => {
                     let entries: Vec<(String, Object)> = held
                         .borrow()
                         .iter()
@@ -57,19 +58,19 @@ impl VirtualMachine {
                     for (key, value) in entries {
                         match key.as_str() {
                             ":flags" => {
-                                if let Object::Int(held) = value {
+                                if let View::Int(held) = value.view() {
                                     flags = held;
                                 }
                             }
                             ":base" => {
-                                base = match &value {
-                                    Object::Nil => None,
-                                    Object::String(text) => Some(path_text(text)),
-                                    other => Some(self.glob_pattern_text(other, position)?),
+                                base = match value.view() {
+                                    View::Nil => None,
+                                    View::String(text) => Some(path_text(text)),
+                                    _ => Some(self.glob_pattern_text(&value, position)?),
                                 }
                             }
-                            ":sort" => match value {
-                                Object::Bool(held) => sorted = held,
+                            ":sort" => match value.view() {
+                                View::Bool(held) => sorted = held,
                                 _ => {
                                     return Err(crate::vm::errors::simple_exception(
                                         "ArgumentError",
@@ -95,7 +96,10 @@ impl VirtualMachine {
                         ));
                     }
                 }
-                other => patterns.push((self.glob_pattern_text(other, position)?, other.clone())),
+                _ => patterns.push((
+                    self.glob_pattern_text(argument, position)?,
+                    argument.clone(),
+                )),
             }
         }
         let options = crate::vm::native_methods::glob::Options {
@@ -153,9 +157,9 @@ impl VirtualMachine {
             }
         }
         // A block is handed each path and the call answers nothing.
-        if let Some(Object::Block(block)) = self.pending_block.take() {
+        if let Some(View::Block(block)) = self.pending_block.take().view() {
             for path in found {
-                self.execute_block_callable(&block, vec![path], position)?;
+                self.execute_block_callable(block, vec![path], position)?;
             }
             return Ok(Object::Nil);
         }
@@ -169,7 +173,7 @@ impl VirtualMachine {
         held: &Object,
         position: Position,
     ) -> Result<String, MetorexError> {
-        if let Object::String(text) = held {
+        if let View::String(text) = held.view() {
             let named = text.encoding_name();
             if !crate::vm::native_methods::string_methods::encoding_is_ascii_compatible(&named) {
                 return Err(crate::vm::errors::simple_exception(

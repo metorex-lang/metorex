@@ -2,6 +2,7 @@
 // measure what a string holds.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The characters an argument stands for, taking `to_str` from an object
@@ -12,26 +13,29 @@ impl VirtualMachine {
         argument: &Object,
         position: Position,
     ) -> Result<String, MetorexError> {
-        match argument {
-            Object::String(text) => Ok(text.as_str().to_string()),
+        match argument.view() {
+            View::String(text) => Ok(text.as_str().to_string()),
             // An object of the program's own is asked whether it spells
             // itself as text, since its answer may be written rather than
             // declared.
-            other if self.answers_to(other, "to_str", position)? => {
-                match self.send_to_object(other.clone(), "to_str", vec![], position)? {
-                    Object::String(text) => Ok(text.as_str().to_string()),
+            _ if self.answers_to(argument, "to_str", position)? => {
+                match self
+                    .send_to_object(argument.clone(), "to_str", vec![], position)?
+                    .view()
+                {
+                    View::String(text) => Ok(text.as_str().to_string()),
                     converted => Err(method_argument_type_error(
                         method_name,
                         "String",
-                        &converted,
+                        &converted.to_object(),
                         position,
                     )),
                 }
             }
-            other => Err(method_argument_type_error(
+            _ => Err(method_argument_type_error(
                 method_name,
                 "String",
-                other,
+                argument,
                 position,
             )),
         }
@@ -45,23 +49,26 @@ impl VirtualMachine {
         argument: &Object,
         position: Position,
     ) -> Result<i64, MetorexError> {
-        match argument {
-            Object::Int(number) => Ok(*number),
-            other if self.answers_to(other, "to_int", position)? => {
-                match self.send_to_object(other.clone(), "to_int", vec![], position)? {
-                    Object::Int(number) => Ok(number),
+        match argument.view() {
+            View::Int(number) => Ok(number),
+            _ if self.answers_to(argument, "to_int", position)? => {
+                match self
+                    .send_to_object(argument.clone(), "to_int", vec![], position)?
+                    .view()
+                {
+                    View::Int(number) => Ok(number),
                     converted => Err(method_argument_type_error(
                         method_name,
                         "Integer",
-                        &converted,
+                        &converted.to_object(),
                         position,
                     )),
                 }
             }
-            other => Err(method_argument_type_error(
+            _ => Err(method_argument_type_error(
                 method_name,
                 "Integer",
-                other,
+                argument,
                 position,
             )),
         }
@@ -80,7 +87,7 @@ impl VirtualMachine {
             // A set spelled with bytes that are not characters in its own
             // encoding cannot be read at all, which is what Ruby reports
             // before it looks at any range inside.
-            if let Object::String(spelled) = argument
+            if let View::String(spelled) = argument.view()
                 && !crate::vm::native_methods::string_methods::holds_valid_text(spelled)
             {
                 let message = format!("invalid byte sequence in {}", spelled.encoding_name());
@@ -116,11 +123,11 @@ impl VirtualMachine {
     ) -> Result<Object, MetorexError> {
         let mut selectors = Vec::with_capacity(arguments.len());
         for argument in arguments {
-            let selector = match argument {
-                held @ Object::String(_) => held.clone(),
-                other => Object::string(self.string_argument(method_name, other, position)?),
+            let selector = match argument.view() {
+                View::String(_) => argument.clone(),
+                _ => Object::string(self.string_argument(method_name, argument, position)?),
             };
-            if let Object::String(given) = &selector
+            if let View::String(given) = selector.view()
                 && !crate::vm::native_methods::string_methods::strings_comparable(
                     string_value,
                     given,
@@ -163,7 +170,7 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        let Object::String(string_value) = receiver else {
+        let View::String(string_value) = receiver.view() else {
             return Ok(None);
         };
         let text = string_value.as_str().to_string();
@@ -180,7 +187,7 @@ impl VirtualMachine {
                 );
             }
             for argument in arguments {
-                if let Object::String(given) = argument
+                if let View::String(given) = argument.view()
                     && !crate::vm::native_methods::string_methods::strings_comparable(
                         string_value,
                         given,
@@ -299,7 +306,7 @@ impl VirtualMachine {
                         Object::String(std::rc::Rc::new(crate::object::StringValue::from_bytes(
                             text_methods::bytes_as_text(&text_methods::wide_bytes(&cut, shape)),
                         )));
-                    if let Object::String(held) = &made {
+                    if let View::String(held) = made.view() {
                         held.set_encoding(string_value.encoding_name());
                     }
                     return Ok(Some(made));
@@ -344,15 +351,16 @@ impl VirtualMachine {
                 // The matched piece carries the separator's own encoding,
                 // while the two pieces around it carry the subject's.
                 let mut separator_encoding = string_value.encoding_name();
-                let found = match &arguments[0] {
-                    Object::Regex(..) => {
+                let found = match arguments[0].view() {
+                    View::Regex(..) => {
                         self.regexp_partition(&text, &arguments[0], method_name, position)?
                     }
                     other => {
-                        if let Object::String(given) = other {
+                        if let View::String(given) = other {
                             separator_encoding = given.encoding_name();
                         }
-                        let separator = self.string_argument(method_name, other, position)?;
+                        let separator =
+                            self.string_argument(method_name, &arguments[0], position)?;
                         let at = if method_name == "partition" {
                             text.find(&separator)
                         } else {
@@ -443,12 +451,14 @@ impl VirtualMachine {
                 // A comparison against something that is not a String answers
                 // nil rather than raising, which is what Ruby does.
                 let converted = self.string_try_convert(&arguments[0], position)?;
-                let other = match &converted {
-                    Object::String(other) => other.clone(),
-                    instance => match crate::vm::native_methods::string_subclass_value(instance) {
-                        Some(Object::String(other)) => other,
+                let other = match converted.view() {
+                    View::String(other) => other.clone(),
+                    _ => (match crate::vm::native_methods::string_subclass_value(&converted).view()
+                    {
+                        Some(View::String(other)) => other,
                         _ => return Ok(Some(Object::Nil)),
-                    },
+                    })
+                    .clone(),
                 };
                 // Two strings with no encoding in common cannot be ordered,
                 // which Ruby reports as nil rather than as an error.
@@ -491,10 +501,10 @@ impl VirtualMachine {
             // Text written in two encodings that do not go together cannot
             // be padded with one another.
             "center" | "ljust" | "rjust"
-                if matches!(arguments.get(1), Some(Object::String(pad))
+                if matches!(arguments.get(1).view(), Some(View::String(pad))
                     if crate::vm::native_methods::string_methods::encodings_clash(string_value, pad)) =>
             {
-                let Some(Object::String(pad)) = arguments.get(1) else {
+                let Some(View::String(pad)) = arguments.get(1).view() else {
                     return Ok(None);
                 };
                 Err(
@@ -529,8 +539,8 @@ impl VirtualMachine {
                         given
                     }
                 };
-                let pad_encoding = match arguments.get(1) {
-                    Some(Object::String(pad)) => pad.encoding_name(),
+                let pad_encoding = match arguments.get(1).view() {
+                    Some(View::String(pad)) => pad.encoding_name(),
                     _ => string_value.encoding_name(),
                 };
                 let Some(encoding) = compatible_encoding(
@@ -639,13 +649,14 @@ impl VirtualMachine {
                 if method_name == "grapheme_clusters" && self.pending_block.is_none() {
                     return Ok(Some(Object::array(clusters)));
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => block,
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(block)) => block,
                     Some(other) => {
                         return Err(method_argument_type_error(
                             method_name,
                             "Block",
-                            &other,
+                            &other.to_object(),
                             position,
                         ));
                     }
@@ -663,7 +674,7 @@ impl VirtualMachine {
                     }
                 };
                 for cluster in clusters {
-                    self.execute_block_body(&block, vec![cluster])?;
+                    self.execute_block_body(block, vec![cluster])?;
                 }
                 Ok(Some(receiver.clone()))
             }
@@ -677,16 +688,17 @@ impl VirtualMachine {
                     ));
                 }
                 let exclusive = matches!(arguments.get(1), Some(other) if other.is_truthy());
-                if let Object::String(other) = &arguments[0] {
+                if let View::String(other) = arguments[0].view() {
                     self.check_upto_encodings(string_value, other, position)?;
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => block,
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(block)) => block,
                     Some(other) => {
                         return Err(method_argument_type_error(
                             method_name,
                             "Block",
-                            &other,
+                            &other.to_object(),
                             position,
                         ));
                     }
@@ -704,7 +716,7 @@ impl VirtualMachine {
                 };
                 let last = self.string_argument(method_name, &arguments[0], position)?;
                 for step in upto_sequence(&text, &last, exclusive) {
-                    self.execute_block_body(&block, vec![Object::string(step)])?;
+                    self.execute_block_body(block, vec![Object::string(step)])?;
                 }
                 Ok(Some(receiver.clone()))
             }
@@ -717,13 +729,12 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let Object::String(held) = receiver else {
-                    let Some(Object::String(held)) =
-                        crate::vm::native_methods::string_subclass_value(receiver)
-                    else {
+                let View::String(held) = receiver.view() else {
+                    let backing = crate::vm::native_methods::string_subclass_value(receiver);
+                    let Some(View::String(held)) = backing.view() else {
                         return Ok(None);
                     };
-                    return self.scrubbed_string(&held, arguments, position).map(Some);
+                    return self.scrubbed_string(held, arguments, position).map(Some);
                 };
                 let held = std::rc::Rc::clone(held);
                 self.scrubbed_string(&held, arguments, position).map(Some)
@@ -737,12 +748,13 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let held = match receiver {
-                    Object::String(held) => Some(std::rc::Rc::clone(held)),
-                    _ => match crate::vm::native_methods::string_subclass_value(receiver) {
-                        Some(Object::String(held)) => Some(held),
+                let held = match receiver.view() {
+                    View::String(held) => Some(std::rc::Rc::clone(held)),
+                    _ => (match crate::vm::native_methods::string_subclass_value(receiver).view() {
+                        Some(View::String(held)) => Some(held),
                         _ => None,
-                    },
+                    })
+                    .cloned(),
                 };
                 let carried = held
                     .as_ref()
@@ -790,7 +802,7 @@ impl VirtualMachine {
         argument: &Object,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        if matches!(argument, Object::String(_))
+        if matches!(argument.view(), View::String(_))
             || crate::vm::native_methods::string_subclass_value(argument).is_some()
         {
             return Ok(argument.clone());
@@ -800,7 +812,7 @@ impl VirtualMachine {
         }
         let source = self.builtins().class_of(argument).name().to_string();
         let converted = self.send_to_object(argument.clone(), "to_str", vec![], position)?;
-        if matches!(converted, Object::Nil | Object::String(_))
+        if matches!(converted.view(), View::Nil | View::String(_))
             || crate::vm::native_methods::string_subclass_value(&converted).is_some()
         {
             return Ok(converted);
@@ -827,7 +839,7 @@ impl VirtualMachine {
         method_name: &str,
         position: Position,
     ) -> Result<Option<(usize, usize)>, MetorexError> {
-        let Object::Regex(source, flags) = pattern else {
+        let View::Regex(source, flags) = pattern.view() else {
             return Ok(None);
         };
         let Some(compiled) = crate::vm::native_methods::regexp_methods::compile(source, flags)

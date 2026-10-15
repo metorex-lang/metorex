@@ -1,6 +1,7 @@
 // Whether a string holds, opens with, or closes on another.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// Whether a string holds, opens with, or closes on another.
@@ -24,7 +25,7 @@ impl VirtualMachine {
                 }
                 // Text written in an encoding this string cannot be read
                 // alongside is refused rather than searched for.
-                if let Object::String(other) = &arguments[0]
+                if let View::String(other) = arguments[0].view()
                     && !strings_comparable(string_value, other)
                 {
                     return Err(clashing_encodings_error(string_value, other, position));
@@ -43,15 +44,15 @@ impl VirtualMachine {
                 for arg in arguments {
                     // An argument that is not a String is asked for one, which
                     // is what `to_str` answers.
-                    let arg = &match arg {
-                        Object::String(_) => arg.clone(),
-                        other if self.responds_to(other, "to_str") => {
-                            self.send_to_object(other.clone(), "to_str", vec![], position)?
+                    let arg = &match arg.view() {
+                        View::String(_) => arg.clone(),
+                        _ if self.responds_to(arg, "to_str") => {
+                            self.send_to_object(arg.clone(), "to_str", vec![], position)?
                         }
-                        other => other.clone(),
+                        _ => arg.clone(),
                     };
-                    match arg {
-                        Object::String(s) => {
+                    match arg.view() {
+                        View::String(s) => {
                             // Text written in an encoding this string cannot
                             // be read alongside is refused rather than
                             // compared.
@@ -95,7 +96,7 @@ impl VirtualMachine {
                         // `start_with?` also takes a Regexp, which matches at
                         // the front of the string and records the match the
                         // way any other match does.
-                        Object::Regex(pattern, flags) if method_name == "start_with?" => {
+                        View::Regex(pattern, flags) if method_name == "start_with?" => {
                             let anchored = format!("\\A(?:{})", pattern);
                             let subject = string_value.as_str().to_string();
                             let found =
@@ -126,8 +127,8 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                match &arguments[0] {
-                    Object::String(prefix) => Ok(Some(Object::Bool(
+                match arguments[0].view() {
+                    View::String(prefix) => Ok(Some(Object::Bool(
                         string_value.as_str().starts_with(&*prefix.as_str()),
                     ))),
                     _ => Err(method_argument_type_error(
@@ -147,8 +148,8 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                match &arguments[0] {
-                    Object::String(suffix) => Ok(Some(Object::Bool(
+                match arguments[0].view() {
+                    View::String(suffix) => Ok(Some(Object::Bool(
                         string_value.as_str().ends_with(&*suffix.as_str()),
                     ))),
                     _ => Err(method_argument_type_error(

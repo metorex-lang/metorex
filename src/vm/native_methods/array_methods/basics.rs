@@ -2,6 +2,7 @@
 // on either end of it.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// How long an array is, what it reads back as, and putting elements
@@ -55,12 +56,12 @@ impl VirtualMachine {
                     match rendered {
                         Ok(rendered) => {
                             if parts.is_empty()
-                                && let Object::String(text) = &rendered
+                                && let View::String(text) = rendered.view()
                             {
                                 writing = text.encoding_name();
                             }
-                            parts.push(match &rendered {
-                                Object::String(text) => text.to_string(),
+                            parts.push(match rendered.view() {
+                                View::String(text) => text.to_string(),
                                 other => format!("{}", other),
                             });
                         }
@@ -132,8 +133,9 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => Some(block),
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(block)) => Some(block),
                     _ => None,
                 };
                 let elements = array_rc.borrow().clone();
@@ -157,7 +159,7 @@ impl VirtualMachine {
                 }
                 match block {
                     Some(block) => self
-                        .execute_block_callable(&block, vec![arguments[0].clone()], position)
+                        .execute_block_callable(block, vec![arguments[0].clone()], position)
                         .map(Some),
                     None => Ok(Some(Object::Nil)),
                 }

@@ -3,6 +3,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -125,8 +126,8 @@ HostIE5.new.run
     // Either the block's `return` escapes to the method (returns 55) or the
     // block returns 55 and the method returns 0 — accept both.
     assert!(matches!(
-        result,
-        Some(Object::Int(55)) | Some(Object::Int(0))
+        result.view(),
+        Some(View::Int(55)) | Some(View::Int(0))
     ));
 }
 

@@ -4,6 +4,7 @@ use super::calls::{call, class_name_of, top_level_module};
 use super::handles::{Value, to_object, to_value};
 use super::raise;
 use crate::object::Object;
+use crate::object::View;
 
 /// Calls one of Kernel's conversion functions, `Complex` or `Rational`.
 fn kernel_conversion(name: &str, arguments: &[Value]) -> Value {
@@ -18,13 +19,13 @@ pub extern "C-unwind" fn rb_float_new(number: f64) -> Value {
 
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_float_value(float: Value) -> f64 {
-    match to_object(float) {
-        Object::Float(number) => number,
+    match to_object(float).view() {
+        View::Float(number) => number,
         other => raise(crate::vm::errors::simple_exception(
             "TypeError",
             &format!(
                 "wrong argument type {} (expected Float)",
-                class_name_of(other)
+                class_name_of(other.to_object())
             ),
             super::called_from(),
         )),
@@ -33,7 +34,7 @@ pub extern "C-unwind" fn rb_float_value(float: Value) -> f64 {
 
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_float_type_p(value: Value) -> i32 {
-    matches!(to_object(value), Object::Float(_)) as i32
+    matches!(to_object(value).view(), View::Float(_)) as i32
 }
 
 #[unsafe(no_mangle)]

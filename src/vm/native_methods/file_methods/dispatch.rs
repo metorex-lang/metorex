@@ -2,6 +2,7 @@
 // `None` when the name is none of its own, and the next step is tried.
 
 use super::*;
+use crate::object::View;
 
 /// One step of the chain: every group reads the same arguments and answers
 /// the same way.
@@ -40,7 +41,7 @@ impl VirtualMachine {
         let coerced;
         let arguments = match arguments.first() {
             Some(first)
-                if !matches!(first, Object::String(_))
+                if !matches!(first.view(), View::String(_))
                     && matches!(class_rc.name(), "File" | "Dir")
                     && names_a_path(method_name) =>
             {
@@ -59,7 +60,7 @@ impl VirtualMachine {
         let coerced_second;
         let arguments = match arguments.get(1) {
             Some(second)
-                if !matches!(second, Object::String(_))
+                if !matches!(second.view(), View::String(_))
                     && class_rc.name() == "File"
                     && names_a_second_path(method_name) =>
             {

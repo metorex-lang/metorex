@@ -4,6 +4,7 @@
 use crate::error::MetorexError;
 use crate::lexer::Lexer;
 use crate::object::Object;
+use crate::object::View;
 use crate::parser::Parser;
 use crate::vm::VirtualMachine;
 use rustyline::error::ReadlineError;
@@ -236,7 +237,7 @@ impl ReplCore {
 
         match self.vm.execute_program(&program) {
             Ok(Some(result)) => {
-                if matches!(result, Object::Nil) {
+                if matches!(result.view(), View::Nil) {
                     LineResult::Continue
                 } else {
                     LineResult::Value(format!("=> {}", Self::format_object(&result)))
@@ -249,27 +250,27 @@ impl ReplCore {
 
     /// Format an object for display.
     pub fn format_object(obj: &Object) -> String {
-        match obj {
-            Object::Nil => "nil".to_string(),
-            Object::Bool(b) => b.to_string(),
-            Object::Int(i) => i.to_string(),
-            Object::BigInt(i) => i.to_string(),
-            Object::Float(f) => {
+        match obj.view() {
+            View::Nil => "nil".to_string(),
+            View::Bool(b) => b.to_string(),
+            View::Int(i) => i.to_string(),
+            View::BigInt(i) => i.to_string(),
+            View::Float(f) => {
                 if f.fract() == 0.0 && f.is_finite() {
                     format!("{:.1}", f)
                 } else {
                     f.to_string()
                 }
             }
-            Object::String(s) => format!("\"{}\"", s),
-            Object::Symbol(s) => format!(":{}", s),
-            Object::Array(items) => {
+            View::String(s) => format!("\"{}\"", s),
+            View::Symbol(s) => format!(":{}", s),
+            View::Array(items) => {
                 let items_borrowed = items.borrow();
                 let formatted_items: Vec<String> =
                     items_borrowed.iter().map(Self::format_object).collect();
                 format!("[{}]", formatted_items.join(", "))
             }
-            Object::Dict(map) => {
+            View::Dict(map) => {
                 let map_borrowed = map.borrow();
                 let mut entries: Vec<String> = map_borrowed
                     .iter()
@@ -278,22 +279,22 @@ impl ReplCore {
                 entries.sort();
                 format!("{{{}}}", entries.join(", "))
             }
-            Object::Block { .. } => "<Block>".to_string(),
-            Object::Method { .. } => "<Method>".to_string(),
-            Object::NativeFunction(name) => format!("<NativeFunction: {}>", name),
-            Object::Class(class) => format!("<Class: {}>", class.name()),
-            Object::Module(module) => format!("<Module: {}>", module.name()),
-            Object::Instance(instance) => {
+            View::Block { .. } => "<Block>".to_string(),
+            View::Method { .. } => "<Method>".to_string(),
+            View::NativeFunction(name) => format!("<NativeFunction: {}>", name),
+            View::Class(class) => format!("<Class: {}>", class.name()),
+            View::Module(module) => format!("<Module: {}>", module.name()),
+            View::Instance(instance) => {
                 let instance_borrowed = instance.borrow();
                 format!("<{} instance>", instance_borrowed.class_name())
             }
-            Object::Range {
+            View::Range {
                 start,
                 end,
                 exclusive,
                 ..
             } => {
-                if *exclusive {
+                if exclusive {
                     format!(
                         "{}...{}",
                         Self::format_object(start),
@@ -307,23 +308,23 @@ impl ReplCore {
                     )
                 }
             }
-            Object::Exception(e) => {
+            View::Exception(e) => {
                 let e_borrowed = e.borrow();
                 format!("<Exception: {}>", e_borrowed.message)
             }
-            Object::Set(s) => {
+            View::Set(s) => {
                 let s_borrowed = s.borrow();
                 format!("<Set: {} items>", s_borrowed.len())
             }
-            Object::Result(r) => match r {
+            View::Result(r) => match r {
                 Ok(v) => format!("<Ok: {}>", Self::format_object(v)),
                 Err(e) => format!("<Err: {}>", Self::format_object(e)),
             },
-            Object::Binding(binding) => {
+            View::Binding(binding) => {
                 format!("<Binding with {} vars>", binding.variable_count())
             }
-            Object::CompiledFunction(func) => format!("{}", func),
-            Object::Regex(pattern, flags) => {
+            View::CompiledFunction(func) => format!("{}", func),
+            View::Regex(pattern, flags) => {
                 if flags.is_empty() {
                     format!("/{}/", pattern)
                 } else {

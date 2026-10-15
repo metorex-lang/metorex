@@ -1,6 +1,7 @@
 // The instance methods a module holds.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The instance methods a module holds, as names and as unbound methods.
@@ -125,8 +126,8 @@ impl VirtualMachine {
                         &owners, &name_str,
                     );
                     if let Some(owner @ ("Kernel" | "BasicObject")) = owner
-                        && let Some(Object::Class(owner_rc) | Object::Module(owner_rc)) =
-                            self.globals().get(owner)
+                        && let Some(View::Class(owner_rc) | View::Module(owner_rc)) =
+                            self.globals().get(owner).view()
                     {
                         let mut stub = Method::with_owner(
                             name_str.clone(),
@@ -149,7 +150,7 @@ impl VirtualMachine {
                         }
                         stub.native_alias = Some(name_str.clone());
                         stub.original_name = Some(name_str.clone());
-                        stub.owner_class = Some(owner_rc);
+                        stub.owner_class = Some(owner_rc.clone());
                         stub.origin_class = Some(Rc::clone(class_rc));
                         return Ok(Answered(Object::Method(Rc::new(stub))));
                     }
@@ -331,24 +332,26 @@ impl VirtualMachine {
             | "public_instance_methods"
             | "private_instance_methods"
             | "protected_instance_methods" => {
-                let include_super = match arguments.first() {
-                    Some(Object::Bool(b)) => *b,
+                let include_super = match arguments.first().view() {
+                    Some(View::Bool(b)) => b,
                     _ => true,
                 };
                 // A refinement's body names the class it refines, and it
                 // answers to everything that class answers to as well as to
                 // its own names, so the class is asked the same question and
                 // what it says is listed behind them.
-                if let Some(Object::Class(refined) | Object::Module(refined)) = class_rc
+                if let Some(View::Class(refined) | View::Module(refined)) = class_rc
                     .get_class_var(crate::vm::native_methods::module_methods::REFINEMENT_TARGET_KEY)
+                    .view()
                 {
                     let mut named: Vec<Object> = class_rc
                         .method_names()
                         .into_iter()
                         .map(Object::symbol)
                         .collect();
-                    if let Some(Object::Array(held)) =
-                        self.call_class_methods(&refined, method_name, arguments, position)?
+                    if let Some(View::Array(held)) = self
+                        .call_class_methods(refined, method_name, arguments, position)?
+                        .view()
                     {
                         for one in held.borrow().iter() {
                             if !named.contains(one) {
@@ -362,8 +365,9 @@ impl VirtualMachine {
                 // A `private`/`public` naming an inherited method marks the
                 // visibility here without defining anything, and Ruby counts
                 // that name among this class's own methods.
-                let object_class = match self.globals().get("Object") {
-                    Some(Object::Class(object_class)) => Some(object_class),
+                let viewed = self.globals().get("Object");
+                let object_class = match viewed.view() {
+                    Some(View::Class(object_class)) => Some(object_class),
                     _ => None,
                 };
                 for name in class_rc.visibility_marked_names() {
@@ -382,7 +386,7 @@ impl VirtualMachine {
                     let mut seen: Vec<*const Class> = Vec::new();
                     push_class_ancestors(class_rc, &mut chain, &mut seen);
                     for ancestor in &chain {
-                        let (Object::Class(c) | Object::Module(c)) = ancestor else {
+                        let (View::Class(c) | View::Module(c)) = ancestor.view() else {
                             continue;
                         };
                         for n in c.method_names() {
@@ -485,8 +489,8 @@ impl VirtualMachine {
                     push_class_ancestors(class_rc, &mut chain, &mut seen);
                     chain
                         .iter()
-                        .filter_map(|ancestor| match ancestor {
-                            Object::Class(c) | Object::Module(c) => Some(Rc::clone(c)),
+                        .filter_map(|ancestor| match ancestor.view() {
+                            View::Class(c) | View::Module(c) => Some(Rc::clone(c)),
                             _ => None,
                         })
                         .collect()

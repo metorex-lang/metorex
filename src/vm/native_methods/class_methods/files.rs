@@ -1,6 +1,7 @@
 // The File class methods.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The File class methods, which read and write through the operating
@@ -26,11 +27,11 @@ impl VirtualMachine {
                         ));
                     }
                     let named = self.path_name_argument("dirname", &arguments[0], position)?;
-                    let encoding = match &arguments[0] {
-                        Object::String(held) => held.encoding_name(),
+                    let encoding = match arguments[0].view() {
+                        View::String(held) => held.encoding_name(),
                         _ => "UTF-8".to_string(),
                     };
-                    if let Object::String(held) = &arguments[0]
+                    if let View::String(held) = arguments[0].view()
                         && !crate::vm::native_methods::string_methods::encoding_is_ascii_compatible(
                             &held.encoding_name(),
                         )
@@ -83,7 +84,7 @@ impl VirtualMachine {
                     }
                     // A name written in an encoding that spells the ASCII
                     // letters in more than one byte cannot be read as a path.
-                    if let Object::String(held) = &arguments[0]
+                    if let View::String(held) = arguments[0].view()
                         && !crate::vm::native_methods::string_methods::encoding_is_ascii_compatible(
                             &held.encoding_name(),
                         )
@@ -102,7 +103,7 @@ impl VirtualMachine {
                     // A suffix is named by text, and nothing else stands for
                     // one.
                     if let Some(held) = arguments.get(1)
-                        && !matches!(held, Object::String(_))
+                        && !matches!(held.view(), View::String(_))
                         && !self.answers_to(held, "to_str", position)?
                     {
                         return Err(method_argument_type_error(
@@ -117,7 +118,7 @@ impl VirtualMachine {
                         trimmed.rsplit('/').next().unwrap_or(trimmed)
                     };
                     let mut name = held.to_string();
-                    if let Some(Object::String(suffix)) = arguments.get(1) {
+                    if let Some(View::String(suffix)) = arguments.get(1).view() {
                         let suffix = suffix.to_text();
                         if suffix == ".*" {
                             if let Some(dot) = name.rfind('.')
@@ -169,8 +170,8 @@ impl VirtualMachine {
                     }
                     let path = self.path_name_argument("split", &arguments[0], position)?;
                     // The pieces keep the encoding the whole path was in.
-                    let whole = match &arguments[0] {
-                        held @ Object::String(_) => held.clone(),
+                    let whole = match arguments[0].view() {
+                        View::String(_) => arguments[0].clone(),
                         _ => Object::string(path),
                     };
                     let arguments = &[whole];
@@ -183,7 +184,7 @@ impl VirtualMachine {
                     return Ok(Answered(Object::array(vec![directory, name])));
                 }
                 "realpath" => {
-                    if let Some(Object::String(s)) = arguments.first() {
+                    if let Some(View::String(s)) = arguments.first().view() {
                         let expanded = std::fs::canonicalize(&*s.as_str())
                             .ok()
                             .and_then(|p| p.to_str().map(String::from))
@@ -201,7 +202,7 @@ impl VirtualMachine {
 /// A piece of a path, written in the same encoding the whole path was.
 fn path_piece(piece: String, whole: &Object) -> Object {
     let made = Object::string(piece);
-    if let (Object::String(held), Object::String(written)) = (whole, &made) {
+    if let (View::String(held), View::String(written)) = (whole.view(), made.view()) {
         written.set_encoding(held.encoding_name());
         if held.holds_bytes() {
             written.mark_bytes();

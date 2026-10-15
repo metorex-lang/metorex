@@ -1,6 +1,7 @@
 // What a Complex reads back as.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// One part of a Complex as text, through the method the caller names.
@@ -10,8 +11,11 @@ impl VirtualMachine {
         method_name: &str,
         position: Position,
     ) -> Result<String, MetorexError> {
-        match self.send_to_object(value.clone(), method_name, vec![], position)? {
-            Object::String(text) => Ok(text.as_str().to_string()),
+        match self
+            .send_to_object(value.clone(), method_name, vec![], position)?
+            .view()
+        {
+            View::String(text) => Ok(text.as_str().to_string()),
             other => Ok(other.to_string()),
         }
     }
@@ -23,7 +27,7 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<bool, MetorexError> {
-        if let Object::Float(number) = value {
+        if let View::Float(number) = value.view() {
             // NaN carries a sign bit that varies by platform, and Ruby prints
             // it with a `+` either way, so only a real negative counts. A
             // negative zero keeps its sign, which `-0.0 < 0` would miss.

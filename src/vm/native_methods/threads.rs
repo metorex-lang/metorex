@@ -1,6 +1,7 @@
 // The methods a Thread answers, and the block it runs.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 use crate::vm::ractors::RACTOR_VAR;
 
@@ -15,11 +16,14 @@ impl VirtualMachine {
         given: &Object,
         position: Position,
     ) -> Result<String, MetorexError> {
-        match given {
-            Object::Symbol(name) | Object::String(name) => Ok(name.as_str().to_string()),
-            other if self.responds_to(other, "to_str") => {
-                match self.send_to_object(other.clone(), "to_str", vec![], position)? {
-                    Object::String(name) => Ok(name.as_str().to_string()),
+        match given.view() {
+            View::Symbol(name) | View::String(name) => Ok(name.as_str().to_string()),
+            _ if self.responds_to(given, "to_str") => {
+                match self
+                    .send_to_object(given.clone(), "to_str", vec![], position)?
+                    .view()
+                {
+                    View::String(name) => Ok(name.as_str().to_string()),
                     answered => Err(crate::vm::errors::simple_exception(
                         "TypeError",
                         &format!("{} is not a symbol nor a string", answered),
@@ -27,11 +31,14 @@ impl VirtualMachine {
                     )),
                 }
             }
-            other => {
-                let rendered = match self.send_to_object(other.clone(), "inspect", vec![], position)
+            _ => {
+                let rendered = match self
+                    .send_to_object(given.clone(), "inspect", vec![], position)
+                    .as_ref()
+                    .map(Object::view)
                 {
-                    Ok(Object::String(text)) => text.as_str().to_string(),
-                    _ => crate::vm::native_methods::array_methods::inspect_element(other),
+                    Ok(View::String(text)) => text.as_str().to_string(),
+                    _ => crate::vm::native_methods::array_methods::inspect_element(given),
                 };
                 Err(crate::vm::errors::simple_exception(
                     "TypeError",
@@ -49,8 +56,8 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        let inst = match receiver {
-            Object::Instance(i) => Rc::clone(i),
+        let inst = match receiver.view() {
+            View::Instance(i) => Rc::clone(i),
             _ => return Ok(None),
         };
         match method_name {
@@ -77,10 +84,10 @@ impl VirtualMachine {
                 }
                 // `join` takes a limit on how long to wait, and answers nil
                 // when the thread is still going once it has passed.
-                let limit = match arguments.first() {
-                    None | Some(Object::Nil) => None,
+                let limit = match arguments.first().view() {
+                    None | Some(View::Nil) => None,
                     Some(given) => Some(std::time::Duration::from_secs_f64(
-                        self.float_value_of(given, position)?.max(0.0),
+                        self.float_value_of(&given.to_object(), position)?.max(0.0),
                     )),
                 };
                 let cached = inst.borrow().get_var("__thread_value").cloned();
@@ -90,8 +97,8 @@ impl VirtualMachine {
                     // A thread that died of an exception hands it to whoever
                     // waits on it, however long after the fact.
                     let died_of = inst.borrow().get_var("__thread_error").cloned();
-                    if let Some(held @ Object::Exception(_)) = died_of {
-                        self.call_native_function("raise", vec![held], position)?;
+                    if let Some(held @ View::Exception(_)) = died_of.view() {
+                        self.call_native_function("raise", vec![held.to_object()], position)?;
                     }
                     return Ok(Some(if method_name == "join" {
                         receiver.clone()
@@ -153,7 +160,7 @@ impl VirtualMachine {
                 let key_str = self.thread_local_name(&arguments[0], position)?;
                 let store = self.thread_local_store(method_name, receiver);
                 let locals = inst.borrow().get_var(&store).cloned();
-                if let Some(Object::Dict(held)) = locals {
+                if let Some(View::Dict(held)) = locals.view() {
                     return Ok(Some(
                         held.borrow().get(&key_str).cloned().unwrap_or(Object::Nil),
                     ));
@@ -172,7 +179,7 @@ impl VirtualMachine {
                 let key_str = self.thread_local_name(&arguments[0], position)?;
                 let store = self.thread_local_store(method_name, receiver);
                 let locals = inst.borrow().get_var(&store).cloned();
-                let held = matches!(locals, Some(Object::Dict(ref names)) if names.borrow().contains_key(&key_str));
+                let held = matches!(locals.view(), Some(View::Dict(names)) if names.borrow().contains_key(&key_str));
                 Ok(Some(Object::Bool(held)))
             }
             "keys" | "thread_variables" => {
@@ -186,7 +193,7 @@ impl VirtualMachine {
                 }
                 let store = self.thread_local_store(method_name, receiver);
                 let locals = inst.borrow().get_var(&store).cloned();
-                let Some(Object::Dict(held)) = locals else {
+                let Some(View::Dict(held)) = locals.view() else {
                     return Ok(Some(Object::array(Vec::new())));
                 };
                 let named: Vec<Object> = held
@@ -215,8 +222,8 @@ impl VirtualMachine {
                 let key_str = self.thread_local_name(&arguments[0], position)?;
                 let store = self.thread_local_store(method_name, receiver);
                 let existing = inst.borrow().get_var(&store).cloned();
-                let dict = match existing {
-                    Some(Object::Dict(held)) => held,
+                let dict = match existing.view() {
+                    Some(View::Dict(held)) => held.clone(),
                     _ => {
                         let held = Rc::new(std::cell::RefCell::new(indexmap::IndexMap::new()));
                         inst.borrow_mut()
@@ -226,7 +233,8 @@ impl VirtualMachine {
                 };
                 // A thread variable set to nil is gone rather than held as
                 // nil, so the thread stops naming it among its variables.
-                if method_name == "thread_variable_set" && matches!(arguments[1], Object::Nil) {
+                if method_name == "thread_variable_set" && matches!(arguments[1].view(), View::Nil)
+                {
                     dict.borrow_mut().shift_remove(&key_str);
                 } else {
                     dict.borrow_mut().insert(key_str, arguments[1].clone());
@@ -254,13 +262,13 @@ impl VirtualMachine {
                 // so it keeps its turn and is left with no value until it
                 // unwinds. One that never started has nothing to unwind.
                 let started = matches!(
-                    inst.borrow().get_var("__thread_fiber"),
-                    Some(Object::Int(_))
+                    inst.borrow().get_var("__thread_fiber").view(),
+                    Some(View::Int(_))
                 );
                 if !started {
                     self.pending_threads.retain(|thread| {
-                        if let (Object::Instance(pending), Object::Instance(target)) =
-                            (thread, receiver)
+                        if let (View::Instance(pending), View::Instance(target)) =
+                            (thread.view(), receiver.view())
                         {
                             !Rc::ptr_eq(pending, target)
                         } else {
@@ -278,30 +286,35 @@ impl VirtualMachine {
             // written, and what it is doing, in bytes rather than characters.
             "inspect" | "to_s" => {
                 let address = Rc::as_ptr(&inst) as usize;
-                let doing = match self.call_thread_method(receiver, "status", &[], position)? {
+                let doing = match self
+                    .call_thread_method(receiver, "status", &[], position)?
+                    .view()
+                {
                     // A thread waiting on what only another thread can give
                     // it sleeps until then, however long that is.
                     _ if matches!(
-                        inst.borrow().get_var(crate::vm::fibers::WAITING_FOREVER),
-                        Some(Object::Bool(true))
+                        inst.borrow()
+                            .get_var(crate::vm::fibers::WAITING_FOREVER)
+                            .view(),
+                        Some(View::Bool(true))
                     ) =>
                     {
                         "sleep_forever".to_string()
                     }
-                    Some(Object::String(word)) => word.as_str().to_string(),
+                    Some(View::String(word)) => word.as_str().to_string(),
                     _ => "dead".to_string(),
                 };
                 let written_at = match (
-                    inst.borrow().get_var("__thread_source"),
-                    inst.borrow().get_var("__thread_line"),
+                    inst.borrow().get_var("__thread_source").view(),
+                    inst.borrow().get_var("__thread_line").view(),
                 ) {
-                    (Some(Object::String(file)), Some(Object::Int(line))) => {
+                    (Some(View::String(file)), Some(View::Int(line))) => {
                         Some(format!("{}:{}", file.as_str(), line))
                     }
                     _ => None,
                 };
-                let label = match inst.borrow().get_var("__thread_name") {
-                    Some(Object::String(name)) => format!("@{}", name.as_str()),
+                let label = match inst.borrow().get_var("__thread_name").view() {
+                    Some(View::String(name)) => format!("@{}", name.as_str()),
                     _ => String::new(),
                 };
                 let described = match written_at {
@@ -343,24 +356,24 @@ impl VirtualMachine {
             )),
             "name=" => {
                 let given = arguments.first().cloned().unwrap_or(Object::Nil);
-                let named = match given {
-                    Object::Nil => Object::Nil,
-                    Object::String(_) => given,
-                    other if self.responds_to(&other, "to_str") => {
-                        self.send_to_object(other, "to_str", vec![], position)?
+                let named = match given.view() {
+                    View::Nil => Object::Nil,
+                    View::String(_) => given,
+                    _ if self.responds_to(&given, "to_str") => {
+                        self.send_to_object(given.clone(), "to_str", vec![], position)?
                     }
-                    other => {
+                    _ => {
                         return Err(crate::vm::errors::simple_exception(
                             "TypeError",
                             &format!(
                                 "no implicit conversion of {} into String",
-                                crate::vm::errors::conversion_subject(&other)
+                                crate::vm::errors::conversion_subject(&given)
                             ),
                             position,
                         ));
                     }
                 };
-                if let Object::String(text) = &named
+                if let View::String(text) = named.view()
                     && text.as_str().contains('\0')
                 {
                     return Err(crate::vm::errors::simple_exception(
@@ -383,7 +396,7 @@ impl VirtualMachine {
             )),
             "priority=" => {
                 let given = arguments.first().cloned().unwrap_or(Object::Int(0));
-                let Object::Int(wanted) = given else {
+                let View::Int(wanted) = given.view() else {
                     return Err(crate::vm::errors::simple_exception(
                         "TypeError",
                         "priority must be an Integer",
@@ -423,8 +436,8 @@ impl VirtualMachine {
                 }
                 let current = self.running_thread();
                 let running = matches!(
-                    (&current, receiver),
-                    (Object::Instance(a), Object::Instance(b)) if Rc::ptr_eq(a, b)
+                    (current.view(), receiver.view()),
+                    (View::Instance(a), View::Instance(b)) if Rc::ptr_eq(a, b)
                 );
                 let lines = if running {
                     self.own_backtrace_lines(position)
@@ -454,10 +467,10 @@ impl VirtualMachine {
                 // A backtrace named in the call, or one the exception already
                 // carries, stays. Any other is recorded where the thread
                 // raises it, not here.
-                let keeps_backtrace = matches!(arguments.get(2), Some(Object::Array(_)))
-                    || matches!(arguments.first(), Some(Object::Exception(given)) if given.borrow().backtrace.is_some());
+                let keeps_backtrace = matches!(arguments.get(2).view(), Some(View::Array(_)))
+                    || matches!(arguments.first().view(), Some(View::Exception(given)) if given.borrow().backtrace.is_some());
                 let built = self.build_raise_exception(arguments, position)?;
-                if !keeps_backtrace && let Object::Exception(details) = &built {
+                if !keeps_backtrace && let View::Exception(details) = built.view() {
                     let mut details = details.borrow_mut();
                     details.backtrace = None;
                     details.backtrace_sites = None;
@@ -465,13 +478,13 @@ impl VirtualMachine {
                     details.backtrace_array = None;
                     details.backtrace_locations_array = None;
                 }
-                if let Object::Exception(details) = &built
+                if let View::Exception(details) = built.view()
                     && !details.borrow().cause_settled
                 {
                     if details.borrow().cause.is_none()
-                        && let Some(active @ Object::Exception(_)) = self.globals().get("!")
+                        && let Some(active @ View::Exception(_)) = self.globals().get("!").view()
                     {
-                        crate::vm::VirtualMachine::record_cause(&built, &active);
+                        crate::vm::VirtualMachine::record_cause(&built, &active.to_object());
                     }
                     details.borrow_mut().cause_settled = true;
                 }
@@ -490,8 +503,8 @@ impl VirtualMachine {
             // is joined.
             "wakeup" | "run" => {
                 if matches!(
-                    inst.borrow().get_var("__thread_reaped"),
-                    Some(Object::Bool(true))
+                    inst.borrow().get_var("__thread_reaped").view(),
+                    Some(View::Bool(true))
                 ) {
                     return Err(crate::vm::errors::simple_exception(
                         "ThreadError",
@@ -515,8 +528,8 @@ impl VirtualMachine {
             "native_thread_id" => {
                 let running = self.running_thread();
                 let is_running = matches!(
-                    (&running, receiver),
-                    (Object::Instance(a), Object::Instance(b)) if Rc::ptr_eq(a, b)
+                    (running.view(), receiver.view()),
+                    (View::Instance(a), View::Instance(b)) if Rc::ptr_eq(a, b)
                 );
                 if !is_running {
                     return Ok(Some(Object::Nil));
@@ -528,8 +541,8 @@ impl VirtualMachine {
             // A thread is stopped when it is asleep or when it is over.
             "stop?" => {
                 let doing = self.call_thread_method(receiver, "status", &[], position)?;
-                Ok(Some(Object::Bool(match doing {
-                    Some(Object::String(word)) => &*word.as_str() == "sleep",
+                Ok(Some(Object::Bool(match doing.view() {
+                    Some(View::String(word)) => &*word.as_str() == "sleep",
                     _ => true,
                 })))
             }
@@ -548,18 +561,18 @@ impl VirtualMachine {
                     return Ok(Some(Object::Bool(false)));
                 }
                 let waiting = matches!(
-                    inst.borrow().get_var("__thread_waiting"),
-                    Some(Object::Bool(true))
+                    inst.borrow().get_var("__thread_waiting").view(),
+                    Some(View::Bool(true))
                 );
                 if waiting {
                     return Ok(Some(Object::string("sleep")));
                 }
                 if matches!(
-                    inst.borrow().get_var("__thread_killed"),
-                    Some(Object::Bool(true))
+                    inst.borrow().get_var("__thread_killed").view(),
+                    Some(View::Bool(true))
                 ) || matches!(
-                    inst.borrow().get_var("__thread_dying"),
-                    Some(Object::Bool(true))
+                    inst.borrow().get_var("__thread_dying").view(),
+                    Some(View::Bool(true))
                 ) {
                     return Ok(Some(Object::string("aborting")));
                 }
@@ -606,7 +619,7 @@ impl VirtualMachine {
         inst: &Rc<std::cell::RefCell<crate::object::Instance>>,
     ) -> bool {
         let fiber = self.lock_holding_fiber();
-        if !matches!(inst.borrow().get_var("__mutex_fiber"), Some(Object::Int(held)) if *held == fiber)
+        if !matches!(inst.borrow().get_var("__mutex_fiber").view(), Some(View::Int(held)) if held == fiber)
         {
             return false;
         }
@@ -621,8 +634,8 @@ impl VirtualMachine {
         let holder = inst.borrow().get_var("__mutex_thread").cloned();
         let running = self.running_thread();
         matches!(
-            (holder, running),
-            (Some(Object::Instance(a)), Object::Instance(b)) if Rc::ptr_eq(&a, &b)
+            (holder.view(), running.view()),
+            (Some(View::Instance(a)), View::Instance(b)) if Rc::ptr_eq(a, b)
         )
     }
 
@@ -636,10 +649,11 @@ impl VirtualMachine {
         }
         // Outside every thread block the thread running is the main one,
         // which is made the first time anything asks after it.
-        let Some(Object::Class(thread_class)) = self.globals().get("Thread") else {
+        let viewed = self.globals().get("Thread");
+        let Some(View::Class(thread_class)) = viewed.view() else {
             return Object::Nil;
         };
-        let made = crate::object::Instance::new(Rc::clone(&thread_class));
+        let made = crate::object::Instance::new(Rc::clone(thread_class));
         let main = Object::Instance(made);
         self.globals_mut().set("__Thread_main", main.clone());
         main
@@ -648,11 +662,12 @@ impl VirtualMachine {
     /// What `Thread#raise` handed the thread running now, taken so it is
     /// raised once and no more.
     pub(crate) fn exception_handed_to_thread(&mut self) -> Option<Vec<Object>> {
-        let Some(Object::Instance(running)) = self.thread_current_stack.last().cloned() else {
+        let viewed = self.thread_current_stack.last().cloned();
+        let Some(View::Instance(running)) = viewed.view() else {
             return None;
         };
         let handed = running.borrow().get_var("__thread_raise").cloned();
-        let Some(Object::Array(values)) = handed else {
+        let Some(View::Array(values)) = handed.view() else {
             return None;
         };
         running
@@ -670,8 +685,8 @@ impl VirtualMachine {
         block: Object,
         arguments: &[Object],
     ) {
-        let written_at = match &block {
-            Object::Block(body) => match (&body.source_file, body.opened_at) {
+        let written_at = match block.view() {
+            View::Block(body) => match (&body.source_file, body.opened_at) {
                 (Some(file), Some(line)) => Some((file.clone(), line)),
                 _ => None,
             },

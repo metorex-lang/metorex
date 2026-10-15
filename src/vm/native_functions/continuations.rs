@@ -2,6 +2,7 @@
 // block returned.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 /// A statement list running, the statement it is on, and how many frames
 /// deep it runs.
@@ -36,11 +37,12 @@ impl VirtualMachine {
         let mut start = 0;
         let answer = loop {
             match run(self, start) {
-                Err(MetorexError::Throw {
-                    tag,
-                    value: Object::Int(index),
-                    ..
-                }) if tag == resume_tag(serial) => start = index as usize,
+                Err(MetorexError::Throw { tag, value, .. })
+                    if tag == resume_tag(serial)
+                        && let View::Int(index) = value.view() =>
+                {
+                    start = index as usize
+                }
                 other => break other,
             }
         };
@@ -82,14 +84,14 @@ impl VirtualMachine {
     /// `__continuation_resumed__(serial, index)` — the value a continuation
     /// left for `callcc` to answer at that statement, in an Array, or nil.
     pub(crate) fn continuation_resumed(&mut self, arguments: &[Object]) -> Object {
-        let (Some(Object::Int(serial)), Some(Object::Int(index))) =
-            (arguments.first(), arguments.get(1))
+        let (Some(View::Int(serial)), Some(View::Int(index))) =
+            (arguments.first().view(), arguments.get(1).view())
         else {
             return Object::Nil;
         };
         match self
             .continuation_resumes
-            .remove(&(*serial as u64, *index as usize))
+            .remove(&(serial as u64, index as usize))
         {
             Some(value) => Object::array(vec![value]),
             None => Object::Nil,
@@ -104,12 +106,12 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let (Some(Object::Int(serial)), Some(Object::Int(index))) =
-            (arguments.first(), arguments.get(1))
+        let (Some(View::Int(serial)), Some(View::Int(index))) =
+            (arguments.first().view(), arguments.get(1).view())
         else {
             return Ok(Object::Bool(false));
         };
-        let serial = *serial as u64;
+        let serial = serial as u64;
         if !self
             .statement_marks
             .iter()
@@ -119,10 +121,10 @@ impl VirtualMachine {
         }
         let value = arguments.get(2).cloned().unwrap_or(Object::Nil);
         self.continuation_resumes
-            .insert((serial, *index as usize), value);
+            .insert((serial, index as usize), value);
         Err(MetorexError::Throw {
             tag: resume_tag(serial),
-            value: Object::Int(*index),
+            value: Object::Int(index),
             location: crate::vm::utils::position_to_location(position),
         })
     }

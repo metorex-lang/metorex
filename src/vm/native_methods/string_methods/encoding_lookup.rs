@@ -1,6 +1,7 @@
 // The encoding an argument or a name stands for.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The encoding an argument names, whether it arrives as an Encoding or
@@ -10,42 +11,42 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<String, MetorexError> {
-        match value {
-            Object::Class(encoding) => Ok(encoding.name().to_string()),
-            Object::String(named) => {
+        match value.view() {
+            View::Class(encoding) => Ok(encoding.name().to_string()),
+            View::String(named) => {
                 let found = self.send_to_object(
                     self.globals().get("Encoding").unwrap_or(Object::Nil),
                     "find",
                     vec![Object::string(named.to_text())],
                     position,
                 )?;
-                match found {
-                    Object::Class(encoding) => Ok(encoding.name().to_string()),
+                match found.view() {
+                    View::Class(encoding) => Ok(encoding.name().to_string()),
                     // A special name such as "internal" that nothing is set
                     // to names no encoding, and Ruby reads the bytes as
                     // bytes rather than refusing them.
-                    Object::Nil => Ok("ASCII-8BIT".to_string()),
+                    View::Nil => Ok("ASCII-8BIT".to_string()),
                     _ => Ok(named.as_str().to_string()),
                 }
             }
             // Anything that reads as a String names an encoding by the
             // characters it reads as.
-            other if self.responds_to(other, "to_str") => {
-                let read = self.send_to_object(other.clone(), "to_str", vec![], position)?;
-                match read {
-                    Object::String(_) => self.encoding_name_argument(&read, position),
+            _ if self.responds_to(value, "to_str") => {
+                let read = self.send_to_object(value.clone(), "to_str", vec![], position)?;
+                match read.view() {
+                    View::String(_) => self.encoding_name_argument(&read, position),
                     _ => Err(method_argument_type_error(
                         "force_encoding",
                         "String",
-                        other,
+                        value,
                         position,
                     )),
                 }
             }
-            other => Err(method_argument_type_error(
+            _ => Err(method_argument_type_error(
                 "force_encoding",
                 "String",
-                other,
+                value,
                 position,
             )),
         }
@@ -90,10 +91,10 @@ impl VirtualMachine {
     /// as the internal or the external encoding, or US-ASCII when that one
     /// spells ASCII differently from ASCII itself.
     pub(crate) fn inspect_result_encoding(&mut self) -> String {
-        let named = match self.globals().get("__Encoding_default_internal") {
-            Some(Object::Class(held)) => held.name().to_string(),
-            _ => match self.globals().get("__Encoding_default_external") {
-                Some(Object::Class(held)) => held.name().to_string(),
+        let named = match self.globals().get("__Encoding_default_internal").view() {
+            Some(View::Class(held)) => held.name().to_string(),
+            _ => match self.globals().get("__Encoding_default_external").view() {
+                Some(View::Class(held)) => held.name().to_string(),
                 _ => crate::object::string_value::DEFAULT_ENCODING.to_string(),
             },
         };

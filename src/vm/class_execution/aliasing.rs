@@ -1,6 +1,7 @@
 // Pointing one method name at another outside a class body.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Execute `alias new_name old_name` outside a class/module body. Ruby
@@ -31,7 +32,7 @@ impl VirtualMachine {
             self.invoke_class_hook(&enclosing, "method_added", new_name, position)?;
             return Ok(ControlFlow::Next);
         }
-        if let Some(Object::Class(object_class)) = self.globals().get("Object")
+        if let Some(View::Class(object_class)) = self.globals().get("Object").view()
             && !object_class.alias_method(new_name, old_name)
         {
             return Err(MetorexError::runtime_error(

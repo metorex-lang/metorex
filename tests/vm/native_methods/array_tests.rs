@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -404,7 +405,7 @@ fn array_pack_format_l() {
     let result = run(r#"[1].pack("l")"#);
     assert!(result.is_some());
     // 1 as i32 little-endian = [1, 0, 0, 0]
-    if let Some(Object::String(s)) = result {
+    if let Some(View::String(s)) = result.view() {
         assert_eq!(s.as_str().len(), 4);
     }
 }
@@ -416,7 +417,7 @@ fn array_pack_format_s() {
     // 's' packs as 16-bit little-endian integer
     let result = run(r#"[1].pack("s")"#);
     assert!(result.is_some());
-    if let Some(Object::String(s)) = result {
+    if let Some(View::String(s)) = result.view() {
         assert_eq!(s.as_str().len(), 2);
     }
 }
@@ -428,7 +429,7 @@ fn array_pack_format_c() {
     // 'c' packs as single byte
     let result = run(r#"[65].pack("c")"#);
     assert!(result.is_some());
-    if let Some(Object::String(s)) = result {
+    if let Some(View::String(s)) = result.view() {
         assert_eq!(s.as_str().len(), 1);
     }
 }
@@ -440,7 +441,7 @@ fn array_pack_format_q() {
     // 'q' packs as 64-bit little-endian integer
     let result = run(r#"[1].pack("q")"#);
     assert!(result.is_some());
-    if let Some(Object::String(s)) = result {
+    if let Some(View::String(s)) = result.view() {
         assert_eq!(s.as_str().len(), 8);
     }
 }
@@ -452,7 +453,7 @@ fn array_pack_format_j() {
     // 'j' packs as 64-bit little-endian integer (native size)
     let result = run(r#"[42].pack("j")"#);
     assert!(result.is_some());
-    if let Some(Object::String(s)) = result {
+    if let Some(View::String(s)) = result.view() {
         assert_eq!(s.as_str().len(), 8);
     }
 }

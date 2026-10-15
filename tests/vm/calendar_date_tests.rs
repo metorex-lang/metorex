@@ -1,7 +1,7 @@
 // Coverage tests for Date
 
 use metorex::lexer::Lexer;
-use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -24,8 +24,8 @@ fn shown(code: &str) -> String {
         let tokens = Lexer::new(&held).tokenize();
         let stmts = Parser::new(tokens).parse().expect("parse failed");
         let mut vm = VirtualMachine::new();
-        match vm.execute_program(&stmts).expect("execution failed") {
-            Some(Object::String(written)) => written.to_string(),
+        match vm.execute_program(&stmts).expect("execution failed").view() {
+            Some(View::String(written)) => written.to_string(),
             other => panic!("expected a string, got {other:?}"),
         }
     })

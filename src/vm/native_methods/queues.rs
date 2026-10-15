@@ -1,6 +1,7 @@
 // The methods a Queue and a SizedQueue answer.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Instance-level Queue / SizedQueue methods. metorex runs blocks
@@ -14,13 +15,13 @@ impl VirtualMachine {
         arguments: &[Object],
         _position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        let inst = match receiver {
-            Object::Instance(i) => Rc::clone(i),
+        let inst = match receiver.view() {
+            View::Instance(i) => Rc::clone(i),
             _ => return Ok(None),
         };
         let items_obj = inst.borrow().get_var("__queue_items").cloned();
-        let items_arr = match items_obj {
-            Some(Object::Array(a)) => a,
+        let items_arr = match items_obj.view() {
+            Some(View::Array(a)) => a,
             _ => return Ok(None),
         };
         match method_name {
@@ -28,8 +29,8 @@ impl VirtualMachine {
                 // A closed queue takes nothing more, which is how a producer
                 // learns the consumers have finished with it.
                 if matches!(
-                    inst.borrow().get_var("__queue_closed"),
-                    Some(Object::Bool(true))
+                    inst.borrow().get_var("__queue_closed").view(),
+                    Some(View::Bool(true))
                 ) {
                     return Err(crate::vm::errors::simple_exception(
                         "ClosedQueueError",
@@ -39,16 +40,16 @@ impl VirtualMachine {
                 }
                 // A queue made with a limit takes nothing more while it is
                 // full, so whoever is putting things on it waits for a reader.
-                let limit = match inst.borrow().get_var("__queue_max") {
-                    Some(Object::Int(most)) => Some(*most as usize),
+                let limit = match inst.borrow().get_var("__queue_max").view() {
+                    Some(View::Int(most)) => Some(most as usize),
                     _ => None,
                 };
                 let (positional, keywords) = queue_keyword_arguments(arguments);
                 let asked_now = positional
                     .get(1)
-                    .is_some_and(|given| !matches!(given, Object::Nil | Object::Bool(false)));
-                let wait_for = match keywords.get("timeout") {
-                    None | Some(Object::Nil) => None,
+                    .is_some_and(|given| !matches!(given.view(), View::Nil | View::Bool(false)));
+                let wait_for = match keywords.get("timeout").view() {
+                    None | Some(View::Nil) => None,
                     Some(_) if asked_now => {
                         return Err(crate::vm::errors::simple_exception(
                             "ArgumentError",
@@ -56,16 +57,16 @@ impl VirtualMachine {
                             _position,
                         ));
                     }
-                    Some(Object::Int(seconds)) => Some(*seconds as f64),
-                    Some(Object::Float(seconds)) => Some(*seconds),
+                    Some(View::Int(seconds)) => Some(seconds as f64),
+                    Some(View::Float(seconds)) => Some(seconds),
                     Some(other) => {
                         return Err(crate::vm::errors::simple_exception(
                             "TypeError",
                             &format!(
                                 "no implicit conversion of {} into Float",
                                 unconvertible_wording(
-                                    other,
-                                    self.builtins().class_of(other).name()
+                                    &other.to_object(),
+                                    self.builtins().class_of(&other.to_object()).name()
                                 )
                             ),
                             _position,
@@ -98,8 +99,8 @@ impl VirtualMachine {
                         // it ends the wait, which is how a producer learns it
                         // is done.
                         if matches!(
-                            inst.borrow().get_var("__queue_closed"),
-                            Some(Object::Bool(true))
+                            inst.borrow().get_var("__queue_closed").view(),
+                            Some(View::Bool(true))
                         ) {
                             if counted {
                                 let waiting = (queue_waiting_count(&inst) - 1).max(0);
@@ -160,9 +161,9 @@ impl VirtualMachine {
                 let (positional, keywords) = queue_keyword_arguments(arguments);
                 let asked_now = positional
                     .first()
-                    .is_some_and(|given| !matches!(given, Object::Nil | Object::Bool(false)));
-                let limit = match keywords.get("timeout") {
-                    None | Some(Object::Nil) => None,
+                    .is_some_and(|given| !matches!(given.view(), View::Nil | View::Bool(false)));
+                let limit = match keywords.get("timeout").view() {
+                    None | Some(View::Nil) => None,
                     Some(_) if asked_now => {
                         return Err(crate::vm::errors::simple_exception(
                             "ArgumentError",
@@ -170,16 +171,16 @@ impl VirtualMachine {
                             _position,
                         ));
                     }
-                    Some(Object::Int(seconds)) => Some(*seconds as f64),
-                    Some(Object::Float(seconds)) => Some(*seconds),
+                    Some(View::Int(seconds)) => Some(seconds as f64),
+                    Some(View::Float(seconds)) => Some(seconds),
                     Some(other) => {
                         return Err(crate::vm::errors::simple_exception(
                             "TypeError",
                             &format!(
                                 "no implicit conversion of {} into Float",
                                 unconvertible_wording(
-                                    other,
-                                    self.builtins().class_of(other).name()
+                                    &other.to_object(),
+                                    self.builtins().class_of(&other.to_object()).name()
                                 )
                             ),
                             _position,
@@ -204,8 +205,8 @@ impl VirtualMachine {
                     let timeout = limit.map_or(Object::Nil, Object::Float);
                     while items_arr.borrow().is_empty()
                         && !matches!(
-                            inst.borrow().get_var("__queue_closed"),
-                            Some(Object::Bool(true))
+                            inst.borrow().get_var("__queue_closed").view(),
+                            Some(View::Bool(true))
                         )
                     {
                         self.scheduler_block(
@@ -240,8 +241,8 @@ impl VirtualMachine {
                 let mut last_round = None;
                 while items_arr.borrow().is_empty()
                     && !matches!(
-                        inst.borrow().get_var("__queue_closed"),
-                        Some(Object::Bool(true))
+                        inst.borrow().get_var("__queue_closed").view(),
+                        Some(View::Bool(true))
                     )
                     && deadline.is_none_or(|deadline| std::time::Instant::now() < deadline)
                 {
@@ -320,8 +321,8 @@ impl VirtualMachine {
                 Ok(Some(receiver.clone()))
             }
             "closed?" => Ok(Some(Object::Bool(matches!(
-                inst.borrow().get_var("__queue_closed"),
-                Some(Object::Bool(true))
+                inst.borrow().get_var("__queue_closed").view(),
+                Some(View::Bool(true))
             )))),
             // A queue carries state its own methods change, so Ruby refuses to
             // freeze one at all rather than leaving a half-usable object.
@@ -341,7 +342,7 @@ fn queue_keyword_arguments(
     arguments: &[Object],
 ) -> (Vec<Object>, std::collections::HashMap<String, Object>) {
     let mut keywords = std::collections::HashMap::new();
-    if let Some(Object::Dict(dict_rc)) = arguments.last() {
+    if let Some(View::Dict(dict_rc)) = arguments.last().view() {
         let dict = dict_rc.borrow();
         if dict.contains_key("__MX_KWARGS__") {
             for (key, value) in dict.iter() {
@@ -361,8 +362,8 @@ fn queue_keyword_arguments(
 
 /// How many are waiting on a queue for something to be put there.
 fn queue_waiting_count(inst: &Rc<std::cell::RefCell<crate::object::Instance>>) -> i64 {
-    match inst.borrow().get_var("__queue_waiting") {
-        Some(Object::Int(held)) => *held,
+    match inst.borrow().get_var("__queue_waiting").view() {
+        Some(View::Int(held)) => held,
         _ => 0,
     }
 }

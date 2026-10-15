@@ -4,6 +4,7 @@
 use metorex::ast::{Expression, MatchCase, MatchPattern, Statement};
 use metorex::lexer::Position;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::vm::VirtualMachine;
 
 /// Create a Position at line 1, column 1
@@ -350,7 +351,7 @@ fn test_match_array_with_rest() {
     assert!(result.is_ok());
 
     // rest should be [2, 3, 4, 5]
-    if let Some(Object::Array(array_rc)) = result.unwrap() {
+    if let Some(View::Array(array_rc)) = result.unwrap().view() {
         let array = array_rc.borrow();
         assert_eq!(array.len(), 4);
         assert_eq!(array[0], Object::Int(2));
@@ -416,7 +417,7 @@ fn test_match_array_rest_middle() {
     assert!(result.is_ok());
 
     // middle should be [2, 3, 4]
-    if let Some(Object::Array(array_rc)) = result.unwrap() {
+    if let Some(View::Array(array_rc)) = result.unwrap().view() {
         let array = array_rc.borrow();
         assert_eq!(array.len(), 3);
         assert_eq!(array[0], Object::Int(2));
@@ -817,7 +818,7 @@ fn test_match_mixed_array_patterns() {
 
     let result = vm.execute_program(&[match_stmt]);
     assert!(result.is_ok());
-    if let Some(Object::String(s)) = result.unwrap() {
+    if let Some(View::String(s)) = result.unwrap().view() {
         assert_eq!(s.as_ref(), "hello");
     } else {
         panic!("Expected string result");

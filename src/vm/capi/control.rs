@@ -10,6 +10,7 @@ use super::{ERROR_INFO, called_from, called_with_block};
 use super::{interpreter, raise, running_method};
 use crate::error::MetorexError;
 use crate::object::Object;
+use crate::object::View;
 use std::cell::RefCell;
 use std::ffi::{CStr, c_char};
 
@@ -152,7 +153,7 @@ pub extern "C-unwind" fn rb_metorex_rescue2(
     let classes = super::handles::objects_from(i64::from(count), classes);
     rescuing(body, data, rescue, rescue_data, |exception| {
         classes.iter().any(|class| {
-            if !matches!(class, Object::Class(_) | Object::Module(_)) {
+            if !matches!(class.view(), View::Class(_) | View::Module(_)) {
                 raise(crate::vm::errors::simple_exception(
                     "TypeError",
                     "class or module required",
@@ -266,9 +267,9 @@ pub extern "C-unwind" fn rb_need_block() {
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_block_lambda() -> Value {
     let block = super::utilities::rb_block_proc();
-    match to_object(block) {
-        Object::Block(held) if !held.is_lambda && !super::block_from_ampersand() => {
-            let mut as_lambda = (*held).clone();
+    match to_object(block).view() {
+        View::Block(held) if !held.is_lambda && !super::block_from_ampersand() => {
+            let mut as_lambda = (**held).clone();
             as_lambda.is_lambda = true;
             to_value(&Object::Block(std::rc::Rc::new(as_lambda)))
         }

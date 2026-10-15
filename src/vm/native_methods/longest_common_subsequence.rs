@@ -5,6 +5,7 @@
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 use crate::vm::errors::*;
 use std::collections::HashMap;
@@ -122,14 +123,14 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         let lines = |argument: Option<&Object>| -> Option<Vec<String>> {
-            let Some(Object::Array(elements)) = argument else {
+            let Some(View::Array(elements)) = argument.view() else {
                 return None;
             };
             elements
                 .borrow()
                 .iter()
-                .map(|element| match element {
-                    Object::String(text) => Some(text.as_str().to_string()),
+                .map(|element| match element.view() {
+                    View::String(text) => Some(text.as_str().to_string()),
                     _ => None,
                 })
                 .collect()

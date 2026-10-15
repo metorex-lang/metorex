@@ -1,6 +1,7 @@
 // The methods a Complex answers, and the class methods that build one.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// Execute native methods for the Complex class.
@@ -87,7 +88,7 @@ impl VirtualMachine {
                 };
                 // Text reads as a number only where `Complex()` parses it,
                 // never as an operand of the arithmetic.
-                if matches!(other, Object::String(_)) {
+                if matches!(other.view(), View::String(_)) {
                     return Err(crate::vm::errors::simple_exception(
                         "TypeError",
                         "String can't be coerced into Complex",
@@ -96,7 +97,7 @@ impl VirtualMachine {
                 }
                 // A number written in Ruby says whether it stands on the
                 // real line, which decides how it joins the arithmetic.
-                if matches!(other, Object::Instance(_))
+                if matches!(other.view(), View::Instance(_))
                     && complex_parts(other).is_none()
                     && crate::vm::native_methods::rational_methods::rational_parts(other).is_none()
                     && self.value_is_numeric(other)
@@ -139,7 +140,7 @@ impl VirtualMachine {
                             vec![real.clone()],
                             position,
                         )?;
-                        if let Object::Array(parts) = &pair {
+                        if let View::Array(parts) = pair.view() {
                             let parts = parts.borrow().clone();
                             if parts.len() == 2 {
                                 let joined = self.send_to_object(
@@ -160,7 +161,7 @@ impl VirtualMachine {
                             vec![receiver.clone()],
                             position,
                         )?;
-                        if let Object::Array(parts) = &pair {
+                        if let View::Array(parts) = pair.view() {
                             let parts = parts.borrow().clone();
                             if parts.len() == 2 {
                                 return self
@@ -188,7 +189,7 @@ impl VirtualMachine {
                         vec![receiver.clone()],
                         position,
                     )?;
-                    if let Object::Array(parts) = &pair {
+                    if let View::Array(parts) = pair.view() {
                         let parts = parts.borrow().clone();
                         if parts.len() == 2 {
                             return self
@@ -212,7 +213,7 @@ impl VirtualMachine {
                 };
                 // A String spells out a number for `Complex()` but is not one
                 // to divide by.
-                if matches!(other, Object::String(_))
+                if matches!(other.view(), View::String(_))
                     || (!self.is_real_operand(other) && complex_parts(other).is_none())
                 {
                     return Err(method_argument_type_error(
@@ -252,7 +253,7 @@ impl VirtualMachine {
                 };
                 // Text reads as a number only where `Complex()` parses it,
                 // never as an operand of the arithmetic.
-                if matches!(other, Object::String(_)) {
+                if matches!(other.view(), View::String(_)) {
                     return Err(crate::vm::errors::simple_exception(
                         "TypeError",
                         "String can't be coerced into Complex",
@@ -266,7 +267,8 @@ impl VirtualMachine {
             "abs" | "magnitude" => {
                 let real = self.part_to_float(&real, position)?;
                 let imaginary = self.part_to_float(&imaginary, position)?;
-                let (Object::Float(real), Object::Float(imaginary)) = (real, imaginary) else {
+                let (View::Float(real), View::Float(imaginary)) = (real.view(), imaginary.view())
+                else {
                     unreachable!("both parts were converted to Floats")
                 };
                 Ok(Some(Object::Float(real.hypot(imaginary))))
@@ -282,7 +284,8 @@ impl VirtualMachine {
             "arg" | "angle" | "phase" => {
                 let real = self.part_to_float(&real, position)?;
                 let imaginary = self.part_to_float(&imaginary, position)?;
-                let (Object::Float(real), Object::Float(imaginary)) = (real, imaginary) else {
+                let (View::Float(real), View::Float(imaginary)) = (real.view(), imaginary.view())
+                else {
                     unreachable!("both parts were converted to Floats")
                 };
                 Ok(Some(Object::Float(imaginary.atan2(real))))
@@ -384,7 +387,7 @@ impl VirtualMachine {
                 // The fraction conversions take it either way.
                 let exact_only = matches!(method_name, "to_f" | "to_i" | "to_int" | "rationalize");
 
-                let empty = !(exact_only && matches!(imaginary, Object::Float(_)))
+                let empty = !(exact_only && matches!(imaginary.view(), View::Float(_)))
                     && self
                         .send_to_object(imaginary.clone(), "==", vec![Object::Int(0)], position)?
                         .is_truthy();
@@ -421,8 +424,8 @@ impl VirtualMachine {
                     )));
                 }
                 // `infinite?` answers 1 when either part runs off the end.
-                Ok(Some(match (&real_answer, &imaginary_answer) {
-                    (Object::Nil, Object::Nil) => Object::Nil,
+                Ok(Some(match (real_answer.view(), imaginary_answer.view()) {
+                    (View::Nil, View::Nil) => Object::Nil,
                     _ => Object::Int(1),
                 }))
             }
@@ -438,11 +441,13 @@ impl VirtualMachine {
                 // `coerce` takes a real number to pair with, so a String is
                 // refused even though `Complex("2")` reads one, and so is a
                 // Numeric that says it is not real.
-                let real_number = !matches!(other, Object::String(_))
+                let real_number = !matches!(other.view(), View::String(_))
                     && self.is_real_operand(other)
                     && !matches!(
-                        self.send_to_object(other.clone(), "real?", vec![], position),
-                        Ok(Object::Bool(false))
+                        self.send_to_object(other.clone(), "real?", vec![], position)
+                            .as_ref()
+                            .map(Object::view),
+                        Ok(View::Bool(false))
                     );
                 if !real_number {
                     let message = format!(

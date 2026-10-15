@@ -1,12 +1,30 @@
-//! Metorex's value as it is now: the `Object` enum. An object's slots are an
-//! `Object::Array`, a reference-counted vector, which is the same body the
-//! tagged representation gives an object, so the two differ only in the
-//! value.
+//! Metorex's value before it took the tagged value: the `Object` enum. An
+//! object's slots are an `Object::Array`, a reference-counted vector, which
+//! is the same body the tagged representation gives an object, so the two
+//! differ only in the value.
 
 use crate::machine::Representation;
-use metorex::object::Object;
 use std::cell::RefCell;
 use std::rc::Rc;
+
+/// The variants of Metorex's `Object` enum the kernels use, and `Range`,
+/// whose two boxes, flag, and mark gave the enum its 32 bytes.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Object {
+    Nil,
+    Bool(bool),
+    Int(i64),
+    BigInt(Rc<num_bigint::BigInt>),
+    Float(f64),
+    Array(Rc<RefCell<Vec<Object>>>),
+    #[allow(dead_code)]
+    Range {
+        start: Box<Object>,
+        end: Box<Object>,
+        exclusive: bool,
+        mark: Rc<()>,
+    },
+}
 
 pub struct EnumValue;
 

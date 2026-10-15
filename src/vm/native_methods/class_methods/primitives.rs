@@ -1,6 +1,7 @@
 // Class methods answered by the interpreter itself.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The class methods that reach straight into the interpreter: a socket
@@ -70,21 +71,24 @@ impl VirtualMachine {
         // the next draw starts at.
         if class_rc.name() == "Random"
             && method_name == "__tempered_bytes__"
-            && let (Some(Object::Array(state)), Some(Object::Int(index)), Some(Object::Int(count))) =
-                (arguments.first(), arguments.get(1), arguments.get(2))
+            && let (Some(View::Array(state)), Some(View::Int(index)), Some(View::Int(count))) = (
+                arguments.first().view(),
+                arguments.get(1).view(),
+                arguments.get(2).view(),
+            )
         {
             let mut words: Vec<u32> = state
                 .borrow()
                 .iter()
-                .map(|word| match word {
-                    Object::Int(held) => *held as u32,
+                .map(|word| match word.view() {
+                    View::Int(held) => held as u32,
                     _ => 0,
                 })
                 .collect();
             let (bytes, next) = crate::vm::native_methods::tempered_bytes(
                 &mut words,
-                *index as usize,
-                *count as usize,
+                index as usize,
+                count as usize,
             );
             *state.borrow_mut() = words
                 .into_iter()
@@ -102,12 +106,12 @@ impl VirtualMachine {
         // interpreter's own writer, which is what keeps a program's output in
         // the order it wrote it whichever route each piece took.
         if class_rc.name() == "IO" && method_name == "__write_standard__" {
-            let named = match arguments.first() {
-                Some(Object::String(held)) => held.as_str().to_string(),
+            let named = match arguments.first().view() {
+                Some(View::String(held)) => held.as_str().to_string(),
                 _ => String::new(),
             };
-            let text = match arguments.get(1) {
-                Some(Object::String(held)) => held.as_str().to_string(),
+            let text = match arguments.get(1).view() {
+                Some(View::String(held)) => held.as_str().to_string(),
                 other => other.map(|held| held.to_string()).unwrap_or_default(),
             };
             if let Err(problem) =

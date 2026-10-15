@@ -1,6 +1,7 @@
 // The run of elements a subscript or an arithmetic sequence names.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The run of elements a `slice!` subscript names: where it starts, how
@@ -15,12 +16,13 @@ impl VirtualMachine {
         let total = size as i64;
         match arguments.len() {
             1 => {
-                let Some(Object::Range {
+                let range = crate::vm::native_methods::as_range(&arguments[0]);
+                let Some(View::Range {
                     start,
                     end,
                     exclusive,
                     ..
-                }) = crate::vm::native_methods::as_range(&arguments[0])
+                }) = range.view()
                 else {
                     let index = self.coerce_integer_argument(&arguments[0], position)?;
                     let at = i64::try_from(&index).unwrap_or(i64::MAX);
@@ -30,10 +32,10 @@ impl VirtualMachine {
                     }
                     return Ok(Some((at as usize, 1, true)));
                 };
-                let opening = match start.as_ref() {
-                    Object::Nil => 0,
-                    held => {
-                        let asked = self.coerce_integer_argument(held, position)?;
+                let opening = match start.view() {
+                    View::Nil => 0,
+                    _ => {
+                        let asked = self.coerce_integer_argument(start, position)?;
                         let asked = i64::try_from(&asked).unwrap_or(i64::MAX);
                         if asked < 0 { asked + total } else { asked }
                     }
@@ -41,10 +43,10 @@ impl VirtualMachine {
                 if opening < 0 || opening > total {
                     return Ok(None);
                 }
-                let closing = match end.as_ref() {
-                    Object::Nil => total - 1,
-                    held => {
-                        let asked = self.coerce_integer_argument(held, position)?;
+                let closing = match end.view() {
+                    View::Nil => total - 1,
+                    _ => {
+                        let asked = self.coerce_integer_argument(end, position)?;
                         let asked = i64::try_from(&asked).unwrap_or(i64::MAX);
                         let placed = if asked < 0 { asked + total } else { asked };
                         if exclusive { placed - 1 } else { placed }
@@ -89,9 +91,12 @@ impl VirtualMachine {
         if !self.is_arithmetic_sequence(value) {
             return Ok(None);
         }
-        let step = match self.send_to_object(value.clone(), "step", vec![], position)? {
-            Object::Int(held) => held,
-            other => self.machine_index(&other, 0, position)?,
+        let step = match self
+            .send_to_object(value.clone(), "step", vec![], position)?
+            .view()
+        {
+            View::Int(held) => held,
+            other => self.machine_index(&other.to_object(), 0, position)?,
         };
         if step == 0 {
             return Err(crate::vm::errors::simple_exception(
@@ -103,18 +108,19 @@ impl VirtualMachine {
         let opening = self.send_to_object(value.clone(), "begin", vec![], position)?;
         let closing = self.send_to_object(value.clone(), "end", vec![], position)?;
         let excluded = matches!(
-            self.send_to_object(value.clone(), "exclude_end?", vec![], position)?,
-            Object::Bool(true)
+            self.send_to_object(value.clone(), "exclude_end?", vec![], position)?
+                .view(),
+            View::Bool(true)
         );
         // A sequence stepping by one reads exactly the way the range it was
         // built from reads, down to answering nil for a start past the end.
         if step == 1 {
-            let span = Object::Range {
-                start: Box::new(opening),
-                end: Box::new(closing),
-                exclusive: excluded,
-                mark: std::rc::Rc::new(()),
-            };
+            let span = Object::Range(
+                Box::new(opening),
+                Box::new(closing),
+                excluded,
+                std::rc::Rc::new(()),
+            );
             let (start, width) = self.range_bounds(&span, total, position)?;
             if start < 0 || start > total {
                 return Ok(Some(Object::Nil));
@@ -126,10 +132,10 @@ impl VirtualMachine {
             )));
         }
         let resolved = |vm: &mut Self, held: &Object| -> Result<Option<i64>, MetorexError> {
-            match held {
-                Object::Nil => Ok(None),
-                other => {
-                    let counted = vm.machine_index(other, 0, position)?;
+            match held.view() {
+                View::Nil => Ok(None),
+                _ => {
+                    let counted = vm.machine_index(held, 0, position)?;
                     Ok(Some(if counted < 0 {
                         counted + total
                     } else {
@@ -190,7 +196,7 @@ impl VirtualMachine {
     /// Whether a value is an arithmetic sequence, which names a run of the
     /// array with a gap between the elements it takes.
     fn is_arithmetic_sequence(&self, value: &Object) -> bool {
-        let Object::Instance(instance) = value else {
+        let View::Instance(instance) = value.view() else {
             return false;
         };
         let mut cursor = Some(Rc::clone(&instance.borrow().class));

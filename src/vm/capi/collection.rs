@@ -7,6 +7,7 @@
 use super::calls::{call, top_level_module};
 use super::handles::{Value, to_object, to_value};
 use crate::object::Object;
+use crate::object::View;
 use std::cell::RefCell;
 
 fn garbage_collector(name: &str, arguments: Vec<Object>) -> Value {
@@ -127,8 +128,8 @@ pub extern "C-unwind" fn rb_gc_start() -> Value {
 
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_gc_count() -> usize {
-    match to_object(garbage_collector("count", Vec::new())) {
-        Object::Int(count) => count as usize,
+    match to_object(garbage_collector("count", Vec::new())).view() {
+        View::Int(count) => count as usize,
         _ => 0,
     }
 }

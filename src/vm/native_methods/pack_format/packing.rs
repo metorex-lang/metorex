@@ -1,6 +1,7 @@
 // `Array#pack`: writing the items out as the directives describe them.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// `Array#pack` — write the items out as the directives describe them.
@@ -27,11 +28,11 @@ impl VirtualMachine {
                 // A run of bytes written from one string. 'a' pads with
                 // nulls, 'A' with spaces, and 'Z' adds a null of its own.
                 'a' | 'A' | 'Z' => {
-                    let held = match items.get(taken) {
-                        Some(Object::String(text)) => text.as_str().to_string(),
+                    let held = match items.get(taken).view() {
+                        Some(View::String(text)) => text.as_str().to_string(),
                         // nil packs as nothing, which the padding then fills.
-                        Some(Object::Nil) => String::new(),
-                        Some(other) => self.coerce_pack_string(other, position)?,
+                        Some(View::Nil) => String::new(),
+                        Some(other) => self.coerce_pack_string(&other.to_object(), position)?,
                         None => return Err(too_few_items(position)),
                     };
                     taken += 1;
@@ -49,10 +50,10 @@ impl VirtualMachine {
                 // Bits and nibbles, written from a string of '0'/'1' or of
                 // hexadecimal digits.
                 'b' | 'B' | 'h' | 'H' => {
-                    let held = match items.get(taken) {
-                        Some(Object::String(text)) => text.as_str().to_string(),
-                        Some(Object::Nil) => String::new(),
-                        Some(other) => self.coerce_pack_string(other, position)?,
+                    let held = match items.get(taken).view() {
+                        Some(View::String(text)) => text.as_str().to_string(),
+                        Some(View::Nil) => String::new(),
+                        Some(other) => self.coerce_pack_string(&other.to_object(), position)?,
                         None => return Err(too_few_items(position)),
                     };
                     taken += 1;
@@ -250,17 +251,20 @@ impl VirtualMachine {
                 }
                 // Uuencoding, written in lines of the length the count names.
                 'u' | 'm' | 'M' => {
-                    let held = match items.get(taken) {
-                        Some(Object::String(text)) => text.as_str().to_string(),
+                    let held = match items.get(taken).view() {
+                        Some(View::String(text)) => text.as_str().to_string(),
                         // Quoted-printable writes whatever an object says it
                         // is, rather than asking it for a string of its own.
                         Some(other) if directive.code == 'M' => {
-                            match self.send_to_object(other.clone(), "to_s", vec![], position)? {
-                                Object::String(text) => text.as_str().to_string(),
+                            match self
+                                .send_to_object(other.to_object(), "to_s", vec![], position)?
+                                .view()
+                            {
+                                View::String(text) => text.as_str().to_string(),
                                 spelled => spelled.to_string(),
                             }
                         }
-                        Some(other) => self.coerce_pack_string(other, position)?,
+                        Some(other) => self.coerce_pack_string(&other.to_object(), position)?,
                         None => return Err(too_few_items(position)),
                     };
                     taken += 1;
@@ -279,12 +283,12 @@ impl VirtualMachine {
                 // holds. Metorex hands out a number of its own for each one
                 // and keeps the string under it, so `unpack` reads it back.
                 'P' | 'p' => {
-                    let held = match items.get(taken) {
-                        Some(Object::Nil) => None,
-                        Some(other @ Object::String(_)) => Some(other.clone()),
-                        Some(other) => {
-                            Some(Object::string(self.coerce_pack_string(other, position)?))
-                        }
+                    let held = match items.get(taken).view() {
+                        Some(View::Nil) => None,
+                        Some(other @ View::String(_)) => Some(other.to_object()),
+                        Some(other) => Some(Object::string(
+                            self.coerce_pack_string(&other.to_object(), position)?,
+                        )),
                         None => return Err(too_few_items(position)),
                     };
                     taken += 1;
@@ -328,10 +332,10 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<i128, MetorexError> {
-        match value {
-            Object::Int(number) => return Ok(*number as i128),
-            Object::Float(number) => return Ok(*number as i128),
-            Object::BigInt(number) => {
+        match value.view() {
+            View::Int(number) => return Ok(number as i128),
+            View::Float(number) => return Ok(number as i128),
+            View::BigInt(number) => {
                 // Only the low bytes are written, so a number too wide for
                 // the directive is taken modulo what fits.
                 let wrapped: num_bigint::BigInt =
@@ -341,8 +345,9 @@ impl VirtualMachine {
             _ => {}
         }
         if self.responds_to(value, "to_int")
-            && let Object::Int(number) =
-                self.send_to_object(value.clone(), "to_int", vec![], position)?
+            && let View::Int(number) = self
+                .send_to_object(value.clone(), "to_int", vec![], position)?
+                .view()
         {
             return Ok(number as i128);
         }
@@ -363,9 +368,9 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<f64, MetorexError> {
-        match value {
-            Object::Float(number) => return Ok(*number),
-            Object::Int(number) => return Ok(*number as f64),
+        match value.view() {
+            View::Float(number) => return Ok(number),
+            View::Int(number) => return Ok(number as f64),
             _ => {}
         }
         // Any other number converts through `to_f`, which is how a Rational
@@ -375,16 +380,18 @@ impl VirtualMachine {
         if crate::vm::method_invocation::descends_from(&class, "Numeric") {
             // A number that has no `to_f`, or one whose `to_f` answers
             // something else, is refused the same way a non-number is.
-            if let Ok(Object::Float(number)) =
-                self.send_to_object(value.clone(), "to_f", vec![], position)
+            if let Ok(View::Float(number)) = self
+                .send_to_object(value.clone(), "to_f", vec![], position)
+                .as_ref()
+                .map(Object::view)
             {
                 return Ok(number);
             }
         }
-        let named = match value {
-            Object::Nil => "nil",
-            Object::Bool(true) => "true",
-            Object::Bool(false) => "false",
+        let named = match value.view() {
+            View::Nil => "nil",
+            View::Bool(true) => "true",
+            View::Bool(false) => "false",
             _ => class.name(),
         };
         let message = format!("can't convert {named} into Float");
@@ -402,8 +409,9 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<String, MetorexError> {
         if self.responds_to(value, "to_str")
-            && let Object::String(text) =
-                self.send_to_object(value.clone(), "to_str", vec![], position)?
+            && let View::String(text) = self
+                .send_to_object(value.clone(), "to_str", vec![], position)?
+                .view()
         {
             return Ok(text.as_str().to_string());
         }

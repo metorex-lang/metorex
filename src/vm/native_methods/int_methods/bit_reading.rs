@@ -1,6 +1,7 @@
 // The bits `Integer#[]` names.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The bits `Integer#[]` names: one by position, a run from a position
@@ -13,23 +14,24 @@ impl VirtualMachine {
     ) -> Result<Object, MetorexError> {
         match arguments.len() {
             1 => {
-                let Some(Object::Range {
+                let range = crate::vm::native_methods::as_range(&arguments[0]);
+                let Some(View::Range {
                     start,
                     end,
                     exclusive,
                     ..
-                }) = crate::vm::native_methods::as_range(&arguments[0])
+                }) = range.view()
                 else {
                     let index = self.bit_position_argument(&arguments[0], position)?;
                     return Ok(from_big(single_bit(value, &index)));
                 };
-                let opening = match start.as_ref() {
-                    Object::Nil => None,
-                    held => Some(self.bit_position_argument(held, position)?),
+                let opening = match start.view() {
+                    View::Nil => None,
+                    _ => Some(self.bit_position_argument(start, position)?),
                 };
-                let closing = match end.as_ref() {
-                    Object::Nil => None,
-                    held => Some(self.bit_position_argument(held, position)?),
+                let closing = match end.view() {
+                    View::Nil => None,
+                    _ => Some(self.bit_position_argument(end, position)?),
                 };
                 match (opening, closing) {
                     // A range with no lower bound reaches every bit below the
@@ -81,9 +83,9 @@ impl VirtualMachine {
         argument: &Object,
         position: Position,
     ) -> Result<num_bigint::BigInt, MetorexError> {
-        if let Object::Float(value) = argument {
+        if let View::Float(value) = argument.view() {
             if value.is_infinite() {
-                let message = format!("{}Infinity", if *value < 0.0 { "-" } else { "" });
+                let message = format!("{}Infinity", if value < 0.0 { "-" } else { "" });
                 return Err(crate::vm::errors::simple_exception(
                     "FloatDomainError",
                     &message,

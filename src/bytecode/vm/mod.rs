@@ -10,6 +10,7 @@ mod natives;
 pub mod types;
 mod upvalues;
 
+use crate::object::View;
 pub use types::{CallFrame, ClosureObj, UpvalueObj};
 
 use std::cell::RefCell;
@@ -180,8 +181,8 @@ impl BytecodeVm {
 
     pub(super) fn read_string_constant(&self, idx: usize) -> Result<String, MetorexError> {
         let constant = self.current_frame()?.chunk().get_constant(idx);
-        match constant {
-            Object::String(s) => Ok(s.to_string()),
+        match constant.view() {
+            View::String(s) => Ok(s.to_string()),
             _ => Err(self.runtime_err("Expected string constant")),
         }
     }

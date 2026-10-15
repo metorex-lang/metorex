@@ -10,6 +10,7 @@ use super::numbers::long_from;
 use super::symbols::symbol_name;
 use super::{called_from, interpreter, or_raise, raise};
 use crate::object::Object;
+use crate::object::View;
 
 fn error(class: &str, message: String) -> ! {
     raise(crate::vm::errors::simple_exception(
@@ -22,11 +23,11 @@ fn error(class: &str, message: String) -> ! {
 /// How an error names the other side of a comparison or coercion: an
 /// immediate value or a Float by its `inspect`, anything else by its class.
 fn subject(object: Object) -> String {
-    match object {
-        Object::Nil | Object::Bool(_) | Object::Int(_) | Object::Symbol(_) | Object::Float(_) => {
+    match object.view() {
+        View::Nil | View::Bool(_) | View::Int(_) | View::Symbol(_) | View::Float(_) => {
             call(object, "inspect", Vec::new()).to_string()
         }
-        other => class_name_of(other),
+        _ => class_name_of(object.clone()),
     }
 }
 
@@ -56,19 +57,19 @@ pub extern "C-unwind" fn rb_num_zerodiv() -> ! {
 /// own sign, or what `> 0` and `< 0` say of anything else.
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_cmpint(answer: Value, first: Value, second: Value) -> i32 {
-    match to_object(answer) {
-        Object::Nil => comparison_error(first, second, Some("comparator returned nil")),
-        Object::Int(number) => number.signum() as i32,
-        Object::BigInt(number) => match number.sign() {
+    match to_object(answer).view() {
+        View::Nil => comparison_error(first, second, Some("comparator returned nil")),
+        View::Int(number) => number.signum() as i32,
+        View::BigInt(number) => match number.sign() {
             num_bigint::Sign::Minus => -1,
             num_bigint::Sign::NoSign => 0,
             num_bigint::Sign::Plus => 1,
         },
         other => {
-            if call(other.clone(), ">", vec![Object::Int(0)]).is_truthy() {
+            if call(other.to_object(), ">", vec![Object::Int(0)]).is_truthy() {
                 return 1;
             }
-            if call(other, "<", vec![Object::Int(0)]).is_truthy() {
+            if call(other.to_object(), "<", vec![Object::Int(0)]).is_truthy() {
                 return -1;
             }
             0
@@ -94,7 +95,7 @@ fn coerced(first: Object, second: Object, strict: bool) -> Option<(Object, Objec
         return None;
     }
     let answer = call(second, "coerce", vec![first]);
-    if !strict && matches!(answer, Object::Nil) {
+    if !strict && matches!(answer.view(), View::Nil) {
         return None;
     }
     match array_of(answer) {
@@ -125,7 +126,7 @@ pub extern "C-unwind" fn rb_num_coerce_relop(first: Value, second: Value, name: 
         comparison_error(first, second, Some("coercion was not possible"))
     };
     let answer = call(coerced_first, &symbol_name(name), vec![coerced_second]);
-    if matches!(answer, Object::Nil) {
+    if matches!(answer.view(), View::Nil) {
         comparison_error(first, second, Some("comparator returned nil"));
     }
     to_value(&answer)
@@ -156,8 +157,8 @@ pub extern "C-unwind" fn rb_num2short(value: Value) -> i16 {
 /// `NUM2INT` reads from anything else.
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_num2char(value: Value) -> i8 {
-    if let Object::String(text) = to_object(value) {
-        let bytes = crate::vm::native_methods::string_methods::binary_bytes(&text);
+    if let View::String(text) = to_object(value).view() {
+        let bytes = crate::vm::native_methods::string_methods::binary_bytes(text);
         if let Some(first) = bytes.first() {
             return *first as i8;
         }

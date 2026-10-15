@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -435,8 +436,8 @@ fn string_plus_string_concatenates() {
 #[test]
 fn array_plus_array_concatenates() {
     let result = run("[1, 2] + [3, 4]");
-    match result {
-        Some(Object::Array(arr)) => assert_eq!(arr.borrow().len(), 4),
+    match result.view() {
+        Some(View::Array(arr)) => assert_eq!(arr.borrow().len(), 4),
         other => panic!("expected array, got {:?}", other),
     }
 }
@@ -483,15 +484,15 @@ fn int_div_non_exact_returns_float() {
     let result = run("5 / 2");
     // May return Int(2) (truncating) or Float(2.5) (exact).
     assert!(matches!(
-        result,
-        Some(Object::Int(2)) | Some(Object::Float(_))
+        result.view(),
+        Some(View::Int(2)) | Some(View::Float(_))
     ));
 }
 
 #[test]
 fn int_power_negative_returns_float() {
     let result = run("2 ** -1");
-    assert!(matches!(result, Some(Object::Float(_))));
+    assert!(matches!(result.view(), Some(View::Float(_))));
 }
 
 #[test]
@@ -503,8 +504,8 @@ fn int_power_positive_returns_int() {
 #[test]
 fn float_power() {
     let result = run("2.0 ** 3.0");
-    match result {
-        Some(Object::Float(f)) => assert_eq!(f, 8.0),
+    match result.view() {
+        Some(View::Float(f)) => assert_eq!(f, 8.0),
         other => panic!("expected float, got {:?}", other),
     }
 }
@@ -512,8 +513,8 @@ fn float_power() {
 #[test]
 fn mixed_float_int_division() {
     let result = run("10.0 / 4");
-    match result {
-        Some(Object::Float(f)) => assert_eq!(f, 2.5),
+    match result.view() {
+        Some(View::Float(f)) => assert_eq!(f, 2.5),
         other => panic!("expected float, got {:?}", other),
     }
 }
@@ -521,8 +522,8 @@ fn mixed_float_int_division() {
 #[test]
 fn mixed_int_float_division() {
     let result = run("10 / 4.0");
-    match result {
-        Some(Object::Float(f)) => assert_eq!(f, 2.5),
+    match result.view() {
+        Some(View::Float(f)) => assert_eq!(f, 2.5),
         other => panic!("expected float, got {:?}", other),
     }
 }
@@ -533,8 +534,8 @@ fn mixed_int_float_division() {
 fn string_format_modulo() {
     // Exercises line 60 (Modulo on String).
     let result = run(r#""%d apples" % 5"#);
-    match result {
-        Some(Object::String(s)) => assert!(s.as_str().contains("5")),
+    match result.view() {
+        Some(View::String(s)) => assert!(s.as_str().contains("5")),
         other => panic!("expected string, got {:?}", other),
     }
 }

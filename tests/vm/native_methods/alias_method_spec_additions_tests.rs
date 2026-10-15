@@ -24,6 +24,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -181,11 +182,11 @@ fn array_sort_by_orders_by_key() {
     let result = run(r#"
 ["banana", "fig", "apple"].sort_by { |s| s.length }
 "#);
-    match result {
-        Some(Object::Array(arr)) => {
+    match result.view() {
+        Some(View::Array(arr)) => {
             let v = arr.borrow();
             assert_eq!(v.len(), 3);
-            if let Object::String(s) = &v[0] {
+            if let View::String(s) = v[0].view() {
                 assert_eq!(**s, "fig");
             } else {
                 panic!("expected string");
@@ -209,8 +210,8 @@ fn array_sort_by_without_block_sorts_through_with_index() {
 #[test]
 fn integer_times_no_block_returns_enumerable_array() {
     let result = run("3.times.map { |i| i * 2 }");
-    match result {
-        Some(Object::Array(arr)) => {
+    match result.view() {
+        Some(View::Array(arr)) => {
             let v = arr.borrow();
             assert_eq!(v.len(), 3);
             assert_eq!(v[0], Object::Int(0));
@@ -678,8 +679,8 @@ fn file_join_flattens_array_of_strings() {
 fn file_expand_path_on_nonexistent_path_returns_input() {
     // canonicalize fails on nonexistent paths; we fall back to the input.
     let result = run(r#"File.expand_path("/this/path/does/not/exist/abc123")"#);
-    match result {
-        Some(Object::String(s)) => assert!(s.as_str().contains("abc123")),
+    match result.view() {
+        Some(View::String(s)) => assert!(s.as_str().contains("abc123")),
         _ => panic!("expected string"),
     }
 }

@@ -1,6 +1,7 @@
 // Every object the running program can still reach.
 
 use super::*;
+use crate::object::View;
 
 /// The names every object answers for itself, which a module keeping no
 /// account of its own names still answers truthfully.
@@ -51,30 +52,30 @@ pub(crate) fn gather_reachable(
     seen: &mut std::collections::HashSet<usize>,
     found: &mut Vec<Object>,
 ) {
-    let identity = match &object {
-        Object::String(held) => Rc::as_ptr(held) as usize,
-        Object::Array(held) => Rc::as_ptr(held) as usize,
-        Object::Dict(held) => Rc::as_ptr(held) as usize,
-        Object::Instance(held) => Rc::as_ptr(held) as usize,
-        Object::Class(held) | Object::Module(held) => Rc::as_ptr(held) as usize,
+    let identity = match object.view() {
+        View::String(held) => Rc::as_ptr(held) as usize,
+        View::Array(held) => Rc::as_ptr(held) as usize,
+        View::Dict(held) => Rc::as_ptr(held) as usize,
+        View::Instance(held) => Rc::as_ptr(held) as usize,
+        View::Class(held) | View::Module(held) => Rc::as_ptr(held) as usize,
         _ => 0,
     };
     if identity == 0 || !seen.insert(identity) {
         return;
     }
     found.push(object.clone());
-    match &object {
-        Object::Array(held) => {
+    match object.view() {
+        View::Array(held) => {
             for element in held.borrow().iter() {
                 gather_reachable(element.clone(), seen, found);
             }
         }
-        Object::Dict(held) => {
+        View::Dict(held) => {
             for (_, value) in held.borrow().iter() {
                 gather_reachable(value.clone(), seen, found);
             }
         }
-        Object::Instance(held) => {
+        View::Instance(held) => {
             let names: Vec<Object> = held.borrow().instance_vars.values().cloned().collect();
             for value in names {
                 gather_reachable(value, seen, found);

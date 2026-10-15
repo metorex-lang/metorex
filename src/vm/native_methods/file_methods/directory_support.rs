@@ -1,6 +1,7 @@
 // Reading a directory, and where a home directory sits.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The path an argument names, taking `to_path` from an object that
@@ -32,32 +33,33 @@ impl VirtualMachine {
         argument: &Object,
         position: Position,
     ) -> Result<String, MetorexError> {
-        match argument {
-            Object::String(path) => Ok(path_text(path)),
+        match argument.view() {
+            View::String(path) => Ok(path_text(path)),
             // A name is spelled by `to_path` where an object has one, and by
             // `to_str` otherwise. Only an object that answers neither is the
             // wrong kind of argument.
-            other => {
+            _ => {
                 for named in ["to_path", "to_str"] {
                     // A name written for the object itself is what counts
                     // here: a Kernel method of the same name would answer for
                     // everything and spell nothing.
                     if self
-                        .lookup_method(other, named)
+                        .lookup_method(argument, named)
                         .is_none_or(|(_, found)| found.is_undefined)
                     {
                         continue;
                     }
-                    if let Object::String(path) =
-                        self.send_to_object(other.clone(), named, vec![], position)?
+                    if let View::String(path) = self
+                        .send_to_object(argument.clone(), named, vec![], position)?
+                        .view()
                     {
-                        return Ok(path_text(&path));
+                        return Ok(path_text(path));
                     }
                 }
                 Err(method_argument_type_error(
                     method_name,
                     "String",
-                    other,
+                    argument,
                     position,
                 ))
             }
@@ -71,8 +73,8 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Option<String> {
-        let named = match arguments.last() {
-            Some(Object::Dict(options)) => options.borrow().get(":encoding").cloned(),
+        let named = match arguments.last().view() {
+            Some(View::Dict(options)) => options.borrow().get(":encoding").cloned(),
             _ => None,
         };
         // Without a keyword the caller works out the encoding from what the
@@ -106,8 +108,8 @@ impl VirtualMachine {
         // A name comes off the file system in the encoding the program reads
         // its surroundings in, unless it was told to read the directory in
         // one of its own.
-        let named_encoding = |name: &str| match self.globals().get(name) {
-            Some(Object::Class(held)) => Some(held.name().to_string()),
+        let named_encoding = |name: &str| match self.globals().get(name).view() {
+            Some(View::Class(held)) => Some(held.name().to_string()),
             _ => None,
         };
         let external = named_encoding("__Encoding_default_external")
@@ -144,8 +146,8 @@ impl VirtualMachine {
     /// A name the file system gave, tagged in the encoding the program reads
     /// file names in.
     pub(crate) fn filesystem_text(&self, text: String) -> Object {
-        let encoding = match self.globals().get("__Encoding_default_external") {
-            Some(Object::Class(held)) => held.name().to_string(),
+        let encoding = match self.globals().get("__Encoding_default_external").view() {
+            Some(View::Class(held)) => held.name().to_string(),
             _ => crate::object::string_value::DEFAULT_ENCODING.to_string(),
         };
         external_text(text, &encoding)

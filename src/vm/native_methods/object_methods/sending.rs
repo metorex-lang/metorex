@@ -1,6 +1,7 @@
 // Sending a message by name, and the blocks a call is handed.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Sending a message by name, and the blocks a call is handed.
@@ -15,7 +16,7 @@ impl VirtualMachine {
             // `a&.b` reaches here as a call on `a`. A nil receiver answers
             // nil without the named method running at all.
             crate::parser::SAFE_CALL => {
-                if matches!(receiver, Object::Nil) {
+                if matches!(receiver.view(), View::Nil) {
                     self.pending_block.take();
                     return Ok(Some(Object::Nil));
                 }
@@ -49,13 +50,13 @@ impl VirtualMachine {
                         })
                     });
                 }
-                let method = match &arguments[0] {
-                    Object::String(s) => s.as_str().to_string(),
-                    Object::Symbol(s) => s.as_str().to_string(),
-                    other => {
+                let method = match arguments[0].view() {
+                    View::String(s) => s.as_str().to_string(),
+                    View::Symbol(s) => s.as_str().to_string(),
+                    _ => {
                         let message = format!(
                             "{} is not a symbol nor a string",
-                            self.get_inspect_representation(other, position)?
+                            self.get_inspect_representation(&arguments[0], position)?
                         );
                         return self.with_call_frame(named, |vm| {
                             let raised = vm.add_stack_trace_to_exception(
@@ -97,7 +98,7 @@ impl VirtualMachine {
                             self.builtins().class_of(receiver).inspect_name()
                         );
                         let exception = Object::exception("NoMethodError", message.clone());
-                        if let Object::Exception(cell) = &exception {
+                        if let View::Exception(cell) = exception.view() {
                             cell.borrow_mut().name = Some(method.clone());
                         }
                         return Err(MetorexError::UncaughtException {
@@ -210,18 +211,19 @@ impl VirtualMachine {
             // A module included at the top level is included into Object, and
             // a method marked there is one of Object's.
             "include" | "ruby2_keywords" if self.is_the_main_object(receiver) => {
-                let Some(Object::Class(object_class)) = self.globals().get("Object") else {
+                let viewed = self.globals().get("Object");
+                let Some(View::Class(object_class)) = viewed.view() else {
                     return Ok(None);
                 };
-                self.call_class_methods(&object_class, method_name, arguments, position)
+                self.call_class_methods(object_class, method_name, arguments, position)
                     .map(|answered| Some(answered.unwrap_or(Object::Nil)))
             }
             // `using` is written on `main` alone, and Ruby permits it only at
             // the top level, which a class or module body is not.
             "using" if self.is_the_main_object(receiver) => {
                 let inside_body = matches!(
-                    self.environment().get("self"),
-                    Some(Object::Class(_) | Object::Module(_))
+                    self.environment().get("self").view(),
+                    Some(View::Class(_) | View::Module(_))
                 );
                 if inside_body {
                     let message = "main.using is permitted only at toplevel".to_string();

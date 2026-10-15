@@ -2,6 +2,7 @@
 // stands for.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Whether `elements` holds a value `eql?` to `wanted`, which is how Ruby
@@ -34,10 +35,10 @@ impl VirtualMachine {
         right: Object,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let (Object::Class(left_rc) | Object::Module(left_rc)) = &left else {
+        let (View::Class(left_rc) | View::Module(left_rc)) = left.view() else {
             unreachable!("caller checks the receiver is a class or module")
         };
-        let (Object::Class(right_rc) | Object::Module(right_rc)) = &right else {
+        let (View::Class(right_rc) | View::Module(right_rc)) = right.view() else {
             let msg = "compared with non class/module".to_string();
             return Err(MetorexError::UncaughtException {
                 exception: Object::exception("TypeError", msg.clone()),
@@ -83,21 +84,24 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<Option<Rc<std::cell::RefCell<Vec<Object>>>>, MetorexError> {
-        if let Object::Array(elements) = value {
+        if let View::Array(elements) = value.view() {
             return Ok(Some(Rc::clone(elements)));
         }
-        if let Some(Object::Array(elements)) =
-            crate::vm::native_methods::array_subclass_value(value)
+        if let Some(View::Array(elements)) =
+            crate::vm::native_methods::array_subclass_value(value).view()
         {
-            return Ok(Some(elements));
+            return Ok(Some(elements.clone()));
         }
         if !self.responds_to(value, "to_ary") {
             return Ok(None);
         }
         // An error raised inside `to_ary` belongs to the caller, so it travels
         // out rather than reading as an operand that is not an array.
-        match self.send_to_object(value.clone(), "to_ary", vec![], position)? {
-            Object::Array(elements) => Ok(Some(elements)),
+        match self
+            .send_to_object(value.clone(), "to_ary", vec![], position)?
+            .view()
+        {
+            View::Array(elements) => Ok(Some(elements.clone())),
             _ => Ok(None),
         }
     }
@@ -110,20 +114,23 @@ impl VirtualMachine {
         count: &Object,
         position: crate::lexer::Position,
     ) -> Result<i64, MetorexError> {
-        match count {
-            Object::Int(number) => Ok(*number),
-            Object::Float(number) => Ok(*number as i64),
-            Object::BigInt(_) => Err(crate::vm::errors::simple_exception(
+        match count.view() {
+            View::Int(number) => Ok(number),
+            View::Float(number) => Ok(number as i64),
+            View::BigInt(_) => Err(crate::vm::errors::simple_exception(
                 "RangeError",
                 "bignum too big to convert into 'long'",
                 position,
             )),
-            other if !self.responds_to(other, "to_int") => {
-                Err(crate::vm::errors::integer_conversion_error(other, position))
+            _ if !self.responds_to(count, "to_int") => {
+                Err(crate::vm::errors::integer_conversion_error(count, position))
             }
-            other => match self.send_to_object(other.clone(), "to_int", vec![], position)? {
-                Object::Int(number) => Ok(number),
-                Object::BigInt(_) => Err(crate::vm::errors::simple_exception(
+            _ => match self
+                .send_to_object(count.clone(), "to_int", vec![], position)?
+                .view()
+            {
+                View::Int(number) => Ok(number),
+                View::BigInt(_) => Err(crate::vm::errors::simple_exception(
                     "RangeError",
                     "bignum too big to convert into 'long'",
                     position,
@@ -132,7 +139,7 @@ impl VirtualMachine {
                     "TypeError",
                     &format!(
                         "no implicit conversion of {} into Integer",
-                        crate::vm::errors::conversion_subject(&converted)
+                        crate::vm::errors::conversion_subject(&converted.to_object())
                     ),
                     position,
                 )),
@@ -143,10 +150,10 @@ impl VirtualMachine {
 
 /// Whether two values are the same object, which is what `equal?` reports.
 pub(crate) fn same_object(left: &Object, right: &Object) -> bool {
-    match (left, right) {
-        (Object::Instance(one), Object::Instance(other)) => Rc::ptr_eq(one, other),
-        (Object::Array(one), Object::Array(other)) => Rc::ptr_eq(one, other),
-        (Object::Dict(one), Object::Dict(other)) => Rc::ptr_eq(one, other),
+    match (left.view(), right.view()) {
+        (View::Instance(one), View::Instance(other)) => Rc::ptr_eq(one, other),
+        (View::Array(one), View::Array(other)) => Rc::ptr_eq(one, other),
+        (View::Dict(one), View::Dict(other)) => Rc::ptr_eq(one, other),
         _ => false,
     }
 }

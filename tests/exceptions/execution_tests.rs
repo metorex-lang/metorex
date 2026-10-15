@@ -3,6 +3,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -102,8 +103,8 @@ x
 "#;
     let result = execute_code(code).unwrap();
     // x should contain the exception object
-    match result {
-        Some(Object::Exception(ex)) => {
+    match result.view() {
+        Some(View::Exception(ex)) => {
             let exception = ex.borrow();
             assert_eq!(exception.message, "Error message");
         }
@@ -296,8 +297,8 @@ end
 [y, z, w]
 "#;
     let result = execute_code(code).unwrap();
-    match result {
-        Some(Object::Array(arr)) => {
+    match result.view() {
+        Some(View::Array(arr)) => {
             let array = arr.borrow();
             assert_eq!(array.len(), 3);
             assert_eq!(array[0], Object::Int(1)); // y set before raise
@@ -325,8 +326,8 @@ end
 [y, z, w]
 "#;
     let result = execute_code(code).unwrap();
-    match result {
-        Some(Object::Array(arr)) => {
+    match result.view() {
+        Some(View::Array(arr)) => {
             let array = arr.borrow();
             assert_eq!(array.len(), 3);
             assert_eq!(array[0], Object::Int(1)); // y set in begin

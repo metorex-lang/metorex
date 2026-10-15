@@ -9,6 +9,7 @@ use metorex::compiler::Compiler;
 use metorex::lexer::Lexer;
 use metorex::lexer::token::Position;
 use metorex::object::Object;
+use metorex::object::View;
 use metorex::parser::Parser;
 
 /// Helper: parse source, compile, return the chunk.
@@ -51,8 +52,8 @@ fn find_compiled_functions_recursive<'a>(
     for i in 0..256 {
         let constant =
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| chunk.get_constant(i)));
-        match constant {
-            Ok(Object::CompiledFunction(func)) => {
+        match constant.map(Object::view) {
+            Ok(View::CompiledFunction(func)) => {
                 funcs.push(func.as_ref());
                 // Recursively search inside this function's chunk
                 find_compiled_functions_recursive(&func.chunk, funcs);

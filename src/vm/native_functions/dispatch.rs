@@ -2,6 +2,7 @@
 // of its own, grouped into the modules beside this one.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Call a native function by name.
@@ -100,15 +101,15 @@ impl VirtualMachine {
             // A class whose instances cannot be made, as C's
             // `rb_undef_alloc_func` says of one.
             "__undefine_allocator__" => {
-                if let Some(Object::Class(class)) = arguments.first() {
+                if let Some(View::Class(class)) = arguments.first().view() {
                     class.set_class_var(crate::vm::capi::data_allocator_var(), Object::Int(0));
                 }
                 Ok(Object::Nil)
             }
             // An instance of a class whose allocator is undefined, which the
             // core library makes for itself.
-            "__allocate_instance__" => match arguments.first() {
-                Some(Object::Class(class)) => self.allocate_instance(&Rc::clone(class), position),
+            "__allocate_instance__" => match arguments.first().view() {
+                Some(View::Class(class)) => self.allocate_instance(&Rc::clone(class), position),
                 _ => Ok(Object::Nil),
             },
             // The converter behind RubyVM::AbstractSyntaxTree, read the
@@ -131,8 +132,8 @@ impl VirtualMachine {
             }
             // Where a block literal opens, as its line and its column counted
             // in characters from 0, or nil for a block with no Ruby source.
-            "__block_position__" => Ok(match arguments.first() {
-                Some(Object::Block(block)) => match (block.opened_at, block.opened_column) {
+            "__block_position__" => Ok(match arguments.first().view() {
+                Some(View::Block(block)) => match (block.opened_at, block.opened_column) {
                     (Some(line), Some(column)) => {
                         Object::array(vec![Object::Int(line as i64), Object::Int(column as i64)])
                     }
@@ -194,8 +195,8 @@ impl VirtualMachine {
                     .push(crate::vm::core::WeakTarget::of(&target));
                 Ok(Object::Int(self.weak_references.len() as i64 - 1))
             }
-            "__weak_target__" => Ok(match arguments.first() {
-                Some(Object::Int(handle)) => usize::try_from(*handle)
+            "__weak_target__" => Ok(match arguments.first().view() {
+                Some(View::Int(handle)) => usize::try_from(handle)
                     .ok()
                     .and_then(|at| self.weak_references.get(at))
                     .and_then(|target| target.reach())

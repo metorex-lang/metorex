@@ -1,6 +1,7 @@
 // Joining an array to itself or to text, and flattening one out.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Joining an array to itself or to text, and flattening one out.
@@ -25,25 +26,25 @@ impl VirtualMachine {
                     ));
                 }
                 let given = arguments[0].clone();
-                if matches!(given, Object::String(_)) {
+                if matches!(given.view(), View::String(_)) {
                     return self.call_array_method(receiver, "join", &[given], position);
                 }
                 if self.responds_to(&given, "to_str") {
                     let separator = self.send_to_object(given, "to_str", vec![], position)?;
                     return self.call_array_method(receiver, "join", &[separator], position);
                 }
-                let count = match given {
-                    Object::Int(_) => given,
-                    other if self.responds_to(&other, "to_int") => {
-                        self.send_to_object(other, "to_int", vec![], position)?
+                let count = match given.view() {
+                    View::Int(_) => given,
+                    _ if self.responds_to(&given, "to_int") => {
+                        self.send_to_object(given.clone(), "to_int", vec![], position)?
                     }
-                    other => {
+                    _ => {
                         return Err(crate::vm::errors::integer_conversion_error(
-                            &other, position,
+                            &given, position,
                         ));
                     }
                 };
-                let Object::Int(count) = count else {
+                let View::Int(count) = count.view() else {
                     return Err(crate::vm::errors::simple_exception(
                         "TypeError",
                         "can't convert to Integer",
@@ -77,8 +78,8 @@ impl VirtualMachine {
                 // goes between. Reading it warns, since a later release will
                 // drop it.
                 let default_separator = |vm: &mut Self| -> String {
-                    match vm.globals().get(",") {
-                        Some(Object::String(held)) => {
+                    match vm.globals().get(",").view() {
+                        Some(View::String(held)) => {
                             let text = held.as_str().to_string();
                             vm.emit_warning_to_stderr(
                                 "warning: $, is set to non-nil value",
@@ -89,24 +90,24 @@ impl VirtualMachine {
                         _ => String::new(),
                     }
                 };
-                let sep = if arguments.is_empty() || matches!(arguments[0], Object::Nil) {
+                let sep = if arguments.is_empty() || matches!(arguments[0].view(), View::Nil) {
                     default_separator(self)
                 } else {
                     // An empty array never asks the separator for anything,
                     // which is what Ruby does.
                     let given = if array_rc.borrow().is_empty() {
                         Object::Nil
-                    } else if matches!(arguments[0], Object::String(_) | Object::Nil) {
+                    } else if matches!(arguments[0].view(), View::String(_) | View::Nil) {
                         arguments[0].clone()
                     } else if self.responds_to(&arguments[0], "to_str") {
                         self.send_to_object(arguments[0].clone(), "to_str", vec![], position)?
                     } else {
                         arguments[0].clone()
                     };
-                    match &given {
-                        Object::String(s) => s.as_str().to_string(),
+                    match given.view() {
+                        View::String(s) => s.as_str().to_string(),
                         // A nil separator joins with nothing between.
-                        Object::Nil => String::new(),
+                        View::Nil => String::new(),
                         _ => {
                             return Err(method_argument_type_error(
                                 method_name,
@@ -151,11 +152,11 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let depth = match arguments.first() {
-                    None | Some(Object::Nil) => -1,
-                    Some(Object::Int(level)) => *level,
+                let depth = match arguments.first().view() {
+                    None | Some(View::Nil) => -1,
+                    Some(View::Int(level)) => level,
                     Some(other) => self
-                        .coerce_integer_argument(other, position)?
+                        .coerce_integer_argument(&other.to_object(), position)?
                         .try_into()
                         .unwrap_or(-1),
                 };
@@ -172,7 +173,7 @@ impl VirtualMachine {
                     && (flat.len() != elements.len()
                         || elements
                             .iter()
-                            .any(|element| matches!(element, Object::Array(_))));
+                            .any(|element| matches!(element.view(), View::Array(_))));
                 *array_rc.borrow_mut() = flat;
                 Ok(Some(if changed {
                     receiver.clone()
@@ -192,7 +193,7 @@ impl VirtualMachine {
                 let array = array_rc.borrow();
                 let compacted: Vec<Object> = array
                     .iter()
-                    .filter(|obj| !matches!(obj, Object::Nil))
+                    .filter(|obj| !matches!(obj.view(), View::Nil))
                     .cloned()
                     .collect();
                 Ok(Some(Object::Array(Rc::new(RefCell::new(compacted)))))

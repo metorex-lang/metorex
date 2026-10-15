@@ -1,6 +1,7 @@
 // What a class reports about itself and its constants.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// `Class#initialize`, the constants a module holds, and the object a
@@ -17,7 +18,7 @@ impl VirtualMachine {
         // raises TypeError (MRI rejects `Class` as a superclass regardless of
         // whether the receiver was freshly allocated).
         if method_name == "initialize" {
-            if let Some(Object::Class(c)) = arguments.first()
+            if let Some(View::Class(c)) = arguments.first().view()
                 && c.name() == "Class"
             {
                 let msg = "already initialized class".to_string();
@@ -82,8 +83,8 @@ impl VirtualMachine {
                             && n.chars().next().is_some_and(|c| c.is_uppercase())
                     })
                     .collect();
-                if let Some(Object::Class(object_class)) = self.globals().get("Object") {
-                    collect_from(&object_class, &mut names);
+                if let Some(View::Class(object_class)) = self.globals().get("Object").view() {
+                    collect_from(object_class, &mut names);
                 }
                 let names: Vec<Object> = names.into_iter().map(Object::symbol).collect();
                 return Ok(Answered(Object::Array(Rc::new(std::cell::RefCell::new(
@@ -165,10 +166,10 @@ impl VirtualMachine {
                 .unwrap_or(Object::Nil);
             // Singleton classes of nil / true / false exist but their attached
             // object can't be obtained directly — MRI raises TypeError here.
-            let tag = match &attached {
-                Object::Nil => Some("NilClass"),
-                Object::Bool(true) => Some("TrueClass"),
-                Object::Bool(false) => Some("FalseClass"),
+            let tag = match attached.view() {
+                View::Nil => Some("NilClass"),
+                View::Bool(true) => Some("TrueClass"),
+                View::Bool(false) => Some("FalseClass"),
                 _ => None,
             };
             if let Some(name) = tag {

@@ -10,6 +10,7 @@
 use super::calls::{answers, call, class_name_of};
 use super::handles::{Value, to_object, to_value};
 use super::{interpreter, raise};
+use crate::object::View;
 use crate::object::{Object, StringValue};
 use crate::vm::native_methods::string_methods::{
     binary_bytes, bytes_are_characters, wide_encoding,
@@ -72,13 +73,13 @@ thread_local! {
 
 /// The String a VALUE C code handed over stands for.
 pub(super) fn string_from(value: Value) -> Rc<StringValue> {
-    match to_object(value) {
-        Object::String(held) => held,
+    match to_object(value).view() {
+        View::String(held) => held.clone(),
         other => raise(crate::vm::errors::simple_exception(
             "TypeError",
             &format!(
                 "wrong argument type {} (expected String)",
-                class_name_of(other)
+                class_name_of(other.to_object())
             ),
             super::called_from(),
         )),
@@ -87,7 +88,7 @@ pub(super) fn string_from(value: Value) -> Rc<StringValue> {
 
 /// The String `object` converts to through `to_str`, as `StringValue` does.
 pub(super) fn string_value(object: Object) -> Object {
-    if let Object::String(_) = object {
+    if let View::String(_) = object.view() {
         return object;
     }
     if !answers(&object, "to_str") {
@@ -101,7 +102,7 @@ pub(super) fn string_value(object: Object) -> Object {
         ));
     }
     let converted = call(object.clone(), "to_str", Vec::new());
-    if let Object::String(_) = converted {
+    if let View::String(_) = converted.view() {
         return converted;
     }
     let class_name = class_name_of(object);
@@ -120,7 +121,7 @@ pub(super) fn string_value(object: Object) -> Object {
 /// `object` as a String when it is one or converts through `to_str`, as
 /// `rb_check_string_type` finds it, or None when it has no `to_str`.
 pub(super) fn check_string(object: Object) -> Option<Object> {
-    if matches!(object, Object::String(_)) || answers(&object, "to_str") {
+    if matches!(object.view(), View::String(_)) || answers(&object, "to_str") {
         return Some(string_value(object));
     }
     None
@@ -151,8 +152,8 @@ pub(super) fn carry_writes_back() {
             if buffer.external.is_some() || buffer.area[..length] == buffer.handed[..] {
                 continue;
             }
-            if let Object::String(string) = to_object(*value) {
-                store_bytes(&string, &buffer.area[..length]);
+            if let View::String(string) = to_object(*value).view() {
+                store_bytes(string, &buffer.area[..length]);
             }
             buffer.handed.copy_from_slice(&buffer.area[..length]);
         }
@@ -164,10 +165,10 @@ pub(super) fn carry_writes_back() {
 pub(super) fn carry_changes_in() {
     BUFFERS.with(|buffers| {
         for (value, buffer) in buffers.borrow_mut().iter_mut() {
-            if let Object::String(string) = to_object(*value) {
-                let current = binary_bytes(&string);
+            if let View::String(string) = to_object(*value).view() {
+                let current = binary_bytes(string);
                 if current != buffer.handed {
-                    buffer.take(current, terminator_length(&string));
+                    buffer.take(current, terminator_length(string));
                 }
             }
         }

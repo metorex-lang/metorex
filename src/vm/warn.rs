@@ -5,6 +5,7 @@
 // travels along as a keyword depends on the arity of the `Warning.warn` in
 // force, matching MRI.
 
+use crate::object::{OptionView, View};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -37,32 +38,33 @@ impl VirtualMachine {
         arguments: Vec<Object>,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let on_warning_itself = match (receiver, self.globals().get("Warning")) {
-            (Some(Object::Module(given)), Some(Object::Module(named))) => Rc::ptr_eq(given, &named),
+        let on_warning_itself = match (receiver.view(), self.globals().get("Warning").view()) {
+            (Some(View::Module(given)), Some(View::Module(named))) => Rc::ptr_eq(given, named),
             _ => false,
         };
         let (messages, keywords) = split_warn_keywords(arguments);
 
-        let category = match keyword_value(&keywords, "category") {
-            Some(Object::Nil) | None => Object::Nil,
-            Some(value) => self.coerce_warn_category(&value, position)?,
+        let category = match keyword_value(&keywords, "category").view() {
+            Some(View::Nil) | None => Object::Nil,
+            Some(value) => self.coerce_warn_category(&value.to_object(), position)?,
         };
-        let prefix = match keyword_value(&keywords, "uplevel") {
-            Some(Object::Nil) | None => String::new(),
+        let prefix = match keyword_value(&keywords, "uplevel").view() {
+            Some(View::Nil) | None => String::new(),
             Some(value) => {
-                let level = self.coerce_uplevel(&value, position)?;
+                let level = self.coerce_uplevel(&value.to_object(), position)?;
                 self.warning_prefix(level, position)
             }
         };
 
         // `$VERBOSE` set to nil silences the warning before anything is built.
-        if messages.is_empty() || matches!(self.globals().get("VERBOSE"), None | Some(Object::Nil))
+        if messages.is_empty()
+            || matches!(self.globals().get("VERBOSE").view(), None | Some(View::Nil))
         {
             return Ok(Object::Nil);
         }
         // A warning in a category that is switched off never reaches
         // `Warning.warn` at all.
-        if let Object::Symbol(name) = &category
+        if let View::Symbol(name) = category.view()
             && !self.warning_category_enabled(&name.as_str())
         {
             return Ok(Object::Nil);
@@ -94,15 +96,15 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        if let Object::Symbol(name) = value {
+        if let View::Symbol(name) = value.view() {
             return Ok(Object::Symbol(Rc::clone(name)));
         }
-        if let Object::String(text) = value {
+        if let View::String(text) = value.view() {
             return Ok(Object::symbol(text.as_str().to_string()));
         }
         if self.responds_to(value, "to_sym") {
             let converted = self.send_to_object(value.clone(), "to_sym", vec![], position)?;
-            if let Object::Symbol(_) = converted {
+            if let View::Symbol(_) = converted.view() {
                 return Ok(converted);
             }
         }
@@ -118,11 +120,11 @@ impl VirtualMachine {
     /// `uplevel:` counts stack frames, so it has to be a non-negative Integer
     /// or something that converts to one.
     fn coerce_uplevel(&mut self, value: &Object, position: Position) -> Result<i64, MetorexError> {
-        let level = match value {
-            Object::Int(number) => *number,
-            Object::Float(number) => *number as i64,
+        let level = match value.view() {
+            View::Int(number) => number,
+            View::Float(number) => number as i64,
             // These answer `to_i` but not `to_int`, so Ruby refuses them.
-            Object::String(_) | Object::Array(_) | Object::Dict(_) | Object::Nil => {
+            View::String(_) | View::Array(_) | View::Dict(_) | View::Nil => {
                 return Err(type_error(
                     format!(
                         "no implicit conversion of {} into Integer",
@@ -131,7 +133,7 @@ impl VirtualMachine {
                     position,
                 ));
             }
-            other => match self.integer_conversion_of(other, position)? {
+            other => match self.integer_conversion_of(value, position)? {
                 Some(number) => number,
                 None => {
                     return Err(type_error(
@@ -164,16 +166,20 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Option<i64>, MetorexError> {
         for name in ["to_int", "to_i"] {
-            match self.send_to_object(value.clone(), name, vec![], position) {
-                Ok(Object::Int(number)) => return Ok(Some(number)),
-                Ok(Object::Float(number)) => return Ok(Some(number as i64)),
+            match self
+                .send_to_object(value.clone(), name, vec![], position)
+                .as_ref()
+                .map(Object::view)
+            {
+                Ok(View::Int(number)) => return Ok(Some(number)),
+                Ok(View::Float(number)) => return Ok(Some(number as i64)),
                 Ok(_) => continue,
                 Err(MetorexError::UncaughtException { exception, .. })
-                    if is_no_method_error(&exception) =>
+                    if is_no_method_error(exception) =>
                 {
                     continue;
                 }
-                Err(error) => return Err(error),
+                Err(error) => return Err(error.clone()),
             }
         }
         Ok(None)
@@ -233,7 +239,7 @@ impl VirtualMachine {
         text: String,
         position: Position,
     ) -> Result<(), MetorexError> {
-        if matches!(self.globals().get("VERBOSE"), None | Some(Object::Nil)) {
+        if matches!(self.globals().get("VERBOSE").view(), None | Some(View::Nil)) {
             return Ok(());
         }
         self.dispatch_to_warning_module(text, Object::Nil, position)?;
@@ -293,12 +299,12 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<String, MetorexError> {
-        match value {
-            Object::Nil => Ok(String::new()),
+        match value.view() {
+            View::Nil => Ok(String::new()),
             other => {
-                let rendered = self.send_to_object(other.clone(), "to_s", vec![], position)?;
-                match rendered {
-                    Object::String(text) => Ok(text.as_str().to_string()),
+                let rendered = self.send_to_object(other.to_object(), "to_s", vec![], position)?;
+                match rendered.view() {
+                    View::String(text) => Ok(text.as_str().to_string()),
                     other => Ok(other.to_string()),
                 }
             }
@@ -309,7 +315,7 @@ impl VirtualMachine {
 /// Whether the `Warning.warn` in force accepts anything past the message. A
 /// method taking exactly one required positional argument does not.
 fn warning_warn_takes_keywords(warning: &Object) -> bool {
-    let (Object::Module(class) | Object::Class(class)) = warning else {
+    let (View::Module(class) | View::Class(class)) = warning.view() else {
         return false;
     };
     let Some(method) = class
@@ -329,7 +335,7 @@ fn warning_warn_takes_keywords(warning: &Object) -> bool {
 
 /// Peel a trailing keyword Hash off the argument list.
 fn split_warn_keywords(mut arguments: Vec<Object>) -> (Vec<Object>, Option<Object>) {
-    let is_keywords = matches!(arguments.last(), Some(Object::Dict(entries))
+    let is_keywords = matches!(arguments.last().view(), Some(View::Dict(entries))
     if !entries.borrow().is_empty()
         && entries
             .borrow()
@@ -349,7 +355,7 @@ fn split_warn_keywords(mut arguments: Vec<Object>) -> (Vec<Object>, Option<Objec
 
 /// One keyword's value, when the call supplied it.
 fn keyword_value(keywords: &Option<Object>, name: &str) -> Option<Object> {
-    let Some(Object::Dict(entries)) = keywords else {
+    let Some(View::Dict(entries)) = keywords.view() else {
         return None;
     };
     entries.borrow().get(&format!(":{}", name)).cloned()
@@ -357,9 +363,9 @@ fn keyword_value(keywords: &Option<Object>, name: &str) -> Option<Object> {
 
 /// An Array argument warns with each element on its own line.
 fn flatten_warn_message(message: &Object) -> Vec<Object> {
-    match message {
-        Object::Array(elements) => elements.borrow().clone(),
-        other => vec![other.clone()],
+    match message.view() {
+        View::Array(elements) => elements.borrow().clone(),
+        _ => vec![message.clone()],
     }
 }
 
@@ -374,8 +380,8 @@ fn type_error(message: String, position: Position) -> MetorexError {
 
 /// Whether an exception object is a NoMethodError or NameError.
 fn is_no_method_error(exception: &Object) -> bool {
-    match exception {
-        Object::Exception(details) => {
+    match exception.view() {
+        View::Exception(details) => {
             matches!(
                 details.borrow().exception_type.as_str(),
                 "NoMethodError" | "NameError"
@@ -422,14 +428,14 @@ impl VirtualMachine {
         owner: &Rc<crate::class::Class>,
         position: Position,
     ) -> Result<(), MetorexError> {
-        if !matches!(self.pending_block, Some(Object::Block(_)))
+        if !matches!(self.pending_block.view(), Some(View::Block(_)))
             || self.pending_block_from_ampersand
         {
             return Ok(());
         }
-        let wanted = match self.warning_category_setting("strict_unused_block") {
-            Some(Object::Bool(set)) => set,
-            _ => matches!(self.globals().get("VERBOSE"), Some(Object::Bool(true))),
+        let wanted = match self.warning_category_setting("strict_unused_block").view() {
+            Some(View::Bool(set)) => set,
+            _ => matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true))),
         };
         if !wanted
             || method.name == "initialize"
@@ -522,8 +528,8 @@ fn body_takes_a_block(body: &[crate::ast::Statement]) -> bool {
 /// class itself, and alone otherwise.
 fn qualified_method_name(owner: &Rc<crate::class::Class>, name: &str) -> String {
     if owner.is_singleton_class() {
-        return match owner.get_class_var("__attached__") {
-            Some(Object::Class(attached) | Object::Module(attached))
+        return match owner.get_class_var("__attached__").view() {
+            Some(View::Class(attached) | View::Module(attached))
                 if !attached.ruby_name().is_empty() && !attached.ruby_name().starts_with("#<") =>
             {
                 format!("{}.{}", attached.ruby_name(), name)

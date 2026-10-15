@@ -1,6 +1,7 @@
 // Raising and lowering letters, and the next string after this one.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// Raising and lowering letters, and the next string after this one.
@@ -53,24 +54,24 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let idx = match &arguments[0] {
-                    Object::Int(n) => *n,
-                    other => {
+                let idx = match arguments[0].view() {
+                    View::Int(n) => n,
+                    _ => {
                         return Err(method_argument_type_error(
                             method_name,
                             "Integer",
-                            other,
+                            &arguments[0],
                             position,
                         ));
                     }
                 };
-                let to_insert = match &arguments[1] {
-                    Object::String(s) => s.as_str().to_string(),
-                    other => {
+                let to_insert = match arguments[1].view() {
+                    View::String(s) => s.as_str().to_string(),
+                    _ => {
                         return Err(method_argument_type_error(
                             method_name,
                             "String",
-                            other,
+                            &arguments[1],
                             position,
                         ));
                     }

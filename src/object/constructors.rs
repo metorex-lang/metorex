@@ -1,6 +1,7 @@
 // Constructor helper methods for Object
 
 use crate::class::Class;
+use crate::object::View;
 use indexmap::IndexMap;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -42,9 +43,9 @@ impl Object {
     /// This object's value as an arbitrary-precision integer, for the numeric
     /// kinds that have one.
     pub fn as_big_integer(&self) -> Option<num_bigint::BigInt> {
-        match self {
-            Object::Int(value) => Some(num_bigint::BigInt::from(*value)),
-            Object::BigInt(value) => Some((**value).clone()),
+        match self.view() {
+            View::Int(value) => Some(num_bigint::BigInt::from(value)),
+            View::BigInt(value) => Some((**value).clone()),
             _ => None,
         }
     }

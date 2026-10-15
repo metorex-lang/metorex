@@ -1,6 +1,7 @@
 // Finding an element, and the elements that appear only once.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Finding an element, and the elements that appear only once.
@@ -32,14 +33,14 @@ impl VirtualMachine {
                 for element in rows {
                     // A row that is not an Array is asked for one, and what it
                     // answers is what comes back when it matches.
-                    let row = match &element {
-                        Object::Array(_) => element.clone(),
-                        other if self.responds_to(other, "to_ary") => {
-                            self.send_to_object(other.clone(), "to_ary", vec![], position)?
+                    let row = match element.view() {
+                        View::Array(_) => element.clone(),
+                        _ if self.responds_to(&element, "to_ary") => {
+                            self.send_to_object(element.clone(), "to_ary", vec![], position)?
                         }
                         _ => continue,
                     };
-                    let Object::Array(pair) = &row else {
+                    let View::Array(pair) = row.view() else {
                         continue;
                     };
                     let candidate = pair.borrow().get(slot).cloned();
@@ -65,7 +66,8 @@ impl VirtualMachine {
                     }
                     return Ok(Some(Object::Nil));
                 }
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     return self
                         .make_enumerator(receiver, method_name, arguments, position)
                         .map(Some);
@@ -73,7 +75,7 @@ impl VirtualMachine {
                 let mut index = 0;
                 while index < array_rc.borrow().len() {
                     let element = array_rc.borrow()[index].clone();
-                    let answer = self.execute_block_callable(&block, vec![element], position)?;
+                    let answer = self.execute_block_callable(block, vec![element], position)?;
                     if answer.is_truthy() {
                         return Ok(Some(Object::Int(index as i64)));
                     }
@@ -121,11 +123,12 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => Some(block),
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(block)) => Some(block),
                     _ => None,
                 };
-                let unique = self.unique_live_elements(array_rc, block, position)?;
+                let unique = self.unique_live_elements(array_rc, block.cloned(), position)?;
                 Ok(Some(Object::array(unique)))
             }
             // `min`, `max`, and `minmax` order with `<=>`, or with the block
@@ -140,14 +143,14 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => Some(block),
+                let block = match self.pending_block.take().view() {
+                    Some(View::Block(block)) => Some(block.clone()),
                     _ => None,
                 };
                 let elements = array_rc.borrow().clone();
                 if let Some(count) = arguments
                     .first()
-                    .filter(|held| !matches!(held, Object::Nil))
+                    .filter(|held| !matches!(held.view(), View::Nil))
                 {
                     let count = self.element_count_argument(count, position)?;
                     let mut ordered = self.sort_elements(elements, block, position)?;

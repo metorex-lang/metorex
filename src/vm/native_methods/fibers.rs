@@ -1,6 +1,7 @@
 // The methods a Fiber answers.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The methods a fiber answers. The coroutine behind one lives in the
@@ -12,11 +13,11 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        let Object::Instance(inst) = receiver else {
+        let View::Instance(inst) = receiver.view() else {
             return Ok(None);
         };
-        let handle = match inst.borrow().get_var("__fiber__") {
-            Some(Object::Int(number)) => *number as usize,
+        let handle = match inst.borrow().get_var("__fiber__").view() {
+            Some(View::Int(number)) => number as usize,
             _ => {
                 return Err(crate::vm::errors::simple_exception(
                     "FiberError",
@@ -88,11 +89,11 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                match &arguments[0] {
-                    Object::Nil => self.fiber_set_storage(handle, None),
-                    held => {
-                        self.check_fiber_storage(held, position)?;
-                        self.fiber_set_storage(handle, Some(held.clone()));
+                match arguments[0].view() {
+                    View::Nil => self.fiber_set_storage(handle, None),
+                    _ => {
+                        self.check_fiber_storage(&arguments[0], position)?;
+                        self.fiber_set_storage(handle, Some(arguments[0].clone()));
                     }
                 }
                 Ok(Some(arguments[0].clone()))

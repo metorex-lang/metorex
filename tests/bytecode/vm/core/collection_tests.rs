@@ -4,6 +4,7 @@ use metorex::bytecode::vm::BytecodeVm;
 use metorex::compiler::Compiler;
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::View;
 use metorex::parser::Parser;
 
 fn run(source: &str) -> Result<Object, String> {
@@ -29,8 +30,8 @@ fn run_ok(source: &str) -> Object {
 #[test]
 fn execute_array_literal() {
     let result = run_ok("return [1, 2, 3]");
-    match result {
-        Object::Array(arr) => {
+    match result.view() {
+        View::Array(arr) => {
             let arr = arr.borrow();
             assert_eq!(arr.len(), 3);
             assert_eq!(arr[0], Object::Int(1));
@@ -43,8 +44,8 @@ fn execute_array_literal() {
 #[test]
 fn execute_hash_literal() {
     let result = run_ok("return {\"a\" => 1, \"b\" => 2}");
-    match result {
-        Object::Dict(dict) => {
+    match result.view() {
+        View::Dict(dict) => {
             let dict = dict.borrow();
             assert_eq!(dict.len(), 2);
             assert_eq!(*dict.get("a").unwrap(), Object::Int(1));

@@ -7,6 +7,7 @@ use metorex::bytecode::opcode::OpCode;
 use metorex::compiler::Compiler;
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::View;
 use metorex::parser::Parser;
 
 /// Helper: parse source, compile, return the chunk.
@@ -41,8 +42,8 @@ fn find_compiled_functions(
     for i in 0..256 {
         let constant =
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| chunk.get_constant(i)));
-        match constant {
-            Ok(Object::CompiledFunction(func)) => funcs.push(func.as_ref()),
+        match constant.map(Object::view) {
+            Ok(View::CompiledFunction(func)) => funcs.push(func.as_ref()),
             Ok(_) => continue,
             Err(_) => break,
         }
@@ -80,8 +81,8 @@ fn class_name_in_constant_pool() {
     for i in 0..256 {
         let constant =
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| chunk.get_constant(i)));
-        match constant {
-            Ok(Object::String(s)) if *s.as_str() == *"MyClass" => {
+        match constant.map(Object::view) {
+            Ok(View::String(s)) if *s.as_str() == *"MyClass" => {
                 found = true;
                 break;
             }

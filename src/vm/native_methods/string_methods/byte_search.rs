@@ -1,6 +1,7 @@
 // Where a needle sits inside a string, counted in bytes.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Where a needle sits in a string, counted in bytes. `byterindex` reads
@@ -87,9 +88,9 @@ impl VirtualMachine {
             self.refuse_mixed_pattern_encoding(string_value, &arguments[0], position)?;
             let found =
                 self.byte_index_by_pattern(&pattern, &flags, &text, opening, from_end, position)?;
-            return Ok(match found {
-                Object::Int(at) => Object::Int(position_of(&places, at as usize, in_bytes, &text)),
-                other => other,
+            return Ok(match found.view() {
+                View::Int(at) => Object::Int(position_of(&places, at as usize, in_bytes, &text)),
+                _ => found.clone(),
             });
         }
         let needle = self.string_needle(method_name, &arguments[0], position)?;
@@ -127,13 +128,13 @@ impl VirtualMachine {
         argument: &Object,
         position: Position,
     ) -> Result<Rc<crate::object::StringValue>, MetorexError> {
-        if let Object::String(text) = argument {
+        if let View::String(text) = argument.view() {
             return Ok(Rc::clone(text));
         }
-        if let Some(Object::String(text)) =
-            crate::vm::native_methods::string_subclass_value(argument)
+        if let Some(View::String(text)) =
+            crate::vm::native_methods::string_subclass_value(argument).view()
         {
-            return Ok(text);
+            return Ok(text.clone());
         }
         let _ = method_name;
         let named = value_name(self, argument);
@@ -145,8 +146,11 @@ impl VirtualMachine {
         if !self.answers_to(argument, "to_str", position)? {
             return Err(refuse(self));
         }
-        match self.send_to_object(argument.clone(), "to_str", vec![], position)? {
-            Object::String(text) => Ok(text),
+        match self
+            .send_to_object(argument.clone(), "to_str", vec![], position)?
+            .view()
+        {
+            View::String(text) => Ok(text.clone()),
             _ => Err(refuse(self)),
         }
     }
@@ -163,8 +167,11 @@ impl VirtualMachine {
         if self.compatible_encoding(&subject, pattern).is_some() {
             return Ok(());
         }
-        let named = match self.send_to_object(pattern.clone(), "encoding", vec![], position)? {
-            Object::Class(held) | Object::Module(held) => held.name().to_string(),
+        let named = match self
+            .send_to_object(pattern.clone(), "encoding", vec![], position)?
+            .view()
+        {
+            View::Class(held) | View::Module(held) => held.name().to_string(),
             other => other.to_string(),
         };
         let message = format!(
@@ -255,10 +262,10 @@ impl VirtualMachine {
 /// The pattern and flags a value stands for, reading a Regexp subclass
 /// through the pattern it keeps.
 pub(crate) fn pattern_of(value: &Object) -> Option<(String, String)> {
-    match value {
-        Object::Regex(pattern, flags) => Some((pattern.to_string(), flags.to_string())),
-        other => match crate::vm::native_methods::regexp_subclass_value(other) {
-            Some(Object::Regex(pattern, flags)) => Some((pattern.to_string(), flags.to_string())),
+    match value.view() {
+        View::Regex(pattern, flags) => Some((pattern.to_string(), flags.to_string())),
+        _ => match crate::vm::native_methods::regexp_subclass_value(value).view() {
+            Some(View::Regex(pattern, flags)) => Some((pattern.to_string(), flags.to_string())),
             _ => None,
         },
     }
@@ -316,11 +323,11 @@ fn byte_run_index(bytes: &[u8], wanted: &[u8], offset: usize, from_end: bool) ->
 /// make: `nil`, `true`, and `false` name themselves, and everything else
 /// names its class.
 fn value_name(vm: &VirtualMachine, held: &Object) -> String {
-    match held {
-        Object::Nil => "nil".to_string(),
-        Object::Bool(true) => "true".to_string(),
-        Object::Bool(false) => "false".to_string(),
-        other => vm.builtins().class_of(other).name().to_string(),
+    match held.view() {
+        View::Nil => "nil".to_string(),
+        View::Bool(true) => "true".to_string(),
+        View::Bool(false) => "false".to_string(),
+        _ => vm.builtins().class_of(held).name().to_string(),
     }
 }
 

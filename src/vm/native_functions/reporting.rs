@@ -1,6 +1,7 @@
 // What a program reports about the call that is running.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     pub(crate) fn format_string(
@@ -16,9 +17,9 @@ impl VirtualMachine {
         }
         // Ruby converts the format with `#to_str`, so a non-String
         // that answers it works and anything else raises TypeError.
-        let fmt = match &arguments[0] {
-            held @ Object::String(_) => held.clone(),
-            other => Object::string(self.coerce_name_argument(other, position)?),
+        let fmt = match arguments[0].view() {
+            View::String(_) => arguments[0].clone(),
+            _ => Object::string(self.coerce_name_argument(&arguments[0], position)?),
         };
         let rest: Vec<Object> = arguments.into_iter().skip(1).collect();
         self.format_with_values(&fmt, rest, position)
@@ -55,24 +56,24 @@ impl VirtualMachine {
         let entries: Vec<Object> = locations
             .iter()
             .map(|location| {
-                let read = |name: &str| match location {
-                    Object::Instance(instance) => instance
+                let read = |name: &str| match location.view() {
+                    View::Instance(instance) => instance
                         .borrow()
                         .get_var(name)
                         .cloned()
                         .unwrap_or(Object::Nil),
                     _ => Object::Nil,
                 };
-                let path = match read("path") {
-                    Object::String(path) => path.as_str().to_string(),
+                let path = match read("path").view() {
+                    View::String(path) => path.as_str().to_string(),
                     _ => String::new(),
                 };
-                let line = match read("lineno") {
-                    Object::Int(line) => line,
+                let line = match read("lineno").view() {
+                    View::Int(line) => line,
                     _ => 0,
                 };
-                let label = match read("label") {
-                    Object::String(label) => label.as_str().to_string(),
+                let label = match read("label").view() {
+                    View::String(label) => label.as_str().to_string(),
                     _ => String::new(),
                 };
                 Object::string(if label.is_empty() {

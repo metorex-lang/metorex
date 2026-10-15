@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::lexer::Position;
+use crate::object::{OptionView, View};
 
 /// An assignment target with whatever it needs ahead of its value already
 /// evaluated.
@@ -91,8 +92,8 @@ impl VirtualMachine {
         if !constant_target_matches(target, left) && !same_global {
             return None;
         }
-        match self.eval_defined(target) {
-            Ok(Object::Nil) => Some(right),
+        match self.eval_defined(target).as_ref().map(Object::view) {
+            Ok(View::Nil) => Some(right),
             _ => None,
         }
     }
@@ -289,10 +290,10 @@ impl VirtualMachine {
                 }
             },
             ReceiverTarget::Setter {
-                receiver: Object::Nil,
+                receiver,
                 safe: true,
                 ..
-            } => Ok(()),
+            } if receiver.is_nil() => Ok(()),
             ReceiverTarget::Setter {
                 receiver_expression,
                 receiver,
@@ -341,10 +342,9 @@ impl VirtualMachine {
                 ..
             } => self.send_to_object(receiver.clone(), "[]", subscripts.clone(), *position),
             ReceiverTarget::ScopedConstant {
-                namespace: Object::Class(owner) | Object::Module(owner),
-                name,
-                ..
+                namespace, name, ..
             } if or_assigning
+                && let View::Class(owner) | View::Module(owner) = namespace.view()
                 && self.const_entry_on(owner, name, true, false).is_none()
                 && owner.get_autoload(name).is_none() =>
             {
@@ -367,7 +367,7 @@ impl VirtualMachine {
         reader: &str,
         position: Position,
     ) -> Result<(), MetorexError> {
-        let Object::Instance(instance) = receiver else {
+        let View::Instance(instance) = receiver.view() else {
             return Ok(());
         };
         let class = Rc::clone(&instance.borrow().class);
@@ -394,10 +394,10 @@ impl VirtualMachine {
             if matches!(
                 on_receiver,
                 ReceiverTarget::Setter {
-                    receiver: Object::Nil,
+                    receiver,
                     safe: true,
                     ..
-                }
+                } if receiver.is_nil()
             ) {
                 return Ok(Object::Nil);
             }
@@ -498,7 +498,7 @@ impl VirtualMachine {
                     match self.constant_home() {
                         Some(enclosing) => name_constant_value(&enclosing, name, &value),
                         None => {
-                            if let Object::Class(v) | Object::Module(v) = &value {
+                            if let View::Class(v) | View::Module(v) = value.view() {
                                 v.assign_name_recursive(name);
                             }
                         }
@@ -541,11 +541,11 @@ impl VirtualMachine {
                         .borrow_mut()
                         .set(name, value.clone());
                     let mut owner = None;
-                    if let Some(Object::Class(object_class)) = self.globals().get("Object") {
+                    if let Some(View::Class(object_class)) = self.globals().get("Object").view() {
                         if object_class.get_class_var(name).is_none() {
-                            owner = Some(Object::Class(Rc::clone(&object_class)));
+                            owner = Some(Object::Class(Rc::clone(object_class)));
                         } else {
-                            self.warn_already_initialized(&object_class, name, *position);
+                            self.warn_already_initialized(object_class, name, *position);
                         }
                         object_class.remove_autoload(name);
                         object_class.set_class_var(name, value);
@@ -566,7 +566,7 @@ impl VirtualMachine {
             Expression::TopLevelConstant { name, position } => {
                 // Naming the module names the anonymous ones it holds, which
                 // is how `A::B` reports its path once `A` has a name.
-                if let Object::Class(bound) | Object::Module(bound) = &value {
+                if let View::Class(bound) | View::Module(bound) = value.view() {
                     bound.assign_name_recursive(name);
                 }
                 let assign_file = self
@@ -575,7 +575,7 @@ impl VirtualMachine {
                     .unwrap_or_default();
                 self.globals_mut().set(name.clone(), value.clone());
                 self.environment_mut().set(name, value.clone());
-                if let Some(Object::Class(object_class)) = self.globals().get("Object") {
+                if let Some(View::Class(object_class)) = self.globals().get("Object").view() {
                     object_class.set_class_var(name, value);
                     object_class.set_const_location(name, assign_file, position.line as i64);
                 }
@@ -586,16 +586,16 @@ impl VirtualMachine {
                 // program's own instance variables the way any other object
                 // does.
                 let held = self.environment().get("self").or_else(|| {
-                    match self.globals().get("TOPLEVEL_BINDING") {
-                        Some(Object::Binding(binding)) => binding.receiver.clone(),
+                    match self.globals().get("TOPLEVEL_BINDING").view() {
+                        Some(View::Binding(binding)) => binding.receiver.clone(),
                         _ => None,
                     }
                 });
-                match held {
-                    Some(Object::Instance(instance_rc)) => {
+                match held.view() {
+                    Some(View::Instance(instance_rc)) => {
                         let is_frozen = instance_rc.borrow().frozen;
                         if is_frozen {
-                            let receiver = Object::Instance(Rc::clone(&instance_rc));
+                            let receiver = Object::Instance(Rc::clone(instance_rc));
                             return Err(self.frozen_modification_error(&receiver, *position));
                         }
                         let mut instance = instance_rc.borrow_mut();
@@ -610,34 +610,37 @@ impl VirtualMachine {
                     }
                     // An exception carries its own instance variables, so a
                     // user-defined subclass can set state on itself.
-                    Some(Object::Exception(details)) => {
+                    Some(View::Exception(details)) => {
                         details
                             .borrow_mut()
                             .instance_vars
                             .insert(name.clone(), value);
                         Ok(())
                     }
-                    Some(Object::Class(class)) => {
+                    Some(View::Class(class)) => {
                         // Module/class-level instance variables stored as class vars
                         class.set_class_var(format!("@{}", name), value);
                         Ok(())
                     }
-                    Some(Object::Module(module)) => {
+                    Some(View::Module(module)) => {
                         module.set_class_var(format!("@{}", name), value);
                         Ok(())
                     }
                     // A collection or a String keeps its instance variables
                     // aside, where `instance_variable_get` reads them.
-                    Some(other) if Self::collection_address(&other).is_some() => {
-                        if self.object_is_frozen(&other) {
-                            return Err(self.frozen_modification_error(&other, *position));
+                    Some(other) if Self::collection_address(&other.to_object()).is_some() => {
+                        if self.object_is_frozen(&other.to_object()) {
+                            return Err(
+                                self.frozen_modification_error(&other.to_object(), *position)
+                            );
                         }
-                        if let Some(address) = Self::collection_address(&other) {
+                        if let Some(address) = Self::collection_address(&other.to_object()) {
                             self.collection_variables
                                 .entry(address)
                                 .or_default()
                                 .insert(name.clone(), value);
-                            self.collection_variable_owners.insert(address, other);
+                            self.collection_variable_owners
+                                .insert(address, other.to_object());
                         }
                         Ok(())
                     }
@@ -647,8 +650,9 @@ impl VirtualMachine {
                     Some(other) => {
                         // The Ruby class name, not the internal tag: Ruby
                         // reports `NilClass`, never `Nil`.
-                        let class_name =
-                            crate::vm::native_methods::define_method::ruby_class_name(&other);
+                        let class_name = crate::vm::native_methods::define_method::ruby_class_name(
+                            &other.to_object(),
+                        );
                         let msg = format!("can't modify frozen {}: {}", class_name, other);
                         let exc = Object::exception("FrozenError", msg.clone());
                         Err(MetorexError::UncaughtException {
@@ -698,34 +702,34 @@ impl VirtualMachine {
         value: Object,
         position: &Position,
     ) -> Result<(), MetorexError> {
-        match obj {
+        match obj.view() {
             // Every array index assignment goes through `[]=`, which
             // knows the index, start-and-length, and Range forms.
-            Object::Array(_) => {
+            View::Array(_) => {
                 self.send_to_object(obj.clone(), "[]=", vec![idx, value], *position)?;
                 Ok(())
             }
-            Object::Dict(dict_rc) => {
+            View::Dict(dict_rc) => {
                 // The environment names and values its variables in
                 // text, so a write to it is read that way first.
-                if self.dict_is_environment(&dict_rc) {
-                    let environment = Object::Dict(Rc::clone(&dict_rc));
+                if self.dict_is_environment(dict_rc) {
+                    let environment = Object::Dict(Rc::clone(dict_rc));
                     let given = vec![idx, value];
                     self.call_hash_method(&environment, "[]=", &given, *position)?;
                     return Ok(());
                 }
-                let held = Object::Dict(Rc::clone(&dict_rc));
+                let held = Object::Dict(Rc::clone(dict_rc));
                 if self.object_is_frozen(&held) {
                     return Err(self.frozen_modification_error(&held, *position));
                 }
                 // Hash/Dict index assignment. Ruby allows any object
                 // as a key, and a key carrying its own `#hash` takes
                 // the slot that number and `#eql?` place it in.
-                self.hash_store(&dict_rc, &idx, value.clone(), *position)?;
-                self.record_environment_change(&dict_rc, &idx, &value);
+                self.hash_store(dict_rc, &idx, value.clone(), *position)?;
+                self.record_environment_change(dict_rc, &idx, &value);
                 Ok(())
             }
-            Object::Instance(instance_rc) => {
+            View::Instance(instance_rc) => {
                 // A `[]=` written on this one object answers before the one
                 // its class carries.
                 let class = Rc::clone(&instance_rc.borrow().class);
@@ -746,7 +750,7 @@ impl VirtualMachine {
                     self.invoke_method(
                         class,
                         method,
-                        Object::Instance(instance_rc),
+                        Object::Instance(instance_rc.clone()),
                         vec![idx, value],
                         *position,
                     )?;
@@ -755,7 +759,7 @@ impl VirtualMachine {
                     // An instance of an Array or Hash subclass that writes no
                     // `[]=` of its own writes through the storage it is
                     // backed by.
-                    let holder = Object::Instance(Rc::clone(&instance_rc));
+                    let holder = Object::Instance(Rc::clone(instance_rc));
                     crate::vm::native_methods::array_subclass_value(&holder)
                         .or_else(|| crate::vm::native_methods::hash_subclass_value(&holder))
                 } {
@@ -765,7 +769,7 @@ impl VirtualMachine {
                     self.call_struct_instance_method(
                         &class,
                         &members,
-                        &Object::Instance(instance_rc),
+                        &Object::Instance(instance_rc.clone()),
                         "[]=",
                         &[idx, value],
                         *position,
@@ -777,7 +781,7 @@ impl VirtualMachine {
                     // through it keeps one reading of the key for the
                     // subscript and the call.
                     self.call_thread_method(
-                        &Object::Instance(Rc::clone(&instance_rc)),
+                        &Object::Instance(Rc::clone(instance_rc)),
                         "[]=",
                         &[idx, value],
                         *position,
@@ -790,14 +794,14 @@ impl VirtualMachine {
                     ))
                 }
             }
-            Object::Class(cls) | Object::Module(cls) => {
+            View::Class(cls) | View::Module(cls) => {
                 // Dispatch to class/module-level `def self.[]=` (stored
                 // under the `__class__` prefix).
-                let receiver = Object::Class(Rc::clone(&cls));
+                let receiver = Object::Class(Rc::clone(cls));
                 let key = "__class__[]=".to_string();
                 if let Some(method) = cls.find_method(&key) {
                     self.invoke_method(
-                        Rc::clone(&cls),
+                        Rc::clone(cls),
                         method,
                         receiver,
                         vec![idx, value],
@@ -805,10 +809,10 @@ impl VirtualMachine {
                     )?;
                     Ok(())
                 } else if self
-                    .call_warning_methods(&cls, "[]=", &[idx.clone(), value.clone()], *position)?
+                    .call_warning_methods(cls, "[]=", &[idx.clone(), value.clone()], *position)?
                     .is_some()
                     || self
-                        .call_class_methods(&cls, "[]=", &[idx, value], *position)?
+                        .call_class_methods(cls, "[]=", &[idx, value], *position)?
                         .is_some()
                 {
                     Ok(())
@@ -821,7 +825,7 @@ impl VirtualMachine {
             }
             // `str[at] = text` writes into the string itself, which
             // every reference to it then reads.
-            Object::String(_) => {
+            View::String(_) => {
                 let given = vec![idx, value];
                 self.call_string_mutation(&obj, "[]=", &given, *position)?;
                 Ok(())
@@ -830,7 +834,7 @@ impl VirtualMachine {
             // fixtures using stub Thread.current (which is Nil)
             // can run `Thread.current[:in_autoload_rb] = true`
             // without crashing.
-            Object::Nil => Ok(()),
+            View::Nil => Ok(()),
             _ => Err(MetorexError::runtime_error(
                 "Cannot index assign on this type",
                 position_to_location(*position),
@@ -869,8 +873,8 @@ impl VirtualMachine {
             }
         }
         // Look up the setter method and invoke it
-        match receiver_obj {
-            Object::Instance(instance_rc) => {
+        match receiver_obj.view() {
+            View::Instance(instance_rc) => {
                 let (class, method_obj) = {
                     let instance = instance_rc.borrow();
                     let class = instance.class.clone();
@@ -904,7 +908,7 @@ impl VirtualMachine {
                     self.invoke_method(
                         class,
                         method,
-                        Object::Instance(Rc::clone(&instance_rc)),
+                        Object::Instance(Rc::clone(instance_rc)),
                         vec![value],
                         *position,
                     )?;
@@ -920,7 +924,7 @@ impl VirtualMachine {
                     // behind it means.
                     let name = Object::symbol(setter_method.clone());
                     self.send_to_object(
-                        Object::Instance(Rc::clone(&instance_rc)),
+                        Object::Instance(Rc::clone(instance_rc)),
                         "method_missing",
                         vec![name, value],
                         *position,
@@ -930,7 +934,7 @@ impl VirtualMachine {
                     // A setter the instance answers natively, such
                     // as an open file handle's `lineno=`, lives in
                     // the native table rather than the method map.
-                    let receiver = Object::Instance(Rc::clone(&instance_rc));
+                    let receiver = Object::Instance(Rc::clone(instance_rc));
                     let class = self.builtins().class_of(&receiver);
                     if self
                         .call_native_method(
@@ -954,25 +958,26 @@ impl VirtualMachine {
                     ))
                 }
             }
-            Object::Class(class_rc) => {
+            View::Class(class_rc) => {
                 // `def self.name=` is stored the way every other
                 // module-level method is, and one written in a
                 // `class << self` body sits on the singleton
                 // class, so both are looked in before a plain
                 // instance method.
                 if let Some(method) =
-                    crate::vm::method_lookup::module_level_method(&class_rc, &setter_method)
-                        .or_else(|| {
+                    crate::vm::method_lookup::module_level_method(class_rc, &setter_method).or_else(
+                        || {
                             class_rc
                                 .singleton_class_slot()
                                 .clone()
                                 .and_then(|singleton| singleton.find_method(&setter_method))
-                        })
+                        },
+                    )
                 {
                     self.invoke_method(
-                        Rc::clone(&class_rc),
+                        Rc::clone(class_rc),
                         method,
-                        Object::Class(class_rc),
+                        Object::Class(class_rc.clone()),
                         vec![value],
                         *position,
                     )?;
@@ -983,7 +988,7 @@ impl VirtualMachine {
                     // the assignment falls back to storing state.
                     if self
                         .call_class_methods(
-                            &class_rc,
+                            class_rc,
                             &setter_method,
                             std::slice::from_ref(&value),
                             *position,
@@ -993,7 +998,7 @@ impl VirtualMachine {
                         return Ok(());
                     }
                     self.send_to_object(
-                        Object::Class(class_rc),
+                        Object::Class(class_rc.clone()),
                         &setter_method,
                         vec![value],
                         *position,
@@ -1001,12 +1006,12 @@ impl VirtualMachine {
                     Ok(())
                 }
             }
-            Object::Module(module_rc) => {
+            View::Module(module_rc) => {
                 // A writer written in a `class << self` body sits
                 // on the singleton class, which is a third place
                 // an assignment has to look.
                 if let Some(method) =
-                    crate::vm::method_lookup::module_level_method(&module_rc, &setter_method)
+                    crate::vm::method_lookup::module_level_method(module_rc, &setter_method)
                         .or_else(|| {
                             module_rc
                                 .singleton_class_slot()
@@ -1015,9 +1020,9 @@ impl VirtualMachine {
                         })
                 {
                     self.invoke_method(
-                        Rc::clone(&module_rc),
+                        Rc::clone(module_rc),
                         method,
-                        Object::Module(module_rc),
+                        Object::Module(module_rc.clone()),
                         vec![value],
                         *position,
                     )?;
@@ -1026,10 +1031,10 @@ impl VirtualMachine {
                     // A setter the module answers natively, such
                     // as `Process.maxgroups=`, lives in the native
                     // table rather than in the method map.
-                    let receiver = Object::Module(Rc::clone(&module_rc));
+                    let receiver = Object::Module(Rc::clone(module_rc));
                     if self
                         .call_module_methods(
-                            &module_rc,
+                            module_rc,
                             &receiver,
                             &setter_method,
                             std::slice::from_ref(&value),
@@ -1050,40 +1055,54 @@ impl VirtualMachine {
             // user-defined accessors fire; fall back to the built-in
             // class otherwise.
             other => {
-                let global_class_name = match &other {
-                    Object::Bool(true) => Some("TrueClass"),
-                    Object::Bool(false) => Some("FalseClass"),
-                    Object::Nil => Some("NilClass"),
-                    Object::Int(_) => Some("Integer"),
-                    Object::Float(_) => Some("Float"),
-                    Object::Symbol(_) => Some("Symbol"),
+                let global_class_name = match other {
+                    View::Bool(true) => Some("TrueClass"),
+                    View::Bool(false) => Some("FalseClass"),
+                    View::Nil => Some("NilClass"),
+                    View::Int(_) => Some("Integer"),
+                    View::Float(_) => Some("Float"),
+                    View::Symbol(_) => Some("Symbol"),
                     _ => None,
                 };
                 let target_class: Option<Rc<crate::class::Class>> = global_class_name
-                    .and_then(|name| match self.globals().get(name) {
-                        Some(Object::Class(c)) => Some(c),
+                    .and_then(|name| match self.globals().get(name).view() {
+                        Some(View::Class(c)) => Some(c.clone()),
                         _ => None,
                     })
-                    .or_else(|| Some(self.builtins().class_of(&other)));
+                    .or_else(|| Some(self.builtins().class_of(&receiver_obj)));
 
                 if let Some(class) = target_class
                     && let Some(method) = class.find_method(&setter_method)
                 {
-                    self.invoke_method(Rc::clone(&class), method, other, vec![value], *position)?;
+                    self.invoke_method(
+                        Rc::clone(&class),
+                        method,
+                        receiver_obj.clone(),
+                        vec![value],
+                        *position,
+                    )?;
                     Ok(())
-                } else if let Some((owner, method)) = self.lookup_method(&other, &setter_method) {
+                } else if let Some((owner, method)) =
+                    self.lookup_method(&receiver_obj, &setter_method)
+                {
                     // An exception carries its own class, which is
                     // where a reopened `attr_accessor` lives.
-                    self.invoke_method(owner, method, other, vec![value], *position)?;
+                    self.invoke_method(
+                        owner,
+                        method,
+                        receiver_obj.clone(),
+                        vec![value],
+                        *position,
+                    )?;
                     Ok(())
                 } else {
                     // A setter the class implements natively, such
                     // as the stream methods the String standing in
                     // for STDOUT answers, is reached last.
-                    let class = self.builtins().class_of(&other);
+                    let class = self.builtins().class_of(&receiver_obj);
                     let handled = self.call_native_method(
                         &class,
-                        &other,
+                        &receiver_obj,
                         &setter_method,
                         std::slice::from_ref(&value),
                         *position,
@@ -1091,10 +1110,10 @@ impl VirtualMachine {
                     match handled {
                         Some(_) => Ok(()),
                         None => {
-                            let wording = self.receiver_wording_for(&other, *position);
+                            let wording = self.receiver_wording_for(&receiver_obj, *position);
                             Err(crate::vm::errors::undefined_method_error_worded(
                                 &setter_method,
-                                &other,
+                                &receiver_obj,
                                 std::slice::from_ref(&value),
                                 wording,
                                 *position,
@@ -1116,16 +1135,16 @@ impl VirtualMachine {
         position: &Position,
     ) -> Result<(), MetorexError> {
         let owner_for_hook = ns.clone();
-        match ns {
-            Object::Class(c) | Object::Module(c) => {
+        match ns.view() {
+            View::Class(c) | View::Module(c) => {
                 // Rebinding a constant, or one with an autoload still
                 // registered, warns unless `$VERBOSE` is nil.
                 if self.autoload_const_access_depth == 0
                     && (c.get_class_var(name).is_some() || c.get_autoload(name).is_some())
                 {
-                    self.warn_already_initialized(&c, name, *position);
+                    self.warn_already_initialized(c, name, *position);
                 }
-                name_constant_value(&c, name, &value);
+                name_constant_value(c, name, &value);
                 // Explicit `Mod::X = value` outside of an autoload
                 // load supersedes any pending autoload. (The
                 // autoload trigger path manages its own autoload
@@ -1145,11 +1164,11 @@ impl VirtualMachine {
                 self.trigger_const_added_hook(owner_for_hook, name, *position)?;
                 Ok(())
             }
-            held => Err(crate::vm::errors::simple_exception(
+            _ => Err(crate::vm::errors::simple_exception(
                 "TypeError",
                 &format!(
                     "{} is not a class/module",
-                    crate::vm::native_methods::array_methods::inspect_element(&held)
+                    crate::vm::native_methods::array_methods::inspect_element(&ns)
                 ),
                 *position,
             )),
@@ -1187,7 +1206,7 @@ pub(crate) fn constant_target_matches(target: &Expression, left: &Expression) ->
 /// namespace makes the name permanent and cascades into the anonymous modules
 /// nested under it; an anonymous one only supplies a temporary name.
 pub(crate) fn name_constant_value(namespace: &Rc<Class>, const_name: &str, value: &Object) {
-    let (Object::Class(bound) | Object::Module(bound)) = value else {
+    let (View::Class(bound) | View::Module(bound)) = value.view() else {
         return;
     };
     let qualified = format!("{}::{}", namespace.inspect_name(), const_name);
@@ -1270,9 +1289,9 @@ impl VirtualMachine {
         }
         match name {
             "~" => {
-                let matchdata = matches!(&value, Object::Instance(instance)
+                let matchdata = matches!(value.view(), View::Instance(instance)
                     if instance.borrow().class.name() == "MatchData");
-                if !matches!(value, Object::Nil) && !matchdata {
+                if !matches!(value.view(), View::Nil) && !matchdata {
                     let named = class_named(&value);
                     return Err(simple_exception(
                         "TypeError",
@@ -1300,13 +1319,13 @@ impl VirtualMachine {
                 Ok(value)
             }
             "/" | "\\" | "," | ";" => {
-                let text = match &value {
-                    Object::Nil | Object::String(_) => value.clone(),
+                let text = match value.view() {
+                    View::Nil | View::String(_) => value.clone(),
                     // The field separator `split` falls back on may be a
                     // pattern.
-                    Object::Regex(_, _) if name == ";" => value.clone(),
-                    other => {
-                        match crate::vm::native_methods::subclasses::string_subclass_value(other) {
+                    View::Regex(_, _) if name == ";" => value.clone(),
+                    _ => {
+                        match crate::vm::native_methods::subclasses::string_subclass_value(&value) {
                             Some(backing) if name == "/" => backing,
                             _ => {
                                 return Err(simple_exception(
@@ -1323,7 +1342,8 @@ impl VirtualMachine {
                 };
                 // Ruby has retired the separators, and says so once the
                 // deprecated category is asked for.
-                if !matches!(text, Object::Nil) && self.warning_category_enabled("deprecated") {
+                if !matches!(text.view(), View::Nil) && self.warning_category_enabled("deprecated")
+                {
                     let message = format!(
                         "{}non-nil '${written}' is deprecated\n",
                         self.warning_prefix(0, position)
@@ -1332,13 +1352,13 @@ impl VirtualMachine {
                 }
                 // The record separator is held as a frozen plain String of
                 // its own unless it was handed one.
-                match &text {
-                    Object::String(held)
+                match text.view() {
+                    View::String(held)
                         if name == "/"
-                            && !(held.is_frozen() && matches!(value, Object::String(_))) =>
+                            && !(held.is_frozen() && matches!(value.view(), View::String(_))) =>
                     {
                         let copy = Object::string(held.as_str().to_string());
-                        if let Object::String(fresh) = &copy {
+                        if let View::String(fresh) = copy.view() {
                             fresh.freeze();
                         }
                         Ok(copy)
@@ -1346,30 +1366,30 @@ impl VirtualMachine {
                     _ => Ok(value),
                 }
             }
-            "." => match value {
-                Object::Int(_) => Ok(value),
-                Object::Float(number) => Ok(Object::Int(number as i64)),
-                other => {
-                    let converted = self.integer_for_global(&other, position)?;
+            "." => match value.view() {
+                View::Int(_) => Ok(value),
+                View::Float(number) => Ok(Object::Int(number as i64)),
+                _ => {
+                    let converted = self.integer_for_global(&value, position)?;
                     Ok(converted)
                 }
             },
             // The program's name is also what a process listing shows.
-            "0" => match &value {
-                Object::String(text) => {
+            "0" => match value.view() {
+                View::String(text) => {
                     self.set_process_title(&text.as_str());
                     Ok(value)
                 }
-                other if self.responds_to(other, "to_str") => {
+                _ if self.responds_to(&value, "to_str") => {
                     let converted =
-                        self.send_to_object(other.clone(), "to_str", Vec::new(), position)?;
-                    if let Object::String(text) = &converted {
+                        self.send_to_object(value.clone(), "to_str", Vec::new(), position)?;
+                    if let View::String(text) = converted.view() {
                         self.set_process_title(&text.as_str());
                     }
                     Ok(converted)
                 }
-                other => {
-                    let named = self.conversion_name(other);
+                _ => {
+                    let named = self.conversion_name(&value);
                     Err(simple_exception(
                         "TypeError",
                         &format!("no implicit conversion of {named} into String"),
@@ -1377,8 +1397,8 @@ impl VirtualMachine {
                     ))
                 }
             },
-            "VERBOSE" => Ok(match value {
-                Object::Nil | Object::Bool(false) => value,
+            "VERBOSE" => Ok(match value.view() {
+                View::Nil | View::Bool(false) => value,
                 _ => Object::Bool(true),
             }),
             "=" => {
@@ -1393,7 +1413,7 @@ impl VirtualMachine {
             }
             "@" => {
                 let raised = self.globals().get("!").unwrap_or(Object::Nil);
-                if matches!(raised, Object::Nil) {
+                if matches!(raised.view(), View::Nil) {
                     return Err(simple_exception("ArgumentError", "$! not set", position));
                 }
                 self.send_to_object(raised, "set_backtrace", vec![value.clone()], position)?;
@@ -1410,7 +1430,7 @@ impl VirtualMachine {
         value: &Object,
         position: crate::lexer::Position,
     ) -> Result<Object, MetorexError> {
-        if matches!(value, Object::Nil) {
+        if matches!(value.view(), View::Nil) {
             return Err(simple_exception(
                 "TypeError",
                 "no implicit conversion from nil to integer",
@@ -1428,8 +1448,11 @@ impl VirtualMachine {
         if !self.responds_to(value, "to_int") && self.lookup_method(value, "to_int").is_none() {
             return Err(refused());
         }
-        match self.send_to_object(value.clone(), "to_int", Vec::new(), position)? {
-            converted @ Object::Int(_) => Ok(converted),
+        match self
+            .send_to_object(value.clone(), "to_int", Vec::new(), position)?
+            .view()
+        {
+            converted @ View::Int(_) => Ok(converted.to_object()),
             _ => Err(refused()),
         }
     }
@@ -1438,9 +1461,9 @@ impl VirtualMachine {
 /// The name of the class `value` is an instance of, as a message about it
 /// spells it.
 fn class_named(value: &Object) -> String {
-    match value {
-        Object::Instance(instance) => instance.borrow().class.inspect_name(),
-        other => crate::vm::native_methods::define_method::ruby_class_name(other).to_string(),
+    match value.view() {
+        View::Instance(instance) => instance.borrow().class.inspect_name(),
+        _ => crate::vm::native_methods::define_method::ruby_class_name(value).to_string(),
     }
 }
 

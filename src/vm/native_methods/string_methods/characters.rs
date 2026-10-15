@@ -1,6 +1,7 @@
 // Characters and code points, and the numbers a string spells.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Characters and code points, and the numbers a string spells.
@@ -26,26 +27,29 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let salt = match &arguments[0] {
-                    Object::String(held) => held.to_text(),
-                    other if self.responds_to(other, "to_str") => {
-                        match self.send_to_object(other.clone(), "to_str", vec![], position)? {
-                            Object::String(held) => held.to_text(),
+                let salt = match arguments[0].view() {
+                    View::String(held) => held.to_text(),
+                    _ if self.responds_to(&arguments[0], "to_str") => {
+                        match self
+                            .send_to_object(arguments[0].clone(), "to_str", vec![], position)?
+                            .view()
+                        {
+                            View::String(held) => held.to_text(),
                             converted => {
                                 return Err(method_argument_type_error(
                                     method_name,
                                     "String",
-                                    &converted,
+                                    &converted.to_object(),
                                     position,
                                 ));
                             }
                         }
                     }
-                    other => {
+                    _ => {
                         return Err(method_argument_type_error(
                             method_name,
                             "String",
-                            other,
+                            &arguments[0],
                             position,
                         ));
                     }
@@ -141,11 +145,12 @@ impl VirtualMachine {
                 // `codepoints` answers the Array, unless a block is given:
                 // then it hands each one over and answers the string.
                 if method_name == "codepoints"
-                    && !matches!(self.pending_block, Some(Object::Block(_)))
+                    && !matches!(self.pending_block.view(), Some(View::Block(_)))
                 {
                     return Ok(Some(Object::Array(Rc::new(RefCell::new(points)))));
                 }
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     let size = points.len() as i64;
                     return self
                         .build_enumerator(
@@ -158,7 +163,7 @@ impl VirtualMachine {
                         .map(Some);
                 };
                 for point in points {
-                    self.execute_block_callable(&block, vec![point], position)?;
+                    self.execute_block_callable(block, vec![point], position)?;
                 }
                 Ok(Some(receiver.clone()))
             }
@@ -174,9 +179,9 @@ impl VirtualMachine {
                 let chars = encoded_characters(string_value);
                 // Given a block, `chars` hands each character over and
                 // answers the string, the way `each_char` does.
-                if let Some(Object::Block(block)) = self.pending_block.take() {
+                if let Some(View::Block(block)) = self.pending_block.take().view() {
                     for character in chars {
-                        self.execute_block_callable(&block, vec![character], position)?;
+                        self.execute_block_callable(block, vec![character], position)?;
                     }
                     return Ok(Some(receiver.clone()));
                 }

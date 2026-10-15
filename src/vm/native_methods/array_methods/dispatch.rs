@@ -2,6 +2,7 @@
 // the name is none of its own, and the next step is tried.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 /// One step of the chain: every group of Array methods reads the same
 /// arguments and answers the same way.
@@ -40,7 +41,7 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        let Object::Array(array_rc) = receiver else {
+        let View::Array(array_rc) = receiver.view() else {
             return Ok(None);
         };
         // Every method that changes the array in place refuses a frozen one.
@@ -88,7 +89,7 @@ impl VirtualMachine {
                 | "keep_if"
                 | "delete_if"
                 | "sort_by!"
-        ) && !matches!(self.pending_block, Some(Object::Block(_)));
+        ) && !matches!(self.pending_block.view(), Some(View::Block(_)));
         if MUTATORS.contains(&method_name) && !answers_enumerator && self.object_is_frozen(receiver)
         {
             return Err(self.frozen_modification_error(receiver, position));

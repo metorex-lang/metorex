@@ -1,5 +1,6 @@
 // Display trait implementation for Object
 
+use crate::object::View;
 use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
@@ -37,21 +38,21 @@ pub(crate) fn render_guarded<T>(address: usize, render: impl FnOnce() -> T) -> O
 // Implement Display for Object to provide string representation
 impl fmt::Display for Object {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Object::Nil => write!(f, "nil"),
-            Object::Bool(b) => write!(f, "{}", b),
-            Object::Int(i) => write!(f, "{}", i),
-            Object::BigInt(i) => write!(f, "{}", i),
+        match self.view() {
+            View::Nil => write!(f, "nil"),
+            View::Bool(b) => write!(f, "{}", b),
+            View::Int(i) => write!(f, "{}", i),
+            View::BigInt(i) => write!(f, "{}", i),
             // Ruby spells the non-finite floats out rather than using Rust's
             // "inf" / "NaN" forms.
-            Object::Float(fl) if fl.is_nan() => write!(f, "NaN"),
-            Object::Float(fl) if fl.is_infinite() => {
-                write!(f, "{}Infinity", if *fl < 0.0 { "-" } else { "" })
+            View::Float(fl) if fl.is_nan() => write!(f, "NaN"),
+            View::Float(fl) if fl.is_infinite() => {
+                write!(f, "{}Infinity", if fl < 0.0 { "-" } else { "" })
             }
-            Object::Float(fl) => write!(f, "{}", float_text(*fl)),
-            Object::String(s) => write!(f, "{}", s),
-            Object::Symbol(s) => write!(f, ":{}", s),
-            Object::Array(arr) => {
+            View::Float(fl) => write!(f, "{}", float_text(fl)),
+            View::String(s) => write!(f, "{}", s),
+            View::Symbol(s) => write!(f, ":{}", s),
+            View::Array(arr) => {
                 let elements = arr.borrow().clone();
                 let rendered = render_guarded(Rc::as_ptr(arr) as usize, || {
                     let mut body = String::new();
@@ -68,7 +69,7 @@ impl fmt::Display for Object {
                     None => write!(f, "[...]"),
                 }
             }
-            Object::Dict(dict) => {
+            View::Dict(dict) => {
                 let address = Rc::as_ptr(dict) as usize;
                 let entered = RENDERING.with(|active| {
                     let mut active = active.borrow_mut();
@@ -118,19 +119,19 @@ impl fmt::Display for Object {
                 outcome
             }
             // Ruby's default `to_s` for an object: its class and address.
-            Object::Instance(inst) => {
+            View::Instance(inst) => {
                 let class_name = inst.borrow().class.inspect_name();
                 write!(f, "#<{}:0x{:016x}>", class_name, Rc::as_ptr(inst) as usize)
             }
             // A class or module displays under the name Ruby reports for it,
             // which includes one set by `set_temporary_name` or derived from
             // an anonymous namespace.
-            Object::Class(class) => write!(f, "{}", class.inspect_name()),
-            Object::Module(module) => write!(f, "{}", module.inspect_name()),
-            Object::Method(method) => write!(f, "<method {}>", method.name),
+            View::Class(class) => write!(f, "{}", class.inspect_name()),
+            View::Module(module) => write!(f, "{}", module.inspect_name()),
+            View::Method(method) => write!(f, "<method {}>", method.name),
             // A callable displays as its address and where it was written,
             // with a lambda saying so.
-            Object::Block(block) => {
+            View::Block(block) => {
                 let shape = if block.is_lambda { " (lambda)" } else { "" };
                 if let Some(named) = &block.from_symbol {
                     return write!(
@@ -153,22 +154,22 @@ impl fmt::Display for Object {
                     _ => write!(f, "#<Proc:0x{:016x}{}>", Rc::as_ptr(block) as usize, shape),
                 }
             }
-            Object::Exception(exc) => {
+            View::Exception(exc) => {
                 let exception = exc.borrow();
                 write!(f, "{}: {}", exception.exception_type, exception.message)
             }
             // A Set renders the way `inspect` does, and prints `{...}` when
             // it reaches itself rather than recursing forever.
-            Object::Set(set) => {
+            View::Set(set) => {
                 let elements: Vec<Object> =
                     set.borrow().iter().map(|held| held.value.clone()).collect();
                 let rendered = render_guarded(Rc::as_ptr(set) as usize, || {
                     elements
                         .iter()
-                        .map(|element| match element {
-                            Object::String(text) => format!("{:?}", text.as_str()),
-                            Object::Symbol(name) => inspect_symbol(&name.as_str()),
-                            Object::Nil => "nil".to_string(),
+                        .map(|element| match element.view() {
+                            View::String(text) => format!("{:?}", text.as_str()),
+                            View::Symbol(name) => inspect_symbol(&name.as_str()),
+                            View::Nil => "nil".to_string(),
                             other => other.to_string(),
                         })
                         .collect::<Vec<String>>()
@@ -179,28 +180,28 @@ impl fmt::Display for Object {
                     None => write!(f, "Set[...]"),
                 }
             }
-            Object::Result(result) => match result {
+            View::Result(result) => match result {
                 Ok(obj) => write!(f, "Ok({})", obj),
                 Err(obj) => write!(f, "Err({})", obj),
             },
-            Object::NativeFunction(name) => write!(f, "<native function {}>", name),
-            Object::Range {
+            View::NativeFunction(name) => write!(f, "<native function {}>", name),
+            View::Range {
                 start,
                 end,
                 exclusive,
                 ..
             } => {
-                if *exclusive {
+                if exclusive {
                     write!(f, "{}...{}", start, end)
                 } else {
                     write!(f, "{}..{}", start, end)
                 }
             }
-            Object::Binding(binding) => {
+            View::Binding(binding) => {
                 write!(f, "<Binding with {} vars>", binding.variable_count())
             }
-            Object::CompiledFunction(func) => write!(f, "{}", func),
-            Object::Regex(pattern, flags) => {
+            View::CompiledFunction(func) => write!(f, "{}", func),
+            View::Regex(pattern, flags) => {
                 if flags.is_empty() {
                     write!(f, "/{}/", pattern)
                 } else {

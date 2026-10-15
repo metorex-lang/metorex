@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -278,7 +279,7 @@ class Foo
 end
 Foo.remove_method()
 "#);
-    assert!(matches!(result, Some(Object::Class(_))));
+    assert!(matches!(result.view(), Some(View::Class(_))));
 }
 
 #[test]
@@ -288,7 +289,7 @@ class Foo
 end
 Foo.undef_method()
 "#);
-    assert!(matches!(result, Some(Object::Class(_))));
+    assert!(matches!(result.view(), Some(View::Class(_))));
 }
 
 #[test]
@@ -533,7 +534,7 @@ module Mod
 end
 Mod.remove_method()
 "#);
-    assert!(matches!(result, Some(Object::Module(_))));
+    assert!(matches!(result.view(), Some(View::Module(_))));
 }
 
 #[test]
@@ -598,7 +599,7 @@ module Mod
 end
 Mod.undef_method()
 "#);
-    assert!(matches!(result, Some(Object::Module(_))));
+    assert!(matches!(result.view(), Some(View::Module(_))));
 }
 
 #[test]

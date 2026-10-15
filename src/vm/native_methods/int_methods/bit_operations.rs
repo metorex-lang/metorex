@@ -1,6 +1,7 @@
 // Dividing with a remainder, shifting, and the width a number reads in.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// Dividing with a remainder, shifting, and the width a number reads in.
@@ -24,8 +25,8 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                match &arguments[0] {
-                    Object::Int(0) => {
+                match arguments[0].view() {
+                    View::Int(0) => {
                         let message = "divided by 0".to_string();
                         Err(MetorexError::UncaughtException {
                             exception: Object::exception("ZeroDivisionError", message.clone()),
@@ -33,13 +34,13 @@ impl VirtualMachine {
                             message,
                         })
                     }
-                    Object::Int(divisor) => {
-                        let quotient = n.div_euclid(*divisor);
+                    View::Int(divisor) => {
+                        let quotient = n.div_euclid(divisor);
                         let remainder = n - quotient * divisor;
                         // `div_euclid` floors toward zero for a negative
                         // divisor, so correct it back to Ruby's floor.
                         let (quotient, remainder) =
-                            if remainder != 0 && (remainder < 0) != (*divisor < 0) {
+                            if remainder != 0 && (remainder < 0) != (divisor < 0) {
                                 (quotient - 1, remainder + divisor)
                             } else {
                                 (quotient, remainder)
@@ -53,7 +54,7 @@ impl VirtualMachine {
                     }
                     // Ruby answers an Integer quotient and a Float modulus
                     // when the divisor is a Float.
-                    Object::Float(divisor) => {
+                    View::Float(divisor) => {
                         let value = *n as f64;
                         let quotient = (value / divisor).floor();
                         Ok(Some(Object::Array(std::rc::Rc::new(
@@ -63,10 +64,10 @@ impl VirtualMachine {
                             ]),
                         ))))
                     }
-                    other => Err(method_argument_type_error(
+                    _ => Err(method_argument_type_error(
                         method_name,
                         "Integer or Float",
-                        other,
+                        &arguments[0],
                         position,
                     )),
                 }

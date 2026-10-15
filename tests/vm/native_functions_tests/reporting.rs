@@ -1,11 +1,12 @@
 // What a program writes out and what it reports about the call running.
 
 use super::*;
+use metorex::object::{OptionView, View};
 
 #[test]
 fn at_exit_returns_the_handler() {
     let result = run("at_exit { puts 'bye' }");
-    assert!(matches!(result, Some(Object::Block(_))));
+    assert!(matches!(result.view(), Some(View::Block(_))));
 }
 
 // ── warn ─────────────────────────────────────────────────────────────────────
@@ -52,7 +53,7 @@ def foo
 end
 foo
 "#);
-    assert!(matches!(result, Some(Object::Symbol(_))));
+    assert!(matches!(result.view(), Some(View::Symbol(_))));
 }
 
 // ── caller ───────────────────────────────────────────────────────────────────
@@ -60,5 +61,5 @@ foo
 #[test]
 fn caller_returns_array() {
     let result = run("caller()");
-    assert!(matches!(result, Some(Object::Array(_))));
+    assert!(matches!(result.view(), Some(View::Array(_))));
 }

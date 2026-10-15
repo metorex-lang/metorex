@@ -2,14 +2,15 @@
 // it reads as a constant.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 /// How Ruby names a value that cannot stand in for a number: true, false and
 /// nil by their own spelling, and everything else by its class.
 pub(crate) fn unconvertible_wording(value: &Object, named: &str) -> String {
-    match value {
-        Object::Bool(true) => "true".to_string(),
-        Object::Bool(false) => "false".to_string(),
-        Object::Nil => "nil".to_string(),
+    match value.view() {
+        View::Bool(true) => "true".to_string(),
+        View::Bool(false) => "false".to_string(),
+        View::Nil => "nil".to_string(),
         _ => named.to_string(),
     }
 }
@@ -20,7 +21,7 @@ pub(crate) const PRIORITY_CEILING: i64 = 3;
 
 /// Whether two objects are the same Thread.
 pub(crate) fn same_thread(one: &Object, other: &Object) -> bool {
-    matches!((one, other), (Object::Instance(a), Object::Instance(b)) if Rc::ptr_eq(a, b))
+    matches!((one.view(), other.view()), (View::Instance(a), View::Instance(b)) if Rc::ptr_eq(a, b))
 }
 
 /// Whether `name` is a syntactically valid Ruby constant name: must start
@@ -166,8 +167,8 @@ impl VirtualMachine {
             None => self.globals().get("__Thread_main"),
         };
         let running = matches!(
-            (&current, receiver),
-            (Some(Object::Instance(a)), Object::Instance(b)) if Rc::ptr_eq(a, b)
+            (current.view(), receiver.view()),
+            (Some(View::Instance(a)), View::Instance(b)) if Rc::ptr_eq(a, b)
         );
         let held = self.fiber_current_handle();
         // A thread's own body is its root fiber, so the names it keeps there

@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -66,7 +67,7 @@ end_f = 3.0
 r = start_f..end_f
 "hello"[r]
 "#);
-    assert!(matches!(result, Some(Object::String(_))));
+    assert!(matches!(result.view(), Some(View::String(_))));
 }
 
 // ── STDOUT/STDERR stream methods ─────────────────────────────────────────────

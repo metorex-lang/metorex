@@ -1,6 +1,7 @@
 // The instance methods every generated struct class inherits.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The instance methods every generated struct class inherits from Struct.
@@ -32,7 +33,7 @@ impl VirtualMachine {
         if arguments.len() == 1
             && let Some(target) = method_name.strip_suffix('=')
             && members.iter().any(|member| member == target)
-            && let Object::Instance(instance) = receiver
+            && let View::Instance(instance) = receiver.view()
         {
             if self.object_is_frozen(receiver) {
                 return Err(self.frozen_modification_error(receiver, position));
@@ -51,8 +52,9 @@ impl VirtualMachine {
                 member_values(receiver, members),
             ))))),
             "to_h" => {
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => Some(block),
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(block)) => Some(block),
                     _ => None,
                 };
                 let mut pairs = IndexMap::new();
@@ -115,7 +117,7 @@ impl VirtualMachine {
                 if self.object_is_frozen(receiver) {
                     return Err(self.frozen_modification_error(receiver, position));
                 }
-                if let Object::Instance(instance) = receiver {
+                if let View::Instance(instance) = receiver.view() {
                     instance
                         .borrow_mut()
                         .instance_vars
@@ -132,7 +134,7 @@ impl VirtualMachine {
                     Err(_) => return Ok(Some(Object::Nil)),
                 };
                 let value = member_value(receiver, &member);
-                if arguments.len() == 1 || matches!(value, Object::Nil) {
+                if arguments.len() == 1 || matches!(value.view(), View::Nil) {
                     return Ok(Some(if arguments.len() == 1 {
                         value
                     } else {
@@ -145,18 +147,18 @@ impl VirtualMachine {
                 let values = member_values(receiver, members);
                 let mut picked = Vec::with_capacity(arguments.len());
                 for key in arguments {
-                    match key {
-                        Object::Int(index) => {
-                            picked.push(indexed_value(&values, *index, position)?);
+                    match key.view() {
+                        View::Int(index) => {
+                            picked.push(indexed_value(&values, index, position)?);
                         }
-                        Object::Range { .. } => {
+                        View::Range { .. } => {
                             picked.extend(range_values(&values, key, position)?);
                         }
-                        other => {
+                        _ => {
                             return Err(MetorexError::type_error(
                                 format!(
                                     "no implicit conversion of {} into Integer",
-                                    crate::vm::errors::conversion_subject(other)
+                                    crate::vm::errors::conversion_subject(key)
                                 ),
                                 position_to_location(position),
                             ));
@@ -166,7 +168,8 @@ impl VirtualMachine {
                 Ok(Some(Object::Array(Rc::new(RefCell::new(picked)))))
             }
             "select" | "filter" => {
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     if !arguments.is_empty() {
                         return Err(argument_error(
                             format!(
@@ -198,7 +201,7 @@ impl VirtualMachine {
                 let mut kept = Vec::new();
                 for value in member_values(receiver, members) {
                     let verdict =
-                        self.execute_block_callable(&block, vec![value.clone()], position)?;
+                        self.execute_block_callable(block, vec![value.clone()], position)?;
                     if verdict.is_truthy() {
                         kept.push(value);
                     }
@@ -206,7 +209,8 @@ impl VirtualMachine {
                 Ok(Some(Object::Array(Rc::new(RefCell::new(kept)))))
             }
             "each" | "each_pair" => {
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     return self
                         .build_enumerator(
                             receiver.clone(),
@@ -228,7 +232,7 @@ impl VirtualMachine {
                             member_value(receiver, member),
                         ])]
                     };
-                    self.execute_block_with_control_flow(&block, args, position)?;
+                    self.execute_block_with_control_flow(block, args, position)?;
                 }
                 Ok(Some(receiver.clone()))
             }
@@ -322,16 +326,16 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         let mut pairs = IndexMap::new();
-        let requested = match keys {
-            Object::Nil => {
+        let requested = match keys.view() {
+            View::Nil => {
                 for member in members {
                     pairs.insert(format!(":{}", member), member_value(receiver, member));
                 }
                 return Ok(Object::Dict(Rc::new(RefCell::new(pairs))));
             }
-            Object::Array(elements) => elements.borrow().clone(),
-            other => {
-                let class_name = crate::vm::native_methods::define_method::ruby_class_name(other);
+            View::Array(elements) => elements.borrow().clone(),
+            _ => {
+                let class_name = crate::vm::native_methods::define_method::ruby_class_name(keys);
                 return Err(MetorexError::type_error(
                     format!("wrong argument type {} (expected Array or nil)", class_name),
                     position_to_location(position),
@@ -342,8 +346,8 @@ impl VirtualMachine {
             return Ok(Object::Dict(Rc::new(RefCell::new(pairs))));
         }
         for key in &requested {
-            let found = match key {
-                Object::Symbol(name) | Object::String(name) => members
+            let found = match key.view() {
+                View::Symbol(name) | View::String(name) => members
                     .iter()
                     .find(|member| *member == &**name)
                     .map(|member| member_value(receiver, member)),
@@ -377,12 +381,12 @@ impl VirtualMachine {
         key: &Object,
         position: Position,
     ) -> Result<i64, MetorexError> {
-        if let Object::Int(index) = key {
-            return Ok(*index);
+        if let View::Int(index) = key.view() {
+            return Ok(index);
         }
-        let class_name = match key {
-            Object::Instance(instance) => Rc::clone(&instance.borrow().class).ruby_name(),
-            other => crate::vm::native_methods::define_method::ruby_class_name(other).to_string(),
+        let class_name = match key.view() {
+            View::Instance(instance) => Rc::clone(&instance.borrow().class).ruby_name(),
+            _ => crate::vm::native_methods::define_method::ruby_class_name(key).to_string(),
         };
         let Some((class, method)) = self.lookup_method(key, "to_int") else {
             return Err(MetorexError::type_error(
@@ -390,8 +394,11 @@ impl VirtualMachine {
                 position_to_location(position),
             ));
         };
-        match self.invoke_method(class, method, key.clone(), vec![], position)? {
-            Object::Int(index) => Ok(index),
+        match self
+            .invoke_method(class, method, key.clone(), vec![], position)?
+            .view()
+        {
+            View::Int(index) => Ok(index),
             _ => Err(MetorexError::type_error(
                 format!("can't convert {} into Integer", class_name),
                 position_to_location(position),
@@ -406,21 +413,19 @@ impl VirtualMachine {
         produced: Object,
         position: Position,
     ) -> Result<(Object, Object), MetorexError> {
-        let pair = match &produced {
-            Object::Array(_) => produced.clone(),
+        let pair = match produced.view() {
+            View::Array(_) => produced.clone(),
             other => {
-                let coerced = match self.lookup_method(other, "to_ary") {
+                let coerced = match self.lookup_method(&produced, "to_ary") {
                     Some((class, method)) => {
-                        self.invoke_method(class, method, other.clone(), vec![], position)?
+                        self.invoke_method(class, method, produced.clone(), vec![], position)?
                     }
                     None => Object::Nil,
                 };
-                if !matches!(coerced, Object::Array(_)) {
+                if !matches!(coerced.view(), View::Array(_)) {
                     let class_name = match other {
-                        Object::Instance(instance) => {
-                            Rc::clone(&instance.borrow().class).ruby_name()
-                        }
-                        _ => crate::vm::native_methods::define_method::ruby_class_name(other)
+                        View::Instance(instance) => Rc::clone(&instance.borrow().class).ruby_name(),
+                        _ => crate::vm::native_methods::define_method::ruby_class_name(&produced)
                             .to_string(),
                     };
                     return Err(MetorexError::type_error(
@@ -431,7 +436,7 @@ impl VirtualMachine {
                 coerced
             }
         };
-        let Object::Array(elements) = &pair else {
+        let View::Array(elements) = pair.view() else {
             unreachable!("pair is an Array by construction");
         };
         let elements = elements.borrow();
@@ -473,14 +478,14 @@ pub(crate) fn struct_values_equal(
     strict: bool,
     in_flight: &mut Vec<(usize, usize)>,
 ) -> bool {
-    let Object::Instance(other_instance) = other else {
+    let View::Instance(other_instance) = other.view() else {
         return false;
     };
     if !Rc::ptr_eq(&other_instance.borrow().class, class_rc) {
         return false;
     }
-    let pair = match (receiver, other) {
-        (Object::Instance(left), Object::Instance(right)) => {
+    let pair = match (receiver.view(), other.view()) {
+        (View::Instance(left), View::Instance(right)) => {
             (Rc::as_ptr(left) as usize, Rc::as_ptr(right) as usize)
         }
         _ => return false,
@@ -507,13 +512,13 @@ pub(crate) fn member_values_equal(
     strict: bool,
     in_flight: &mut Vec<(usize, usize)>,
 ) -> bool {
-    if let Object::Instance(instance) = left
+    if let View::Instance(instance) = left.view()
         && let Some(members) = struct_members(&Rc::clone(&instance.borrow().class))
     {
         let class_rc = Rc::clone(&instance.borrow().class);
         return struct_values_equal(&class_rc, &members, left, right, strict, in_flight);
     }
-    if strict && std::mem::discriminant(left) != std::mem::discriminant(right) {
+    if strict && std::mem::discriminant(&left.view()) != std::mem::discriminant(&right.view()) {
         return false;
     }
     left.equals(right)

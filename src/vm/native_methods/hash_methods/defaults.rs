@@ -1,6 +1,7 @@
 // What a hash answers for a key it has no entry for.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// What a hash answers for a key it has no entry for.
@@ -32,8 +33,8 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                match &arguments[0] {
-                    Object::Nil => {
+                match arguments[0].view() {
+                    View::Nil => {
                         dict_rc.borrow_mut().shift_remove(DEFAULT_PROC_KEY);
                     }
                     other => {
@@ -41,22 +42,26 @@ impl VirtualMachine {
                         // be the default, and one that names its arguments
                         // strictly must take the hash and the key.
                         let held = match other {
-                            Object::Block(_) | Object::Method(_) => other.clone(),
-                            _ if self.responds_to(other, "to_proc") => {
-                                self.send_to_object(other.clone(), "to_proc", vec![], position)?
-                            }
+                            View::Block(_) | View::Method(_) => arguments[0].clone(),
+                            _ if self.responds_to(&arguments[0], "to_proc") => self
+                                .send_to_object(
+                                    arguments[0].clone(),
+                                    "to_proc",
+                                    vec![],
+                                    position,
+                                )?,
                             _ => {
                                 return Err(crate::vm::errors::simple_exception(
                                     "TypeError",
                                     &format!(
                                         "wrong default_proc type {} (expected Proc)",
-                                        self.builtins().class_of(other).ruby_name()
+                                        self.builtins().class_of(&arguments[0]).ruby_name()
                                     ),
                                     position,
                                 ));
                             }
                         };
-                        if let Object::Block(block) = &held
+                        if let View::Block(block) = held.view()
                             && block.is_lambda
                         {
                             let counted =

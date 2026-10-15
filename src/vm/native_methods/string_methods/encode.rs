@@ -1,6 +1,7 @@
 // Writing a string out in another encoding.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Writing a string out in another encoding.
@@ -21,8 +22,8 @@ impl VirtualMachine {
                 // default internal encoding, or kept in its own.
                 let wanted = match arguments.first() {
                     Some(named) => self.encode_target_name(string_value, named, position)?,
-                    None => match self.globals().get("__Encoding_default_internal") {
-                        Some(Object::Class(internal)) => internal.name().to_string(),
+                    None => match self.globals().get("__Encoding_default_internal").view() {
+                        Some(View::Class(internal)) => internal.name().to_string(),
                         _ => string_value.encoding_name(),
                     },
                 };
@@ -51,7 +52,7 @@ impl VirtualMachine {
                 let newline = newline_conversion(&options, position)?;
                 if held == wanted && xml.is_none() && newline.is_none() {
                     let copy = relabeled_copy(string_value, &wanted);
-                    if let (true, Object::String(copied)) = (options.invalid_replace, &copy) {
+                    if let (true, View::String(copied)) = (options.invalid_replace, copy.view()) {
                         let stands_in = options.replace.map_or(Object::Nil, Object::string);
                         return self
                             .scrubbed_string(copied, &[stands_in], position)
@@ -201,13 +202,13 @@ impl VirtualMachine {
                     let made = Object::String(Rc::new(crate::object::StringValue::from_bytes(
                         bytes_as_text(&wide_bytes(&reading, shape)),
                     )));
-                    if let Object::String(copied) = &made {
+                    if let View::String(copied) = made.view() {
                         copied.set_encoding(wanted);
                     }
                     return Ok(Some(made));
                 }
                 let copy = Object::string(reading);
-                if let Object::String(copied) = &copy {
+                if let View::String(copied) = copy.view() {
                     copied.set_encoding(wanted);
                 }
                 Ok(Some(copy))

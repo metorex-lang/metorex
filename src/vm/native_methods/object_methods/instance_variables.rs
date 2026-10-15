@@ -1,6 +1,7 @@
 // Reading, writing and removing the instance variables an object holds.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// Reading, writing and removing the instance variables an object holds.
@@ -21,7 +22,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let vars = if let Object::Instance(inst_rc) = receiver {
+                let vars = if let View::Instance(inst_rc) = receiver.view() {
                     let inst = inst_rc.borrow();
                     inst.instance_vars
                         .keys()
@@ -43,7 +44,7 @@ impl VirtualMachine {
                                 .collect()
                         })
                         .unwrap_or_default()
-                } else if let Object::Exception(details) = receiver {
+                } else if let View::Exception(details) = receiver.view() {
                     // An exception keeps the program's variables beside the
                     // ones the interpreter uses, which start with `__`.
                     details
@@ -53,7 +54,7 @@ impl VirtualMachine {
                         .filter(|name| !name.starts_with("__"))
                         .map(|name| Object::symbol(format!("@{}", name)))
                         .collect()
-                } else if let Object::Class(class_rc) | Object::Module(class_rc) = receiver {
+                } else if let View::Class(class_rc) | View::Module(class_rc) = receiver.view() {
                     // A class keeps its own instance variables among its
                     // class-level storage, under an `@` prefix.
                     class_rc
@@ -80,32 +81,32 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let var_name = match &arguments[0] {
-                    Object::String(name) => name.as_str().to_string(),
-                    Object::Symbol(name) => name.as_str().to_string(),
-                    other => {
+                let var_name = match arguments[0].view() {
+                    View::String(name) => name.as_str().to_string(),
+                    View::Symbol(name) => name.as_str().to_string(),
+                    _ => {
                         return Err(method_argument_type_error(
                             method_name,
                             "String or Symbol",
-                            other,
+                            &arguments[0],
                             position,
                         ));
                     }
                 };
                 let bare_name = var_name.strip_prefix('@').unwrap_or(&var_name);
-                let defined = match receiver {
-                    Object::Instance(inst_rc) => {
+                let defined = match receiver.view() {
+                    View::Instance(inst_rc) => {
                         inst_rc.borrow().instance_vars.contains_key(bare_name)
                     }
-                    Object::Class(class_rc) | Object::Module(class_rc) => {
+                    View::Class(class_rc) | View::Module(class_rc) => {
                         class_rc.get_class_var(&format!("@{}", bare_name)).is_some()
                     }
-                    Object::Exception(details) => {
+                    View::Exception(details) => {
                         details.borrow().instance_vars.contains_key(bare_name)
                     }
                     // A collection's variables are recorded against it by the
                     // VM, which is where they are looked for.
-                    other => Self::collection_address(other).is_some_and(|address| {
+                    _ => Self::collection_address(receiver).is_some_and(|address| {
                         self.collection_variables
                             .get(&address)
                             .is_some_and(|held| held.contains_key(bare_name))
@@ -125,8 +126,8 @@ impl VirtualMachine {
                 let clean_name =
                     self.coerce_instance_variable_name(&arguments[0], receiver, position)?;
                 let clean_name = clean_name.as_str();
-                match receiver {
-                    Object::Instance(inst_rc) => {
+                match receiver.view() {
+                    View::Instance(inst_rc) => {
                         let inst = inst_rc.borrow();
                         Ok(Some(
                             inst.instance_vars
@@ -135,31 +136,31 @@ impl VirtualMachine {
                                 .unwrap_or(Object::Nil),
                         ))
                     }
-                    Object::Class(class_rc) => Ok(Some(
+                    View::Class(class_rc) => Ok(Some(
                         class_rc
                             .get_class_var(&format!("@{}", clean_name))
                             .unwrap_or(Object::Nil),
                     )),
-                    Object::Array(_)
-                    | Object::Dict(_)
-                    | Object::Set(_)
-                    | Object::String(_)
-                    | Object::Method(_)
-                    | Object::Block(_)
-                    | Object::Binding(_)
-                    | Object::Regex(_, _) => Ok(Some(
+                    View::Array(_)
+                    | View::Dict(_)
+                    | View::Set(_)
+                    | View::String(_)
+                    | View::Method(_)
+                    | View::Block(_)
+                    | View::Binding(_)
+                    | View::Regex(_, _) => Ok(Some(
                         Self::collection_address(receiver)
                             .and_then(|address| self.collection_variables.get(&address))
                             .and_then(|held| held.get(clean_name))
                             .cloned()
                             .unwrap_or(Object::Nil),
                     )),
-                    Object::Module(module_rc) => Ok(Some(
+                    View::Module(module_rc) => Ok(Some(
                         module_rc
                             .get_class_var(&format!("@{}", clean_name))
                             .unwrap_or(Object::Nil),
                     )),
-                    Object::Exception(details) => Ok(Some(
+                    View::Exception(details) => Ok(Some(
                         details
                             .borrow()
                             .instance_vars
@@ -187,11 +188,8 @@ impl VirtualMachine {
                 let var_name =
                     self.coerce_instance_variable_name(&arguments[0], receiver, position)?;
                 let holds_variables = matches!(
-                    receiver,
-                    Object::Instance(_)
-                        | Object::Class(_)
-                        | Object::Module(_)
-                        | Object::Exception(_)
+                    receiver.view(),
+                    View::Instance(_) | View::Class(_) | View::Module(_) | View::Exception(_)
                 ) || Self::collection_address(receiver).is_some();
                 if self.object_is_frozen(receiver) || !holds_variables {
                     let class_name = self.builtins().class_of(receiver).name().to_string();
@@ -205,15 +203,15 @@ impl VirtualMachine {
                 }
                 // Each kind keeps its variables where `instance_variable_set`
                 // put them.
-                let removed = match receiver {
-                    Object::Instance(instance_rc) => instance_rc
+                let removed = match receiver.view() {
+                    View::Instance(instance_rc) => instance_rc
                         .borrow_mut()
                         .instance_vars
                         .shift_remove(&var_name),
-                    Object::Class(class_rc) | Object::Module(class_rc) => {
+                    View::Class(class_rc) | View::Module(class_rc) => {
                         class_rc.remove_class_var(&format!("@{}", var_name))
                     }
-                    Object::Exception(details) => {
+                    View::Exception(details) => {
                         details.borrow_mut().instance_vars.shift_remove(&var_name)
                     }
                     _ => Self::collection_address(receiver).and_then(|address| {
@@ -227,7 +225,7 @@ impl VirtualMachine {
                     None => {
                         let msg = format!("instance variable @{} not defined", var_name);
                         let exc = Object::exception("NameError", msg.clone());
-                        if let Object::Exception(cell) = &exc {
+                        if let View::Exception(cell) = exc.view() {
                             cell.borrow_mut().name = Some(format!("@{}", var_name));
                         }
                         Err(MetorexError::UncaughtException {
@@ -254,8 +252,8 @@ impl VirtualMachine {
                     self.coerce_instance_variable_name(&arguments[0], receiver, position)?;
                 self.warn_chilled_string(receiver, position);
                 let value = arguments[1].clone();
-                match receiver {
-                    Object::Instance(instance_rc) => {
+                match receiver.view() {
+                    View::Instance(instance_rc) => {
                         let is_frozen = instance_rc.borrow().frozen;
                         if is_frozen {
                             return Err(self.frozen_modification_error(receiver, position));
@@ -269,15 +267,15 @@ impl VirtualMachine {
                         }
                         Ok(Some(value))
                     }
-                    Object::Class(class_rc) => {
+                    View::Class(class_rc) => {
                         class_rc.set_class_var(format!("@{}", var_name), value.clone());
                         Ok(Some(value))
                     }
-                    Object::Module(module_rc) => {
+                    View::Module(module_rc) => {
                         module_rc.set_class_var(format!("@{}", var_name), value.clone());
                         Ok(Some(value))
                     }
-                    Object::Exception(details) => {
+                    View::Exception(details) => {
                         details
                             .borrow_mut()
                             .instance_vars
@@ -286,14 +284,14 @@ impl VirtualMachine {
                     }
                     // A collection has nowhere of its own to keep an instance
                     // variable, so the VM records it against the collection.
-                    Object::Array(_)
-                    | Object::Dict(_)
-                    | Object::Set(_)
-                    | Object::String(_)
-                    | Object::Method(_)
-                    | Object::Block(_)
-                    | Object::Binding(_)
-                    | Object::Regex(_, _) => {
+                    View::Array(_)
+                    | View::Dict(_)
+                    | View::Set(_)
+                    | View::String(_)
+                    | View::Method(_)
+                    | View::Block(_)
+                    | View::Binding(_)
+                    | View::Regex(_, _) => {
                         if self.object_is_frozen(receiver) {
                             return Err(self.frozen_modification_error(receiver, position));
                         }
@@ -312,11 +310,11 @@ impl VirtualMachine {
                     // match Ruby (FrozenError is a subclass of RuntimeError).
                     other => {
                         let class_name = match other {
-                            Object::Bool(true) => "TrueClass".to_string(),
-                            Object::Bool(false) => "FalseClass".to_string(),
-                            Object::Nil => "NilClass".to_string(),
-                            Object::Symbol(_) => "Symbol".to_string(),
-                            _ => self.builtins().class_of(other).name().to_string(),
+                            View::Bool(true) => "TrueClass".to_string(),
+                            View::Bool(false) => "FalseClass".to_string(),
+                            View::Nil => "NilClass".to_string(),
+                            View::Symbol(_) => "Symbol".to_string(),
+                            _ => self.builtins().class_of(receiver).name().to_string(),
                         };
                         let msg = format!("can't modify frozen {}: {}", class_name, other);
                         let exc = Object::exception("FrozenError", msg.clone());

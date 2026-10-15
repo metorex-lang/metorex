@@ -1,6 +1,7 @@
 // The methods a number past the machine word answers.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// The Integer methods that have an exact answer for a value past the
@@ -36,7 +37,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let Object::Int(base) = arguments[0] else {
+                let View::Int(base) = arguments[0].view() else {
                     return Err(method_argument_type_error(
                         method_name,
                         "Integer",
@@ -201,7 +202,7 @@ impl VirtualMachine {
             // and a Float for one that is not.
             "quo" => {
                 no_arguments(1)?;
-                if matches!(arguments[0], Object::Float(_)) {
+                if matches!(arguments[0].view(), View::Float(_)) {
                     let left = value.to_string().parse::<f64>().unwrap_or(f64::NAN);
                     return self
                         .send_to_object(

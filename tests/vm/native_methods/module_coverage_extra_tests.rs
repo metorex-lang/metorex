@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -111,7 +112,7 @@ module UM
 end
 UM.send(:undef_method, :gone)
 "#);
-    assert!(matches!(result, Some(Object::Module(_))));
+    assert!(matches!(result.view(), Some(View::Module(_))));
 }
 
 #[test]
@@ -121,7 +122,7 @@ module UM2
 end
 UM2.send(:undef_method)
 "#);
-    assert!(matches!(result, Some(Object::Module(_))));
+    assert!(matches!(result.view(), Some(View::Module(_))));
 }
 
 #[test]
@@ -247,7 +248,7 @@ module IM
 end
 IM.instance_method(:fn)
 "#);
-    assert!(matches!(result, Some(Object::Method(_))));
+    assert!(matches!(result.view(), Some(View::Method(_))));
 }
 
 #[test]
@@ -348,31 +349,31 @@ ExtMod2.send(:extend_object, ExtTgt2)
 #[test]
 fn module_instance_method_synthesizes_append_features_stub() {
     let result = run(r#"Module.instance_method(:append_features)"#);
-    assert!(matches!(result, Some(Object::Method(_))));
+    assert!(matches!(result.view(), Some(View::Method(_))));
 }
 
 #[test]
 fn module_instance_method_synthesizes_prepend_features_stub() {
     let result = run(r#"Module.instance_method(:prepend_features)"#);
-    assert!(matches!(result, Some(Object::Method(_))));
+    assert!(matches!(result.view(), Some(View::Method(_))));
 }
 
 #[test]
 fn module_instance_method_synthesizes_extend_object_stub() {
     let result = run(r#"Module.instance_method(:extend_object)"#);
-    assert!(matches!(result, Some(Object::Method(_))));
+    assert!(matches!(result.view(), Some(View::Method(_))));
 }
 
 #[test]
 fn module_instance_method_synthesizes_included_stub() {
     let result = run(r#"Module.instance_method(:included)"#);
-    assert!(matches!(result, Some(Object::Method(_))));
+    assert!(matches!(result.view(), Some(View::Method(_))));
 }
 
 #[test]
 fn module_instance_method_synthesizes_extended_stub() {
     let result = run(r#"Module.instance_method(:extended)"#);
-    assert!(matches!(result, Some(Object::Method(_))));
+    assert!(matches!(result.view(), Some(View::Method(_))));
 }
 
 #[test]
@@ -385,7 +386,7 @@ module IM4
 end
 IM4.instance_method("fn4")
 "#);
-    assert!(matches!(result, Some(Object::Method(_))));
+    assert!(matches!(result.view(), Some(View::Method(_))));
 }
 
 // ── append_features explicit invocation (lines 294-319) ─────────────────────

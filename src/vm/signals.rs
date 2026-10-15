@@ -1,6 +1,7 @@
 //! Signal names and numbers, plus the handler table `Process.kill` consults.
 
 use crate::object::Object;
+use crate::object::{OptionView, View};
 
 /// The signals `Signal.list` reports, in the order Ruby lists them. Numbers
 /// come from libc so each platform reports its own values.
@@ -64,19 +65,17 @@ pub(crate) fn name_for_number(number: i32) -> Option<&'static str> {
 /// `(name, number)` pair. A negative number asks for the process group, which
 /// names the same signal.
 pub(crate) fn signal_from_object(value: &Object) -> Option<(String, i32)> {
-    match value {
-        Object::Symbol(name) | Object::String(name) => {
-            number_for_name(&name.as_str()).map(|number| {
-                (
-                    name.as_str()
-                        .strip_prefix("SIG")
-                        .unwrap_or(&*name.as_str())
-                        .to_string(),
-                    number,
-                )
-            })
-        }
-        Object::Int(number) => {
+    match value.view() {
+        View::Symbol(name) | View::String(name) => number_for_name(&name.as_str()).map(|number| {
+            (
+                name.as_str()
+                    .strip_prefix("SIG")
+                    .unwrap_or(&*name.as_str())
+                    .to_string(),
+                number,
+            )
+        }),
+        View::Int(number) => {
             let number = number.unsigned_abs() as i32;
             name_for_number(number).map(|name| (name.to_string(), number))
         }
@@ -87,8 +86,8 @@ pub(crate) fn signal_from_object(value: &Object) -> Option<(String, i32)> {
 /// The handler name a `Signal.trap` command argument stands for, or `None`
 /// when the argument is a callable to run instead.
 pub(crate) fn handler_name(command: &Object) -> Option<String> {
-    let text = match command {
-        Object::Symbol(name) | Object::String(name) => name.as_str().to_string(),
+    let text = match command.view() {
+        View::Symbol(name) | View::String(name) => name.as_str().to_string(),
         _ => return None,
     };
     Some(match text.as_str() {
@@ -178,14 +177,14 @@ fn set_disposition(number: i32, command: &Object) {
     let Some(caught) = CAUGHT.get(number as usize) else {
         return;
     };
-    let catching = !matches!(command, Object::String(_) | Object::Nil);
+    let catching = !matches!(command.view(), View::String(_) | View::Nil);
     if !catching && !caught.load(std::sync::atomic::Ordering::SeqCst) {
         return;
     }
     let handler = if catching {
         note_signal as extern "C" fn(libc::c_int) as libc::sighandler_t
-    } else if matches!(command, Object::Nil)
-        || matches!(command, Object::String(held) if *held.as_str() == *"IGNORE")
+    } else if matches!(command.view(), View::Nil)
+        || matches!(command.view(), View::String(held) if *held.as_str() == *"IGNORE")
     {
         libc::SIG_IGN
     } else {
@@ -298,8 +297,8 @@ impl crate::vm::VirtualMachine {
         argument: &Object,
         position: crate::lexer::Position,
     ) -> Result<i64, crate::error::MetorexError> {
-        if let Object::Int(number) = argument {
-            return Ok(*number);
+        if let View::Int(number) = argument.view() {
+            return Ok(number);
         }
         let source = self.builtins().class_of(argument).name().to_string();
         let refuse = |message: String| crate::error::MetorexError::UncaughtException {
@@ -313,13 +312,16 @@ impl crate::vm::VirtualMachine {
                 source
             )));
         };
-        match self.invoke_method(class, method, argument.clone(), Vec::new(), position)? {
-            Object::Int(number) => Ok(number),
+        match self
+            .invoke_method(class, method, argument.clone(), Vec::new(), position)?
+            .view()
+        {
+            View::Int(number) => Ok(number),
             produced => Err(refuse(format!(
                 "can't convert {} to Integer ({}#to_int gives {})",
                 source,
                 source,
-                self.builtins().class_of(&produced).name()
+                self.builtins().class_of(&produced.to_object()).name()
             ))),
         }
     }
@@ -335,7 +337,7 @@ impl crate::vm::VirtualMachine {
         let given = arguments.first().cloned().unwrap_or(Object::Nil);
         // `EXIT` is not a signal the operating system sends: it names what to
         // run as the program ends.
-        let exiting = matches!(&given, Object::Symbol(held) | Object::String(held) if *held.as_str() == *"EXIT");
+        let exiting = matches!(given.view(), View::Symbol(held) | View::String(held) if *held.as_str() == *"EXIT");
         let (name, number) = if exiting {
             ("EXIT".to_string(), 0)
         } else {
@@ -383,9 +385,9 @@ impl crate::vm::VirtualMachine {
         let given = arguments.first().cloned().unwrap_or(Object::Nil);
         // A signal named with a leading minus, or a negative number, goes to
         // the process group each pid leads rather than to the process.
-        let (given, to_the_group) = match &given {
-            Object::Int(number) => (given.clone(), *number < 0),
-            Object::Symbol(text) | Object::String(text) if text.as_str().starts_with('-') => {
+        let (given, to_the_group) = match given.view() {
+            View::Int(number) => (given.clone(), number < 0),
+            View::Symbol(text) | View::String(text) if text.as_str().starts_with('-') => {
                 (Object::string(&text.as_str()[1..]), true)
             }
             _ => (given.clone(), false),
@@ -393,7 +395,7 @@ impl crate::vm::VirtualMachine {
         let (name, number) = self.signal_named_by(&given, position)?;
         // EXIT names what a program runs as it ends, not a signal one process
         // can send another.
-        if name == "EXIT" && !matches!(given, Object::Int(_)) {
+        if name == "EXIT" && !matches!(given.view(), View::Int(_)) {
             return Err(self.signal_name_error(&given, position));
         }
         let own_pid = std::process::id() as i64;
@@ -415,7 +417,7 @@ impl crate::vm::VirtualMachine {
                 if !self.thread_current_stack.is_empty()
                     && matches!(
                         self.signal_handlers.get(&name),
-                        Some(held) if !matches!(held, Object::String(_) | Object::Nil)
+                        Some(held) if !matches!(held.view(), View::String(_) | View::Nil)
                     )
                 {
                     self.signals_for_main_thread.push(number);
@@ -476,18 +478,23 @@ impl crate::vm::VirtualMachine {
     ) -> Result<(), crate::error::MetorexError> {
         SIGNALS_TAKEN.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let handler = self.signal_handlers.get(name).cloned();
-        match handler {
-            Some(Object::String(disposition)) => match &*disposition.as_str() {
+        match handler.view() {
+            Some(View::String(disposition)) => match &*disposition.as_str() {
                 "IGNORE" => Ok(()),
                 _ => Err(self.signal_exception(name, number, position)),
             },
             // Nothing at all is written for a signal set aside with nil,
             // which is the same as ignoring it.
-            Some(Object::Nil) => Ok(()),
+            Some(View::Nil) => Ok(()),
             Some(held) => {
                 // Anything that answers to `call` when the signal arrives
                 // runs, whether it could when it was written down or not.
-                self.send_to_object(held, "call", vec![Object::Int(number as i64)], position)?;
+                self.send_to_object(
+                    held.to_object(),
+                    "call",
+                    vec![Object::Int(number as i64)],
+                    position,
+                )?;
                 Ok(())
             }
             None => Err(self.signal_exception(name, number, position)),
@@ -508,7 +515,7 @@ impl crate::vm::VirtualMachine {
             ("SignalException", format!("SIG{}", name))
         };
         let exception = Object::exception(class_name, message.clone());
-        if let Object::Exception(details) = &exception {
+        if let View::Exception(details) = exception.view() {
             let mut details = details.borrow_mut();
             details.message_given = !message.is_empty();
             details
@@ -540,10 +547,10 @@ impl crate::vm::VirtualMachine {
             location: crate::vm::utils::position_to_location(position),
             message,
         };
-        let named = match given {
-            Object::Symbol(_) | Object::String(_) | Object::Int(_) => given.clone(),
-            other if self.responds_to(other, "to_str") => {
-                self.send_to_object(other.clone(), "to_str", Vec::new(), position)?
+        let named = match given.view() {
+            View::Symbol(_) | View::String(_) | View::Int(_) => given.clone(),
+            _ if self.responds_to(given, "to_str") => {
+                self.send_to_object(given.clone(), "to_str", Vec::new(), position)?
             }
             other => {
                 // Ruby names nil, true and false outright rather than by the
@@ -551,15 +558,19 @@ impl crate::vm::VirtualMachine {
                 return Err(refuse(format!(
                     "bad signal type {}",
                     match other {
-                        Object::Nil => "NilClass".to_string(),
-                        Object::Bool(true) => "TrueClass".to_string(),
-                        Object::Bool(false) => "FalseClass".to_string(),
-                        held => self.builtins().class_of(held).name().to_string(),
+                        View::Nil => "NilClass".to_string(),
+                        View::Bool(true) => "TrueClass".to_string(),
+                        View::Bool(false) => "FalseClass".to_string(),
+                        held => self
+                            .builtins()
+                            .class_of(&held.to_object())
+                            .name()
+                            .to_string(),
                     }
                 )));
             }
         };
-        if let Object::Int(number) = &named
+        if let View::Int(number) = named.view()
             && crate::vm::signals::name_for_number(number.unsigned_abs() as i32).is_none()
         {
             return Err(refuse(format!("invalid signal number ({})", number)));
@@ -598,8 +609,8 @@ impl crate::vm::VirtualMachine {
     ) -> crate::error::MetorexError {
         // Ruby names the signal the way it spells one, so a bare name is
         // reported with its `SIG` prefix.
-        let named = match given {
-            Object::Symbol(name) | Object::String(name) => {
+        let named = match given.view() {
+            View::Symbol(name) | View::String(name) => {
                 format!(
                     "SIG{}",
                     name.as_str().strip_prefix("SIG").unwrap_or(&*name.as_str())
@@ -607,8 +618,8 @@ impl crate::vm::VirtualMachine {
             }
             other => other.to_string(),
         };
-        let message = match given {
-            Object::Symbol(name) | Object::String(name) if name.as_str().starts_with('-') => {
+        let message = match given.view() {
+            View::Symbol(name) | View::String(name) if name.as_str().starts_with('-') => {
                 format!("negative signal name: {}", name.as_str())
             }
             _ => format!("unsupported signal '{}'", named),
@@ -634,8 +645,8 @@ pub fn signal_number_of(details: &crate::object::Exception) -> Option<libc::c_in
     ) {
         return None;
     }
-    if let Some(crate::object::Object::Int(number)) = details.instance_vars.get(SIGNO_KEY) {
-        return Some(*number as libc::c_int);
+    if let Some(View::Int(number)) = details.instance_vars.get(SIGNO_KEY).view() {
+        return Some(number as libc::c_int);
     }
     // An exception raised by the program names its signal in the message,
     // with or without the `SIG` in front.

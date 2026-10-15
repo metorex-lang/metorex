@@ -1,6 +1,7 @@
 // The methods a ConditionVariable answers.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The threads lined up on a condition variable, made the first time one
@@ -9,7 +10,7 @@ impl VirtualMachine {
         &mut self,
         inst: &Rc<std::cell::RefCell<crate::object::Instance>>,
     ) -> Rc<std::cell::RefCell<Vec<Object>>> {
-        if let Some(Object::Array(line)) = inst.borrow().get_var("__cv_waiters") {
+        if let Some(View::Array(line)) = inst.borrow().get_var("__cv_waiters").view() {
             return Rc::clone(line);
         }
         let line = Rc::new(std::cell::RefCell::new(Vec::new()));
@@ -29,7 +30,7 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        let Object::Instance(inst) = receiver else {
+        let View::Instance(inst) = receiver.view() else {
             return Ok(None);
         };
         let inst = Rc::clone(inst);
@@ -70,7 +71,7 @@ impl VirtualMachine {
                 let woken: Vec<Object> = waiting.drain(..serving).collect();
                 drop(waiting);
                 for thread in woken {
-                    if let Object::Instance(held) = thread {
+                    if let View::Instance(held) = thread.view() {
                         held.borrow_mut()
                             .set_var("__thread_waiting".to_string(), Object::Bool(false));
                     }

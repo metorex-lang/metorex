@@ -2,6 +2,7 @@
 // files live.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The working directory, the scratch directory, and where a user's
@@ -95,32 +96,34 @@ impl VirtualMachine {
             }
             // A name may arrive as a String or as something that answers
             // `to_path`, and anything else is the wrong kind of argument.
-            let path = match &arguments[0] {
-                Object::String(path) => Rc::clone(path),
-                other if self.responds_to(other, "to_path") => {
-                    match self.send_to_object(other.clone(), "to_path", vec![], position)? {
-                        Object::String(path) => path,
-                        _ => {
-                            return Err(method_argument_type_error(
-                                method_name,
-                                "String",
-                                other,
-                                position,
-                            ));
-                        }
+            let path = match arguments[0].view() {
+                View::String(path) => Rc::clone(path),
+                _ if self.responds_to(&arguments[0], "to_path") => (match self
+                    .send_to_object(arguments[0].clone(), "to_path", vec![], position)?
+                    .view()
+                {
+                    View::String(path) => path,
+                    _ => {
+                        return Err(method_argument_type_error(
+                            method_name,
+                            "String",
+                            &arguments[0],
+                            position,
+                        ));
                     }
-                }
-                other => {
+                })
+                .clone(),
+                _ => {
                     return Err(method_argument_type_error(
                         method_name,
                         "String",
-                        other,
+                        &arguments[0],
                         position,
                     ));
                 }
             };
-            let mode = match arguments.get(1) {
-                Some(Object::Int(mode)) => *mode as libc::mode_t,
+            let mode = match arguments.get(1).view() {
+                Some(View::Int(mode)) => mode as libc::mode_t,
                 _ => 0o666,
             };
             let named = std::ffi::CString::new(path_text(&path).into_bytes()).map_err(|_| {
@@ -151,7 +154,7 @@ impl VirtualMachine {
         // `lchmod` changes the mode of a symlink itself rather than of what it
         // points at, which only some systems allow at all.
         if class_rc.name() == "File" && method_name == "lchmod" {
-            let Some(Object::Int(mode)) = arguments.first() else {
+            let Some(View::Int(mode)) = arguments.first().view() else {
                 return Err(method_argument_error(
                     method_name,
                     2,
@@ -161,7 +164,7 @@ impl VirtualMachine {
             };
             let mut changed = 0;
             for path in arguments.iter().skip(1) {
-                let Object::String(path) = path else {
+                let View::String(path) = path.view() else {
                     return Err(method_argument_type_error(
                         method_name,
                         "String",
@@ -182,7 +185,7 @@ impl VirtualMachine {
                     libc::fchmodat(
                         libc::AT_FDCWD,
                         named.as_ptr(),
-                        *mode as libc::mode_t,
+                        mode as libc::mode_t,
                         libc::AT_SYMLINK_NOFOLLOW,
                     )
                 } == 0
@@ -201,11 +204,11 @@ impl VirtualMachine {
             if let Err(error) = std::env::set_current_dir(&target) {
                 return Err(directory_error(&error, "chdir", &target, position));
             }
-            let Some(Object::Block(block)) = self.pending_block.take() else {
+            let viewed = self.pending_block.take();
+            let Some(View::Block(block)) = viewed.view() else {
                 return Ok(Some(Object::Int(0)));
             };
-            let result =
-                self.execute_block_callable(&block, vec![Object::string(target)], position);
+            let result = self.execute_block_callable(block, vec![Object::string(target)], position);
             if let Some(previous) = previous {
                 // The directory the program came from may be gone by now,
                 // which is what the program hears about rather than silently
@@ -262,13 +265,13 @@ impl VirtualMachine {
                     position,
                 ));
             }
-            let path = match &arguments[0] {
-                Object::String(s) => path_text(s),
-                other => {
+            let path = match arguments[0].view() {
+                View::String(s) => path_text(s),
+                _ => {
                     return Err(method_argument_type_error(
                         method_name,
                         "String",
-                        other,
+                        &arguments[0],
                         position,
                     ));
                 }
@@ -324,14 +327,14 @@ impl VirtualMachine {
                     position,
                 ));
             }
-            let named = match arguments.first() {
-                None | Some(Object::Nil) => None,
-                Some(Object::String(name)) => Some(name.as_str().to_string()),
+            let named = match arguments.first().view() {
+                None | Some(View::Nil) => None,
+                Some(View::String(name)) => Some(name.as_str().to_string()),
                 Some(other) => {
                     return Err(method_argument_type_error(
                         method_name,
                         "String",
-                        other,
+                        &other.to_object(),
                         position,
                     ));
                 }

@@ -13,6 +13,7 @@ use crate::class::Class;
 use crate::error::{MetorexError, StackFrame};
 use crate::lexer::Position;
 use crate::object::{Method, Object};
+use crate::object::{OptionView, View};
 use indexmap::IndexMap;
 use std::rc::Rc;
 
@@ -36,8 +37,8 @@ impl VirtualMachine {
             // A method of a class or module itself is named the way Ruby
             // writes a call of it, `Name.method`.
             let owner = method.owner_class.as_ref().unwrap_or(&class);
-            let callee = match &receiver {
-                Object::Class(held) | Object::Module(held)
+            let callee = match receiver.view() {
+                View::Class(held) | View::Module(held)
                     if owner.is_singleton_class() || Rc::ptr_eq(held, owner) =>
                 {
                     format!("{}.{}", held.name(), method.name)
@@ -146,8 +147,8 @@ impl VirtualMachine {
         // stand one in for `Dir.tmpdir`. The library's own `def self.name`
         // methods live in the class's method table instead, and stay behind
         // the native table the way they were written to.
-        let stands_for_a_class_method = match &receiver {
-            Object::Class(held) | Object::Module(held) => {
+        let stands_for_a_class_method = match receiver.view() {
+            View::Class(held) | View::Module(held) => {
                 held.singleton_class_slot()
                     .as_ref()
                     .is_some_and(|singleton| singleton.find_own_method(&method_name).is_some())
@@ -161,7 +162,7 @@ impl VirtualMachine {
         // body rather than the native table's, which is what lets a program
         // stand one in for `Regexp#match` on a single pattern.
         let stands_on_its_own_singleton = class.is_singleton_class()
-            && !matches!(receiver, Object::Class(_) | Object::Module(_))
+            && !matches!(receiver.view(), View::Class(_) | View::Module(_))
             && class.find_own_method(&method_name).is_some();
         // A method a refinement puts in place of one the interpreter answers
         // natively runs its own body, which is the whole point of writing it.
@@ -173,19 +174,19 @@ impl VirtualMachine {
         // A method the program writes in `class Object` runs for an object
         // made by `Object.new` the way it does for an instance of a class of
         // the program's own.
-        let stands_on_a_plain_object = matches!(&receiver, Object::Instance(held)
+        let stands_on_a_plain_object = matches!(receiver.view(), View::Instance(held)
                 if held.borrow().class.ruby_name() == "Object")
             && written_by_the_program(&method);
         // A module made by `new` on a subclass of Module runs the methods
         // that subclass writes, `initialize` among them.
-        let stands_on_a_module_instance = matches!(&receiver, Object::Module(held)
+        let stands_on_a_module_instance = matches!(receiver.view(), View::Module(held)
                 if held.instance_of().is_some())
             && written_by_the_program(&method);
         // A method a class or module answers because it extended a module
         // the program wrote runs its own body, as `extend Typed` puts a
         // module's `attr_accessor` ahead of Module's own.
-        let stands_in_an_extended_module = match &receiver {
-            Object::Class(held) | Object::Module(held) => {
+        let stands_in_an_extended_module = match receiver.view() {
+            View::Class(held) | View::Module(held) => {
                 written_by_the_program(&method)
                     && (class.is_module()
                         || crate::vm::method_lookup::module_extended_method(held, &method_name)
@@ -243,7 +244,7 @@ impl VirtualMachine {
             }
             // An exception's own methods, such as `SystemExit#status`, are
             // answered by the exception's dispatch.
-            if matches!(receiver, Object::Exception(_))
+            if matches!(receiver.view(), View::Exception(_))
                 && let Some(result) =
                     self.call_exception_method(&receiver, &target, &arguments, position)?
             {
@@ -252,7 +253,7 @@ impl VirtualMachine {
             // `new` on a class is the constructor rather than an entry in any
             // native table, so it is reached through the class itself.
             if target == "new"
-                && let Object::Class(constructed) = &receiver
+                && let View::Class(constructed) = receiver.view()
             {
                 let constructed = Rc::clone(constructed);
                 return self.invoke_class(constructed, arguments, position);
@@ -328,7 +329,7 @@ impl VirtualMachine {
         // A method declaring `**nil` refuses keywords before it counts the
         // rest of what it was given.
         if method.keyword_rest_parameter.as_deref() == Some(crate::object::NO_KEYWORDS_PARAM)
-            && matches!(arguments.last(), Some(Object::Dict(entries))
+            && matches!(arguments.last().view(), Some(View::Dict(entries))
                 if entries.borrow().contains_key(crate::vm::param_binding::KWARGS_MARKER))
         {
             return Err(crate::vm::errors::simple_exception(
@@ -345,7 +346,7 @@ impl VirtualMachine {
         if method.block_parameter.is_some()
             && self.pending_block.is_none()
             && !arguments.is_empty()
-            && matches!(arguments.last(), Some(Object::Block(_)))
+            && matches!(arguments.last().view(), Some(View::Block(_)))
             && method.variadic_param.is_none()
             && positional_count > method.parameters.len()
         {
@@ -377,7 +378,7 @@ impl VirtualMachine {
 
         // A method on a class or module is named with a dot, the way Ruby
         // writes `Foo.bar` in a backtrace, and an instance method with a hash.
-        let on_a_module = matches!(receiver, Object::Class(_) | Object::Module(_));
+        let on_a_module = matches!(receiver.view(), View::Class(_) | View::Module(_));
         let (frame_name, defined_name) =
             self.frame_names_for(&method, &class, &method_name, on_a_module);
         let frame_location = position_to_location(position);
@@ -458,7 +459,7 @@ impl VirtualMachine {
             .as_ref()
             .filter(|owner| {
                 !owner.is_singleton_class()
-                    && !matches!(&receiver, Object::Class(held) | Object::Module(held) if Rc::ptr_eq(held, owner))
+                    && !matches!(receiver.view(), View::Class(held) | View::Module(held) if Rc::ptr_eq(held, owner))
             })
             .map(|owner| owner.ruby_name())
             .filter(|path| !path.is_empty());
@@ -1023,7 +1024,7 @@ impl VirtualMachine {
         if keyword_parameters.is_empty() || keyword_rest_parameter.is_some() {
             return Ok(());
         }
-        let Some(Object::Dict(entries)) = keyword_hash else {
+        let Some(View::Dict(entries)) = keyword_hash.view() else {
             return Ok(());
         };
         let held = entries.borrow().clone();
@@ -1157,7 +1158,7 @@ impl VirtualMachine {
 /// Whether an object is an instance of a String, Array, Set, Hash, or Regexp
 /// subclass, which holds the value it stands for in an instance variable.
 fn backs_a_core_value(receiver: &crate::object::Object) -> bool {
-    matches!(receiver, crate::object::Object::Instance(_))
+    matches!(receiver.view(), crate::object::View::Instance(_))
         && crate::vm::native_methods::subclasses::subclass_backing(receiver).is_some()
 }
 

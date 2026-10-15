@@ -2,6 +2,7 @@
 // Complex.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The number a string spells, read as an Integer, Float, Rational or
@@ -24,13 +25,14 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(b)) => b,
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(b)) => b,
                     Some(other) => {
                         return Err(method_argument_type_error(
                             method_name,
                             "Block",
-                            &other,
+                            &other.to_object(),
                             position,
                         ));
                     }
@@ -48,7 +50,7 @@ impl VirtualMachine {
                     }
                 };
                 for character in encoded_characters(string_value) {
-                    self.execute_block_body(&block, vec![character])?;
+                    self.execute_block_body(block, vec![character])?;
                 }
                 Ok(Some(receiver.clone()))
             }
@@ -63,11 +65,11 @@ impl VirtualMachine {
                 }
                 // A base of its own reads the digits of that base, so
                 // `"ff".to_i(16)` is 255. Zero means "read the prefix".
-                let base = match arguments.first() {
+                let base = match arguments.first().view() {
                     None => 10i64,
-                    Some(Object::Int(held)) => *held,
+                    Some(View::Int(held)) => held,
                     Some(other) => {
-                        let coerced = self.coerce_integer_argument(other, position)?;
+                        let coerced = self.coerce_integer_argument(&other.to_object(), position)?;
                         coerced.try_into().unwrap_or(i64::MAX)
                     }
                 };

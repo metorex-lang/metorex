@@ -5,6 +5,7 @@
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 use crate::vm::errors::*;
 use crate::vm::utils::position_to_location;
@@ -40,7 +41,7 @@ pub(crate) fn greatest_common_divisor(
 pub(crate) fn rational_parts(
     receiver: &Object,
 ) -> Option<(num_bigint::BigInt, num_bigint::BigInt)> {
-    let Object::Instance(instance) = receiver else {
+    let View::Instance(instance) = receiver.view() else {
         return None;
     };
     let instance = instance.borrow();
@@ -58,11 +59,11 @@ pub(crate) fn rational_parts(
 /// Read `value` as an exact fraction: integers and Rationals directly, floats
 /// through their decimal digits so `Rational(0.5)` is (1/2).
 fn as_fraction(value: &Object) -> Option<(num_bigint::BigInt, num_bigint::BigInt)> {
-    match value {
-        Object::Int(_) | Object::BigInt(_) => {
+    match value.view() {
+        View::Int(_) | View::BigInt(_) => {
             Some((value.as_big_integer()?, num_bigint::BigInt::from(1)))
         }
-        Object::Float(number) if number.is_finite() => {
+        View::Float(number) if number.is_finite() => {
             let text = format!("{}", number);
             parse_decimal_fraction(&text)
         }
@@ -137,7 +138,7 @@ pub(crate) fn float_exact_fraction(value: f64) -> (num_bigint::BigInt, num_bigin
 
 /// The parts of a Complex instance, or None for anything that is not one.
 pub(crate) fn complex_parts(value: &Object) -> Option<(Object, Object)> {
-    let Object::Instance(instance) = value else {
+    let View::Instance(instance) = value.view() else {
         return None;
     };
     let instance = instance.borrow();
@@ -160,9 +161,9 @@ pub(crate) fn complex_parts(value: &Object) -> Option<(Object, Object)> {
 
 /// Whether a Complex component is exactly zero.
 pub(crate) fn is_zero(value: &Object) -> bool {
-    match value {
-        Object::Int(number) => *number == 0,
-        Object::Float(number) => *number == 0.0,
+    match value.view() {
+        View::Int(number) => number == 0,
+        View::Float(number) => number == 0.0,
         _ => rational_parts(value)
             .is_some_and(|(numerator, _)| numerator == num_bigint::BigInt::from(0)),
     }
@@ -261,13 +262,14 @@ impl VirtualMachine {
         }
         let divisor = greatest_common_divisor(numerator.clone(), denominator.clone());
 
-        let Some(Object::Class(rational_class)) = self.globals().get("Rational") else {
+        let viewed = self.globals().get("Rational");
+        let Some(View::Class(rational_class)) = viewed.view() else {
             return Err(MetorexError::runtime_error(
                 "Rational is not defined",
                 position_to_location(position),
             ));
         };
-        let instance = crate::object::Instance::new(rational_class);
+        let instance = crate::object::Instance::new(rational_class.clone());
         instance.borrow_mut().set_var(
             "numerator".to_string(),
             Object::integer(numerator / &divisor),
@@ -287,12 +289,12 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let (numerator, denominator) = match value {
-            Object::Int(_) | Object::BigInt(_) => (
+        let (numerator, denominator) = match value.view() {
+            View::Int(_) | View::BigInt(_) => (
                 value.as_big_integer().expect("integer-kinded"),
                 num_bigint::BigInt::from(1),
             ),
-            Object::Float(number) => float_fraction(*number),
+            View::Float(number) => float_fraction(number),
             _ => return Ok(value.clone()),
         };
         self.make_rational(numerator, denominator, position)
@@ -305,13 +307,14 @@ impl VirtualMachine {
         imaginary: Object,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let Some(Object::Class(complex_class)) = self.globals().get("Complex") else {
+        let viewed = self.globals().get("Complex");
+        let Some(View::Class(complex_class)) = viewed.view() else {
             return Err(MetorexError::runtime_error(
                 "Complex is not defined",
                 position_to_location(position),
             ));
         };
-        let instance = crate::object::Instance::new(complex_class);
+        let instance = crate::object::Instance::new(complex_class.clone());
         instance.borrow_mut().set_var("real".to_string(), real);
         instance
             .borrow_mut()
@@ -352,7 +355,7 @@ impl VirtualMachine {
             // A Rational compared against something that is not a number
             // answers by asking that object instead.
             "==" if arguments.len() == 1
-                && matches!(&arguments[0], Object::Instance(instance)
+                && matches!(arguments[0].view(), View::Instance(instance)
                     if !matches!(instance.borrow().class.name(), "Rational" | "Complex")) =>
             {
                 let answer = self.send_to_object(
@@ -387,9 +390,9 @@ impl VirtualMachine {
                 }
                 // Ruby takes an Integer precision here and nothing else, so an
                 // object carrying `to_int` is refused rather than converted.
-                let digits = match arguments.first() {
+                let digits = match arguments.first().view() {
                     None => 0,
-                    Some(Object::Int(digits)) => *digits,
+                    Some(View::Int(digits)) => digits,
                     Some(_) => {
                         return Err(crate::vm::errors::simple_exception(
                             "TypeError",
@@ -477,10 +480,10 @@ impl VirtualMachine {
                 // Ruby compares a Rational against a Float by rounding the
                 // Rational to a Float, so `0.7.to_r == 0.7` holds even though
                 // no fraction with a power-of-ten denominator equals 0.7.
-                let equal = match (method_name, other) {
+                let equal = match (method_name, other.view()) {
                     ("eql?", _) if rational_parts(other).is_none() => false,
-                    (_, Object::Float(number)) => {
-                        crate::vm::native_methods::exact_ratio(&numerator, &denominator) == *number
+                    (_, View::Float(number)) => {
+                        crate::vm::native_methods::exact_ratio(&numerator, &denominator) == number
                     }
                     _ => match as_fraction(other) {
                         Some((other_numerator, other_denominator)) => {
@@ -529,8 +532,8 @@ impl VirtualMachine {
         let zero = BigInt::from(0);
         let one = BigInt::from(1);
         let base = big_to_float(&numerator) / big_to_float(&denominator);
-        if let Object::Float(exponent) = other {
-            return self.raised_as_float(base, *exponent, position).map(Some);
+        if let View::Float(exponent) = other.view() {
+            return self.raised_as_float(base, exponent, position).map(Some);
         }
         let Some((exponent, exponent_denominator)) = rational_parts(other)
             .or_else(|| other.as_big_integer().map(|held| (held, BigInt::from(1))))
@@ -615,10 +618,10 @@ impl VirtualMachine {
         other: &Object,
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        if let Object::Float(value) = other {
+        if let View::Float(value) = other.view() {
             let left = big_to_float(&numerator) / big_to_float(&denominator);
             return self
-                .float_binary_operation(left, operator, *value, position)
+                .float_binary_operation(left, operator, value, position)
                 .map(Some);
         }
 

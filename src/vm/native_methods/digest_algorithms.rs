@@ -481,6 +481,7 @@ pub(crate) fn digest_named(algorithm: &str, message: &[u8]) -> Option<Vec<u8>> {
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::vm::core::VirtualMachine;
 
 impl VirtualMachine {
@@ -491,8 +492,8 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let (Some(Object::String(algorithm)), Some(Object::String(message))) =
-            (arguments.first(), arguments.get(1))
+        let (Some(View::String(algorithm)), Some(View::String(message))) =
+            (arguments.first().view(), arguments.get(1).view())
         else {
             return Err(crate::vm::errors::argument_count_error(
                 crate::vm::errors::Arity::Exact(2),
@@ -519,17 +520,17 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         let (
-            Some(Object::String(algorithm)),
-            Some(Object::String(pass)),
-            Some(Object::String(salt)),
-            Some(Object::Int(rounds)),
-            Some(Object::Int(length)),
+            Some(View::String(algorithm)),
+            Some(View::String(pass)),
+            Some(View::String(salt)),
+            Some(View::Int(rounds)),
+            Some(View::Int(length)),
         ) = (
-            arguments.first(),
-            arguments.get(1),
-            arguments.get(2),
-            arguments.get(3),
-            arguments.get(4),
+            arguments.first().view(),
+            arguments.get(1).view(),
+            arguments.get(2).view(),
+            arguments.get(3).view(),
+            arguments.get(4).view(),
         )
         else {
             return Err(crate::vm::errors::argument_count_error(
@@ -542,8 +543,8 @@ impl VirtualMachine {
             &algorithm.as_str(),
             &super::pack_format::string_to_bytes(&pass.as_str()),
             &super::pack_format::string_to_bytes(&salt.as_str()),
-            (*rounds).max(1) as u32,
-            (*length).max(0) as usize,
+            rounds.max(1) as u32,
+            length.max(0) as usize,
         );
         match derived {
             Some(held) => Ok(super::pack_format::bytes_to_string(&held)),
@@ -564,19 +565,19 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         let (
-            Some(Object::String(pass)),
-            Some(Object::String(salt)),
-            Some(Object::Int(n)),
-            Some(Object::Int(r)),
-            Some(Object::Int(p)),
-            Some(Object::Int(length)),
+            Some(View::String(pass)),
+            Some(View::String(salt)),
+            Some(View::Int(n)),
+            Some(View::Int(r)),
+            Some(View::Int(p)),
+            Some(View::Int(length)),
         ) = (
-            arguments.first(),
-            arguments.get(1),
-            arguments.get(2),
-            arguments.get(3),
-            arguments.get(4),
-            arguments.get(5),
+            arguments.first().view(),
+            arguments.get(1).view(),
+            arguments.get(2).view(),
+            arguments.get(3).view(),
+            arguments.get(4).view(),
+            arguments.get(5).view(),
         )
         else {
             return Err(crate::vm::errors::argument_count_error(
@@ -588,10 +589,10 @@ impl VirtualMachine {
         let derived = scrypt(
             &super::pack_format::string_to_bytes(&pass.as_str()),
             &super::pack_format::string_to_bytes(&salt.as_str()),
-            *n as usize,
-            *r as usize,
-            *p as usize,
-            *length as usize,
+            n as usize,
+            r as usize,
+            p as usize,
+            length as usize,
         );
         Ok(super::pack_format::bytes_to_string(&derived))
     }

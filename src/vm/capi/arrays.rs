@@ -8,6 +8,7 @@ use super::calls::{call, class_name_of};
 use super::handles::{QNIL, Value, objects_from, to_object, to_value};
 use super::{called_from, raise};
 use crate::object::Object;
+use crate::object::View;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
@@ -37,7 +38,7 @@ pub(super) fn carry_element_writes_back() {
             .collect()
     });
     for (array, values) in written {
-        if let Object::Array(elements) = to_object(array) {
+        if let View::Array(elements) = to_object(array).view() {
             *elements.borrow_mut() = values.into_iter().map(to_object).collect();
         }
     }
@@ -46,13 +47,13 @@ pub(super) fn carry_element_writes_back() {
 /// The VALUEs of the elements of the Array a VALUE C code handed over
 /// stands for.
 fn element_values(array: Value) -> Vec<Value> {
-    match to_object(array) {
-        Object::Array(elements) => elements.borrow().iter().map(to_value).collect(),
+    match to_object(array).view() {
+        View::Array(elements) => elements.borrow().iter().map(to_value).collect(),
         other => raise(crate::vm::errors::simple_exception(
             "TypeError",
             &format!(
                 "wrong argument type {} (expected Array)",
-                class_name_of(other)
+                class_name_of(other.to_object())
             ),
             super::called_from(),
         )),
@@ -62,15 +63,15 @@ fn element_values(array: Value) -> Vec<Value> {
 /// The Array `object` converts to through `to_ary`, as `rb_check_array_type`
 /// finds it, or None for an object that has no `to_ary`.
 pub(super) fn array_of(object: Object) -> Option<Vec<Object>> {
-    if let Object::Array(elements) = &object {
+    if let View::Array(elements) = object.view() {
         return Some(elements.borrow().clone());
     }
     if !super::calls::answers(&object, "to_ary") {
         return None;
     }
-    match super::calls::call(object.clone(), "to_ary", Vec::new()) {
-        Object::Array(elements) => Some(elements.borrow().clone()),
-        Object::Nil => None,
+    match super::calls::call(object.clone(), "to_ary", Vec::new()).view() {
+        View::Array(elements) => Some(elements.borrow().clone()),
+        View::Nil => None,
         converted => {
             let class_name = class_name_of(object);
             raise(crate::vm::errors::simple_exception(
@@ -79,7 +80,7 @@ pub(super) fn array_of(object: Object) -> Option<Vec<Object>> {
                     "can't convert {} to Array ({}#to_ary gives {})",
                     class_name,
                     class_name,
-                    class_name_of(converted)
+                    class_name_of(converted.to_object())
                 ),
                 called_from(),
             ))
@@ -309,7 +310,7 @@ pub extern "C-unwind" fn rb_ary_subseq(array: Value, start: i64, length: i64) ->
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_ary_to_ary(object: Value) -> Value {
     let held = to_object(object);
-    if matches!(held, Object::Array(_)) {
+    if matches!(held.view(), View::Array(_)) {
         return object;
     }
     let elements = array_of(held.clone()).unwrap_or_else(|| vec![held]);

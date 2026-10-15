@@ -6,6 +6,7 @@ use super::calls::{call, class_name_of};
 use super::handles::{Value, to_object, to_value};
 use super::{called_from, interpreter, or_raise, raise};
 use crate::object::Object;
+use crate::object::View;
 use num_bigint::{BigInt, Sign};
 
 fn error(class: &str, message: String) -> ! {
@@ -89,8 +90,8 @@ pub extern "C-unwind" fn rb_big2ulong(value: Value) -> u64 {
 /// `$VERBOSE` is true.
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_big2dbl(value: Value) -> f64 {
-    let converted = match call(to_object(value), "to_f", Vec::new()) {
-        Object::Float(number) => number,
+    let converted = match call(to_object(value), "to_f", Vec::new()).view() {
+        View::Float(number) => number,
         _ => 0.0,
     };
     if converted.is_infinite() {
@@ -172,15 +173,15 @@ pub extern "C-unwind" fn rb_absint_size(value: Value, unused_bits: *mut i32) -> 
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_num2dbl(value: Value) -> f64 {
     let object = to_object(value);
-    match &object {
-        Object::Float(number) => return *number,
-        Object::Int(_) | Object::BigInt(_) => {
-            if let Object::Float(number) = call(object, "to_f", Vec::new()) {
+    match object.view() {
+        View::Float(number) => return number,
+        View::Int(_) | View::BigInt(_) => {
+            if let View::Float(number) = call(object, "to_f", Vec::new()).view() {
                 return number;
             }
             return 0.0;
         }
-        Object::Nil | Object::Bool(_) | Object::Symbol(_) | Object::String(_) => error(
+        View::Nil | View::Bool(_) | View::Symbol(_) | View::String(_) => error(
             "TypeError",
             format!(
                 "no implicit conversion of {} into Float",
@@ -195,7 +196,7 @@ pub extern "C-unwind" fn rb_num2dbl(value: Value) -> f64 {
         vec![super::calls::top_level_module("Rational")],
     )
     .is_truthy();
-    if is_rational && let Object::Float(number) = call(object.clone(), "to_f", Vec::new()) {
+    if is_rational && let View::Float(number) = call(object.clone(), "to_f", Vec::new()).view() {
         return number;
     }
     let class_name = class_name_of(object.clone());
@@ -205,15 +206,15 @@ pub extern "C-unwind" fn rb_num2dbl(value: Value) -> f64 {
             format!("can't convert {} into Float", class_name),
         );
     }
-    match call(object.clone(), "to_f", Vec::new()) {
-        Object::Float(number) => number,
+    match call(object.clone(), "to_f", Vec::new()).view() {
+        View::Float(number) => number,
         other => error(
             "TypeError",
             format!(
                 "can't convert {} to Float ({}#to_f gives {})",
                 class_name,
                 class_name,
-                class_name_of(other)
+                class_name_of(other.to_object())
             ),
         ),
     }

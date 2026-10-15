@@ -5,6 +5,7 @@
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::vm::core::VirtualMachine;
 
 /// The option bit asking for the message to reach the error stream too.
@@ -18,15 +19,15 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         let (
-            Some(Object::String(ident)),
-            Some(Object::Int(options)),
-            Some(Object::Int(priority)),
-            Some(Object::String(message)),
+            Some(View::String(ident)),
+            Some(View::Int(options)),
+            Some(View::Int(priority)),
+            Some(View::String(message)),
         ) = (
-            arguments.first(),
-            arguments.get(1),
-            arguments.get(2),
-            arguments.get(3),
+            arguments.first().view(),
+            arguments.get(1).view(),
+            arguments.get(2).view(),
+            arguments.get(3).view(),
         )
         else {
             return Err(crate::vm::errors::argument_count_error(
@@ -44,10 +45,10 @@ impl VirtualMachine {
         // The C library writes to stderr itself under LOG_PERROR on some
         // systems and not others, so it is never asked to, and the line is
         // written here instead.
-        let asked = (*options & !LOG_PERROR) as i32;
+        let asked = (options & !LOG_PERROR) as i32;
         unsafe {
             libc::openlog(named.as_ptr(), asked, 0);
-            libc::syslog(*priority as i32, carried.as_ptr(), written.as_ptr());
+            libc::syslog(priority as i32, carried.as_ptr(), written.as_ptr());
             libc::closelog();
         }
         if options & LOG_PERROR != 0 {

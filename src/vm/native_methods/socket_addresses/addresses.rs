@@ -1,6 +1,7 @@
 // Reading an address out of the text a program writes it as.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// `Socket.__address__(action, text, port)` — the one place the socket
@@ -11,19 +12,19 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let Some(Object::String(action)) = arguments.first() else {
+        let Some(View::String(action)) = arguments.first().view() else {
             return Err(crate::vm::errors::argument_count_error(
                 crate::vm::errors::Arity::AtLeast(1),
                 arguments.len(),
                 position,
             ));
         };
-        let text = match arguments.get(1) {
-            Some(Object::String(held)) => held.as_str().to_string(),
+        let text = match arguments.get(1).view() {
+            Some(View::String(held)) => held.as_str().to_string(),
             _ => String::new(),
         };
-        let port = match arguments.get(2) {
-            Some(Object::Int(held)) => *held,
+        let port = match arguments.get(2).view() {
+            Some(View::Int(held)) => held,
             _ => 0,
         };
         let refuse =

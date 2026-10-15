@@ -7,6 +7,7 @@ use super::handles::{QNIL, Value, to_object, to_value};
 use super::numbers::long_from;
 use super::{called_from, interpreter, raise};
 use crate::object::Object;
+use crate::object::View;
 use crate::vm::native_methods::from_big;
 use num_bigint::BigInt;
 
@@ -109,14 +110,14 @@ fn split_seconds(value: Object, interval: bool) -> (i64, i64) {
             );
         }
     };
-    match &value {
-        Object::Int(_) | Object::BigInt(_) => {
+    match value.view() {
+        View::Int(_) | View::BigInt(_) => {
             let seconds = long_from(to_value(&value));
             refuse_negative(seconds as f64);
             (seconds, 0)
         }
-        Object::Float(number) => {
-            refuse_negative(*number);
+        View::Float(number) => {
+            refuse_negative(number);
             let mut whole = number.trunc();
             let fraction = number - whole;
             let mut nanoseconds;
@@ -170,8 +171,8 @@ fn timespec_of(value: Value, interval: bool) -> (i64, i64) {
     let value = to_object(value);
     let is_time = !interval
         && matches!(
-            call(value.clone(), "is_a?", vec![time_class()]),
-            Object::Bool(true)
+            call(value.clone(), "is_a?", vec![time_class()]).view(),
+            View::Bool(true)
         );
     if !is_time {
         return split_seconds(value, interval);

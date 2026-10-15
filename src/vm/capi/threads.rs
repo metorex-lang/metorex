@@ -8,6 +8,7 @@ use super::methods::{CFunction, THREAD_FUNCTION_ARITY};
 use super::symbols::symbol_name;
 use super::{called_from, interpreter, keeping_call_state, on_interpreter_thread, raise};
 use crate::object::{Method, Object};
+use crate::object::{OptionView, View};
 use std::ffi::c_void;
 use std::os::unix::thread::JoinHandleExt;
 use std::rc::Rc;
@@ -26,8 +27,8 @@ pub extern "C-unwind" fn rb_thread_current() -> Value {
 /// Whether the thread running now is the only one alive.
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_thread_alone() -> i32 {
-    match call(thread_class(), "list", Vec::new()) {
-        Object::Array(threads) => (threads.borrow().len() == 1) as i32,
+    match call(thread_class(), "list", Vec::new()).view() {
+        View::Array(threads) => (threads.borrow().len() == 1) as i32,
         _ => 1,
     }
 }
@@ -195,7 +196,7 @@ fn wait_until(
     let machine = interpreter();
     let on_main = !machine.running_a_thread_body();
     let thread = machine.running_thread();
-    let Object::Instance(instance) = &thread else {
+    let View::Instance(instance) = thread.view() else {
         unreachable!("a thread is an instance of Thread")
     };
     let mut asked_to_end = false;
@@ -216,8 +217,8 @@ fn wait_until(
             }
         });
         let woken = !matches!(
-            instance.borrow().get_var("__thread_waiting"),
-            Some(Object::Bool(true))
+            instance.borrow().get_var("__thread_waiting").view(),
+            Some(View::Bool(true))
         );
         let machine = interpreter();
         if on_main

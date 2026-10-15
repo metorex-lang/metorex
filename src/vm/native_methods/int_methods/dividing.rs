@@ -1,6 +1,7 @@
 // Dividing, and the divisors two numbers share.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// `div`, `modulo`, `fdiv`, and `remainder`, each of which divides and then
@@ -16,8 +17,8 @@ impl VirtualMachine {
         // Every one of these divides, so an operand that cannot become a
         // number is refused up front and named the way Ruby names it.
         let numeric = matches!(
-            argument,
-            Object::Int(_) | Object::BigInt(_) | Object::Float(_)
+            argument.view(),
+            View::Int(_) | View::BigInt(_) | View::Float(_)
         ) || crate::vm::native_methods::rational_parts(argument).is_some();
         if !numeric && !self.responds_to(argument, "coerce") {
             return Err(self.uncoercible(argument, position));
@@ -29,7 +30,7 @@ impl VirtualMachine {
                 // A value of the program's own answers the division itself:
                 // the pair its `coerce` hands back is asked for `div` rather
                 // than for `/`.
-                let coerces = matches!(argument, Object::Instance(held)
+                let coerces = matches!(argument.view(), View::Instance(held)
                     if !matches!(held.borrow().class.name(), "Rational" | "Complex"));
                 if coerces && self.answers_to(argument, "coerce", position)? {
                     let pair = self.send_to_object(
@@ -38,7 +39,7 @@ impl VirtualMachine {
                         vec![receiver.clone()],
                         position,
                     )?;
-                    if let Object::Array(parts) = &pair
+                    if let View::Array(parts) = pair.view()
                         && parts.borrow().len() == 2
                     {
                         let (first, second) = {
@@ -50,7 +51,7 @@ impl VirtualMachine {
                 }
                 // A zero divisor is refused before the division runs, so a
                 // Float zero is reported the same way an Integer one is.
-                if matches!(argument, Object::Float(divisor) if *divisor == 0.0) {
+                if matches!(argument.view(), View::Float(divisor) if divisor == 0.0) {
                     return Err(crate::vm::errors::simple_exception(
                         "ZeroDivisionError",
                         "divided by 0",
@@ -63,23 +64,23 @@ impl VirtualMachine {
                     argument.clone(),
                     position,
                 )?;
-                match quotient {
+                match quotient.view() {
                     // A NaN quotient names no number at all, which Ruby
                     // reports apart from a division by zero.
-                    Object::Float(value) if value.is_nan() => Err(
+                    View::Float(value) if value.is_nan() => Err(
                         crate::vm::errors::simple_exception("FloatDomainError", "NaN", position),
                     ),
-                    Object::Float(value) if !value.is_finite() => {
+                    View::Float(value) if !value.is_finite() => {
                         Err(crate::vm::errors::simple_exception(
                             "ZeroDivisionError",
                             "divided by 0",
                             position,
                         ))
                     }
-                    Object::Float(value) => Ok(Object::integer(
+                    View::Float(value) => Ok(Object::integer(
                         format!("{:.0}", value.floor()).parse().unwrap_or_default(),
                     )),
-                    other => self.send_to_object(other, "floor", vec![], position),
+                    _ => self.send_to_object(quotient.clone(), "floor", vec![], position),
                 }
             }
             "modulo" => self.evaluate_binary_operation(
@@ -98,9 +99,9 @@ impl VirtualMachine {
                     return Ok(Object::Float(exact_ratio(&value, &divisor)));
                 }
                 let divisor = self.float_value_of(argument, position)?;
-                let value = match receiver {
-                    Object::BigInt(value) => crate::vm::operators::big_to_float(value),
-                    Object::Int(value) => *value as f64,
+                let value = match receiver.view() {
+                    View::BigInt(value) => crate::vm::operators::big_to_float(value),
+                    View::Int(value) => value as f64,
                     _ => unreachable!("caller restricts the receiver to integers"),
                 };
                 Ok(Object::Float(value / divisor))
@@ -200,23 +201,24 @@ impl VirtualMachine {
         value: &Object,
         position: Position,
     ) -> Result<f64, MetorexError> {
-        match value {
-            Object::Int(number) => Ok(*number as f64),
-            Object::BigInt(number) => Ok(crate::vm::operators::big_to_float(number)),
-            Object::Float(number) => Ok(*number),
+        match value.view() {
+            View::Int(number) => Ok(number as f64),
+            View::BigInt(number) => Ok(crate::vm::operators::big_to_float(number)),
+            View::Float(number) => Ok(number),
             // A Rational answers its own Float value, and anything else is
             // asked to coerce before Ruby gives up on it. A core value such
             // as nil or a String is not a number whatever `to_f` it has.
-            other @ Object::Instance(_) if self.responds_to(other, "to_f") => {
-                match self.send_to_object(other.clone(), "to_f", vec![], position)? {
-                    Object::Float(number) => Ok(number),
-                    Object::Int(number) => Ok(number as f64),
-                    _ => Err(self.uncoercible(other, position)),
-                }
-            }
-            other => match self.coerced_float(other, position)? {
+            View::Instance(_) if self.responds_to(value, "to_f") => match self
+                .send_to_object(value.clone(), "to_f", vec![], position)?
+                .view()
+            {
+                View::Float(number) => Ok(number),
+                View::Int(number) => Ok(number as f64),
+                _ => Err(self.uncoercible(value, position)),
+            },
+            _ => match self.coerced_float(value, position)? {
                 Some(number) => Ok(number),
-                None => Err(self.uncoercible(other, position)),
+                None => Err(self.uncoercible(value, position)),
             },
         }
     }

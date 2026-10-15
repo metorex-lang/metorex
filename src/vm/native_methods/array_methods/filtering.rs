@@ -2,6 +2,7 @@
 // at once.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Keeping or dropping elements in place, and reading several positions
@@ -21,7 +22,8 @@ impl VirtualMachine {
                 // Without a block there is nothing to filter by, so the array
                 // is not touched and an Enumerator comes back even from a
                 // frozen one.
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     return self
                         .make_enumerator(receiver, method_name, arguments, position)
                         .map(Some);
@@ -38,7 +40,7 @@ impl VirtualMachine {
                 let mut outcome = Ok(());
                 while index < array_rc.borrow().len() {
                     let element = array_rc.borrow()[index].clone();
-                    match self.execute_block_callable(&block, vec![element.clone()], position) {
+                    match self.execute_block_callable(block, vec![element.clone()], position) {
                         Ok(answer) => {
                             let remove = if method_name == "delete_if" {
                                 answer.is_truthy()
@@ -69,7 +71,8 @@ impl VirtualMachine {
             }
             // `each_index` walks the positions rather than the elements.
             "each_index" => {
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     return self
                         .make_enumerator(receiver, method_name, arguments, position)
                         .map(Some);
@@ -78,14 +81,15 @@ impl VirtualMachine {
                 // while it is walked is walked to its new end.
                 let mut index = 0;
                 while index < array_rc.borrow().len() {
-                    self.execute_block_callable(&block, vec![Object::Int(index as i64)], position)?;
+                    self.execute_block_callable(block, vec![Object::Int(index as i64)], position)?;
                     index += 1;
                 }
                 Ok(Some(receiver.clone()))
             }
             "reverse_each" => {
                 let elements = array_rc.borrow().clone();
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     return self
                         .make_enumerator(receiver, method_name, arguments, position)
                         .map(Some);
@@ -101,7 +105,7 @@ impl VirtualMachine {
                         Some(element) => element.clone(),
                         None => continue,
                     };
-                    self.execute_block_callable(&block, vec![element], position)?;
+                    self.execute_block_callable(block, vec![element], position)?;
                 }
                 Ok(Some(receiver.clone()))
             }
@@ -114,16 +118,16 @@ impl VirtualMachine {
                 let length = array.len() as i64;
                 let mut picked = Vec::new();
                 for argument in arguments {
-                    if let Object::Range {
+                    if let View::Range {
                         start,
                         end,
                         exclusive,
                         ..
-                    } = argument
+                    } = argument.view()
                     {
-                        let first = match start.as_ref() {
-                            Object::Nil => 0,
-                            bound => self.index_from(bound, length, position)?,
+                        let first = match start.view() {
+                            View::Nil => 0,
+                            _ => self.index_from(start, length, position)?,
                         };
                         // A start before the front names nothing. A start past
                         // the end still fills nil for every position the range
@@ -131,11 +135,11 @@ impl VirtualMachine {
                         if first < 0 {
                             continue;
                         }
-                        let last = match end.as_ref() {
-                            Object::Nil => length - 1,
-                            bound => {
-                                let resolved = self.index_from(bound, length, position)?;
-                                if *exclusive { resolved - 1 } else { resolved }
+                        let last = match end.view() {
+                            View::Nil => length - 1,
+                            _ => {
+                                let resolved = self.index_from(end, length, position)?;
+                                if exclusive { resolved - 1 } else { resolved }
                             }
                         };
                         for index in first..=last.max(first - 1) {

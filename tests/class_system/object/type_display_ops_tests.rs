@@ -2,6 +2,7 @@
 // constructors, and lib::version
 
 use indexmap::IndexMap;
+use metorex::object::View;
 use metorex::object::{Class, Method, Object, ObjectHash};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -122,12 +123,12 @@ fn type_name_native_function() {
 
 #[test]
 fn type_name_range() {
-    let r = Object::Range {
-        start: Box::new(Object::Int(1)),
-        end: Box::new(Object::Int(10)),
-        exclusive: false,
-        mark: std::rc::Rc::new(()),
-    };
+    let r = Object::Range(
+        Box::new(Object::Int(1)),
+        Box::new(Object::Int(10)),
+        false,
+        std::rc::Rc::new(()),
+    );
     assert_eq!(r.type_name(), "Range");
 }
 
@@ -276,23 +277,23 @@ fn display_native_function() {
 
 #[test]
 fn display_range_inclusive() {
-    let r = Object::Range {
-        start: Box::new(Object::Int(1)),
-        end: Box::new(Object::Int(5)),
-        exclusive: false,
-        mark: std::rc::Rc::new(()),
-    };
+    let r = Object::Range(
+        Box::new(Object::Int(1)),
+        Box::new(Object::Int(5)),
+        false,
+        std::rc::Rc::new(()),
+    );
     assert_eq!(format!("{}", r), "1..5");
 }
 
 #[test]
 fn display_range_exclusive() {
-    let r = Object::Range {
-        start: Box::new(Object::Int(1)),
-        end: Box::new(Object::Int(5)),
-        exclusive: true,
-        mark: std::rc::Rc::new(()),
-    };
+    let r = Object::Range(
+        Box::new(Object::Int(1)),
+        Box::new(Object::Int(5)),
+        true,
+        std::rc::Rc::new(()),
+    );
     assert_eq!(format!("{}", r), "1...5");
 }
 
@@ -437,7 +438,7 @@ fn equals_instance_same_rc() {
     let class = Class::new("X", None);
     let inst = Object::instance(class);
     // Same Rc → equal
-    if let Object::Instance(rc) = &inst {
+    if let View::Instance(rc) = inst.view() {
         let inst2 = Object::Instance(Rc::clone(rc));
         assert!(inst.equals(&inst2));
     }
@@ -461,7 +462,7 @@ fn equals_class_different_rc() {
 #[test]
 fn equals_exception_same_rc() {
     let e = Object::exception("E", "m");
-    if let Object::Exception(rc) = &e {
+    if let View::Exception(rc) = e.view() {
         let e2 = Object::Exception(Rc::clone(rc));
         assert!(e.equals(&e2));
     }
@@ -509,7 +510,7 @@ fn constructor_string() {
 
 #[test]
 fn constructor_empty_array() {
-    if let Object::Array(arr) = Object::empty_array() {
+    if let View::Array(arr) = Object::empty_array().view() {
         assert!(arr.borrow().is_empty());
     } else {
         panic!("Expected Array");
@@ -519,14 +520,14 @@ fn constructor_empty_array() {
 #[test]
 fn constructor_array() {
     let a = Object::array(vec![Object::Int(1), Object::Int(2)]);
-    if let Object::Array(arr) = a {
+    if let View::Array(arr) = a.view() {
         assert_eq!(arr.borrow().len(), 2);
     }
 }
 
 #[test]
 fn constructor_empty_dict() {
-    if let Object::Dict(d) = Object::empty_dict() {
+    if let View::Dict(d) = Object::empty_dict().view() {
         assert!(d.borrow().is_empty());
     }
 }
@@ -536,14 +537,14 @@ fn constructor_dict() {
     let mut m = IndexMap::new();
     m.insert("k".to_string(), Object::Int(1));
     let d = Object::dict(m);
-    if let Object::Dict(d) = d {
+    if let View::Dict(d) = d.view() {
         assert_eq!(d.borrow().len(), 1);
     }
 }
 
 #[test]
 fn constructor_empty_set() {
-    if let Object::Set(s) = Object::empty_set() {
+    if let View::Set(s) = Object::empty_set().view() {
         assert!(s.borrow().is_empty());
     }
 }
@@ -558,7 +559,7 @@ fn constructor_instance() {
 #[test]
 fn constructor_exception() {
     let e = Object::exception("RuntimeError", "oops");
-    if let Object::Exception(exc) = e {
+    if let View::Exception(exc) = e.view() {
         assert_eq!(exc.borrow().exception_type, "RuntimeError");
     }
 }
@@ -566,15 +567,15 @@ fn constructor_exception() {
 #[test]
 fn constructor_ok() {
     let r = Object::ok(Object::Int(42));
-    if let Object::Result(Ok(v)) = r {
-        assert_eq!(*v, Object::Int(42));
+    if let View::Result(Ok(v)) = r.view() {
+        assert_eq!(**v, Object::Int(42));
     }
 }
 
 #[test]
 fn constructor_err() {
     let r = Object::err(Object::string("bad"));
-    if let Object::Result(Err(v)) = r {
+    if let View::Result(Err(v)) = r.view() {
         assert_eq!(v.type_name(), "String");
     }
 }
@@ -583,7 +584,7 @@ fn constructor_err() {
 fn constructor_exception_with_cause() {
     let cause = Object::string("original");
     let e = Object::exception_with_cause("Error", "wrapped", cause);
-    if let Object::Exception(exc) = e {
+    if let View::Exception(exc) = e.view() {
         assert!(exc.borrow().cause.is_some());
     }
 }

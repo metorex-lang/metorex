@@ -1,6 +1,7 @@
 // Constants registered against the file that defines them.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Registering a constant against the file that defines it.
@@ -21,9 +22,9 @@ impl VirtualMachine {
                     .register_autoload(method_name, arguments.to_vec(), position)
                     .map(Answered);
             }
-            let const_name = match arguments.first() {
-                Some(Object::Symbol(s)) => s.as_str().to_string(),
-                Some(Object::String(s)) => s.as_str().to_string(),
+            let const_name = match arguments.first().view() {
+                Some(View::Symbol(s)) => s.as_str().to_string(),
+                Some(View::String(s)) => s.as_str().to_string(),
                 _ => return Ok(Answered(Object::Nil)),
             };
             if !is_valid_constant_name(&const_name) {
@@ -48,16 +49,23 @@ impl VirtualMachine {
                     message: msg,
                 });
             }
-            let path = match arguments.get(1) {
-                Some(Object::String(s)) => s.as_str().to_string(),
-                Some(Object::Symbol(s)) => s.as_str().to_string(),
+            let path = match arguments.get(1).view() {
+                Some(View::String(s)) => s.as_str().to_string(),
+                Some(View::Symbol(s)) => s.as_str().to_string(),
                 Some(other) => {
-                    let other_obj = other.clone();
-                    if let Some((cls, method)) = self.lookup_method(&other_obj, "to_path") {
-                        let result =
-                            self.invoke_method(cls, method, other_obj, Vec::new(), position)?;
-                        match result {
-                            Object::String(s) => s.as_str().to_string(),
+                    let other_obj = other;
+                    if let Some((cls, method)) =
+                        self.lookup_method(&other_obj.to_object(), "to_path")
+                    {
+                        let result = self.invoke_method(
+                            cls,
+                            method,
+                            other_obj.to_object(),
+                            Vec::new(),
+                            position,
+                        )?;
+                        match result.view() {
+                            View::String(s) => s.as_str().to_string(),
                             _ => {
                                 let msg = "to_path must return a String".to_string();
                                 let exc = Object::exception("TypeError", msg.clone());
@@ -120,12 +128,12 @@ impl VirtualMachine {
         _position: Position,
     ) -> Result<ClassMethodAnswer, MetorexError> {
         if method_name == "autoload?" {
-            let const_name = match arguments.first() {
-                Some(Object::Symbol(s)) => s.as_str().to_string(),
-                Some(Object::String(s)) => s.as_str().to_string(),
+            let const_name = match arguments.first().view() {
+                Some(View::Symbol(s)) => s.as_str().to_string(),
+                Some(View::String(s)) => s.as_str().to_string(),
                 _ => return Ok(Answered(Object::Nil)),
             };
-            let inherit = !matches!(arguments.get(1), Some(Object::Bool(false)));
+            let inherit = !matches!(arguments.get(1).view(), Some(View::Bool(false)));
             let class_for_autoload = Rc::clone(class_rc);
             let local_only_blocked = !inherit && class_rc.get_autoload(&const_name).is_none();
             let path = if local_only_blocked {

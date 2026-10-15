@@ -2,6 +2,7 @@
 // Tests the Object type system including equality, hashing, and type operations
 
 use indexmap::IndexMap;
+use metorex::object::View;
 use metorex::object::{BlockStatement, Class, Exception, Instance, Method, Object, ObjectHash};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -25,14 +26,14 @@ fn test_create_all_object_types() {
     let set_obj = Object::Set(Rc::new(RefCell::new(indexmap::IndexSet::new())));
 
     // Verify types exist
-    assert!(matches!(nil, Object::Nil));
-    assert!(matches!(bool_obj, Object::Bool(_)));
-    assert!(matches!(int_obj, Object::Int(_)));
-    assert!(matches!(float_obj, Object::Float(_)));
-    assert!(matches!(string_obj, Object::String(_)));
-    assert!(matches!(array_obj, Object::Array(_)));
-    assert!(matches!(dict_obj, Object::Dict(_)));
-    assert!(matches!(set_obj, Object::Set(_)));
+    assert!(matches!(nil.view(), View::Nil));
+    assert!(matches!(bool_obj.view(), View::Bool(_)));
+    assert!(matches!(int_obj.view(), View::Int(_)));
+    assert!(matches!(float_obj.view(), View::Float(_)));
+    assert!(matches!(string_obj.view(), View::String(_)));
+    assert!(matches!(array_obj.view(), View::Array(_)));
+    assert!(matches!(dict_obj.view(), View::Dict(_)));
+    assert!(matches!(set_obj.view(), View::Set(_)));
 }
 
 #[test]
@@ -70,13 +71,13 @@ fn test_create_complex_types() {
     let result_err = Object::Result(Err(Box::new(Object::string("error"))));
 
     // Verify types exist
-    assert!(matches!(class_obj, Object::Class(_)));
-    assert!(matches!(instance_obj, Object::Instance(_)));
-    assert!(matches!(method_obj, Object::Method(_)));
-    assert!(matches!(block_obj, Object::Block(_)));
-    assert!(matches!(exception_obj, Object::Exception(_)));
-    assert!(matches!(result_ok, Object::Result(Ok(_))));
-    assert!(matches!(result_err, Object::Result(Err(_))));
+    assert!(matches!(class_obj.view(), View::Class(_)));
+    assert!(matches!(instance_obj.view(), View::Instance(_)));
+    assert!(matches!(method_obj.view(), View::Method(_)));
+    assert!(matches!(block_obj.view(), View::Block(_)));
+    assert!(matches!(exception_obj.view(), View::Exception(_)));
+    assert!(matches!(result_ok.view(), View::Result(Ok(_))));
+    assert!(matches!(result_err.view(), View::Result(Err(_))));
 }
 
 // ============================================================================
@@ -589,15 +590,15 @@ fn test_class_variables() {
 fn test_result_type_operations() {
     // Ok result
     let ok = Object::Result(Ok(Box::new(Object::Int(42))));
-    assert!(matches!(ok, Object::Result(Ok(_))));
+    assert!(matches!(ok.view(), View::Result(Ok(_))));
 
     // Error result
     let err = Object::Result(Err(Box::new(Object::string("error message"))));
-    assert!(matches!(err, Object::Result(Err(_))));
+    assert!(matches!(err.view(), View::Result(Err(_))));
 
     // Nested results
     let nested_ok = Object::Result(Ok(Box::new(Object::Result(Ok(Box::new(Object::Int(42)))))));
-    assert!(matches!(nested_ok, Object::Result(Ok(_))));
+    assert!(matches!(nested_ok.view(), View::Result(Ok(_))));
 }
 
 // ── allocate on the classes whose instances are primitives ──────────────────

@@ -3,7 +3,7 @@
 
 use super::calls::{call, top_level_module};
 use super::handles::{Value, to_object, to_value};
-use crate::object::Object;
+use crate::object::View;
 
 /// What a walk's function answers to go on, stop, or drop the element.
 const ST_STOP: i32 = 1;
@@ -16,8 +16,8 @@ fn new_set() -> Value {
 /// Whether a `?` method of the set answered something other than nil.
 fn answered(set: Value, name: &str, element: Value) -> bool {
     !matches!(
-        call(to_object(set), name, vec![to_object(element)]),
-        Object::Nil | Object::Bool(false)
+        call(to_object(set), name, vec![to_object(element)]).view(),
+        View::Nil | View::Bool(false)
     )
 }
 
@@ -54,8 +54,8 @@ pub extern "C-unwind" fn rb_set_clear(set: Value) -> Value {
 
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_set_size(set: Value) -> usize {
-    match call(to_object(set), "size", Vec::new()) {
-        Object::Int(count) => count as usize,
+    match call(to_object(set), "size", Vec::new()).view() {
+        View::Int(count) => count as usize,
         _ => 0,
     }
 }
@@ -66,7 +66,8 @@ pub extern "C-unwind" fn rb_set_foreach(
     function: extern "C-unwind" fn(Value, Value) -> i32,
     data: Value,
 ) {
-    let Object::Array(elements) = call(to_object(set), "to_a", Vec::new()) else {
+    let viewed = call(to_object(set), "to_a", Vec::new());
+    let View::Array(elements) = viewed.view() else {
         return;
     };
     let elements = elements.borrow().clone();

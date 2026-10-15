@@ -3,6 +3,7 @@
 // socket(2) does.
 
 use super::*;
+use crate::object::{OptionView, View};
 use std::os::unix::io::{FromRawFd as _, IntoRawFd as _};
 
 impl VirtualMachine {
@@ -405,9 +406,9 @@ pub(crate) fn socket_addrinfo_list(text: &str, port: Option<&Object>) -> Object 
         || -> libc::c_int { parts.next().and_then(|held| held.parse().ok()).unwrap_or(0) };
     let (family, socktype, protocol, flags) = (hint(), hint(), hint(), hint());
     let node_given = hint() == 1;
-    let service = match port {
-        Some(Object::Int(number)) => Some(number.to_string()),
-        Some(Object::String(named)) => Some(named.as_str().to_string()),
+    let service = match port.view() {
+        Some(View::Int(number)) => Some(number.to_string()),
+        Some(View::String(named)) => Some(named.as_str().to_string()),
         _ => None,
     };
     let numbered_service = service

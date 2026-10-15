@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -31,7 +32,7 @@ arr.push(3)
 "#);
     // push returns the array itself
     assert!(result.is_some());
-    if let Some(Object::Array(arr)) = result {
+    if let Some(View::Array(arr)) = result.view() {
         assert_eq!(arr.borrow().len(), 3);
     }
 }
@@ -39,7 +40,7 @@ arr.push(3)
 #[test]
 fn array_push_no_args_returns_self() {
     let result = run("[1, 2].push");
-    if let Some(Object::Array(arr)) = result {
+    if let Some(View::Array(arr)) = result.view() {
         assert_eq!(arr.borrow().len(), 2);
     }
 }
@@ -47,7 +48,7 @@ fn array_push_no_args_returns_self() {
 #[test]
 fn array_append_no_args_returns_self() {
     let result = run("[1, 2].append");
-    if let Some(Object::Array(arr)) = result {
+    if let Some(View::Array(arr)) = result.view() {
         assert_eq!(arr.borrow().len(), 2);
     }
 }
@@ -146,7 +147,7 @@ fn array_reverse_method() {
 [1, 2, 3].reverse
 "#);
     assert!(result.is_some());
-    if let Some(Object::Array(arr)) = result {
+    if let Some(View::Array(arr)) = result.view() {
         let borrowed = arr.borrow();
         assert_eq!(borrowed[0], Object::Int(3));
         assert_eq!(borrowed[2], Object::Int(1));
@@ -213,8 +214,8 @@ fn array_bracket_start_length_negative_len_returns_nil() {
 fn array_bracket_start_length_clamps_to_end() {
     let result = run(r#"[1, 2, 3, 4, 5][3, 100]"#);
     // Starting at index 3, requesting 100, should clamp to elements [4, 5]
-    match result {
-        Some(Object::Array(arr)) => assert_eq!(arr.borrow().len(), 2),
+    match result.view() {
+        Some(View::Array(arr)) => assert_eq!(arr.borrow().len(), 2),
         other => panic!("expected Array, got {:?}", other),
     }
 }

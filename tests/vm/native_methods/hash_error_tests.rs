@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -72,7 +73,7 @@ end
 test_hash_return
 "#);
     // Iteration order for hashes may vary; assert we got a key, not an error.
-    assert!(matches!(result, Some(Object::String(_))));
+    assert!(matches!(result.view(), Some(View::String(_))));
 }
 
 #[test]

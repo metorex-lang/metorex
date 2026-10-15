@@ -1,6 +1,7 @@
 // What an object reads back as when it defines nothing of its own.
 
 use super::*;
+use crate::object::View;
 
 thread_local! {
     /// The instances whose default `inspect` is being rendered now.
@@ -18,7 +19,7 @@ impl VirtualMachine {
         receiver: &Object,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let Object::Instance(instance) = receiver else {
+        let View::Instance(instance) = receiver.view() else {
             return Ok(Object::string(receiver.to_string()));
         };
         let header = receiver.to_string();
@@ -48,24 +49,24 @@ impl VirtualMachine {
             Some((class, method)) if !method.is_undefined => {
                 let answer =
                     self.invoke_method(class, method, receiver.clone(), Vec::new(), position)?;
-                match answer {
-                    Object::Nil => None,
-                    Object::Array(names) => Some(
+                match answer.view() {
+                    View::Nil => None,
+                    View::Array(names) => Some(
                         names
                             .borrow()
                             .iter()
-                            .map(|name| match name {
-                                Object::Symbol(text) | Object::String(text) => {
+                            .map(|name| match name.view() {
+                                View::Symbol(text) | View::String(text) => {
                                     text.as_str().to_string()
                                 }
                                 other => other.to_string(),
                             })
                             .collect::<Vec<_>>(),
                     ),
-                    other => {
+                    _ => {
                         let message = format!(
                             "Expected #instance_variables_to_inspect to return an Array or nil, but it returned {}",
-                            self.builtins().class_of(&other).name()
+                            self.builtins().class_of(&answer).name()
                         );
                         return Err(MetorexError::UncaughtException {
                             exception: Object::exception("TypeError", message.clone()),
@@ -127,7 +128,7 @@ impl VirtualMachine {
         }
         // An object of the program's own answers `inspect` the way any call
         // reaches it, which shows its instance variables.
-        if let Object::Instance(_) = value {
+        if let View::Instance(_) = value.view() {
             let shown = self.send_to_object(value.clone(), "inspect", Vec::new(), position)?;
             return Ok(shown.to_string());
         }

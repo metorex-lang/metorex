@@ -7,6 +7,7 @@ use super::handles::{QFALSE, QNIL, QTRUE, Value, objects_from, to_object, to_val
 use super::symbols::symbol_name;
 use super::{called_from, called_with_block, interpreter, raise, running_method};
 use crate::object::Object;
+use crate::object::View;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::{CStr, CString, c_char};
@@ -197,19 +198,19 @@ pub extern "C-unwind" fn rb_method_boundp(klass: Value, name: Value, exclude_pri
 pub extern "C-unwind" fn rb_special_const_p(object: Value) -> Value {
     let special = object & 1 == 1
         || matches!(
-            to_object(object),
-            Object::Nil | Object::Bool(_) | Object::Symbol(_)
+            to_object(object).view(),
+            View::Nil | View::Bool(_) | View::Symbol(_)
         );
     truth(special)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_to_id(name: Value) -> Value {
-    match to_object(name) {
-        Object::Symbol(_) => name,
-        Object::String(text) => to_value(&Object::symbol(text.as_str().to_string())),
+    match to_object(name).view() {
+        View::Symbol(_) => name,
+        View::String(text) => to_value(&Object::symbol(text.as_str().to_string())),
         other => {
-            let shown = call(other, "inspect", Vec::new());
+            let shown = call(other.to_object(), "inspect", Vec::new());
             type_error(format!("{} is not a symbol nor a string", shown))
         }
     }
@@ -218,10 +219,10 @@ pub extern "C-unwind" fn rb_to_id(name: Value) -> Value {
 /// The class name a conversion error names `object` by: `nil`, `true`
 /// and `false` by themselves.
 fn named_in_error(object: &Object) -> String {
-    match object {
-        Object::Nil => "nil".to_string(),
-        Object::Bool(held) => held.to_string(),
-        other => class_name_of(other.clone()),
+    match object.view() {
+        View::Nil => "nil".to_string(),
+        View::Bool(held) => held.to_string(),
+        _ => class_name_of(object.clone()),
     }
 }
 
@@ -297,7 +298,7 @@ pub extern "C-unwind" fn rb_check_string_type(object: Value) -> Value {
 }
 
 fn is_integer(object: &Object) -> bool {
-    matches!(object, Object::Int(_) | Object::BigInt(_))
+    matches!(object.view(), View::Int(_) | View::BigInt(_))
 }
 
 /// `object` when it is an Integer, or what `method` converts it to when
@@ -388,7 +389,7 @@ pub extern "C-unwind" fn rb_equal(first: Value, second: Value) -> Value {
 }
 
 fn is_module(object: &Object) -> bool {
-    matches!(object, Object::Class(_) | Object::Module(_))
+    matches!(object.view(), View::Class(_) | View::Module(_))
 }
 
 /// Whether `module` is `other` or descends from it, or nil when the two

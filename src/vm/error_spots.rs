@@ -5,6 +5,7 @@ use crate::ast::{Expression, UnaryOp};
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::View;
 use crate::vm::VirtualMachine;
 
 /// Where an exception keeps the file, line, column and name of the
@@ -46,7 +47,7 @@ impl VirtualMachine {
     /// Record where an error was raised, unless a place nearer the raise is
     /// already recorded.
     fn record_spot_hint(&mut self, exception: &Object, start: Position, name: Option<String>) {
-        let Object::Exception(details) = exception else {
+        let View::Exception(details) = exception.view() else {
             return;
         };
         if details.borrow().instance_vars.contains_key(SPOT_HINT_KEY) {
@@ -151,13 +152,12 @@ impl VirtualMachine {
         class: &std::rc::Rc<crate::class::Class>,
         position: Position,
     ) -> MetorexError {
-        let MetorexError::UncaughtException {
-            exception: exception @ Object::Exception(_),
-            ..
-        } = &error
-        else {
+        let MetorexError::UncaughtException { exception, .. } = &error else {
             return error;
         };
+        if !matches!(exception.view(), View::Exception(_)) {
+            return error;
+        }
         let Some(location) = &method.source_location else {
             return error;
         };
@@ -165,7 +165,7 @@ impl VirtualMachine {
             return error;
         };
         let traced = self.add_stack_trace_to_exception(exception.clone(), position);
-        let Object::Exception(details) = traced else {
+        let View::Exception(details) = traced.view() else {
             return error;
         };
         let label = match method.name.strip_prefix("__class__") {
@@ -201,10 +201,8 @@ impl VirtualMachine {
         error: MetorexError,
         method: &crate::object::Method,
     ) -> MetorexError {
-        if let MetorexError::UncaughtException {
-            exception: exception @ Object::Exception(_),
-            ..
-        } = &error
+        if let MetorexError::UncaughtException { exception, .. } = &error
+            && matches!(exception.view(), View::Exception(_))
             && let Some(location) = &method.source_location
         {
             self.add_stack_trace_to_exception(

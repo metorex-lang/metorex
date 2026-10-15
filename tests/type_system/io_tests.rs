@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -65,7 +66,7 @@ fn p_without_arguments_returns_nil() {
 fn file_read_existing_file() {
     // Read our own test fixture
     let result = run(r#"File.read("tests/_examples/require/bad_runtime.rb")"#);
-    if let Some(Object::String(s)) = result {
+    if let Some(View::String(s)) = result.view() {
         assert!(s.as_str().contains("raise"));
     } else {
         panic!("Expected string content");
@@ -202,8 +203,8 @@ fn print_with_no_args_returns_nil() {
 #[test]
 fn file_realpath_for_existing_file() {
     let result = run(r#"File.realpath("Cargo.toml")"#);
-    match result {
-        Some(Object::String(s)) => assert!(s.as_str().ends_with("Cargo.toml")),
+    match result.view() {
+        Some(View::String(s)) => assert!(s.as_str().ends_with("Cargo.toml")),
         other => panic!("expected canonical path string, got {:?}", other),
     }
 }
@@ -211,8 +212,8 @@ fn file_realpath_for_existing_file() {
 #[test]
 fn file_realpath_with_base_dir() {
     let result = run(r#"File.realpath("Cargo.toml", ".")"#);
-    match result {
-        Some(Object::String(s)) => assert!(s.as_str().ends_with("Cargo.toml")),
+    match result.view() {
+        Some(View::String(s)) => assert!(s.as_str().ends_with("Cargo.toml")),
         other => panic!("expected canonical path string, got {:?}", other),
     }
 }
@@ -304,13 +305,13 @@ fn file_file_non_string_arg_errors() {
 #[test]
 fn dir_bracket_glob_returns_matches() {
     let result = run(r#"Dir["Cargo.*"]"#);
-    match result {
-        Some(Object::Array(arr)) => {
+    match result.view() {
+        Some(View::Array(arr)) => {
             let names: Vec<String> = arr
                 .borrow()
                 .iter()
-                .filter_map(|o| match o {
-                    Object::String(s) => Some(s.as_str().to_string()),
+                .filter_map(|o| match o.view() {
+                    View::String(s) => Some(s.as_str().to_string()),
                     _ => None,
                 })
                 .collect();
@@ -323,8 +324,8 @@ fn dir_bracket_glob_returns_matches() {
 #[test]
 fn dir_glob_returns_matches() {
     let result = run(r#"Dir.glob("Cargo.*")"#);
-    match result {
-        Some(Object::Array(arr)) => {
+    match result.view() {
+        Some(View::Array(arr)) => {
             assert!(!arr.borrow().is_empty());
         }
         other => panic!("expected Array, got {:?}", other),
@@ -334,8 +335,8 @@ fn dir_glob_returns_matches() {
 #[test]
 fn dir_glob_no_match_returns_empty_array() {
     let result = run(r#"Dir["zzz_no_such_pattern_xyz_*"]"#);
-    match result {
-        Some(Object::Array(arr)) => assert!(arr.borrow().is_empty()),
+    match result.view() {
+        Some(View::Array(arr)) => assert!(arr.borrow().is_empty()),
         other => panic!("expected Array, got {:?}", other),
     }
 }

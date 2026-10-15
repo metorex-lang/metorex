@@ -3,6 +3,7 @@
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 use crate::vm::utils::position_to_location;
 use std::cell::RefCell;
@@ -109,13 +110,13 @@ const COMPILED_PATTERNS_KEPT: usize = 4096;
 /// The characters a `=~` operand searches, which a Symbol supplies from its
 /// name the way Ruby's does.
 pub(crate) fn subject_text(object: &Object) -> Option<String> {
-    match object {
-        Object::String(text) => Some(match_text(text)),
-        Object::Symbol(text) => Some(text.as_str().to_string()),
+    match object.view() {
+        View::String(text) => Some(match_text(text)),
+        View::Symbol(text) => Some(text.as_str().to_string()),
         // An instance of a String subclass carries its characters in an
         // instance variable, and matches the same as a plain String.
-        other => match super::string_subclass_value(other) {
-            Some(Object::String(text)) => Some(match_text(&text)),
+        _ => match super::string_subclass_value(object).view() {
+            Some(View::String(text)) => Some(match_text(text)),
             _ => None,
         },
     }
@@ -140,10 +141,10 @@ pub(crate) fn match_text(string_value: &crate::object::StringValue) -> String {
 /// The encoding a `=~` operand's String is tagged with, which the pieces a
 /// match cuts out of it carry too.
 pub(crate) fn subject_encoding(object: &Object) -> Option<String> {
-    match object {
-        Object::String(text) => Some(text.encoding_name()),
-        other => match super::string_subclass_value(other) {
-            Some(Object::String(text)) => Some(text.encoding_name()),
+    match object.view() {
+        View::String(text) => Some(text.encoding_name()),
+        _ => match super::string_subclass_value(object).view() {
+            Some(View::String(text)) => Some(text.encoding_name()),
             _ => None,
         },
     }
@@ -162,12 +163,13 @@ impl VirtualMachine {
         subject: &Object,
         position: Position,
     ) -> Result<(), MetorexError> {
-        let text = match subject {
-            Object::String(text) => Rc::clone(text),
-            other => match super::string_subclass_value(other) {
-                Some(Object::String(text)) => text,
+        let text = match subject.view() {
+            View::String(text) => Rc::clone(text),
+            _ => (match super::string_subclass_value(subject).view() {
+                Some(View::String(text)) => text,
                 _ => return Ok(()),
-            },
+            })
+            .clone(),
         };
         let string_encoding = text.encoding_name();
         if !super::string_methods::holds_valid_text(&text) {
@@ -365,11 +367,11 @@ impl VirtualMachine {
         if let Some(held) = self.pattern_timeouts.get(pattern).copied().flatten() {
             return Some(held);
         }
-        match self.globals().get("__regexp_timeout__") {
-            Some(Object::Float(seconds)) if seconds > 0.0 => {
+        match self.globals().get("__regexp_timeout__").view() {
+            Some(View::Float(seconds)) if seconds > 0.0 => {
                 Some(std::time::Duration::from_secs_f64(seconds))
             }
-            Some(Object::Int(seconds)) if seconds > 0 => {
+            Some(View::Int(seconds)) if seconds > 0 => {
                 Some(std::time::Duration::from_secs(seconds as u64))
             }
             _ => None,
@@ -395,12 +397,12 @@ impl VirtualMachine {
             // false for a string whose characters a pattern does not read one
             // Rust character at a time, which the caller matches another way.
             "__scan_spans__" => {
-                let (Some(Object::String(subject)), Some(Object::Int(at))) =
-                    (arguments.first(), arguments.get(1))
+                let (Some(View::String(subject)), Some(View::Int(at))) =
+                    (arguments.first().view(), arguments.get(1).view())
                 else {
                     return Ok(Some(Object::Bool(false)));
                 };
-                let anchored = matches!(arguments.get(2), Some(Object::Bool(true)));
+                let anchored = matches!(arguments.get(2).view(), Some(View::Bool(true)));
                 let encoding = subject.encoding_name();
                 if !super::string_methods::characters_are_text(subject)
                     || encoding == "EUC-JP"
@@ -413,22 +415,18 @@ impl VirtualMachine {
                 };
                 let limit = self.pattern_time_limit(pattern, flags);
                 let letters = subject.letters();
-                let spans = match compiled.spans_in_rest(
-                    &letters,
-                    (*at).max(0) as usize,
-                    anchored,
-                    limit,
-                ) {
-                    Ok(Some(spans)) => spans,
-                    Ok(None) => return Ok(Some(Object::Nil)),
-                    Err(_) => {
-                        return Err(crate::vm::errors::simple_exception(
-                            "Regexp::TimeoutError",
-                            "regexp match timeout",
-                            position,
-                        ));
-                    }
-                };
+                let spans =
+                    match compiled.spans_in_rest(&letters, at.max(0) as usize, anchored, limit) {
+                        Ok(Some(spans)) => spans,
+                        Ok(None) => return Ok(Some(Object::Nil)),
+                        Err(_) => {
+                            return Err(crate::vm::errors::simple_exception(
+                                "Regexp::TimeoutError",
+                                "regexp match timeout",
+                                position,
+                            ));
+                        }
+                    };
                 // A pattern that names any of its groups leaves the unnamed
                 // ones uncaptured.
                 let names: Vec<Option<String>> = compiled
@@ -523,8 +521,8 @@ impl VirtualMachine {
                 let mut captures: indexmap::IndexMap<String, Object> = indexmap::IndexMap::new();
                 for (slot, name) in named_groups(pattern, flags) {
                     let number = Object::Int(slot as i64);
-                    match captures.get(&name) {
-                        Some(Object::Array(existing)) => existing.borrow_mut().push(number),
+                    match captures.get(&name).view() {
+                        Some(View::Array(existing)) => existing.borrow_mut().push(number),
                         _ => {
                             captures
                                 .insert(name, Object::Array(Rc::new(RefCell::new(vec![number]))));
@@ -541,7 +539,7 @@ impl VirtualMachine {
                 }
                 let Some(text) = subject_text(&arguments[0]) else {
                     self.globals_mut().set(LAST_MATCH, Object::Nil);
-                    if matches!(arguments[0], Object::Nil) {
+                    if matches!(arguments[0].view(), View::Nil) {
                         return Ok(Some(Object::Nil));
                     }
                     return Err(type_error(
@@ -553,8 +551,8 @@ impl VirtualMachine {
                     ));
                 };
                 self.prepare_match_subject(pattern, flags, &arguments[0], position)?;
-                let start = match arguments.get(1) {
-                    Some(Object::Int(offset)) => resolve_offset(&text, *offset),
+                let start = match arguments.get(1).view() {
+                    Some(View::Int(offset)) => resolve_offset(&text, offset),
                     _ => Some(0),
                 };
                 let Some(start) = start else {
@@ -564,8 +562,9 @@ impl VirtualMachine {
                 // `match` with a block hands the MatchData to it. The block is
                 // taken before the walk, since building the MatchData is
                 // itself a call and would consume it.
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => Some(block),
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(block)) => Some(block),
                     _ => None,
                 };
                 let found = self.regexp_match_data_in(
@@ -578,7 +577,7 @@ impl VirtualMachine {
                 )?;
                 match (found, block) {
                     (Some(data), Some(block)) => self
-                        .execute_block_callable(&block, vec![data], position)
+                        .execute_block_callable(block, vec![data], position)
                         .map(Some),
                     (Some(data), None) => Ok(Some(data)),
                     (None, _) => Ok(Some(Object::Nil)),
@@ -594,8 +593,8 @@ impl VirtualMachine {
                     return Ok(Some(Object::Bool(false)));
                 };
                 self.prepare_match_subject(pattern, flags, &arguments[0], position)?;
-                let start = match arguments.get(1) {
-                    Some(Object::Int(offset)) => resolve_offset(&text, *offset),
+                let start = match arguments.get(1).view() {
+                    Some(View::Int(offset)) => resolve_offset(&text, offset),
                     _ => Some(0),
                 };
                 let Some(start) = start else {
@@ -615,10 +614,10 @@ impl VirtualMachine {
                 let names = group_names(pattern);
                 let found = self.globals().get(LAST_MATCH).unwrap_or(Object::Nil);
                 for name in names {
-                    let value = match &found {
-                        Object::Nil => Object::Nil,
-                        held => self.send_to_object(
-                            held.clone(),
+                    let value = match found.view() {
+                        View::Nil => Object::Nil,
+                        _ => self.send_to_object(
+                            found.clone(),
                             "[]",
                             vec![Object::string(name.clone())],
                             position,
@@ -725,9 +724,9 @@ impl VirtualMachine {
                     crate::vm::native_methods::regexp_subclass_value(held)
                         .unwrap_or_else(|| held.clone())
                 });
-                let same = matches!(other, Some(Object::Regex(other, other_flags))
+                let same = matches!(other.view(), Some(View::Regex(other, other_flags))
                     if *other.as_str() == ***pattern
-                        && comparable_flags(&other_flags) == comparable_flags(flags));
+                        && comparable_flags(other_flags) == comparable_flags(flags));
                 Ok(Some(Object::Bool(same)))
             }
             "freeze" | "itself" => Ok(Some(Object::Regex(
@@ -1011,7 +1010,7 @@ impl VirtualMachine {
         let Some(data) = self
             .globals()
             .get(LAST_MATCH)
-            .filter(|found| !matches!(found, Object::Nil))
+            .filter(|found| !matches!(found.view(), View::Nil))
         else {
             return Ok(Object::Nil);
         };
@@ -1025,14 +1024,14 @@ impl VirtualMachine {
             // the match holds anything for.
             MatchPart::LastGroup => {
                 let held = self.send_to_object(data, "captures", vec![], position)?;
-                let Object::Array(groups) = held else {
+                let View::Array(groups) = held.view() else {
                     return Ok(Object::Nil);
                 };
                 let found = groups
                     .borrow()
                     .iter()
                     .rev()
-                    .find(|group| !matches!(group, Object::Nil))
+                    .find(|group| !matches!(group.view(), View::Nil))
                     .cloned();
                 Ok(found.unwrap_or(Object::Nil))
             }

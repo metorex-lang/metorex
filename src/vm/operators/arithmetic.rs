@@ -1,6 +1,7 @@
 // Adding, subtracting, multiplying and dividing.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Handle addition across supported operand types.
@@ -10,8 +11,8 @@ impl VirtualMachine {
         right: Object,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        match (left, right) {
-            (Object::Int(a), Object::Int(b)) => match a.checked_add(b) {
+        match (left.view(), right.view()) {
+            (View::Int(a), View::Int(b)) => match a.checked_add(b) {
                 Some(v) => Ok(Object::Int(v)),
                 // Too large for an i64, so carry on in arbitrary precision.
                 None => Ok(Object::integer(
@@ -19,8 +20,8 @@ impl VirtualMachine {
                 )),
             },
             (
-                ref left @ (Object::Int(_) | Object::BigInt(_)),
-                ref right @ (Object::Int(_) | Object::BigInt(_)),
+                ref left @ (View::Int(_) | View::BigInt(_)),
+                ref right @ (View::Int(_) | View::BigInt(_)),
             ) => {
                 let (a, b) = (
                     left.as_big_integer().expect("integer-kinded"),
@@ -28,12 +29,12 @@ impl VirtualMachine {
                 );
                 Ok(Object::integer(a + b))
             }
-            (Object::BigInt(a), Object::Float(b)) => Ok(Object::Float(big_to_float(&a) + b)),
-            (Object::Float(a), Object::BigInt(b)) => Ok(Object::Float(a + big_to_float(&b))),
-            (Object::Float(a), Object::Float(b)) => Ok(Object::Float(a + b)),
-            (Object::Int(a), Object::Float(b)) => Ok(Object::Float((a as f64) + b)),
-            (Object::Float(a), Object::Int(b)) => Ok(Object::Float(a + (b as f64))),
-            (Object::String(a), Object::String(b)) => {
+            (View::BigInt(a), View::Float(b)) => Ok(Object::Float(big_to_float(a) + b)),
+            (View::Float(a), View::BigInt(b)) => Ok(Object::Float(a + big_to_float(b))),
+            (View::Float(a), View::Float(b)) => Ok(Object::Float(a + b)),
+            (View::Int(a), View::Float(b)) => Ok(Object::Float((a as f64) + b)),
+            (View::Float(a), View::Int(b)) => Ok(Object::Float(a + (b as f64))),
+            (View::String(a), View::String(b)) => {
                 // Where either side stands for the bytes it was read from,
                 // the answer does too, and the other side is written out in
                 // the bytes its own encoding spells it with.
@@ -55,7 +56,7 @@ impl VirtualMachine {
                 };
                 // A run recording where each object was made records this
                 // one at the place the two were joined.
-                if let Object::String(made) = &joined
+                if let View::String(made) = joined.view()
                     && let Some(written_at) = self.literal_birthplace(position)
                 {
                     made.set_created_at(written_at);
@@ -63,7 +64,7 @@ impl VirtualMachine {
                 // The result is written in the receiver's encoding, unless
                 // the receiver is empty or nothing but ASCII and the other
                 // side is not, where that side's reading carries over.
-                if let Object::String(made) = &joined {
+                if let View::String(made) = joined.view() {
                     let plain = |side: &crate::object::StringValue| {
                         side.as_str().is_empty()
                             || (side.as_str().is_ascii() && !side.holds_bytes())
@@ -80,12 +81,17 @@ impl VirtualMachine {
                 }
                 Ok(joined)
             }
-            (Object::Array(a), Object::Array(b)) => {
+            (View::Array(a), View::Array(b)) => {
                 let mut combined = a.borrow().clone();
                 combined.extend(b.borrow().iter().cloned());
                 Ok(Object::Array(Rc::new(std::cell::RefCell::new(combined))))
             }
-            (lhs, rhs) => Err(binary_type_error(BinaryOp::Add, &lhs, &rhs, position)),
+            (lhs, rhs) => Err(binary_type_error(
+                BinaryOp::Add,
+                &lhs.to_object(),
+                &rhs.to_object(),
+                position,
+            )),
         }
     }
 
@@ -100,15 +106,15 @@ impl VirtualMachine {
         // An instance of a String subclass repeats the characters it holds,
         // answering a plain String the way Ruby's does.
         if matches!(op, BinaryOp::Multiply)
-            && matches!(left, Object::Instance(_))
+            && matches!(left.view(), View::Instance(_))
             && let Some(text) = crate::vm::native_methods::string_subclass_value(&left)
         {
             return self.evaluate_numeric_binary(op, text, right, position);
         }
-        match (left, right) {
+        match (left.view(), right.view()) {
             // Array difference: elements of the left array not present in
             // the right one, preserving left order.
-            (Object::Array(a), Object::Array(b)) if matches!(op, BinaryOp::Subtract) => {
+            (View::Array(a), View::Array(b)) if matches!(op, BinaryOp::Subtract) => {
                 let b_items = b.borrow();
                 let remaining: Vec<Object> = a
                     .borrow()
@@ -119,8 +125,8 @@ impl VirtualMachine {
                 Ok(Object::Array(Rc::new(std::cell::RefCell::new(remaining))))
             }
             (
-                ref left @ (Object::Int(_) | Object::BigInt(_)),
-                ref right @ (Object::Int(_) | Object::BigInt(_)),
+                ref left @ (View::Int(_) | View::BigInt(_)),
+                ref right @ (View::Int(_) | View::BigInt(_)),
             ) => {
                 let a = left.as_big_integer().expect("integer-kinded");
                 let b = right.as_big_integer().expect("integer-kinded");
@@ -128,18 +134,18 @@ impl VirtualMachine {
             }
             // An Integer receiver refuses a zero divisor whether or not the
             // divisor is a Float, so the bignum path says so.
-            (Object::BigInt(a), Object::Float(b)) if matches!(op, BinaryOp::Modulo) => {
-                float_modulo(big_to_float(&a), b, position)
+            (View::BigInt(a), View::Float(b)) if matches!(op, BinaryOp::Modulo) => {
+                float_modulo(big_to_float(a), b, position)
             }
             // A negative base raised to a power that is not a whole number
             // has no real root, so the answer is the principal complex one.
-            (Object::BigInt(a), Object::Float(b))
+            (View::BigInt(a), View::Float(b))
                 if matches!(op, BinaryOp::Power)
                     && a.sign() == num_bigint::Sign::Minus
                     && b.fract() != 0.0
                     && b.is_finite() =>
             {
-                let magnitude = (-big_to_float(&a)).powf(b);
+                let magnitude = (-big_to_float(a)).powf(b);
                 let angle = std::f64::consts::PI * b;
                 self.make_complex(
                     Object::Float(magnitude * angle.cos()),
@@ -147,13 +153,9 @@ impl VirtualMachine {
                     position,
                 )
             }
-            (Object::BigInt(a), Object::Float(b)) => {
-                float_arithmetic(op, big_to_float(&a), b, position)
-            }
-            (Object::Float(a), Object::BigInt(b)) => {
-                float_arithmetic(op, a, big_to_float(&b), position)
-            }
-            (Object::Float(a), Object::Float(b)) => match op {
+            (View::BigInt(a), View::Float(b)) => float_arithmetic(op, big_to_float(a), b, position),
+            (View::Float(a), View::BigInt(b)) => float_arithmetic(op, a, big_to_float(b), position),
+            (View::Float(a), View::Float(b)) => match op {
                 BinaryOp::Subtract => Ok(Object::Float(a - b)),
                 BinaryOp::Multiply => Ok(Object::Float(a * b)),
                 // Float division by zero follows IEEE 754 and answers an
@@ -175,7 +177,7 @@ impl VirtualMachine {
                 BinaryOp::Power => Ok(Object::Float(a.powf(b))),
                 _ => unreachable!(),
             },
-            (Object::Int(a), Object::Float(b)) => match op {
+            (View::Int(a), View::Float(b)) => match op {
                 BinaryOp::Subtract => Ok(Object::Float((a as f64) - b)),
                 BinaryOp::Multiply => Ok(Object::Float((a as f64) * b)),
                 BinaryOp::Divide => Ok(Object::Float((a as f64) / b)),
@@ -195,7 +197,7 @@ impl VirtualMachine {
                 BinaryOp::Power => Ok(Object::Float((a as f64).powf(b))),
                 _ => unreachable!(),
             },
-            (Object::Float(a), Object::Int(b)) => match op {
+            (View::Float(a), View::Int(b)) => match op {
                 BinaryOp::Subtract => Ok(Object::Float(a - (b as f64))),
                 BinaryOp::Multiply => Ok(Object::Float(a * (b as f64))),
                 BinaryOp::Divide => Ok(Object::Float(a / (b as f64))),
@@ -208,13 +210,10 @@ impl VirtualMachine {
             // `"ab" * 3` repeats the string, and a negative count is an
             // ArgumentError rather than an empty string.
             (
-                Object::String(text),
-                given @ (Object::Int(_)
-                | Object::Float(_)
-                | Object::BigInt(_)
-                | Object::Instance(_)),
+                View::String(text),
+                given @ (View::Int(_) | View::Float(_) | View::BigInt(_) | View::Instance(_)),
             ) if matches!(op, BinaryOp::Multiply) => {
-                let count = self.repeat_count(&given, position)?;
+                let count = self.repeat_count(&given.to_object(), position)?;
                 let Ok(count) = usize::try_from(count) else {
                     return Err(crate::vm::errors::simple_exception(
                         "ArgumentError",
@@ -254,18 +253,34 @@ impl VirtualMachine {
             // which Array answers from its own method table.
             (left, right)
                 if matches!(op, BinaryOp::Multiply)
-                    && (matches!(left, Object::Array(_))
+                    && (matches!(left, View::Array(_))
                         || matches!(
-                            crate::vm::native_methods::array_subclass_value(&left),
-                            Some(Object::Array(_))
+                            crate::vm::native_methods::array_subclass_value(&left.to_object())
+                                .view(),
+                            Some(View::Array(_))
                         )) =>
             {
-                match self.call_array_method(&left, "*", std::slice::from_ref(&right), position)? {
+                match self.call_array_method(
+                    &left.to_object(),
+                    "*",
+                    std::slice::from_ref(&right.to_object()),
+                    position,
+                )? {
                     Some(answered) => Ok(answered),
-                    None => Err(binary_type_error(op.clone(), &left, &right, position)),
+                    None => Err(binary_type_error(
+                        op.clone(),
+                        &left.to_object(),
+                        &right.to_object(),
+                        position,
+                    )),
                 }
             }
-            (lhs, rhs) => Err(binary_type_error(op.clone(), &lhs, &rhs, position)),
+            (lhs, rhs) => Err(binary_type_error(
+                op.clone(),
+                &lhs.to_object(),
+                &rhs.to_object(),
+                position,
+            )),
         }
     }
 }

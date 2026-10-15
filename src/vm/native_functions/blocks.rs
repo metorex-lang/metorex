@@ -2,6 +2,7 @@
 // refinements it brings into scope.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// A receiverless `freeze` freezes `self` — inside a class or
@@ -9,9 +10,9 @@ impl VirtualMachine {
     pub(crate) fn freeze_value(&mut self) -> Result<Object, MetorexError> {
         self.pending_block.take();
         let current_self = self.environment().get("self").unwrap_or(Object::Nil);
-        match &current_self {
-            Object::Class(class) | Object::Module(class) => class.freeze(),
-            Object::Instance(instance) => instance.borrow_mut().frozen = true,
+        match current_self.view() {
+            View::Class(class) | View::Module(class) => class.freeze(),
+            View::Instance(instance) => instance.borrow_mut().frozen = true,
             _ => {}
         }
         Ok(current_self)
@@ -22,10 +23,10 @@ impl VirtualMachine {
     /// it unless it is already a lambda.
     pub(crate) fn make_lambda(&mut self, position: Position) -> Result<Object, MetorexError> {
         let from_ampersand = self.pending_block_from_ampersand;
-        match self.pending_block.take() {
-            Some(Object::Block(block)) => {
+        match self.pending_block.take().view() {
+            Some(View::Block(block)) => {
                 if block.is_lambda {
-                    return Ok(Object::Block(block));
+                    return Ok(Object::Block(block.clone()));
                 }
                 if from_ampersand {
                     let msg = "the lambda method requires a literal block";
@@ -35,11 +36,11 @@ impl VirtualMachine {
                         message: msg.to_string(),
                     });
                 }
-                let mut as_lambda = (*block).clone();
+                let mut as_lambda = (**block).clone();
                 as_lambda.is_lambda = true;
                 Ok(Object::Block(std::rc::Rc::new(as_lambda)))
             }
-            Some(other) => Ok(other),
+            Some(other) => Ok(other.to_object()),
             None => {
                 let msg = "tried to create Proc object without a block";
                 Err(MetorexError::UncaughtException {
@@ -118,8 +119,8 @@ impl VirtualMachine {
                 message: "wrong number of arguments for using".to_string(),
             });
         }
-        let module = match &arguments[0] {
-            Object::Module(m) => std::rc::Rc::clone(m),
+        let module = match arguments[0].view() {
+            View::Module(m) => std::rc::Rc::clone(m),
             other => {
                 let exc = Object::exception(
                     "TypeError",

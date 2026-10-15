@@ -4,6 +4,7 @@
 // parameter compilation, OP_RETURN at function end, constant pool storage,
 // and method compilation.
 
+use metorex::object::View;
 use std::rc::Rc;
 
 use metorex::ast::{Parameter, Statement};
@@ -46,8 +47,8 @@ fn find_compiled_function(
         // Scan the constant pool
         let constant =
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| chunk.get_constant(i)));
-        match constant {
-            Ok(Object::CompiledFunction(func)) => return Some(func),
+        match constant.map(Object::view) {
+            Ok(View::CompiledFunction(func)) => return Some(func),
             Ok(_) => continue,
             Err(_) => break, // out of range
         }
@@ -178,8 +179,8 @@ fn multiple_functions_stored_in_constant_pool() {
     for i in 0..256 {
         let constant =
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| chunk.get_constant(i)));
-        match constant {
-            Ok(Object::CompiledFunction(_)) => func_count += 1,
+        match constant.map(Object::view) {
+            Ok(View::CompiledFunction(_)) => func_count += 1,
             Ok(_) => continue,
             Err(_) => break,
         }

@@ -1,6 +1,7 @@
 // Links between names, and moving a name onto another.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Links between names, and moving a name onto another.
@@ -23,7 +24,8 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let (Object::String(target), Object::String(link)) = (&arguments[0], &arguments[1])
+                let (View::String(target), View::String(link)) =
+                    (arguments[0].view(), arguments[1].view())
                 else {
                     return Err(method_argument_type_error(
                         method_name,
@@ -55,7 +57,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let Object::String(path) = &arguments[0] else {
+                let View::String(path) = arguments[0].view() else {
                     return Err(method_argument_type_error(
                         method_name,
                         "String",
@@ -86,8 +88,8 @@ impl VirtualMachine {
                 {
                     // Ruby tags the target in the file system's encoding as it
                     // stands, whether or not its bytes spell text there.
-                    let encoding = match self.globals().get("__Encoding_default_external") {
-                        Some(Object::Class(held)) => held.name().to_string(),
+                    let encoding = match self.globals().get("__Encoding_default_external").view() {
+                        Some(View::Class(held)) => held.name().to_string(),
                         _ => crate::object::string_value::DEFAULT_ENCODING.to_string(),
                     };
                     Ok(Some(Object::String(std::rc::Rc::new(
@@ -107,7 +109,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let Object::String(path) = &arguments[0] else {
+                let View::String(path) = arguments[0].view() else {
                     return Err(method_argument_type_error(
                         method_name,
                         "String",
@@ -133,7 +135,8 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let (Object::String(from), Object::String(to)) = (&arguments[0], &arguments[1])
+                let (View::String(from), View::String(to)) =
+                    (arguments[0].view(), arguments[1].view())
                 else {
                     return Err(method_argument_type_error(
                         "rename",

@@ -1,6 +1,7 @@
 // Writing values out.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     pub(crate) fn put_lines(
@@ -11,7 +12,7 @@ impl VirtualMachine {
         // Ruby's `puts` hands its arguments to `$stdout.puts`, which
         // is what a program replacing that stream relies on.
         let target = self.globals().get("stdout").unwrap_or(Object::Nil);
-        if !matches!(target, Object::Nil) && self.responds_to(&target, "puts") {
+        if !matches!(target.view(), View::Nil) && self.responds_to(&target, "puts") {
             self.send_to_object(target, "puts", arguments, position)?;
             return Ok(Object::Nil);
         }
@@ -33,7 +34,7 @@ impl VirtualMachine {
     ) -> Result<Object, MetorexError> {
         if arguments.is_empty() {
             let last_line = self.globals().get("_").unwrap_or(Object::Nil);
-            if !matches!(last_line, Object::Nil) {
+            if !matches!(last_line.view(), View::Nil) {
                 let output = self.get_string_representation(&last_line, position)?;
                 self.write_to_stdout(&output, position)?;
             }
@@ -58,8 +59,8 @@ impl VirtualMachine {
         if arguments.is_empty() {
             return Ok(Object::Nil);
         }
-        let first_is_format =
-            matches!(&arguments[0], Object::String(_)) || !self.responds_to(&arguments[0], "write");
+        let first_is_format = matches!(arguments[0].view(), View::String(_))
+            || !self.responds_to(&arguments[0], "write");
         let (target, rest) = if first_is_format {
             (None, arguments.as_slice())
         } else {
@@ -68,16 +69,16 @@ impl VirtualMachine {
         let Some(format) = rest.first() else {
             return Ok(Object::Nil);
         };
-        let format = match format {
-            Object::String(text) => Object::String(std::rc::Rc::clone(text)),
-            other => Object::string(self.coerce_load_path(other, position)?),
+        let format = match format.view() {
+            View::String(text) => Object::String(std::rc::Rc::clone(text)),
+            _ => Object::string(self.coerce_load_path(format, position)?),
         };
         let values = Object::Array(std::rc::Rc::new(std::cell::RefCell::new(
             rest[1..].to_vec(),
         )));
         let rendered = self.evaluate_string_format(format, values, position)?;
-        let text = match &rendered {
-            Object::String(text) => text.as_str().to_string(),
+        let text = match rendered.view() {
+            View::String(text) => text.as_str().to_string(),
             other => other.to_string(),
         };
         match target {

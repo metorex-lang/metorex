@@ -4,6 +4,7 @@ use crate::ast::Expression;
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 
 use crate::vm::core::VirtualMachine;
 use crate::vm::utils::position_to_location;
@@ -27,8 +28,8 @@ impl VirtualMachine {
             })
         });
 
-        let block = match block {
-            Some(Object::Block(b)) => b,
+        let block = match block.view() {
+            Some(View::Block(b)) => b,
             _ => {
                 // Ruby names this a jump with nowhere to land rather than a
                 // plain runtime failure.

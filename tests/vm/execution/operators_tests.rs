@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -86,7 +87,7 @@ fn unary_plus_on_non_numeric_errors() {
 #[test]
 fn format_d_with_float_uses_display() {
     let result = run(r#""%d" % 3.14"#);
-    assert!(matches!(result, Some(Object::String(_))));
+    assert!(matches!(result.view(), Some(View::String(_))));
 }
 
 #[test]
@@ -106,7 +107,7 @@ fn format_c_refuses_a_code_past_the_last_character() {
 #[test]
 fn format_c_with_float_uses_display() {
     let result = run(r#""%c" % 3.14"#);
-    assert!(matches!(result, Some(Object::String(_))));
+    assert!(matches!(result.view(), Some(View::String(_))));
 }
 
 // ── Regexp type name in error message ─────────────────────────────────────────

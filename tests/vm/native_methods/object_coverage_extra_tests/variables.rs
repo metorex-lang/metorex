@@ -1,6 +1,7 @@
 // The instance variables an object carries.
 
 use super::*;
+use metorex::object::{OptionView, View};
 #[test]
 fn method_undefined_errors() {
     let err = run_err(
@@ -23,7 +24,7 @@ class M4
 end
 M4.new.method(:foo)
 "#);
-    assert!(matches!(result, Some(Object::Method(_))));
+    assert!(matches!(result.view(), Some(View::Method(_))));
 }
 
 // ── respond_to? non-string arg (lines 410-417) ───────────────────────────────
@@ -58,7 +59,7 @@ end
 UserMod = Class.new
 UserMod.new.is_a?(M)
 "#);
-    assert!(matches!(result, Some(Object::Bool(_))));
+    assert!(matches!(result.view(), Some(View::Bool(_))));
 }
 
 // ── is_a? Class chain walking (lines 485-504) ────────────────────────────────
@@ -141,7 +142,7 @@ end
 dup = DM1.dup
 dup.class.name
 "#);
-    assert!(matches!(result, Some(Object::String(_))));
+    assert!(matches!(result.view(), Some(View::String(_))));
 }
 
 #[test]
@@ -160,7 +161,7 @@ fn dup_on_int_returns_self() {
 #[test]
 fn dup_on_symbol_returns_self() {
     let result = run(":hello.dup");
-    assert!(matches!(result, Some(Object::Symbol(_))));
+    assert!(matches!(result.view(), Some(View::Symbol(_))));
 }
 
 #[test]

@@ -2,7 +2,7 @@
 // defining methods where a `def` written there would, against its self.
 
 use metorex::lexer::Lexer;
-use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -10,8 +10,12 @@ fn inspected(code: &str) -> String {
     let tokens = Lexer::new(&format!("({code}).inspect")).tokenize();
     let statements = Parser::new(tokens).parse().expect("parse failed");
     let mut vm = VirtualMachine::new();
-    match vm.execute_program(&statements).expect("execution failed") {
-        Some(Object::String(text)) => text.as_str().to_string(),
+    match vm
+        .execute_program(&statements)
+        .expect("execution failed")
+        .view()
+    {
+        Some(View::String(text)) => text.as_str().to_string(),
         other => panic!("expected an inspection, got {other:?}"),
     }
 }

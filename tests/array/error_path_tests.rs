@@ -1,5 +1,6 @@
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -128,7 +129,7 @@ fn array_map_with_args_error() {
 #[test]
 fn array_map_returns_transformed_array() {
     let result = run("[1, 2, 3].map { |x| x * 10 }");
-    if let Some(Object::Array(arr)) = result {
+    if let Some(View::Array(arr)) = result.view() {
         let arr = arr.borrow();
         assert_eq!(arr[0], Object::Int(10));
         assert_eq!(arr[1], Object::Int(20));

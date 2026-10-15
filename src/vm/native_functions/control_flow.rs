@@ -1,6 +1,7 @@
 // Raising, catching, throwing, and looping.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// `fail` is Ruby's other spelling of `raise`.
@@ -14,8 +15,8 @@ impl VirtualMachine {
     ) -> Result<Object, MetorexError> {
         // A class, a message and a backtrace, with `cause:` allowed
         // alongside them.
-        let counted = match arguments.last() {
-            Some(Object::Dict(pairs)) if pairs.borrow().contains_key("__MX_KWARGS__") => {
+        let counted = match arguments.last().view() {
+            Some(View::Dict(pairs)) if pairs.borrow().contains_key("__MX_KWARGS__") => {
                 arguments.len() - 1
             }
             _ => arguments.len(),
@@ -38,8 +39,8 @@ impl VirtualMachine {
             position,
             vec![("raised_exception", exception.clone())],
         )?;
-        let message = match &exception {
-            Object::Exception(_) => crate::vm::utils::format_exception(&exception),
+        let message = match exception.view() {
+            View::Exception(_) => crate::vm::utils::format_exception(&exception),
             _ => String::new(),
         };
         Err(MetorexError::UncaughtException {
@@ -66,8 +67,9 @@ impl VirtualMachine {
         }
         // Without a block, `loop` answers an enumerator that yields
         // forever, which is what `loop.size` and `loop.each` read.
-        let block = match self.pending_block.take() {
-            Some(Object::Block(block)) => block,
+        let viewed = self.pending_block.take();
+        let block = match viewed.view() {
+            Some(View::Block(block)) => block,
             _ => {
                 let Some(enumerator_class) = self.globals().get("Enumerator") else {
                     let message = "uninitialized constant Enumerator".to_string();
@@ -89,7 +91,7 @@ impl VirtualMachine {
                 Err(MetorexError::UncaughtException { exception, .. })
                     if self.exception_matches(&exception, &["StopIteration".to_string()])? =>
                 {
-                    if let Object::Exception(details) = &exception {
+                    if let View::Exception(details) = exception.view() {
                         let result = details.borrow().instance_vars.get("result").cloned();
                         if let Some(result) = result {
                             return Ok(result);
@@ -113,8 +115,9 @@ impl VirtualMachine {
                 crate::vm::utils::position_to_location(position),
             ));
         }
-        let block = match self.pending_block.take() {
-            Some(Object::Block(b)) => b,
+        let viewed = self.pending_block.take();
+        let block = match viewed.view() {
+            Some(View::Block(b)) => b,
             _ => {
                 let message = "no block given (yield)".to_string();
                 return Err(MetorexError::UncaughtException {
@@ -126,8 +129,8 @@ impl VirtualMachine {
         };
         let tag = match arguments.first() {
             Some(tag) => tag.clone(),
-            None => match self.globals().get("Object") {
-                Some(Object::Class(object_class)) => Object::instance(object_class),
+            None => match self.globals().get("Object").view() {
+                Some(View::Class(object_class)) => Object::instance(object_class.clone()),
                 _ => Object::Nil,
             },
         };
@@ -177,7 +180,7 @@ impl VirtualMachine {
                 crate::vm::native_methods::array_methods::inspect_element(&tag)
             );
             let exception = Object::exception("UncaughtThrowError", message.clone());
-            if let Object::Exception(details) = &exception {
+            if let View::Exception(details) = exception.view() {
                 let mut details = details.borrow_mut();
                 details
                     .instance_vars

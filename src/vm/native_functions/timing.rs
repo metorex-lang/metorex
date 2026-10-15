@@ -1,6 +1,7 @@
 // Waiting, and the clock a timeout runs against.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Metorex does not hold the program up: a sleep answers at once.
@@ -18,22 +19,26 @@ impl VirtualMachine {
             {
                 let given: Vec<Object> = arguments
                     .iter()
-                    .filter(|held| !matches!(held, Object::Nil))
+                    .filter(|held| !matches!(held.view(), View::Nil))
                     .cloned()
                     .collect();
                 self.send_to_object(scheduler, "kernel_sleep", given, position)?;
                 return Ok(Object::Int(0));
             }
         }
-        let wanted = match arguments.first() {
-            None | Some(Object::Nil) => None,
+        let wanted = match arguments.first().view() {
+            None | Some(View::Nil) => None,
             // A length may be named by anything that says how to
             // divide itself, which is what a Rational-like value of
             // the program's own does.
-            Some(held @ Object::Instance(_)) if self.responds_to(held, "divmod") => {
-                let parts =
-                    self.send_to_object(held.clone(), "divmod", vec![Object::Int(1)], position)?;
-                let Object::Array(held) = parts else {
+            Some(held @ View::Instance(_)) if self.responds_to(&held.to_object(), "divmod") => {
+                let parts = self.send_to_object(
+                    held.to_object(),
+                    "divmod",
+                    vec![Object::Int(1)],
+                    position,
+                )?;
+                let View::Array(held) = parts.view() else {
                     return Err(crate::vm::errors::simple_exception(
                         "TypeError",
                         "can't convert into time interval",
@@ -47,15 +52,16 @@ impl VirtualMachine {
                         + self.float_value_of(&rest, position)?,
                 )
             }
-            Some(held @ (Object::Int(_) | Object::BigInt(_) | Object::Float(_))) => {
-                Some(self.float_value_of(held, position)?)
+            Some(held @ (View::Int(_) | View::BigInt(_) | View::Float(_))) => {
+                Some(self.float_value_of(&held.to_object(), position)?)
             }
             // Anything else names no length of time.
             Some(other) => {
                 let named = match other {
-                    Object::Instance(instance) => instance.borrow().class.name().to_string(),
+                    View::Instance(instance) => instance.borrow().class.name().to_string(),
                     held => {
-                        crate::vm::native_methods::define_method::ruby_class_name(held).to_string()
+                        crate::vm::native_methods::define_method::ruby_class_name(&held.to_object())
+                            .to_string()
                     }
                 };
                 return Err(crate::vm::errors::simple_exception(

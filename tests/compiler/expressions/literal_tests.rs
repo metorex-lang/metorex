@@ -4,6 +4,7 @@ use metorex::bytecode::opcode::OpCode;
 use metorex::compiler::Compiler;
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::View;
 use metorex::parser::Parser;
 
 fn compile(source: &str) -> metorex::bytecode::chunk::Chunk {
@@ -148,7 +149,7 @@ fn compile_interpolated_string_empty_parts_via_ast() {
     assert!(!chunk.is_empty());
     let mut found_empty_string = false;
     for i in 0..chunk.constants_count() {
-        if let Object::String(s) = chunk.get_constant(i)
+        if let View::String(s) = chunk.get_constant(i).view()
             && s.as_str().is_empty()
         {
             found_empty_string = true;

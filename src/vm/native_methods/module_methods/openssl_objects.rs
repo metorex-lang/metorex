@@ -2,6 +2,7 @@
 // `openssl list -objects` prints OpenSSL's built-in table.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 /// One object per line: the short name, the long name, and the OID, with a
 /// tab between them. An object with no OID has an empty third field.
@@ -66,12 +67,12 @@ impl VirtualMachine {
     /// table does not hold names itself in all three places.
     /// `OpenSSL.__object__(:encode, oid)` answers the DER content of an OID.
     pub(crate) fn openssl_object_command(&mut self, arguments: &[Object]) -> Object {
-        let text = match arguments.get(1) {
-            Some(Object::String(held)) => held.as_str().to_string(),
+        let text = match arguments.get(1).view() {
+            Some(View::String(held)) => held.as_str().to_string(),
             _ => return Object::Nil,
         };
-        match arguments.first() {
-            Some(Object::Symbol(command)) if &*command.as_str() == "encode" => {
+        match arguments.first().view() {
+            Some(View::Symbol(command)) if &*command.as_str() == "encode" => {
                 if !dotted_oid(&text) {
                     return Object::Nil;
                 }

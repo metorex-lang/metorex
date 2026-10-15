@@ -4,7 +4,7 @@
 
 use super::handles::{Value, to_object};
 use super::{interpreter, or_raise, raise};
-use crate::object::Object;
+use crate::object::View;
 use num_bigint::BigInt;
 
 fn range_error(message: String) -> ! {
@@ -17,15 +17,17 @@ fn range_error(message: String) -> ! {
 
 /// The whole number a VALUE stands for, a Float cut toward zero.
 fn integer_from(value: Value) -> BigInt {
-    match to_object(value) {
-        Object::Nil => raise(crate::vm::errors::simple_exception(
+    match to_object(value).view() {
+        View::Nil => raise(crate::vm::errors::simple_exception(
             "TypeError",
             "no implicit conversion from nil to integer",
             super::called_from(),
         )),
-        Object::Float(number) if number.is_finite() => BigInt::from(number.trunc() as i128),
-        Object::Float(number) => range_error(format!("float {} out of range of integer", number)),
-        other => or_raise(interpreter().coerce_integer_argument(&other, super::called_from())),
+        View::Float(number) if number.is_finite() => BigInt::from(number.trunc() as i128),
+        View::Float(number) => range_error(format!("float {} out of range of integer", number)),
+        other => or_raise(
+            interpreter().coerce_integer_argument(&other.to_object(), super::called_from()),
+        ),
     }
 }
 

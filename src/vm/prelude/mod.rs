@@ -10,6 +10,7 @@
 // falls between two definitions. A class whose body runs long is carried
 // across more than one module, so a boundary may sit inside a class body.
 
+use crate::object::OptionView;
 use crate::vm::core::VirtualMachine;
 
 mod collections;
@@ -158,7 +159,8 @@ impl VirtualMachine {
     /// come to it natively, so they are undefined here rather than by an
     /// `undef_method`, which looks for them in a method table.
     fn take_ordering_from_complex(&mut self) {
-        let Some(crate::object::Object::Class(complex)) = self.globals().get("Complex") else {
+        let complex = self.globals().get("Complex");
+        let Some(crate::object::View::Class(complex)) = complex.view() else {
             return;
         };
         for name in [
@@ -190,7 +192,8 @@ impl VirtualMachine {
     /// The private methods the singleton class of `main` defines natively,
     /// each running the way its bare form written at the top level runs.
     fn give_main_its_private_methods(&mut self) {
-        let Some(crate::object::Object::Instance(main)) = self.globals().get("__main__") else {
+        let main = self.globals().get("__main__");
+        let Some(crate::object::View::Instance(main)) = main.view() else {
             return;
         };
         let Some(singleton) = main.borrow().singleton_class.borrow().clone() else {

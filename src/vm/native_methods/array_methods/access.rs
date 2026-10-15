@@ -1,6 +1,7 @@
 // Reading one element, a run of them, or one nested inside.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Reading one element, a run of them, or one nested inside.
@@ -63,7 +64,7 @@ impl VirtualMachine {
                 if arguments.is_empty() {
                     return Err(method_argument_error(method_name, 1, 0, position));
                 }
-                let Object::Int(index) = &arguments[0] else {
+                let View::Int(index) = arguments[0].view() else {
                     return Err(method_argument_type_error(
                         method_name,
                         "Integer",
@@ -73,7 +74,7 @@ impl VirtualMachine {
                 };
                 let array = array_rc.borrow();
                 let length = array.len() as i64;
-                let resolved = if *index < 0 { index + length } else { *index };
+                let resolved = if index < 0 { index + length } else { index };
                 if resolved < 0 || resolved >= length {
                     return Ok(Some(Object::Nil));
                 }
@@ -82,7 +83,7 @@ impl VirtualMachine {
                 if arguments.len() == 1 {
                     return Ok(Some(value));
                 }
-                if matches!(value, Object::Nil) {
+                if matches!(value.view(), View::Nil) {
                     return Ok(Some(Object::Nil));
                 }
                 self.dig_into(&value, &arguments[1..], position).map(Some)
@@ -98,7 +99,8 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     return self
                         .build_enumerator(receiver.clone(), method_name, vec![], None, position)
                         .map(Some);
@@ -106,7 +108,7 @@ impl VirtualMachine {
                 let elements = array_rc.borrow().clone();
                 for (index, element) in elements.iter().enumerate() {
                     let args = vec![element.clone(), Object::Int(index as i64)];
-                    match self.execute_block_with_control_flow(&block, args, position)? {
+                    match self.execute_block_with_control_flow(block, args, position)? {
                         crate::vm::ControlFlow::Next
                         | crate::vm::ControlFlow::Value(_)
                         | crate::vm::ControlFlow::Redo { .. }

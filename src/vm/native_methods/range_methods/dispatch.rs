@@ -2,6 +2,7 @@
 // the name is none of its own, and the next step is tried.
 
 use super::*;
+use crate::object::View;
 
 /// One step of the chain: every group of Range methods reads the same
 /// arguments and answers the same way.
@@ -30,7 +31,7 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        if !matches!(receiver, Object::Range { .. }) {
+        if !matches!(receiver.view(), View::Range { .. }) {
             return Ok(None);
         }
         // A subclass instance stands wherever a range does, so an argument

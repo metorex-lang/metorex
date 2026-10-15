@@ -3,6 +3,7 @@
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::View;
 use crate::vm::VirtualMachine;
 use crate::vm::errors::*;
 use crate::vm::utils::position_to_location;
@@ -16,7 +17,7 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        let Object::Float(f) = receiver else {
+        let View::Float(f) = receiver.view() else {
             return Ok(None);
         };
         match method_name {
@@ -35,7 +36,7 @@ impl VirtualMachine {
                     None => 0,
                     Some(held) => self.coerce_precision_argument(held, position)?,
                 };
-                rounded_float(*f, precision, arguments.is_empty(), half, position).map(Some)
+                rounded_float(f, precision, arguments.is_empty(), half, position).map(Some)
             }
             "nan?" => {
                 if !arguments.is_empty() {
@@ -86,8 +87,8 @@ impl VirtualMachine {
                     ));
                 }
                 Ok(Some(Object::Float(match method_name {
-                    "-@" => -*f,
-                    _ => *f,
+                    "-@" => -f,
+                    _ => f,
                 })))
             }
             "abs" | "magnitude" => {
@@ -120,26 +121,26 @@ impl VirtualMachine {
                 };
                 let Some(argument) = arguments.first() else {
                     if !f.is_finite() {
-                        return Err(float_domain_error(*f, position));
+                        return Err(float_domain_error(f, position));
                     }
-                    return Ok(Some(float_to_integer(round(*f))));
+                    return Ok(Some(float_to_integer(round(f))));
                 };
                 let digits = self.coerce_precision_argument(argument, position)?;
                 if digits > 0 {
                     if !f.is_finite() {
-                        return Ok(Some(Object::Float(*f)));
+                        return Ok(Some(Object::Float(f)));
                     }
                     let scale = (10f64).powi(digits.min(320) as i32);
                     return Ok(Some(Object::Float(round(f * scale) / scale)));
                 }
                 if !f.is_finite() {
-                    return Err(float_domain_error(*f, position));
+                    return Err(float_domain_error(f, position));
                 }
                 // The whole number the fraction sits in, rounded the way this
                 // method rounds, and then the same method again on that
                 // Integer. A power of ten past what a Float can spell exactly
                 // is still exact there.
-                let whole = float_to_integer(round(*f));
+                let whole = float_to_integer(round(f));
                 self.send_to_object(whole, method_name, vec![Object::Int(digits)], position)
                     .map(Some)
             }
@@ -159,7 +160,7 @@ impl VirtualMachine {
                     let message = if f.is_nan() {
                         "NaN".to_string()
                     } else {
-                        Object::Float(*f).to_string()
+                        Object::Float(f).to_string()
                     };
                     return Err(crate::vm::errors::simple_exception(
                         "FloatDomainError",
@@ -181,7 +182,7 @@ impl VirtualMachine {
                     ));
                 }
                 use crate::ast::BinaryOp;
-                let receiver = Object::Float(*f);
+                let receiver = Object::Float(f);
                 match method_name {
                     "modulo" => self
                         .evaluate_binary_operation(
@@ -194,8 +195,8 @@ impl VirtualMachine {
                     "divmod" => {
                         // A zero divisor leaves no quotient to floor, which
                         // Ruby reports as a division by zero.
-                        if matches!(&arguments[0], Object::Float(divisor) if *divisor == 0.0)
-                            || matches!(&arguments[0], Object::Int(0))
+                        if matches!(arguments[0].view(), View::Float(divisor) if divisor == 0.0)
+                            || matches!(arguments[0].view(), View::Int(0))
                         {
                             return Err(crate::vm::errors::simple_exception(
                                 "ZeroDivisionError",
@@ -222,7 +223,7 @@ impl VirtualMachine {
                     // is, a Rational or a Complex included, which each carry
                     // their own division.
                     _ => {
-                        if matches!(&arguments[0], Object::Instance(_)) {
+                        if matches!(arguments[0].view(), View::Instance(_)) {
                             return self
                                 .evaluate_binary_operation(
                                     &BinaryOp::Divide,
@@ -248,9 +249,9 @@ impl VirtualMachine {
                     ));
                 }
                 Ok(Some(Object::Bool(match method_name {
-                    "zero?" => *f == 0.0,
-                    "positive?" => *f > 0.0,
-                    _ => *f < 0.0,
+                    "zero?" => f == 0.0,
+                    "positive?" => f > 0.0,
+                    _ => f < 0.0,
                 })))
             }
             // `Float#angle` is the direction the number points on the number
@@ -266,7 +267,7 @@ impl VirtualMachine {
                     ));
                 }
                 if f.is_nan() {
-                    return Ok(Some(Object::Float(*f)));
+                    return Ok(Some(Object::Float(f)));
                 }
                 Ok(Some(if f.is_sign_negative() {
                     Object::Float(std::f64::consts::PI)
@@ -285,7 +286,7 @@ impl VirtualMachine {
                     ));
                 }
                 Ok(Some(Object::Float(neighboring_float(
-                    *f,
+                    f,
                     method_name == "next_float",
                 ))))
             }
@@ -301,8 +302,8 @@ impl VirtualMachine {
                     ));
                 }
                 // Ruby reads a String here the way `Float()` reads one.
-                let other = match &arguments[0] {
-                    Object::String(text) => text.as_str().trim().parse::<f64>().map_err(|_| {
+                let other = match arguments[0].view() {
+                    View::String(text) => text.as_str().trim().parse::<f64>().map_err(|_| {
                         let message = format!("invalid value for Float(): {:?}", text.as_str());
                         MetorexError::UncaughtException {
                             exception: Object::exception("ArgumentError", message.clone()),
@@ -310,11 +311,11 @@ impl VirtualMachine {
                             message,
                         }
                     })?,
-                    other => self.float_value_of(other, position)?,
+                    _ => self.float_value_of(&arguments[0], position)?,
                 };
                 Ok(Some(Object::array(vec![
                     Object::Float(other),
-                    Object::Float(*f),
+                    Object::Float(f),
                 ])))
             }
             // The parts of the exact fraction the number stands for. NaN and
@@ -330,11 +331,11 @@ impl VirtualMachine {
                 }
                 if !f.is_finite() {
                     return Ok(Some(match method_name {
-                        "numerator" => Object::Float(*f),
+                        "numerator" => Object::Float(f),
                         _ => Object::Int(1),
                     }));
                 }
-                let (numerator, denominator) = super::rational_methods::float_exact_fraction(*f);
+                let (numerator, denominator) = super::rational_methods::float_exact_fraction(f);
                 Ok(Some(Object::integer(match method_name {
                     "numerator" => numerator,
                     _ => denominator,
@@ -343,7 +344,7 @@ impl VirtualMachine {
             // `to_r` is the float's exact binary value, so `0.6.to_r` is
             // (5404319552844595/9007199254740992) rather than (3/5).
             "to_r" => {
-                let (numerator, denominator) = super::rational_methods::float_exact_fraction(*f);
+                let (numerator, denominator) = super::rational_methods::float_exact_fraction(f);
                 self.make_rational(numerator, denominator, position)
                     .map(Some)
             }
@@ -372,7 +373,7 @@ impl VirtualMachine {
                 // digits are ASCII, and Ruby says so.
                 Ok(Some(Object::String(std::rc::Rc::new(
                     crate::object::StringValue::with_encoding(
-                        Object::Float(*f).to_string(),
+                        Object::Float(f).to_string(),
                         "US-ASCII",
                     ),
                 ))))

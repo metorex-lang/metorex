@@ -1,6 +1,7 @@
 // ObjectHash - wrapper for making Objects hashable for use in a Set
 
 use super::Object;
+use crate::object::View;
 
 /// Wrapper that makes an Object usable as a set element. The rendered
 /// `hash_value` is what decides membership, and the element itself travels
@@ -32,40 +33,40 @@ impl ObjectHash {
     /// rendering can be an element; an Instance is told apart by identity,
     /// which is what its rendering carries.
     pub fn from_object(obj: &Object) -> Option<Self> {
-        let hash_value = match obj {
-            Object::Nil => "nil".to_string(),
-            Object::Bool(value) => value.to_string(),
-            Object::Int(value) => value.to_string(),
+        let hash_value = match obj.view() {
+            View::Nil => "nil".to_string(),
+            View::Bool(value) => value.to_string(),
+            View::Int(value) => value.to_string(),
             // A Float keeps its fraction, so 1.0 and 1 are different
             // elements the way `eql?` makes them.
-            Object::Float(value) if value.fract() == 0.0 && value.is_finite() => {
+            View::Float(value) if value.fract() == 0.0 && value.is_finite() => {
                 format!("{:.1}", value)
             }
-            Object::Float(value) => value.to_string(),
-            Object::String(text) => format!("\"{}\"", text),
-            Object::Symbol(name) => format!(":{}", name),
-            Object::BigInt(value) => value.to_string(),
+            View::Float(value) => value.to_string(),
+            View::String(text) => format!("\"{}\"", text),
+            View::Symbol(name) => format!(":{}", name),
+            View::BigInt(value) => value.to_string(),
             // A collection is told apart by what it holds, which its own
             // rendering reports. That rendering guards against a collection
             // that reaches itself, where a structural walk would not.
-            Object::Array(_) | Object::Dict(_) | Object::Range { .. } | Object::Regex(_, _) => {
+            View::Array(_) | View::Dict(_) | View::Range { .. } | View::Regex(_, _) => {
                 format!("{}{}", obj.type_name(), obj)
             }
-            Object::Instance(instance) => {
+            View::Instance(instance) => {
                 format!("#<{:p}>", std::rc::Rc::as_ptr(instance))
             }
             // A class, a module, an exception and a callable are each told
             // apart by which object they are.
-            Object::Class(class) | Object::Module(class) => {
+            View::Class(class) | View::Module(class) => {
                 format!("#<{:p}>", std::rc::Rc::as_ptr(class))
             }
-            Object::Exception(details) => format!("#<{:p}>", std::rc::Rc::as_ptr(details)),
-            Object::Block(block) => format!("#<{:p}>", std::rc::Rc::as_ptr(block)),
-            Object::Method(method) => format!("#<{:p}>", std::rc::Rc::as_ptr(method)),
-            Object::Binding(binding) => format!("#<{:p}>", std::rc::Rc::as_ptr(binding)),
+            View::Exception(details) => format!("#<{:p}>", std::rc::Rc::as_ptr(details)),
+            View::Block(block) => format!("#<{:p}>", std::rc::Rc::as_ptr(block)),
+            View::Method(method) => format!("#<{:p}>", std::rc::Rc::as_ptr(method)),
+            View::Binding(binding) => format!("#<{:p}>", std::rc::Rc::as_ptr(binding)),
             // A Set is told apart by what it holds, in an order-independent
             // way, so two sets with the same elements are one element.
-            Object::Set(set) => {
+            View::Set(set) => {
                 let mut keys: Vec<String> = set
                     .borrow()
                     .iter()
@@ -86,16 +87,16 @@ impl ObjectHash {
     /// rather than by what they hold, which is what a set comparing by
     /// identity puts its elements under.
     pub fn by_identity(obj: &Object) -> Option<Self> {
-        let hash_value = match obj {
-            Object::String(text) => format!("@{:p}", std::rc::Rc::as_ptr(text)),
-            Object::Array(elements) => format!("@{:p}", std::rc::Rc::as_ptr(elements)),
-            Object::Dict(pairs) => format!("@{:p}", std::rc::Rc::as_ptr(pairs)),
-            Object::Set(elements) => format!("@{:p}", std::rc::Rc::as_ptr(elements)),
-            Object::Block(block) => format!("@{:p}", std::rc::Rc::as_ptr(block)),
-            Object::Method(method) => format!("@{:p}", std::rc::Rc::as_ptr(method)),
+        let hash_value = match obj.view() {
+            View::String(text) => format!("@{:p}", std::rc::Rc::as_ptr(text)),
+            View::Array(elements) => format!("@{:p}", std::rc::Rc::as_ptr(elements)),
+            View::Dict(pairs) => format!("@{:p}", std::rc::Rc::as_ptr(pairs)),
+            View::Set(elements) => format!("@{:p}", std::rc::Rc::as_ptr(elements)),
+            View::Block(block) => format!("@{:p}", std::rc::Rc::as_ptr(block)),
+            View::Method(method) => format!("@{:p}", std::rc::Rc::as_ptr(method)),
             // Everything else stands for one value however many names reach
             // it, so identity and equality are the same question for it.
-            other => return Self::from_object(other),
+            _ => return Self::from_object(obj),
         };
         Some(Self {
             hash_value,

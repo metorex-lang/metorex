@@ -1,6 +1,7 @@
 // The slot a key occupies, and the key object kept beside it.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The slot an object occupies in a hash. A key that carries its own
@@ -38,9 +39,12 @@ impl VirtualMachine {
         position: Position,
         stored_at: impl Fn(&str) -> Option<Object>,
     ) -> Result<String, MetorexError> {
-        let hashed = match self.send_to_object(key.clone(), "hash", vec![], position)? {
-            Object::Int(number) => number,
-            other => self.object_identity(&other, position)?,
+        let hashed = match self
+            .send_to_object(key.clone(), "hash", vec![], position)?
+            .view()
+        {
+            View::Int(number) => number,
+            other => self.object_identity(&other.to_object(), position)?,
         };
         let mut slot = 0usize;
         loop {
@@ -89,20 +93,20 @@ impl VirtualMachine {
     /// else is placed by how it renders, which is cheaper and keeps the
     /// primitives reading back from their slot names.
     fn key_hashes_for_itself(&mut self, key: &Object) -> bool {
-        if matches!(key, Object::Instance(_)) {
+        if matches!(key.view(), View::Instance(_)) {
             return true;
         }
         // Ruby places the immediates by value without asking them, so a
         // `TrueClass#hash` written in the program is never reached.
         if matches!(
-            key,
-            Object::Bool(_)
-                | Object::Int(_)
-                | Object::BigInt(_)
-                | Object::Float(_)
-                | Object::String(_)
-                | Object::Symbol(_)
-                | Object::Nil
+            key.view(),
+            View::Bool(_)
+                | View::Int(_)
+                | View::BigInt(_)
+                | View::Float(_)
+                | View::String(_)
+                | View::Symbol(_)
+                | View::Nil
         ) {
             return false;
         }
@@ -114,8 +118,11 @@ impl VirtualMachine {
 
     /// The object id a hash comparing by identity places a key by.
     fn object_identity(&mut self, key: &Object, position: Position) -> Result<i64, MetorexError> {
-        match self.send_to_object(key.clone(), "object_id", vec![], position)? {
-            Object::Int(number) => Ok(number),
+        match self
+            .send_to_object(key.clone(), "object_id", vec![], position)?
+            .view()
+        {
+            View::Int(number) => Ok(number),
             _ => Ok(0),
         }
     }
@@ -208,7 +215,7 @@ impl VirtualMachine {
             };
             if !crate::vm::utils::is_primitive_key(key)
                 || rendered.starts_with(HASHED_SLOT_PREFIX)
-                || matches!(stored, Object::String(_))
+                || matches!(stored.view(), View::String(_))
             {
                 remember_key_object(&mut dict, &rendered, &stored);
             }
@@ -287,14 +294,14 @@ impl VirtualMachine {
 /// as a frozen copy, so a later write through the original text leaves the
 /// hash alone; a key already frozen is kept as it stands.
 pub(crate) fn stored_key_object(key: &Object) -> Object {
-    let Object::String(text) = key else {
+    let View::String(text) = key.view() else {
         return key.clone();
     };
     if text.is_frozen() {
         return key.clone();
     }
     let copy = Object::string(text.as_str().to_string());
-    if let Object::String(copied) = &copy {
+    if let View::String(copied) = copy.view() {
         copied.freeze();
     }
     copy
@@ -317,16 +324,17 @@ pub(crate) fn remember_key_object(
     // A copy of a hash shares the record with the hash it came from, so a
     // shared record is copied before it changes, and one held by this hash
     // alone is written in place.
-    if let Some(Object::Dict(existing)) = pairs.get(KEY_OBJECTS_KEY)
-        && Rc::strong_count(existing) == 1
+    if let Some(record) = pairs.get(KEY_OBJECTS_KEY)
+        && record.references() == 1
+        && let View::Dict(existing) = record.view()
     {
         existing
             .borrow_mut()
             .insert(rendered.to_string(), key.clone());
         return;
     }
-    let mut objects = match pairs.get(KEY_OBJECTS_KEY) {
-        Some(Object::Dict(existing)) => existing.borrow().clone(),
+    let mut objects = match pairs.get(KEY_OBJECTS_KEY).view() {
+        Some(View::Dict(existing)) => existing.borrow().clone(),
         _ => indexmap::IndexMap::new(),
     };
     objects.insert(rendered.to_string(), key.clone());
@@ -339,10 +347,13 @@ pub(crate) fn remember_key_object(
 /// Drop the key object recorded for `slot`. A record shared with a copy of
 /// the hash is copied first, so the copy keeps its keys.
 pub(crate) fn forget_key_object(pairs: &mut indexmap::IndexMap<String, Object>, slot: &str) {
-    let Some(Object::Dict(existing)) = pairs.get(KEY_OBJECTS_KEY) else {
+    let Some(record) = pairs.get(KEY_OBJECTS_KEY) else {
         return;
     };
-    if Rc::strong_count(existing) == 1 {
+    let View::Dict(existing) = record.view() else {
+        return;
+    };
+    if record.references() == 1 {
         existing.borrow_mut().shift_remove(slot);
         return;
     }

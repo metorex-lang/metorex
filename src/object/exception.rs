@@ -1,6 +1,7 @@
 // Exception handling types - Exception and SourceLocation
 
 use super::Object;
+use crate::object::View;
 
 /// Source location for exceptions
 #[derive(Debug, Clone, PartialEq)]
@@ -207,7 +208,7 @@ impl Exception {
         let mut chain = vec![format!("{}: {}", self.exception_type, self.message)];
 
         if let Some(ref cause_obj) = self.cause
-            && let Object::Exception(cause_exc) = cause_obj.as_ref()
+            && let View::Exception(cause_exc) = cause_obj.as_ref().view()
         {
             let cause = cause_exc.borrow();
             chain.extend(cause.exception_chain());

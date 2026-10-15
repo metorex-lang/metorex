@@ -1,6 +1,7 @@
 // The integer `Object#hash` answers.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The integer `Object#hash` answers. Value types digest their canonical
@@ -14,8 +15,8 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<i64, MetorexError> {
         let marked = |kind: i64, count: usize| kind.wrapping_mul(1_000_003) ^ count as i64;
-        match held {
-            Object::Dict(entries) => Ok(marked(
+        match held.view() {
+            View::Dict(entries) => Ok(marked(
                 1,
                 entries
                     .borrow()
@@ -23,9 +24,9 @@ impl VirtualMachine {
                     .filter(|key| !crate::vm::native_methods::hash_methods::is_internal_key(key))
                     .count(),
             )),
-            Object::Array(items) => Ok(marked(2, items.borrow().len())),
-            Object::Set(items) => Ok(marked(3, items.borrow().len())),
-            other => self.hash_digest(other, position),
+            View::Array(items) => Ok(marked(2, items.borrow().len())),
+            View::Set(items) => Ok(marked(3, items.borrow().len())),
+            _ => self.hash_digest(held, position),
         }
     }
 
@@ -42,9 +43,9 @@ impl VirtualMachine {
         receiver: &Object,
         position: Position,
     ) -> Result<i64, MetorexError> {
-        let address = match receiver {
-            Object::Array(held) => std::rc::Rc::as_ptr(held) as usize,
-            Object::Dict(held) => std::rc::Rc::as_ptr(held) as usize,
+        let address = match receiver.view() {
+            View::Array(held) => std::rc::Rc::as_ptr(held) as usize,
+            View::Dict(held) => std::rc::Rc::as_ptr(held) as usize,
             _ => return Ok(0),
         };
         if self.hash_walk.contains(&address) {
@@ -56,9 +57,9 @@ impl VirtualMachine {
             self.hash_walk_looped = false;
         }
         self.hash_walk.push(address);
-        let parts: Vec<Object> = match receiver {
-            Object::Array(held) => held.borrow().clone(),
-            Object::Dict(held) => {
+        let parts: Vec<Object> = match receiver.view() {
+            View::Array(held) => held.borrow().clone(),
+            View::Dict(held) => {
                 let mut listed = Vec::new();
                 for (key, value) in self.hash_pairs_for_digest(held) {
                     listed.push(key);
@@ -68,8 +69,8 @@ impl VirtualMachine {
             }
             _ => Vec::new(),
         };
-        let length = match receiver {
-            Object::Dict(_) => parts.len() / 2,
+        let length = match receiver.view() {
+            View::Dict(_) => parts.len() / 2,
             _ => parts.len(),
         };
         let mut digest = (length as i64).wrapping_mul(0x9e37_79b9);
@@ -106,10 +107,13 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<i64, MetorexError> {
         let hashed = self.send_to_object(element.clone(), "hash", vec![], position)?;
-        match hashed {
-            Object::Int(number) => Ok(number),
-            other => match self.send_to_object(other, "to_int", vec![], position)? {
-                Object::Int(number) => Ok(number),
+        match hashed.view() {
+            View::Int(number) => Ok(number),
+            _ => match self
+                .send_to_object(hashed.clone(), "to_int", vec![], position)?
+                .view()
+            {
+                View::Int(number) => Ok(number),
                 _ => Ok(0),
             },
         }
@@ -122,7 +126,7 @@ impl VirtualMachine {
     ) -> Result<i64, MetorexError> {
         // Two names for one method hash alike, so the hash comes from the
         // definition they share rather than from the object holding it.
-        if let Object::Method(method) = receiver {
+        if let View::Method(method) = receiver.view() {
             // The name the method was defined under tells two aliases apart
             // from two different methods.
             let named = method
@@ -155,7 +159,7 @@ impl VirtualMachine {
             }
             if let Some(held) = method.receiver.as_deref() {
                 let id = self.call_object_method(held, "object_id", &[], position)?;
-                if let Some(Object::Int(id)) = id {
+                if let Some(View::Int(id)) = id.view() {
                     digest = digest.wrapping_mul(31).wrapping_add(id);
                 }
             }
@@ -166,24 +170,28 @@ impl VirtualMachine {
         // from its length the way Ruby answers one. A subclass hashes as the
         // collection behind it, so the class it was made from makes no
         // difference to the number.
-        if matches!(receiver, Object::Array(_) | Object::Dict(_)) {
+        if matches!(receiver.view(), View::Array(_) | View::Dict(_)) {
             return self
                 .collection_hash_digest(receiver, position)
                 .map(seeded_hash);
         }
-        if let Some(backing @ (Object::Array(_) | Object::Dict(_))) =
+        if let Some(backing @ (View::Array(_) | View::Dict(_))) =
             crate::vm::native_methods::array_subclass_value(receiver)
                 .or_else(|| crate::vm::native_methods::hash_subclass_value(receiver))
+                .view()
         {
             return self
-                .collection_hash_digest(&backing, position)
+                .collection_hash_digest(&backing.to_object(), position)
                 .map(seeded_hash);
         }
         if let Some(hashable) = crate::object::ObjectHash::from_object(receiver) {
             return Ok(seeded_text_hash(&hashable.hash_value));
         }
-        match self.call_object_method(receiver, "object_id", &[], position)? {
-            Some(Object::Int(id)) => Ok(id),
+        match self
+            .call_object_method(receiver, "object_id", &[], position)?
+            .view()
+        {
+            Some(View::Int(id)) => Ok(id),
             _ => Ok(0),
         }
     }

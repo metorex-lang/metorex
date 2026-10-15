@@ -1,6 +1,7 @@
 // Unit tests for Metorex Exception objects
 // Tests exception creation, source location, cause chains, and exception hierarchy
 
+use metorex::object::View;
 use metorex::object::{Exception, Object, SourceLocation};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -183,8 +184,8 @@ fn test_exception_chain_no_cause() {
 fn test_exception_object_creation() {
     let obj = Object::exception("RuntimeError", "Test error");
 
-    match obj {
-        Object::Exception(exc) => {
+    match obj.view() {
+        View::Exception(exc) => {
             let exception = exc.borrow();
             assert_eq!(exception.exception_type, "RuntimeError");
             assert_eq!(exception.message, "Test error");

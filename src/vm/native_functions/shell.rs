@@ -1,6 +1,7 @@
 // Running another program.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Kernel#` — run the command through the shell, answering what it
@@ -21,8 +22,8 @@ impl VirtualMachine {
         let command = self.coerce_command_argument(argument, position)?;
         // The shell reads bytes, so a command whose characters stand
         // for bytes is handed those rather than their text form.
-        let written: std::ffi::OsString = match argument {
-            Object::String(text) if text.holds_bytes() => {
+        let written: std::ffi::OsString = match argument.view() {
+            View::String(text) if text.holds_bytes() => {
                 use std::os::unix::ffi::OsStringExt;
                 std::ffi::OsString::from_vec(
                     crate::vm::native_methods::string_methods::binary_bytes(text),
@@ -133,12 +134,15 @@ impl VirtualMachine {
         let mut given: &[Object] = &arguments;
         let mut environment = None;
         if let Some(first) = given.first()
-            && (matches!(first, Object::Dict(_)) || self.responds_to(first, "to_hash"))
+            && (matches!(first.view(), View::Dict(_)) || self.responds_to(first, "to_hash"))
         {
-            let entries = match first {
-                Object::Dict(entries) => entries.borrow().clone(),
-                other => match self.send_to_object(other.clone(), "to_hash", vec![], position)? {
-                    Object::Dict(entries) => entries.borrow().clone(),
+            let entries = match first.view() {
+                View::Dict(entries) => entries.borrow().clone(),
+                _ => match self
+                    .send_to_object(first.clone(), "to_hash", vec![], position)?
+                    .view()
+                {
+                    View::Dict(entries) => entries.borrow().clone(),
                     _ => indexmap::IndexMap::new(),
                 },
             };
@@ -146,7 +150,7 @@ impl VirtualMachine {
             given = &given[1..];
         }
         let mut settings = None;
-        if let Some(Object::Dict(entries)) = given.last() {
+        if let Some(View::Dict(entries)) = given.last().view() {
             settings = Some(entries.borrow().clone());
             given = &given[..given.len() - 1];
         }
@@ -159,12 +163,15 @@ impl VirtualMachine {
         };
         // `[program, argv0]` names the program and what it is told it is
         // called, and an object answering `to_ary` stands for one.
-        let pair = match command {
-            Object::Array(pair) => Some(pair.borrow().clone()),
-            Object::String(_) => None,
-            other if self.responds_to(other, "to_ary") => {
-                match self.send_to_object(other.clone(), "to_ary", vec![], position)? {
-                    Object::Array(pair) => Some(pair.borrow().clone()),
+        let pair = match command.view() {
+            View::Array(pair) => Some(pair.borrow().clone()),
+            View::String(_) => None,
+            _ if self.responds_to(command, "to_ary") => {
+                match self
+                    .send_to_object(command.clone(), "to_ary", vec![], position)?
+                    .view()
+                {
+                    View::Array(pair) => Some(pair.borrow().clone()),
                     _ => None,
                 }
             }
@@ -249,12 +256,12 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                match value {
-                    Object::Nil => {
+                match value.view() {
+                    View::Nil => {
                         running.env_remove(&name);
                     }
-                    held => {
-                        let value = self.environment_word(held, position)?;
+                    _ => {
+                        let value = self.environment_word(value, position)?;
                         running.env(&name, value);
                     }
                 }
@@ -383,7 +390,7 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<std::ffi::OsString, MetorexError> {
         let text = self.command_word(word, position)?;
-        if let Object::String(held) = word {
+        if let View::String(held) = word.view() {
             use std::os::unix::ffi::OsStringExt;
             return Ok(std::ffi::OsString::from_vec(
                 crate::vm::native_methods::string_methods::binary_bytes(held),
@@ -410,8 +417,8 @@ impl VirtualMachine {
         given: &Object,
         position: Position,
     ) -> Result<String, MetorexError> {
-        match self.implicit_conversion(given, "to_str", position)? {
-            Some(Object::String(text)) => Ok(text.as_str().to_string()),
+        match self.implicit_conversion(given, "to_str", position)?.view() {
+            Some(View::String(text)) => Ok(text.as_str().to_string()),
             _ => Err(self.conversion_error(given, "String", position)),
         }
     }
@@ -422,8 +429,8 @@ impl VirtualMachine {
         given: &Object,
         position: Position,
     ) -> Result<i64, MetorexError> {
-        match self.implicit_conversion(given, "to_int", position)? {
-            Some(Object::Int(number)) => Ok(number),
+        match self.implicit_conversion(given, "to_int", position)?.view() {
+            Some(View::Int(number)) => Ok(number),
             _ => Err(self.conversion_error(given, "Integer", position)),
         }
     }
@@ -437,8 +444,8 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
         let already = match conversion {
-            "to_str" => matches!(given, Object::String(_)),
-            _ => matches!(given, Object::Int(_)),
+            "to_str" => matches!(given.view(), View::String(_)),
+            _ => matches!(given.view(), View::Int(_)),
         };
         if already {
             return Ok(Some(given.clone()));
@@ -479,11 +486,11 @@ impl VirtualMachine {
         // away where a name is given nil.
         let mut environment = Vec::new();
         let mut arguments = &arguments[..];
-        if let Some(Object::Dict(entries)) = arguments.first() {
+        if let Some(View::Dict(entries)) = arguments.first().view() {
             for (name, value) in entries.borrow().iter() {
-                let value = match value {
-                    Object::Nil => None,
-                    held => Some(self.get_string_representation(held, position)?),
+                let value = match value.view() {
+                    View::Nil => None,
+                    _ => Some(self.get_string_representation(value, position)?),
                 };
                 environment.push((name.trim_start_matches(':').to_string(), value));
             }
@@ -497,21 +504,21 @@ impl VirtualMachine {
         };
         // A command written as `[program, name]` runs the program under the
         // name its `$0` answers.
-        let (program, named_as) = match command {
-            Object::Array(pair) if pair.borrow().len() == 2 => {
+        let (program, named_as) = match command.view() {
+            View::Array(pair) if pair.borrow().len() == 2 => {
                 let pair = pair.borrow().clone();
                 (
                     self.get_string_representation(&pair[0], position)?,
                     Some(self.get_string_representation(&pair[1], position)?),
                 )
             }
-            held => (self.get_string_representation(held, position)?, None),
+            _ => (self.get_string_representation(command, position)?, None),
         };
         // A trailing Hash names where the child's streams go and
         // whether a failure is raised rather than reported.
         let mut given = &arguments[1..];
         let mut options = None;
-        if let Some(Object::Dict(entries)) = given.last() {
+        if let Some(View::Dict(entries)) = given.last().view() {
             options = Some(entries.borrow().clone());
             given = &given[..given.len() - 1];
         }
@@ -525,7 +532,7 @@ impl VirtualMachine {
             && let Some((_, given)) = options
                 .iter()
                 .find(|(name, _)| name.trim_start_matches(':') == "exception")
-            && !matches!(given, Object::Nil)
+            && !matches!(given.view(), View::Nil)
         {
             raises = self.exception_keyword(Some(given), position)?;
         }
@@ -535,8 +542,8 @@ impl VirtualMachine {
         if let Some(options) = &options
             && options.iter().any(|(name, target)| {
                 !matches!(
-                    (name.trim_start_matches(':'), target),
-                    ("exception", _) | ("out" | "err", Object::String(_))
+                    (name.trim_start_matches(':'), target.view()),
+                    ("exception", _) | ("out" | "err", View::String(_))
                 )
             })
         {
@@ -548,12 +555,12 @@ impl VirtualMachine {
                 match name.trim_start_matches(':') {
                     "exception" => {}
                     "out" => {
-                        if let Object::String(path) = target {
+                        if let View::String(path) = target.view() {
                             redirects.push((1, path.as_str().to_string()));
                         }
                     }
                     "err" => {
-                        if let Object::String(path) = target {
+                        if let View::String(path) = target.view() {
                             redirects.push((2, path.as_str().to_string()));
                         }
                     }
@@ -693,22 +700,24 @@ impl VirtualMachine {
         let block = self.pending_block.take();
         let process = self.globals().get("Process").unwrap_or(Object::Nil);
         let answered = self.send_to_object(process, "_fork", vec![], position)?;
-        if !matches!(answered, Object::Int(0)) {
+        if !matches!(answered.view(), View::Int(0)) {
             return Ok(answered);
         }
         // In the child. Without a block, `fork` answers nil and the
         // caller carries on as the child.
-        let Some(Object::Block(block)) = block else {
+        let Some(View::Block(block)) = block.view() else {
             return Ok(Object::Nil);
         };
-        let outcome = self.execute_block_callable(&block, Vec::new(), position);
+        let outcome = self.execute_block_callable(block, Vec::new(), position);
         let _ = std::io::stdout().flush();
-        let status = match outcome {
+        let status = match &outcome {
             Ok(_) => 0,
-            Err(MetorexError::UncaughtException {
-                exception: Object::Exception(details),
-                ..
-            }) if details.borrow().is_system_exit() => details.borrow().status.unwrap_or(0) as i32,
+            Err(MetorexError::UncaughtException { exception, .. })
+                if let View::Exception(details) = exception.view()
+                    && details.borrow().is_system_exit() =>
+            {
+                details.borrow().status.unwrap_or(0) as i32
+            }
             Err(error) => {
                 eprintln!("{}", error);
                 1
@@ -742,7 +751,7 @@ impl VirtualMachine {
         // Only the thread that called `fork` survives into the child, so
         // every other one is marked finished there.
         for thread in std::mem::take(&mut self.pending_threads) {
-            if let Object::Instance(instance) = thread {
+            if let View::Instance(instance) = thread.view() {
                 instance
                     .borrow_mut()
                     .set_var("__thread_value".to_string(), Object::Nil);
@@ -763,7 +772,7 @@ impl VirtualMachine {
         keeps_streams: bool,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        if !matches!(self.split_process(position)?, Object::Int(0)) {
+        if !matches!(self.split_process(position)?.view(), View::Int(0)) {
             // SAFETY: `_exit` ends the parent without running its handlers,
             // which belong to the child now.
             unsafe { libc::_exit(0) };
@@ -904,8 +913,8 @@ impl VirtualMachine {
                 continue;
             }
             let key = crate::vm::native_methods::hash_methods::reconstruct_key(entries, slot);
-            let targets: Vec<libc::c_int> = match &key {
-                Object::Symbol(name) => match &*name.as_str() {
+            let targets: Vec<libc::c_int> = match key.view() {
+                View::Symbol(name) => match &*name.as_str() {
                     "in" => vec![0],
                     "out" => vec![1],
                     "err" => vec![2],
@@ -917,7 +926,7 @@ impl VirtualMachine {
                         continue;
                     }
                     "unsetenv_others" | "close_others" => {
-                        if !matches!(value, Object::Bool(_) | Object::Nil) {
+                        if !matches!(value.view(), View::Bool(_) | View::Nil) {
                             let shown = self.get_inspect_representation(value, position)?;
                             return Err(refuse(format!(
                                 "expected true or false as {name}: {shown}"
@@ -935,15 +944,15 @@ impl VirtualMachine {
                         continue;
                     }
                     "pgroup" => {
-                        settings.pgroup = match value {
-                            Object::Nil | Object::Bool(false) => None,
-                            Object::Bool(true) => Some(0),
-                            Object::Int(number) if *number < 0 => {
+                        settings.pgroup = match value.view() {
+                            View::Nil | View::Bool(false) => None,
+                            View::Bool(true) => Some(0),
+                            View::Int(number) if number < 0 => {
                                 return Err(refuse(format!(
                                     "negative process group ID : {number}"
                                 )));
                             }
-                            other => Some(self.implicit_integer(other, position)? as libc::pid_t),
+                            _ => Some(self.implicit_integer(value, position)? as libc::pid_t),
                         };
                         continue;
                     }
@@ -962,8 +971,8 @@ impl VirtualMachine {
                         else {
                             return Err(refuse(format!("wrong exec option symbol: {named}")));
                         };
-                        let (current, maximum) = match value {
-                            Object::Array(pair) => {
+                        let (current, maximum) = match value.view() {
+                            View::Array(pair) => {
                                 let pair = pair.borrow().clone();
                                 let current = self.implicit_integer(
                                     pair.first().unwrap_or(&Object::Nil),
@@ -975,8 +984,8 @@ impl VirtualMachine {
                                 };
                                 (current as u64, maximum as u64)
                             }
-                            other => {
-                                let both = self.implicit_integer(other, position)? as u64;
+                            _ => {
+                                let both = self.implicit_integer(value, position)? as u64;
                                 (both, both)
                             }
                         };
@@ -984,8 +993,8 @@ impl VirtualMachine {
                         continue;
                     }
                 },
-                Object::Int(number) => vec![*number as libc::c_int],
-                Object::Array(named) => {
+                View::Int(number) => vec![number as libc::c_int],
+                View::Array(named) => {
                     let named = named.borrow().clone();
                     let mut targets = Vec::new();
                     for one in &named {
@@ -993,8 +1002,8 @@ impl VirtualMachine {
                     }
                     targets
                 }
-                Object::String(_) => return Err(refuse("wrong exec option".to_string())),
-                other => vec![self.redirect_target(other, position)?],
+                View::String(_) => return Err(refuse("wrong exec option".to_string())),
+                _ => vec![self.redirect_target(&key, position)?],
             };
             let Some(first) = targets.first().copied() else {
                 continue;
@@ -1018,8 +1027,8 @@ impl VirtualMachine {
         named: &Object,
         position: Position,
     ) -> Result<libc::c_int, MetorexError> {
-        match named {
-            Object::Symbol(name) => match &*name.as_str() {
+        match named.view() {
+            View::Symbol(name) => match &*name.as_str() {
                 "in" => Ok(0),
                 "out" => Ok(1),
                 "err" => Ok(2),
@@ -1029,8 +1038,8 @@ impl VirtualMachine {
                     position,
                 )),
             },
-            Object::Int(number) => Ok(*number as libc::c_int),
-            other => self.stream_descriptor(other, position)?.ok_or_else(|| {
+            View::Int(number) => Ok(number as libc::c_int),
+            _ => self.stream_descriptor(named, position)?.ok_or_else(|| {
                 crate::vm::errors::simple_exception("ArgumentError", "wrong exec option", position)
             }),
         }
@@ -1053,26 +1062,26 @@ impl VirtualMachine {
                 position,
             )
         };
-        match value {
-            Object::Int(number) => Ok(RedirectSource::Descriptor(*number as libc::c_int)),
-            Object::Symbol(name) => match &*name.as_str() {
+        match value.view() {
+            View::Int(number) => Ok(RedirectSource::Descriptor(number as libc::c_int)),
+            View::Symbol(name) => match &*name.as_str() {
                 "close" => Ok(RedirectSource::Close),
                 "in" => Ok(RedirectSource::Descriptor(0)),
                 "out" => Ok(RedirectSource::Descriptor(1)),
                 "err" => Ok(RedirectSource::Descriptor(2)),
                 _ => Err(refuse()),
             },
-            Object::String(path) => {
+            View::String(path) => {
                 let opened = open_redirect_file(&path.as_str(), target, None)
                     .map_err(|problem| redirect_error(&path.as_str(), &problem, position))?;
                 let number = opened.as_raw_fd();
                 held_open.push(opened);
                 Ok(RedirectSource::Descriptor(number))
             }
-            Object::Array(parts) => {
+            View::Array(parts) => {
                 let parts = parts.borrow().clone();
-                match parts.first() {
-                    Some(Object::Symbol(child)) if &*child.as_str() == "child" => {
+                match parts.first().view() {
+                    Some(View::Symbol(child)) if &*child.as_str() == "child" => {
                         let Some(other) = parts.get(1) else {
                             return Err(refuse());
                         };
@@ -1080,9 +1089,9 @@ impl VirtualMachine {
                             self.redirect_target(other, position)?,
                         ))
                     }
-                    Some(Object::String(path)) => {
-                        let mode = match parts.get(1) {
-                            Some(Object::String(mode)) => Some(mode.as_str().to_string()),
+                    Some(View::String(path)) => {
+                        let mode = match parts.get(1).view() {
+                            Some(View::String(mode)) => Some(mode.as_str().to_string()),
                             _ => None,
                         };
                         let opened = open_redirect_file(&path.as_str(), target, mode.as_deref())
@@ -1096,7 +1105,7 @@ impl VirtualMachine {
                     _ => Err(refuse()),
                 }
             }
-            other => match self.stream_descriptor(other, position)? {
+            _ => match self.stream_descriptor(value, position)? {
                 Some(number) => Ok(RedirectSource::Descriptor(number)),
                 None => Err(refuse()),
             },
@@ -1118,8 +1127,11 @@ impl VirtualMachine {
         if !self.responds_to(&stream, "fileno") {
             return Ok(None);
         }
-        match self.send_to_object(stream, "fileno", vec![], position)? {
-            Object::Int(number) => Ok(Some(number as libc::c_int)),
+        match self
+            .send_to_object(stream, "fileno", vec![], position)?
+            .view()
+        {
+            View::Int(number) => Ok(Some(number as libc::c_int)),
             _ => Ok(None),
         }
     }

@@ -1,6 +1,7 @@
 // Pointing one method name at another.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Point `new_name` at whatever `old_name` already names on `class_rc`.
@@ -33,7 +34,7 @@ impl VirtualMachine {
         }
         if !copied {
             let mut found = false;
-            if let Some(Object::Class(object_class)) = self.globals().get("Object")
+            if let Some(View::Class(object_class)) = self.globals().get("Object").view()
                 && let Some(method) = object_class.find_method(&old_name)
             {
                 class_rc.define_method(&new_name, method);
@@ -83,8 +84,9 @@ impl VirtualMachine {
             // given there stands for one that class answers to, whether it
             // holds an entry for it or answers it natively.
             if !found
-                && let Some(Object::Class(refined) | Object::Module(refined)) = class_rc
+                && let Some(View::Class(refined) | View::Module(refined)) = class_rc
                     .get_class_var(crate::vm::native_methods::module_methods::REFINEMENT_TARGET_KEY)
+                    .view()
             {
                 if let Some(method) = refined.find_method(&old_name) {
                     class_rc.define_method(&new_name, method);

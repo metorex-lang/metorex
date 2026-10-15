@@ -4,6 +4,7 @@ use metorex::bytecode::vm::BytecodeVm;
 use metorex::compiler::Compiler;
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::View;
 use metorex::parser::Parser;
 
 /// Helper: compile source and execute on the bytecode VM.
@@ -64,7 +65,7 @@ fn native_p_callable() {
 fn class_callable_creates_instance() {
     let result = run_ok("class Foo\nend\nreturn Foo()");
     assert!(
-        matches!(result, Object::Instance(_)),
+        matches!(result.view(), View::Instance(_)),
         "Expected Instance, got {:?}",
         result
     );
@@ -76,7 +77,7 @@ fn class_callable_with_initialize() {
     let result =
         run_ok("class Counter\n  def initialize(n)\n    return n\n  end\nend\nreturn Counter(42)");
     // Counter(42) calls initialize, then returns the instance
-    assert!(matches!(result, Object::Instance(_)));
+    assert!(matches!(result.view(), View::Instance(_)));
 }
 
 // ── define_method error paths ───────────────────────────────────────

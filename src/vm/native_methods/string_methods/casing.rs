@@ -1,6 +1,7 @@
 // Mapping the case of letters, with the options Ruby allows.
 
 use super::*;
+use crate::object::View;
 
 /// Which way a case mapping runs.
 #[derive(Clone, Copy, PartialEq)]
@@ -25,7 +26,7 @@ pub(crate) fn case_options(
 ) -> Result<CaseOptions, MetorexError> {
     let mut named = Vec::new();
     for argument in arguments {
-        let Object::Symbol(name) = argument else {
+        let View::Symbol(name) = argument.view() else {
             let message = format!("invalid option {}", argument);
             return Err(crate::vm::errors::simple_exception(
                 "ArgumentError",

@@ -1,6 +1,7 @@
 // The bytes a string is made of, read singly and in runs.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The bytes a string is made of, read singly and in runs.
@@ -68,16 +69,16 @@ impl VirtualMachine {
                     crate::vm::native_methods::as_range(&arguments[0])
                     && arguments.len() == 1
                 {
-                    let Object::Range {
+                    let View::Range {
                         start,
                         end,
                         exclusive,
                         ..
-                    } = span
+                    } = span.view()
                     else {
                         return Ok(Some(Object::Nil));
                     };
-                    let opening = match self.span_end_index(start.as_ref(), position)? {
+                    let opening = match self.span_end_index(start, position)? {
                         Some(number) => {
                             if number < 0 {
                                 total + number
@@ -87,7 +88,7 @@ impl VirtualMachine {
                         }
                         None => 0,
                     };
-                    let closing = match self.span_end_index(end.as_ref(), position)? {
+                    let closing = match self.span_end_index(end, position)? {
                         Some(number) => {
                             let placed = if number < 0 { total + number } else { number };
                             if exclusive { placed - 1 } else { placed }
@@ -141,10 +142,13 @@ impl VirtualMachine {
                     .collect();
                 // `bytes` with a block yields the same way `each_byte`
                 // does, and answers the string rather than the Array.
-                if method_name == "bytes" && !matches!(self.pending_block, Some(Object::Block(_))) {
+                if method_name == "bytes"
+                    && !matches!(self.pending_block.view(), Some(View::Block(_)))
+                {
                     return Ok(Some(Object::Array(Rc::new(RefCell::new(bytes)))));
                 }
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     let size = bytes.len() as i64;
                     return self
                         .build_enumerator(
@@ -166,7 +170,7 @@ impl VirtualMachine {
                     };
                     let byte = Object::Int(*byte as i64);
                     at += 1;
-                    self.execute_block_callable(&block, vec![byte], position)?;
+                    self.execute_block_callable(block, vec![byte], position)?;
                 }
                 Ok(Some(receiver.clone()))
             }
@@ -179,7 +183,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let Object::Int(index) = &arguments[0] else {
+                let View::Int(index) = arguments[0].view() else {
                     return Err(method_argument_type_error(
                         method_name,
                         "Integer",
@@ -188,7 +192,7 @@ impl VirtualMachine {
                     ));
                 };
                 Ok(Some(
-                    byte_at(string_value, *index)
+                    byte_at(string_value, index)
                         .map_or(Object::Nil, |byte| Object::Int(i64::from(byte))),
                 ))
             }

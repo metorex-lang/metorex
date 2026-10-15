@@ -1,6 +1,7 @@
 // The variants that write their answer back into the receiver.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The variants that write their answer back into the receiver.
@@ -28,7 +29,7 @@ impl VirtualMachine {
                 let kept: Vec<Object> = array_rc
                     .borrow()
                     .iter()
-                    .filter(|element| !matches!(element, Object::Nil))
+                    .filter(|element| !matches!(element.view(), View::Nil))
                     .cloned()
                     .collect();
                 let changed = kept.len() != array_rc.borrow().len();
@@ -60,12 +61,13 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => Some(block),
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(block)) => Some(block),
                     _ => None,
                 };
                 let elements = array_rc.borrow().clone();
-                let sorted = self.sort_elements(elements, block, position)?;
+                let sorted = self.sort_elements(elements, block.cloned(), position)?;
                 *array_rc.borrow_mut() = sorted;
                 Ok(Some(receiver.clone()))
             }
@@ -78,7 +80,8 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     return self
                         .make_enumerator(receiver, method_name, arguments, position)
                         .map(Some);
@@ -88,7 +91,7 @@ impl VirtualMachine {
                 while let Some(element) = element_at(array_rc, index) {
                     index += 1;
                     let key =
-                        self.execute_block_callable(&block, vec![element.clone()], position)?;
+                        self.execute_block_callable(block, vec![element.clone()], position)?;
                     keyed.push((key, element));
                 }
                 *array_rc.borrow_mut() = self.sort_by_keys(keyed, position)?;
@@ -103,7 +106,8 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     return self
                         .make_enumerator(receiver, method_name, arguments, position)
                         .map(Some);
@@ -113,7 +117,7 @@ impl VirtualMachine {
                 // results so far and the originals after them.
                 let mut index = 0;
                 while let Some(element) = element_at(array_rc, index) {
-                    let value = self.execute_block_callable(&block, vec![element], position)?;
+                    let value = self.execute_block_callable(block, vec![element], position)?;
                     array_rc.borrow_mut()[index] = value;
                     index += 1;
                 }
@@ -128,14 +132,15 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     return self
                         .make_enumerator(receiver, method_name, arguments, position)
                         .map(Some);
                 };
                 let rejecting = method_name == "reject!";
                 let before = array_rc.borrow().len();
-                let kept = self.filter_in_place(array_rc, &block, rejecting, position)?;
+                let kept = self.filter_in_place(array_rc, block, rejecting, position)?;
                 Ok(Some(if kept != before {
                     receiver.clone()
                 } else {
@@ -151,11 +156,12 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => Some(block),
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(block)) => Some(block),
                     _ => None,
                 };
-                let unique = self.unique_live_elements(array_rc, block, position)?;
+                let unique = self.unique_live_elements(array_rc, block.cloned(), position)?;
                 let changed = unique.len() != array_rc.borrow().len();
                 *array_rc.borrow_mut() = unique;
                 Ok(Some(if changed {
@@ -173,11 +179,11 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let by = match arguments.first() {
+                let by = match arguments.first().view() {
                     None => 1,
-                    Some(Object::Int(count)) => *count,
+                    Some(View::Int(count)) => count,
                     Some(other) => {
-                        let coerced = self.coerce_integer_argument(other, position)?;
+                        let coerced = self.coerce_integer_argument(&other.to_object(), position)?;
                         coerced.try_into().unwrap_or(0)
                     }
                 };
@@ -194,7 +200,7 @@ impl VirtualMachine {
                 // from, which Ruby asks for `rand` rather than drawing itself.
                 let mut source = None;
                 let mut positional = arguments;
-                if let Some(Object::Dict(entries)) = arguments.last()
+                if let Some(View::Dict(entries)) = arguments.last().view()
                     && let Some(named) = entries.borrow().get(":random").cloned()
                 {
                     source = Some(named);

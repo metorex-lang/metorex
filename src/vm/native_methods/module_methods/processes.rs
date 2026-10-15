@@ -2,6 +2,7 @@
 // this process.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 /// The Process methods the interpreter answers itself rather than through a
 /// method written in Ruby, which `respond_to?` reports alongside those.
@@ -74,7 +75,7 @@ impl VirtualMachine {
                 }
                 let named = self.script_name().unwrap_or_else(|| "-e".to_string());
                 let made = Object::string(named);
-                if let Object::String(text) = &made {
+                if let View::String(text) = made.view() {
                     text.freeze();
                 }
                 self.globals_mut().set("__Process_argv0", made.clone());
@@ -192,7 +193,7 @@ impl VirtualMachine {
             // The supplementary groups a named user belongs to, which
             // only a process running as root may take on.
             "initgroups" => {
-                let Some(Object::String(user)) = arguments.first() else {
+                let Some(View::String(user)) = arguments.first().view() else {
                     return Err(method_argument_type_error(
                         "initgroups",
                         "String",
@@ -218,7 +219,7 @@ impl VirtualMachine {
                 return Ok(Some(current_groups()));
             }
             "groups=" => {
-                let Some(Object::Array(wanted)) = arguments.first() else {
+                let Some(View::Array(wanted)) = arguments.first().view() else {
                     return Err(method_argument_type_error(
                         "groups=",
                         "Array",
@@ -229,8 +230,8 @@ impl VirtualMachine {
                 let held: Vec<libc::gid_t> = wanted
                     .borrow()
                     .iter()
-                    .filter_map(|group| match group {
-                        Object::Int(number) => Some(*number as libc::gid_t),
+                    .filter_map(|group| match group.view() {
+                        View::Int(number) => Some(number as libc::gid_t),
                         _ => None,
                     })
                     .collect();
@@ -244,13 +245,13 @@ impl VirtualMachine {
             // The name this process shows under in a process listing,
             // which Ruby keeps apart from `$0`.
             "setproctitle" => {
-                let title = match arguments.first() {
-                    Some(Object::String(text)) => text.as_str().to_string(),
+                let title = match arguments.first().view() {
+                    Some(View::String(text)) => text.as_str().to_string(),
                     other => {
                         return Err(method_argument_type_error(
                             "setproctitle",
                             "String",
-                            other.unwrap_or(&Object::Nil),
+                            &other.map(View::to_object).unwrap_or(Object::Nil),
                             position,
                         ));
                     }
@@ -264,7 +265,7 @@ impl VirtualMachine {
             // and from the one that started it, which leaves at once.
             "daemon" => {
                 for (given, named) in arguments.iter().zip(["nochdir", "noclose"]) {
-                    if !matches!(given, Object::Bool(_) | Object::Nil) {
+                    if !matches!(given.view(), View::Bool(_) | View::Nil) {
                         let shown = self.get_inspect_representation(given, position)?;
                         return Err(crate::vm::errors::simple_exception(
                             "ArgumentError",
@@ -374,12 +375,12 @@ impl VirtualMachine {
             // `$?` alone. With no child to wait for, the status names a pid
             // of -1 rather than raising.
             "__wait_status__" => {
-                let requested = match arguments.first() {
-                    None | Some(Object::Nil) => -1,
-                    Some(held) => self.process_id_argument(Some(held), position)?,
+                let requested = match arguments.first().view() {
+                    None | Some(View::Nil) => -1,
+                    Some(held) => self.process_id_argument(Some(&held.to_object()), position)?,
                 };
-                let flags = match arguments.get(1) {
-                    Some(Object::Int(held)) => *held as libc::c_int,
+                let flags = match arguments.get(1).view() {
+                    Some(View::Int(held)) => held as libc::c_int,
                     _ => 0,
                 };
                 return Ok(Some(match self.reap_child(requested, flags, position)? {
@@ -393,12 +394,12 @@ impl VirtualMachine {
             "wait" | "waitpid" | "wait2" | "waitpid2" => {
                 // A process id may be spelled by an object that answers
                 // `to_int`, which is what Ruby reads it through.
-                let requested = match arguments.first() {
-                    None | Some(Object::Nil) => -1,
-                    Some(held) => self.process_id_argument(Some(held), position)?,
+                let requested = match arguments.first().view() {
+                    None | Some(View::Nil) => -1,
+                    Some(held) => self.process_id_argument(Some(&held.to_object()), position)?,
                 };
-                let flags = match arguments.get(1) {
-                    Some(Object::Int(held)) => *held as libc::c_int,
+                let flags = match arguments.get(1).view() {
+                    Some(View::Int(held)) => held as libc::c_int,
                     _ => 0,
                 };
                 let (pid, status) =
@@ -428,14 +429,14 @@ impl VirtualMachine {
                 } else {
                     self.clock_resolution(&arguments[0], position)?
                 };
-                let unit = match arguments.get(1) {
-                    None | Some(Object::Nil) => "float_second".to_string(),
-                    Some(Object::Symbol(named)) => named.as_str().to_string(),
+                let unit = match arguments.get(1).view() {
+                    None | Some(View::Nil) => "float_second".to_string(),
+                    Some(View::Symbol(named)) => named.as_str().to_string(),
                     Some(other) => {
                         return Err(method_argument_type_error(
                             method_name,
                             "Symbol",
-                            other,
+                            &other.to_object(),
                             position,
                         ));
                     }
@@ -479,19 +480,28 @@ impl VirtualMachine {
         argument: Option<&Object>,
         position: Position,
     ) -> Result<i32, MetorexError> {
-        match argument {
-            None | Some(Object::Nil) => Ok(0),
-            Some(Object::Int(number)) => Ok(*number as i32),
-            Some(other) if self.answers_to(other, "to_int", position)? => {
-                match self.send_to_object(other.clone(), "to_int", vec![], position)? {
-                    Object::Int(number) => Ok(number as i32),
+        match argument.view() {
+            None | Some(View::Nil) => Ok(0),
+            Some(View::Int(number)) => Ok(number as i32),
+            Some(other) if self.answers_to(&other.to_object(), "to_int", position)? => {
+                match self
+                    .send_to_object(other.to_object(), "to_int", vec![], position)?
+                    .view()
+                {
+                    View::Int(number) => Ok(number as i32),
                     converted => Err(method_argument_type_error(
-                        "Process", "Integer", &converted, position,
+                        "Process",
+                        "Integer",
+                        &converted.to_object(),
+                        position,
                     )),
                 }
             }
             Some(other) => Err(method_argument_type_error(
-                "Process", "Integer", other, position,
+                "Process",
+                "Integer",
+                &other.to_object(),
+                position,
             )),
         }
     }
@@ -536,7 +546,7 @@ impl VirtualMachine {
         is_user: bool,
         position: Position,
     ) -> Result<i32, MetorexError> {
-        if let Some(Object::String(name)) = argument {
+        if let Some(View::String(name)) = argument.view() {
             let Ok(held) = std::ffi::CString::new(name.as_str().as_bytes().to_vec()) else {
                 return Err(method_argument_type_error(
                     method_name,

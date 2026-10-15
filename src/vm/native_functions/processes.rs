@@ -1,6 +1,7 @@
 // Running a program to completion, and finding one to run.
 
 use super::*;
+use crate::object::View;
 
 impl crate::vm::core::VirtualMachine {
     /// A name written at the top level names a method of Object, since that
@@ -8,7 +9,7 @@ impl crate::vm::core::VirtualMachine {
     /// `self` is the Object class itself, so an ordinary send looks for a
     /// class method of that name and finds nothing.
     pub(crate) fn top_level_method(&mut self, receiver: &Object, name: &str) -> Option<Object> {
-        let Object::Class(held) = receiver else {
+        let View::Class(held) = receiver.view() else {
             return None;
         };
         if held.name() != "Object" {

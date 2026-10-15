@@ -1,6 +1,7 @@
 // Running a file, recording it among the features already loaded.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Run a file, recording it in `$LOADED_FEATURES` and skipping it when it
@@ -48,10 +49,10 @@ impl VirtualMachine {
             self.wait_for_the_file_being_loaded(&canonical_path);
         }
         let listed_str = named_path.to_string_lossy().into_owned();
-        let already_in_features = if let Some(Object::Array(arr)) = self.globals().get("\"") {
+        let already_in_features = if let Some(View::Array(arr)) = self.globals().get("\"").view() {
             arr.borrow()
                 .iter()
-                .any(|o| matches!(o, Object::String(s) if *s.as_str() == *listed_str))
+                .any(|o| matches!(o.view(), View::String(s) if *s.as_str() == *listed_str))
         } else {
             false
         };
@@ -62,7 +63,8 @@ impl VirtualMachine {
                 .loading_paths
                 .iter()
                 .any(|(held, _)| held == &canonical_path.to_string_lossy());
-            if in_progress && matches!(self.globals().get("VERBOSE"), Some(Object::Bool(true))) {
+            if in_progress && matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true)))
+            {
                 let message = format!(
                     "warning: loading in progress, circular require considered harmful - {}",
                     named_path.display()
@@ -84,7 +86,7 @@ impl VirtualMachine {
         // require during the file's own body short-circuits.
         if record {
             self.mark_file_loaded(canonical_path.clone());
-            if let Some(Object::Array(arr)) = self.globals().get("\"") {
+            if let Some(View::Array(arr)) = self.globals().get("\"").view() {
                 arr.borrow_mut().push(Object::string(listed_str.clone()));
             }
         }
@@ -134,7 +136,7 @@ impl VirtualMachine {
         // A `frozen_string_literal` comment written after code names nothing,
         // and a verbose run says so.
         if crate::lexer::frozen_string_literal_after_a_token(&source)
-            && matches!(self.globals().get("VERBOSE"), Some(Object::Bool(true)))
+            && matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true)))
         {
             self.emit_warning_to_stderr(
                 "warning: `frozen_string_literal' is ignored after any tokens",
@@ -171,9 +173,9 @@ impl VirtualMachine {
                 // file is no feature that was provided.
                 if record {
                     self.unmark_file_loaded(&canonical_path);
-                    if let Some(Object::Array(features)) = self.globals().get("\"") {
+                    if let Some(View::Array(features)) = self.globals().get("\"").view() {
                         features.borrow_mut().retain(|feature| {
-                            !matches!(feature, Object::String(held) if *held.as_str() == *listed_str)
+                            !matches!(feature.view(), View::String(held) if *held.as_str() == *listed_str)
                         });
                     }
                 }
@@ -291,9 +293,9 @@ impl VirtualMachine {
         // feature list is left as it stood before the attempt.
         if record && result.is_err() {
             self.loaded_files.remove(&canonical_path);
-            if let Some(Object::Array(arr)) = self.globals().get("\"") {
+            if let Some(View::Array(arr)) = self.globals().get("\"").view() {
                 arr.borrow_mut().retain(
-                    |held| !matches!(held, Object::String(name) if *name.as_str() == *listed_str),
+                    |held| !matches!(held.view(), View::String(name) if *name.as_str() == *listed_str),
                 );
             }
         }
@@ -377,7 +379,7 @@ impl VirtualMachine {
         // backtrace gives its lines, so a program asking for a feature by
         // its file name finds it as it would under MRI.
         if self.lists_carried_features
-            && let Some(Object::Array(features)) = self.globals().get("\"")
+            && let Some(View::Array(features)) = self.globals().get("\"").view()
         {
             features
                 .borrow_mut()

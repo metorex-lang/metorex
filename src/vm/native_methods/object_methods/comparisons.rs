@@ -1,20 +1,19 @@
 // Ordering one object against another.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Whether `receiver` is an `Instance` whose class descends from `Module`
     /// (e.g. `class Sub < Module; end; Sub.new`). Such instances are modules
     /// and answer the module-body methods (`class_eval`/`class_exec`/...).
     pub(crate) fn instance_acts_as_module(&self, receiver: &Object) -> bool {
-        let Object::Instance(inst) = receiver else {
+        let View::Instance(inst) = receiver.view() else {
             return false;
         };
         let class = std::rc::Rc::clone(&inst.borrow().class);
-        match self.globals().get("Module") {
-            Some(Object::Class(module_class)) => {
-                self.builtins().is_subclass_of(&class, &module_class)
-            }
+        match self.globals().get("Module").view() {
+            Some(View::Class(module_class)) => self.builtins().is_subclass_of(&class, module_class),
             _ => false,
         }
     }
@@ -34,29 +33,27 @@ impl VirtualMachine {
                 vec![other.clone()],
                 position,
             )?;
-            match result {
-                Object::Int(n) => Ok(Some(n)),
-                Object::Nil => Ok(None),
+            match result.view() {
+                View::Int(n) => Ok(Some(n)),
+                View::Nil => Ok(None),
                 _ => Ok(None),
             }
         } else {
             // Fallback for built-in types
-            match (receiver, other) {
-                (Object::Int(_) | Object::BigInt(_), Object::Int(_) | Object::BigInt(_)) => {
+            match (receiver.view(), other.view()) {
+                (View::Int(_) | View::BigInt(_), View::Int(_) | View::BigInt(_)) => {
                     let a = receiver.as_big_integer().expect("integer-kinded");
                     let b = other.as_big_integer().expect("integer-kinded");
                     Ok(Some(a.cmp(&b) as i64))
                 }
-                (Object::String(a), Object::String(b)) => Ok(Some((**a).cmp(b) as i64)),
-                (Object::Symbol(a), Object::Symbol(b)) => {
-                    Ok(Some(a.as_str().cmp(&b.as_str()) as i64))
-                }
+                (View::String(a), View::String(b)) => Ok(Some((**a).cmp(b) as i64)),
+                (View::Symbol(a), View::Symbol(b)) => Ok(Some(a.as_str().cmp(&b.as_str()) as i64)),
                 // Integers and Floats compare against each other, so a Range
                 // with one of each answers `include?` for either.
-                (Object::Float(_) | Object::Int(_), Object::Float(_) | Object::Int(_)) => {
-                    let to_f = |value: &Object| match value {
-                        Object::Int(n) => *n as f64,
-                        Object::Float(n) => *n,
+                (View::Float(_) | View::Int(_), View::Float(_) | View::Int(_)) => {
+                    let to_f = |value: &Object| match value.view() {
+                        View::Int(n) => n as f64,
+                        View::Float(n) => n,
                         _ => unreachable!(),
                     };
                     Ok(to_f(receiver).partial_cmp(&to_f(other)).map(|o| o as i64))
@@ -82,7 +79,7 @@ impl VirtualMachine {
         include_ancestors: bool,
     ) -> Object {
         let mut names: Vec<String> = Vec::new();
-        if let Object::Class(class_rc) | Object::Module(class_rc) = receiver {
+        if let View::Class(class_rc) | View::Module(class_rc) = receiver.view() {
             let mut current = Some(std::rc::Rc::clone(class_rc));
             while let Some(class) = current {
                 // `def self.name` is stored under the `__class__` convention.

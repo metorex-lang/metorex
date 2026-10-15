@@ -1,6 +1,7 @@
 // The class variables a class holds, and the copies it hands back.
 
 use super::*;
+use crate::object::View;
 
 impl Class {
     /// Set a class variable on this class. Setting an uppercase-named
@@ -26,7 +27,7 @@ impl Class {
         // attached to, likewise changes nothing a lookup has answered yet.
         let answered_nothing = self.method_cache.borrow().is_empty();
         let changes_lookups = match key.as_str() {
-            "__attached__" => !(matches!(value, Object::Instance(_)) && answered_nothing),
+            "__attached__" => !(matches!(value.view(), View::Instance(_)) && answered_nothing),
             "__singleton__" => !answered_nothing,
             _ => false,
         };

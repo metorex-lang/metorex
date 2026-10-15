@@ -6,6 +6,7 @@ use crate::class::Class;
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 use crate::vm::utils::position_to_location;
 use std::rc::Rc;
@@ -20,8 +21,8 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        let class_rc = match receiver {
-            Object::Class(c) | Object::Module(c) => c,
+        let class_rc = match receiver.view() {
+            View::Class(c) | View::Module(c) => c,
             _ => return Ok(None),
         };
 
@@ -81,8 +82,8 @@ impl VirtualMachine {
             );
         }
         Object::Bool(matches!(
-            self.environment().get("block_given?"),
-            Some(Object::Bool(true))
+            self.environment().get("block_given?").view(),
+            Some(View::Bool(true))
         ))
     }
 
@@ -95,8 +96,8 @@ impl VirtualMachine {
     /// Say whether a warning category is on, which `-W:name` and
     /// `-W:no-name` decide for a run.
     pub fn set_warning_category(&mut self, category: &str, enabled: bool) {
-        if let Some(Object::Module(warning) | Object::Class(warning)) =
-            self.globals().get("Warning")
+        if let Some(View::Module(warning) | View::Class(warning)) =
+            self.globals().get("Warning").view()
         {
             warning.set_class_var(category_key(category), Object::Bool(enabled));
         }
@@ -105,8 +106,8 @@ impl VirtualMachine {
     /// `Warning[:category]` — a category no one has set reads as its own
     /// default, and one Ruby does not know reads as off.
     pub(crate) fn warning_category_enabled(&self, category: &str) -> bool {
-        match self.warning_category_slot(category) {
-            Some(Object::Bool(enabled)) => enabled,
+        match self.warning_category_slot(category).view() {
+            Some(View::Bool(enabled)) => enabled,
             _ => category == "experimental",
         }
     }
@@ -120,8 +121,8 @@ impl VirtualMachine {
     /// The stored `Warning[:category]` value, if the `Warning` module and the
     /// category are both present.
     fn warning_category_slot(&self, category: &str) -> Option<Object> {
-        match self.globals().get("Warning") {
-            Some(Object::Module(warning)) | Some(Object::Class(warning)) => {
+        match self.globals().get("Warning").view() {
+            Some(View::Module(warning)) | Some(View::Class(warning)) => {
                 warning.get_class_var(&category_key(category))
             }
             _ => None,
@@ -143,8 +144,8 @@ impl VirtualMachine {
         // `Warning[]`/`Warning[]=` are native, so they are invisible to the
         // generic `respond_to?`. Other names fall through to it.
         if matches!(method_name, "respond_to?" | "respond_to_missing?") {
-            let named = match arguments.first() {
-                Some(Object::Symbol(name) | Object::String(name)) => name.as_str().to_string(),
+            let named = match arguments.first().view() {
+                Some(View::Symbol(name) | View::String(name)) => name.as_str().to_string(),
                 _ => return Ok(None),
             };
             return Ok(match named.as_str() {
@@ -183,7 +184,7 @@ impl VirtualMachine {
         argument: Option<&Object>,
         position: Position,
     ) -> Result<String, MetorexError> {
-        let Some(Object::Symbol(name)) = argument else {
+        let Some(View::Symbol(name)) = argument.view() else {
             let given = argument.cloned().unwrap_or(Object::Nil);
             let message = format!(
                 "no implicit conversion of {} into Symbol",

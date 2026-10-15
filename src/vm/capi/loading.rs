@@ -3,6 +3,7 @@
 
 use crate::error::MetorexError;
 use crate::lexer::Position;
+use crate::object::OptionView;
 use crate::vm::VirtualMachine;
 use std::ffi::{CStr, CString};
 use std::path::Path;
@@ -116,7 +117,7 @@ impl VirtualMachine {
             "so"
         };
         if self.lists_carried_features
-            && let Some(crate::object::Object::Array(features)) = self.globals().get("\"")
+            && let Some(crate::object::View::Array(features)) = self.globals().get("\"").view()
         {
             features
                 .borrow_mut()

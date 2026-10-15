@@ -1,6 +1,7 @@
 // Rewriting the keys or the values, in place or into a copy.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Rewriting the keys or the values, in place or into a copy.
@@ -18,9 +19,9 @@ impl VirtualMachine {
             // block answers one for every key it does not.
             "transform_keys" | "transform_keys!" => {
                 let in_place = method_name == "transform_keys!";
-                let mapping = match arguments.first() {
+                let mapping = match arguments.first().view() {
                     None => None,
-                    Some(Object::Dict(given)) => Some(Rc::clone(given)),
+                    Some(View::Dict(given)) => Some(Rc::clone(given)),
                     Some(other) => {
                         return Err(crate::vm::errors::simple_exception(
                             "TypeError",
@@ -29,7 +30,7 @@ impl VirtualMachine {
                         ));
                     }
                 };
-                let has_block = matches!(self.pending_block, Some(Object::Block(_)));
+                let has_block = matches!(self.pending_block.view(), Some(View::Block(_)));
                 if in_place && (has_block || mapping.is_some()) && self.object_is_frozen(receiver) {
                     return Err(self.frozen_modification_error(receiver, position));
                 }
@@ -38,8 +39,9 @@ impl VirtualMachine {
                         .make_enumerator(receiver, method_name, arguments, position)
                         .map(Some);
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => Some(block),
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(block)) => Some(block),
                     _ => None,
                 };
                 let replacements: indexmap::IndexMap<String, Object> = match &mapping {
@@ -126,7 +128,8 @@ impl VirtualMachine {
             // `transform_values` rebuilds the hash with what the block
             // answers for each value.
             "transform_values" => {
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     return self
                         .make_enumerator(receiver, method_name, arguments, position)
                         .map(Some);
@@ -139,7 +142,7 @@ impl VirtualMachine {
                     } else {
                         key.clone()
                     };
-                    let answered = self.execute_block_callable(&block, vec![subject], position)?;
+                    let answered = self.execute_block_callable(block, vec![subject], position)?;
                     let (new_key, new_value) = if transforming_values {
                         (key, answered)
                     } else {
@@ -165,12 +168,13 @@ impl VirtualMachine {
                 // Without a block it answers an Enumerator first, which Ruby
                 // allows even on a frozen hash.
                 if in_place
-                    && matches!(self.pending_block, Some(Object::Block(_)))
+                    && matches!(self.pending_block.view(), Some(View::Block(_)))
                     && self.object_is_frozen(receiver)
                 {
                     return Err(self.frozen_modification_error(receiver, position));
                 }
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     return self
                         .make_enumerator(receiver, method_name, arguments, position)
                         .map(Some);
@@ -179,7 +183,7 @@ impl VirtualMachine {
                 let mut kept = indexmap::IndexMap::new();
                 for (key, value) in self.hash_pairs(dict_rc) {
                     let verdict = self.execute_block_callable(
-                        &block,
+                        block,
                         vec![key.clone(), value.clone()],
                         position,
                     )?;

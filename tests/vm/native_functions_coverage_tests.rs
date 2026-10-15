@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -198,7 +199,7 @@ fn assert_raises_with_args_errors() {
 fn assert_raises_block_raises_passes() {
     let result = run(r#"assert_raises { raise "oops" }"#);
     // Returns true (the exception was raised as expected).
-    assert!(matches!(result, Some(Object::Bool(true)) | Some(_)));
+    assert!(matches!(result.view(), Some(View::Bool(true)) | Some(_)));
 }
 
 // ── __method__ outside method ────────────────────────────────────────────────
@@ -219,7 +220,7 @@ def my_fn
 end
 my_fn
 "#);
-    assert!(matches!(result, Some(Object::Symbol(_))));
+    assert!(matches!(result.view(), Some(View::Symbol(_))));
 }
 
 // ── caller returns empty array ───────────────────────────────────────────────
@@ -227,8 +228,8 @@ my_fn
 #[test]
 fn caller_returns_empty_array() {
     let result = run(r#"caller()"#);
-    match result {
-        Some(Object::Array(a)) => assert_eq!(a.borrow().len(), 0),
+    match result.view() {
+        Some(View::Array(a)) => assert_eq!(a.borrow().len(), 0),
         other => panic!("expected Array, got {:?}", other),
     }
 }
@@ -238,8 +239,8 @@ fn caller_returns_empty_array() {
 #[test]
 fn top_level_to_s_returns_main() {
     let result = run(r#"to_s"#);
-    match result {
-        Some(Object::String(s)) => assert_eq!(&*s.as_str(), "main"),
+    match result.view() {
+        Some(View::String(s)) => assert_eq!(&*s.as_str(), "main"),
         other => panic!("expected 'main', got {:?}", other),
     }
 }
@@ -249,8 +250,8 @@ fn top_level_to_s_returns_main() {
 #[test]
 fn format_with_args() {
     let result = run(r#"format("%d", 42)"#);
-    match result {
-        Some(Object::String(s)) => assert!(s.as_str().contains("42")),
+    match result.view() {
+        Some(View::String(s)) => assert!(s.as_str().contains("42")),
         other => panic!("expected String, got {:?}", other),
     }
 }
@@ -258,8 +259,8 @@ fn format_with_args() {
 #[test]
 fn format_with_multi_args_as_array() {
     let result = run(r#"format("%d-%d", 1, 2)"#);
-    match result {
-        Some(Object::String(s)) => assert!(s.as_str().contains("1") && s.as_str().contains("2")),
+    match result.view() {
+        Some(View::String(s)) => assert!(s.as_str().contains("1") && s.as_str().contains("2")),
         other => panic!("expected String, got {:?}", other),
     }
 }
@@ -282,8 +283,8 @@ end
 private "foo_for_priv"
 "#);
     assert!(matches!(
-        result,
-        Some(Object::Symbol(_)) | Some(Object::Array(_))
+        result.view(),
+        Some(View::Symbol(_)) | Some(View::Array(_))
     ));
 }
 
@@ -297,8 +298,8 @@ private :foo_for_pub
 public :foo_for_pub
 "#);
     assert!(matches!(
-        result,
-        Some(Object::Symbol(_)) | Some(Object::Array(_))
+        result.view(),
+        Some(View::Symbol(_)) | Some(View::Array(_))
     ));
 }
 
@@ -314,8 +315,8 @@ end
 private [:a, :b]
 "#);
     assert!(matches!(
-        result,
-        Some(Object::Symbol(_)) | Some(Object::Array(_))
+        result.view(),
+        Some(View::Symbol(_)) | Some(View::Array(_))
     ));
 }
 

@@ -1,6 +1,7 @@
 // The callbacks a class fires as methods and modules are added to it.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Invoke a `method_added` / `singleton_method_added` hook on `class_rc` if
@@ -22,8 +23,10 @@ impl VirtualMachine {
         if let Some(method) = class_rc.find_method(&format!("__class__{}", name)) {
             return Some(method);
         }
-        if let Some(Object::Method(method)) = class_rc.get_class_var(&format!("__ext__{}", name)) {
-            return Some(method);
+        if let Some(View::Method(method)) =
+            class_rc.get_class_var(&format!("__ext__{}", name)).view()
+        {
+            return Some(method.clone());
         }
         let mut cursor = Some(Rc::clone(class_rc));
         while let Some(current) = cursor {
@@ -52,11 +55,10 @@ impl VirtualMachine {
                 // A refinement's body names the class it refines, so a name
                 // aliased there is the one that class answers to rather than
                 // one the refinement holds of its own.
-                let Some(Object::Class(refined) | Object::Module(refined)) = module_rc
-                    .get_class_var(
-                        crate::vm::native_methods::module_methods::REFINEMENT_TARGET_KEY,
-                    )
-                else {
+                let viewed = module_rc.get_class_var(
+                    crate::vm::native_methods::module_methods::REFINEMENT_TARGET_KEY,
+                );
+                let Some(View::Class(refined) | View::Module(refined)) = viewed.view() else {
                     return None;
                 };
                 refined.find_method(name)
@@ -64,8 +66,8 @@ impl VirtualMachine {
             .or_else(|| {
                 // Kernel methods live on Object, which a module does not
                 // inherit from; `module_function :require` copies from there.
-                match self.globals().get("Object") {
-                    Some(Object::Class(object_class)) => object_class.find_method(name),
+                match self.globals().get("Object").view() {
+                    Some(View::Class(object_class)) => object_class.find_method(name),
                     _ => None,
                 }
             });
@@ -142,8 +144,8 @@ impl VirtualMachine {
     /// The class or module a singleton class is attached to, when it is one.
     pub(crate) fn attached_class_of(&self, class_rc: &Rc<Class>) -> Option<Rc<Class>> {
         class_rc.get_class_var("__singleton__")?;
-        match class_rc.get_class_var("__attached__") {
-            Some(Object::Class(attached) | Object::Module(attached)) => Some(attached),
+        match class_rc.get_class_var("__attached__").view() {
+            Some(View::Class(attached) | View::Module(attached)) => Some(attached.clone()),
             _ => None,
         }
     }
@@ -200,8 +202,8 @@ impl VirtualMachine {
             && class_rc.get_class_var("__singleton__").is_some()
             && let Some(attached) = class_rc.get_class_var("__attached__")
         {
-            let attached_class = match &attached {
-                Object::Class(c) | Object::Module(c) => Some(Rc::clone(c)),
+            let attached_class = match attached.view() {
+                View::Class(c) | View::Module(c) => Some(Rc::clone(c)),
                 _ => None,
             };
             if let Some(target_class) = attached_class {

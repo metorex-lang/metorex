@@ -3,6 +3,7 @@
 use metorex::ast::{Expression, Parameter, Statement};
 use metorex::lexer::Position;
 use metorex::object::Object;
+use metorex::object::View;
 use metorex::vm::VirtualMachine;
 
 // Helper function to create a test position
@@ -29,7 +30,7 @@ fn test_simple_class_definition() {
 
     // Check that Point is defined as a Class object
     let point_class = vm.environment().get("Point").unwrap();
-    assert!(matches!(point_class, Object::Class(_)));
+    assert!(matches!(point_class.view(), View::Class(_)));
 }
 
 #[test]
@@ -88,7 +89,7 @@ fn test_class_with_initialize_method() {
 
     // Verify class was created
     let point_class = vm.environment().get("Point").unwrap();
-    assert!(matches!(point_class, Object::Class(_)));
+    assert!(matches!(point_class.view(), View::Class(_)));
 }
 
 #[test]
@@ -130,7 +131,7 @@ fn test_create_instance_without_initialize() {
 
     // Check that s is an instance
     let s = vm.environment().get("s").unwrap();
-    assert!(matches!(s, Object::Instance(_)));
+    assert!(matches!(s.view(), View::Instance(_)));
 }
 
 #[test]
@@ -218,7 +219,7 @@ fn test_create_instance_with_initialize() {
 
     // Check that p is an instance
     let p = vm.environment().get("p").unwrap();
-    assert!(matches!(p, Object::Instance(_)));
+    assert!(matches!(p.view(), View::Instance(_)));
 }
 
 #[test]
@@ -530,10 +531,10 @@ fn test_class_with_inheritance() {
 
     // Check that d is an instance of Derived
     let d = vm.environment().get("d").unwrap();
-    assert!(matches!(d, Object::Instance(_)));
+    assert!(matches!(d.view(), View::Instance(_)));
 
     // Verify it's a Derived instance
-    if let Object::Instance(instance_rc) = d {
+    if let View::Instance(instance_rc) = d.view() {
         let instance = instance_rc.borrow();
         assert_eq!(instance.class_name(), "Derived");
         // Verify initialize was called and @x was set

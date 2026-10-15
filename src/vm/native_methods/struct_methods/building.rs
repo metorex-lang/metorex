@@ -1,6 +1,7 @@
 // `Struct.new`, and the class it hands back.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// `Struct.new(...)` on Struct itself, plus the class-level methods a
@@ -51,8 +52,8 @@ impl VirtualMachine {
             "members" => Ok(Some(symbols(&members))),
             // `keyword_init?` reports a truthy setting as `true` and keeps
             // `nil` for a struct that never named one.
-            "keyword_init?" => Ok(Some(match keyword_init(class_rc) {
-                Object::Nil => Object::Nil,
+            "keyword_init?" => Ok(Some(match keyword_init(class_rc).view() {
+                View::Nil => Object::Nil,
                 other => Object::Bool(other.is_truthy()),
             })),
             _ => Ok(None),
@@ -74,16 +75,16 @@ impl VirtualMachine {
         let mut index = 0;
         let mut constant_name = None;
         if let Some(first) = positional.first() {
-            match first {
-                Object::Nil => index = 1,
-                Object::String(held) => {
+            match first.view() {
+                View::Nil => index = 1,
+                View::String(held) => {
                     constant_name = Some(held.as_str().to_string());
                     index = 1;
                 }
-                Object::Symbol(_) => {}
-                other if self.answers_to(other, "to_str", position)? => {
-                    let named = self.send_to_object(other.clone(), "to_str", vec![], position)?;
-                    if let Object::String(held) = named {
+                View::Symbol(_) => {}
+                _ if self.answers_to(first, "to_str", position)? => {
+                    let named = self.send_to_object(first.clone(), "to_str", vec![], position)?;
+                    if let View::String(held) = named.view() {
                         constant_name = Some(held.as_str().to_string());
                         index = 1;
                     }
@@ -104,9 +105,9 @@ impl VirtualMachine {
 
         let mut members: Vec<String> = Vec::new();
         for argument in &positional[index..] {
-            let named = match argument {
-                Object::Symbol(name) => name.as_str().to_string(),
-                Object::String(name) => name.as_str().to_string(),
+            let named = match argument.view() {
+                View::Symbol(name) => name.as_str().to_string(),
+                View::String(name) => name.as_str().to_string(),
                 other => {
                     return Err(MetorexError::type_error(
                         format!("{} is not a symbol nor a string", other),
@@ -123,7 +124,8 @@ impl VirtualMachine {
             members.push(named);
         }
 
-        let Some(Object::Class(struct_class)) = self.globals().get("Struct") else {
+        let viewed = self.globals().get("Struct");
+        let Some(View::Class(struct_class)) = viewed.view() else {
             return Err(MetorexError::runtime_error(
                 "Struct is not defined",
                 position_to_location(position),
@@ -183,8 +185,8 @@ impl VirtualMachine {
         if let Some(name) = constant_name {
             // A struct built from a subclass of Struct registers its constant
             // on that subclass, which is where a program looks for it.
-            let owner = if Rc::ptr_eq(parent, &struct_class) {
-                Rc::clone(&struct_class)
+            let owner = if Rc::ptr_eq(parent, struct_class) {
+                Rc::clone(struct_class)
             } else {
                 Rc::clone(parent)
             };
@@ -203,8 +205,8 @@ impl VirtualMachine {
                 .set(qualified, Object::Class(Rc::clone(&generated)));
         }
 
-        if let Some(Object::Block(block)) = self.pending_block.take() {
-            self.apply_block_as_class_body(&generated, &block, position)?;
+        if let Some(View::Block(block)) = self.pending_block.take().view() {
+            self.apply_block_as_class_body(&generated, block, position)?;
         }
 
         Ok(Object::Class(generated))
@@ -224,8 +226,8 @@ impl VirtualMachine {
         // A struct built with `keyword_init: true` takes one Hash, written
         // either as keywords or as a Hash of its own.
         if named_only && keywords.is_empty() && positional.len() == 1 {
-            let Some(Object::Dict(held)) = crate::vm::native_methods::as_dict(&positional[0])
-            else {
+            let viewed = crate::vm::native_methods::as_dict(&positional[0]);
+            let Some(View::Dict(held)) = viewed.view() else {
                 return Err(argument_error(
                     format!(
                         "wrong number of arguments (given {}, expected 0)",

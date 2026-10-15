@@ -1,6 +1,7 @@
 // Emptying a hash, and the copies that keep only some of its entries.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Emptying a hash, and the copies that keep only some of its entries.
@@ -56,7 +57,7 @@ impl VirtualMachine {
                 let pairs = self.hash_pairs(dict_rc);
                 let dropped: Vec<String> = pairs
                     .iter()
-                    .filter(|(_, value)| matches!(value, Object::Nil))
+                    .filter(|(_, value)| matches!(value.view(), View::Nil))
                     .map(|(key, _)| crate::vm::utils::object_to_dict_key(key).unwrap_or_default())
                     .collect();
                 if dropped.is_empty() {
@@ -87,7 +88,7 @@ impl VirtualMachine {
                     }
                 }
                 for (key, value) in self.hash_pairs(dict_rc) {
-                    if matches!(value, Object::Nil) {
+                    if matches!(value.view(), View::Nil) {
                         continue;
                     }
                     let rendered = crate::vm::utils::object_to_dict_key(&key).unwrap_or_default();
@@ -137,8 +138,9 @@ impl VirtualMachine {
             // `values_at` answers the values the named keys hold, and
             // `fetch_values` raises for a key the hash has no entry for.
             "values_at" | "fetch_values" => {
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => Some(block),
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(block)) => Some(block),
                     _ => None,
                 };
                 let mut picked = Vec::with_capacity(arguments.len());

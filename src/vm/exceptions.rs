@@ -4,6 +4,7 @@
 use super::ControlFlow;
 use super::core::VirtualMachine;
 use super::utils::*;
+use crate::object::{OptionView, View};
 
 use crate::ast::Statement;
 use crate::error::MetorexError;
@@ -25,22 +26,22 @@ impl VirtualMachine {
             // If it's already an Exception object, use it directly
             // If it's a String, create a RuntimeError exception
             // If it's a Class (exception class), instantiate it
-            match value {
-                Object::Exception(_) => value,
-                given @ Object::String(_) => runtime_error_from(&given),
-                Object::Class(class) => {
+            match value.view() {
+                View::Exception(_) => value,
+                View::String(_) => runtime_error_from(&value),
+                View::Class(class) => {
                     // Instantiated the way `raise` does it, so the class
                     // travels with the exception and a subclass that writes
                     // its own `initialize` or `to_s` is honored.
                     let built =
-                        self.invoke_callable(Object::Class(Rc::clone(&class)), vec![], position)?;
+                        self.invoke_callable(Object::Class(Rc::clone(class)), vec![], position)?;
                     // An anonymous subclass records the nearest named
                     // ancestor, so `rescue StopIteration` still matches a
                     // `Class.new StopIteration`.
                     if class.ruby_name().is_empty()
-                        && let Object::Exception(details) = &built
+                        && let View::Exception(details) = built.view()
                     {
-                        let mut named = class;
+                        let mut named = class.clone();
                         while named.ruby_name().is_empty() {
                             match named.superclass() {
                                 Some(parent) => named = parent,
@@ -63,8 +64,8 @@ impl VirtualMachine {
             // Bare `raise` re-raises `$!`. With nothing to re-raise Ruby
             // raises `RuntimeError: unhandled exception`, which is what
             // Kernel#raise called with no arguments does too.
-            match self.environment().get("$!") {
-                Some(Object::Exception(_)) => self.environment().get("$!").unwrap(),
+            match self.environment().get("$!").view() {
+                Some(View::Exception(_)) => self.environment().get("$!").unwrap(),
                 _ => Object::exception("RuntimeError", ""),
             }
         };
@@ -75,7 +76,7 @@ impl VirtualMachine {
         }
         // The cause is settled where the exception is raised, so raising it
         // again leaves it with the one it was raised with the first time.
-        if let Object::Exception(cell) = &exception_obj {
+        if let View::Exception(cell) = exception_obj.view() {
             cell.borrow_mut().cause_settled = true;
         }
         // A trace sees the exception on its way up, before anything has had
@@ -107,7 +108,7 @@ impl VirtualMachine {
         let mut cause_settled = false;
         let mut arguments = arguments;
         let without_keywords: Vec<Object>;
-        if let Some(Object::Dict(pairs)) = arguments.last()
+        if let Some(View::Dict(pairs)) = arguments.last().view()
             && pairs.borrow().contains_key("__MX_KWARGS__")
         {
             cause_settled = pairs.borrow().contains_key(":cause");
@@ -141,7 +142,7 @@ impl VirtualMachine {
         }
         // A message reads as one only when it stands alone. Anything after it
         // means the first argument was meant to name the exception.
-        if arguments.len() > 1 && matches!(arguments.first(), Some(Object::String(_))) {
+        if arguments.len() > 1 && matches!(arguments.first().view(), Some(View::String(_))) {
             let msg = "exception class/object expected".to_string();
             return Err(MetorexError::UncaughtException {
                 exception: Object::exception("TypeError", msg.clone()),
@@ -151,8 +152,8 @@ impl VirtualMachine {
         }
         // The cause names an exception, or nothing at all.
         if !matches!(
-            named_cause,
-            None | Some(Object::Nil) | Some(Object::Exception(_))
+            named_cause.view(),
+            None | Some(View::Nil) | Some(View::Exception(_))
         ) {
             let msg = "exception object expected".to_string();
             return Err(MetorexError::UncaughtException {
@@ -165,27 +166,25 @@ impl VirtualMachine {
         // Whether the exception being raised is one that was raised before,
         // which keeps the cause it was raised with then.
         let mut re_raised = false;
-        let exception = match arguments.first() {
-            None => match self.environment().get("$!") {
+        let exception = match arguments.first().view() {
+            None => match self.environment().get("$!").view() {
                 // An exception raised again keeps the cause it was raised
                 // with the first time, and takes on no other.
-                Some(exception @ Object::Exception(_)) => {
+                Some(View::Exception(cell)) => {
                     re_raised = true;
-                    if let Object::Exception(cell) = &exception {
-                        cell.borrow_mut().cause_settled = true;
-                    }
-                    exception
+                    cell.borrow_mut().cause_settled = true;
+                    Object::Exception(cell.clone())
                 }
                 _ => Object::exception("RuntimeError", ""),
             },
             // An exception is asked for the one to raise through its own
             // `exception`, handed the message when there is one, which is
             // where a copy carrying that message comes from.
-            Some(Object::Exception(cell)) => {
+            Some(View::Exception(cell)) => {
                 let existing = Object::Exception(Rc::clone(cell));
                 let handed: Vec<Object> = message.into_iter().collect();
                 let answered = self.send_to_object(existing, "exception", handed, position)?;
-                let Object::Exception(answered_cell) = &answered else {
+                let View::Exception(answered_cell) = answered.view() else {
                     let msg = "exception object expected".to_string();
                     return Err(MetorexError::UncaughtException {
                         exception: Object::exception("TypeError", msg.clone()),
@@ -198,15 +197,16 @@ impl VirtualMachine {
                 re_raised = answered_cell.borrow().cause_settled;
                 answered
             }
-            Some(given @ Object::String(_)) => runtime_error_from(given),
+            Some(given @ View::String(_)) => runtime_error_from(&given.to_object()),
             // An exception class is instantiated with the message.
-            Some(value @ Object::Class(_)) => {
+            Some(value @ View::Class(_)) => {
                 let call_arguments = message.into_iter().collect();
-                self.invoke_callable(value.clone(), call_arguments, position)?
+                self.invoke_callable(value.to_object(), call_arguments, position)?
             }
             Some(value) => {
                 // Any other receiver is asked for an exception of its own.
-                let Some((class, method)) = self.lookup_method(value, "exception") else {
+                let Some((class, method)) = self.lookup_method(&value.to_object(), "exception")
+                else {
                     let msg = "exception class/object expected".to_string();
                     return Err(MetorexError::UncaughtException {
                         exception: Object::exception("TypeError", msg.clone()),
@@ -215,10 +215,10 @@ impl VirtualMachine {
                     });
                 };
                 let call_arguments = message.into_iter().collect();
-                self.invoke_method(class, method, value.clone(), call_arguments, position)?
+                self.invoke_method(class, method, value.to_object(), call_arguments, position)?
             }
         };
-        if !matches!(exception, Object::Exception(_)) {
+        if !matches!(exception.view(), View::Exception(_)) {
             let msg = "exception object expected".to_string();
             return Err(MetorexError::UncaughtException {
                 exception: Object::exception("TypeError", msg.clone()),
@@ -231,23 +231,23 @@ impl VirtualMachine {
         // A program's own `set_backtrace` is handed the backtrace named in
         // the call.
         let mut written_trace = written_trace;
-        if let Some(trace @ Object::Array(_)) = &written_trace
-            && matches!(exception, Object::Exception(_))
+        if let Some(trace @ View::Array(_)) = written_trace.view()
+            && matches!(exception.view(), View::Exception(_))
             && let Some((_, method)) = self.lookup_method(&exception, "set_backtrace")
             && crate::vm::method_execution::written_by_the_program(&method)
         {
             self.send_to_object(
                 exception.clone(),
                 "set_backtrace",
-                vec![trace.clone()],
+                vec![trace.to_object()],
                 position,
             )?;
             written_trace = None;
         }
         // A third argument names the backtrace the exception carries, in
         // place of the one the call stack would give it.
-        if let Some(Object::Array(entries)) = written_trace
-            && let Object::Exception(cell) = &exception
+        if let Some(View::Array(entries)) = written_trace.view()
+            && let View::Exception(cell) = exception.view()
         {
             // A list of Locations names where the exception came from the way
             // `caller_locations` does, and the exception hands those back
@@ -256,7 +256,7 @@ impl VirtualMachine {
                 && entries
                     .borrow()
                     .iter()
-                    .all(|held| matches!(held, Object::Instance(_)));
+                    .all(|held| matches!(held.view(), View::Instance(_)));
             if all_locations {
                 let listed: Vec<String> = entries
                     .borrow()
@@ -265,31 +265,31 @@ impl VirtualMachine {
                     .collect();
                 let mut held = cell.borrow_mut();
                 held.backtrace = Some(listed);
-                held.backtrace_locations_array = Some(Object::Array(Rc::clone(&entries)));
+                held.backtrace_locations_array = Some(Object::Array(Rc::clone(entries)));
             } else {
                 let listed: Vec<String> = entries
                     .borrow()
                     .iter()
-                    .map(|held| match held {
-                        Object::String(text) => text.as_str().to_string(),
+                    .map(|held| match held.view() {
+                        View::String(text) => text.as_str().to_string(),
                         other => other.to_string(),
                     })
                     .collect();
                 cell.borrow_mut().backtrace = Some(listed);
             }
         }
-        if let Object::Exception(cell) = &exception {
+        if let View::Exception(cell) = exception.view() {
             if cause_settled {
                 cell.borrow_mut().cause_settled = true;
             }
-            match named_cause {
+            match named_cause.view() {
                 // An exception is not its own cause, so naming itself names
                 // nothing.
-                Some(Object::Exception(held)) if Rc::ptr_eq(&held, cell) => {
+                Some(View::Exception(held)) if Rc::ptr_eq(held, cell) => {
                     cell.borrow_mut().cause = None;
                 }
-                Some(Object::Exception(held)) => {
-                    if causes_run_in_a_circle(&held, cell) {
+                Some(View::Exception(held)) => {
+                    if causes_run_in_a_circle(held, cell) {
                         let msg = "circular causes".to_string();
                         return Err(MetorexError::UncaughtException {
                             exception: Object::exception("ArgumentError", msg.clone()),
@@ -297,7 +297,7 @@ impl VirtualMachine {
                             message: msg,
                         });
                     }
-                    cell.borrow_mut().cause = Some(Box::new(Object::Exception(held)));
+                    cell.borrow_mut().cause = Some(Box::new(Object::Exception(held.clone())));
                 }
                 // `cause: nil` asks for no cause to be set. An exception
                 // raised before keeps the one it already had.
@@ -310,14 +310,14 @@ impl VirtualMachine {
             // handled where it is raised as its cause, never itself.
             let unsettled = !cell.borrow().cause_settled && cell.borrow().cause.is_none();
             if unsettled
-                && let Some(active @ Object::Exception(_)) = self.globals().get("!")
-                && let Object::Exception(active_cell) = &active
+                && let Some(active @ View::Exception(_)) = self.globals().get("!").view()
+                && let View::Exception(active_cell) = active
                 && !Rc::ptr_eq(active_cell, cell)
             {
-                cell.borrow_mut().cause = Some(Box::new(active));
+                cell.borrow_mut().cause = Some(Box::new(active.to_object()));
             }
         }
-        if let Object::Exception(cell) = &exception {
+        if let View::Exception(cell) = exception.view() {
             cell.borrow_mut().cause_settled = true;
         }
         Ok(exception)
@@ -326,8 +326,12 @@ impl VirtualMachine {
     /// How a Location writes itself, which is the line a backtrace shows for
     /// it.
     fn backtrace_location_text(&mut self, held: &Object) -> String {
-        match self.send_to_object(held.clone(), "to_s", Vec::new(), Position::new(0, 0, 0)) {
-            Ok(Object::String(text)) => text.as_str().to_string(),
+        match self
+            .send_to_object(held.clone(), "to_s", Vec::new(), Position::new(0, 0, 0))
+            .as_ref()
+            .map(Object::view)
+        {
+            Ok(View::String(text)) => text.as_str().to_string(),
             _ => held.to_string(),
         }
     }
@@ -340,8 +344,8 @@ impl VirtualMachine {
     ) -> Object {
         // The native methods running are listed between the frames of the
         // Ruby code around them, each named as MRI names it.
-        let flagged = match &exception {
-            Object::Exception(held) if held.borrow().backtrace.is_none() => {
+        let flagged = match exception.view() {
+            View::Exception(held) if held.borrow().backtrace.is_none() => {
                 self.frames_with_native_flags()
             }
             _ => Vec::new(),
@@ -349,7 +353,7 @@ impl VirtualMachine {
         let native_flags: Vec<bool> = flagged.iter().rev().map(|(_, native)| *native).collect();
         let merged: Vec<crate::vm::CallFrame> =
             flagged.into_iter().map(|(frame, _)| frame).collect();
-        if let Object::Exception(exc_ref) = exception {
+        if let View::Exception(exc_ref) = exception.view() {
             let mut exc = exc_ref.borrow_mut();
 
             // Ruby sets `#cause` from the exception a rescue clause is
@@ -357,8 +361,8 @@ impl VirtualMachine {
             if exc.cause.is_none()
                 && !exc.cause_settled
                 && let Some(active) = self.globals().get("!")
-                && let Object::Exception(active_ref) = &active
-                && !Rc::ptr_eq(&exc_ref, active_ref)
+                && let View::Exception(active_ref) = active.view()
+                && !Rc::ptr_eq(exc_ref, active_ref)
             {
                 exc.cause = Some(Box::new(active));
             }
@@ -376,7 +380,7 @@ impl VirtualMachine {
             // raised before or from `set_backtrace`, keeps it.
             if exc.backtrace.is_some() {
                 drop(exc);
-                return Object::Exception(exc_ref);
+                return Object::Exception(exc_ref.clone());
             }
             // Generate stack trace from call stack
             // Ruby's entries read `file:line:in 'label'`, so a backtrace is
@@ -430,7 +434,7 @@ impl VirtualMachine {
             exc.site_columns = columns;
 
             drop(exc); // Release the borrow before returning
-            Object::Exception(exc_ref)
+            Object::Exception(exc_ref.clone())
         } else {
             exception
         }
@@ -486,15 +490,15 @@ impl VirtualMachine {
     /// class, and nothing for a function that is no Kernel method.
     pub(crate) fn native_frame_label(&mut self, native: &crate::vm::NativeFrame) -> Option<String> {
         use crate::vm::native_methods::object_methods::nearest_core_owner;
-        match &native.receiver {
+        match native.receiver.view() {
             None => nearest_core_owner(&["Kernel".to_string()], &native.name)
                 .map(|owner| format!("{owner}#{}", native.name)),
             // A method a class answers as an object, such as `class_eval`,
             // is named by the module defining it, and one of its own, such
             // as `Integer.sqrt`, by the class.
-            Some(receiver @ (Object::Class(class) | Object::Module(class))) => {
+            Some(receiver @ (View::Class(class) | View::Module(class))) => {
                 let owners: Vec<String> = match receiver {
-                    Object::Class(_) => ["Class", "Module", "Object", "Kernel", "BasicObject"],
+                    View::Class(_) => ["Class", "Module", "Object", "Kernel", "BasicObject"],
                     _ => ["Module", "Object", "Kernel", "BasicObject", ""],
                 }
                 .iter()
@@ -502,7 +506,7 @@ impl VirtualMachine {
                 .map(|owner| owner.to_string())
                 .collect();
                 // MRI runs `Class#new` without a frame of its own.
-                if matches!(receiver, Object::Class(_)) && native.name == "new" {
+                if matches!(receiver, View::Class(_)) && native.name == "new" {
                     return None;
                 }
                 match nearest_core_owner(&owners, &native.name) {
@@ -511,7 +515,7 @@ impl VirtualMachine {
                 }
             }
             Some(receiver) => {
-                let class = Object::Class(self.builtins().class_of(receiver));
+                let class = Object::Class(self.builtins().class_of(&receiver.to_object()));
                 let owners = self.ancestor_names(class, Position::default()).ok()?;
                 let owner = nearest_core_owner(&owners, &native.name)
                     .map(str::to_string)
@@ -807,7 +811,7 @@ impl VirtualMachine {
                 .or_else(|| self.resolve_constant_in_scope(name))
                 .or_else(|| self.resolve_qualified_constant(name));
             if let Some(held) = &held {
-                if !matches!(held, Object::Class(_) | Object::Module(_)) {
+                if !matches!(held.view(), View::Class(_) | View::Module(_)) {
                     return Err(crate::vm::errors::simple_exception(
                         "TypeError",
                         "class or module required for rescue clause",
@@ -841,8 +845,8 @@ impl VirtualMachine {
         exception: &Object,
         position: Position,
     ) -> Result<bool, MetorexError> {
-        let named = match handler {
-            Object::Class(class) | Object::Module(class) => class.name().to_string(),
+        let named = match handler.view() {
+            View::Class(class) | View::Module(class) => class.name().to_string(),
             _ => {
                 return Err(crate::vm::errors::simple_exception(
                     "TypeError",
@@ -862,7 +866,7 @@ impl VirtualMachine {
     /// Whether the program wrote a `===` for this class rather than leaving
     /// it the one every class answers with.
     fn rescue_handler_has_own_case_equality(&self, handler: &Object) -> bool {
-        let (Object::Class(class) | Object::Module(class)) = handler else {
+        let (View::Class(class) | View::Module(class)) = handler.view() else {
             return false;
         };
         if class
@@ -890,8 +894,8 @@ impl VirtualMachine {
         // Get the exception's type name, and the class it carries when it has
         // one. An anonymous or namespaced class has no name to look up later,
         // so the carried class is the only way to place it.
-        let (exception_type_name, exception_class) = match exception {
-            Object::Exception(ex) => {
+        let (exception_type_name, exception_class) = match exception.view() {
+            View::Exception(ex) => {
                 let details = ex.borrow();
                 (details.exception_type.clone(), details.class.clone())
             }
@@ -913,12 +917,13 @@ impl VirtualMachine {
             // naming a class of the enclosing module is found by its simple
             // name the way any other constant reference is.
             // A module catches an exception whose class includes it.
-            let target_class = match self.resolve_constant_in_scope(type_name) {
-                Some(Object::Class(class) | Object::Module(class)) => Some(class),
-                _ => match self.environment().get(type_name) {
-                    Some(Object::Class(class) | Object::Module(class)) => Some(class),
-                    _ => match self.resolve_qualified_constant(type_name) {
-                        Some(Object::Class(class) | Object::Module(class)) => Some(class),
+            let viewed = self.resolve_constant_in_scope(type_name);
+            let target_class = match viewed.view() {
+                Some(View::Class(class) | View::Module(class)) => Some(class.clone()),
+                _ => match self.environment().get(type_name).view() {
+                    Some(View::Class(class) | View::Module(class)) => Some(class.clone()),
+                    _ => match self.resolve_qualified_constant(type_name).view() {
+                        Some(View::Class(class) | View::Module(class)) => Some(class.clone()),
                         _ => None,
                     },
                 },
@@ -926,20 +931,22 @@ impl VirtualMachine {
             let raised_class = exception_class
                 .clone()
                 .or_else(
-                    || match self.resolve_constant_in_scope(&exception_type_name) {
-                        Some(Object::Class(class)) => Some(class),
+                    || match self.resolve_constant_in_scope(&exception_type_name).view() {
+                        Some(View::Class(class)) => Some(class.clone()),
                         _ => None,
                     },
                 )
-                .or_else(|| match self.environment().get(&exception_type_name) {
-                    Some(Object::Class(class)) => Some(class),
-                    _ => None,
-                })
+                .or_else(
+                    || match self.environment().get(&exception_type_name).view() {
+                        Some(View::Class(class)) => Some(class.clone()),
+                        _ => None,
+                    },
+                )
                 // A name written with its namespace, as `Errno::ENOENT` is,
                 // is not a name the environment holds on its own.
                 .or_else(
-                    || match self.resolve_qualified_constant(&exception_type_name) {
-                        Some(Object::Class(class)) => Some(class),
+                    || match self.resolve_qualified_constant(&exception_type_name).view() {
+                        Some(View::Class(class)) => Some(class.clone()),
                         _ => None,
                     },
                 );
@@ -965,8 +972,8 @@ fn causes_run_in_a_circle(
         if Rc::ptr_eq(&held, raised) {
             return true;
         }
-        walked = match held.borrow().cause.as_deref() {
-            Some(Object::Exception(next)) => Some(Rc::clone(next)),
+        walked = match held.borrow().cause.as_deref().view() {
+            Some(View::Exception(next)) => Some(Rc::clone(next)),
             _ => None,
         };
     }
@@ -977,7 +984,7 @@ fn causes_run_in_a_circle(
 /// was, encoding and all, for `message` to answer.
 fn runtime_error_from(given: &Object) -> Object {
     let made = Object::exception("RuntimeError", given.to_string());
-    if let Object::Exception(details) = &made {
+    if let View::Exception(details) = made.view() {
         details
             .borrow_mut()
             .instance_vars

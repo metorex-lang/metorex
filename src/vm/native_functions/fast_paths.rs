@@ -1,6 +1,7 @@
 // Rex's native fast paths, and the guards they run behind.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// `__fast_paths__(on)`: whether the native fast paths run, which Rex
@@ -19,8 +20,8 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let (Some(Object::Class(owner) | Object::Module(owner)), Some(name)) =
-            (arguments.first(), arguments.get(1))
+        let (Some(View::Class(owner) | View::Module(owner)), Some(name)) =
+            (arguments.first().view(), arguments.get(1))
         else {
             return Err(crate::vm::errors::simple_exception(
                 "ArgumentError",
@@ -89,7 +90,7 @@ impl VirtualMachine {
     /// The value the example `receiver` stored for the `let` `name`, when
     /// its memo is Rex's own and holds one.
     fn stored_let_value(&mut self, receiver: &Object, name: &Object) -> Option<Object> {
-        let Object::Instance(example) = receiver else {
+        let View::Instance(example) = receiver.view() else {
             return None;
         };
         let example_class = Rc::clone(&example.borrow().class);
@@ -97,14 +98,15 @@ impl VirtualMachine {
             return None;
         }
         let memo = example.borrow().get_var("__memoized").cloned()?;
-        let Object::Instance(memo) = memo else {
+        let View::Instance(memo) = memo.view() else {
             return None;
         };
         let memo_class = Rc::clone(&memo.borrow().class);
         if !self.answers_as_recorded(&memo_class, "fetch_or_store") {
             return None;
         }
-        let Some(Object::Dict(slots)) = memo.borrow().get_var("memoized").cloned() else {
+        let viewed = memo.borrow().get_var("memoized").cloned();
+        let Some(View::Dict(slots)) = viewed.view() else {
             return None;
         };
         let slot = crate::vm::utils::object_to_dict_key(name)?;
@@ -141,12 +143,11 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let (
-            Some(Object::Instance(populator)),
-            Some(Object::Array(reserved)),
-            Some(metadata_module),
-        ) = (arguments.first(), arguments.get(1), arguments.get(2))
-        else {
+        let (Some(View::Instance(populator)), Some(View::Array(reserved)), Some(metadata_module)) = (
+            arguments.first().view(),
+            arguments.get(1).view(),
+            arguments.get(2),
+        ) else {
             return Ok(Object::Bool(false));
         };
         if !self.fast_paths_enabled {
@@ -159,18 +160,22 @@ impl VirtualMachine {
             }
         }
         let held = |name: &str| populator.borrow().get_var(name).cloned();
-        let (Some(Object::Dict(metadata)), Some(Object::Dict(user_metadata))) =
-            (held("metadata"), held("user_metadata"))
+        let (metadata, user_metadata) = (held("metadata"), held("user_metadata"));
+        let (Some(View::Dict(metadata)), Some(View::Dict(user_metadata))) =
+            (metadata.view(), user_metadata.view())
         else {
             return Ok(Object::Bool(false));
         };
-        let (Some(index_provider), Some(description_args @ Object::Array(_)), Some(block)) = (
+        let (Some(index_provider), Some(description_args), Some(block)) = (
             held("index_provider"),
             held("description_args"),
             held("block"),
         ) else {
             return Ok(Object::Bool(false));
         };
+        if !matches!(description_args.view(), View::Array(_)) {
+            return Ok(Object::Bool(false));
+        }
         let slot = |name: &str| format!(":{name}");
         let user_slots: Vec<String> = user_metadata.borrow().keys().cloned().collect();
         let reserved_slots: Vec<String> = reserved
@@ -184,27 +189,27 @@ impl VirtualMachine {
         {
             return Ok(Object::Bool(false));
         }
-        let Object::Array(arguments_held) = &description_args else {
+        let View::Array(arguments_held) = description_args.view() else {
             return Ok(Object::Bool(false));
         };
         let first_argument = arguments_held.borrow().first().cloned();
-        let description = match first_argument.as_ref() {
+        let description = match first_argument.as_ref().view() {
             None => Object::string(String::new()),
-            Some(text @ Object::String(_)) => text.clone(),
-            Some(Object::Symbol(name)) => Object::string(name.to_string()),
+            Some(text @ View::String(_)) => text.to_object(),
+            Some(View::Symbol(name)) => Object::string(name.to_string()),
             Some(_) => return Ok(Object::Bool(false)),
         };
-        let group = match metadata.borrow().get(&slot("example_group")) {
-            Some(Object::Dict(group)) => Rc::clone(group),
+        let group = match metadata.borrow().get(&slot("example_group")).view() {
+            Some(View::Dict(group)) => Rc::clone(group),
             _ => return Ok(Object::Bool(false)),
         };
         let (group_description, described_class) = {
             let group = group.borrow();
             match (
-                group.get(&slot("full_description")),
+                group.get(&slot("full_description")).view(),
                 group.get(&slot("described_class")),
             ) {
-                (Some(Object::String(text)), Some(described)) => {
+                (Some(View::String(text)), Some(described)) => {
                     (text.as_str().to_string(), described.clone())
                 }
                 _ => return Ok(Object::Bool(false)),
@@ -213,7 +218,7 @@ impl VirtualMachine {
         let full_description = if group_description.is_empty() {
             description.clone()
         } else {
-            let Object::String(text) = &description else {
+            let View::String(text) = description.view() else {
                 return Ok(Object::Bool(false));
             };
             Object::string(format!("{group_description} {}", text.as_str()))
@@ -221,16 +226,16 @@ impl VirtualMachine {
 
         // An example written without a block finds its place from the
         // caller, which the Ruby steps read.
-        if !matches!(block, Object::Block(_)) {
+        if !matches!(block.view(), View::Block(_)) {
             return Ok(Object::Bool(false));
         }
         let source = self.send_to_object(block.clone(), "source_location", Vec::new(), position)?;
-        let (file_path, line_number) = match &source {
-            Object::Array(pair) => {
+        let (file_path, line_number) = match source.view() {
+            View::Array(pair) => {
                 let pair = pair.borrow();
-                match (pair.first(), pair.get(1)) {
-                    (Some(file @ Object::String(_)), Some(Object::Int(line))) => {
-                        (file.clone(), *line)
+                match (pair.first().view(), pair.get(1).view()) {
+                    (Some(file @ View::String(_)), Some(View::Int(line))) => {
+                        (file.to_object(), line)
                     }
                     _ => return Ok(Object::Bool(false)),
                 }
@@ -240,7 +245,7 @@ impl VirtualMachine {
         let relative = self.send_to_object(
             metadata_module.clone(),
             "relative_path",
-            vec![file_path],
+            vec![file_path.clone()],
             position,
         )?;
         let file_class = self.globals().get("File").unwrap_or(Object::Nil);
@@ -248,16 +253,16 @@ impl VirtualMachine {
             self.send_to_object(file_class, "expand_path", vec![relative.clone()], position)?;
         let index =
             self.send_to_object(index_provider, "call", vec![absolute.clone()], position)?;
-        let index = match index {
-            Object::Int(number) => number.to_string(),
+        let index = match index.view() {
+            View::Int(number) => number.to_string(),
             _ => return Ok(Object::Bool(false)),
         };
-        let Object::String(relative_text) = &relative else {
+        let View::String(relative_text) = relative.view() else {
             return Ok(Object::Bool(false));
         };
         let location = Object::string(format!("{}:{line_number}", relative_text.as_str()));
-        let scoped_id = match metadata.borrow().get(&slot("scoped_id")) {
-            Some(Object::String(parent)) => Object::string(format!("{}:{index}", parent.as_str())),
+        let scoped_id = match metadata.borrow().get(&slot("scoped_id")).view() {
+            Some(View::String(parent)) => Object::string(format!("{}:{index}", parent.as_str())),
             Some(_) => return Ok(Object::Bool(false)),
             None => Object::string(index),
         };
@@ -268,7 +273,7 @@ impl VirtualMachine {
 
         let entries = [
             ("block", block),
-            ("description_args", description_args),
+            ("description_args", description_args.clone()),
             ("description", description),
             ("full_description", full_description),
             ("described_class", described_class),
@@ -280,15 +285,10 @@ impl VirtualMachine {
             ("scoped_id", scoped_id),
         ];
         for (name, value) in entries {
-            self.hash_store(
-                &metadata,
-                &Object::symbol(name.to_string()),
-                value,
-                position,
-            )?;
+            self.hash_store(metadata, &Object::symbol(name.to_string()), value, position)?;
         }
-        for (key, value) in self.hash_pairs(&user_metadata) {
-            self.hash_store(&metadata, &key, value, position)?;
+        for (key, value) in self.hash_pairs(user_metadata) {
+            self.hash_store(metadata, &key, value, position)?;
         }
         Ok(Object::Bool(true))
     }
@@ -308,25 +308,25 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         let (
-            Some(Object::Class(group)),
+            Some(View::Class(group)),
             Some(inspect_output),
-            Some(Object::Class(memo_class)),
+            Some(View::Class(memo_class)),
             Some(reentrant_mutex_class),
-            Some(Object::Class(example_group)),
+            Some(View::Class(example_group)),
         ) = (
-            arguments.first(),
+            arguments.first().view(),
             arguments.get(1),
-            arguments.get(2),
+            arguments.get(2).view(),
             arguments.get(3),
-            arguments.get(4),
+            arguments.get(4).view(),
         )
         else {
             return Ok(Object::Nil);
         };
         // A thread-safe memo holds a reentrant mutex, which the class given
         // for one builds.
-        let reentrant_mutex_class = match reentrant_mutex_class {
-            Object::Class(class) => Some(class),
+        let reentrant_mutex_class = match reentrant_mutex_class.view() {
+            View::Class(class) => Some(class),
             _ => None,
         };
         if !self.fast_paths_enabled
@@ -336,7 +336,8 @@ impl VirtualMachine {
         }
         let instance = self.allocate_instance(group, position)?;
         let memo = self.allocate_instance(memo_class, position)?;
-        let (Object::Instance(held), Object::Instance(memo_held)) = (&instance, &memo) else {
+        let (View::Instance(held), View::Instance(memo_held)) = (instance.view(), memo.view())
+        else {
             return Ok(Object::Nil);
         };
         let inspect_output = if inspect_output.is_truthy() {
@@ -351,7 +352,7 @@ impl VirtualMachine {
             .set_var("memoized".to_string(), Object::empty_dict());
         if let Some(reentrant_mutex_class) = reentrant_mutex_class {
             let mutex = self.allocate_instance(reentrant_mutex_class, position)?;
-            if let Object::Instance(mutex_held) = &mutex {
+            if let View::Instance(mutex_held) = mutex.view() {
                 let lock = self.globals().get("Mutex").unwrap_or(Object::Nil);
                 let lock = self.send_to_object(lock, "new", Vec::new(), position)?;
                 let mut mutex_held = mutex_held.borrow_mut();
@@ -474,8 +475,8 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let (Some(Object::Class(owner) | Object::Module(owner)), Some(name)) =
-            (arguments.first(), arguments.get(1))
+        let (Some(View::Class(owner) | View::Module(owner)), Some(name)) =
+            (arguments.first().view(), arguments.get(1))
         else {
             return Ok(Object::Nil);
         };
@@ -495,8 +496,8 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let (Some(Object::Symbol(kind)), Some(Object::Class(matcher_class))) =
-            (arguments.first(), arguments.get(1))
+        let (Some(View::Symbol(kind)), Some(View::Class(matcher_class))) =
+            (arguments.first().view(), arguments.get(1).view())
         else {
             return Ok(Object::Nil);
         };
@@ -553,18 +554,18 @@ impl VirtualMachine {
     ) -> Result<Object, MetorexError> {
         let (
             Some(actual),
-            Some(Object::Instance(matcher)),
-            Some(Object::Nil),
-            Some(Object::Nil),
-            Some(Object::Module(matchers_module)),
-            Some(Object::Class(target_class)),
+            Some(View::Instance(matcher)),
+            Some(View::Nil),
+            Some(View::Nil),
+            Some(View::Module(matchers_module)),
+            Some(View::Class(target_class)),
         ) = (
             arguments.first(),
-            arguments.get(1),
-            arguments.get(2),
-            arguments.get(3),
-            arguments.get(4),
-            arguments.get(5),
+            arguments.get(1).view(),
+            arguments.get(2).view(),
+            arguments.get(3).view(),
+            arguments.get(4).view(),
+            arguments.get(5).view(),
         )
         else {
             return Ok(Object::Nil);
@@ -594,23 +595,30 @@ impl VirtualMachine {
             return Ok(Object::Nil);
         }
         let expected = matcher.borrow().get_var("expected").cloned();
-        let matched = match (kind.as_str(), expected) {
+        let matched = match (kind.as_str(), expected.view()) {
             ("eq", Some(expected)) => {
-                self.send_to_object(actual.clone(), "==", vec![expected], position)?
+                self.send_to_object(actual.clone(), "==", vec![expected.to_object()], position)?
             }
-            ("equal", Some(expected)) => {
-                self.send_to_object(actual.clone(), "equal?", vec![expected], position)?
-            }
+            ("equal", Some(expected)) => self.send_to_object(
+                actual.clone(),
+                "equal?",
+                vec![expected.to_object()],
+                position,
+            )?,
             ("be_truthy", _) => Object::Bool(actual.is_truthy()),
             ("be_nil", _) => self.send_to_object(actual.clone(), "nil?", Vec::new(), position)?,
-            ("match", Some(expected @ Object::Regex(_, _)))
-                if matches!(actual, Object::String(_)) =>
+            ("match", Some(expected @ View::Regex(_, _)))
+                if matches!(actual.view(), View::String(_)) =>
             {
                 if matcher.borrow().get_var("expected_captures").is_some() {
                     return Ok(Object::Nil);
                 }
-                let matched =
-                    self.send_to_object(expected, "===", vec![actual.clone()], position)?;
+                let matched = self.send_to_object(
+                    expected.to_object(),
+                    "===",
+                    vec![actual.clone()],
+                    position,
+                )?;
                 Object::Bool(matched.is_truthy())
             }
             ("include", _) => match self.included_natively(actual, matcher, position)? {
@@ -648,16 +656,17 @@ impl VirtualMachine {
         if held("expected_count").is_some_and(|count| count.is_truthy()) {
             return Ok(None);
         }
-        let Some(Object::Array(expecteds)) = held("expecteds") else {
+        let viewed = held("expecteds");
+        let Some(View::Array(expecteds)) = viewed.view() else {
             return Ok(None);
         };
         let expecteds = expecteds.borrow().clone();
-        match actual {
-            Object::Array(_) => {}
-            Object::String(_)
+        match actual.view() {
+            View::Array(_) => {}
+            View::String(_)
                 if expecteds
                     .iter()
-                    .all(|item| matches!(item, Object::String(_))) => {}
+                    .all(|item| matches!(item.view(), View::String(_))) => {}
             _ => return Ok(None),
         }
         for item in expecteds {
@@ -680,7 +689,8 @@ impl VirtualMachine {
     /// for no space at all. False when the fast paths are off, or
     /// `verify_all` or `reset_all` is not Rex's own.
     pub(crate) fn mock_space_idle(&mut self, arguments: &[Object]) -> Result<Object, MetorexError> {
-        let (Some(space), Some(Object::Class(space_class))) = (arguments.first(), arguments.get(1))
+        let (Some(space), Some(View::Class(space_class))) =
+            (arguments.first(), arguments.get(1).view())
         else {
             return Ok(Object::Bool(false));
         };
@@ -690,15 +700,15 @@ impl VirtualMachine {
         {
             return Ok(Object::Bool(false));
         }
-        let space = match space {
-            Object::Nil => return Ok(Object::Bool(true)),
-            Object::Instance(space) if Rc::ptr_eq(&space.borrow().class, space_class) => space,
+        let space = match space.view() {
+            View::Nil => return Ok(Object::Bool(true)),
+            View::Instance(space) if Rc::ptr_eq(&space.borrow().class, space_class) => space,
             _ => return Ok(Object::Bool(false)),
         };
         let space = space.borrow();
-        let empty = |name: &str| match space.get_var(name) {
-            Some(Object::Dict(table)) => table.borrow().is_empty(),
-            Some(Object::Array(list)) => list.borrow().is_empty(),
+        let empty = |name: &str| match space.get_var(name).view() {
+            Some(View::Dict(table)) => table.borrow().is_empty(),
+            Some(View::Array(list)) => list.borrow().is_empty(),
             _ => false,
         };
         Ok(Object::Bool(

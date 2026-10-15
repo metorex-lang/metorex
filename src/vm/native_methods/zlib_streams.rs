@@ -422,6 +422,7 @@ pub(crate) fn gzip_wrap(bytes: &[u8], name: Option<&str>, stamp: u32) -> Vec<u8>
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::vm::core::VirtualMachine;
 
 impl VirtualMachine {
@@ -432,20 +433,20 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let Some(Object::String(action)) = arguments.first() else {
+        let Some(View::String(action)) = arguments.first().view() else {
             return Err(crate::vm::errors::argument_count_error(
                 crate::vm::errors::Arity::AtLeast(1),
                 arguments.len(),
                 position,
             ));
         };
-        let text = match arguments.get(1) {
-            Some(Object::String(held)) => held.as_str().to_string(),
+        let text = match arguments.get(1).view() {
+            Some(View::String(held)) => held.as_str().to_string(),
             _ => String::new(),
         };
         let bytes = super::pack_format::string_to_bytes(&text);
-        let running = match arguments.get(2) {
-            Some(Object::Int(held)) => *held as u32,
+        let running = match arguments.get(2).view() {
+            Some(View::Int(held)) => held as u32,
             _ => 0,
         };
         let refuse = |what: &str| {
@@ -465,8 +466,8 @@ impl VirtualMachine {
                     .collect(),
             )),
             "deflate" => {
-                let dictionary = match arguments.get(3) {
-                    Some(Object::String(held)) => {
+                let dictionary = match arguments.get(3).view() {
+                    Some(View::String(held)) => {
                         super::pack_format::string_to_bytes(&held.as_str().to_string())
                     }
                     _ => Vec::new(),
@@ -479,8 +480,8 @@ impl VirtualMachine {
             // How much of the stream zlib has handed on after reading what
             // was given with no flush asked for, header included.
             "deflate_handed_on" => {
-                let dictionary = match arguments.get(3) {
-                    Some(Object::String(held)) => {
+                let dictionary = match arguments.get(3).view() {
+                    Some(View::String(held)) => {
                         super::pack_format::string_to_bytes(&held.as_str().to_string())
                     }
                     _ => Vec::new(),
@@ -496,8 +497,8 @@ impl VirtualMachine {
             // What the stream stands for, and the bytes after it that are
             // not part of it, which `Zlib::Inflate` passes through.
             "inflate_part" | "raw_inflate_part" => {
-                let dictionary = match arguments.get(3) {
-                    Some(Object::String(held)) => {
+                let dictionary = match arguments.get(3).view() {
+                    Some(View::String(held)) => {
                         super::pack_format::string_to_bytes(&held.as_str().to_string())
                     }
                     _ => Vec::new(),
@@ -522,8 +523,8 @@ impl VirtualMachine {
             // What a stream that has not all arrived stands for so far. The
             // text names the kind: `zlib`, `raw` or `gzip`.
             "inflate_so_far" => {
-                let dictionary = match arguments.get(3) {
-                    Some(Object::String(held)) => {
+                let dictionary = match arguments.get(3).view() {
+                    Some(View::String(held)) => {
                         super::pack_format::string_to_bytes(&held.as_str().to_string())
                     }
                     _ => Vec::new(),
@@ -558,8 +559,8 @@ impl VirtualMachine {
                 None => Err(refuse("the text")),
             },
             "gzip" => {
-                let name = match arguments.get(3) {
-                    Some(Object::String(held)) => Some(held.as_str().to_string()),
+                let name = match arguments.get(3).view() {
+                    Some(View::String(held)) => Some(held.as_str().to_string()),
                     _ => None,
                 };
                 Ok(super::pack_format::bytes_to_string(&gzip_wrap(

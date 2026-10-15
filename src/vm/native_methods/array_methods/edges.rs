@@ -1,6 +1,7 @@
 // The elements at either end, and removing one by position or value.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The elements at either end, and removing one by position or value.
@@ -113,7 +114,8 @@ impl VirtualMachine {
                     }
                     return Ok(Some(Object::Nil));
                 }
-                let Some(Object::Block(block)) = self.pending_block.take() else {
+                let viewed = self.pending_block.take();
+                let Some(View::Block(block)) = viewed.view() else {
                     return self
                         .make_enumerator(receiver, method_name, arguments, position)
                         .map(Some);
@@ -126,7 +128,7 @@ impl VirtualMachine {
                     let Some(element) = array_rc.borrow().get(index).cloned() else {
                         continue;
                     };
-                    let answer = self.execute_block_callable(&block, vec![element], position)?;
+                    let answer = self.execute_block_callable(block, vec![element], position)?;
                     if answer.is_truthy() {
                         return Ok(Some(Object::Int(index as i64)));
                     }

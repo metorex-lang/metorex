@@ -1,6 +1,7 @@
 // Running a block against the receiver, and the walks a method hands back.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Running a block against the receiver, and the walks a method hands back.
@@ -44,7 +45,7 @@ impl VirtualMachine {
                 let cls = self.builtins().class_of(receiver);
                 let msg = format!("undefined method '=~' for an instance of {}", cls.name());
                 let exc = Object::exception("NoMethodError", msg.clone());
-                if let Object::Exception(cell) = &exc {
+                if let View::Exception(cell) = exc.view() {
                     cell.borrow_mut().name = Some("=~".to_string());
                 }
                 Err(MetorexError::UncaughtException {
@@ -60,12 +61,12 @@ impl VirtualMachine {
             "class_exec" | "module_exec" | "class_eval" | "module_eval"
                 if self.instance_acts_as_module(receiver) =>
             {
-                let inst = match receiver {
-                    Object::Instance(i) => std::rc::Rc::clone(i),
+                let inst = match receiver.view() {
+                    View::Instance(i) => std::rc::Rc::clone(i),
                     _ => unreachable!(),
                 };
-                let existing = match inst.borrow().get_var("__module_body_class__") {
-                    Some(Object::Class(c)) => Some(std::rc::Rc::clone(c)),
+                let existing = match inst.borrow().get_var("__module_body_class__").view() {
+                    Some(View::Class(c)) => Some(std::rc::Rc::clone(c)),
                     _ => None,
                 };
                 let backing = match existing {
@@ -80,14 +81,15 @@ impl VirtualMachine {
                     }
                 };
                 if method_name == "class_exec" || method_name == "module_exec" {
-                    let block = match self.pending_block.take() {
-                        Some(Object::Block(b)) => b,
+                    let viewed = self.pending_block.take();
+                    let block = match viewed.view() {
+                        Some(View::Block(b)) => b,
                         _ => return Err(local_jump_error(method_name, position)),
                     };
                     let result = self.class_exec_block(
                         &backing,
                         receiver.clone(),
-                        &block,
+                        block,
                         arguments.to_vec(),
                         position,
                     )?;
@@ -118,17 +120,20 @@ impl VirtualMachine {
                     None,
                     position,
                 )?;
-                if let (Some(block @ Object::Block(_)), Object::Instance(instance)) =
-                    (sizing, &held)
+                if let (Some(block @ View::Block(_)), View::Instance(instance)) =
+                    (sizing.view(), held.view())
                 {
-                    instance.borrow_mut().set_var("size".to_string(), block);
+                    instance
+                        .borrow_mut()
+                        .set_var("size".to_string(), block.to_object());
                 }
                 Ok(Some(held))
             }
             // `tap` is written in Ruby, in the prelude, so it is not here.
             "then" | "yield_self" => {
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(b)) => b,
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(b)) => b,
                     // `then` and `yield_self` hand back an Enumerator of size
                     // one when they are called with no block.
                     _ => {
@@ -177,7 +182,7 @@ impl VirtualMachine {
     ) -> Result<Option<Object>, MetorexError> {
         let block = self.pending_block.take().or_else(|| {
             if !arguments.is_empty()
-                && let Object::Block(_) = &arguments[0]
+                && let View::Block(_) = arguments[0].view()
             {
                 Some(arguments[0].clone())
             } else {
@@ -186,15 +191,15 @@ impl VirtualMachine {
         });
         let positional: Vec<Object> = arguments
             .iter()
-            .filter(|argument| !matches!(argument, Object::Block(_)))
+            .filter(|argument| !matches!(argument.view(), View::Block(_)))
             .cloned()
             .collect();
-        if let Some(Object::Block(body)) = block {
+        if let Some(View::Block(body)) = block.view() {
             // Ruby refuses a singleton method on an immediate, and a
             // `def` in the body would be exactly that.
             if matches!(
-                receiver,
-                Object::Int(_) | Object::BigInt(_) | Object::Float(_) | Object::Symbol(_)
+                receiver.view(),
+                View::Int(_) | View::BigInt(_) | View::Float(_) | View::Symbol(_)
             ) && body_defines_a_method(&body.body)
             {
                 let message = "can't define singleton".to_string();
@@ -215,7 +220,7 @@ impl VirtualMachine {
                     ));
                 }
                 let result = self.execute_block_with_receiver(
-                    &body,
+                    body,
                     receiver.clone(),
                     vec![receiver.clone()],
                     position,
@@ -223,7 +228,7 @@ impl VirtualMachine {
                 return Ok(Some(result));
             }
             return self
-                .execute_block_with_receiver(&body, receiver.clone(), positional, position)
+                .execute_block_with_receiver(body, receiver.clone(), positional, position)
                 .map(Some);
         }
         // The String form runs source in the receiver's context. A
@@ -241,14 +246,14 @@ impl VirtualMachine {
             let source = self.coerce_name_argument(&positional[0], position)?;
             // The file and the line are taken the way any other
             // String and Integer argument is.
-            let named = match positional.get(1) {
-                None | Some(Object::Nil) => None,
-                Some(Object::String(text)) => Some(text.as_str().to_string()),
+            let named = match positional.get(1).view() {
+                None | Some(View::Nil) => None,
+                Some(View::String(text)) => Some(text.as_str().to_string()),
                 Some(held) => {
-                    if !self.responds_to(held, "to_str") {
+                    if !self.responds_to(&held.to_object(), "to_str") {
                         let message = format!(
                             "no implicit conversion of {} into String",
-                            self.conversion_name(held)
+                            self.conversion_name(&held.to_object())
                         );
                         return Err(crate::vm::errors::simple_exception(
                             "TypeError",
@@ -256,14 +261,14 @@ impl VirtualMachine {
                             position,
                         ));
                     }
-                    Some(self.coerce_name_argument(held, position)?)
+                    Some(self.coerce_name_argument(&held.to_object(), position)?)
                 }
             };
-            let lineno: i64 = match positional.get(2) {
-                None | Some(Object::Nil) => 1,
-                Some(Object::Int(held)) => *held,
+            let lineno: i64 = match positional.get(2).view() {
+                None | Some(View::Nil) => 1,
+                Some(View::Int(held)) => held,
                 Some(held) => {
-                    let counted = self.coerce_integer_argument(held, position)?;
+                    let counted = self.coerce_integer_argument(&held.to_object(), position)?;
                     counted.try_into().unwrap_or(1)
                 }
             };

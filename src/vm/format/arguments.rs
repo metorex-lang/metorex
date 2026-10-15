@@ -1,6 +1,7 @@
 // The values a format string reads, by name, by number, or in order.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The text a format string writes, with each directive filled in from
@@ -11,7 +12,7 @@ impl VirtualMachine {
         right: Object,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        if !matches!(&left, Object::String(_)) {
+        if !matches!(left.view(), View::String(_)) {
             return Err(type_error(
                 format!("no implicit conversion of {} into String", left.type_name()),
                 position,
@@ -28,24 +29,29 @@ impl VirtualMachine {
         right: Object,
         position: Position,
     ) -> Result<Vec<Object>, MetorexError> {
-        if let Object::Array(held) = &right {
+        if let View::Array(held) = right.view() {
             return Ok(held.borrow().clone());
         }
-        if let Some(Object::Array(held)) = crate::vm::native_methods::array_subclass_value(&right) {
+        if let Some(View::Array(held)) =
+            crate::vm::native_methods::array_subclass_value(&right).view()
+        {
             return Ok(held.borrow().clone());
         }
         if !self.responds_to(&right, "to_ary") {
             return Ok(vec![right]);
         }
-        match self.send_to_object(right.clone(), "to_ary", vec![], position)? {
-            Object::Array(held) => Ok(held.borrow().clone()),
-            Object::Nil => Ok(vec![right]),
+        match self
+            .send_to_object(right.clone(), "to_ary", vec![], position)?
+            .view()
+        {
+            View::Array(held) => Ok(held.borrow().clone()),
+            View::Nil => Ok(vec![right]),
             other => Err(type_error(
                 format!(
                     "can't convert {} to Array ({}#to_ary gives {})",
                     self.class_name_of(&right),
                     self.class_name_of(&right),
-                    self.class_name_of(&other)
+                    self.class_name_of(&other.to_object())
                 ),
                 position,
             )),
@@ -60,7 +66,7 @@ impl VirtualMachine {
         values: Vec<Object>,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let Object::String(format) = left else {
+        let View::String(format) = left.view() else {
             return Err(type_error(
                 format!("no implicit conversion of {} into String", left.type_name()),
                 position,
@@ -71,7 +77,7 @@ impl VirtualMachine {
         // A lone Hash names its values as well as standing in a position, and
         // which of the two it is settles at the directive that reads it.
         let keywords = match values.as_slice() {
-            [Object::Dict(_)] => Some(values[0].clone()),
+            [lone] if matches!(lone.view(), View::Dict(_)) => Some(values[0].clone()),
             _ => None,
         };
         let mut arguments = Arguments {
@@ -143,13 +149,13 @@ impl VirtualMachine {
             && !arguments.took_by_number
             && arguments.keywords.is_none()
             && arguments.next < arguments.values.len();
-        if unused && matches!(self.globals().get("DEBUG"), Some(Object::Bool(true))) {
+        if unused && matches!(self.globals().get("DEBUG").view(), Some(View::Bool(true))) {
             return Err(argument_error(
                 "too many arguments for format string",
                 position,
             ));
         }
-        if unused && matches!(self.globals().get("VERBOSE"), Some(Object::Bool(true))) {
+        if unused && matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true))) {
             let text = format!(
                 "{}too many arguments for format string\n",
                 self.warning_prefix(0, position)
@@ -317,12 +323,12 @@ impl VirtualMachine {
         // A Hash with a default answers for a key it does not hold, and only
         // a default of nil leaves the name unanswered.
         let found = self.send_to_object(held.clone(), "[]", vec![key.clone()], position)?;
-        if !matches!(found, Object::Nil) {
+        if !matches!(found.view(), View::Nil) {
             return Ok(found);
         }
         let message = format!("key{{{}}} not found", name);
         let trouble = Object::exception("KeyError", message.clone());
-        if let Object::Exception(cell) = &trouble {
+        if let View::Exception(cell) = trouble.view() {
             let mut held_cell = cell.borrow_mut();
             held_cell.receiver = Some(Box::new(held));
             held_cell

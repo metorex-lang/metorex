@@ -4,6 +4,7 @@
 //! to the appropriate method implementation.
 
 use super::VirtualMachine;
+use crate::object::{OptionView, View};
 
 use crate::ast::Expression;
 use crate::class::Class;
@@ -20,21 +21,21 @@ pub(crate) fn refinement_target_name(
     receiver: &Object,
     vm: &crate::vm::VirtualMachine,
 ) -> Option<String> {
-    match receiver {
-        Object::String(_) => Some(builtin_key(vm, "String")),
-        Object::Int(_) => Some(builtin_key(vm, "Integer")),
-        Object::Float(_) => Some(builtin_key(vm, "Float")),
-        Object::Array(_) => Some(builtin_key(vm, "Array")),
-        Object::Dict(_) => Some(builtin_key(vm, "Hash")),
-        Object::Symbol(_) => Some(builtin_key(vm, "Symbol")),
-        Object::Instance(inst) => {
+    match receiver.view() {
+        View::String(_) => Some(builtin_key(vm, "String")),
+        View::Int(_) => Some(builtin_key(vm, "Integer")),
+        View::Float(_) => Some(builtin_key(vm, "Float")),
+        View::Array(_) => Some(builtin_key(vm, "Array")),
+        View::Dict(_) => Some(builtin_key(vm, "Hash")),
+        View::Symbol(_) => Some(builtin_key(vm, "Symbol")),
+        View::Instance(inst) => {
             let cls = &inst.borrow().class;
             Some(format!("__refine__{}@{:p}", cls.name(), Rc::as_ptr(cls)))
         }
         // A class or module is itself an object, and `refine Foo.singleton_class`
         // is how its own methods are refined. The singleton class is where
         // those land, so it is what the key names.
-        Object::Class(held) | Object::Module(held) => {
+        View::Class(held) | View::Module(held) => {
             let singleton = held.singleton_class_slot().clone()?;
             Some(format!(
                 "__refine__{}@{:p}",
@@ -64,8 +65,8 @@ pub(crate) fn find_refinement(
     {
         return Some(found);
     }
-    let mut cursor = match receiver {
-        Object::Instance(inst) => Some(Rc::clone(&inst.borrow().class)),
+    let mut cursor = match receiver.view() {
+        View::Instance(inst) => Some(Rc::clone(&inst.borrow().class)),
         _ => Some(vm.builtins().class_of(receiver)),
     };
     while let Some(class) = cursor {
@@ -93,7 +94,7 @@ pub(crate) fn find_refinement(
 /// or `define_singleton_method`. Ruby looks there before it looks at any
 /// refinement in force.
 pub(crate) fn singleton_answers(receiver: &Object, name: &str) -> bool {
-    let Object::Instance(inst) = receiver else {
+    let View::Instance(inst) = receiver.view() else {
         return false;
     };
     let held = inst.borrow().singleton_class.borrow().clone();
@@ -105,8 +106,8 @@ pub(crate) fn singleton_answers(receiver: &Object, name: &str) -> bool {
 }
 
 fn builtin_key(vm: &crate::vm::VirtualMachine, name: &str) -> String {
-    if let Some(Object::Class(c)) = vm.globals().get(name) {
-        format!("__refine__{}@{:p}", name, Rc::as_ptr(&c))
+    if let Some(View::Class(c)) = vm.globals().get(name).view() {
+        format!("__refine__{}@{:p}", name, Rc::as_ptr(c))
     } else {
         format!("__refine__{}", name)
     }
@@ -160,11 +161,11 @@ impl VirtualMachine {
         // the receiver expression.
         if method_name == "[]"
             && let Expression::Identifier { name, .. } = receiver_expr
-            && let Some(Object::NativeFunction(native_name)) = self.environment().get(name)
+            && let Some(View::NativeFunction(native_name)) = self.environment().get(name).view()
         {
             let arguments = self.evaluate_arguments(argument_exprs)?;
             let array_arg = Object::Array(Rc::new(RefCell::new(arguments)));
-            return self.call_native_function(&native_name, vec![array_arg], position);
+            return self.call_native_function(native_name, vec![array_arg], position);
         }
 
         let receiver = self.evaluate_expression(receiver_expr)?;
@@ -172,7 +173,7 @@ impl VirtualMachine {
         // `held&.name(args) { block }` runs none of what follows when there
         // is no receiver, so the arguments are never evaluated.
         if method_name == crate::parser::SAFE_CALL {
-            let nil_receiver = matches!(receiver, Object::Nil);
+            let nil_receiver = matches!(receiver.view(), View::Nil);
             self.coverage_branch(position, usize::from(nil_receiver));
             if nil_receiver {
                 return Ok(Object::Nil);
@@ -203,7 +204,7 @@ impl VirtualMachine {
         // over the instance method of the same name: `module_function :foo`
         // and `extend` both leave the instance method private, and `Mod.foo`
         // must reach the copy rather than trip visibility enforcement.
-        if let Object::Class(class_rc) | Object::Module(class_rc) = &receiver {
+        if let View::Class(class_rc) | View::Module(class_rc) = receiver.view() {
             let class_rc = Rc::clone(class_rc);
             // A method put on the class's own singleton class stands ahead of
             // one written as `def self.name`, which is how a later
@@ -323,9 +324,9 @@ impl VirtualMachine {
                     ) {
                         return handled;
                     }
-                    let named = match &receiver {
-                        Object::Nil => "nil".to_string(),
-                        Object::Bool(held) => held.to_string(),
+                    let named = match receiver.view() {
+                        View::Nil => "nil".to_string(),
+                        View::Bool(held) => held.to_string(),
                         _ if self.is_the_main_object(&receiver) => "main".to_string(),
                         _ => format!("an instance of {}", class.inspect_name()),
                     };
@@ -355,7 +356,7 @@ impl VirtualMachine {
         // A natively-implemented class method carries visibility too, so
         // `private_class_method :new` refuses an explicit-receiver call the
         // way a table-backed one does.
-        if let Object::Class(class_rc) | Object::Module(class_rc) = &receiver
+        if let View::Class(class_rc) | View::Module(class_rc) = receiver.view()
             && !matches!(receiver_expr, Expression::SelfExpr { .. })
             && self.method_is_restricted(&receiver, method_name)
         {
@@ -430,7 +431,7 @@ impl VirtualMachine {
         // Kernel carries its functions as module functions as well as
         // private instance methods, so `Kernel.rand` reaches the same
         // implementation a bare `rand` does.
-        if let Object::Module(module_rc) = &receiver
+        if let View::Module(module_rc) = receiver.view()
             && module_rc.ruby_name() == "Kernel"
             && crate::vm::native_methods::is_kernel_private_function(method_name)
         {
@@ -482,7 +483,7 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Option<Result<Object, MetorexError>> {
-        if !matches!(receiver, Object::Instance(_)) {
+        if !matches!(receiver.view(), View::Instance(_)) {
             return None;
         }
         let (_, method) = self.lookup_method(receiver, method_name)?;
@@ -536,8 +537,8 @@ impl VirtualMachine {
     /// is inside a class or module body rather than at the top level.
     pub(crate) fn self_is_class_or_module(&self) -> bool {
         matches!(
-            self.environment().get("self"),
-            Some(Object::Class(_) | Object::Module(_))
+            self.environment().get("self").view(),
+            Some(View::Class(_) | View::Module(_))
         ) || self.def_scope_stack.last().is_some()
     }
 
@@ -583,8 +584,8 @@ impl VirtualMachine {
         if let Some(definee) = self.def_scope_stack.last() {
             return Some(Rc::clone(definee));
         }
-        match self.environment().get("self") {
-            Some(Object::Class(class) | Object::Module(class)) => Some(class),
+        match self.environment().get("self").view() {
+            Some(View::Class(class) | View::Module(class)) => Some(class.clone()),
             _ => None,
         }
     }
@@ -606,7 +607,7 @@ impl VirtualMachine {
         if self.is_the_main_object(receiver) && main_object_method(name) {
             return true;
         }
-        let (Object::Class(class_rc) | Object::Module(class_rc)) = receiver else {
+        let (View::Class(class_rc) | View::Module(class_rc)) = receiver.view() else {
             // A tombstone left by `undef_method` is not something the object
             // responds to.
             // Kernel methods live in the native dispatch tables rather than
@@ -614,10 +615,10 @@ impl VirtualMachine {
             return match self.lookup_method(receiver, name) {
                 Some((_, method)) => !method.is_undefined,
                 None => {
-                    (matches!(receiver, Object::Method(_))
+                    (matches!(receiver.view(), View::Method(_))
                         && crate::vm::native_methods::method_object_methods::NATIVE_METHOD_OBJECT_METHODS
                             .contains(&name))
-                        || (matches!(receiver, Object::Exception(_))
+                        || (matches!(receiver.view(), View::Exception(_))
                             && crate::vm::native_methods::EVERY_EXCEPTION_METHOD
                                 .contains(&name))
                         || self.exception_answers_natively(receiver, name)
@@ -683,12 +684,13 @@ impl VirtualMachine {
         // A class answers to `new` and to Module's own natives, which live in
         // the dispatch tables rather than in a method map. It also carries
         // Kernel's default `respond_to_missing?` the way any object does.
-        if name == "respond_to_missing?" || (name == "new" && matches!(receiver, Object::Class(_)))
+        if name == "respond_to_missing?"
+            || (name == "new" && matches!(receiver.view(), View::Class(_)))
         {
             return true;
         }
         // Class's own public methods, such as `allocate` and `superclass`.
-        if matches!(receiver, Object::Class(_)) && class_public_method(name) {
+        if matches!(receiver.view(), View::Class(_)) && class_public_method(name) {
             return true;
         }
         // Kernel's and BasicObject's public methods, such as
@@ -703,7 +705,7 @@ impl VirtualMachine {
         }
         // An exception class builds one with `exception` as well as `new`.
         if name == "exception"
-            && matches!(receiver, Object::Class(_))
+            && matches!(receiver.view(), View::Class(_))
             && self.is_exception_class(class_rc)
         {
             return true;
@@ -711,7 +713,7 @@ impl VirtualMachine {
         // Reopening `Class` or `Module` adds a method every class and module
         // answers to, the same chain `lookup_method` walks for the call.
         for global_name in ["Class", "Module"] {
-            if let Some(Object::Class(global_class)) = self.globals().get(global_name)
+            if let Some(View::Class(global_class)) = self.globals().get(global_name).view()
                 && let Some(method) = global_class.find_method(name)
             {
                 return !method.is_undefined;
@@ -787,7 +789,7 @@ impl VirtualMachine {
         if (crate::vm::native_methods::is_kernel_private_function(name)
             || crate::vm::native_methods::class_methods::BASIC_OBJECT_PRIVATE_METHODS
                 .contains(&name))
-            && !matches!(receiver, Object::Class(_) | Object::Module(_))
+            && !matches!(receiver.view(), View::Class(_) | View::Module(_))
             && self.visibility_owner(receiver, name).is_none()
             && !self.answers_natively(receiver, name)
             && !self.exception_answers_natively(receiver, name)
@@ -804,7 +806,7 @@ impl VirtualMachine {
         }
         // Otherwise a module-level copy is public even when the instance
         // method it was copied from is private, as `module_function` leaves it.
-        if let Object::Class(class_rc) | Object::Module(class_rc) = receiver
+        if let View::Class(class_rc) | View::Module(class_rc) = receiver.view()
             && module_level_method(class_rc, name).is_some()
         {
             return false;
@@ -845,10 +847,10 @@ impl VirtualMachine {
         let Some(caller) = self.environment().get("self") else {
             return false;
         };
-        let mut cursor = match &caller {
-            Object::Class(class_rc) | Object::Module(class_rc) => Some(Rc::clone(class_rc)),
-            Object::Instance(instance) => Some(Rc::clone(&instance.borrow().class)),
-            other => Some(self.builtins().class_of(other)),
+        let mut cursor = match caller.view() {
+            View::Class(class_rc) | View::Module(class_rc) => Some(Rc::clone(class_rc)),
+            View::Instance(instance) => Some(Rc::clone(&instance.borrow().class)),
+            _ => Some(self.builtins().class_of(&caller)),
         };
         while let Some(current) = cursor {
             if Rc::ptr_eq(&current, owner) || current.name() == owner.name() {
@@ -874,7 +876,7 @@ impl VirtualMachine {
         // A class method's visibility is recorded on the singleton class,
         // even though the method itself may live in the class's own table
         // under the `__class__` convention.
-        if let Object::Class(class_rc) | Object::Module(class_rc) = receiver {
+        if let View::Class(class_rc) | View::Module(class_rc) = receiver.view() {
             let mut defining_singleton = None;
             let mut cursor = Some(Rc::clone(class_rc));
             while let Some(current) = cursor {
@@ -898,8 +900,8 @@ impl VirtualMachine {
             }
             // A module's own instance methods are its instances' business,
             // so what decides it is Module and the classes above it.
-            if let Object::Module(_) = receiver
-                && let Some(Object::Class(module_class)) = self.globals().get("Module")
+            if let View::Module(_) = receiver.view()
+                && let Some(View::Class(module_class)) = self.globals().get("Module").view()
                 && let Some((owner, _)) = module_class.find_method_with_owner(name)
             {
                 return Some(owner);
@@ -908,7 +910,7 @@ impl VirtualMachine {
         // A value's lookup answers with its own class, so the class that
         // defines the method is found from there, which is where a top-level
         // method's privacy is recorded.
-        let Object::Instance(instance_rc) = receiver else {
+        let View::Instance(instance_rc) = receiver.view() else {
             return self
                 .lookup_method(receiver, name)
                 .map(|(class, _)| {
@@ -982,13 +984,13 @@ impl VirtualMachine {
     /// with `by_program`, or otherwise as a core class that defines it as a
     /// public method of its own, as Binding does `eval`.
     fn public_in_chain(&self, receiver: &Object, name: &str, by_program: bool) -> bool {
-        let singleton = match receiver {
-            Object::Instance(instance) => instance.borrow().singleton_class.borrow().clone(),
+        let singleton = match receiver.view() {
+            View::Instance(instance) => instance.borrow().singleton_class.borrow().clone(),
             _ => None,
         };
-        let class = match receiver {
-            Object::Instance(instance) => Rc::clone(&instance.borrow().class),
-            other => self.builtins().class_of(other),
+        let class = match receiver.view() {
+            View::Instance(instance) => Rc::clone(&instance.borrow().class),
+            _ => self.builtins().class_of(receiver),
         };
         let publicly = |held: &Rc<crate::class::Class>| {
             if by_program {
@@ -1020,10 +1022,10 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> MetorexError {
-        let wording = match receiver {
-            Object::Nil => "nil".to_string(),
-            Object::Bool(held) => held.to_string(),
-            other => self.receiver_wording_for(other, position),
+        let wording = match receiver.view() {
+            View::Nil => "nil".to_string(),
+            View::Bool(held) => held.to_string(),
+            _ => self.receiver_wording_for(receiver, position),
         };
         let msg = format!("private method '{method_name}' called for {wording}");
         MetorexError::UncaughtException {
@@ -1036,11 +1038,12 @@ impl VirtualMachine {
     /// A method written on Object, such as a top-level `def`, which a value
     /// whose own class lookup does not reach Object still answers to.
     pub(crate) fn object_table_method(&self, method_name: &str) -> Option<(Rc<Class>, Rc<Method>)> {
-        let Some(Object::Class(object_class)) = self.globals().get("Object") else {
+        let viewed = self.globals().get("Object");
+        let Some(View::Class(object_class)) = viewed.view() else {
             return None;
         };
         let method = object_class.find_method(method_name)?;
-        (!method.is_undefined).then_some((object_class, method))
+        (!method.is_undefined).then_some((object_class.clone(), method))
     }
 
     /// Whether `method`, found for an exception, nil, true or false, is one
@@ -1052,11 +1055,11 @@ impl VirtualMachine {
         method_name: &str,
         method: &Rc<Method>,
     ) -> bool {
-        let answered_natively = match receiver {
-            Object::Exception(_) => {
+        let answered_natively = match receiver.view() {
+            View::Exception(_) => {
                 crate::vm::native_methods::EVERY_EXCEPTION_METHOD.contains(&method_name)
             }
-            Object::Nil | Object::Bool(_) => {
+            View::Nil | View::Bool(_) => {
                 crate::vm::native_methods::value_answers_natively(receiver, method_name)
             }
             _ => false,
@@ -1070,13 +1073,14 @@ impl VirtualMachine {
     /// Whether a class or module receiver would answer `method_name` with an
     /// instance method every object has from Object, Kernel or BasicObject.
     pub(crate) fn object_method_behind_native(&self, receiver: &Object, method_name: &str) -> bool {
-        if !matches!(receiver, Object::Class(_) | Object::Module(_)) {
+        if !matches!(receiver.view(), View::Class(_) | View::Module(_)) {
             return false;
         }
         let Some((_, found)) = self.lookup_method(receiver, method_name) else {
             return false;
         };
-        let Some(Object::Class(object_class)) = self.globals().get("Object") else {
+        let viewed = self.globals().get("Object");
+        let Some(View::Class(object_class)) = viewed.view() else {
             return false;
         };
         object_class
@@ -1087,10 +1091,10 @@ impl VirtualMachine {
     /// Whether the method the receiver would answer comes from the Enumerable
     /// module rather than from its own class.
     pub(crate) fn enumerable_stands_in(&self, receiver: &Object, method_name: &str) -> bool {
-        let class = match receiver {
-            Object::Instance(instance_rc) => Rc::clone(&instance_rc.borrow().class),
-            Object::Class(_) | Object::Module(_) => return false,
-            other => self.builtins().class_of(other),
+        let class = match receiver.view() {
+            View::Instance(instance_rc) => Rc::clone(&instance_rc.borrow().class),
+            View::Class(_) | View::Module(_) => return false,
+            _ => self.builtins().class_of(receiver),
         };
         class
             .find_method_with_owner(method_name)
@@ -1132,8 +1136,8 @@ impl VirtualMachine {
         receiver: &Object,
         method_name: &str,
     ) -> Option<(Rc<Class>, Rc<Method>)> {
-        match receiver {
-            Object::Instance(instance_rc) => {
+        match receiver.view() {
+            View::Instance(instance_rc) => {
                 let instance_ref = instance_rc.borrow();
                 let class = Rc::clone(&instance_ref.class);
                 if let Some(sing) = instance_ref.find_singleton_method(method_name) {
@@ -1147,7 +1151,7 @@ impl VirtualMachine {
                 drop(instance_ref);
                 class.find_method(method_name).map(|method| (class, method))
             }
-            Object::Class(class_rc) => {
+            View::Class(class_rc) => {
                 // A module-level method (`def self.name`, or one copied in by
                 // `extend`) is checked before walking the singleton class's
                 // superclass chain, so a method from the singleton's ancestors
@@ -1182,14 +1186,14 @@ impl VirtualMachine {
                 // chain reaches Class and Module before Object. A name Module
                 // answers natively counts as one of its own.
                 for global_name in ["Class", "Module"] {
-                    if let Some(Object::Class(global_class)) = self.globals().get(global_name)
+                    if let Some(View::Class(global_class)) = self.globals().get(global_name).view()
                         && let Some(method) = global_class.find_own_method(method_name)
                     {
-                        return Some((global_class, method));
+                        return Some((global_class.clone(), method));
                     }
                 }
                 if crate::vm::native_methods::is_native_module_method(method_name)
-                    && let Some(Object::Class(module_class)) = self.globals().get("Module")
+                    && let Some(View::Class(module_class)) = self.globals().get("Module").view()
                 {
                     // The stub carries the parameters Module's method takes,
                     // which a block made from it with `&method(name)` counts.
@@ -1202,7 +1206,7 @@ impl VirtualMachine {
                                 "Module".to_string(),
                             )
                         });
-                    return Some((module_class, Rc::new(stub)));
+                    return Some((module_class.clone(), Rc::new(stub)));
                 }
                 // A class answers what Class and its ancestors define for
                 // their instances, never its own instance methods. An
@@ -1220,15 +1224,15 @@ impl VirtualMachine {
                 // `Module`, so reopening either (`class Module; def
                 // const_added(name); ...`) adds a method every class answers.
                 for global_name in ["Class", "Module"] {
-                    if let Some(Object::Class(global_class)) = self.globals().get(global_name)
+                    if let Some(View::Class(global_class)) = self.globals().get(global_name).view()
                         && let Some(method) = global_class.find_method(method_name)
                     {
-                        return Some((global_class, method));
+                        return Some((global_class.clone(), method));
                     }
                 }
                 None
             }
-            Object::Module(module_rc) => {
+            View::Module(module_rc) => {
                 if let Some(sc) = module_rc.singleton_class_slot().clone()
                     && let Some(method) = sc.find_own_method(method_name)
                 {
@@ -1259,10 +1263,10 @@ impl VirtualMachine {
                 // on that global class, not on the user module itself, so
                 // fall back to `Module`'s method table when the receiver's
                 // own chain comes up empty.
-                if let Some(Object::Class(global_module)) = self.globals().get("Module")
+                if let Some(View::Class(global_module)) = self.globals().get("Module").view()
                     && let Some(method) = global_module.find_method(method_name)
                 {
-                    return Some((global_module, method));
+                    return Some((global_module.clone(), method));
                 }
                 None
             }
@@ -1278,16 +1282,16 @@ impl VirtualMachine {
                 // immediate classes makes a class of its own in globals,
                 // which is where the method it wrote lives.
                 if let Some(named) = reopened_class_name(receiver)
-                    && let Some(Object::Class(reopened)) = self.globals().get(named)
+                    && let Some(View::Class(reopened)) = self.globals().get(named).view()
                     && let Some(method) = reopened.find_method(method_name)
                     && !method.body.is_empty()
                     && !self.object_method_hides_native(receiver, method_name, &method)
                 {
-                    return Some((reopened, method));
+                    return Some((reopened.clone(), method));
                 }
                 // An exception built from a user-defined subclass looks the
                 // method up on that class, which `class_of` cannot report.
-                if let Object::Exception(details) = receiver
+                if let View::Exception(details) = receiver.view()
                     && let Some(class) = details.borrow().class.clone()
                     && let Some(method) = class.find_method(method_name)
                     // A body-less stub stands in for a native method, so it
@@ -1301,20 +1305,20 @@ impl VirtualMachine {
                 // An exception the interpreter raised carries only its class
                 // name, and the class that name resolves to holds what a
                 // program reopened or prepended there.
-                if let Object::Exception(details) = receiver
+                if let View::Exception(details) = receiver.view()
                     && details.borrow().class.is_none()
                 {
                     let exception_type = details.borrow().exception_type.clone();
-                    let named = match self.globals().get(&exception_type) {
-                        Some(class @ Object::Class(_)) => Some(class),
+                    let named = match self.globals().get(&exception_type).view() {
+                        Some(View::Class(class)) => Some(Object::Class(class.clone())),
                         _ => self.resolve_qualified_constant(&exception_type),
                     };
-                    if let Some(Object::Class(class)) = named
+                    if let Some(View::Class(class)) = named.view()
                         && let Some(method) = class.find_method(method_name)
                         && !method.body.is_empty()
                         && !self.object_method_hides_native(receiver, method_name, &method)
                     {
-                        return Some((class, method));
+                        return Some((class.clone(), method));
                     }
                 }
                 let class = self.builtins().class_of(receiver);
@@ -1332,14 +1336,14 @@ impl VirtualMachine {
 /// The class name a program writes to reopen one of the immediate values,
 /// whose methods live in a class of their own rather than on the builtin.
 pub(crate) fn reopened_class_name(receiver: &Object) -> Option<&'static str> {
-    match receiver {
-        Object::Nil => Some("NilClass"),
-        Object::Bool(true) => Some("TrueClass"),
-        Object::Bool(false) => Some("FalseClass"),
-        Object::Symbol(_) => Some("Symbol"),
+    match receiver.view() {
+        View::Nil => Some("NilClass"),
+        View::Bool(true) => Some("TrueClass"),
+        View::Bool(false) => Some("FalseClass"),
+        View::Symbol(_) => Some("Symbol"),
         // The core library reopens Regexp, so what a program writes there
         // lands on the class in globals rather than on the builtin.
-        Object::Regex(_, _) => Some("Regexp"),
+        View::Regex(_, _) => Some("Regexp"),
         _ => None,
     }
 }
@@ -1381,13 +1385,17 @@ pub(crate) fn module_extended_method(
     if !class_rc.holds_extended_copies.get() {
         return None;
     }
-    let copied = match class_rc.get_class_var(&format!("__ext__{}", method_name)) {
-        Some(Object::Method(method)) => method,
+    let viewed = class_rc.get_class_var(&format!("__ext__{}", method_name));
+    let copied = match viewed.view() {
+        Some(View::Method(method)) => method,
         _ => return None,
     };
-    match class_rc.get_class_var(&format!("__ext_from__{}", method_name)) {
-        Some(Object::Module(extended)) => extended.find_method(method_name).or(Some(copied)),
-        _ => Some(copied),
+    match class_rc
+        .get_class_var(&format!("__ext_from__{}", method_name))
+        .view()
+    {
+        Some(View::Module(extended)) => extended.find_method(method_name).or(Some(copied.clone())),
+        _ => Some(copied.clone()),
     }
 }
 

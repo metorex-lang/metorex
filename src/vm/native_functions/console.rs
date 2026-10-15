@@ -2,6 +2,7 @@
 // held as a byte string, the window size, and flushing the queues.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 /// A descriptor's terminal settings, or the errno the read failed with.
 fn terminal_settings(descriptor: i32) -> Result<libc::termios, i32> {
@@ -25,7 +26,7 @@ fn settings_bytes(settings: &libc::termios) -> Object {
 
 /// Terminal settings read back from the bytes the Ruby side kept.
 fn settings_from(argument: Option<&Object>) -> Option<libc::termios> {
-    let Some(Object::String(text)) = argument else {
+    let Some(View::String(text)) = argument.view() else {
         return None;
     };
     let bytes = crate::vm::native_methods::string_methods::binary_bytes(text);
@@ -44,8 +45,8 @@ fn settings_from(argument: Option<&Object>) -> Option<libc::termios> {
 }
 
 fn integer_argument(argument: Option<&Object>) -> i64 {
-    match argument {
-        Some(Object::Int(value)) => *value,
+    match argument.view() {
+        Some(View::Int(value)) => value,
         _ => 0,
     }
 }
@@ -107,15 +108,15 @@ impl VirtualMachine {
                 let Some(mut settings) = settings_from(arguments.first()) else {
                     return Ok(Object::Nil);
                 };
-                let change = match arguments.get(1) {
-                    Some(Object::Symbol(change)) => change.as_str().to_string(),
+                let change = match arguments.get(1).view() {
+                    Some(View::Symbol(change)) => change.as_str().to_string(),
                     _ => String::new(),
                 };
                 let echo = libc::ECHO | libc::ECHOE | libc::ECHOK | libc::ECHONL;
                 match change.as_str() {
                     "raw" => {
-                        let intr = match arguments.get(4) {
-                            Some(Object::Bool(given)) => Some(*given),
+                        let intr = match arguments.get(4).view() {
+                            Some(View::Bool(given)) => Some(given),
                             _ => None,
                         };
                         make_raw(

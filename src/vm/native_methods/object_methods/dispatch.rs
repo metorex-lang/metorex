@@ -2,6 +2,7 @@
 // the name is none of its own, and the next step is tried.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 /// One step of the chain: every group of Object methods reads the same
 /// arguments and answers the same way.
@@ -67,9 +68,9 @@ impl VirtualMachine {
         // receiver registers the autoload on Object, Ruby's home for
         // top-level constants.
         if matches!(method_name, "autoload" | "autoload?")
-            && let Some(Object::Class(object_class)) = self.globals().get("Object")
+            && let Some(View::Class(object_class)) = self.globals().get("Object").view()
         {
-            return self.call_class_methods(&object_class, method_name, arguments, position);
+            return self.call_class_methods(object_class, method_name, arguments, position);
         }
 
         // Operators reached by name rather than by syntax — `1.send(:+, 2)`,
@@ -91,14 +92,14 @@ impl VirtualMachine {
         }
 
         // A Proc is already one, so `to_proc` answers the same object.
-        if method_name == "to_proc" && matches!(receiver, Object::Block(_)) {
+        if method_name == "to_proc" && matches!(receiver.view(), View::Block(_)) {
             return Ok(Some(receiver.clone()));
         }
 
         // Symbol#to_proc — `:foo.to_proc` is a two-parameter callable that
         // sends `foo` to its first argument.
         if method_name == "to_proc"
-            && let Object::Symbol(name) = receiver
+            && let View::Symbol(name) = receiver.view()
         {
             return Ok(Some(Object::Block(std::rc::Rc::new(symbol_to_proc_block(
                 &name.as_str(),
@@ -110,7 +111,7 @@ impl VirtualMachine {
         // `nil.to_a == []`, `nil.to_f == 0.0`. The dispatch above checks the
         // class of the receiver first, so we have to intercept here for Nil
         // before falling through to the generic Object methods.
-        if matches!(receiver, Object::Nil) {
+        if matches!(receiver.view(), View::Nil) {
             match method_name {
                 "to_i" => return Ok(Some(Object::Int(0))),
                 "to_f" => return Ok(Some(Object::Float(0.0))),
@@ -147,8 +148,9 @@ impl VirtualMachine {
                         });
                     }
                     // Return Rational(0, 1) — create an instance via global function
-                    if let Some(Object::Class(rational_class)) = self.globals().get("Rational") {
-                        let inst = crate::object::Instance::new(rational_class);
+                    if let Some(View::Class(rational_class)) = self.globals().get("Rational").view()
+                    {
+                        let inst = crate::object::Instance::new(rational_class.clone());
                         inst.borrow_mut()
                             .set_var("numerator".to_string(), Object::Int(0));
                         inst.borrow_mut()
@@ -158,8 +160,8 @@ impl VirtualMachine {
                     return Ok(Some(Object::Int(0)));
                 }
                 "to_c" => {
-                    if let Some(Object::Class(complex_class)) = self.globals().get("Complex") {
-                        let inst = crate::object::Instance::new(complex_class);
+                    if let Some(View::Class(complex_class)) = self.globals().get("Complex").view() {
+                        let inst = crate::object::Instance::new(complex_class.clone());
                         inst.borrow_mut()
                             .set_var("real".to_string(), Object::Int(0));
                         inst.borrow_mut()

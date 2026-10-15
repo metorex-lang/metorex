@@ -2,6 +2,7 @@
 // one reads.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Evaluate a binary operation across runtime values. An error the
@@ -81,11 +82,11 @@ impl VirtualMachine {
         // Rational answer stands for, so the exponent is read as a Float and
         // the Float arithmetic runs.
         if matches!(op, BinaryOp::Power)
-            && matches!(left, Object::Float(_))
+            && matches!(left.view(), View::Float(_))
             && crate::vm::native_methods::rational_parts(&right).is_some()
         {
             let exponent = self.send_to_object(right.clone(), "to_f", vec![], position)?;
-            if let Object::Float(exponent) = exponent {
+            if let View::Float(exponent) = exponent.view() {
                 return self.evaluate_numeric_binary(op, left, Object::Float(exponent), position);
             }
         }
@@ -95,13 +96,13 @@ impl VirtualMachine {
         // names a whole number, and reads the exponent as a Float where it
         // does not.
         if matches!(op, BinaryOp::Power)
-            && matches!(left, Object::Int(_) | Object::BigInt(_))
+            && matches!(left.view(), View::Int(_) | View::BigInt(_))
             && let Some((numerator, denominator)) =
                 crate::vm::native_methods::rational_parts(&right)
         {
             if denominator != num_bigint::BigInt::from(1) {
                 let exponent = self.send_to_object(right.clone(), "to_f", vec![], position)?;
-                if let Object::Float(exponent) = exponent {
+                if let View::Float(exponent) = exponent.view() {
                     return self.evaluate_numeric_binary(
                         op,
                         left,
@@ -128,8 +129,8 @@ impl VirtualMachine {
                 self.make_rational(whole, num_bigint::BigInt::from(1), position)
             };
         }
-        if let (Some(name), Object::Int(_) | Object::BigInt(_) | Object::Float(_)) =
-            (crate::vm::eval::binary_op_method_name(op), &left)
+        if let (Some(name), View::Int(_) | View::BigInt(_) | View::Float(_)) =
+            (crate::vm::eval::binary_op_method_name(op), left.view())
             && crate::vm::native_methods::rational_parts(&right).is_some()
         {
             let promoted = self.promote_to_rational(&left, position)?;
@@ -149,7 +150,7 @@ impl VirtualMachine {
         // A Set answers the algebra operators from its own method table, so
         // `a - b`, `a | b`, and the comparisons read the same as the named
         // methods do.
-        if matches!(left, Object::Set(_))
+        if matches!(left.view(), View::Set(_))
             && let Some(name) = set_operator_name(op)
         {
             let class = self.builtins().class_of(&left);
@@ -167,7 +168,9 @@ impl VirtualMachine {
         match op {
             // `"a" + other` puts the right operand through `to_str`, which
             // String answers from its own method table.
-            Add if matches!(left, Object::String(_)) && !matches!(right, Object::String(_)) => {
+            Add if matches!(left.view(), View::String(_))
+                && !matches!(right.view(), View::String(_)) =>
+            {
                 match self.call_string_method(&left, "+", std::slice::from_ref(&right), position)? {
                     Some(answered) => Ok(answered),
                     None => Err(binary_type_error(BinaryOp::Add, &left, &right, position)),
@@ -175,7 +178,9 @@ impl VirtualMachine {
             }
             // `[1] + other` puts the right operand through `to_ary`, so an
             // object standing for an array concatenates the way one does.
-            Add if matches!(left, Object::Array(_)) && !matches!(right, Object::Array(_)) => {
+            Add if matches!(left.view(), View::Array(_))
+                && !matches!(right.view(), View::Array(_)) =>
+            {
                 let Some(elements) = self.as_array_operand(&right, position)? else {
                     return Err(binary_type_error(BinaryOp::Add, &left, &right, position));
                 };
@@ -197,7 +202,8 @@ impl VirtualMachine {
             // `-`, `&`, and `|` between arrays put the right operand through
             // `to_ary` too, the same way `+` does.
             Subtract | BitwiseAnd | BitwiseOr
-                if matches!(left, Object::Array(_)) && !matches!(right, Object::Array(_)) =>
+                if matches!(left.view(), View::Array(_))
+                    && !matches!(right.view(), View::Array(_)) =>
             {
                 let Some(elements) = self.as_array_operand(&right, position)? else {
                     return Err(binary_type_error(op.clone(), &left, &right, position));
@@ -214,8 +220,14 @@ impl VirtualMachine {
             }
             // Array difference keeps what the right operand does not hold,
             // matching on `eql?` the way Ruby does.
-            Subtract if matches!((&left, &right), (Object::Array(_), Object::Array(_))) => {
-                let (Object::Array(left_items), Object::Array(right_items)) = (&left, &right)
+            Subtract
+                if matches!(
+                    (left.view(), right.view()),
+                    (View::Array(_), View::Array(_))
+                ) =>
+            {
+                let (View::Array(left_items), View::Array(right_items)) =
+                    (left.view(), right.view())
                 else {
                     unreachable!("both operands are arrays")
                 };
@@ -232,22 +244,22 @@ impl VirtualMachine {
             // An operator the program redefined on Integer or Float answers
             // for it, whatever the numbers underneath would have done.
             Add | Subtract | Multiply | Divide | Modulo | Power
-                if matches!(left, Object::Int(_) | Object::BigInt(_) | Object::Float(_))
+                if matches!(left.view(), View::Int(_) | View::BigInt(_) | View::Float(_))
                     && let Some(named) = comparison_free_operator_name(op)
                     && let Some((owner, method)) = self.redefined_number_operator(&left, named) =>
             {
                 self.invoke_method(owner, method, left, vec![right], position)
             }
             Add => self.evaluate_addition(left, right, position),
-            Modulo if matches!(left, Object::String(_)) => {
+            Modulo if matches!(left.view(), View::String(_)) => {
                 self.evaluate_string_format(left, right, position)
             }
             // An instance of a String subclass writes a format the same way,
             // answering a plain String the way Ruby's does.
             Modulo
                 if matches!(
-                    crate::vm::native_methods::string_subclass_value(&left),
-                    Some(Object::String(_))
+                    crate::vm::native_methods::string_subclass_value(&left).view(),
+                    Some(View::String(_))
                 ) =>
             {
                 let held = crate::vm::native_methods::string_subclass_value(&left)
@@ -256,7 +268,7 @@ impl VirtualMachine {
             }
             // `(1..10) % 2` is Range#%, which answers the same sequence
             // `step` does.
-            Modulo if matches!(left, Object::Range { .. }) => {
+            Modulo if matches!(left.view(), View::Range { .. }) => {
                 self.send_to_object(left, "%", vec![right], position)
             }
             Subtract | Multiply | Divide | Modulo | Power => {
@@ -272,7 +284,7 @@ impl VirtualMachine {
             }
             // Two hashes compare by containment rather than by order, which
             // Hash answers from its own method table.
-            Less | Greater | LessEqual | GreaterEqual if matches!(left, Object::Dict(_)) => {
+            Less | Greater | LessEqual | GreaterEqual if matches!(left.view(), View::Dict(_)) => {
                 let name = match op {
                     Less => "<",
                     Greater => ">",

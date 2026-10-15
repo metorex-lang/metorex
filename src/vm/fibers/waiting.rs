@@ -1,6 +1,7 @@
 // Where a thread stands, and what it is waiting for.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Where the code running now stands, one line per frame, innermost
@@ -16,19 +17,19 @@ impl VirtualMachine {
     /// first, the way a backtrace reads. A thread that has not started yet
     /// has no frames of its own.
     pub(crate) fn thread_backtrace_lines(&mut self, thread: &Object) -> Option<Vec<String>> {
-        let Object::Instance(instance) = thread else {
+        let View::Instance(instance) = thread.view() else {
             return None;
         };
-        let handle = match instance.borrow().get_var("__thread_fiber") {
-            Some(Object::Int(handle)) => *handle as usize,
+        let handle = match instance.borrow().get_var("__thread_fiber").view() {
+            Some(View::Int(handle)) => handle as usize,
             _ => return None,
         };
-        let written_in = match instance.borrow().get_var("__thread_source") {
-            Some(Object::String(file)) => file.as_str().to_string(),
+        let written_in = match instance.borrow().get_var("__thread_source").view() {
+            Some(View::String(file)) => file.as_str().to_string(),
             _ => String::new(),
         };
-        let waiting_in = match instance.borrow().get_var("__thread_in") {
-            Some(Object::String(named)) => Some(named.as_str().to_string()),
+        let waiting_in = match instance.borrow().get_var("__thread_in").view() {
+            Some(View::String(named)) => Some(named.as_str().to_string()),
             _ => None,
         };
         let held = self.fibers.get(handle)?.held.as_ref()?;
@@ -54,8 +55,8 @@ impl VirtualMachine {
         let mut lines = Vec::with_capacity(frames.len() + 1);
         // The innermost entry is where the thread stands right now, which is
         // the name of the wait it is parked in when it is parked in one.
-        let written_line = match instance.borrow().get_var("__thread_line") {
-            Some(Object::Int(line)) => *line as usize,
+        let written_line = match instance.borrow().get_var("__thread_line").view() {
+            Some(View::Int(line)) => line as usize,
             _ => 0,
         };
         let (here, at, named) = match frames.first() {
@@ -91,11 +92,12 @@ impl VirtualMachine {
     /// Whether the thread running now has been handed an exception that has
     /// not been raised yet.
     pub(crate) fn thread_holds_an_interrupt(&mut self) -> bool {
-        let Object::Instance(running) = self.running_thread() else {
+        let viewed = self.running_thread();
+        let View::Instance(running) = viewed.view() else {
             return false;
         };
         let held = running.borrow().get_var("__thread_raise").cloned();
-        matches!(held, Some(Object::Array(values)) if !values.borrow().is_empty())
+        matches!(held.view(), Some(View::Array(values)) if !values.borrow().is_empty())
     }
 
     /// Whether a thread was asked to take the program down with it when it
@@ -106,8 +108,10 @@ impl VirtualMachine {
         position: Position,
     ) -> bool {
         matches!(
-            self.send_to_object(thread.clone(), "abort_on_exception", vec![], position),
-            Ok(Object::Bool(true))
+            self.send_to_object(thread.clone(), "abort_on_exception", vec![], position)
+                .as_ref()
+                .map(Object::view),
+            Ok(View::Bool(true))
         )
     }
 
@@ -137,7 +141,7 @@ impl VirtualMachine {
         // asked of Thread itself.
         if self.thread_holds_an_interrupt() {
             let named = self.globals().get("Thread").unwrap_or(Object::Nil);
-            if !matches!(named, Object::Nil) {
+            if !matches!(named.view(), View::Nil) {
                 self.send_to_object(
                     named,
                     "__run_pending_interrupt__",
@@ -146,12 +150,13 @@ impl VirtualMachine {
                 )?;
             }
         }
-        let Some(Object::Instance(running)) = self.thread_current_stack.last().cloned() else {
+        let viewed = self.thread_current_stack.last().cloned();
+        let Some(View::Instance(running)) = viewed.view() else {
             return Ok(());
         };
         if !matches!(
-            running.borrow().get_var("__thread_killed"),
-            Some(Object::Bool(true))
+            running.borrow().get_var("__thread_killed").view(),
+            Some(View::Bool(true))
         ) {
             return Ok(());
         }
@@ -277,13 +282,13 @@ impl VirtualMachine {
             // A thread that hands control over while it waits is asleep for
             // as long as the wait lasts, which is what `status` reports.
             let running = self.thread_current_stack.last().cloned();
-            if let Some(Object::Instance(instance)) = &running {
+            if let Some(View::Instance(instance)) = running.view() {
                 instance
                     .borrow_mut()
                     .set_var("__thread_waiting".to_string(), Object::Bool(true));
             }
             let _ = self.fiber_suspend(Object::Nil, position);
-            if let Some(Object::Instance(instance)) = &running {
+            if let Some(View::Instance(instance)) = running.view() {
                 instance
                     .borrow_mut()
                     .set_var("__thread_waiting".to_string(), Object::Bool(false));
@@ -293,13 +298,13 @@ impl VirtualMachine {
         // The thread handing control over is asleep for as long as the wait
         // lasts, whichever thread it is, which is what `status` reports.
         let running = self.running_thread();
-        if let Object::Instance(instance) = &running {
+        if let View::Instance(instance) = running.view() {
             instance
                 .borrow_mut()
                 .set_var("__thread_waiting".to_string(), Object::Bool(true));
         }
         let stepped = self.step_pending_threads(position);
-        if let Object::Instance(instance) = &running {
+        if let View::Instance(instance) = running.view() {
             instance
                 .borrow_mut()
                 .set_var("__thread_waiting".to_string(), Object::Bool(false));
@@ -388,7 +393,7 @@ impl VirtualMachine {
                     };
                     self.report_thread_death(thread, &died_of, position);
                     self.finish_thread(thread, Object::Nil);
-                    if let Object::Instance(instance) = thread {
+                    if let View::Instance(instance) = thread.view() {
                         instance
                             .borrow_mut()
                             .set_var("__thread_error".to_string(), died_of);
@@ -411,15 +416,15 @@ impl VirtualMachine {
         // A thread another wait ran to its end may have died of an
         // exception, which is handed to whoever waits on it, including while
         // that death is still being reported.
-        let (held, died_of) = match thread {
-            Object::Instance(instance) => (
+        let (held, died_of) = match thread.view() {
+            View::Instance(instance) => (
                 instance.borrow().get_var("__thread_value").cloned(),
                 instance.borrow().get_var(DYING_OF).cloned(),
             ),
             _ => (None, None),
         };
-        if let Some(raised @ Object::Exception(_)) = died_of {
-            self.call_native_function("raise", vec![raised], position)?;
+        if let Some(raised @ View::Exception(_)) = died_of.view() {
+            self.call_native_function("raise", vec![raised.to_object()], position)?;
         }
         Ok(Some(held.unwrap_or(Object::Nil)))
     }
@@ -432,7 +437,7 @@ impl VirtualMachine {
         died_of: &Object,
         position: Position,
     ) {
-        if !matches!(died_of, Object::Exception(_)) {
+        if !matches!(died_of.view(), View::Exception(_)) {
             return;
         }
         let _ = self.send_to_object(
@@ -446,7 +451,7 @@ impl VirtualMachine {
     /// The Fiber object a thread's body runs on, which is the thread's root
     /// one.
     pub(crate) fn thread_fiber_object(&mut self, thread: &Object, handle: usize) -> Object {
-        if let Object::Instance(instance) = thread
+        if let View::Instance(instance) = thread.view()
             && let Some(held) = instance.borrow().get_var("__thread_fiber_object")
         {
             return held.clone();
@@ -474,7 +479,7 @@ impl VirtualMachine {
     /// Marks the running thread as waiting on something only another
     /// thread can give it, or as done waiting.
     pub(crate) fn mark_waiting_forever(&mut self, waiting: bool) {
-        if let Object::Instance(instance) = self.running_thread() {
+        if let View::Instance(instance) = self.running_thread().view() {
             instance
                 .borrow_mut()
                 .set_var(WAITING_FOREVER.to_string(), Object::Bool(waiting));
@@ -485,8 +490,8 @@ impl VirtualMachine {
     /// to raise, either of which ends a wait it would otherwise never leave.
     pub(crate) fn thread_told_to_stop(&mut self) -> bool {
         self.thread_abort.is_some()
-            || matches!(self.running_thread(), Object::Instance(running)
-                if matches!(running.borrow().get_var("__thread_killed"), Some(Object::Bool(true))))
+            || matches!(self.running_thread().view(), View::Instance(running)
+                if matches!(running.borrow().get_var("__thread_killed").view(), Some(View::Bool(true))))
     }
 
     /// The main thread, waiting on something only another thread can give
@@ -503,8 +508,8 @@ impl VirtualMachine {
         }
         let living = self.living_threads();
         let all_waiting = living.iter().all(|thread| {
-            matches!(thread, Object::Instance(held)
-                if matches!(held.borrow().get_var(WAITING_FOREVER), Some(Object::Bool(true))))
+            matches!(thread.view(), View::Instance(held)
+                if matches!(held.borrow().get_var(WAITING_FOREVER).view(), Some(View::Bool(true))))
         });
         if !all_waiting {
             return Ok(());
@@ -517,7 +522,7 @@ impl VirtualMachine {
         self.pending_threads
             .iter()
             .filter(|thread| {
-                !matches!(thread, Object::Instance(held)
+                !matches!(thread.view(), View::Instance(held)
                     if held.borrow().get_var("__thread_value").is_some())
             })
             .cloned()
@@ -550,9 +555,10 @@ impl VirtualMachine {
             }
         }
         let exception = Object::exception("fatal", message.clone());
-        if let (Object::Exception(details), Object::Class(class)) = (&exception, self.fatal_class())
+        if let (View::Exception(details), View::Class(class)) =
+            (exception.view(), self.fatal_class().view())
         {
-            details.borrow_mut().class = Some(class);
+            details.borrow_mut().class = Some(class.clone());
         }
         MetorexError::UncaughtException {
             exception,

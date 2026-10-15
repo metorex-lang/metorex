@@ -1,6 +1,7 @@
 // Running a block, with the scope it captured.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The values a lone argument spreads into when the block takes it apart
@@ -47,7 +48,7 @@ impl VirtualMachine {
         let takes_keywords = parameters.iter().any(|name| {
             name.starts_with("**") || name.starts_with(crate::object::KEYWORD_PARAM_PREFIX)
         });
-        let found = if takes_keywords && matches!(arguments.last(), Some(Object::Dict(_))) {
+        let found = if takes_keywords && matches!(arguments.last().view(), Some(View::Dict(_))) {
             arguments.len() - 1
         } else {
             arguments.len()

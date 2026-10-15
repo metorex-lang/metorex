@@ -1,6 +1,7 @@
 // Reading a file, and what the operating system records about it.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Reading a file, and what the operating system records about it.
@@ -23,7 +24,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let Object::String(path) = &arguments[0] else {
+                let View::String(path) = arguments[0].view() else {
                     return Err(method_argument_type_error(
                         method_name,
                         "String",
@@ -41,26 +42,26 @@ impl VirtualMachine {
                 // A count and an offset name a run of bytes rather than
                 // the whole file. Neither may be negative: there is no run
                 // of fewer than no bytes, and none before the first.
-                let counted = match arguments.get(1) {
-                    Some(Object::Int(held)) if *held < 0 => {
+                let counted = match arguments.get(1).view() {
+                    Some(View::Int(held)) if held < 0 => {
                         return Err(crate::vm::errors::simple_exception(
                             "ArgumentError",
                             "negative length -1 given",
                             position,
                         ));
                     }
-                    Some(Object::Int(held)) => Some(*held as usize),
+                    Some(View::Int(held)) => Some(held as usize),
                     _ => None,
                 };
-                let from = match arguments.get(2) {
-                    Some(Object::Int(held)) if *held < 0 => {
+                let from = match arguments.get(2).view() {
+                    Some(View::Int(held)) if held < 0 => {
                         return Err(crate::vm::errors::simple_exception(
                             "Errno::EINVAL",
                             "Invalid argument - negative offset",
                             position,
                         ));
                     }
-                    Some(Object::Int(held)) => *held as usize,
+                    Some(View::Int(held)) => held as usize,
                     _ => 0,
                 };
                 let held = std::fs::read(path_text(path)).map_err(|problem| {
@@ -94,7 +95,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let Object::String(path) = &arguments[0] else {
+                let View::String(path) = arguments[0].view() else {
                     return Err(method_argument_type_error(
                         method_name,
                         "String",
@@ -113,12 +114,12 @@ impl VirtualMachine {
                 }
                 // A count and an offset name a run of bytes rather than the
                 // whole file, which is what `IO.read(name, 4)` asks for.
-                let counted = match arguments.get(1) {
-                    Some(Object::Int(held)) => Some(*held as usize),
+                let counted = match arguments.get(1).view() {
+                    Some(View::Int(held)) => Some(held as usize),
                     _ => None,
                 };
-                let from = match arguments.get(2) {
-                    Some(Object::Int(held)) => *held as usize,
+                let from = match arguments.get(2).view() {
+                    Some(View::Int(held)) => held as usize,
                     _ => 0,
                 };
                 if counted.is_none() && from == 0 {
@@ -160,7 +161,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let Object::String(path) = &arguments[0] else {
+                let View::String(path) = arguments[0].view() else {
                     return Err(method_argument_type_error(
                         method_name,
                         "String",

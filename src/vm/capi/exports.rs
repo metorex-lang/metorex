@@ -4,6 +4,7 @@ use super::handles::{Value, to_object, to_value};
 use super::methods::{CFunction, MAX_FIXED_ARITY};
 use super::{interpreter, or_raise, raise};
 use crate::class::Class;
+use crate::object::View;
 use crate::object::{Method, Object};
 use crate::vm::VirtualMachine;
 use std::ffi::{CStr, c_char};
@@ -19,8 +20,8 @@ pub(super) fn text(pointer: *const c_char) -> String {
 
 /// The class or module a VALUE C code handed over stands for.
 pub(super) fn class_from(value: Value) -> Rc<Class> {
-    match to_object(value) {
-        Object::Class(class) | Object::Module(class) => class,
+    match to_object(value).view() {
+        View::Class(class) | View::Module(class) => class.clone(),
         other => raise(crate::vm::errors::simple_exception(
             "TypeError",
             &format!("{} is not a class/module", other),
@@ -38,8 +39,8 @@ pub extern "C-unwind" fn rb_class_of(object: Value) -> Value {
     let object = to_object(object);
     // Every class and module has a singleton class from the start in Ruby,
     // where other objects get one only when something asks for it.
-    let singleton = match &object {
-        Object::Class(_) | Object::Module(_) => Some(machine.singleton_class_of(&object)),
+    let singleton = match object.view() {
+        View::Class(_) | View::Module(_) => Some(machine.singleton_class_of(&object)),
         _ => machine.held_singleton_class(&object),
     };
     let class = match singleton {
@@ -79,9 +80,9 @@ pub extern "C-unwind" fn rb_define_method(
 impl VirtualMachine {
     /// The singleton class `object` already has, without making one.
     pub(super) fn held_singleton_class(&self, object: &Object) -> Option<Rc<Class>> {
-        match object {
-            Object::Instance(instance) => instance.borrow().singleton_class.borrow().clone(),
-            other => self.existing_singleton_class(other),
+        match object.view() {
+            View::Instance(instance) => instance.borrow().singleton_class.borrow().clone(),
+            _ => self.existing_singleton_class(object),
         }
     }
 }

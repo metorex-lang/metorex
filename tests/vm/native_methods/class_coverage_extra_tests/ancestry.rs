@@ -1,6 +1,7 @@
 // Mixins, ancestry, and the singleton class.
 
 use super::*;
+use metorex::object::{OptionView, View};
 #[test]
 fn const_get_with_string_name() {
     let result = run(r#"
@@ -222,7 +223,7 @@ class ChildA < Parent; end
 class ChildB < Parent; end
 Parent.subclasses.length
 "#);
-    if let Some(Object::Int(n)) = result {
+    if let Some(View::Int(n)) = result.view() {
         assert!(n >= 2, "Expected 2+ subclasses, got {}", n);
     }
 }
@@ -232,7 +233,7 @@ Parent.subclasses.length
 #[test]
 fn module_nesting_returns_array() {
     let result = run(r#"Module.nesting"#);
-    assert!(matches!(result, Some(Object::Array(_))));
+    assert!(matches!(result.view(), Some(View::Array(_))));
 }
 
 // ── `remove_method` / `undef_method` ─────────────────────────────────────────
@@ -272,7 +273,7 @@ class R3
 end
 R3.send(:remove_method)
 "#);
-    assert!(matches!(result, Some(Object::Class(_))));
+    assert!(matches!(result.view(), Some(View::Class(_))));
 }
 
 #[test]
@@ -313,5 +314,5 @@ class U2
 end
 U2.send(:undef_method)
 "#);
-    assert!(matches!(result, Some(Object::Class(_))));
+    assert!(matches!(result.view(), Some(View::Class(_))));
 }

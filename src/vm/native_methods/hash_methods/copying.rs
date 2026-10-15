@@ -1,6 +1,7 @@
 // A hash derived from another, and the errors a lookup raises.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// Ruby warns when `fetch` was handed both a default value and a block,
@@ -36,7 +37,7 @@ impl VirtualMachine {
         else {
             return error;
         };
-        if let Object::Exception(details) = &exception {
+        if let View::Exception(details) = exception.view() {
             let mut details = details.borrow_mut();
             details.receiver = Some(Box::new(receiver.clone()));
             details

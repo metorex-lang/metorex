@@ -1,6 +1,7 @@
 // What a Binding answers: the locals it names, reading and writing them, and
 // running code where it was captured.
 
+use crate::object::{OptionView, View};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -151,15 +152,14 @@ impl VirtualMachine {
         method_name: &str,
         position: Position,
     ) -> Result<String, MetorexError> {
-        match arguments.first() {
-            Some(Object::Symbol(name)) | Some(Object::String(name)) => {
-                Ok(name.as_str().to_string())
-            }
+        match arguments.first().view() {
+            Some(View::Symbol(name)) | Some(View::String(name)) => Ok(name.as_str().to_string()),
             // A name may be written as anything that spells itself out.
-            Some(other) if self.responds_to(other, "to_str") => {
-                let spelled = self.send_to_object(other.clone(), "to_str", Vec::new(), position)?;
-                match spelled {
-                    Object::String(name) => Ok(name.as_str().to_string()),
+            Some(other) if self.responds_to(&other.to_object(), "to_str") => {
+                let spelled =
+                    self.send_to_object(other.to_object(), "to_str", Vec::new(), position)?;
+                match spelled.view() {
+                    View::String(name) => Ok(name.as_str().to_string()),
                     held => Err(crate::vm::errors::simple_exception(
                         "TypeError",
                         &format!("{held} is not a symbol nor a string"),

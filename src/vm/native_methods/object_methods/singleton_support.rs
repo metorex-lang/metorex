@@ -1,6 +1,7 @@
 // The class an object alone has.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The Symbol a String names. The symbol keeps the encoding the string
@@ -39,7 +40,7 @@ impl VirtualMachine {
     /// release, for the operations that count as changing it. The notice is
     /// given once, the way Ruby gives it.
     pub(crate) fn warn_chilled_string(&mut self, receiver: &Object, position: Position) {
-        let Object::String(text) = receiver else {
+        let View::String(text) = receiver.view() else {
             return;
         };
         let Some(notice) = text.take_chill() else {
@@ -72,10 +73,10 @@ impl VirtualMachine {
 /// same number, symbol, or interned string names the same object, so a method
 /// written on one would be written on all of them.
 pub(crate) fn refuses_a_singleton(receiver: &Object) -> bool {
-    matches!(receiver, Object::String(held) if held.is_deduplicated())
+    matches!(receiver.view(), View::String(held) if held.is_deduplicated())
         || matches!(
-            receiver,
-            Object::Int(_) | Object::BigInt(_) | Object::Float(_) | Object::Symbol(_)
+            receiver.view(),
+            View::Int(_) | View::BigInt(_) | View::Float(_) | View::Symbol(_)
         )
 }
 
@@ -83,7 +84,7 @@ impl VirtualMachine {
     /// Whether the receiver is the object a program runs against at the top
     /// level, which Ruby calls `main`.
     pub(crate) fn is_the_main_object(&self, receiver: &Object) -> bool {
-        let Object::Instance(held) = receiver else {
+        let View::Instance(held) = receiver.view() else {
             return false;
         };
         // A wrapped load runs against a main of its own, which stands for
@@ -95,8 +96,8 @@ impl VirtualMachine {
         {
             return true;
         }
-        match self.globals().get("__main__") {
-            Some(Object::Instance(main)) => std::rc::Rc::ptr_eq(held, &main),
+        match self.globals().get("__main__").view() {
+            Some(View::Instance(main)) => std::rc::Rc::ptr_eq(held, main),
             _ => false,
         }
     }

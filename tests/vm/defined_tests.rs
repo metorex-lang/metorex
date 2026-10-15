@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -108,14 +109,14 @@ fn defined_scope_resolution() {
 fn defined_global_function_returns_string() {
     // `puts` is in scope; defined? returns some non-nil string.
     let result = run("defined?(puts)");
-    assert!(matches!(result, Some(Object::String(_))));
+    assert!(matches!(result.view(), Some(View::String(_))));
 }
 
 #[test]
 fn defined_class_var_with_existing() {
     let result =
         run("class Foo\n  @@x = 1\n  def check\n    defined?(@@x)\n  end\nend\nFoo.new.check");
-    if let Some(Object::String(s)) = result {
+    if let Some(View::String(s)) = result.view() {
         assert!(s.as_str().contains("class") || s.as_str().contains("variable"));
     } else {
         panic!("expected String, got {:?}", result);
@@ -139,7 +140,7 @@ fn defined_super_returns_super() {
 #[test]
 fn defined_self_returns_string() {
     let result = run("class Foo\n  def check\n    defined?(self)\n  end\nend\nFoo.new.check");
-    assert!(matches!(result, Some(Object::String(_))));
+    assert!(matches!(result.view(), Some(View::String(_))));
 }
 
 #[test]
@@ -183,7 +184,7 @@ end
 Foo.check
 "#);
     assert!(result.is_some());
-    assert!(!matches!(result, Some(Object::Nil)));
+    assert!(!matches!(result.view(), Some(View::Nil)));
 }
 
 #[test]
@@ -194,7 +195,7 @@ end
 defined?(Foo)
 "#);
     assert!(result.is_some());
-    assert!(!matches!(result, Some(Object::Nil)));
+    assert!(!matches!(result.view(), Some(View::Nil)));
 }
 
 #[test]
@@ -207,7 +208,7 @@ fn defined_undefined_scope_resolution() {
 fn defined_method_call_on_receiver() {
     let result = run(r#"defined?("hello".length)"#);
     assert!(result.is_some());
-    assert!(!matches!(result, Some(Object::Nil)));
+    assert!(!matches!(result.view(), Some(View::Nil)));
 }
 
 #[test]
@@ -226,7 +227,7 @@ fn defined_call_expression_coverage() {
 fn defined_index_expression() {
     let result = run("defined?([1,2,3][0])");
     assert!(result.is_some());
-    assert!(!matches!(result, Some(Object::Nil)));
+    assert!(!matches!(result.view(), Some(View::Nil)));
 }
 
 #[test]
@@ -259,7 +260,7 @@ end
 Foo.new.test
 "#);
     assert!(result.is_some());
-    assert!(!matches!(result, Some(Object::Nil)));
+    assert!(!matches!(result.view(), Some(View::Nil)));
 }
 
 // ── defined? catch-all for unknown expressions ───────────────────────────────

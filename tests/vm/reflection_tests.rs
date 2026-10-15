@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -88,7 +89,7 @@ class Foo
 end
 Foo.new.methods
 "#);
-    if let Some(Object::Array(arr)) = result {
+    if let Some(View::Array(arr)) = result.view() {
         let names: Vec<String> = arr.borrow().iter().map(|o| o.to_string()).collect();
         assert!(names.contains(&":bar".to_string()));
         assert!(names.contains(&":baz".to_string()));
@@ -112,7 +113,7 @@ class Child < Parent
 end
 Child.new.methods
 "#);
-    if let Some(Object::Array(arr)) = result {
+    if let Some(View::Array(arr)) = result.view() {
         let names: Vec<String> = arr.borrow().iter().map(|o| o.to_string()).collect();
         assert!(names.contains(&":greet".to_string()));
         assert!(names.contains(&":wave".to_string()));
@@ -124,7 +125,7 @@ Child.new.methods
 #[test]
 fn methods_on_builtin_returns_array() {
     let result = run(r#"[1, 2].methods"#);
-    if let Some(Object::Array(arr)) = result {
+    if let Some(View::Array(arr)) = result.view() {
         assert!(!arr.borrow().is_empty());
     } else {
         panic!("Expected Array");
@@ -248,7 +249,7 @@ end
 d = Dog.new
 d.send("class")
 "#);
-    if let Some(Object::Class(c)) = result {
+    if let Some(View::Class(c)) = result.view() {
         assert_eq!(c.name(), "Dog");
     } else {
         panic!("Expected Class");

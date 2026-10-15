@@ -4,6 +4,7 @@ use super::ControlFlow;
 use super::core::VirtualMachine;
 use super::errors::*;
 use super::utils::*;
+use crate::object::{OptionView, View};
 
 use crate::ast::{Expression, Statement};
 use crate::error::MetorexError;
@@ -52,7 +53,7 @@ fn method_to_proc_block(target: &Object, position: Position) -> BlockStatement {
     let written_in_ruby = |method: &crate::object::Method| {
         method.source_location.is_some() || !method.body.is_empty()
     };
-    if let Object::Method(method) = target
+    if let View::Method(method) = target.view()
         && written_in_ruby(method)
     {
         let optional: std::collections::HashSet<usize> = method
@@ -402,14 +403,14 @@ impl VirtualMachine {
                     position: splat_at,
                 } => {
                     let value = self.evaluate_expression(expression)?;
-                    match value {
-                        Object::Array(arr) => {
+                    match value.view() {
+                        View::Array(arr) => {
                             args.extend(arr.borrow().iter().cloned());
                         }
                         // `*nil` spreads into nothing, the way `[*nil]` does,
                         // so a call written with one passes no argument there.
-                        Object::Nil => {}
-                        other => match self.splat_through_to_a(other, *splat_at)? {
+                        View::Nil => {}
+                        _ => match self.splat_through_to_a(value.clone(), *splat_at)? {
                             Ok(items) => args.extend(items),
                             Err(held) => args.push(held),
                         },
@@ -425,19 +426,19 @@ impl VirtualMachine {
                     let mut value = self.evaluate_expression(expression)?;
                     // Anything else is asked for a Hash of its own, which is
                     // how an object stands in for keyword arguments.
-                    if !matches!(value, Object::Dict(_))
+                    if !matches!(value.view(), View::Dict(_))
                         && self.lookup_method(&value, "to_hash").is_some()
                     {
                         value = self.send_to_object(value, "to_hash", vec![], splat_position)?;
                     }
-                    match &value {
+                    match value.view() {
                         // `**nil` passes no keywords, the same as `**{}`.
-                        Object::Nil => {}
-                        Object::Dict(entries) if entries.borrow().is_empty() => {}
-                        Object::Dict(entries) => {
+                        View::Nil => {}
+                        View::Dict(entries) if entries.borrow().is_empty() => {}
+                        View::Dict(entries) => {
                             // Keywords spread after other keywords join them,
                             // a later key taking the place of an earlier one.
-                            if let Some(Object::Dict(gathered)) = args.last()
+                            if let Some(View::Dict(gathered)) = args.last().view()
                                 && gathered.borrow().contains_key("__MX_KWARGS__")
                             {
                                 let mut joined = gathered.borrow().clone();
@@ -474,24 +475,24 @@ impl VirtualMachine {
                         && crate::vm::method_lookup::refinement_target_name(&value, self)
                             .and_then(|target| self.find_refined_method(&target, "to_proc"))
                             .is_some();
-                    match value {
-                        Object::Nil => {}
-                        Object::Block(_) => {
+                    match value.view() {
+                        View::Nil => {}
+                        View::Block(_) => {
                             self.pending_block = Some(value);
                             self.pending_block_from_ampersand = true;
                         }
-                        other if refined_to_proc => {
+                        _ if refined_to_proc => {
                             let made = self.send_to_object(
-                                other.clone(),
+                                value.clone(),
                                 "to_proc",
                                 Vec::new(),
                                 other_position,
                             )?;
                             self.pending_block = Some(made);
                             self.pending_block_from_ampersand = true;
-                            self.pending_block_source = Some(other);
+                            self.pending_block_source = Some(value.clone());
                         }
-                        Object::Symbol(sym) => {
+                        View::Symbol(sym) => {
                             // `&:method` is symbol-to-proc: synthesize a block
                             // `|x| x.send(:method)`. The block has no captured
                             // vars and a one-statement body that calls .send
@@ -503,17 +504,18 @@ impl VirtualMachine {
                         }
                         // `&some_method` hands the method over as the block,
                         // which is what `to_proc` on a Method answers.
-                        target @ Object::Method(_) => {
-                            self.pending_block = Some(block_for_method(target, other_position));
+                        View::Method(_) => {
+                            self.pending_block =
+                                Some(block_for_method(value.clone(), other_position));
                             self.pending_block_from_ampersand = true;
                         }
                         // An object of the program's own becomes a block
                         // through `to_proc`, which is how a Yielder reaches
                         // a method that takes one.
-                        other @ Object::Instance(_)
+                        View::Instance(_)
                             if self
                                 .send_to_object(
-                                    other.clone(),
+                                    value.clone(),
                                     "respond_to?",
                                     vec![Object::symbol("to_proc".to_string())],
                                     other_position,
@@ -521,29 +523,29 @@ impl VirtualMachine {
                                 .is_truthy() =>
                         {
                             let made = self.send_to_object(
-                                other.clone(),
+                                value.clone(),
                                 "to_proc",
                                 Vec::new(),
                                 other_position,
                             )?;
-                            match made {
-                                Object::Block(_) => {
+                            match made.view() {
+                                View::Block(_) => {
                                     self.pending_block = Some(made);
                                     self.pending_block_from_ampersand = true;
-                                    self.pending_block_source = Some(other.clone());
+                                    self.pending_block_source = Some(value.clone());
                                 }
                                 // A `to_proc` that answers a Method stands
                                 // for a block the same way `&method` does.
-                                target @ Object::Method(_) => {
+                                View::Method(_) => {
                                     self.pending_block =
-                                        Some(block_for_method(target, other_position));
+                                        Some(block_for_method(made.clone(), other_position));
                                     self.pending_block_from_ampersand = true;
                                 }
                                 // Anything else is no block at all, which
                                 // Ruby names both sides of.
-                                answered => {
-                                    let named = self.builtins().class_of(&other).ruby_name();
-                                    let gives = self.builtins().class_of(&answered).ruby_name();
+                                _ => {
+                                    let named = self.builtins().class_of(&value).ruby_name();
+                                    let gives = self.builtins().class_of(&made).ruby_name();
                                     let message = format!(
                                         "can't convert {} into Proc ({}#to_proc gives {})",
                                         named, named, gives
@@ -559,8 +561,8 @@ impl VirtualMachine {
                         // An object with no `to_proc` of its own is no block,
                         // and Ruby refuses it rather than counting it among
                         // the arguments.
-                        other @ Object::Instance(_) => {
-                            let named = self.builtins().class_of(&other).ruby_name();
+                        View::Instance(_) => {
+                            let named = self.builtins().class_of(&value).ruby_name();
                             let message = format!("no implicit conversion of {} into Proc", named);
                             return Err(crate::vm::errors::simple_exception(
                                 "TypeError",
@@ -568,12 +570,12 @@ impl VirtualMachine {
                                 other_position,
                             ));
                         }
-                        other => {
+                        _ => {
                             // Non-block, non-nil &arg: push as positional so
                             // the existing trailing-block-extraction in
                             // `invoke_method` can pick it up if it happens to
                             // be a Method/Proc that the user wants to coerce.
-                            args.push(other);
+                            args.push(value.clone());
                         }
                     }
                 }
@@ -585,7 +587,7 @@ impl VirtualMachine {
         // A hash marked by `ruby2_keywords` and spread out of a splat goes on
         // as the keyword arguments it was gathered from.
         if tail_from_splat
-            && let Some(Object::Dict(entries)) = args.last()
+            && let Some(View::Dict(entries)) = args.last().view()
             && entries
                 .borrow()
                 .contains_key(crate::vm::native_methods::hash_methods::RUBY2_KEYWORDS_KEY)
@@ -655,11 +657,11 @@ impl VirtualMachine {
         // `Signal.trap(:EXIT, ...)` names what to run as the program ends,
         // ahead of everything `at_exit` left.
         if let Some(held) = self.signal_handlers.get("EXIT").cloned()
-            && !matches!(&held, Object::String(text) if matches!(
+            && !matches!(held.view(), View::String(text) if matches!(
                 &*text.as_str(),
                 "DEFAULT" | "SYSTEM_DEFAULT" | "IGNORE"
             ))
-            && !matches!(held, Object::Nil)
+            && !matches!(held.view(), View::Nil)
         {
             let position = crate::lexer::Position::new(0, 0, 0);
             let _ = self.send_to_object(held, "call", Vec::new(), position);
@@ -667,7 +669,7 @@ impl VirtualMachine {
             let _ = std::io::stdout().flush();
         }
         while let Some(handler) = self.at_exit_handlers.pop() {
-            let Object::Block(block) = handler else {
+            let View::Block(block) = handler.view() else {
                 continue;
             };
             let position = crate::lexer::Position {
@@ -676,26 +678,26 @@ impl VirtualMachine {
                 offset: 0,
                 prelude: false,
             };
-            let outcome = self.execute_block_callable(&block, Vec::new(), position);
+            let outcome = self.execute_block_callable(block, Vec::new(), position);
             // What a handler printed belongs before whatever the next one
             // reports, and stdout would otherwise hold it until exit.
             use std::io::Write as _;
             let _ = std::io::stdout().flush();
-            match outcome {
+            match &outcome {
                 Ok(_) => {}
-                Err(crate::error::MetorexError::UncaughtException {
-                    exception: Object::Exception(details),
-                    ..
-                }) if details.borrow().is_system_exit() => {
+                Err(crate::error::MetorexError::UncaughtException { exception, .. })
+                    if let View::Exception(details) = exception.view()
+                        && details.borrow().is_system_exit() =>
+                {
                     // `exit` inside a handler ends that handler and settles
                     // the status the program leaves with.
                     if let Some(carried) = details.borrow().status {
                         status = carried as i32;
                     }
-                    self.set_current_exception(Object::Exception(std::rc::Rc::clone(&details)));
+                    self.set_current_exception(Object::Exception(std::rc::Rc::clone(details)));
                 }
                 Err(error) => {
-                    self.report_ending_error(error);
+                    self.report_ending_error(error.clone());
                     status = 1;
                 }
             }

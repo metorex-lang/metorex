@@ -1,6 +1,7 @@
 // The method table, the mixin chains, and the lookups over them.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 thread_local! {
     /// A number every change to a method table, a mixin chain or a
@@ -182,9 +183,9 @@ impl Class {
         if !self.is_singleton_class() || name.starts_with("__class__") {
             return None;
         }
-        match self.get_class_var("__attached__") {
-            Some(crate::object::Object::Class(attached))
-            | Some(crate::object::Object::Module(attached))
+        match self.get_class_var("__attached__").view() {
+            Some(crate::object::View::Class(attached))
+            | Some(crate::object::View::Module(attached))
                 if attached.holds_class_methods.get() =>
             {
                 attached.find_own_method(&format!("__class__{}", name))
@@ -359,8 +360,8 @@ impl Class {
         // singleton class itself. Alias from there so e.g. mspec's mock
         // installer can save a class method aside.
         if self.get_class_var("__singleton__").is_some()
-            && let Some(Object::Class(attached) | Object::Module(attached)) =
-                self.get_class_var("__attached__")
+            && let Some(View::Class(attached) | View::Module(attached)) =
+                self.get_class_var("__attached__").view()
             && let Some(method) = attached.find_method(&format!("__class__{}", old_name))
         {
             method_state_changed();
@@ -425,9 +426,10 @@ impl Class {
         // A singleton class answers for the `def self.name` methods its
         // attached class holds under a prefix.
         if self.is_singleton_class()
+            && let attached_to = self.get_class_var("__attached__")
             && let Some(
-                crate::object::Object::Class(attached) | crate::object::Object::Module(attached),
-            ) = self.get_class_var("__attached__")
+                crate::object::View::Class(attached) | crate::object::View::Module(attached),
+            ) = attached_to.view()
         {
             for held in attached.methods.borrow().keys() {
                 if let Some(plain) = held.strip_prefix("__class__")

@@ -1,6 +1,7 @@
 // Stopping a fiber where it stands, and what it keeps.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Stop a fiber where it stands, unwinding whatever it was part-way
@@ -93,8 +94,8 @@ impl VirtualMachine {
                 position,
             ));
         }
-        let message = match &raised {
-            Object::Exception(details) => details.borrow().message.clone(),
+        let message = match raised.view() {
+            View::Exception(details) => details.borrow().message.clone(),
             other => format!("{other}"),
         };
         Err(MetorexError::UncaughtException {
@@ -178,10 +179,11 @@ impl VirtualMachine {
         if let Some(held) = &self.root_fiber {
             return held.clone();
         }
-        let Some(Object::Class(fiber_class)) = self.globals().get("Fiber") else {
+        let viewed = self.globals().get("Fiber");
+        let Some(View::Class(fiber_class)) = viewed.view() else {
             return Object::Nil;
         };
-        let made = crate::object::Instance::new(fiber_class);
+        let made = crate::object::Instance::new(fiber_class.clone());
         made.borrow_mut()
             .set_var("__fiber__".to_string(), Object::Int(ROOT_FIBER as i64));
         let held = Object::Instance(made);
@@ -207,7 +209,7 @@ pub(crate) fn frame_line(frame: &crate::vm::CallFrame) -> usize {
 /// Whether what a thread died of ends the whole program rather than just
 /// that thread, which is what `exit` raises.
 pub(crate) fn ends_the_program(died_of: &Object) -> bool {
-    let Object::Exception(details) = died_of else {
+    let View::Exception(details) = died_of.view() else {
         return false;
     };
     matches!(
@@ -221,7 +223,7 @@ pub(crate) fn fiber_was_killed(trouble: &MetorexError) -> bool {
     let MetorexError::UncaughtException { exception, .. } = trouble else {
         return false;
     };
-    let Object::Exception(details) = exception else {
+    let View::Exception(details) = exception.view() else {
         return false;
     };
     details.borrow().exception_type == FIBER_KILLED

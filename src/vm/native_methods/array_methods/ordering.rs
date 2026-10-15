@@ -1,6 +1,7 @@
 // Putting the elements in order.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Putting the elements in order.
@@ -44,12 +45,13 @@ impl VirtualMachine {
                 }
                 // A block decides the order, answering negative, zero, or
                 // positive the way `<=>` does.
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(block)) => Some(block),
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(block)) => Some(block),
                     _ => None,
                 };
                 let elements = array_rc.borrow().clone();
-                let sorted = self.sort_elements(elements, block, position)?;
+                let sorted = self.sort_elements(elements, block.cloned(), position)?;
                 Ok(Some(Object::array(sorted)))
             }
             "sort_by" => {
@@ -61,8 +63,9 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(b)) => b,
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(b)) => b,
                     // Without a block the sort is an Enumerator, which
                     // `sort_by.with_index` hands the index to.
                     None => {
@@ -74,7 +77,7 @@ impl VirtualMachine {
                         return Err(method_argument_type_error(
                             method_name,
                             "Block",
-                            &other,
+                            &other.to_object(),
                             position,
                         ));
                     }
@@ -82,7 +85,7 @@ impl VirtualMachine {
                 let mut keyed: Vec<(Object, Object)> = Vec::new();
                 for element in array_rc.borrow().iter() {
                     let key =
-                        self.execute_block_callable(&block, vec![element.clone()], position)?;
+                        self.execute_block_callable(block, vec![element.clone()], position)?;
                     keyed.push((key, element.clone()));
                 }
                 let sorted = self.sort_by_keys(keyed, position)?;

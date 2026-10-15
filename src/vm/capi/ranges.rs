@@ -7,6 +7,7 @@ use super::handles::{QFALSE, QNIL, QTRUE, Value, to_object, to_value};
 use super::numbers::long_from;
 use super::{called_from, raise};
 use crate::object::Object;
+use crate::object::View;
 
 /// The ends of a range and whether it leaves out its last value.
 struct Ends {
@@ -74,13 +75,13 @@ fn out_of_range(object: &Object) -> ! {
 /// outside. With `err` 0 or 2 a range reaching past the end is cut short
 /// and one starting past it is outside; with `err` 1 neither is.
 fn start_and_length(ends: &Ends, length: i64, err: i32) -> Option<(i64, i64)> {
-    let start = match ends.first {
-        Object::Nil => 0,
-        ref first => long_from(to_value(first)),
+    let start = match ends.first.view() {
+        View::Nil => 0,
+        ref first => long_from(to_value(&first.to_object())),
     };
-    let (finish, exclusive) = match ends.last {
-        Object::Nil => (-1, false),
-        ref last => (long_from(to_value(last)), ends.exclusive),
+    let (finish, exclusive) = match ends.last.view() {
+        View::Nil => (-1, false),
+        ref last => (long_from(to_value(&last.to_object())), ends.exclusive),
     };
     let mut start = start;
     let mut finish = finish;
@@ -205,13 +206,13 @@ pub extern "C-unwind" fn rb_arithmetic_sequence_beg_len_step(
     let Some((mut ends, step)) = sequence_parts(&sequence) else {
         return QFALSE;
     };
-    let step = match step {
-        Object::Nil => 1,
-        held => long_from(to_value(&held)),
+    let step = match step.view() {
+        View::Nil => 1,
+        _ => long_from(to_value(&step)),
     };
     *stride = step;
     if step < 0 {
-        if ends.exclusive && !matches!(ends.last, Object::Nil) {
+        if ends.exclusive && !matches!(ends.last.view(), View::Nil) {
             ends.last = Object::Int(long_from(to_value(&ends.last)) + 1);
             ends.exclusive = false;
         }

@@ -2,6 +2,7 @@
 // that `-n` and `-p` add.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Set the current file being executed.
@@ -18,17 +19,18 @@ impl VirtualMachine {
     /// The directories `$LOAD_PATH` names. An entry that is not a String is
     /// asked for its `to_path`, the way Ruby reads one.
     pub(crate) fn load_path_directories(&mut self) -> Vec<String> {
-        let Some(Object::Array(entries)) = self.globals().get(":") else {
+        let viewed = self.globals().get(":");
+        let Some(View::Array(entries)) = viewed.view() else {
             return Vec::new();
         };
         let entries = entries.borrow().clone();
         let mut directories = Vec::with_capacity(entries.len());
         for entry in entries {
-            match entry {
-                Object::String(directory) => directories.push(directory.as_str().to_string()),
-                other => {
+            match entry.view() {
+                View::String(directory) => directories.push(directory.as_str().to_string()),
+                _ => {
                     let position = crate::lexer::Position::new(0, 0, 0);
-                    if let Ok(path) = self.coerce_load_path(&other, position) {
+                    if let Ok(path) = self.coerce_load_path(&entry, position) {
                         directories.push(path);
                     }
                 }
@@ -43,9 +45,9 @@ impl VirtualMachine {
         let Some(rest) = path.strip_prefix("~/") else {
             return path.to_string();
         };
-        let home = match self.globals().get("ENV") {
-            Some(Object::Dict(entries)) => match entries.borrow().get("HOME") {
-                Some(Object::String(home)) => Some(home.as_str().to_string()),
+        let home = match self.globals().get("ENV").view() {
+            Some(View::Dict(entries)) => match entries.borrow().get("HOME").view() {
+                Some(View::String(home)) => Some(home.as_str().to_string()),
                 _ => None,
             },
             _ => None,
@@ -61,14 +63,15 @@ impl VirtualMachine {
     /// The files named on the command line, taken off ARGV the way Ruby's
     /// line-reading loop takes them.
     pub fn argv_paths(&mut self) -> Vec<String> {
-        let Some(Object::Array(held)) = self.globals().get("ARGV") else {
+        let viewed = self.globals().get("ARGV");
+        let Some(View::Array(held)) = viewed.view() else {
             return Vec::new();
         };
         let named: Vec<String> = held
             .borrow()
             .iter()
-            .filter_map(|entry| match entry {
-                Object::String(text) => Some(text.as_str().to_string()),
+            .filter_map(|entry| match entry.view() {
+                View::String(text) => Some(text.as_str().to_string()),
                 _ => None,
             })
             .collect();
@@ -109,9 +112,9 @@ impl VirtualMachine {
     pub fn print_current_line(&mut self) {
         // `print` writes whatever `$_` holds, which the program may have
         // replaced with something that is not a string.
-        match self.globals().get("_") {
-            Some(Object::Nil) | None => {}
-            Some(Object::String(line)) => print!("{}", line.as_str()),
+        match self.globals().get("_").view() {
+            Some(View::Nil) | None => {}
+            Some(View::String(line)) => print!("{}", line.as_str()),
             Some(other) => print!("{other}"),
         }
     }
@@ -205,7 +208,7 @@ impl VirtualMachine {
         };
         // The separator the flag named cannot be changed afterwards.
         let held = Object::string(separator);
-        if let Object::String(text) = &held {
+        if let View::String(text) = held.view() {
             text.freeze();
         }
         self.globals_mut().set_variable("/", held.clone());
@@ -215,8 +218,8 @@ impl VirtualMachine {
 
     /// The separator `$/` names now, which a program may have changed.
     pub fn line_separator(&self) -> String {
-        match self.globals().get("/") {
-            Some(Object::String(text)) => text.as_str().to_string(),
+        match self.globals().get("/").view() {
+            Some(View::String(text)) => text.as_str().to_string(),
             _ => "\n".to_string(),
         }
     }
@@ -282,7 +285,8 @@ impl VirtualMachine {
         let Some(scope) = self.main_script_scope.clone() else {
             return;
         };
-        let Some(Object::Binding(held)) = self.globals().get("TOPLEVEL_BINDING") else {
+        let viewed = self.globals().get("TOPLEVEL_BINDING");
+        let Some(View::Binding(held)) = viewed.view() else {
             return;
         };
         let named: Vec<String> = scope.borrow().own_variable_names();

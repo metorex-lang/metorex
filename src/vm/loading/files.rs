@@ -1,6 +1,7 @@
 // The file running now, and the files already loaded.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// The path `__FILE__` reports for the file running now: the spelling the
@@ -54,15 +55,15 @@ impl VirtualMachine {
     pub fn unmark_file_loaded(&mut self, path: &PathBuf) {
         self.loaded_files.remove(path);
         let path_str = path.to_string_lossy().into_owned();
-        if let Some(Object::Array(arr)) = self.globals().get("\"") {
+        if let Some(View::Array(arr)) = self.globals().get("\"").view() {
             arr.borrow_mut()
-                .retain(|o| !matches!(o, Object::String(s) if *s.as_str() == *path_str));
+                .retain(|o| !matches!(o.view(), View::String(s) if *s.as_str() == *path_str));
         }
     }
 
     /// Prepend a path to the `$LOAD_PATH` (`$:`) global array.
     pub fn prepend_load_path(&mut self, path: String) {
-        if let Some(Object::Array(arr)) = self.globals.get(":") {
+        if let Some(View::Array(arr)) = self.globals.get(":").view() {
             arr.borrow_mut().insert(0, Object::string(path));
         }
     }
@@ -70,7 +71,7 @@ impl VirtualMachine {
     /// Add a directory to the end of `$LOAD_PATH`, where the directories a
     /// library is installed into sit.
     pub fn append_load_path(&mut self, path: String) {
-        if let Some(Object::Array(arr)) = self.globals.get(":") {
+        if let Some(View::Array(arr)) = self.globals.get(":").view() {
             arr.borrow_mut().push(Object::string(path));
         }
     }
@@ -80,7 +81,7 @@ impl VirtualMachine {
     /// which is what tells them apart from a directory the program added.
     pub fn append_installed_load_path(&mut self, path: String) {
         let entry = Object::string(path.clone());
-        if let Object::String(held) = &entry {
+        if let View::String(held) = entry.view() {
             held.freeze();
         }
         if let Some(address) = Self::collection_address(&entry) {
@@ -91,7 +92,7 @@ impl VirtualMachine {
             self.collection_variable_owners
                 .insert(address, entry.clone());
         }
-        if let Some(Object::Array(arr)) = self.globals.get(":") {
+        if let Some(View::Array(arr)) = self.globals.get(":").view() {
             arr.borrow_mut().push(entry);
         }
     }

@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -29,7 +30,7 @@ fn range_to_a_inclusive_values() {
 (1..3).to_a
 "#);
     assert!(result.is_some());
-    if let Some(Object::Array(arr)) = result {
+    if let Some(View::Array(arr)) = result.view() {
         let borrowed = arr.borrow();
         assert_eq!(borrowed.len(), 3);
         assert_eq!(borrowed[0], Object::Int(1));
@@ -43,7 +44,7 @@ fn range_to_a_exclusive_values() {
 (1...4).to_a
 "#);
     assert!(result.is_some());
-    if let Some(Object::Array(arr)) = result {
+    if let Some(View::Array(arr)) = result.view() {
         let borrowed = arr.borrow();
         assert_eq!(borrowed.len(), 3);
         assert_eq!(borrowed[0], Object::Int(1));
@@ -61,7 +62,7 @@ fn range_map_inclusive_transforms() {
 (1..4).map { |x| x * 10 }
 "#);
     assert!(result.is_some());
-    if let Some(Object::Array(arr)) = result {
+    if let Some(View::Array(arr)) = result.view() {
         let borrowed = arr.borrow();
         assert_eq!(borrowed.len(), 4);
         assert_eq!(borrowed[0], Object::Int(10));
@@ -75,7 +76,7 @@ fn range_map_exclusive_transforms() {
 (1...4).map { |x| x * 10 }
 "#);
     assert!(result.is_some());
-    if let Some(Object::Array(arr)) = result {
+    if let Some(View::Array(arr)) = result.view() {
         let borrowed = arr.borrow();
         assert_eq!(borrowed.len(), 3);
         assert_eq!(borrowed[0], Object::Int(10));

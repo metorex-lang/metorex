@@ -15,6 +15,7 @@ use crate::class::Class;
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -53,7 +54,7 @@ impl VirtualMachine {
         // A module-level method lives either on the singleton class, put
         // there by `class << Mod`, or under the name-mangled key `def
         // self.name` uses. Neither is reachable by an instance-method lookup.
-        if let Object::Class(class) | Object::Module(class) = &receiver {
+        if let View::Class(class) | View::Module(class) = receiver.view() {
             // What the module itself defines comes first, whether written as
             // `def self.name` or in a `class << self` body. A method it
             // answers to only because it extended a module sits behind those,
@@ -127,7 +128,7 @@ impl VirtualMachine {
         if class.name() != "Interrupt" {
             return;
         }
-        let Object::Exception(details) = exception else {
+        let View::Exception(details) = exception.view() else {
             return;
         };
         details.borrow_mut().instance_vars.insert(
@@ -150,15 +151,15 @@ impl VirtualMachine {
         let invalid = |detail: String| {
             crate::vm::errors::simple_exception("ArgumentError", &detail, position)
         };
-        let (number, name) = match arguments.first() {
-            Some(Object::Int(given)) => {
-                let number = i32::try_from(*given).ok().unwrap_or(-1);
+        let (number, name) = match arguments.first().view() {
+            Some(View::Int(given)) => {
+                let number = i32::try_from(given).ok().unwrap_or(-1);
                 let Some(name) = name_for_number(number) else {
                     return Err(invalid(format!("invalid signal number {}", given)));
                 };
                 (number, format!("SIG{}", name))
             }
-            Some(Object::String(given) | Object::Symbol(given)) => {
+            Some(View::String(given) | View::Symbol(given)) => {
                 // A name and a message together is one argument too many:
                 // the name is already the message.
                 if arguments.len() > 1 {
@@ -184,7 +185,11 @@ impl VirtualMachine {
             }
             other => {
                 let type_name = match other {
-                    Some(value) => self.builtins().class_of(value).name().to_string(),
+                    Some(value) => self
+                        .builtins()
+                        .class_of(&value.to_object())
+                        .name()
+                        .to_string(),
                     None => {
                         return Err(crate::vm::errors::argument_count_error(
                             crate::vm::errors::Arity::Range(1, 2),
@@ -202,7 +207,7 @@ impl VirtualMachine {
             None => name,
         };
         let exception = Object::exception(class.name(), message);
-        if let Object::Exception(details) = &exception {
+        if let View::Exception(details) = exception.view() {
             let mut details = details.borrow_mut();
             details.class = Some(Rc::clone(class));
             details.message_given = true;
@@ -220,9 +225,9 @@ impl VirtualMachine {
         arguments: Vec<Object>,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        match callable {
-            Object::Block(block) => block.call(self, arguments, position),
-            Object::Method(method) => {
+        match callable.view() {
+            View::Block(block) => block.call(self, arguments, position),
+            View::Method(method) => {
                 // Call standalone function (represented as Method object)
                 // Validate positional argument count, accounting for defaults
                 let expected = method.parameters.len();
@@ -277,7 +282,7 @@ impl VirtualMachine {
                         method.name.clone(),
                         defined_name,
                     ),
-                    |vm| vm.execute_function_body(&method, arguments),
+                    |vm| vm.execute_function_body(method, arguments),
                 );
                 if has_captured {
                     self.refinement_scopes.pop();
@@ -285,9 +290,9 @@ impl VirtualMachine {
                 self.user_def_nesting = self.user_def_nesting.saturating_sub(1);
                 result
             }
-            Object::Class(class) => self.invoke_class(class, arguments, position),
-            Object::NativeFunction(name) => self.call_native_function(&name, arguments, position),
-            other => Err(not_callable_error(&other, position)),
+            View::Class(class) => self.invoke_class(class.clone(), arguments, position),
+            View::NativeFunction(name) => self.call_native_function(name, arguments, position),
+            _ => Err(not_callable_error(&callable, position)),
         }
     }
 
@@ -330,7 +335,7 @@ impl VirtualMachine {
             // `capacity:` only sizes the storage, so it is accepted and
             // dropped. Any other keyword is refused the way Ruby refuses it.
             let mut arguments = arguments;
-            if let Some(Object::Dict(entries)) = arguments.last() {
+            if let Some(View::Dict(entries)) = arguments.last().view() {
                 let named: Vec<String> = entries
                     .borrow()
                     .keys()
@@ -385,13 +390,13 @@ impl VirtualMachine {
         // Regexp.new(source, flags) — the runtime form of a regex literal,
         // which is how an interpolated literal is assembled.
         if class.name() == "Regexp" && !arguments.is_empty() {
-            let source = match &arguments[0] {
-                Object::String(s) => s.as_str().to_string(),
-                Object::Regex(pattern, _) => pattern.as_str().to_string(),
+            let source = match arguments[0].view() {
+                View::String(s) => s.as_str().to_string(),
+                View::Regex(pattern, _) => pattern.as_str().to_string(),
                 other => format!("{}", other),
             };
-            let flags = match arguments.get(1) {
-                Some(Object::String(f)) => f.as_str().to_string(),
+            let flags = match arguments.get(1).view() {
+                Some(View::String(f)) => f.as_str().to_string(),
                 _ => String::new(),
             };
             return Ok(Object::Regex(Rc::new(source), Rc::new(flags)));
@@ -431,12 +436,12 @@ impl VirtualMachine {
         if descends_from(&class, "Range") && (2..=3).contains(&arguments.len()) {
             self.pending_block.take();
             self.check_range_ends(&arguments[0], &arguments[1], position)?;
-            let made = Object::Range {
-                start: Box::new(arguments[0].clone()),
-                end: Box::new(arguments[1].clone()),
-                exclusive: arguments.get(2).is_some_and(|flag| flag.is_truthy()),
-                mark: std::rc::Rc::new(()),
-            };
+            let made = Object::Range(
+                Box::new(arguments[0].clone()),
+                Box::new(arguments[1].clone()),
+                arguments.get(2).is_some_and(|flag| flag.is_truthy()),
+                std::rc::Rc::new(()),
+            );
             if class.name() == "Range" {
                 return Ok(made);
             }
@@ -525,8 +530,8 @@ impl VirtualMachine {
                 }
                 _ => {
                     let elements = self.build_array_elements(&arguments, position)?;
-                    if let Some(Object::Array(storage)) =
-                        crate::vm::native_methods::array_subclass_value(&object)
+                    if let Some(View::Array(storage)) =
+                        crate::vm::native_methods::array_subclass_value(&object).view()
                     {
                         *storage.borrow_mut() = elements;
                     }
@@ -549,10 +554,11 @@ impl VirtualMachine {
                 self.pending_block = None;
                 return Ok(source);
             }
-            let held = match self.pending_block.take() {
-                Some(block @ Object::Block(_)) => block,
+            let viewed = self.pending_block.take();
+            let held = match viewed.view() {
+                Some(block @ View::Block(_)) => block.to_object(),
                 other => {
-                    self.pending_block = other;
+                    self.pending_block = other.map(View::to_object);
                     return Err(crate::vm::errors::simple_exception(
                         "ArgumentError",
                         "tried to create Proc object without a block",
@@ -563,7 +569,7 @@ impl VirtualMachine {
             let instance = crate::object::Instance::new(Rc::clone(&class));
             instance.borrow_mut().set_var(
                 crate::vm::native_methods::PROC_SUBCLASS_VAR.to_string(),
-                held,
+                held.clone(),
             );
             let object = Object::Instance(instance);
             if let Some(initialize) = class.find_method("initialize")
@@ -603,9 +609,9 @@ impl VirtualMachine {
                 _ => {
                     let set_class = Rc::clone(&self.builtins().set_class);
                     let built = self.call_class_methods(&set_class, "new", &arguments, position)?;
-                    if let (Some(Object::Set(storage)), Some(Object::Set(built))) = (
-                        crate::vm::native_methods::set_subclass_value(&object),
-                        built,
+                    if let (Some(View::Set(storage)), Some(View::Set(built))) = (
+                        crate::vm::native_methods::set_subclass_value(&object).view(),
+                        built.view(),
                     ) {
                         *storage.borrow_mut() = built.borrow().clone();
                     }
@@ -652,7 +658,7 @@ impl VirtualMachine {
             let mut named_args = None;
             let mut named_private_call = None;
             let mut arguments = arguments;
-            if let Some(Object::Dict(entries)) = arguments.last() {
+            if let Some(View::Dict(entries)) = arguments.last().view() {
                 let entries = entries.borrow();
                 named_receiver = entries.get(":receiver").cloned();
                 named_key = entries.get(":key").cloned();
@@ -670,15 +676,18 @@ impl VirtualMachine {
             let message = if arguments.is_empty() {
                 String::new()
             } else if arguments.len() == 1 {
-                match &arguments[0] {
+                match arguments[0].view() {
                     // A message of nil is no message at all, so the exception
                     // names itself the way one built with none does.
-                    Object::Nil => String::new(),
-                    Object::String(s) => s.as_str().to_string(),
+                    View::Nil => String::new(),
+                    View::String(s) => s.as_str().to_string(),
                     // Ruby renders the message with `to_s`, which a message
                     // object is free to define.
-                    other => match self.send_to_object(other.clone(), "to_s", vec![], position)? {
-                        Object::String(text) => text.as_str().to_string(),
+                    _ => match self
+                        .send_to_object(arguments[0].clone(), "to_s", vec![], position)?
+                        .view()
+                    {
+                        View::String(text) => text.as_str().to_string(),
                         rendered => rendered.to_string(),
                     },
                 }
@@ -691,9 +700,9 @@ impl VirtualMachine {
                 named_name = Some(arguments[1].clone());
                 named_args = arguments.get(2).cloned();
                 named_private_call = arguments.get(3).map(|held| Object::Bool(held.is_truthy()));
-                match &arguments[0] {
-                    Object::String(text) => text.as_str().to_string(),
-                    other => self.coerce_name_argument(other, position)?,
+                match arguments[0].view() {
+                    View::String(text) => text.as_str().to_string(),
+                    _ => self.coerce_name_argument(&arguments[0], position)?,
                 }
             } else if class
                 .find_method("initialize")
@@ -718,7 +727,7 @@ impl VirtualMachine {
             let creating_frame_locals = self.name_error_locals(&class, position);
             // An anonymous class has no name to look up later, so the class
             // itself travels with the exception.
-            if let Object::Exception(details) = &exception {
+            if let View::Exception(details) = exception.view() {
                 let mut details = details.borrow_mut();
                 details.class = Some(Rc::clone(&class));
                 let writes_its_own_initialize = class
@@ -726,15 +735,15 @@ impl VirtualMachine {
                     .is_some_and(|held| !held.is_undefined && !held.body.is_empty());
                 details.message_given = !writes_its_own_initialize
                     && !arguments.is_empty()
-                    && !matches!(arguments.first(), Some(Object::Nil));
+                    && !matches!(arguments.first().view(), Some(View::Nil));
                 // The String given is kept as it was, encoding and all, for
                 // Marshal to write.
                 if details.message_given
-                    && let Some(given @ Object::String(_)) = arguments.first()
+                    && let Some(given @ View::String(_)) = arguments.first().view()
                 {
                     details
                         .instance_vars
-                        .insert(crate::vm::MESSAGE_STRING_KEY.to_string(), given.clone());
+                        .insert(crate::vm::MESSAGE_STRING_KEY.to_string(), given.to_object());
                 }
                 if let Some(value) = named_receiver {
                     details.receiver = Some(Box::new(value));
@@ -899,23 +908,23 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let (status, rest) = match arguments.first() {
-            Some(Object::Int(status)) => (*status, &arguments[1..]),
-            Some(Object::Bool(success)) => (i64::from(!*success), &arguments[1..]),
+        let (status, rest) = match arguments.first().view() {
+            Some(View::Int(status)) => (status, &arguments[1..]),
+            Some(View::Bool(success)) => (i64::from(!success), &arguments[1..]),
             _ => (0, arguments),
         };
-        let message = match rest.first() {
-            None | Some(Object::Nil) => None,
-            Some(Object::String(text)) => Some(text.as_str().to_string()),
-            Some(other) => Some(self.coerce_name_argument(other, position)?),
+        let message = match rest.first().view() {
+            None | Some(View::Nil) => None,
+            Some(View::String(text)) => Some(text.as_str().to_string()),
+            Some(other) => Some(self.coerce_name_argument(&other.to_object(), position)?),
         };
         let exception = Object::exception(class.name(), message.clone().unwrap_or_default());
-        if let Object::Exception(details) = &exception {
+        if let View::Exception(details) = exception.view() {
             let mut details = details.borrow_mut();
             details.class = Some(Rc::clone(class));
             details.status = Some(status);
             details.message_given = message.is_some();
-            if matches!(arguments.first(), Some(Object::Nil)) {
+            if matches!(arguments.first().view(), Some(View::Nil)) {
                 details.message_given = false;
             }
         }
@@ -989,10 +998,10 @@ impl VirtualMachine {
             }
             // Module's own `initialize` runs a block as the module's body.
             _ => {
-                if let Some(Object::Block(body)) = block {
+                if let Some(View::Block(body)) = block.view() {
                     self.apply_block_as_class_body_with_self(
                         &made,
-                        &body,
+                        body,
                         position,
                         receiver.clone(),
                     )?;
@@ -1040,7 +1049,7 @@ impl VirtualMachine {
     ) -> Result<Object, MetorexError> {
         let mut named = None;
         let mut positional = arguments;
-        if let Some(Object::Dict(options)) = arguments.last() {
+        if let Some(View::Dict(options)) = arguments.last().view() {
             let held = options.borrow();
             if held.contains_key(":encoding") || held.contains_key(":capacity") {
                 if let Some(wanted) = held.get(":encoding") {
@@ -1049,21 +1058,26 @@ impl VirtualMachine {
                 positional = &arguments[..arguments.len() - 1];
             }
         }
-        let (text, held) = match positional.first() {
+        let (text, held) = match positional.first().view() {
             None => (String::new(), "ASCII-8BIT".to_string()),
-            Some(Object::String(given)) => (given.to_text(), given.encoding_name()),
-            Some(other) if self.responds_to(other, "to_str") => {
-                match self.send_to_object(other.clone(), "to_str", vec![], position)? {
-                    Object::String(given) => (given.to_text(), given.encoding_name()),
+            Some(View::String(given)) => (given.to_text(), given.encoding_name()),
+            Some(other) if self.responds_to(&other.to_object(), "to_str") => {
+                match self
+                    .send_to_object(other.to_object(), "to_str", vec![], position)?
+                    .view()
+                {
+                    View::String(given) => (given.to_text(), given.encoding_name()),
                     _ => {
-                        return Err(self.string_conversion_error(other, position));
+                        return Err(self.string_conversion_error(&other.to_object(), position));
                     }
                 }
             }
-            Some(other) => match crate::vm::native_methods::string_subclass_value(other) {
-                Some(Object::String(given)) => (given.to_text(), given.encoding_name()),
-                _ => return Err(self.string_conversion_error(other, position)),
-            },
+            Some(other) => {
+                match crate::vm::native_methods::string_subclass_value(&other.to_object()).view() {
+                    Some(View::String(given)) => (given.to_text(), given.encoding_name()),
+                    _ => return Err(self.string_conversion_error(&other.to_object(), position)),
+                }
+            }
         };
         let made = crate::object::StringValue::with_encoding(text, named.unwrap_or(held));
         Ok(Object::String(Rc::new(made)))

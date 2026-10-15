@@ -1,5 +1,6 @@
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -32,7 +33,7 @@ fn string_format_percent_d_with_space_sign() {
 
 #[test]
 fn string_format_percent_d_with_width() {
-    if let Some(Object::String(s)) = run(r#""%5d" % 42"#) {
+    if let Some(View::String(s)) = run(r#""%5d" % 42"#).view() {
         assert!(s.as_str().contains("42"));
     } else {
         panic!("expected String");
@@ -79,7 +80,7 @@ fn string_format_percent_with_array_args() {
 
 #[test]
 fn string_format_percent_f_basic() {
-    if let Some(Object::String(s)) = run(r#""%f" % 3.14"#) {
+    if let Some(View::String(s)) = run(r#""%f" % 3.14"#).view() {
         assert!(s.as_str().starts_with("3.14"));
     } else {
         panic!("expected String");
@@ -96,21 +97,21 @@ fn string_format_percent_f_with_precision() {
 
 #[test]
 fn string_format_percent_f_from_int() {
-    if let Some(Object::String(s)) = run(r#""%.1f" % 5"#) {
+    if let Some(View::String(s)) = run(r#""%.1f" % 5"#).view() {
         assert!(s.as_str().starts_with("5.0"));
     }
 }
 
 #[test]
 fn string_format_percent_f_with_plus_sign() {
-    if let Some(Object::String(s)) = run(r#""%+.1f" % 3.5"#) {
+    if let Some(View::String(s)) = run(r#""%+.1f" % 3.5"#).view() {
         assert!(s.as_str().starts_with("+3.5"));
     }
 }
 
 #[test]
 fn string_format_percent_f_with_space_sign() {
-    if let Some(Object::String(s)) = run(r#""% .1f" % 3.5"#) {
+    if let Some(View::String(s)) = run(r#""% .1f" % 3.5"#).view() {
         assert!(s.as_str().starts_with(" 3.5"));
     }
 }
@@ -190,7 +191,7 @@ fn string_format_percent_literal_double() {
 
 #[test]
 fn string_format_left_align() {
-    if let Some(Object::String(s)) = run(r#""[%-5s]" % "hi""#) {
+    if let Some(View::String(s)) = run(r#""[%-5s]" % "hi""#).view() {
         assert_eq!(&*s.as_str(), "[hi   ]");
     } else {
         panic!("expected String");
@@ -207,7 +208,7 @@ fn string_format_zero_pad() {
 
 #[test]
 fn string_format_left_align_coverage() {
-    if let Some(Object::String(s)) = run("'%-10s' % 'hi'") {
+    if let Some(View::String(s)) = run("'%-10s' % 'hi'").view() {
         assert!(s.as_str().starts_with("hi"));
         assert_eq!(s.as_str().len(), 10);
     } else {

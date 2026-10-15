@@ -2,6 +2,7 @@
 // patterns.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// Execute a match statement for pattern matching.
@@ -273,11 +274,11 @@ pub(crate) fn literal_pattern_spelling(pattern: &crate::ast::MatchPattern) -> Op
 /// Whether two names stand for the very same object, which is what tells the
 /// value a `case` is matching from one nested inside a pattern.
 pub(crate) fn names_the_same_value(left: &Object, right: &Object) -> bool {
-    match (left, right) {
-        (Object::Array(one), Object::Array(other)) => Rc::ptr_eq(one, other),
-        (Object::Dict(one), Object::Dict(other)) => Rc::ptr_eq(one, other),
-        (Object::Instance(one), Object::Instance(other)) => Rc::ptr_eq(one, other),
-        (Object::String(one), Object::String(other)) => Rc::ptr_eq(one, other),
+    match (left.view(), right.view()) {
+        (View::Array(one), View::Array(other)) => Rc::ptr_eq(one, other),
+        (View::Dict(one), View::Dict(other)) => Rc::ptr_eq(one, other),
+        (View::Instance(one), View::Instance(other)) => Rc::ptr_eq(one, other),
+        (View::String(one), View::String(other)) => Rc::ptr_eq(one, other),
         _ => left == right,
     }
 }

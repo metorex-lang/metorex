@@ -1,6 +1,7 @@
 // The members a struct names, and the subscripts that reach them.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 /// Class variable holding the ordered member names of a generated struct class.
 pub(crate) const MEMBERS_VAR: &str = "__struct_members__";
@@ -25,13 +26,13 @@ pub(crate) fn is_member_slot(name: &str) -> bool {
 /// The member names of a generated struct class, or None when `class_rc` is
 /// not one. `Struct` itself has no members and answers None.
 pub(crate) fn struct_members(class_rc: &Rc<Class>) -> Option<Vec<String>> {
-    match class_rc.lookup_class_var(MEMBERS_VAR) {
-        Some(Object::Array(names)) => Some(
+    match class_rc.lookup_class_var(MEMBERS_VAR).view() {
+        Some(View::Array(names)) => Some(
             names
                 .borrow()
                 .iter()
-                .map(|name| match name {
-                    Object::Symbol(s) => s.as_str().to_string(),
+                .map(|name| match name.view() {
+                    View::Symbol(s) => s.as_str().to_string(),
                     other => other.to_string(),
                 })
                 .collect(),
@@ -93,20 +94,20 @@ pub(crate) fn range_values(
     range: &Object,
     position: Position,
 ) -> Result<Vec<Object>, MetorexError> {
-    let Object::Range {
+    let View::Range {
         start,
         end,
         exclusive,
         ..
-    } = range
+    } = range.view()
     else {
         return Ok(Vec::new());
     };
     let length = values.len() as i64;
-    let first = match start.as_ref() {
-        Object::Nil => 0,
-        Object::Int(value) if *value < 0 => value + length,
-        Object::Int(value) => *value,
+    let first = match start.view() {
+        View::Nil => 0,
+        View::Int(value) if value < 0 => value + length,
+        View::Int(value) => value,
         _ => 0,
     };
     if first < 0 || first > length {
@@ -116,19 +117,19 @@ pub(crate) fn range_values(
             message: format!("{} out of range", range),
         });
     }
-    let mut last = match end.as_ref() {
-        Object::Nil => length - 1,
-        Object::Int(value) if *value < 0 => value + length,
-        Object::Int(value) => {
-            if *exclusive {
+    let mut last = match end.view() {
+        View::Nil => length - 1,
+        View::Int(value) if value < 0 => value + length,
+        View::Int(value) => {
+            if exclusive {
                 value - 1
             } else {
-                *value
+                value
             }
         }
         _ => length - 1,
     };
-    if matches!(end.as_ref(), Object::Int(value) if *value < 0) && *exclusive {
+    if matches!(end.view(), View::Int(value) if value < 0) && exclusive {
         last -= 1;
     }
     let mut picked = Vec::new();
@@ -169,7 +170,7 @@ pub(crate) fn name_error(message: String, position: Position) -> MetorexError {
 pub(crate) fn take_keyword_arguments(
     arguments: &[Object],
 ) -> (Vec<Object>, IndexMap<String, Object>) {
-    if let Some(Object::Dict(dict_rc)) = arguments.last() {
+    if let Some(View::Dict(dict_rc)) = arguments.last().view() {
         let dict = dict_rc.borrow();
         if dict.contains_key("__MX_KWARGS__") {
             let keywords = dict
@@ -190,8 +191,8 @@ pub(crate) fn take_keyword_arguments(
 
 /// The value stored for `member` on a struct instance.
 pub(crate) fn member_value(receiver: &Object, member: &str) -> Object {
-    match receiver {
-        Object::Instance(instance) => instance
+    match receiver.view() {
+        View::Instance(instance) => instance
             .borrow()
             .instance_vars
             .get(&member_slot(member))
@@ -215,12 +216,12 @@ pub(crate) fn resolve_member(
     key: &Object,
     position: Position,
 ) -> Result<String, MetorexError> {
-    match key {
-        Object::Int(index) => {
+    match key.view() {
+        View::Int(index) => {
             let length = members.len() as i64;
-            let resolved = if *index < 0 { index + length } else { *index };
+            let resolved = if index < 0 { index + length } else { index };
             if resolved < 0 || resolved >= length {
-                let direction = if *index < 0 { "small" } else { "large" };
+                let direction = if index < 0 { "small" } else { "large" };
                 let message = format!(
                     "offset {} too {} for struct(size:{})",
                     index, direction, length
@@ -233,8 +234,8 @@ pub(crate) fn resolve_member(
             }
             Ok(members[resolved as usize].clone())
         }
-        Object::Symbol(name) => resolve_named_member(members, &name.as_str(), position),
-        Object::String(name) => resolve_named_member(members, &name.as_str(), position),
+        View::Symbol(name) => resolve_named_member(members, &name.as_str(), position),
+        View::String(name) => resolve_named_member(members, &name.as_str(), position),
         other => Err(MetorexError::type_error(
             format!(
                 "no implicit conversion of {} into Integer",

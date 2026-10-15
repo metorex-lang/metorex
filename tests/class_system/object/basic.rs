@@ -1,6 +1,7 @@
 // Basic Object Tests - creation, type checking, variables, and ObjectHash
 
 use indexmap::IndexMap;
+use metorex::object::View;
 use metorex::object::{BlockStatement, Class, Method, Object, ObjectHash};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -178,7 +179,7 @@ fn test_instance_variables() {
     let class = Class::new("Person", None);
     let obj = Object::instance(Rc::clone(&class));
 
-    if let Object::Instance(inst) = obj {
+    if let View::Instance(inst) = obj.view() {
         let mut instance = inst.borrow_mut();
         instance.set_var("name".to_string(), Object::string("Alice"));
         instance.set_var("age".to_string(), Object::Int(30));
@@ -279,7 +280,7 @@ fn test_is_falsy() {
 fn test_exception_with_cause() {
     let cause = Object::exception("RuntimeError", "original error");
     let exc = Object::exception_with_cause("RuntimeError", "wrapper error", cause);
-    if let Object::Exception(exc_ref) = exc {
+    if let View::Exception(exc_ref) = exc.view() {
         let exc_inner = exc_ref.borrow();
         assert_eq!(exc_inner.message, "wrapper error");
         assert!(exc_inner.cause.is_some());
@@ -306,4 +307,98 @@ fn test_metorex_error_from_io_error() {
     let metorex_err: MetorexError = io_err.into();
     let msg = metorex_err.to_string();
     assert!(msg.contains("file not found"));
+}
+
+#[test]
+fn an_object_is_eight_bytes() {
+    assert_eq!(std::mem::size_of::<Object>(), 8);
+}
+
+#[test]
+fn integers_read_back_on_both_sides_of_the_inline_range() {
+    for number in [
+        0,
+        -1,
+        (1 << 62) - 1,
+        -(1 << 62),
+        1 << 62,
+        -(1 << 62) - 1,
+        i64::MAX,
+        i64::MIN,
+    ] {
+        assert_eq!(Object::Int(number).view(), View::Int(number));
+    }
+}
+
+#[test]
+fn floats_read_back_inside_and_outside_the_inline_range() {
+    for number in [
+        0.0,
+        -0.0,
+        1.0,
+        0.1,
+        -2.5,
+        1e300,
+        -1e-300,
+        f64::MAX,
+        f64::MIN_POSITIVE,
+        5e-324,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+    ] {
+        let View::Float(read) = Object::Float(number).view() else {
+            panic!("{number} did not read back as a Float");
+        };
+        assert_eq!(read.to_bits(), number.to_bits());
+    }
+}
+
+#[test]
+fn a_float_that_is_not_a_number_reads_back_as_not_a_number() {
+    let View::Float(read) = Object::Float(f64::NAN).view() else {
+        panic!("NaN did not read back as a Float");
+    };
+    assert!(read.is_nan());
+}
+
+#[test]
+fn nil_true_and_false_hold_the_bits_c_extensions_test() {
+    assert_eq!(
+        (
+            Object::Bool(false).bits(),
+            Object::Nil.bits(),
+            Object::Bool(true).bits()
+        ),
+        (0x00, 0x08, 0x14)
+    );
+}
+
+#[test]
+fn a_copy_of_a_heap_value_shares_its_parts() {
+    let array = Object::array(vec![Object::Int(1)]);
+    let copy = array.clone();
+    let (View::Array(held), View::Array(copied)) = (array.view(), copy.view()) else {
+        panic!("an Array did not read back as one");
+    };
+    assert!(Rc::ptr_eq(held, copied));
+}
+
+#[test]
+fn a_symbol_is_held_inline_and_reads_back_its_name() {
+    let symbol = Object::symbol("maintenance_window");
+    let View::Symbol(name) = symbol.view() else {
+        panic!("a Symbol did not read back as one");
+    };
+    assert_eq!(
+        (symbol.bits() & 0xff, name.as_str().to_string()),
+        (0x0c, "maintenance_window".to_string())
+    );
+}
+
+#[test]
+fn two_symbols_with_one_name_hold_the_same_bits() {
+    assert_eq!(
+        Object::symbol("retry_after").bits(),
+        Object::symbol("retry_after").bits()
+    );
 }

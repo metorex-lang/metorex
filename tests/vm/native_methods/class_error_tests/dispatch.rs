@@ -1,6 +1,7 @@
 // What a refused call reports.
 
 use super::*;
+use metorex::object::{OptionView, View};
 // ── object_methods.rs: =~ wrong arg count (line 418) ─────────────────────────
 
 #[test]
@@ -29,8 +30,8 @@ m = d.methods
 m.length
 "#);
     // Should include both speak and fetch (and possibly more)
-    match result {
-        Some(Object::Int(n)) => assert!(n >= 2),
+    match result.view() {
+        Some(View::Int(n)) => assert!(n >= 2),
         other => panic!("expected Int, got {:?}", other),
     }
 }
@@ -81,8 +82,8 @@ Helpers2.send(:module_function, 99)
 fn file_expand_path_with_curdir_component() {
     // A path containing "." exercises the CurDir match arm in expand_path.
     let result = run(r#"File.expand_path("./foo.txt", "/tmp")"#);
-    match result {
-        Some(Object::String(s)) => assert!(s.as_str().contains("foo.txt")),
+    match result.view() {
+        Some(View::String(s)) => assert!(s.as_str().contains("foo.txt")),
         other => panic!("expected String, got {:?}", other),
     }
 }
@@ -137,7 +138,7 @@ class Priv
 end
 Priv.send(:private, :secret)
 "#);
-    assert!(matches!(result, Some(Object::Symbol(_))));
+    assert!(matches!(result.view(), Some(View::Symbol(_))));
 }
 
 #[test]
@@ -151,7 +152,7 @@ end
 Pub.send(:private, :greet)
 Pub.send(:public, :greet)
 "#);
-    assert!(matches!(result, Some(Object::Symbol(_))));
+    assert!(matches!(result.view(), Some(View::Symbol(_))));
 }
 
 #[test]
@@ -167,7 +168,7 @@ class Multi
 end
 Multi.send(:private, :a, :b)
 "#);
-    assert!(matches!(result, Some(Object::Array(_))));
+    assert!(matches!(result.view(), Some(View::Array(_))));
 }
 
 #[test]

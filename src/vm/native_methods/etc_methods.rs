@@ -4,6 +4,7 @@
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 use crate::vm::errors::*;
 use std::ffi::{CStr, CString};
@@ -131,15 +132,15 @@ impl VirtualMachine {
     ) -> Result<Option<Object>, MetorexError> {
         match method_name {
             "__pw_by_uid__" => {
-                let Some(Object::Int(uid)) = arguments.first() else {
+                let Some(View::Int(uid)) = arguments.first().view() else {
                     return Ok(Some(Object::Nil));
                 };
                 // SAFETY: `getpwuid` answers a pointer the C library owns,
                 // read before any other call to it.
-                Ok(Some(unsafe { passwd_dict(libc::getpwuid(*uid as u32)) }))
+                Ok(Some(unsafe { passwd_dict(libc::getpwuid(uid as u32)) }))
             }
             "__pw_by_name__" => {
-                let Some(Object::String(name)) = arguments.first() else {
+                let Some(View::String(name)) = arguments.first().view() else {
                     return Ok(Some(Object::Nil));
                 };
                 let Ok(held) = CString::new(name.as_str().as_bytes().to_vec()) else {
@@ -163,14 +164,14 @@ impl VirtualMachine {
                 Ok(Some(Object::Nil))
             }
             "__gr_by_gid__" => {
-                let Some(Object::Int(gid)) = arguments.first() else {
+                let Some(View::Int(gid)) = arguments.first().view() else {
                     return Ok(Some(Object::Nil));
                 };
                 // SAFETY: `getgrgid` answers a pointer the C library owns.
-                Ok(Some(unsafe { group_dict(libc::getgrgid(*gid as u32)) }))
+                Ok(Some(unsafe { group_dict(libc::getgrgid(gid as u32)) }))
             }
             "__gr_by_name__" => {
-                let Some(Object::String(name)) = arguments.first() else {
+                let Some(View::String(name)) = arguments.first().view() else {
                     return Ok(Some(Object::Nil));
                 };
                 let Ok(held) = CString::new(name.as_str().as_bytes().to_vec()) else {
@@ -227,7 +228,7 @@ impl VirtualMachine {
                 Ok(Some(Object::Int(if counted < 1 { 1 } else { counted })))
             }
             "__sysconf__" => {
-                let Some(Object::Int(name)) = arguments.first() else {
+                let Some(View::Int(name)) = arguments.first().view() else {
                     return Err(method_argument_type_error(
                         "sysconf",
                         "Integer",
@@ -237,14 +238,14 @@ impl VirtualMachine {
                 };
                 // SAFETY: `sysconf` reads one configuration value and reports
                 // -1 for a name it does not know.
-                let answered = unsafe { libc::sysconf(*name as i32) };
+                let answered = unsafe { libc::sysconf(name as i32) };
                 if answered < 0 {
                     return Ok(Some(Object::Nil));
                 }
                 Ok(Some(Object::Int(answered)))
             }
             "__confstr__" => {
-                let Some(Object::Int(name)) = arguments.first() else {
+                let Some(View::Int(name)) = arguments.first().view() else {
                     return Err(method_argument_type_error(
                         "confstr",
                         "Integer",
@@ -254,7 +255,7 @@ impl VirtualMachine {
                 };
                 let mut held = [0 as libc::c_char; 1024];
                 // SAFETY: `confstr` writes at most the count it is given.
-                let written = unsafe { libc::confstr(*name as i32, held.as_mut_ptr(), held.len()) };
+                let written = unsafe { libc::confstr(name as i32, held.as_mut_ptr(), held.len()) };
                 if written == 0 {
                     return Err(simple_exception(
                         "Errno::EINVAL",

@@ -6,9 +6,9 @@
 //! back into an object by indexing that table. With a tagged value, the
 //! VALUE is the value's own bits.
 
+use crate::enum_value::Object;
 use crate::machine::Representation;
 use crate::tagged_value::{Tagged, TaggedValue};
-use metorex::object::Object;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;

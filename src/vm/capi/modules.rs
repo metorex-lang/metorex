@@ -7,6 +7,7 @@ use super::exports::{class_from, rb_define_method, text};
 use super::handles::{Value, to_object, to_value};
 use super::symbols::symbol_name;
 use super::{called_from, interpreter, or_raise, raise};
+use crate::object::View;
 use crate::object::{Method, Object};
 use std::ffi::{CString, c_char};
 use std::rc::Rc;
@@ -99,8 +100,8 @@ pub extern "C-unwind" fn rb_const_get_from(module: Value, name: Value) -> Value 
     let named = symbol_name(name);
     let module_object = to_object(module);
     let object_class = top_level_module("Object");
-    let ancestors = match call(module_object.clone(), "ancestors", Vec::new()) {
-        Object::Array(found) => found.borrow().clone(),
+    let ancestors = match call(module_object.clone(), "ancestors", Vec::new()).view() {
+        View::Array(found) => found.borrow().clone(),
         _ => Vec::new(),
     };
     for ancestor in ancestors {
@@ -318,7 +319,7 @@ pub(super) fn class_at_path(path: &str) -> Value {
             walked.push_str("::");
         }
         walked.push_str(segment);
-        if !matches!(current, Object::Class(_) | Object::Module(_)) {
+        if !matches!(current.view(), View::Class(_) | View::Module(_)) {
             error(
                 "TypeError",
                 format!("{} does not refer to class/module", walked),
@@ -332,7 +333,7 @@ pub(super) fn class_at_path(path: &str) -> Value {
         }
         current = call(current, "const_get", arguments);
     }
-    if !matches!(current, Object::Class(_) | Object::Module(_)) {
+    if !matches!(current.view(), View::Class(_) | View::Module(_)) {
         error(
             "TypeError",
             format!("{} does not refer to class/module", path),

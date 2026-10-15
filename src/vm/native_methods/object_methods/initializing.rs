@@ -1,6 +1,7 @@
 // Copying one object into another, and the scope a call sits in.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// Copying one object into another, and the scope a call sits in.
@@ -92,12 +93,12 @@ impl VirtualMachine {
                 // A reference type is identified by its address. An immediate
                 // gets a value-derived id, so two literals that are the same
                 // value share one, the way Ruby's do.
-                let id = match receiver {
-                    Object::Instance(inst) => std::rc::Rc::as_ptr(inst) as i64,
+                let id = match receiver.view() {
+                    View::Instance(inst) => std::rc::Rc::as_ptr(inst) as i64,
                     // Two strings holding the same text are two objects, so
                     // each takes an id of its own the first time one is asked
                     // for.
-                    Object::String(text) => {
+                    View::String(text) => {
                         let next = self.next_object_id;
                         let given = text.object_id(|| next);
                         if given == next {
@@ -105,28 +106,28 @@ impl VirtualMachine {
                         }
                         given as i64
                     }
-                    Object::Array(arr) => std::rc::Rc::as_ptr(arr) as i64,
-                    Object::Dict(dict) => std::rc::Rc::as_ptr(dict) as i64,
-                    Object::Set(set) => std::rc::Rc::as_ptr(set) as i64,
-                    Object::Class(cls) => std::rc::Rc::as_ptr(cls) as i64,
-                    Object::Module(m) => std::rc::Rc::as_ptr(m) as i64,
-                    Object::Block(block) => std::rc::Rc::as_ptr(block) as i64,
+                    View::Array(arr) => std::rc::Rc::as_ptr(arr) as i64,
+                    View::Dict(dict) => std::rc::Rc::as_ptr(dict) as i64,
+                    View::Set(set) => std::rc::Rc::as_ptr(set) as i64,
+                    View::Class(cls) => std::rc::Rc::as_ptr(cls) as i64,
+                    View::Module(m) => std::rc::Rc::as_ptr(m) as i64,
+                    View::Block(block) => std::rc::Rc::as_ptr(block) as i64,
                     // A Method and a Binding are objects of their own, so two
                     // that name the same thing have different ids.
-                    Object::Method(method) => std::rc::Rc::as_ptr(method) as i64,
-                    Object::Binding(binding) => std::rc::Rc::as_ptr(binding) as i64,
-                    Object::Exception(exc) => std::rc::Rc::as_ptr(exc) as i64,
+                    View::Method(method) => std::rc::Rc::as_ptr(method) as i64,
+                    View::Binding(binding) => std::rc::Rc::as_ptr(binding) as i64,
+                    View::Exception(exc) => std::rc::Rc::as_ptr(exc) as i64,
                     // An integer past the i64 range is a heap object in Ruby
                     // too, so two of the same value have different ids.
-                    Object::BigInt(value) => std::rc::Rc::as_ptr(value) as i64,
+                    View::BigInt(value) => std::rc::Rc::as_ptr(value) as i64,
                     // Ruby's fixnum object_id. Wrapping keeps the far ends of
                     // the range from overflowing.
-                    Object::Int(n) => n.wrapping_mul(2).wrapping_add(1),
-                    Object::Bool(true) => 20,
-                    Object::Bool(false) => 0,
-                    Object::Nil => 4,
-                    Object::Symbol(name) => value_object_id("symbol", &name.as_str()),
-                    Object::Float(value) => value_object_id("float", &value.to_bits().to_string()),
+                    View::Int(n) => n.wrapping_mul(2).wrapping_add(1),
+                    View::Bool(true) => 20,
+                    View::Bool(false) => 0,
+                    View::Nil => 4,
+                    View::Symbol(name) => value_object_id("symbol", &name.as_str()),
+                    View::Float(value) => value_object_id("float", &value.to_bits().to_string()),
                     other => value_object_id("other", &other.to_string()),
                 };
                 Ok(Some(Object::Int(id)))

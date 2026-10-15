@@ -1,6 +1,7 @@
 // The name a class answers to, whether it was given one or not.
 
 use super::*;
+use crate::object::OptionView;
 
 impl Class {
     /// Return the class name.
@@ -26,8 +27,8 @@ impl Class {
     /// synthesize `#<Class:0x<ptr>>::C` for the subclass's name.
     pub fn inspect_name(&self) -> String {
         // A refinement always displays by its label, whatever it is named.
-        if let Some(crate::object::Object::String(label)) =
-            self.get_class_var(crate::vm::REFINEMENT_LABEL_KEY)
+        if let Some(crate::object::View::String(label)) =
+            self.get_class_var(crate::vm::REFINEMENT_LABEL_KEY).view()
         {
             return format!("#<refinement:{}>", label);
         }
@@ -62,8 +63,8 @@ impl Class {
             if !key.chars().next().is_some_and(|c| c.is_uppercase()) {
                 continue;
             }
-            let (crate::object::Object::Class(nested) | crate::object::Object::Module(nested)) =
-                value
+            let (crate::object::View::Class(nested) | crate::object::View::Module(nested)) =
+                value.view()
             else {
                 continue;
             };
@@ -123,7 +124,7 @@ impl Class {
             if !key.chars().next().is_some_and(|c| c.is_uppercase()) {
                 continue;
             }
-            if let crate::object::Object::Class(c) | crate::object::Object::Module(c) = val {
+            if let crate::object::View::Class(c) | crate::object::View::Module(c) = val.view() {
                 c.assign_name_recursive(&format!("{}::{}", new_name, key));
             }
         }

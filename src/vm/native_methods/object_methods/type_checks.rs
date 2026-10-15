@@ -1,6 +1,7 @@
 // Whether an object belongs to a class or one of its ancestors.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Whether an object belongs to a class or one of its ancestors.
@@ -21,14 +22,14 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let target_class = match &arguments[0] {
-                    Object::Class(c) => c,
-                    Object::Module(m) => m,
-                    other => {
+                let target_class = match arguments[0].view() {
+                    View::Class(c) => c,
+                    View::Module(m) => m,
+                    _ => {
                         return Err(method_argument_type_error(
                             method_name,
                             "Class",
-                            other,
+                            &arguments[0],
                             position,
                         ));
                     }
@@ -48,7 +49,7 @@ impl VirtualMachine {
                 }
                 // A module made by `new` on a subclass of Module is a kind of
                 // that subclass and each class it inherits from.
-                if let Object::Module(module) = receiver
+                if let View::Module(module) = receiver.view()
                     && let Some(made_from) = module.instance_of()
                     && crate::vm::method_invocation::descends_from_class(&made_from, target_class)
                 {
@@ -57,29 +58,29 @@ impl VirtualMachine {
                 // A class is a kind of the singleton class of itself and of
                 // each class it inherits from, since those are the classes
                 // its own singleton class inherits from.
-                if let (Object::Class(named) | Object::Module(named), true) =
-                    (receiver, target_class.is_singleton_class())
-                    && let Some(Object::Class(attached) | Object::Module(attached)) =
-                        target_class.get_class_var("__attached__")
+                if let (View::Class(named) | View::Module(named), true) =
+                    (receiver.view(), target_class.is_singleton_class())
+                    && let Some(View::Class(attached) | View::Module(attached)) =
+                        target_class.get_class_var("__attached__").view()
                 {
                     let mut current = Some(std::rc::Rc::clone(named));
                     while let Some(held) = current {
-                        if std::rc::Rc::ptr_eq(&held, &attached) {
+                        if std::rc::Rc::ptr_eq(&held, attached) {
                             return Ok(Some(Object::Bool(true)));
                         }
                         current = held.superclass();
                     }
                     return Ok(Some(Object::Bool(false)));
                 }
-                if matches!(receiver, Object::Class(_) | Object::Module(_)) {
+                if matches!(receiver.view(), View::Class(_) | View::Module(_)) {
                     let target_name = target_class.name();
-                    let meta_name = match receiver {
-                        Object::Class(_) => "Class",
-                        Object::Module(_) => "Module",
+                    let meta_name = match receiver.view() {
+                        View::Class(_) => "Class",
+                        View::Module(_) => "Module",
                         _ => unreachable!(),
                     };
-                    if let Some(Object::Class(meta)) = self.globals().get(meta_name) {
-                        if self.builtins().is_subclass_of(&meta, target_class) {
+                    if let Some(View::Class(meta)) = self.globals().get(meta_name).view() {
+                        if self.builtins().is_subclass_of(meta, target_class) {
                             return Ok(Some(Object::Bool(true)));
                         }
                         let mut current = meta.superclass();
@@ -94,20 +95,20 @@ impl VirtualMachine {
                 // An exception is tagged with its type name rather than
                 // carrying a class pointer, so its ancestry is walked from the
                 // class that name resolves to.
-                if let Object::Exception(details) = receiver {
+                if let View::Exception(details) = receiver.view() {
                     let carried = details.borrow().class.clone().map(Object::Class);
                     let exception_type = details.borrow().exception_type.clone();
                     let resolved = match carried {
                         Some(class) => Some(class),
-                        None => match self.globals().get(&exception_type) {
-                            Some(class @ Object::Class(_)) => Some(class),
+                        None => match self.globals().get(&exception_type).view() {
+                            Some(class @ View::Class(_)) => Some(class.to_object()),
                             _ => self.resolve_qualified_constant(&exception_type),
                         },
                     };
-                    if let Some(Object::Class(exception_class)) = resolved {
+                    if let Some(View::Class(exception_class)) = resolved.view() {
                         return Ok(Some(Object::Bool(
                             self.builtins()
-                                .is_subclass_of(&exception_class, target_class),
+                                .is_subclass_of(exception_class, target_class),
                         )));
                     }
                 }

@@ -1,6 +1,7 @@
 // What an object reads back as, and the class it belongs to.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// What an object reads back as, and the class it belongs to.
@@ -23,22 +24,22 @@ impl VirtualMachine {
                 }
                 // A String already is one, so `to_s` answers the receiver
                 // itself and the encoding it is tagged with travels with it.
-                if method_name == "to_s" && matches!(receiver, Object::String(_)) {
+                if method_name == "to_s" && matches!(receiver.view(), View::String(_)) {
                     return Ok(Some(receiver.clone()));
                 }
                 // `true` and `false` each write themselves as one string
                 // that never changes, so asking twice answers the same
                 // object.
                 if method_name == "to_s"
-                    && let Some((slot, text)) = match receiver {
-                        Object::Bool(true) => Some(("__true_to_s", "true")),
-                        Object::Bool(false) => Some(("__false_to_s", "false")),
+                    && let Some((slot, text)) = match receiver.view() {
+                        View::Bool(true) => Some(("__true_to_s", "true")),
+                        View::Bool(false) => Some(("__false_to_s", "false")),
                         _ => None,
                     }
                 {
                     return Ok(Some(self.memoized_text(slot, text)));
                 }
-                if let Object::Symbol(s) = receiver {
+                if let View::Symbol(s) = receiver.view() {
                     // A name past ASCII in an encoding other than the one the
                     // answer is written in cannot be shown as it is, so it is
                     // quoted and escaped the way the String would be.
@@ -59,10 +60,8 @@ impl VirtualMachine {
                         }
                         let text = Object::String(std::rc::Rc::new(made));
                         let shown = self.send_to_object(text, "inspect", Vec::new(), position)?;
-                        let (shown, written_in) = match shown {
-                            Object::String(held) => {
-                                (held.as_str().to_string(), held.encoding_name())
-                            }
+                        let (shown, written_in) = match shown.view() {
+                            View::String(held) => (held.as_str().to_string(), held.encoding_name()),
                             _ => (String::new(), self.inspect_result_encoding()),
                         };
                         return Ok(Some(Object::String(std::rc::Rc::new(
@@ -87,13 +86,13 @@ impl VirtualMachine {
                     return Ok(Some(Object::String(std::rc::Rc::new(made))));
                 }
                 if method_name == "inspect"
-                    && let Object::Instance(_) = receiver
+                    && let View::Instance(_) = receiver.view()
                 {
                     return self.default_instance_inspect(receiver, position).map(Some);
                 }
                 // A callable describes itself in bytes rather than in text,
                 // which is what Ruby tags the description with.
-                if matches!(receiver, Object::Block(_)) {
+                if matches!(receiver.view(), View::Block(_)) {
                     return Ok(Some(Object::String(std::rc::Rc::new(
                         crate::object::StringValue::with_encoding(
                             receiver.to_string(),
@@ -113,25 +112,25 @@ impl VirtualMachine {
                     ));
                 }
                 // For exceptions, return the specific exception class, not generic Exception
-                if let Object::Exception(exc_ref) = receiver {
+                if let View::Exception(exc_ref) = receiver.view() {
                     if let Some(class) = exc_ref.borrow().class.clone() {
                         return Ok(Some(Object::Class(class)));
                     }
                     let exc_type = exc_ref.borrow().exception_type.clone();
-                    if let Some(Object::Class(cls)) = self.globals().get(&exc_type) {
-                        return Ok(Some(Object::Class(cls)));
+                    if let Some(View::Class(cls)) = self.globals().get(&exc_type).view() {
+                        return Ok(Some(Object::Class(cls.clone())));
                     }
                     // A namespaced type such as `Errno::EINVAL` lives as a
                     // constant on its module rather than at the top level.
-                    if let Some(class @ Object::Class(_)) =
-                        self.resolve_qualified_constant(&exc_type)
+                    if let Some(class @ View::Class(_)) =
+                        self.resolve_qualified_constant(&exc_type).view()
                     {
-                        return Ok(Some(class));
+                        return Ok(Some(class.to_object()));
                     }
                 }
                 // A module made by `new` on a subclass of Module is an
                 // instance of that subclass.
-                if let Object::Module(module) = receiver
+                if let View::Module(module) = receiver.view()
                     && let Some(made_from) = module.instance_of()
                 {
                     return Ok(Some(Object::Class(made_from)));
@@ -142,38 +141,38 @@ impl VirtualMachine {
                 // An encoding is held as a class whose parent is Encoding,
                 // and what it stands for is an Encoding rather than a class.
                 if self.names_an_encoding(receiver)
-                    && let Some(held @ Object::Class(_)) = self.globals().get("Encoding")
+                    && let Some(held @ View::Class(_)) = self.globals().get("Encoding").view()
                 {
-                    return Ok(Some(held));
+                    return Ok(Some(held.to_object()));
                 }
-                match receiver {
-                    Object::Class(_) => {
-                        if let Some(Object::Class(cls)) = self.globals().get("Class") {
-                            return Ok(Some(Object::Class(cls)));
+                match receiver.view() {
+                    View::Class(_) => {
+                        if let Some(View::Class(cls)) = self.globals().get("Class").view() {
+                            return Ok(Some(Object::Class(cls.clone())));
                         }
                     }
-                    Object::Module(_) => {
-                        if let Some(Object::Class(cls)) = self.globals().get("Module") {
-                            return Ok(Some(Object::Class(cls)));
+                    View::Module(_) => {
+                        if let Some(View::Class(cls)) = self.globals().get("Module").view() {
+                            return Ok(Some(Object::Class(cls.clone())));
                         }
                     }
                     _ => {}
                 }
                 // For booleans and nil, return the specific class
-                match receiver {
-                    Object::Bool(true) => {
-                        if let Some(Object::Class(cls)) = self.globals().get("TrueClass") {
-                            return Ok(Some(Object::Class(cls)));
+                match receiver.view() {
+                    View::Bool(true) => {
+                        if let Some(View::Class(cls)) = self.globals().get("TrueClass").view() {
+                            return Ok(Some(Object::Class(cls.clone())));
                         }
                     }
-                    Object::Bool(false) => {
-                        if let Some(Object::Class(cls)) = self.globals().get("FalseClass") {
-                            return Ok(Some(Object::Class(cls)));
+                    View::Bool(false) => {
+                        if let Some(View::Class(cls)) = self.globals().get("FalseClass").view() {
+                            return Ok(Some(Object::Class(cls.clone())));
                         }
                     }
-                    Object::Nil => {
-                        if let Some(Object::Class(cls)) = self.globals().get("NilClass") {
-                            return Ok(Some(Object::Class(cls)));
+                    View::Nil => {
+                        if let Some(View::Class(cls)) = self.globals().get("NilClass").view() {
+                            return Ok(Some(Object::Class(cls.clone())));
                         }
                     }
                     _ => {}

@@ -2,6 +2,7 @@
 // object carries.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Holding a value between two bounds, and the singleton methods an
@@ -18,8 +19,8 @@ impl VirtualMachine {
                 // Comparable#clamp — 1 or 2 args, Range, or beginless/endless ranges
                 let (min, max) = if arguments.len() == 1 {
                     // Range argument
-                    match &arguments[0] {
-                        Object::Range {
+                    match arguments[0].view() {
+                        View::Range {
                             start,
                             end,
                             exclusive,
@@ -27,7 +28,7 @@ impl VirtualMachine {
                         } => {
                             // Exclusive range is an error — except when end is nil
                             // (endless exclusive range like `x...` is allowed).
-                            if *exclusive && !matches!(**end, Object::Nil) {
+                            if exclusive && !matches!(end.view(), View::Nil) {
                                 let exc = Object::exception(
                                     "ArgumentError",
                                     "cannot clamp with an exclusive range".to_string(),
@@ -38,7 +39,7 @@ impl VirtualMachine {
                                     message: "cannot clamp with an exclusive range".to_string(),
                                 });
                             }
-                            ((**start).clone(), (**end).clone())
+                            ((*start).clone(), (*end).clone())
                         }
                         _ => {
                             return Err(method_argument_error(
@@ -61,7 +62,7 @@ impl VirtualMachine {
                 };
 
                 // Verify min <= max when both are non-nil (also raise if incomparable)
-                if !matches!(min, Object::Nil) && !matches!(max, Object::Nil) {
+                if !matches!(min.view(), View::Nil) && !matches!(max.view(), View::Nil) {
                     let cmp = self.dispatch_spaceship(&min, &max, position)?;
                     match cmp {
                         Some(n) if n > 0 => {
@@ -79,21 +80,21 @@ impl VirtualMachine {
                         None => {
                             // Ruby names the right side by value when it is
                             // an immediate, and by class otherwise.
-                            let right = match &max {
-                                Object::Int(_)
-                                | Object::Float(_)
-                                | Object::Nil
-                                | Object::Bool(_)
-                                | Object::Symbol(_) => self.inspect_value(&max, position)?,
-                                other => {
-                                    crate::vm::native_methods::define_method::ruby_class_name(other)
+                            let right = match max.view() {
+                                View::Int(_)
+                                | View::Float(_)
+                                | View::Nil
+                                | View::Bool(_)
+                                | View::Symbol(_) => self.inspect_value(&max, position)?,
+                                _ => {
+                                    crate::vm::native_methods::define_method::ruby_class_name(&max)
                                         .to_string()
                                 }
                             };
-                            let left = match &min {
-                                Object::Instance(instance) => instance.borrow().class.ruby_name(),
-                                other => {
-                                    crate::vm::native_methods::define_method::ruby_class_name(other)
+                            let left = match min.view() {
+                                View::Instance(instance) => instance.borrow().class.ruby_name(),
+                                _ => {
+                                    crate::vm::native_methods::define_method::ruby_class_name(&min)
                                         .to_string()
                                 }
                             };
@@ -108,13 +109,13 @@ impl VirtualMachine {
                 }
 
                 // Clamp: return min if self < min, max if self > max, else self
-                if !matches!(min, Object::Nil) {
+                if !matches!(min.view(), View::Nil) {
                     let cmp = self.dispatch_spaceship(receiver, &min, position)?;
                     if matches!(cmp, Some(n) if n < 0) {
                         return Ok(Some(min));
                     }
                 }
-                if !matches!(max, Object::Nil) {
+                if !matches!(max.view(), View::Nil) {
                     let cmp = self.dispatch_spaceship(receiver, &max, position)?;
                     if matches!(cmp, Some(n) if n > 0) {
                         return Ok(Some(max));
@@ -157,8 +158,8 @@ impl VirtualMachine {
                     ));
                 }
                 let include_ancestors = !matches!(
-                    arguments.first(),
-                    Some(Object::Bool(false)) | Some(Object::Nil)
+                    arguments.first().view(),
+                    Some(View::Bool(false)) | Some(View::Nil)
                 );
                 Ok(Some(self.singleton_method_names_with_ancestors(
                     receiver,
@@ -169,8 +170,8 @@ impl VirtualMachine {
             // the object a singleton class of its own again when it does. It
             // also takes the class of the stream it was pointed at.
             "__fresh_singleton_class__" => {
-                if let Object::Instance(inst_rc) = receiver {
-                    if let Some(Object::Instance(other_rc)) = arguments.first() {
+                if let View::Instance(inst_rc) = receiver.view() {
+                    if let Some(View::Instance(other_rc)) = arguments.first().view() {
                         let adopted = other_rc.borrow().class.clone();
                         inst_rc.borrow_mut().class = adopted;
                     }

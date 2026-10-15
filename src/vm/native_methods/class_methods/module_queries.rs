@@ -1,6 +1,7 @@
 // Visibility and ancestry questions.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Visibility, ancestry, and the other questions a module answers about
@@ -31,7 +32,7 @@ impl VirtualMachine {
                 }
                 // A lone array argument names several methods at once.
                 let named: Vec<Object> = match arguments {
-                    [Object::Array(names)] => names.borrow().clone(),
+                    [names] if let View::Array(names) = names.view() => names.borrow().clone(),
                     other => other.to_vec(),
                 };
                 let target_class = Object::Class(Rc::clone(class_rc));
@@ -100,7 +101,7 @@ impl VirtualMachine {
                 } else {
                     Object::Class(Rc::clone(class_rc))
                 };
-                if matches!(arguments[0], Object::Nil) {
+                if matches!(arguments[0].view(), View::Nil) {
                     class_rc.set_temporary_name(None);
                     return Ok(Answered(receiver));
                 }
@@ -195,8 +196,8 @@ impl VirtualMachine {
             }
             "private_methods" => {
                 let include_super = !matches!(
-                    arguments.first(),
-                    Some(Object::Bool(false)) | Some(Object::Nil)
+                    arguments.first().view(),
+                    Some(View::Bool(false)) | Some(View::Nil)
                 );
                 // Without its ancestors, a class or module answers the private
                 // methods its own singleton class holds and those Class or
@@ -289,13 +290,13 @@ impl VirtualMachine {
                     // The singleton class of a value, such as a String,
                     // inherits from that value's class.
                     None if class_rc.is_singleton_class() => {
-                        match class_rc.get_class_var("__attached__") {
-                            Some(Object::Instance(_) | Object::Class(_) | Object::Module(_)) => {
+                        match class_rc.get_class_var("__attached__").view() {
+                            Some(View::Instance(_) | View::Class(_) | View::Module(_)) => {
                                 Ok(Answered(Object::Nil))
                             }
-                            Some(value) => {
-                                Ok(Answered(Object::Class(self.builtins().class_of(&value))))
-                            }
+                            Some(value) => Ok(Answered(Object::Class(
+                                self.builtins().class_of(&value.to_object()),
+                            ))),
                             None => Ok(Answered(Object::Nil)),
                         }
                     }
@@ -313,8 +314,8 @@ impl VirtualMachine {
                     && class_rc.superclass().is_none()
                     && let Some(attached) = class_rc.get_class_var("__attached__")
                     && !matches!(
-                        attached,
-                        Object::Instance(_) | Object::Class(_) | Object::Module(_)
+                        attached.view(),
+                        View::Instance(_) | View::Class(_) | View::Module(_)
                     )
                 {
                     let value_class = self.builtins().class_of(&attached);
@@ -332,8 +333,8 @@ impl VirtualMachine {
                 push_class_ancestors(class_rc, &mut chain, &mut seen);
                 let modules: Vec<Object> = chain
                     .into_iter()
-                    .filter(|ancestor| match ancestor {
-                        Object::Module(m) => !Rc::ptr_eq(m, class_rc),
+                    .filter(|ancestor| match ancestor.view() {
+                        View::Module(m) => !Rc::ptr_eq(m, class_rc),
                         _ => false,
                     })
                     .collect();

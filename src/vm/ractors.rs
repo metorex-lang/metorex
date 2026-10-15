@@ -4,6 +4,7 @@
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 
 /// Where a thread keeps the Ractor it belongs to. A thread with none belongs
@@ -21,10 +22,10 @@ impl VirtualMachine {
     /// Whether the code running now belongs to a Ractor other than the main
     /// one.
     pub(crate) fn in_a_non_main_ractor(&self) -> bool {
-        let Some(Object::Instance(thread)) = self.thread_current_stack.last() else {
+        let Some(View::Instance(thread)) = self.thread_current_stack.last().view() else {
             return false;
         };
-        matches!(thread.borrow().get_var(RACTOR_VAR), Some(held) if !matches!(held, Object::Nil))
+        matches!(thread.borrow().get_var(RACTOR_VAR), Some(held) if !held.is_nil())
     }
 
     /// Refuse a global a Ractor other than the main one may not reach. Code
@@ -120,14 +121,14 @@ impl VirtualMachine {
     /// `Ractor.shareable?` decides.
     fn is_shareable(&mut self, value: &Object, position: Position) -> Result<bool, MetorexError> {
         if matches!(
-            value,
-            Object::Nil
-                | Object::Bool(_)
-                | Object::Int(_)
-                | Object::Float(_)
-                | Object::Symbol(_)
-                | Object::Class(_)
-                | Object::Module(_)
+            value.view(),
+            View::Nil
+                | View::Bool(_)
+                | View::Int(_)
+                | View::Float(_)
+                | View::Symbol(_)
+                | View::Class(_)
+                | View::Module(_)
         ) {
             return Ok(true);
         }
@@ -220,9 +221,9 @@ impl VirtualMachine {
 /// The address that names an object a Ractor can move, or that a scheduler
 /// keeps fibers waiting on.
 pub(crate) fn moved_address(held: &Object) -> Option<usize> {
-    match held {
-        Object::Instance(instance) => Some(std::rc::Rc::as_ptr(instance) as usize),
-        other => VirtualMachine::collection_address(other),
+    match held.view() {
+        View::Instance(instance) => Some(std::rc::Rc::as_ptr(instance) as usize),
+        _ => VirtualMachine::collection_address(held),
     }
 }
 

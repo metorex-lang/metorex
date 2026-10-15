@@ -2,6 +2,7 @@
 // the exponents and coefficient a private key carries alongside them.
 
 use super::*;
+use crate::object::{OptionView, View};
 use num_bigint::BigUint;
 
 /// The primes below 2000, which a candidate is divided by before the slower
@@ -114,7 +115,7 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let (Some(Object::Int(bits)), Some(exponent)) = (arguments.first(), arguments.get(1))
+        let (Some(View::Int(bits)), Some(exponent)) = (arguments.first().view(), arguments.get(1))
         else {
             return Err(simple_exception(
                 "ArgumentError",
@@ -128,7 +129,7 @@ impl VirtualMachine {
             .ok_or_else(|| simple_exception("ArgumentError", "invalid exponent", position))?;
         // An even exponent shares a factor with every prime less one, so no
         // prime would ever be found for it.
-        if !exponent.bit(0) || exponent < BigUint::from(3u32) || *bits < 16 {
+        if !exponent.bit(0) || exponent < BigUint::from(3u32) || bits < 16 {
             return Err(simple_exception(
                 "ArgumentError",
                 "invalid key size or exponent",
@@ -139,11 +140,11 @@ impl VirtualMachine {
             simple_exception("OpenSSL::PKey::RSAError", &problem.to_string(), position)
         };
         let primes = small_primes();
-        let half = (*bits as usize).div_ceil(2);
+        let half = (bits as usize).div_ceil(2);
         let one = BigUint::from(1u32);
         let (first, second) = loop {
             let first = random_prime(half, &exponent, &primes).map_err(failed)?;
-            let second = random_prime(*bits as usize - half, &exponent, &primes).map_err(failed)?;
+            let second = random_prime(bits as usize - half, &exponent, &primes).map_err(failed)?;
             if first != second {
                 break if first > second {
                     (first, second)

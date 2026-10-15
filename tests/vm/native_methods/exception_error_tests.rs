@@ -2,6 +2,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -63,7 +64,7 @@ end
 result
 "#);
     assert!(result.is_some());
-    if let Some(Object::String(s)) = result {
+    if let Some(View::String(s)) = result.view() {
         assert!(
             s.as_str().contains("test error"),
             "Expected to contain 'test error', got: {}",

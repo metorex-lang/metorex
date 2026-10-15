@@ -1,6 +1,7 @@
 // Recording why a pattern did not cover a value.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// Record why the pattern being tried failed. The innermost pattern fails
@@ -69,7 +70,7 @@ impl VirtualMachine {
         let MetorexError::UncaughtException { exception, .. } = &raised else {
             return raised;
         };
-        if let Object::Exception(details) = exception {
+        if let View::Exception(details) = exception.view() {
             let mut details = details.borrow_mut();
             details
                 .instance_vars

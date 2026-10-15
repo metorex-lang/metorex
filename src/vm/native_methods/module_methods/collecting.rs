@@ -1,13 +1,14 @@
 // What the collector accounts for.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// How many collections have been asked for. Metorex frees an object when
     /// its last reference goes, so nothing else moves this.
     pub(crate) fn gc_collection_count(&self) -> i64 {
-        match self.globals().get("__gc_count") {
-            Some(Object::Int(count)) => count,
+        match self.globals().get("__gc_count").view() {
+            Some(View::Int(count)) => count,
             _ => 0,
         }
     }
@@ -15,8 +16,8 @@ impl VirtualMachine {
     /// The nanoseconds spent collecting. Each request accounts for the time
     /// its own bookkeeping took, which is what keeps the total climbing.
     pub(crate) fn gc_total_time(&self) -> i64 {
-        match self.globals().get("__gc_total_time") {
-            Some(Object::Int(nanoseconds)) => nanoseconds,
+        match self.globals().get("__gc_total_time").view() {
+            Some(View::Int(nanoseconds)) => nanoseconds,
             _ => 0,
         }
     }

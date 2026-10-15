@@ -2,6 +2,7 @@
 // when the name is none of its own, and the next step is tried.
 
 use super::*;
+use crate::object::View;
 
 /// A step that reads the receiver as it stands, whichever width it is.
 type WholeStep = fn(
@@ -49,10 +50,10 @@ impl VirtualMachine {
                 return Ok(Some(result));
             }
         }
-        if let Object::BigInt(value) = receiver {
+        if let View::BigInt(value) = receiver.view() {
             return self.call_big_int_method(value, method_name, arguments, position);
         }
-        let Object::Int(n) = receiver else {
+        let View::Int(n) = receiver.view() else {
             return Ok(None);
         };
         // These read the same whether or not the receiver fits in a machine
@@ -69,11 +70,11 @@ impl VirtualMachine {
                 | "pred"
                 | "integer?"
         ) {
-            let value = Rc::new(num_bigint::BigInt::from(*n));
+            let value = Rc::new(num_bigint::BigInt::from(n));
             return self.call_big_int_method(&value, method_name, arguments, position);
         }
         for step in NARROW_STEPS {
-            if let Some(result) = step(self, receiver, n, method_name, arguments, position)? {
+            if let Some(result) = step(self, receiver, &n, method_name, arguments, position)? {
                 return Ok(Some(result));
             }
         }

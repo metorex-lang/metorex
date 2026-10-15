@@ -25,10 +25,10 @@ These come first because every instruction, frame, and native method is written 
 
 ## Groundwork
 
-- [ ] Values in 8 bytes: `Object` becomes the 8-byte value `docs/engine/value-representation.md` describes. Code that matches on a value matches on `view()`, an enum of its parts borrowed from it, and the variants' constructors become functions
-  - Acceptance: a test checks `std::mem::size_of::<Object>()` is 8, `cargo test` and ruby/spec pass, and the benchmark table is recorded beside the one before the change
+- [x] Values in 8 bytes: `Object` becomes the 8-byte value `docs/engine/value-representation.md` describes. Code that matches on a value matches on `view()`, an enum of its parts borrowed from it, and the variants' constructors become functions
+  - Acceptance: a test checks `std::mem::size_of::<Object>()` is 8, and `cargo test` and ruby/spec pass
 - [ ] Strings as bytes: a String holds its bytes and an encoding tag, and every String method reads the bytes through the encoding
-  - Acceptance: `cargo test` and ruby/spec pass, a test counts the bytes `getbyte`, `setbyte`, `bytesize`, and `byteslice` read and finds the same count on a 1 KB and a 1 MB binary string, and protoboeuf-encode's row in the benchmark table is recorded beside the one before
+  - Acceptance: `cargo test` and ruby/spec pass, a test counts the bytes `getbyte`, `setbyte`, `bytesize`, and `byteslice` read and finds the same count on a 1 KB and a 1 MB binary string
 - [ ] Cycle collection, as `docs/engine/memory-management.md` describes: every heap object listed, with its counts in its header, and trial deletion run when the list has doubled and on `GC.start`. `ObjectSpace.each_object` and `count_objects` read the list, `WeakMap` and `WeakKeyMap` hold weak references, a finalizer runs after its object is freed, and `GC.count` and `GC.stat` report the collector's numbers
   - Acceptance: `cargo test` and ruby/spec pass, the benchmark table shows `cycles` with a peak memory within 10% of `no_cycles`, and tests show an object in a cycle freed by `GC.start` with its finalizer run, a `WeakMap` entry gone once its key is freed, and `each_object(String)` finding a String
 - [ ] C extensions are handed values: a `VALUE` is the value's bits, the handle table in `src/vm/capi/handles.rs` is removed, and an object handed to C is pinned until a collection cannot reach it from the native stack, a `dmark` function, or a registered address

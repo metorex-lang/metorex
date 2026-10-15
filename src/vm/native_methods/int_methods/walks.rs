@@ -1,6 +1,7 @@
 // Counting from one number to another, and the exact quotient of two.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Counting from one number to another, and the exact quotient of two.
@@ -22,13 +23,14 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(b)) => b,
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(b)) => b,
                     Some(other) => {
                         return Err(method_argument_type_error(
                             method_name,
                             "Block",
-                            &other,
+                            &other.to_object(),
                             position,
                         ));
                     }
@@ -42,7 +44,7 @@ impl VirtualMachine {
                 };
                 for i in 0..*n {
                     let args = vec![Object::Int(i)];
-                    match self.execute_block_with_control_flow(&block, args, position)? {
+                    match self.execute_block_with_control_flow(block, args, position)? {
                         crate::vm::ControlFlow::Next
                         | crate::vm::ControlFlow::Value(_)
                         | crate::vm::ControlFlow::Redo { .. }
@@ -91,7 +93,7 @@ impl VirtualMachine {
                 }
                 // Dividing by a Float answers a Float, and dividing by a
                 // number too large for a machine word answers one too.
-                if matches!(arguments[0], Object::Float(_) | Object::BigInt(_)) {
+                if matches!(arguments[0].view(), View::Float(_) | View::BigInt(_)) {
                     return self
                         .send_to_object(
                             Object::Float(*n as f64),
@@ -101,7 +103,7 @@ impl VirtualMachine {
                         )
                         .map(Some);
                 }
-                let Some(Object::Int(divisor)) = arguments.first() else {
+                let Some(View::Int(divisor)) = arguments.first().view() else {
                     return Err(method_argument_type_error(
                         method_name,
                         "Integer",
@@ -109,19 +111,20 @@ impl VirtualMachine {
                         position,
                     ));
                 };
-                if *divisor == 0 {
+                if divisor == 0 {
                     return Err(crate::vm::errors::divide_by_zero_error(position));
                 }
-                let (mut numerator, mut denominator) = (*n, *divisor);
+                let (mut numerator, mut denominator) = (*n, divisor);
                 if denominator < 0 {
                     numerator = -numerator;
                     denominator = -denominator;
                 }
                 let divisor = greatest_common_divisor(numerator.abs(), denominator);
-                let Some(Object::Class(rational_class)) = self.globals().get("Rational") else {
+                let viewed = self.globals().get("Rational");
+                let Some(View::Class(rational_class)) = viewed.view() else {
                     return Ok(None);
                 };
-                let instance = crate::object::Instance::new(rational_class);
+                let instance = crate::object::Instance::new(rational_class.clone());
                 instance
                     .borrow_mut()
                     .set_var("numerator".to_string(), Object::Int(numerator / divisor));
@@ -145,7 +148,7 @@ impl VirtualMachine {
                 // Without a block the walk is handed back as an Enumerator
                 // whatever the endpoint is, and only asking it for a size
                 // reports that it cannot count to one it does not understand.
-                let numeric_limit = matches!(&arguments[0], Object::Int(_) | Object::Float(_));
+                let numeric_limit = matches!(arguments[0].view(), View::Int(_) | View::Float(_));
                 if !numeric_limit && self.pending_block.is_none() {
                     let message = format!(
                         "comparison of Integer with {} failed",
@@ -170,31 +173,33 @@ impl VirtualMachine {
                 // An endless limit walks on without stopping, so the walk
                 // ends only when what reads it stops asking.
                 let endless = matches!(
-                    &arguments[0],
-                    Object::Float(limit)
+                    arguments[0].view(),
+                    View::Float(limit)
                         if limit.is_infinite()
                             && (limit.is_sign_positive() == (method_name == "upto"))
                 );
-                let limit = match &arguments[0] {
-                    Object::Int(limit) => *limit,
-                    Object::Float(_) if endless => {
+                let limit = match arguments[0].view() {
+                    View::Int(limit) => limit,
+                    View::Float(_) if endless => {
                         if method_name == "upto" {
                             i64::MAX
                         } else {
                             i64::MIN
                         }
                     }
-                    Object::Float(limit) if limit.is_finite() => {
+                    View::Float(limit) if limit.is_finite() => {
                         let whole = match method_name {
                             "upto" => limit.floor(),
                             _ => limit.ceil(),
                         };
                         whole as i64
                     }
-                    other => {
+                    _ => {
                         let message = format!(
                             "comparison of Integer with {} failed",
-                            crate::vm::native_methods::array_methods::inspect_element(other)
+                            crate::vm::native_methods::array_methods::inspect_element(
+                                &arguments[0]
+                            )
                         );
                         return Err(crate::vm::errors::simple_exception(
                             "ArgumentError",
@@ -209,13 +214,14 @@ impl VirtualMachine {
                 } else {
                     Box::new((*limit..=*n).rev())
                 };
-                let block = match self.pending_block.take() {
-                    Some(Object::Block(b)) => b,
+                let viewed = self.pending_block.take();
+                let block = match viewed.view() {
+                    Some(View::Block(b)) => b,
                     Some(other) => {
                         return Err(method_argument_type_error(
                             method_name,
                             "Block",
-                            &other,
+                            &other.to_object(),
                             position,
                         ));
                     }
@@ -251,7 +257,7 @@ impl VirtualMachine {
                 };
                 for value in sequence {
                     let args = vec![Object::Int(value)];
-                    match self.execute_block_with_control_flow(&block, args, position)? {
+                    match self.execute_block_with_control_flow(block, args, position)? {
                         crate::vm::ControlFlow::Next
                         | crate::vm::ControlFlow::Value(_)
                         | crate::vm::ControlFlow::Redo { .. }

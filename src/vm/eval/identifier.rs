@@ -3,6 +3,7 @@
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use std::rc::Rc;
 
 use crate::vm::core::VirtualMachine;
@@ -34,10 +35,8 @@ impl VirtualMachine {
         }
         let locals = self.local_variable_names(Vec::new(), position).ok();
         let looked_up_on = self.eval_self(position).ok();
-        if let MetorexError::UncaughtException {
-            exception: Object::Exception(details),
-            ..
-        } = &error
+        if let MetorexError::UncaughtException { exception, .. } = &error
+            && let View::Exception(details) = exception.view()
         {
             let mut details = details.borrow_mut();
             if details.receiver.is_none() {
@@ -55,7 +54,7 @@ impl VirtualMachine {
     /// A NameError for a constant nothing defines, raised on `Object`.
     pub(crate) fn constant_name_error(&self, message: &str, name: &str) -> Object {
         let exception = Object::exception("NameError", message);
-        if let Object::Exception(details) = &exception {
+        if let View::Exception(details) = exception.view() {
             let mut details = details.borrow_mut();
             details.name = Some(name.to_string());
             details.receiver = self.globals().get("Object").map(Box::new);
@@ -66,7 +65,7 @@ impl VirtualMachine {
     /// Whether `name` is bound to the very method a `def` installed on the
     /// default definee, rather than to a local variable holding a Method.
     pub(crate) fn name_is_a_definition(&self, name: &str, value: &Object) -> bool {
-        let Object::Method(method) = value else {
+        let View::Method(method) = value.view() else {
             return false;
         };
         if method.name != name || method.receiver.is_some() {
@@ -82,7 +81,7 @@ impl VirtualMachine {
         if self.def_scope_stack.iter().any(same) || method.definee.as_ref().is_some_and(same) {
             return true;
         }
-        matches!(self.globals().get("Object"), Some(Object::Class(object_class)) if same(&object_class))
+        matches!(self.globals().get("Object").view(), Some(View::Class(object_class)) if same(object_class))
     }
 
     /// Evaluate a bare identifier expression.
@@ -159,7 +158,7 @@ impl VirtualMachine {
             // bare `to_s` inside a class reaches that class's `to_s` rather
             // than the top-level one, and a method that needs arguments
             // refuses the call the way it would anywhere else.
-            if matches!(val, Object::NativeFunction(_))
+            if matches!(val.view(), View::NativeFunction(_))
                 && let Some(current_self) = self.environment().get("self")
                 && let Some((class, method)) = self.lookup_method(&current_self, name)
                 && !method.is_undefined
@@ -174,16 +173,16 @@ impl VirtualMachine {
             // `to_s` answers "main" only at the top level. Inside a class
             // or module body, and on any other receiver, it is a call on
             // whatever `self` is there.
-            if let Object::NativeFunction(fn_name) = &val
+            if let View::NativeFunction(fn_name) = val.view()
                 && fn_name == "top_level_to_s"
                 && let Some(current_self) = self.environment().get("self")
-                && !matches!(current_self, Object::Nil)
+                && !matches!(current_self.view(), View::Nil)
                 && (!self.def_scope_stack.is_empty()
-                    || !matches!(&current_self, Object::Class(held) if held.name() == "Object"))
+                    || !matches!(current_self.view(), View::Class(held) if held.name() == "Object"))
             {
                 return self.send_to_object(current_self, "to_s", vec![], position);
             }
-            if let Object::NativeFunction(fn_name) = &val
+            if let View::NativeFunction(fn_name) = val.view()
                 && (runs_when_named_bare(fn_name)
                     || (matches!(
                         fn_name.as_str(),
@@ -201,7 +200,7 @@ impl VirtualMachine {
             // definee holds under that name. A Method held in a local (from
             // `method(:x)` or `instance_method(:x)`) is a different object, so
             // it stays a value.
-            if let Object::Method(method) = &val
+            if let View::Method(method) = val.view()
                 && self.name_is_a_definition(name, &val)
             {
                 let receiver = self.eval_self(position).unwrap_or(Object::Nil);
@@ -241,8 +240,8 @@ impl VirtualMachine {
                     return Ok(val);
                 }
             }
-            if let Some(Object::Class(object_class)) = self.globals().get("Object")
-                && let Some(val) = self.try_autoload_constant(&object_class, name)?
+            if let Some(View::Class(object_class)) = self.globals().get("Object").view()
+                && let Some(val) = self.try_autoload_constant(object_class, name)?
             {
                 return Ok(val);
             }
@@ -265,18 +264,24 @@ impl VirtualMachine {
             // was built around. Nothing binds it there, so it is answered
             // here rather than reported as an undefined name.
             if name == "self"
-                && let Some(Object::Binding(binding)) = self.globals().get("TOPLEVEL_BINDING")
+                && let Some(View::Binding(binding)) = self.globals().get("TOPLEVEL_BINDING").view()
                 && let Some(main) = binding.receiver.clone()
             {
                 return Ok(main);
             }
             // Check global Object class for injected methods (mspec describe/it)
-            if let Some(Object::Class(object_class)) = self.globals().get("Object")
+            if let Some(View::Class(object_class)) = self.globals().get("Object").view()
                 && let Some(method) = object_class.find_method(name)
                 && !method.is_undefined
             {
                 // A bare name is a call, and one missing arguments raises.
-                return self.invoke_method(object_class, method, Object::Nil, vec![], position);
+                return self.invoke_method(
+                    object_class.clone(),
+                    method,
+                    Object::Nil,
+                    vec![],
+                    position,
+                );
             }
             // At the top level a bare name may name a method written on
             // `main` alone, which nothing else answers to.
@@ -348,21 +353,21 @@ impl VirtualMachine {
                 .last()
                 .and_then(|nesting| nesting.first().cloned())
                 .or_else(|| self.def_scope_stack.last().cloned())
-                .or_else(|| match &receiver {
-                    Object::Class(c) | Object::Module(c) => Some(Rc::clone(c)),
-                    Object::Instance(inst) => Some(Rc::clone(&inst.borrow().class)),
+                .or_else(|| match receiver.view() {
+                    View::Class(c) | View::Module(c) => Some(Rc::clone(c)),
+                    View::Instance(inst) => Some(Rc::clone(&inst.borrow().class)),
                     _ => None,
                 })
                 // A singleton class stands for whatever it is attached to,
                 // whose ancestors are the ones the name is looked up through.
-                .map(|held| match held.get_class_var("__attached__") {
-                    Some(Object::Class(attached) | Object::Module(attached))
+                .map(|held| match held.get_class_var("__attached__").view() {
+                    Some(View::Class(attached) | View::Module(attached))
                         if held.is_singleton_class() =>
                     {
-                        attached
+                        attached.clone()
                     }
-                    _ => match (held.is_singleton_class(), &receiver) {
-                        (true, Object::Instance(inst)) => Rc::clone(&inst.borrow().class),
+                    _ => match (held.is_singleton_class(), receiver.view()) {
+                        (true, View::Instance(inst)) => Rc::clone(&inst.borrow().class),
                         _ => held,
                     },
                 });
@@ -414,7 +419,7 @@ impl VirtualMachine {
 
         // Bare `new` inside a class method should instantiate the class.
         if name == "new"
-            && let Object::Class(_) = &receiver
+            && let View::Class(_) = receiver.view()
         {
             return self.invoke_callable(receiver, vec![], position);
         }
@@ -435,37 +440,37 @@ impl VirtualMachine {
         }
 
         // Fallback: check global Object class (mspec injects describe/it/before/after)
-        if let Some(Object::Class(object_class)) = self.globals().get("Object")
+        if let Some(View::Class(object_class)) = self.globals().get("Object").view()
             && let Some(method) = object_class.find_method(name)
             && !method.is_undefined
         {
             // A bare name is a call, and one missing arguments raises.
-            return self.invoke_method(object_class, method, receiver, vec![], position);
+            return self.invoke_method(object_class.clone(), method, receiver, vec![], position);
         }
 
         // Bare `include` / `prepend` in a class or module body is a call with
         // no arguments, so Ruby reports the missing module rather than a
         // missing name.
         if matches!(name, "include" | "prepend")
-            && let Some(receiver @ (Object::Class(_) | Object::Module(_))) =
-                self.environment().get("self")
+            && let Some(receiver @ (View::Class(_) | View::Module(_))) =
+                self.environment().get("self").view()
         {
-            let (Object::Class(class_rc) | Object::Module(class_rc)) = &receiver else {
+            let (View::Class(class_rc) | View::Module(class_rc)) = receiver else {
                 unreachable!("the match above admits only classes and modules")
             };
             let class_rc = Rc::clone(class_rc);
             return self
-                .call_native_method(&class_rc, &receiver, name, &[], position)
+                .call_native_method(&class_rc, &receiver.to_object(), name, &[], position)
                 .map(|result| result.unwrap_or(Object::Nil));
         }
 
         // A fiber body runs with a scope of its own, which does not reach
         // the one the interpreter's own functions were registered in. The
         // bare name still names one of them.
-        if let Some(Object::NativeFunction(fn_name)) = self.globals().get(name)
-            && runs_when_named_bare(&fn_name)
+        if let Some(View::NativeFunction(fn_name)) = self.globals().get(name).view()
+            && runs_when_named_bare(fn_name)
         {
-            return self.call_native_function(&fn_name, vec![], position);
+            return self.call_native_function(fn_name, vec![], position);
         }
 
         // A bare name nothing answers is handed to a `method_missing` the
@@ -653,7 +658,8 @@ impl VirtualMachine {
 
     /// The constant `name` names on Object, or in a module included there.
     pub(crate) fn object_constant(&self, name: &str) -> Option<Object> {
-        let Some(Object::Class(object_class)) = self.globals().get("Object") else {
+        let viewed = self.globals().get("Object");
+        let Some(View::Class(object_class)) = viewed.view() else {
             return None;
         };
         object_class.get_class_var(name).or_else(|| {

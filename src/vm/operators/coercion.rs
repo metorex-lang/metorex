@@ -1,6 +1,7 @@
 // The protocol a number follows for an operand it does not know.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// Ruby's coercion protocol: a number handed an operand it does not know
@@ -29,13 +30,13 @@ impl VirtualMachine {
         let pair = self.send_to_object(right.clone(), "coerce", vec![left.clone()], position)?;
         // A `coerce` that answers no pair leaves the operator with nothing to
         // apply, which for an ordering means the two have no order at all.
-        let parts = match &pair {
-            Object::Array(parts) if parts.borrow().len() == 2 => parts.borrow().clone(),
+        let parts = match pair.view() {
+            View::Array(parts) if parts.borrow().len() == 2 => parts.borrow().clone(),
             // A `coerce` that answers no pair leaves the operator with
             // nothing to apply. Ruby refuses it for a Float, where the
             // comparison is a relational one, and reports no order at all
             // for the rest.
-            _ if matches!(op, BinaryOp::Spaceship) && !matches!(left, Object::Float(_)) => {
+            _ if matches!(op, BinaryOp::Spaceship) && !matches!(left.view(), View::Float(_)) => {
                 return Ok(Some(Object::Nil));
             }
             _ if matches!(op, BinaryOp::Spaceship) => {
@@ -77,14 +78,17 @@ fn coerces_its_operand(op: &BinaryOp) -> bool {
 
 /// Whether this operand is one of the numbers the operators handle directly.
 pub(crate) fn is_number(value: &Object) -> bool {
-    matches!(value, Object::Int(_) | Object::BigInt(_) | Object::Float(_))
+    matches!(
+        value.view(),
+        View::Int(_) | View::BigInt(_) | View::Float(_)
+    )
 }
 
 /// Whether an operand is a candidate for coercion. Rational and Complex carry
 /// their own arithmetic, so they are left to it.
 pub(crate) fn takes_coercion(value: &Object) -> bool {
-    match value {
-        Object::Instance(instance) => {
+    match value.view() {
+        View::Instance(instance) => {
             !matches!(instance.borrow().class.name(), "Rational" | "Complex")
         }
         _ => false,

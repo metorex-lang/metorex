@@ -1,6 +1,7 @@
 // Removing a name, and the path one resolves to.
 
 use super::*;
+use crate::object::View;
 
 impl VirtualMachine {
     /// Removing a name, and the path one resolves to.
@@ -35,11 +36,14 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let path = match &arguments[0] {
-                    Object::String(s) => path_text(s),
-                    other => {
+                let path = match arguments[0].view() {
+                    View::String(s) => path_text(s),
+                    _ => {
                         return Err(method_argument_type_error(
-                            "exist?", "String", other, position,
+                            "exist?",
+                            "String",
+                            &arguments[0],
+                            position,
                         ));
                     }
                 };
@@ -56,11 +60,14 @@ impl VirtualMachine {
                 }
                 let path_str = self.path_text("realpath", &arguments[0], position)?;
                 let base = if arguments.len() == 2 {
-                    match &arguments[1] {
-                        Object::String(s) => path_text(s),
-                        other => {
+                    match arguments[1].view() {
+                        View::String(s) => path_text(s),
+                        _ => {
                             return Err(method_argument_type_error(
-                                "realpath", "String", other, position,
+                                "realpath",
+                                "String",
+                                &arguments[1],
+                                position,
                             ));
                         }
                     }

@@ -4,6 +4,7 @@
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 use crate::vm::errors::method_argument_error;
 use std::ffi::CStr;
@@ -208,18 +209,18 @@ impl VirtualMachine {
                 }
                 let mut fields = [0i64; 6];
                 for (slot, argument) in fields.iter_mut().zip(arguments.iter()) {
-                    let Object::Int(value) = argument else {
+                    let View::Int(value) = argument.view() else {
                         return Ok(None);
                     };
-                    *slot = *value;
+                    *slot = value;
                 }
-                let utc = matches!(arguments[6], Object::Bool(true));
+                let utc = matches!(arguments[6].view(), View::Bool(true));
                 // The daylight-saving flag tells the two readings of an hour
                 // that the clock goes through twice apart. Nothing said about
                 // it leaves the choice to the zone.
-                let daylight = match arguments.get(7) {
-                    Some(Object::Bool(true)) => 1,
-                    Some(Object::Bool(false)) => 0,
+                let daylight = match arguments.get(7).view() {
+                    Some(View::Bool(true)) => 1,
+                    Some(View::Bool(false)) => 0,
                     _ => -1,
                 };
                 Ok(Some(Object::Int(assembled(fields, utc, daylight))))
@@ -235,15 +236,15 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let (Object::String(template), Object::Int(seconds)) =
-                    (&arguments[0], &arguments[1])
+                let (View::String(template), View::Int(seconds)) =
+                    (arguments[0].view(), arguments[1].view())
                 else {
                     return Ok(None);
                 };
-                let utc = matches!(arguments[2], Object::Bool(true));
+                let utc = matches!(arguments[2].view(), View::Bool(true));
                 Ok(Some(Object::string(formatted(
                     &template.as_str(),
-                    *seconds,
+                    seconds,
                     utc,
                 ))))
             }
@@ -267,12 +268,12 @@ fn two_arguments(
             position,
         ));
     }
-    let seconds = match &arguments[0] {
-        Object::Int(value) => *value,
-        Object::Float(value) => *value as i64,
+    let seconds = match arguments[0].view() {
+        View::Int(value) => value,
+        View::Float(value) => value as i64,
         _ => 0,
     };
-    Ok((seconds, matches!(arguments[1], Object::Bool(true))))
+    Ok((seconds, matches!(arguments[1].view(), View::Bool(true))))
 }
 
 /// What the C library's `strftime` makes of a template.

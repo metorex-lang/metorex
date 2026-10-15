@@ -3,6 +3,7 @@
 
 use metorex::lexer::Lexer;
 use metorex::object::Object;
+use metorex::object::{OptionView, View};
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
@@ -94,7 +95,7 @@ rescue RuntimeError => refused
   refused.backtrace.first
 end
 "#);
-    let Some(Object::String(held)) = answered else {
+    let Some(View::String(held)) = answered.view() else {
         panic!("Got something other than a backtrace line")
     };
     assert!(
@@ -107,7 +108,7 @@ end
 #[test]
 fn code_with_no_file_named_for_it_reads_as_written_where_the_call_was_made() {
     let answered = run(r#"Object.new.instance_eval("__FILE__")"#);
-    let Some(Object::String(held)) = answered else {
+    let Some(View::String(held)) = answered.view() else {
         panic!("Got something other than a file name")
     };
     assert!(
