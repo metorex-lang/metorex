@@ -18,7 +18,7 @@ These come first because every instruction, frame, and native method is written 
   - Acceptance: the prototype's numbers on the benchmarks, protoboeuf-encode's under each String layout, and the C API's `VALUE` conversion cost are recorded, and the chosen representation is the one the instruction set uses
 - [x] Memory management: reference counting as now, or a tracing collector, chosen with the C API's raw pointers, `ObjectSpace`, `WeakMap`, finalizers, and `GC` behavior in ruby/spec weighed in
   - Acceptance: the decision records how each of those keeps passing ruby/spec under it
-- [ ] Frames and calls: frames in one contiguous value stack, arguments passed in place with no allocation per call, and fibers holding their own segment of frames rather than an operating system stack
+- [x] Frames and calls: frames in one contiguous value stack, arguments passed in place with no allocation per call, and fibers holding their own segment of frames, with a native stack only for the native methods running in them
   - Acceptance: a prototype call path measured on `method_calls` and `block_calls`
 - [ ] Instruction format and dispatch: stack or register machine, operand encoding, and how dispatch is written in Rust, measured on a prototype loop
   - Acceptance: the chosen format is the one the Groundwork instruction set item builds

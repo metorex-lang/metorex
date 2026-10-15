@@ -188,7 +188,7 @@ impl<const MODE: u8> TaggedOf<MODE> {
         TaggedOf(((number as u64) << 1) | 1)
     }
 
-    fn fixnum_value(&self) -> i64 {
+    pub fn fixnum_value(&self) -> i64 {
         (self.0 as i64) >> 1
     }
 

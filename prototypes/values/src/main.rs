@@ -1,8 +1,11 @@
-//! Times the value representation prototype and prints Markdown tables for
-//! docs/engine/value-representation.md. Each time is the fastest of five
+//! Times the prototypes and prints Markdown tables for
+//! docs/engine/value-representation.md, docs/engine/memory-management.md,
+//! and docs/engine/frames-and-calls.md. Each time is the fastest of five
 //! runs.
 
+mod calls;
 mod enum_value;
+mod fibers;
 mod handles;
 mod kernels;
 mod machine;
@@ -154,4 +157,88 @@ fn main() {
         "| The tagged value's bits | {} |",
         per_round_trip(tagged_time)
     );
+
+    // block_calls' total passes the largest Integer held inline past 2.4
+    // million steps, and every addition after that makes a Bignum.
+    let call_kernels = [
+        calls::method_calls(10_000_000),
+        calls::block_calls(2_000_000),
+    ];
+    println!(
+        "\n| Workload | Calls | Heap frames | Contiguous stack | Heap ÷ stacked | Heap frames, per call | Contiguous stack, per call |"
+    );
+    println!("| :-- | --: | --: | --: | --: | --: | --: |");
+    for kernel in &call_kernels {
+        let (heap_time, heap_answer) =
+            fastest(|| TaggedValue::describe(&calls::HeapFrames::run(&kernel.units)));
+        let (stacked_time, stacked_answer) =
+            fastest(|| TaggedValue::describe(&calls::Stacked::run(&kernel.units)));
+        assert_eq!(
+            heap_answer, stacked_answer,
+            "{} answered differently",
+            kernel.name
+        );
+        let per_call =
+            |time: Duration| format!("{:.1} ns", time.as_secs_f64() * 1e9 / kernel.calls as f64);
+        println!(
+            "| {} | {} | {} | {} | {} | {} | {} |",
+            kernel.name,
+            kernel.calls,
+            milliseconds(heap_time),
+            milliseconds(stacked_time),
+            ratio(heap_time, stacked_time),
+            per_call(heap_time),
+            per_call(stacked_time)
+        );
+    }
+
+    let count = 100_000;
+    let (metorex_time, metorex_sum) =
+        fastest(|| fibers::make_and_finish(count, fibers::METOREX_STACK_BYTES));
+    let (cruby_time, cruby_sum) =
+        fastest(|| fibers::make_and_finish(count, fibers::CRUBY_STACK_BYTES));
+    assert_eq!(metorex_sum, cruby_sum);
+    let (segment_time, _) = fastest(|| fibers::make_segments(count));
+    let switch_count = 10_000_000;
+    let (switch_time, _) = fastest(|| fibers::switches(switch_count));
+    let per_fiber = |time: Duration| format!("{:.0} ns", time.as_secs_f64() * 1e9 / count as f64);
+    println!("\n| A fiber made, suspended once, and finished | Per fiber |");
+    println!("| :-- | --: |");
+    println!(
+        "| Native stack of 32 MB (now) | {} |",
+        per_fiber(metorex_time)
+    );
+    println!("| Native stack of 512 KB | {} |", per_fiber(cruby_time));
+    println!(
+        "| A value stack segment of 128 KB, made and dropped | {} |",
+        per_fiber(segment_time)
+    );
+    println!(
+        "\nA resume and the suspension it runs to: {:.1} ns.",
+        switch_time.as_secs_f64() * 1e9 / switch_count as f64
+    );
+
+    // Counting every allocation from here on slows each one, so the
+    // timings above run before it starts.
+    unsafe { std::env::set_var("METOREX_COUNTERS", "1") };
+    metorex::vm::counters::enable_from_environment();
+    let allocations_per_call = |kernel: &calls::CallKernel, run: &dyn Fn()| {
+        let before = metorex::vm::counters::allocations_so_far();
+        run();
+        let made = metorex::vm::counters::allocations_so_far() - before;
+        format!("{:.2}", made as f64 / kernel.calls as f64)
+    };
+    println!(
+        "\n| Workload | Heap frames, allocations per call | Contiguous stack, allocations per call |"
+    );
+    println!("| :-- | --: | --: |");
+    for kernel in &call_kernels {
+        let heap = allocations_per_call(kernel, &|| {
+            calls::HeapFrames::run(&kernel.units);
+        });
+        let stacked = allocations_per_call(kernel, &|| {
+            calls::Stacked::run(&kernel.units);
+        });
+        println!("| {} | {} | {} |", kernel.name, heap, stacked);
+    }
 }

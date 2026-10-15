@@ -1,7 +1,8 @@
-# The value representation prototype that docs/engine/value-representation.md
-# records. It runs one interpreter loop over Metorex's `Object` enum and over
-# an 8-byte tagged value, and compares String layouts and the C API's VALUE
-# conversion. Run it with:
+# The prototypes that docs/engine/value-representation.md,
+# memory-management.md, and frames-and-calls.md record. It runs one
+# interpreter loop over Metorex's `Object` enum and over an 8-byte tagged
+# value, compares String layouts and the C API's VALUE conversion, and lays
+# out frames on the heap and in one contiguous stack. Run it with:
 #
 #   cargo run --release --manifest-path prototypes/values/Cargo.toml
 
@@ -12,6 +13,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+corosensei = "0.3.4"
 metorex = { path = "../.." }
 num-bigint = "0.5.1"
 
