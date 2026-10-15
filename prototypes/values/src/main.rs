@@ -37,6 +37,25 @@ fn ratio(slower: Duration, faster: Duration) -> String {
     format!("{:.2}×", slower.as_secs_f64() / faster.as_secs_f64())
 }
 
+/// One kernel under one way of managing cells: its answer, its fastest
+/// time, the most cells alive at once in the last run, and the collections
+/// that run made.
+fn memory_run<const MODE: u8>(kernel: &kernels::Kernel) -> (String, Duration, usize, usize) {
+    let mut best = Duration::MAX;
+    let mut answer = String::new();
+    let mut peak_and_collections = (0, 0);
+    for _ in 0..RUNS {
+        tagged_value::reset_counts(MODE);
+        let started = Instant::now();
+        answer = tagged_value::Tagging::<MODE>::describe(&machine::run::<
+            tagged_value::Tagging<MODE>,
+        >(&kernel.program));
+        best = best.min(started.elapsed());
+        peak_and_collections = tagged_value::peak_cells_and_collections(MODE);
+    }
+    (answer, best, peak_and_collections.0, peak_and_collections.1)
+}
+
 fn main() {
     println!(
         "Value sizes: `Object` {} bytes, tagged value {} bytes, `Option<Object>` {} bytes.\n",
@@ -69,6 +88,33 @@ fn main() {
             milliseconds(tagged_time),
             ratio(enum_time, tagged_time),
             heap_floats
+        );
+    }
+
+    println!(
+        "\n| Kernel | Counted | Counted, cells | Cycle collected | Cycle collected, cells | Collections | Traced | Traced, cells | Collections |"
+    );
+    println!("| :-- | --: | --: | --: | --: | --: | --: | --: | --: |");
+    for kernel in kernels::memory() {
+        let counted = memory_run::<{ tagged_value::COUNTED }>(&kernel);
+        let cycles = memory_run::<{ tagged_value::CYCLES }>(&kernel);
+        let traced = memory_run::<{ tagged_value::TRACED }>(&kernel);
+        assert!(
+            counted.0 == cycles.0 && cycles.0 == traced.0,
+            "{} answered differently",
+            kernel.name
+        );
+        println!(
+            "| {} | {} | {} | {} | {} | {} | {} | {} | {} |",
+            kernel.name,
+            milliseconds(counted.1),
+            counted.2,
+            milliseconds(cycles.1),
+            cycles.2,
+            cycles.3,
+            milliseconds(traced.1),
+            traced.2,
+            traced.3
         );
     }
 

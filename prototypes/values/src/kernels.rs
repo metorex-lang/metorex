@@ -214,6 +214,30 @@ fn array_sum() -> Kernel {
     }
 }
 
+/// Making an object that refers to itself in a loop and dropping it, as an
+/// object holding a lambda that refers back to it does.
+fn cycles() -> Kernel {
+    let mut main = Assembler::default();
+    counted_loop(&mut main, 0, 500_000, |code| {
+        code.op(Op::NewObject(1))
+            .op(Op::Store(1))
+            .op(Op::Load(1))
+            .op(Op::Load(1))
+            .op(Op::SetSlot(0));
+    });
+    main.op(Op::Load(0)).op(Op::Return);
+    Kernel {
+        name: "cycles",
+        from: "benchmarks/memory/cycles.rb",
+        program: vec![main.finish(0, 2)],
+    }
+}
+
+/// The kernels the memory management comparison runs.
+pub fn memory() -> Vec<Kernel> {
+    vec![fib(), getivar(), object_new(), array_sum(), cycles()]
+}
+
 pub fn all() -> Vec<Kernel> {
     vec![
         fib(),

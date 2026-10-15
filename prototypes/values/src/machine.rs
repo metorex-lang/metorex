@@ -21,6 +21,9 @@ pub trait Representation {
     fn new_array() -> Self::Value;
     fn array_push(array: &Self::Value, value: Self::Value);
     fn array_get(array: &Self::Value, index: &Self::Value) -> Self::Value;
+    /// A place a collector may run, after an object is made, with every
+    /// value the interpreter holds on `stack`.
+    fn safepoint(_stack: &[Self::Value]) {}
     /// The value written out, to check both representations computed the
     /// same thing.
     fn describe(value: &Self::Value) -> String;
@@ -132,7 +135,10 @@ pub fn run<R: Representation>(program: &[Function]) -> R::Value {
                 at = finished.return_to;
                 code = &program[frames.last().unwrap().function].code;
             }
-            Op::NewObject(slots) => stack.push(R::new_object(slots as usize)),
+            Op::NewObject(slots) => {
+                stack.push(R::new_object(slots as usize));
+                R::safepoint(&stack);
+            }
             Op::GetSlot(slot) => {
                 let object = stack.pop().unwrap();
                 stack.push(R::get_slot(&object, slot as usize));
@@ -142,7 +148,10 @@ pub fn run<R: Representation>(program: &[Function]) -> R::Value {
                 let object = stack.pop().unwrap();
                 R::set_slot(&object, slot as usize, value);
             }
-            Op::NewArray => stack.push(R::new_array()),
+            Op::NewArray => {
+                stack.push(R::new_array());
+                R::safepoint(&stack);
+            }
             Op::ArrayPush => {
                 let value = stack.pop().unwrap();
                 let array = stack.pop().unwrap();

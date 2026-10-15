@@ -7,7 +7,8 @@
 # The rows are:
 #
 # - `empty`, an empty script, which times starting up
-# - the scripts in benchmarks/workloads, whose output must match across engines
+# - the scripts in benchmarks/workloads and benchmarks/memory, whose output
+#   must match across engines
 # - every benchmark in benchmarks/ruby-bench (github.com/ruby/ruby-bench) in its
 #   headline, other, and micro categories that needs no gems
 # - the Rex suite in benchmarks/rex_suite, run with `metorex spec` and with
@@ -162,7 +163,8 @@ def seconds_text(seconds) = seconds < 1 ? format("%.1f ms", seconds * 1000) : fo
 def megabytes(bytes) = format("%.0f MB", bytes / 1_048_576.0)
 
 rows = []
-scripts = [File.join(__dir__, "startup", "empty.rb")] + Dir[File.join(__dir__, "workloads", "*.rb")].sort
+scripts = [File.join(__dir__, "startup", "empty.rb")] + Dir[File.join(__dir__, "workloads", "*.rb")].sort +
+          Dir[File.join(__dir__, "memory", "*.rb")].sort
 scripts.each do |script|
   next unless wanted?(File.basename(script, ".rb"))
   rows << script_row(script)

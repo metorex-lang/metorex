@@ -629,7 +629,7 @@ The driver needs MRI with the aruba and thread_order gems, which rspec-core's su
 
 ### Speed
 
-`ruby benchmarks/compare.rb`, run with a release build, times Metorex beside CRuby with and without `--yjit` and prints this table. It covers startup, the scripts in `benchmarks/workloads`, every benchmark in the [ruby-bench](https://github.com/ruby/ruby-bench) suite (the `benchmarks/ruby-bench` submodule) in its headline, other, and micro categories that needs no gems, and the Rex suite. Startup, workload, and Rex suite times are the fastest of three whole runs. A ruby-bench time is the mean of one iteration after the warmup ones, under ruby-bench's own harness: CRuby runs the harness's defaults, as ruby-bench's runner does, and Metorex runs one warmup iteration and two timed ones. Peak memory is the largest resident set size of the run.
+`ruby benchmarks/compare.rb`, run with a release build, times Metorex beside CRuby with and without `--yjit` and prints this table. It covers startup, the scripts in `benchmarks/workloads` and `benchmarks/memory`, every benchmark in the [ruby-bench](https://github.com/ruby/ruby-bench) suite (the `benchmarks/ruby-bench` submodule) in its headline, other, and micro categories that needs no gems, and the Rex suite. Startup, workload, and Rex suite times are the fastest of three whole runs. A ruby-bench time is the mean of one iteration after the warmup ones, under ruby-bench's own harness: CRuby runs the harness's defaults, as ruby-bench's runner does, and Metorex runs one warmup iteration and two timed ones. Peak memory is the largest resident set size of the run.
 
 On an Apple M5 Max (18 CPUs, macOS 27.0.1), Metorex 0.1.0 built with rustc 1.96.0, ruby 4.0.6 (2026-07-14 revision 03b6d3f889) +PRISM [arm64-darwin25]:
 
@@ -641,6 +641,8 @@ On an Apple M5 Max (18 CPUs, macOS 27.0.1), Metorex 0.1.0 built with rustc 1.96.
 | method_calls | 33.0 ms | 30.3 ms | 469.2 ms | 14.2× | 15.5× | 19 MB | 19 MB | 49 MB |
 | object_allocation | 37.2 ms | 33.6 ms | 854.2 ms | 22.9× | 25.4× | 19 MB | 20 MB | 49 MB |
 | string_building | 40.5 ms | 39.7 ms | 223.4 ms | 5.5× | 5.6× | 25 MB | 26 MB | 72 MB |
+| cycles | 50.8 ms | 49.0 ms | 553.7 ms | 10.9× | 11.3× | 19 MB | 20 MB | 551 MB |
+| no_cycles | 34.1 ms | 32.2 ms | 411.0 ms | 12.0× | 12.8× | 19 MB | 20 MB | 49 MB |
 | 30k_ifelse | 312.1 ms | 80.3 ms | 8.59 s | 27.5× | 106.9× | 116 MB | 159 MB | 545 MB |
 | 30k_methods | 247.3 ms | 47.8 ms | 4.52 s | 18.3× | 94.6× | 66 MB | 77 MB | 191 MB |
 | 30k_variables | 391.8 ms | 1.19 s | 49.09 s | 125.3× | 41.2× | 41 MB | 171 MB | 175 MB |
