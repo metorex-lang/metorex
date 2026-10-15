@@ -64,6 +64,7 @@ pub(crate) fn cli_flags_example_stderr(flags: &[&str], script: &str) -> String {
     String::from_utf8(output.stderr).unwrap()
 }
 
+mod counters;
 mod errors;
 mod flags;
 mod running;

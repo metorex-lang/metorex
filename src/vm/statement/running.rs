@@ -37,6 +37,9 @@ impl VirtualMachine {
         &mut self,
         statement: &Statement,
     ) -> Result<ControlFlow, MetorexError> {
+        if crate::vm::counters::enabled() {
+            crate::vm::counters::count_statement(statement.kind_name());
+        }
         let flow = self.execute_statement_body(statement)?;
         // A local assigned inside a branch or a loop is a local from there
         // on whether or not the assignment ran, so a block written later

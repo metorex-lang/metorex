@@ -68,6 +68,7 @@ fn run_with_program_stack(program: fn()) {
 }
 
 fn real_main() {
+    metorex::vm::counters::enable_from_environment();
     // Ruby lets `-r`, `-I`, and `-W` carry their value attached (`-rfoo`),
     // which the argument parser only understands as two words.
     let mut arguments = interpreter_words(std::env::args_os().map(argument_text).collect());

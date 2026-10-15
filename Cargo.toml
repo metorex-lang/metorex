@@ -21,3 +21,10 @@ num-bigint = "0.5.1"
 corosensei = "0.3.4"
 
 [dev-dependencies]
+
+# A release build that keeps line tables, so a sampling profiler names the
+# file and line each sample was taken in. `cargo build --profile profiling`
+# puts it in target/profiling.
+[profile.profiling]
+inherits = "release"
+debug = "line-tables-only"

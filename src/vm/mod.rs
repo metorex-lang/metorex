@@ -11,6 +11,7 @@ mod class_execution;
 mod control_flow;
 mod control_structures;
 pub(crate) mod core;
+pub mod counters;
 pub(crate) mod coverage;
 pub(crate) mod error_spots;
 pub(crate) mod errors;

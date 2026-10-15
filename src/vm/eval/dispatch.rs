@@ -109,6 +109,9 @@ impl VirtualMachine {
         &mut self,
         expression: &Expression,
     ) -> Result<Object, MetorexError> {
+        if crate::vm::counters::enabled() {
+            crate::vm::counters::count_expression(expression.kind_name());
+        }
         match expression {
             // ── Literals ────────────────────────────────────────────────────
             Expression::IntLiteral { value, .. } => Ok(Object::Int(*value)),

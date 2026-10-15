@@ -187,3 +187,90 @@ impl Statement {
         )
     }
 }
+
+impl Expression {
+    /// The name of this kind of expression, as `METOREX_COUNTERS` reports it.
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            Expression::IntLiteral { .. } => "IntLiteral",
+            Expression::FloatLiteral { .. } => "FloatLiteral",
+            Expression::StringLiteral { .. } => "StringLiteral",
+            Expression::RegexLiteral { .. } => "RegexLiteral",
+            Expression::PatternTest { .. } => "PatternTest",
+            Expression::InterpolatedString { .. } => "InterpolatedString",
+            Expression::BoolLiteral { .. } => "BoolLiteral",
+            Expression::NilLiteral { .. } => "NilLiteral",
+            Expression::Symbol { .. } => "Symbol",
+            Expression::Identifier { .. } => "Identifier",
+            Expression::InstanceVariable { .. } => "InstanceVariable",
+            Expression::ClassVariable { .. } => "ClassVariable",
+            Expression::GlobalVariable { .. } => "GlobalVariable",
+            Expression::MagicFile { .. } => "MagicFile",
+            Expression::MagicLine { .. } => "MagicLine",
+            Expression::MagicDir { .. } => "MagicDir",
+            Expression::BinaryOp { .. } => "BinaryOp",
+            Expression::UnaryOp { .. } => "UnaryOp",
+            Expression::Call { .. } => "Call",
+            Expression::MethodCall { .. } => "MethodCall",
+            Expression::Array { .. } => "Array",
+            Expression::Index { .. } => "Index",
+            Expression::Dictionary { .. } => "Dictionary",
+            Expression::Lambda { .. } => "Lambda",
+            Expression::Grouped { .. } => "Grouped",
+            Expression::SelfExpr { .. } => "SelfExpr",
+            Expression::SingletonClass { .. } => "SingletonClass",
+            Expression::Super { .. } => "Super",
+            Expression::BigIntLiteral { .. } => "BigIntLiteral",
+            Expression::Splat { .. } => "Splat",
+            Expression::KeywordSplat { .. } => "KeywordSplat",
+            Expression::TopLevelConstant { .. } => "TopLevelConstant",
+            Expression::BlockArg { .. } => "BlockArg",
+            Expression::BeginRescue { .. } => "BeginRescue",
+            Expression::Defined { .. } => "Defined",
+            Expression::Yield { .. } => "Yield",
+            Expression::Range { .. } => "Range",
+            Expression::Case { .. } => "Case",
+            Expression::If { .. } => "If",
+            Expression::Unless { .. } => "Unless",
+            Expression::ScopeResolution { .. } => "ScopeResolution",
+        }
+    }
+}
+
+impl Statement {
+    /// The name of this kind of statement, as `METOREX_COUNTERS` reports it.
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            Statement::Expression { .. } => "Expression",
+            Statement::Assignment { .. } => "Assignment",
+            Statement::DoWhile { .. } => "DoWhile",
+            Statement::DeclareLocals { .. } => "DeclareLocals",
+            Statement::BeginBlock { .. } => "BeginBlock",
+            Statement::MultipleAssignment { .. } => "MultipleAssignment",
+            Statement::FunctionDef { .. } => "FunctionDef",
+            Statement::MethodDef { .. } => "MethodDef",
+            Statement::ClassDef { .. } => "ClassDef",
+            Statement::ModuleDef { .. } => "ModuleDef",
+            Statement::Include { .. } => "Include",
+            Statement::Extend { .. } => "Extend",
+            Statement::Alias { .. } => "Alias",
+            Statement::If { .. } => "If",
+            Statement::Unless { .. } => "Unless",
+            Statement::While { .. } => "While",
+            Statement::For { .. } => "For",
+            Statement::Match { .. } => "Match",
+            Statement::CaseIn { .. } => "CaseIn",
+            Statement::Return { .. } => "Return",
+            Statement::Break { .. } => "Break",
+            Statement::Continue { .. } => "Continue",
+            Statement::Redo { .. } => "Redo",
+            Statement::Retry { .. } => "Retry",
+            Statement::Block { .. } => "Block",
+            Statement::Begin { .. } => "Begin",
+            Statement::Raise { .. } => "Raise",
+            Statement::AttrReader { .. } => "AttrReader",
+            Statement::AttrWriter { .. } => "AttrWriter",
+            Statement::AttrAccessor { .. } => "AttrAccessor",
+        }
+    }
+}

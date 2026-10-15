@@ -17,10 +17,23 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
+        let counted = crate::vm::counters::enabled().then(|| {
+            (
+                self.enclosing_scope_label(),
+                crate::vm::counters::allocations_so_far(),
+            )
+        });
         let entered = self.enter_native_frame(Some(receiver), method_name, position);
         let answered =
             self.call_native_method_body(class, receiver, method_name, arguments, position);
         self.leave_native_call(entered, position, &answered);
+        // A native method answers None for a name it does not have, which
+        // is a lookup rather than a call.
+        if let (Some((caller, allocations_before)), Ok(Some(_))) = (counted, &answered) {
+            let made = crate::vm::counters::allocations_so_far() - allocations_before;
+            let callee = format!("{}#{} (native)", class.name(), method_name);
+            crate::vm::counters::count_call(&caller, &callee, made);
+        }
         answered
     }
 

@@ -32,6 +32,24 @@ impl VirtualMachine {
         // an expression in between, so calls count toward how deep the
         // program is nested as well.
         crate::vm::program::enter_nesting(position)?;
+        let counted = crate::vm::counters::enabled().then(|| {
+            // A method of a class or module itself is named the way Ruby
+            // writes a call of it, `Name.method`.
+            let owner = method.owner_class.as_ref().unwrap_or(&class);
+            let callee = match &receiver {
+                Object::Class(held) | Object::Module(held)
+                    if owner.is_singleton_class() || Rc::ptr_eq(held, owner) =>
+                {
+                    format!("{}.{}", held.name(), method.name)
+                }
+                _ => format!("{}#{}", owner.name(), method.name),
+            };
+            (
+                self.enclosing_scope_label(),
+                callee,
+                crate::vm::counters::allocations_so_far(),
+            )
+        });
         // A stub with no body and no source stands for a native method,
         // which a trace sees as a method written in C.
         let traced_as_c = !self.tracepoints.is_empty()
@@ -46,6 +64,10 @@ impl VirtualMachine {
             self.invoke_method_unguarded(class, method, receiver, arguments, position)
         };
         crate::vm::program::leave_nesting();
+        if let Some((caller, callee, allocations_before)) = counted {
+            let made = crate::vm::counters::allocations_so_far() - allocations_before;
+            crate::vm::counters::count_call(&caller, &callee, made);
+        }
         answered
     }
 

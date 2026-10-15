@@ -746,6 +746,11 @@ scripts/run_ruby_spec.sh
 # benchmarks/ruby-bench submodule)
 cargo build --release
 ruby benchmarks/compare.rb
+
+# Profile a run with sample (macOS) or perf (Linux), and count what it
+# evaluates, calls, and allocates (docs/engine/profiling.md)
+scripts/profile.sh report.txt path/to/program.rb
+METOREX_COUNTERS=1 target/release/metorex path/to/program.rb
 ```
 
 ### Running everything
