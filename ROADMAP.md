@@ -14,7 +14,7 @@ These come first because every instruction, frame, and native method is written 
   - Acceptance: one command prints the table for all three engines, and the README's speed section shows it
 - [x] Profiling: a documented way to profile a run with a sampling profiler on macOS and Linux, and `METOREX_COUNTERS=1` printing per-instruction and per-call-path counts and allocations at exit
   - Acceptance: a profile of one benchmark is recorded in `docs/engine/profiling.md` with the commands that produced it
-- [ ] Value representation: an 8-byte value with Integers that fit, Floats, Symbols, nil, true, and false held inline and everything else a pointer, against the current `Object` enum. Strings are part of it: a String held as bytes with an encoding, against the current Rust `String` that holds a binary string's bytes 0x80 to 0xFF as two-byte characters, where `setbyte`, `bytesize`, `bytesplice`, and `pack(buffer:)` take time in proportion to the string's length
+- [x] Value representation: an 8-byte value with Integers that fit, Floats, Symbols, nil, true, and false held inline and everything else a pointer, against the current `Object` enum. Strings are part of it: a String held as bytes with an encoding, against the current Rust `String` that holds a binary string's bytes 0x80 to 0xFF as two-byte characters, where `setbyte`, `bytesize`, `bytesplice`, and `pack(buffer:)` take time in proportion to the string's length
   - Acceptance: the prototype's numbers on the benchmarks, protoboeuf-encode's under each String layout, and the C API's `VALUE` conversion cost are recorded, and the chosen representation is the one the instruction set uses
 - [ ] Memory management: reference counting as now, or a tracing collector, chosen with the C API's raw pointers, `ObjectSpace`, `WeakMap`, finalizers, and `GC` behavior in ruby/spec weighed in
   - Acceptance: the decision records how each of those keeps passing ruby/spec under it
@@ -25,6 +25,12 @@ These come first because every instruction, frame, and native method is written 
 
 ## Groundwork
 
+- [ ] Values in 8 bytes: `Object` becomes the 8-byte value `docs/engine/value-representation.md` describes. Code that matches on a value matches on `view()`, an enum of its parts borrowed from it, and the variants' constructors become functions
+  - Acceptance: a test checks `std::mem::size_of::<Object>()` is 8, `cargo test` and ruby/spec pass, and the benchmark table is recorded beside the one before the change
+- [ ] Strings as bytes: a String holds its bytes and an encoding tag, and every String method reads the bytes through the encoding
+  - Acceptance: `cargo test` and ruby/spec pass, a test counts the bytes `getbyte`, `setbyte`, `bytesize`, and `byteslice` read and finds the same count on a 1 KB and a 1 MB binary string, and protoboeuf-encode's row in the benchmark table is recorded beside the one before
+- [ ] C extensions are handed values: a `VALUE` is the value's bits, the handle table in `src/vm/capi/handles.rs` is removed, and an object a C extension holds stays alive as the memory management decision says
+  - Acceptance: every C extension example and ruby/spec's C API specs pass, and no file under `src/` names the handle table
 - [ ] Engine switch: `METOREX_ENGINE=tree|bytecode`, read once at startup, with `tree` the default
   - Acceptance: a test runs one example under each value and both print its output, and an unknown value ends the run with a message naming the two allowed
 - [ ] Compilation unit and fallback: a method body, block body, class or module body, or file top level compiles on its first run and the result is kept on the `Method`, `BlockStatement`, or loaded file. A unit holding a node the compiler does not handle yet records that node type and runs on the tree walker

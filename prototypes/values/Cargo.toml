@@ -1,0 +1,18 @@
+# The value representation prototype that docs/engine/value-representation.md
+# records. It runs one interpreter loop over Metorex's `Object` enum and over
+# an 8-byte tagged value, and compares String layouts and the C API's VALUE
+# conversion. Run it with:
+#
+#   cargo run --release --manifest-path prototypes/values/Cargo.toml
+
+[package]
+name = "values-prototype"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+metorex = { path = "../.." }
+num-bigint = "0.5.1"
+
+[workspace]
