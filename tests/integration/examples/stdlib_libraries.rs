@@ -842,6 +842,29 @@ fn test_stdlib_libraries_fiddle_handles_no_parens_execution() {
     assert_eq!(output, FIDDLE_HANDLES_OUTPUT);
 }
 
+#[test]
+fn test_stdlib_libraries_fiddle_functions_execution() {
+    let output = run_example("stdlib_libraries/fiddle_functions.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "5\n",
+            "[true, true, 1, nil, false]\n",
+            "\"wrong number of arguments (given 0, expected 1)\"\n",
+            "7\n",
+            "2.5\n",
+            "1.5\n",
+            "1024.0\n",
+            "true\n",
+            "[Fiddle::Pointer, \"abc\", \"ab\", false]\n",
+            "nil\n",
+            "\"written\\x00\"\n",
+            "16\n",
+            "[8, 8, 4, 8, -5]\n",
+        )
+    );
+}
+
 /// The expected output of both `stdlib_libraries/socket_full_buffers` variants.
 const SOCKET_FULL_BUFFERS_OUTPUT: &str = "[IO::EAGAINWaitWritable, \"Resource temporarily unavailable - sendmsg(2) would block\"]\n:wait_writable\n3000000\n3000000\n";
 
@@ -2387,4 +2410,33 @@ fn test_stdlib_libraries_inflating_gzip_in_pieces_execution() {
 fn test_stdlib_libraries_inflating_gzip_in_pieces_no_parens_execution() {
     let output = run_example("stdlib_libraries/inflating_gzip_in_pieces_no_parens.rb");
     assert_eq!(output, INFLATING_GZIP_IN_PIECES);
+}
+
+#[test]
+fn test_stdlib_libraries_json_escaped_quotes_execution() {
+    let output = run_example("stdlib_libraries/json_escaped_quotes.rb");
+    assert_eq!(
+        output,
+        "{\"summary\" => \"\\\"Did you mean?\\\" experience\"}\n[\"\\\"\", \"a\\\\\", \"\\\\\\\"\"]\n"
+    );
+}
+
+#[test]
+fn test_stdlib_libraries_string_scanner_groups_execution() {
+    let output = run_example("stdlib_libraries/string_scanner_groups.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"ab\", \"ab\", \"ab\", \"ab\"]\n",
+            "[[\"ab\"], {\"l\" => \"ab\"}, 2, [\"ab\", \"ab\"]]\n",
+            "\"undefined group name reference: missing\"\n",
+            "[[\"1\", nil], nil, nil, {}]\n",
+            "[\"2\", {\"a\" => \"2\"}]\n",
+            "[\"hé\", 3, \"llo w\", \"héllo \", \"örld\\nnext\"]\n",
+            "[\"ö\", 5, false, \"\\n\", true, \"n\", \"ext\"]\n",
+            "[\"abc\", \"\\xFF\", 4, \"\\xFE\"]\n",
+            "[2, 2, 2, 4, nil]\n",
+            "[6, 2, \"éé x\", 6]\n",
+        )
+    );
 }

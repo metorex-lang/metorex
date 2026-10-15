@@ -222,22 +222,26 @@ impl VirtualMachine {
                         return Ok(Some(receiver.clone()));
                     }
                     let block = self.pending_block.take();
-                    for (key, value) in pairs {
+                    for (key, mut value) in pairs {
                         let key = self.environment_text(&key, position)?;
-                        let mut value = self.environment_text(&value, position)?;
                         self.refuse_bad_variable_name(&key, position)?;
                         // A block settles a name both sides hold.
                         if let Some(Object::Block(block)) = &block
                             && let Some(held) = dict_rc.borrow().get(&key).cloned()
                         {
-                            let given = vec![
-                                Object::string(key.clone()),
-                                held,
-                                Object::string(value.clone()),
-                            ];
-                            let answered = self.execute_block_callable(block, given, position)?;
-                            value = self.environment_text(&answered, position)?;
+                            let given = vec![Object::string(key.clone()), held, value];
+                            value = self.execute_block_callable(block, given, position)?;
                         }
+                        // A name merged with nil is taken away, as `ENV[name] = nil` does.
+                        if matches!(value, Object::Nil) {
+                            self.record_environment_change(
+                                dict_rc,
+                                &Object::string(key),
+                                &Object::Nil,
+                            );
+                            continue;
+                        }
+                        let value = self.environment_text(&value, position)?;
                         self.store_variable(dict_rc, key, value);
                     }
                     return Ok(Some(receiver.clone()));

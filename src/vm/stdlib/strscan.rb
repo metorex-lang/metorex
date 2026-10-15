@@ -182,6 +182,19 @@ class StringScanner
       @match_text = found[0]
       return found
     end
+    spans = compiled.__scan_spans__(@string, @position, anchored)
+    unless spans == false
+      if spans.nil?
+        @match = nil
+        @match_start = nil
+        @match_text = nil
+        return nil
+      end
+      @match = MatchSpans.new(@string, *spans)
+      @match_start = @match.start
+      @match_text = @match[0]
+      return @match
+    end
     remaining = rest
     found = compiled.match(remaining)
     if found.nil? || (anchored && found.begin(0) != 0)
@@ -196,6 +209,58 @@ class StringScanner
     found
   end
   private :attempt
+
+  # The groups of a match, each read out of the scanned string when it is
+  # asked for, which spares copying what is left of the string to match it.
+  class MatchSpans
+    def initialize(string, spans, names)
+      @string = string
+      @spans = spans
+      @names = names
+    end
+
+    def start
+      @spans[0][0]
+    end
+
+    def [](index)
+      if index.is_a?(String) || index.is_a?(Symbol)
+        name = index.to_s
+        unless @names.include?(name)
+          raise IndexError, "undefined group name reference: #{name}"
+        end
+        return named(name)
+      end
+      number = Integer.try_convert(index)
+      if number.nil?
+        raise TypeError, "no implicit conversion from nil to integer" if index.nil?
+        raise TypeError, "no implicit conversion of #{index.class} into Integer"
+      end
+      span = @spans[number]
+      span && @string[span[0], span[1] - span[0]]
+    end
+
+    def captures
+      (1...@spans.size).map { |index| self[index] }
+    end
+
+    def named_captures
+      @names.compact.uniq.to_h { |name| [name, named(name)] }
+    end
+
+    private
+
+    # A name may be written on more than one group, and the last one that
+    # matched is the one it stands for.
+    def named(name)
+      found = nil
+      @names.each_with_index do |held, index|
+        found = self[index] if held == name && @spans[index]
+      end
+      found
+    end
+  end
+  private_constant :MatchSpans
 
   def scan(pattern)
     found = attempt(pattern, true)
@@ -212,7 +277,7 @@ class StringScanner
 
   def match?(pattern)
     found = attempt(pattern, true)
-    found.nil? ? nil : @match_text.length
+    found.nil? ? nil : @match_text.bytesize
   end
 
   def skip(pattern)
@@ -220,7 +285,7 @@ class StringScanner
     return nil if found.nil?
     @previous = @position
     @position = @position + @match_text.length
-    @match_text.length
+    @match_text.bytesize
   end
 
   def scan_until(pattern)
@@ -240,13 +305,13 @@ class StringScanner
 
   def skip_until(pattern)
     taken = scan_until(pattern)
-    taken.nil? ? nil : taken.length
+    taken.nil? ? nil : taken.bytesize
   end
 
   def exist?(pattern)
     found = attempt(pattern, false)
     return nil if found.nil?
-    @match_start + @match_text.length - @position
+    @string[@position, @match_start + @match_text.length - @position].bytesize
   end
 
   def search_full(pattern, advance, return_string)
@@ -258,7 +323,7 @@ class StringScanner
       @previous = @position
       @position = @position + reach
     end
-    return_string ? taken : reach
+    return_string ? taken : taken.bytesize
   end
 
   def scan_full(pattern, advance, return_string)
@@ -270,7 +335,7 @@ class StringScanner
       @previous = @position
       @position = @position + reach
     end
-    return_string ? taken : reach
+    return_string ? taken : taken.bytesize
   end
 
   def unscan
@@ -291,7 +356,7 @@ class StringScanner
   end
 
   def matched_size
-    @match_text.nil? ? nil : @match_text.length
+    @match_text.nil? ? nil : @match_text.bytesize
   end
 
   def pre_match

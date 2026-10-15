@@ -15,7 +15,9 @@ pub(crate) fn bytes_are_characters(string_value: &crate::object::StringValue) ->
 /// per byte, so its characters are its bytes rather than their UTF-8 form.
 pub(crate) fn binary_bytes(string_value: &crate::object::StringValue) -> Vec<u8> {
     if bytes_are_characters(string_value) {
-        return crate::vm::native_methods::pack_format::string_to_bytes(&string_value.as_str());
+        return string_value
+            .byte_spelling(crate::vm::native_methods::pack_format::string_to_bytes)
+            .to_vec();
     }
     string_value.as_str().as_bytes().to_vec()
 }

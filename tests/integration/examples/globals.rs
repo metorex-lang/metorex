@@ -193,3 +193,9 @@ fn test_globals_output_stream_names_no_parens_execution() {
     let output = run_example("globals/output_stream_names_no_parens.rb");
     assert_eq!(output, OUTPUT_STREAM_NAMES_OUTPUT);
 }
+
+#[test]
+fn test_globals_environment_merge_nil_execution() {
+    let output = run_example("globals/environment_merge_nil.rb");
+    assert_eq!(output, "\"kept\"\nfalse\n\"added\"\nfalse\nfalse\n");
+}

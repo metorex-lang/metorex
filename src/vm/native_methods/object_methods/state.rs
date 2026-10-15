@@ -23,6 +23,16 @@ impl VirtualMachine {
                 }
                 Ok(Some(receiver.clone()))
             }
+            // `display` writes the object to `$stdout`, or to the port it is
+            // handed, through that port's `write`.
+            "display" if arguments.len() <= 1 => {
+                let port = match arguments.first() {
+                    Some(port) => port.clone(),
+                    None => self.read_global_variable("stdout", position)?,
+                };
+                self.send_to_object(port, "write", vec![receiver.clone()], position)?;
+                Ok(Some(Object::Nil))
+            }
             "frozen?" => Ok(Some(Object::Bool(self.object_is_frozen(receiver)))),
             "freeze" => {
                 self.freeze_object(receiver);

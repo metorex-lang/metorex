@@ -159,8 +159,17 @@ impl VirtualMachine {
                 // which is what `to_int` is asked for.
                 let start = self.coerce_slice_number(&arguments[0], method_name, position)?;
                 let len = self.coerce_slice_number(&arguments[1], method_name, position)?;
-                let chars = character_units(string_value);
-                let char_count = chars.len() as i64;
+                let as_text = characters_are_text(string_value);
+                let chars = if as_text {
+                    Vec::new()
+                } else {
+                    character_units(string_value)
+                };
+                let char_count = if as_text {
+                    string_value.character_count()
+                } else {
+                    chars.len()
+                } as i64;
                 // A start past the end names no substring at all, where a
                 // start exactly at the end names the empty one.
                 if start > char_count || (start < 0 && char_count + start < 0) {
@@ -172,11 +181,15 @@ impl VirtualMachine {
                     start.min(char_count) as usize
                 };
                 let end_idx = (start_idx as i64 + len).min(char_count).max(0) as usize;
-                if start_idx > chars.len() || len < 0 {
+                if start_idx as i64 > char_count || len < 0 {
                     Ok(Some(Object::Nil))
                 } else {
-                    let end_idx = end_idx.clamp(start_idx, chars.len());
-                    let sliced: String = chars[start_idx..end_idx].concat();
+                    let end_idx = end_idx.clamp(start_idx, char_count as usize);
+                    let sliced: String = if as_text {
+                        string_value.character_slice(start_idx, end_idx)
+                    } else {
+                        chars[start_idx..end_idx].concat()
+                    };
                     // A piece is written in the whole string's encoding.
                     let piece = crate::object::StringValue::with_encoding(
                         sliced,

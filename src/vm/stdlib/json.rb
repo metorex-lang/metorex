@@ -190,7 +190,7 @@ module JSON
         # A quote with a backslash in front of it stands in the text rather
         # than closing it, and a backslash before that escapes the backslash.
         slashes = 0
-        slashes += 1 while piece[piece.length - 1 - slashes] == "\\"
+        slashes += 1 while slashes < piece.length && piece[piece.length - 1 - slashes] == "\\"
         held << piece
         @at = stop + 1
         if slashes.odd?

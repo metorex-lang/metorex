@@ -754,3 +754,12 @@ fn test_parse_answers_a_node_for_each_kind_of_statement_and_expression() {
         )
     );
 }
+
+#[test]
+fn test_kernel_methods_answer_bare_at_the_top_level() {
+    let output = run_example("methods/bare_kernel_methods.rb");
+    assert_eq!(
+        output,
+        "main\nfalse\ntrue\ntrue\n[]\ntrue\nmain1[1, :a]nil\n\"text\"\n"
+    );
+}

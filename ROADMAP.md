@@ -10,12 +10,12 @@ Every item keeps `cargo test` and `scripts/run_ruby_spec.sh` passing on both eng
 
 These come first because every instruction, frame, and native method is written against them, and changing one after the compiler is built means rewriting what was built on it. Each decision is made with a prototype measured on the benchmarks below, and the decision, the alternatives, and the numbers are written in `docs/engine/<topic>.md`.
 
-- [ ] Benchmarks that decide: the yjit-bench suite's benchmarks that run under Metorex today, beside the five in `benchmarks/workloads` and the Rex suite, compared against CRuby 4.0.6 with and without `--yjit`. `benchmarks/compare.rb` reports each with startup time and peak memory
+- [x] Benchmarks that decide: the ruby-bench suite's (formerly yjit-bench) benchmarks that run under Metorex today, beside the five in `benchmarks/workloads` and the Rex suite, compared against CRuby 4.0.6 with and without `--yjit`. `benchmarks/compare.rb` reports each with startup time and peak memory
   - Acceptance: one command prints the table for all three engines, and the README's speed section shows it
 - [ ] Profiling: a documented way to profile a run with a sampling profiler on macOS and Linux, and `METOREX_COUNTERS=1` printing per-instruction and per-call-path counts and allocations at exit
   - Acceptance: a profile of one benchmark is recorded in `docs/engine/profiling.md` with the commands that produced it
-- [ ] Value representation: an 8-byte value with Integers that fit, Floats, Symbols, nil, true, and false held inline and everything else a pointer, against the current `Object` enum
-  - Acceptance: the prototype's numbers on the benchmarks, and the C API's `VALUE` conversion cost, are recorded, and the chosen representation is the one the instruction set uses
+- [ ] Value representation: an 8-byte value with Integers that fit, Floats, Symbols, nil, true, and false held inline and everything else a pointer, against the current `Object` enum. Strings are part of it: a String held as bytes with an encoding, against the current Rust `String` that holds a binary string's bytes 0x80 to 0xFF as two-byte characters, where `setbyte`, `bytesize`, `bytesplice`, and `pack(buffer:)` take time in proportion to the string's length
+  - Acceptance: the prototype's numbers on the benchmarks, protoboeuf-encode's under each String layout, and the C API's `VALUE` conversion cost are recorded, and the chosen representation is the one the instruction set uses
 - [ ] Memory management: reference counting as now, or a tracing collector, chosen with the C API's raw pointers, `ObjectSpace`, `WeakMap`, finalizers, and `GC` behavior in ruby/spec weighed in
   - Acceptance: the decision records how each of those keeps passing ruby/spec under it
 - [ ] Frames and calls: frames in one contiguous value stack, arguments passed in place with no allocation per call, and fibers holding their own segment of frames rather than an operating system stack

@@ -115,7 +115,7 @@ Metorex runs programs with a tree-walking interpreter. [ROADMAP.md](ROADMAP.md) 
 - **Octal escapes**: `"\000"` reads up to three digits as one character
 - **An argument may assign**: `StringIO.new(text = "hello")` binds `text` and passes what it assigned
 - **`io/console`**: `require` finds it, adding `getch` and `getpass` to StringIO
-- **StringScanner**: `require 'strscan'` gives a cursor over a string. `scan`, `check`, `match?`, and `skip` match where the cursor stands, `scan_until`, `check_until`, `skip_until`, `exist?`, `search_full`, and `scan_full` search ahead, and `matched`, `pre_match`, `post_match`, `[]`, `captures`, `named_captures`, and `values_at` report what the last match found. `pos`, `charpos`, `rest`, `eos?`, `bol?`, `reset`, `terminate`, and `unscan` move the cursor, and `getch`, `peek`, `peek_byte`, and `scan_byte` read one piece at a time
+- **StringScanner**: `require 'strscan'` gives a cursor over a string. `scan`, `check`, `match?`, and `skip` match where the cursor stands, `scan_until`, `check_until`, `skip_until`, `exist?`, `search_full`, and `scan_full` search ahead, and `matched`, `pre_match`, `post_match`, `[]`, `captures`, `named_captures`, and `values_at` report what the last match found. `match?`, `skip`, `skip_until`, `exist?`, and `matched_size` count bytes. `pos`, `charpos`, `rest`, `eos?`, `bol?`, `reset`, `terminate`, and `unscan` move the cursor, and `getch`, `peek`, `peek_byte`, and `scan_byte` read one piece at a time
 - **OpenStruct**: `require 'ostruct'` gives an object whose fields are decided as they are set, with `[]`, `[]=`, `delete_field`, `dig`, `each_pair`, `to_h`, `==`, `marshal_dump`, and an `inspect` that shows a field reaching back to the object as the class alone. A frozen one may be read but not written
 - **Prime**: `require 'prime'` gives `Prime.prime?`, `Prime.each` (lazy without a block, so `next` and `rewind` walk it), `Prime.first`, `Prime.prime_division`, and `Prime.int_from_prime_division`, plus `Integer#prime?`, `Integer#prime_division`, `Integer.from_prime_division`, and `Integer.each_prime`
 - **Matrix and Vector**: `require 'matrix'` gives rectangular arrays of numbers and the arithmetic over them. Matrices are built with `[]`, `rows`, `columns`, `build`, `diagonal`, `scalar`, `identity`, `zero`, `row_vector`, `column_vector`, and `empty`, and answer `row`, `column`, `[]`, `transpose`, `+`, `-`, `*`, `/`, `**`, `determinant`, `trace`, `rank`, `inverse`, `minor`, `first_minor`, `cofactor`, `collect`, `each`, `each_with_index`, and the shape questions from `square?` through `unitary?`. Vectors answer `+`, `-`, `*`, `inner_product`, `cross_product`, `magnitude`, `normalize`, `each2`, `covector`, and `angle_with`
@@ -141,7 +141,7 @@ Metorex runs programs with a tree-walking interpreter. [ROADMAP.md](ROADMAP.md) 
 - **YAML**: `require 'yaml'` gives `Psych` under both names. `load`, `unsafe_load`, `load_file`, and `load_stream` read scalars, sequences, mappings, flow collections, multi-document streams, and complex keys, naming symbols, numbers, dates, and timestamps as they go, and refusing a malformed mapping with `Psych::SyntaxError`. `dump`, `dump_stream`, and `Object#to_yaml` write them back, tagging a class, a module, a Struct, a Regexp, a Range, an exception, and an object's own fields the way Ruby tags them. `parse` and `parse_file` answer a `Psych::Nodes::Document`
 - **Build settings**: `require 'rbconfig'` gives `RbConfig::CONFIG` naming the version, the host, the extensions, and the tools the interpreter was built with, and `RbConfig::TOPDIR` is nil because metorex is one binary rather than an installed tree. `require 'rbconfig/sizeof'` adds `RbConfig::SIZEOF` and `RbConfig::LIMITS`
 - **C extensions**: `require` of a `.bundle` or `.so` opens it and runs its `Init_<name>` function, and so does a `require` or `autoload` of its path written without the ending, once no `.rb` file of the name is on the load path. A name ending in `.so` or `.o` loads the extension built for the platform, so `require "debug/debug.so"` loads `debug.bundle` on macOS. An extension is compiled against the headers under `include/`, which `RbConfig::CONFIG["rubyhdrdir"]` names, and `require 'mkmf'` gives the `create_makefile`, `append_cflags` and `dir_config` an extconf.rb calls, building in the current directory from the sources under `$srcdir`, the extconf.rb's own directory, or the ones `$srcs` names, with `$INCFLAGS` on the compiler's command line and a directory in the extension's name, such as `debug/debug`, written to the Makefile as `target_prefix`, with `have_header`, `have_library`, `have_func`, `have_var`, `have_type`, `have_macro` and `have_const` compiling a test program and adding the `HAVE_` define or library the Makefile carries. `ruby -run -e mkmf` runs those checks from its options and writes the Makefile. The C API defines classes, modules, methods of any arity, attributes, constants, class variables, Structs, Data classes, and globals backed by C memory or C functions. It calls into Ruby with `rb_funcall`, `rb_call_super`, `rb_call_super_kw`, and `rb_block_call`, whose C function can yield to the block of the C method that called it, and `rb_iterate`, whose walk hands its block to the next method it calls, as `rb_each` does. `rb_call_super` passes the C method's block on and reaches `method_missing` when nothing is above it, and a keyword argument C passes is read through `to_hash`, reads an object's type tag with `TYPE` and `RB_TYPE_P`, reads arguments with `rb_scan_args` including keywords and the block, and yields with `rb_yield`, `rb_block_proc` and `rb_proc_new`. Strings are read and written through `RSTRING_PTR` and `StringValue`, with room to grow that `rb_str_set_len` and `rb_str_resize` work on, and Arrays through `RARRAY_PTR`, `RARRAY_AREF` and `RARRAY_ASET`, with what C writes carried back into the object when control leaves C. `RBASIC` reads an object's class and flags, and setting or clearing its FREEZE flag freezes or thaws the object. `rb_protect`, `rb_rescue`, `rb_rescue2` and `rb_ensure` catch what Ruby raises, throws or breaks out of through C, with `$!` and `rb_errinfo` naming the exception while a rescue or ensure function runs, and `rb_jump_tag` raises it again. `rb_catch` and `rb_throw` work alongside Ruby's `catch` and `throw`, `rb_set_end_proc` runs a C function with the `at_exit` blocks, and `ruby_vm_at_exit` runs one as the process ends. It allocates objects through the allocator a class has, `rb_get_alloc_func` handing back one C can call for a class without its own, converts objects with `rb_convert_type` and its `rb_check_` forms, and keeps an instance variable C names without an `@` where Ruby code cannot see it. An IO is reached through `GetOpenFile` and `rb_io_descriptor`, written to with `rb_io_write` and its relatives, and waited on with `rb_io_wait` and `rb_thread_fd_select`, which let the other threads run while the descriptor is not ready. Encodings are found by name or by their index in `Encoding.list`, and `rb_define_dummy_encoding` and `rb_enc_alias` add to what `Encoding.find` answers. The `rb_enc_` character functions read the characters a run of bytes holds in any encoding. A C extension adds a digest algorithm by subclassing Digest::Base and naming its init, update and finish functions through `rb_digest_make_metadata`. The debug inspector, `rb_debug_inspector_open`, hands C the `self`, class, binding and backtrace location of each frame on the call stack, the native methods running among them, such as the `Kernel#require` loading the extension, and `rb_debug_inspector_frame_depth` and `rb_debug_inspector_current_depth` count the frames from the outermost. The instruction sequence functions the debug gem declares for itself, `rb_iseqw_to_iseq`, `rb_iseqw_new`, `rb_iseq_realpath`, `rb_iseq_type`, `rb_iseq_parameters` and `rb_iseq_code_location`, answer for a `RubyVM::InstructionSequence`. `rb_objspace_each_objects` hands C a `T_IMEMO` object for each method, class, module and block written in the Ruby files loaded so far, read from them with metorex's own parser, and `rb_obj_memsize_of` answers what `ObjectSpace.memsize_of` does. `rb_raise`, `rb_sprintf` and `rb_warn` format with `PRIsVALUE`. It wraps C pointers in objects with `TypedData_Wrap_Struct` and `Data_Wrap_Struct`, checked by type with `TypedData_Get_Struct`, and makes a class's instances with the allocator `rb_define_alloc_func` gives it. `GC.start` frees a wrapped object that neither Ruby, the mark function of a wrapped object something reaches, nor an address given to `rb_gc_register_address` reaches, running its free function, and the program frees the rest as it ends. It makes threads around C functions and runs a C function without the interpreter through `rb_thread_call_without_gvl`, on an operating system thread of its own that waking the calling thread or a signal can interrupt. It also covers IDs and Symbols, Arrays, Hashes and their hash codes, Sets, Ranges, Fibers, Mutexes, TracePoints, Regexps, Times, `st_table`, Integers of any width, Floats, Rationals and Complex numbers with their conversions and coercion, exceptions and `rb_errinfo`, the `rb_c*`, `rb_m*` and `rb_e*` class globals, and `rb_marshal_dump` and `rb_marshal_load`. An error raised in C reaches Ruby as the exception it was
-- **Fiddle**: `require 'fiddle'` opens shared libraries with `Fiddle::Handle` and finds the symbols in them, and `Fiddle::Pointer` reads the byte or the run of bytes at an address
+- **Fiddle**: `require 'fiddle'` opens shared libraries with `Fiddle::Handle` and finds the symbols in them, `Fiddle::Function` calls a C function with up to eight integer or pointer arguments and eight floating point ones, writing what the function puts in a String argument back into the String, and `Fiddle::Pointer` reads the byte, the run of bytes, or the C string at an address. The `TYPE_`, `SIZEOF_`, and `ALIGN_` constants name the C types
 - **Name lookup**: `require 'resolv'` gives `Resolv` and `Resolv::Hosts`, reading a hosts file for `getaddress`, `getaddresses`, `getname`, and `getnames`, and raising `Resolv::ResolvError` for a name nothing answers to
 - **Command-line options**: `require 'optparse'` gives MRI's own `OptionParser`, with `optparse/time`, `optparse/date`, `optparse/uri`, `optparse/shellwords`, `optparse/kwargs` and `optparse/ac`. `on` describes an option by its short and long names, taking `--[no-]name` for one that negates and `--name VALUE` for one that takes a value, and `parse`, `parse!`, `order`, and `order!` read them out of an argument list, storing what they find in the hash an `into:` keyword names
 - **Syslog**: `require 'syslog'` gives the system log. `open`, `close`, `reopen`, and `opened?` work it, `ident`, `options`, `facility`, and `mask` report how it was opened, and `debug`, `info`, `notice`, `warning`, `err`, `crit`, `alert`, `emerg`, and `log` write at their severity. `Syslog::Constants` names the severities, facilities, and options, with `LOG_MASK` and `LOG_UPTO` building a mask. A message goes through the C library, and under `LOG_PERROR` it also reaches `$stderr`
@@ -629,6 +629,65 @@ The driver needs MRI with the aruba and thread_order gems, which rspec-core's su
 
 ### Speed
 
+`ruby benchmarks/compare.rb`, run with a release build, times Metorex beside CRuby with and without `--yjit` and prints this table. It covers startup, the scripts in `benchmarks/workloads`, every benchmark in the [ruby-bench](https://github.com/ruby/ruby-bench) suite (the `benchmarks/ruby-bench` submodule) in its headline, other, and micro categories that needs no gems, and the Rex suite. Startup, workload, and Rex suite times are the fastest of three whole runs. A ruby-bench time is the mean of one iteration after the warmup ones, under ruby-bench's own harness: CRuby runs the harness's defaults, as ruby-bench's runner does, and Metorex runs one warmup iteration and two timed ones. Peak memory is the largest resident set size of the run.
+
+On an Apple M5 Max (18 CPUs, macOS 27.0.1), Metorex 0.1.0 built with rustc 1.96.0, ruby 4.0.6 (2026-07-14 revision 03b6d3f889) +PRISM [arm64-darwin25]:
+
+| Benchmark | CRuby | CRuby --yjit | Metorex | Metorex ÷ CRuby | Metorex ÷ YJIT | CRuby peak | YJIT peak | Metorex peak |
+| :-- | --: | --: | --: | --: | --: | --: | --: | --: |
+| empty | 26.5 ms | 26.3 ms | 47.9 ms | 1.8× | 1.8× | 19 MB | 19 MB | 49 MB |
+| block_calls | 34.5 ms | 33.7 ms | 567.6 ms | 16.4× | 16.9× | 19 MB | 19 MB | 49 MB |
+| hash_access | 48.5 ms | 47.2 ms | 323.3 ms | 6.7× | 6.8× | 28 MB | 29 MB | 74 MB |
+| method_calls | 33.0 ms | 30.3 ms | 469.2 ms | 14.2× | 15.5× | 19 MB | 19 MB | 49 MB |
+| object_allocation | 37.2 ms | 33.6 ms | 854.2 ms | 22.9× | 25.4× | 19 MB | 20 MB | 49 MB |
+| string_building | 40.5 ms | 39.7 ms | 223.4 ms | 5.5× | 5.6× | 25 MB | 26 MB | 72 MB |
+| 30k_ifelse | 312.1 ms | 80.3 ms | 8.59 s | 27.5× | 106.9× | 116 MB | 159 MB | 545 MB |
+| 30k_methods | 247.3 ms | 47.8 ms | 4.52 s | 18.3× | 94.6× | 66 MB | 77 MB | 191 MB |
+| 30k_variables | 391.8 ms | 1.19 s | 49.09 s | 125.3× | 41.2× | 41 MB | 171 MB | 175 MB |
+| attr_accessor | 80.3 ms | 11.7 ms | 9.99 s | 124.4× | 853.4× | 20 MB | 21 MB | 51 MB |
+| binarytrees | 152.3 ms | 71.5 ms | 9.27 s | 60.9× | 129.7× | 27 MB | 28 MB | 62 MB |
+| block_methods | 1.20 s | 270.6 ms | 116.97 s | 97.6× | 432.2× | 90 MB | 101 MB | 58 MB |
+| blurhash | 165.0 ms | 62.4 ms | 6.54 s | 39.6× | 104.8× | 21 MB | 22 MB | 63 MB |
+| cfunc_itself | 39.1 ms | 9.7 ms | 1.09 s | 27.7× | 111.5× | 20 MB | 21 MB | 51 MB |
+| etanni | 150.5 ms | 125.1 ms | 2.38 s | 15.8× | 19.0× | 29 MB | 25 MB | 68 MB |
+| fannkuchredux | 235.2 ms | 85.2 ms | 7.14 s | 30.3× | 83.7× | 20 MB | 21 MB | 51 MB |
+| fib | 100.6 ms | 16.6 ms | 8.54 s | 84.8× | 515.1× | 20 MB | 21 MB | 52 MB |
+| getivar | 55.3 ms | 8.5 ms | 2.57 s | 46.4× | 302.3× | 20 MB | 21 MB | 51 MB |
+| getivar-module | 112.1 ms | 35.1 ms | 5.58 s | 49.8× | 158.7× | 20 MB | 21 MB | 51 MB |
+| keyword_args | 84.7 ms | 15.1 ms | 11.11 s | 131.2× | 737.5× | 20 MB | 21 MB | 51 MB |
+| knucleotide | 15.9 ms | 16.0 ms | 318.4 ms | 20.0× | 20.0× | 22 MB | 23 MB | 52 MB |
+| loops-times | 476.4 ms | 136.1 ms | 22.41 s | 47.0× | 164.7× | 22 MB | 27 MB | 51 MB |
+| matmul | 231.8 ms | 97.1 ms | 9.19 s | 39.6× | 94.6× | 26 MB | 27 MB | 56 MB |
+| nbody | 42.4 ms | 18.0 ms | 2.88 s | 67.9× | 159.6× | 20 MB | 21 MB | 51 MB |
+| nqueens | 106.9 ms | 24.6 ms | 3.58 s | 33.5× | 145.9× | 20 MB | 22 MB | 51 MB |
+| object-new | 30.3 ms | 14.8 ms | 1.18 s | 38.9× | 79.5× | 20 MB | 21 MB | 51 MB |
+| object-new-initialize | 54.4 ms | 17.9 ms | 3.56 s | 65.4× | 198.1× | 20 MB | 21 MB | 51 MB |
+| object-new-no-escape | 97.9 ms | 34.7 ms | 8.19 s | 83.6× | 235.7× | 20 MB | 21 MB | 51 MB |
+| protoboeuf | 70.8 ms | 14.0 ms | 28.95 s | 409.0× | 2068.2× | 43 MB | 48 MB | 320 MB |
+| protoboeuf-encode | 61.9 ms | 14.9 ms | 102.56 s | 1656.3× | 6892.5× | 876 MB | 3401 MB | 363 MB |
+| respond_to | 95.3 ms | 6.8 ms | 4.07 s | 42.7× | 595.9× | 20 MB | 21 MB | 51 MB |
+| ruby-json | 98.3 ms | 79.7 ms | 23.61 s | 240.1× | 296.2× | 21 MB | 22 MB | 328 MB |
+| ruby-xor | 57.2 ms | 11.2 ms | 2.82 s | 49.2× | 251.5× | 21 MB | 22 MB | 52 MB |
+| send_bmethod | 94.2 ms | 4.4 ms | 7.98 s | 84.8× | 1831.3× | 20 MB | 21 MB | 51 MB |
+| send_cfunc_block | 115.7 ms | 40.7 ms | 8.18 s | 70.7× | 201.2× | 20 MB | 21 MB | 52 MB |
+| send_rubyfunc_block | 59.5 ms | 11.8 ms | 7.11 s | 119.6× | 603.4× | 20 MB | 21 MB | 51 MB |
+| send_rubyfunc_inline | 366.3 ms | 49.4 ms | 24.48 s | 66.8× | 495.1× | 20 MB | 21 MB | 52 MB |
+| setivar | 31.2 ms | 4.6 ms | 1.08 s | 34.5× | 236.8× | 20 MB | 21 MB | 51 MB |
+| setivar_object | 53.4 ms | 19.5 ms | 1.16 s | 21.8× | 59.7× | 20 MB | 21 MB | 51 MB |
+| setivar_young | 53.8 ms | 19.4 ms | 1.13 s | 20.9× | 58.0× | 20 MB | 21 MB | 51 MB |
+| splay | 45.2 ms | 29.8 ms | 2.71 s | 60.0× | 91.0× | 905 MB | 1003 MB | 498 MB |
+| str_concat | 39.2 ms | 12.3 ms | 1.61 s | 41.0× | 131.3× | 80 MB | 86 MB | 51 MB |
+| struct-new-no-escape | 61.4 ms | 34.8 ms | 3.40 s | 55.5× | 97.8× | 20 MB | 21 MB | 52 MB |
+| structaref | 86.2 ms | 10.9 ms | 7.41 s | 86.0× | 681.7× | 20 MB | 21 MB | 51 MB |
+| structaset | 72.0 ms | 28.3 ms | 11.47 s | 159.2× | 405.7× | 20 MB | 21 MB | 52 MB |
+| sudoku | 272.9 ms | 62.8 ms | 9.02 s | 33.1× | 143.6× | 20 MB | 21 MB | 52 MB |
+| throw | 8.9 ms | 6.7 ms | 566.1 ms | 63.7× | 84.2× | 20 MB | 21 MB | 51 MB |
+| rex_suite | 286.2 ms | 352.5 ms | 5.47 s | 19.1× | 15.5× | 55 MB | 61 MB | 277 MB |
+
+Not run, since they need gems installed with `bundle install`: activerecord, addressable-equality, addressable-getters, addressable-join, addressable-merge, addressable-new, addressable-normalize, addressable-parse, addressable-setters, addressable-to-s, chunky-png, erubi, erubi-rails, fluentd, grape, graphql, graphql-native, hexapdf, lee, liquid-c, liquid-compile, liquid-il, liquid-render, lobsters, mail, optcarrot, psych-load, rack, railsbench, rubocop, ruby-lsp, rubyboy, rubykon, sequel, shipit, tinygql.
+
+The ruby-bench benchmarks that need gems installed with `bundle install` are not run.
+
 `scripts/bench_rex.sh` runs `benchmarks/rex_suite`, 3000 trivial examples, with a release build and compares boot time, load time, examples per second, and peak memory with `benchmarks/rex_suite/baseline.json`. `scripts/compare_fast_paths.sh` runs the RSpec libraries' suites with the fast paths on and off and checks that every spec file prints the same.
 
 Times on an Apple M-series machine, release build:
@@ -683,7 +742,8 @@ cargo llvm-cov --ignore-filename-regex 'ruby/'
 # Run Ruby spec suite (requires submodules)
 scripts/run_ruby_spec.sh
 
-# Compare speed with MRI (by hand, needs a release build)
+# Compare speed with CRuby and YJIT (by hand, needs a release build and the
+# benchmarks/ruby-bench submodule)
 cargo build --release
 ruby benchmarks/compare.rb
 ```

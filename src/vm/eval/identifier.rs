@@ -286,6 +286,14 @@ impl VirtualMachine {
             {
                 return self.invoke_method(owner, method, main, vec![], position);
             }
+            // The Object and Kernel natives (`itself`, `hash`, `frozen?`)
+            // answer bare at the top level, as they do inside a method.
+            if !name.starts_with(char::is_uppercase)
+                && let Ok(main) = self.eval_self(position)
+                && let Some(result) = self.call_object_method(&main, name, &[], position)?
+            {
+                return Ok(result);
+            }
             return Err(self.undefined_name_error(name, position));
         };
 

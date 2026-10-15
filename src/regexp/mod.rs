@@ -13,7 +13,7 @@ mod parser;
 
 pub use parser::{Flags, Trouble};
 
-use matcher::{Found, Matcher};
+use matcher::{Found, Matcher, Slot};
 use node::Node;
 
 /// A run of text written so a pattern reads it as itself, with every
@@ -176,6 +176,41 @@ impl Pattern {
             return Ok(None);
         };
         Ok(Some(reading.captures(subject, &self.names, &found)))
+    }
+
+    /// Where each group of a match sits, in characters of `letters`, when
+    /// the characters from `from` on are matched as a subject of their own:
+    /// the match that begins at `from` when `anchored`, or the leftmost one
+    /// at or after it. Group zero is the whole match.
+    pub fn spans_in_rest(
+        &self,
+        letters: &[char],
+        from: usize,
+        anchored: bool,
+        limit: Option<std::time::Duration>,
+    ) -> Result<Option<Vec<Slot>>, TimedOut> {
+        let Some(rest) = letters.get(from..) else {
+            return Ok(None);
+        };
+        let mut matcher = Matcher::new(rest, &self.names, &self.root);
+        if let Some(limit) = limit {
+            matcher.give_up_after(limit);
+        }
+        let found = if anchored {
+            matcher.match_at(&self.root, 0)
+        } else {
+            matcher.search(&self.root, 0)
+        };
+        let Some(found) = found else {
+            if matcher.gave_up() {
+                return Err(TimedOut);
+            }
+            return Ok(None);
+        };
+        let placed = |span: (usize, usize)| (span.0 + from, span.1 + from);
+        let mut spans = vec![Some(placed((found.start, found.end)))];
+        spans.extend(found.slots.iter().skip(1).map(|slot| slot.map(placed)));
+        Ok(Some(spans))
     }
 
     /// Where the leftmost match at or after `start` sits, without its groups.

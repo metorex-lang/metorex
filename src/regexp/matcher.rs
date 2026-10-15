@@ -161,6 +161,18 @@ impl<'a> Matcher<'a> {
         }
     }
 
+    /// The match that begins at `at` exactly, or None when there is none.
+    pub fn match_at(&mut self, root: &'a Node, at: usize) -> Option<Found> {
+        self.search_start = at;
+        self.reset();
+        let end = self.run(root, at, &Rest::Done)?;
+        Some(Found {
+            start: self.keep.unwrap_or(at),
+            end,
+            slots: std::mem::take(&mut self.slots),
+        })
+    }
+
     /// Whether a match begins at `at` exactly.
     pub fn matches_at(&mut self, root: &'a Node, at: usize) -> bool {
         self.search_start = at;

@@ -198,13 +198,16 @@ pub(crate) enum Separator {
     /// A run of text, matched as it stands.
     Literal(String),
     /// A pattern, whose groups are kept alongside the pieces.
-    Pattern(crate::regexp::Pattern),
+    Pattern(std::rc::Rc<crate::regexp::Pattern>),
     /// The place a run starts, cut in front of rather than taken out.
-    Before(crate::regexp::Pattern),
+    Before(std::rc::Rc<crate::regexp::Pattern>),
 }
 
 /// The run a pattern that is nothing but a look-ahead names.
-pub(crate) fn looks_ahead(pattern: &str, flags: &str) -> Option<crate::regexp::Pattern> {
+pub(crate) fn looks_ahead(
+    pattern: &str,
+    flags: &str,
+) -> Option<std::rc::Rc<crate::regexp::Pattern>> {
     let inside = pattern.strip_prefix("(?=")?.strip_suffix(')')?;
     if inside.contains(')') && !inside.contains('(') {
         return None;

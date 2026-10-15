@@ -4,3 +4,6 @@
 [submodule "ruby/mspec"]
 	path = ruby/mspec
 	url = https://github.com/ruby/mspec
+[submodule "benchmarks/ruby-bench"]
+	path = benchmarks/ruby-bench
+	url = https://github.com/ruby/ruby-bench

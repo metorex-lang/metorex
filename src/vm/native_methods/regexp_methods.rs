@@ -75,15 +75,36 @@ pub(crate) fn read_pattern(pattern: &str, flags: &str) -> Result<crate::regexp::
 }
 
 /// Compile a pattern, applying the flags the literal carried.
-pub(crate) fn compile(pattern: &str, flags: &str) -> Option<crate::regexp::Pattern> {
+pub(crate) fn compile(pattern: &str, flags: &str) -> Option<Rc<crate::regexp::Pattern>> {
+    thread_local! {
+        static COMPILED: RefCell<std::collections::HashMap<(String, String), Rc<crate::regexp::Pattern>>> =
+            RefCell::new(std::collections::HashMap::new());
+    }
+    let key = (pattern.to_string(), flags.to_string());
+    if let Some(held) = COMPILED.with(|compiled| compiled.borrow().get(&key).cloned()) {
+        return Some(held);
+    }
     let written = crate::regexp::Flags {
         folded: flags.contains('i'),
         dot_reads_newline: flags.contains('m'),
         extended: flags.contains('x'),
         ..crate::regexp::Flags::default()
     };
-    crate::regexp::Pattern::compile(pattern, written).ok()
+    let made = Rc::new(crate::regexp::Pattern::compile(pattern, written).ok()?);
+    COMPILED.with(|compiled| {
+        let mut compiled = compiled.borrow_mut();
+        // A program that builds patterns from data could make any number of
+        // them, so the cache starts over rather than growing without end.
+        if compiled.len() >= COMPILED_PATTERNS_KEPT {
+            compiled.clear();
+        }
+        compiled.insert(key, Rc::clone(&made));
+    });
+    Some(made)
 }
+
+/// How many compiled patterns `compile` keeps before it starts over.
+const COMPILED_PATTERNS_KEPT: usize = 4096;
 
 /// The characters a `=~` operand searches, which a Symbol supplies from its
 /// name the way Ruby's does.
@@ -366,6 +387,76 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
         match method_name {
+            // StringScanner's match: `__scan_spans__(string, at, anchored)`
+            // matches the characters of `string` from `at` on as a subject of
+            // their own, and answers `[spans, names]`, one `[start, end]` in
+            // characters of `string` (or nil) and one name (or nil) for each
+            // group a MatchData would hold, or nil for no match. It answers
+            // false for a string whose characters a pattern does not read one
+            // Rust character at a time, which the caller matches another way.
+            "__scan_spans__" => {
+                let (Some(Object::String(subject)), Some(Object::Int(at))) =
+                    (arguments.first(), arguments.get(1))
+                else {
+                    return Ok(Some(Object::Bool(false)));
+                };
+                let anchored = matches!(arguments.get(2), Some(Object::Bool(true)));
+                let encoding = subject.encoding_name();
+                if !super::string_methods::characters_are_text(subject)
+                    || encoding == "EUC-JP"
+                    || super::string_methods::spells_shift_jis(&encoding)
+                {
+                    return Ok(Some(Object::Bool(false)));
+                }
+                let Some(compiled) = compile(pattern, flags) else {
+                    return Ok(Some(Object::Bool(false)));
+                };
+                let limit = self.pattern_time_limit(pattern, flags);
+                let letters = subject.letters();
+                let spans = match compiled.spans_in_rest(
+                    &letters,
+                    (*at).max(0) as usize,
+                    anchored,
+                    limit,
+                ) {
+                    Ok(Some(spans)) => spans,
+                    Ok(None) => return Ok(Some(Object::Nil)),
+                    Err(_) => {
+                        return Err(crate::vm::errors::simple_exception(
+                            "Regexp::TimeoutError",
+                            "regexp match timeout",
+                            position,
+                        ));
+                    }
+                };
+                // A pattern that names any of its groups leaves the unnamed
+                // ones uncaptured.
+                let names: Vec<Option<String>> = compiled
+                    .capture_names()
+                    .map(|name| name.map(str::to_string))
+                    .collect();
+                let any_named = names.iter().any(Option::is_some);
+                let mut kept_spans = Vec::new();
+                let mut kept_names = Vec::new();
+                for (index, span) in spans.iter().enumerate() {
+                    let name = names.get(index).cloned().flatten();
+                    if any_named && index > 0 && name.is_none() {
+                        continue;
+                    }
+                    kept_spans.push(match span {
+                        Some((start, end)) => Object::array(vec![
+                            Object::Int(*start as i64),
+                            Object::Int(*end as i64),
+                        ]),
+                        None => Object::Nil,
+                    });
+                    kept_names.push(name.map_or(Object::Nil, Object::string));
+                }
+                Ok(Some(Object::array(vec![
+                    Object::array(kept_spans),
+                    Object::array(kept_names),
+                ])))
+            }
             // The limit a pattern was built with, which is nil for one built
             // without one however long the class lets a match run.
             "timeout" => Ok(Some(

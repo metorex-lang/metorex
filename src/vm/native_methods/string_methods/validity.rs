@@ -306,6 +306,19 @@ pub(crate) fn character_count(string_value: &crate::object::StringValue) -> i64 
     }
 }
 
+/// Whether each character of a string, as `character_units` reads it, is one
+/// Rust character of its text, so `StringValue::character_slice` reads it.
+/// That is every string except one held as bytes in an encoding that pairs
+/// them, and one in UTF-16 or UTF-32, unless the text is all ASCII.
+pub(crate) fn characters_are_text(string_value: &crate::object::StringValue) -> bool {
+    let named = string_value.encoding_name();
+    if super::wide::wide_encoding(&named).is_some() {
+        return false;
+    }
+    let pairs_bytes = spells_shift_jis(&named) || named == "EUC-JP" || named == "UTF-8";
+    !(pairs_bytes && string_value.holds_bytes()) || string_value.is_ascii()
+}
+
 /// The characters of a string, each as the text that spells it. A Shift_JIS
 /// or EUC-JP string held as bytes pairs some of them, so one character there
 /// is the run of byte characters it takes.

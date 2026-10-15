@@ -48,6 +48,59 @@ pub struct StringValue {
     /// Only `--debug-frozen-string-literal` records it, and everything else
     /// leaves it empty.
     created_at: RefCell<Option<String>>,
+    /// Whether the text is all ASCII, worked out the first time it is asked
+    /// and forgotten whenever the text changes.
+    ascii: std::cell::Cell<Option<bool>>,
+    /// Where every `CHARACTERS_PER_MARK`th character starts, built the first
+    /// time a character is looked up by position and forgotten whenever the
+    /// text changes.
+    character_marks: RefCell<Option<std::rc::Rc<CharacterMarks>>>,
+    /// The text's Rust characters, which a pattern is matched over, built
+    /// the first time a match asks and forgotten whenever the text changes.
+    letters: RefCell<Option<std::rc::Rc<[char]>>>,
+    /// The bytes each character stands for when it stands for bytes, built
+    /// the first time they are asked for and forgotten whenever the text
+    /// changes.
+    byte_spelling: RefCell<Option<std::rc::Rc<[u8]>>>,
+}
+
+/// How many characters apart the byte offsets in `CharacterMarks` are.
+const CHARACTERS_PER_MARK: usize = 64;
+
+/// The byte offset of every `CHARACTERS_PER_MARK`th character of a text, and
+/// how many characters it has.
+#[derive(Debug)]
+struct CharacterMarks {
+    offsets: Vec<usize>,
+    count: usize,
+}
+
+impl CharacterMarks {
+    fn of(text: &str) -> Self {
+        let mut offsets = Vec::with_capacity(text.len() / CHARACTERS_PER_MARK + 1);
+        let mut count = 0;
+        for (offset, _) in text.char_indices() {
+            if count % CHARACTERS_PER_MARK == 0 {
+                offsets.push(offset);
+            }
+            count += 1;
+        }
+        Self { offsets, count }
+    }
+
+    /// The byte offset character `index` starts at, or the text's length for
+    /// the index just past its last character.
+    fn byte_offset(&self, text: &str, index: usize) -> usize {
+        if index >= self.count {
+            return text.len();
+        }
+        let start = self.offsets[index / CHARACTERS_PER_MARK];
+        let skipped = index % CHARACTERS_PER_MARK;
+        text[start..]
+            .char_indices()
+            .nth(skipped)
+            .map_or(text.len(), |(offset, _)| start + offset)
+    }
 }
 
 impl StringValue {
@@ -64,6 +117,10 @@ impl StringValue {
             chilled: RefCell::new(None),
             pointer: std::cell::Cell::new(0),
             created_at: RefCell::new(None),
+            ascii: std::cell::Cell::new(None),
+            character_marks: RefCell::new(None),
+            letters: RefCell::new(None),
+            byte_spelling: RefCell::new(None),
         }
     }
 
@@ -81,6 +138,10 @@ impl StringValue {
             chilled: RefCell::new(None),
             pointer: std::cell::Cell::new(0),
             created_at: RefCell::new(None),
+            ascii: std::cell::Cell::new(None),
+            character_marks: RefCell::new(None),
+            letters: RefCell::new(None),
+            byte_spelling: RefCell::new(None),
         }
     }
 
@@ -126,6 +187,76 @@ impl StringValue {
         std::cell::Ref::map(self.text.borrow(), |held| held.as_str())
     }
 
+    /// Whether every character of the text is ASCII.
+    pub fn is_ascii(&self) -> bool {
+        if let Some(known) = self.ascii.get() {
+            return known;
+        }
+        let found = self.text.borrow().is_ascii();
+        self.ascii.set(Some(found));
+        found
+    }
+
+    fn forget_text_readings(&self) {
+        self.ascii.set(None);
+        *self.character_marks.borrow_mut() = None;
+        *self.letters.borrow_mut() = None;
+        *self.byte_spelling.borrow_mut() = None;
+    }
+
+    /// The bytes `spell` reads the text as, kept until the text changes.
+    /// Every caller passes the same reading, the one that takes each
+    /// character below 256 as one byte.
+    pub fn byte_spelling(&self, spell: impl FnOnce(&str) -> Vec<u8>) -> std::rc::Rc<[u8]> {
+        if let Some(bytes) = self.byte_spelling.borrow().as_ref() {
+            return std::rc::Rc::clone(bytes);
+        }
+        let bytes: std::rc::Rc<[u8]> = spell(&self.text.borrow()).into();
+        *self.byte_spelling.borrow_mut() = Some(std::rc::Rc::clone(&bytes));
+        bytes
+    }
+
+    /// The text's Rust characters, in order.
+    pub fn letters(&self) -> std::rc::Rc<[char]> {
+        if let Some(letters) = self.letters.borrow().as_ref() {
+            return std::rc::Rc::clone(letters);
+        }
+        let letters: std::rc::Rc<[char]> = self.text.borrow().chars().collect();
+        *self.letters.borrow_mut() = Some(std::rc::Rc::clone(&letters));
+        letters
+    }
+
+    fn character_marks(&self) -> std::rc::Rc<CharacterMarks> {
+        if let Some(marks) = self.character_marks.borrow().as_ref() {
+            return std::rc::Rc::clone(marks);
+        }
+        let marks = std::rc::Rc::new(CharacterMarks::of(&self.text.borrow()));
+        *self.character_marks.borrow_mut() = Some(std::rc::Rc::clone(&marks));
+        marks
+    }
+
+    /// How many Rust characters the text holds.
+    pub fn character_count(&self) -> usize {
+        if self.is_ascii() {
+            return self.text.borrow().len();
+        }
+        self.character_marks().count
+    }
+
+    /// The text of characters `from` up to but not including `to`, counted
+    /// in Rust characters. Both are clamped to the text's length.
+    pub fn character_slice(&self, from: usize, to: usize) -> String {
+        let text = self.text.borrow();
+        if self.is_ascii() {
+            let end = to.min(text.len());
+            return text[from.min(end)..end].to_string();
+        }
+        let marks = self.character_marks();
+        let start = marks.byte_offset(&text, from);
+        let end = marks.byte_offset(&text, to.max(from));
+        text[start..end].to_string()
+    }
+
     /// A copy of the text, for a caller that keeps it past a change.
     pub fn to_text(&self) -> String {
         self.text.borrow().clone()
@@ -135,17 +266,24 @@ impl StringValue {
     /// sees the new text, which is what Ruby's in-place methods do.
     pub fn replace_text(&self, text: impl Into<String>) {
         *self.text.borrow_mut() = text.into();
+        self.forget_text_readings();
     }
 
     /// Add text to the end of what the string holds.
     pub fn append_text(&self, extra: &str) {
         self.text.borrow_mut().push_str(extra);
+        let ascii = self.ascii.get();
+        self.forget_text_readings();
+        if ascii == Some(true) && extra.is_ascii() {
+            self.ascii.set(Some(true));
+        }
     }
 
     /// Change the text through a function of what it holds now.
     pub fn update_text(&self, change: impl FnOnce(&str) -> String) {
         let made = change(self.text.borrow().as_str());
         *self.text.borrow_mut() = made;
+        self.forget_text_readings();
     }
 
     /// Whether something else is reading the string and refuses a change.
@@ -249,6 +387,10 @@ impl Clone for StringValue {
             chilled: RefCell::new(None),
             pointer: std::cell::Cell::new(self.pointer.get()),
             created_at: RefCell::new(self.created_at.borrow().clone()),
+            ascii: std::cell::Cell::new(self.ascii.get()),
+            character_marks: RefCell::new(self.character_marks.borrow().clone()),
+            letters: RefCell::new(self.letters.borrow().clone()),
+            byte_spelling: RefCell::new(self.byte_spelling.borrow().clone()),
         }
     }
 }

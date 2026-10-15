@@ -643,11 +643,24 @@ impl VirtualMachine {
                 };
                 let made = match key {
                     Object::Int(i) => {
-                        let chars = crate::vm::native_methods::string_methods::character_units(&s);
-                        let len = chars.len() as i64;
+                        let as_text =
+                            crate::vm::native_methods::string_methods::characters_are_text(&s);
+                        let chars = if as_text {
+                            Vec::new()
+                        } else {
+                            crate::vm::native_methods::string_methods::character_units(&s)
+                        };
+                        let len = if as_text {
+                            s.character_count()
+                        } else {
+                            chars.len()
+                        } as i64;
                         let idx = if i < 0 { len + i } else { i };
                         if idx < 0 || idx >= len {
                             Ok(Object::Nil)
+                        } else if as_text {
+                            let at = idx as usize;
+                            Ok(Object::string(s.character_slice(at, at + 1)))
                         } else {
                             Ok(Object::string(chars[idx as usize].clone()))
                         }
@@ -658,8 +671,18 @@ impl VirtualMachine {
                         exclusive,
                         ..
                     } => {
-                        let chars = crate::vm::native_methods::string_methods::character_units(&s);
-                        let len = chars.len() as i64;
+                        let as_text =
+                            crate::vm::native_methods::string_methods::characters_are_text(&s);
+                        let chars = if as_text {
+                            Vec::new()
+                        } else {
+                            crate::vm::native_methods::string_methods::character_units(&s)
+                        };
+                        let len = if as_text {
+                            s.character_count()
+                        } else {
+                            chars.len()
+                        } as i64;
                         let from = match self.span_end_index(start.as_ref(), position)? {
                             Some(number) => {
                                 let placed = if number < 0 { len + number } else { number };
@@ -679,7 +702,11 @@ impl VirtualMachine {
                         };
                         let count = (last - from + 1).max(0);
                         let stop = (from + count).min(len);
-                        let sliced: String = chars[from as usize..stop as usize].concat();
+                        let sliced: String = if as_text {
+                            s.character_slice(from as usize, stop as usize)
+                        } else {
+                            chars[from as usize..stop as usize].concat()
+                        };
                         Ok(Object::string(sliced))
                     }
                     // `text[other]` answers the other string when it appears,
