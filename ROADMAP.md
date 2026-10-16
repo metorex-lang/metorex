@@ -57,7 +57,7 @@ Each item compiles a group of node types. Its acceptance is the same in every ca
 - [x] Operators and calls: `BinaryOp`, `UnaryOp`, `Call`, `MethodCall` with positional, splat, keyword, keyword splat, and block arguments (`Splat`, `KeywordSplat`, `BlockArg`), safe navigation, `PatternTest`, and `Defined`
 - [x] Branches and loops: `If`, `Unless` as statements and expressions, `Case`, `While`, `DoWhile`, `For`, `Break`, `Continue`, `Redo`, and `&&`, `||`, and `!` short-circuiting
 - [x] Blocks and procs: `Lambda`, blocks passed to calls, `Yield`, `Block`, numbered parameters and `it`, and `break`, `next`, and `return` from a block, including a `return` that leaves the method that wrote the block through several yielding methods
-- [ ] Methods, classes, and modules: `FunctionDef`, `MethodDef` with every parameter kind, `ClassDef`, `ModuleDef`, `SingletonClass`, `Include`, `Extend`, `Alias`, `AttrReader`, `AttrWriter`, `AttrAccessor`, `Super` with and without arguments, and `Return`
+- [x] Methods, classes, and modules: `FunctionDef`, `MethodDef` with every parameter kind, `ClassDef`, `ModuleDef`, `SingletonClass`, `Include`, `Extend`, `Alias`, `AttrReader`, `AttrWriter`, `AttrAccessor`, `Super` with and without arguments, and `Return`
 - [ ] Exceptions: `Begin`, `BeginRescue`, `Raise`, `Retry`, `ensure`, method-level `rescue`, `throw` and `catch`, and the `ControlFlow` exits that pass through an `ensure`
 - [ ] Pattern matching: `CaseIn` and `Match`, with array, find, hash, alternative, pin, and guard patterns, and `deconstruct` and `deconstruct_keys` caching as MRI does
 - [ ] `BeginBlock` and `END`, `__END__` and `DATA`, and `-n` and `-p` loops around the main program

@@ -21,5 +21,6 @@ mod identifier;
 mod literals;
 mod singleton_class_expr;
 mod super_expr;
+pub(crate) use super_expr::SuperArguments;
 mod vars;
 mod yield_expr;

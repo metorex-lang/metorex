@@ -108,3 +108,31 @@ fn test_bytecode_blocks_and_returns_execution() {
         )
     );
 }
+
+#[test]
+fn test_bytecode_definitions_execution() {
+    let output = run_example("bytecode/definitions.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"you\", [], 1, {}, nil]\n",
+            "[\"ann\", [1], 2, {extra: 3}, :block]\n",
+            "\"hi!\"\n",
+            "[\"Plain\", \"Outer::Inner\", 3, Struct]\n",
+            "[:spoken, :twin, :later]\n",
+        )
+    );
+}
+
+#[test]
+fn test_bytecode_supers_execution() {
+    let output = run_example("bytecode/supers.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[10, 10, \"HELLO ANN.\", \"!nna olleh\"]\n",
+            "[[[1, 2, 9], :given], [[], :none]]\n",
+            ":broken\n",
+        )
+    );
+}

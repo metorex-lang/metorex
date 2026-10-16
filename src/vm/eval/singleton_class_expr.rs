@@ -190,6 +190,19 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         let target_obj = self.evaluate_expression(target)?;
+        self.open_singleton_class(target_obj, assign_to, body, position)
+    }
+
+    /// Run `class << target; body; end` with the target evaluated already.
+    /// `assign_to` is the place `class << place = target` stores it, None
+    /// when the code compiled the store itself.
+    pub(crate) fn open_singleton_class(
+        &mut self,
+        target_obj: Object,
+        assign_to: Option<&Expression>,
+        body: &[Statement],
+        position: Position,
+    ) -> Result<Object, MetorexError> {
         // `true`, `false`, and `nil` each have exactly one instance, so the
         // class itself is the singleton class. A number or a symbol has no
         // singleton class at all.

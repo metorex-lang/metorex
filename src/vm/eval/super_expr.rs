@@ -11,12 +11,33 @@ use crate::class::Class;
 use crate::vm::core::VirtualMachine;
 use crate::vm::utils::position_to_location;
 
-/// What a `super` call was written as: the arguments it named, whether it
-/// forwards the enclosing method's own, and the block it carries.
+/// What a `super` call was written as: the arguments it passes, and the
+/// block it carries.
 struct SuperCall<'a> {
-    arguments: &'a [Expression],
-    forward_args: bool,
+    arguments: &'a SuperArguments,
     block: Option<Object>,
+}
+
+/// The arguments a `super` call passes: the running method's own, for a
+/// bare `super`, or those written, evaluated before the parent method is
+/// looked for, as CRuby evaluates them.
+pub(crate) enum SuperArguments {
+    Forwarded,
+    Written {
+        values: Vec<Object>,
+        /// Whether one was `&block`, which named the block itself.
+        block_argument: bool,
+    },
+}
+
+impl SuperArguments {
+    /// The values written, none for a bare `super`.
+    fn values(&self) -> Vec<Object> {
+        match self {
+            SuperArguments::Forwarded => Vec::new(),
+            SuperArguments::Written { values, .. } => values.clone(),
+        }
+    }
 }
 
 impl VirtualMachine {
@@ -35,13 +56,57 @@ impl VirtualMachine {
         // ends up reaching the parent method.
         let super_block = match trailing_block {
             Some(block) => Some(self.attach_trailing_block(block)?),
-            // With no block of its own, `super` hands the parent the block
-            // this method was called with.
-            None => self
-                .environment()
-                .get("__block__")
-                .filter(|held| matches!(held.view(), View::Block(_))),
+            None => self.block_super_passes(),
         };
+        let arguments = if forward_args {
+            SuperArguments::Forwarded
+        } else {
+            let block_argument = self.prepare_super_block_argument(arguments, &super_block);
+            SuperArguments::Written {
+                values: self.evaluate_arguments(arguments)?,
+                block_argument,
+            }
+        };
+        self.super_with(&arguments, super_block, position)
+    }
+
+    /// The block `super` hands on when none is written on it: the one this
+    /// method was called with.
+    pub(crate) fn block_super_passes(&self) -> Option<Object> {
+        self.environment()
+            .get("__block__")
+            .filter(|held| matches!(held.view(), View::Block(_)))
+    }
+
+    /// Before the arguments of a `super` call written with `&block` are
+    /// evaluated, the block they name is the one the parent receives, and
+    /// none stands until they are. Answers whether one was written.
+    pub(crate) fn prepare_super_block_argument(
+        &mut self,
+        arguments: &[Expression],
+        super_block: &Option<Object>,
+    ) -> bool {
+        let block_argument = arguments
+            .iter()
+            .any(|argument| matches!(argument, Expression::BlockArg { .. }));
+        if block_argument {
+            self.pending_block_from_ampersand = super_block.is_some();
+            self.pending_block = None;
+        }
+        block_argument
+    }
+
+    /// Call the parent's method of the running method's name, with the
+    /// arguments evaluated and the block the call carries. Walks the
+    /// inheritance chain from the receiver's class to find the class
+    /// defining the current method, then invokes the same-named method on
+    /// that class's superclass.
+    pub(crate) fn super_with(
+        &mut self,
+        arguments: &SuperArguments,
+        super_block: Option<Object>,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
         // Get the current method name from the call stack.
         // The call stack stores method names as "Class#method".
         // A block names the method it was written in, whichever method is
@@ -89,8 +154,7 @@ impl VirtualMachine {
         {
             let self_class = self_class.clone();
             let self_class = Rc::clone(&self_class);
-            let evaluated_args =
-                self.super_arguments(arguments, forward_args, &super_block, position)?;
+            let evaluated_args = self.super_arguments(arguments, &super_block, position)?;
             // A module extended with another module reaches that module's
             // copy through `super`: the extended copy sits just above the
             // receiver's own module-level method in the singleton chain. The
@@ -294,7 +358,6 @@ impl VirtualMachine {
                     &method_name,
                     SuperCall {
                         arguments,
-                        forward_args,
                         block: super_block,
                     },
                     position,
@@ -408,8 +471,7 @@ impl VirtualMachine {
             found
         };
         if let Some((owner, method)) = next_in_chain {
-            let evaluated_args =
-                self.super_arguments(arguments, forward_args, &super_block, position)?;
+            let evaluated_args = self.super_arguments(arguments, &super_block, position)?;
             drop(instance_borrowed);
             // An ancestor that undefined the method ends the search there.
             if method.is_undefined {
@@ -433,7 +495,7 @@ impl VirtualMachine {
                 // Object#<=> returns 0 if self.equal?(other), else nil
                 if method_name == "<=>" {
                     drop(instance_borrowed);
-                    let evaluated_args = self.evaluate_arguments(arguments)?;
+                    let evaluated_args = arguments.values();
                     let self_val = self.environment().get("self").unwrap_or(Object::Nil);
                     if let Some(other) = evaluated_args.first() {
                         let same = matches!(
@@ -446,14 +508,13 @@ impl VirtualMachine {
                 }
                 if method_name == "initialize" {
                     drop(instance_borrowed);
-                    let evaluated_args = self.evaluate_arguments(arguments)?;
+                    let evaluated_args = arguments.values();
                     return self.super_initialize(&evaluated_args, position);
                 }
                 // A module has no superclass of its own, so what answers
                 // next is what every object answers.
                 drop(instance_borrowed);
-                let evaluated_args =
-                    self.super_arguments(arguments, forward_args, &super_block, position)?;
+                let evaluated_args = self.super_arguments(arguments, &super_block, position)?;
                 return self.super_past_every_ancestor(&method_name, evaluated_args, position);
             }
         };
@@ -466,7 +527,7 @@ impl VirtualMachine {
             Some(m) => m,
             None if method_name == "<=>" => {
                 drop(instance_borrowed);
-                let evaluated_args = self.evaluate_arguments(arguments)?;
+                let evaluated_args = arguments.values();
                 let self_val = self.environment().get("self").unwrap_or(Object::Nil);
                 if let Some(other) = evaluated_args.first() {
                     let same = matches!(
@@ -483,16 +544,14 @@ impl VirtualMachine {
                 // that overrides one (a `def load` calling `super`) has to
                 // reach them here.
                 drop(instance_borrowed);
-                let evaluated_args =
-                    self.super_arguments(arguments, forward_args, &super_block, position)?;
+                let evaluated_args = self.super_arguments(arguments, &super_block, position)?;
                 return self.super_past_every_ancestor(&method_name, evaluated_args, position);
             }
         };
 
         // Evaluate the arguments (or forward the enclosing method's args for
         // bare `super`).
-        let evaluated_args =
-            self.super_arguments(arguments, forward_args, &super_block, position)?;
+        let evaluated_args = self.super_arguments(arguments, &super_block, position)?;
 
         // Drop the borrow before invoking the method
         drop(instance_borrowed);
@@ -517,28 +576,29 @@ impl VirtualMachine {
     /// enclosing method was called with stands in only when there is none.
     fn super_arguments(
         &mut self,
-        arguments: &[Expression],
-        forward_args: bool,
+        arguments: &SuperArguments,
         super_block: &Option<Object>,
         position: Position,
     ) -> Result<Vec<Object>, MetorexError> {
         // The block `super` hands on was given to the method making the call,
         // which is the one that answers for whether it is used.
-        self.pending_block_from_ampersand = super_block.is_some();
-        if forward_args {
-            self.pending_block = super_block.clone();
-            return self.implicit_super_arguments(position);
+        match arguments {
+            SuperArguments::Forwarded => {
+                self.pending_block_from_ampersand = super_block.is_some();
+                self.pending_block = super_block.clone();
+                self.implicit_super_arguments(position)
+            }
+            // A written `&arg` named the block itself as it was evaluated.
+            SuperArguments::Written {
+                values,
+                block_argument: true,
+            } => Ok(values.clone()),
+            SuperArguments::Written { values, .. } => {
+                self.pending_block_from_ampersand = super_block.is_some();
+                self.pending_block = super_block.clone();
+                Ok(values.clone())
+            }
         }
-        if arguments
-            .iter()
-            .any(|argument| matches!(argument, Expression::BlockArg { .. }))
-        {
-            self.pending_block = None;
-            return self.evaluate_arguments(arguments);
-        }
-        let evaluated = self.evaluate_arguments(arguments)?;
-        self.pending_block = super_block.clone();
-        Ok(evaluated)
     }
 
     /// What `super` reaches once no ancestor defines the method: the
@@ -764,7 +824,6 @@ impl VirtualMachine {
     ) -> Result<Object, MetorexError> {
         let SuperCall {
             arguments,
-            forward_args,
             block: super_block,
         } = call;
         let receiver_class = self
@@ -787,8 +846,7 @@ impl VirtualMachine {
             .filter(|owner| chain.iter().any(|c| Rc::ptr_eq(c, owner)))
             .or_else(|| chain.iter().find(|c| c.name() == class_name).cloned());
 
-        let evaluated_args =
-            self.super_arguments(arguments, forward_args, &super_block, position)?;
+        let evaluated_args = self.super_arguments(arguments, &super_block, position)?;
 
         if let Some(defining_class) = &defining_class
             && let Some(index) = chain.iter().position(|c| Rc::ptr_eq(c, defining_class))

@@ -203,3 +203,9 @@ fn test_metaprogramming_define_method_super_block_no_parens_execution() {
     let output = run_example("metaprogramming/define_method_super_block_no_parens.rb");
     assert_eq!(output, DEFINE_METHOD_SUPER_BLOCK_OUTPUT);
 }
+
+#[test]
+fn test_metaprogramming_instance_exec_defines_execution() {
+    let output = run_example("metaprogramming/instance_exec_defines.rb");
+    assert_eq!(output, "[[], [:shout, :yell], \"A\"]\n");
+}

@@ -414,6 +414,94 @@ pub enum Instruction {
     },
     /// Open a scope, as a `Block` statement runs in one.
     PushScope,
+    /// Run the unit's class or module body statement the operand numbers by
+    /// the body's own rules, with `to` holding the value the body answers.
+    BodyStatement {
+        to: u8,
+        statement: u16,
+    },
+    /// Bind the constant the name names, as a class or module body binds
+    /// one, to the value in `from`.
+    BodyConstant {
+        from: u8,
+        name: u16,
+    },
+    /// `attr_reader`, `attr_writer`, or `attr_accessor`, by `kind` 0, 1,
+    /// or 2, in a class body, with the names in the Array in `names`.
+    BodyAttributes {
+        to: u8,
+        names: u8,
+        kind: u8,
+    },
+    /// `@name = from` in a class body.
+    BodyInstanceVariable {
+        from: u8,
+        name: u16,
+    },
+    /// `@@name = from` in a class body.
+    BodyClassVariable {
+        from: u8,
+        name: u16,
+    },
+    /// `alias_method` in a class body, with the new name in `first` and the
+    /// old in the register after it.
+    BodyAliasMethod {
+        first: u8,
+    },
+    /// `define_method(arguments) { block }` in a class body, with the block
+    /// in `block` and the `count` arguments in the registers after it.
+    BodyDefineMethod {
+        to: u8,
+        block: u8,
+        count: u8,
+    },
+    /// The accessors an `attr_accessor` in a `Block` of a class body
+    /// defines, for the names in the Array in `names`.
+    BodyBlockAccessors {
+        names: u8,
+    },
+    /// When the value in `register` is a method, call it with no arguments
+    /// and put what it answers there, as a bare name in a class body does.
+    InvokeIfMethod {
+        register: u8,
+    },
+    /// Run the unit's body statement the operand numbers as a statement of a
+    /// `Block` in a module body, with the attribute names an `attr_*` there
+    /// was given in the Array in `names`.
+    ModuleBlockStatement {
+        names: u8,
+        statement: u16,
+    },
+    /// Make the unit's definition the operand numbers, putting what it
+    /// answers in `to`.
+    Define {
+        to: u8,
+        definition: u16,
+    },
+    /// Add what `*from` spreads to the attribute names in the Array in
+    /// `array`, through `to_a`, as `attr_reader *names` does.
+    AttributeSplat {
+        array: u8,
+        from: u8,
+    },
+    /// Mark the block in `from`, written on a `super` call, as attached to
+    /// the call being made.
+    AttachSuperBlock {
+        from: u8,
+    },
+    /// Before the arguments of a `super` written with `&block` are
+    /// evaluated, no block stands. `written` is 1 when a block is written on
+    /// the call too.
+    ClearSuperBlock {
+        written: u8,
+    },
+    /// Call the parent's method of the running method's name, as `super`
+    /// does, with the arguments and block the site lays out after `base`,
+    /// and put the answer in `base`.
+    CallSuper {
+        base: u8,
+        site: u16,
+    },
     /// Begin a loop, during which a `break` ends the loop rather than
     /// returning from the call a surrounding block was attached to.
     EnterLoop,
@@ -559,6 +647,21 @@ impl Instruction {
             Instruction::FindBlock { .. } => "FindBlock",
             Instruction::CallBlock { .. } => "CallBlock",
             Instruction::PushScope => "PushScope",
+            Instruction::Define { .. } => "Define",
+            Instruction::BodyStatement { .. } => "BodyStatement",
+            Instruction::BodyConstant { .. } => "BodyConstant",
+            Instruction::BodyAttributes { .. } => "BodyAttributes",
+            Instruction::BodyInstanceVariable { .. } => "BodyInstanceVariable",
+            Instruction::BodyClassVariable { .. } => "BodyClassVariable",
+            Instruction::BodyAliasMethod { .. } => "BodyAliasMethod",
+            Instruction::BodyDefineMethod { .. } => "BodyDefineMethod",
+            Instruction::InvokeIfMethod { .. } => "InvokeIfMethod",
+            Instruction::BodyBlockAccessors { .. } => "BodyBlockAccessors",
+            Instruction::ModuleBlockStatement { .. } => "ModuleBlockStatement",
+            Instruction::AttributeSplat { .. } => "AttributeSplat",
+            Instruction::AttachSuperBlock { .. } => "AttachSuperBlock",
+            Instruction::ClearSuperBlock { .. } => "ClearSuperBlock",
+            Instruction::CallSuper { .. } => "CallSuper",
             Instruction::EnterLoop => "EnterLoop",
             Instruction::LeaveLoop => "LeaveLoop",
             Instruction::Checkpoint => "Checkpoint",

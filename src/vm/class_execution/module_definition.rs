@@ -12,10 +12,25 @@ impl VirtualMachine {
         body: &[Statement],
         position: Position,
     ) -> Result<ControlFlow, MetorexError> {
-        // `module NS::Name` — evaluate NS, then install Name on it. The
-        // namespace expression must resolve to a Class or Module.
-        let explicit_ns: Option<Rc<Class>> = if let Some(expr) = namespace {
-            let value = self.evaluate_expression(expr)?;
+        let namespace = match namespace {
+            Some(expression) => Some(self.evaluate_expression(expression)?),
+            None => None,
+        };
+        self.define_module(name, namespace, body, position)
+    }
+
+    /// Open the module `module name` names, with the namespace written as
+    /// `module Namespace::Name` evaluated already, and run its body.
+    pub(crate) fn define_module(
+        &mut self,
+        name: &str,
+        namespace: Option<Object>,
+        body: &[Statement],
+        position: Position,
+    ) -> Result<ControlFlow, MetorexError> {
+        // `module NS::Name` — install Name on NS, which must be a Class or
+        // Module.
+        let explicit_ns: Option<Rc<Class>> = if let Some(value) = namespace {
             match value.view() {
                 View::Class(c) | View::Module(c) => Some(c.clone()),
                 other => {
@@ -271,7 +286,6 @@ impl VirtualMachine {
                 .with_location(Some(format!("{}:{}", position.line, position.column)))
                 .with_source_file(self.file_for_frames()),
         );
-        self.body_on_the_tree_walker("ModuleDef");
         let answer = self.module_body_statements(module, body);
         self.call_stack_pop();
         self.class_var_home = held_home;

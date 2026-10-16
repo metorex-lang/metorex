@@ -114,10 +114,24 @@ registers than on the stack, since its literals each take an instruction.
   literals, pattern tests, calls with or without a receiver, with any
   arguments, a block, and `&.`, `if`, `unless`, `while`, `until`, `for`,
   `case` written as an expression, flip-flops, `break`, `next`, `redo`,
-  `return`, and `yield`. A body holding any other node is refused
-  with that node's type name and runs on the tree walker. Class and module
-  bodies run on the tree walker under either engine for now, since their
-  statements follow rules of their own.
+  `return`, `yield`, `super`, and definitions. A body holding any other node is refused
+  with that node's type name and runs on the tree walker.
+- A method, class, or module definition, `alias`, `include`, and
+  `extend` is a `Define` instruction. What the statement needs evaluated,
+  such as the namespace of `class A::B` or the target of `class << target`,
+  is compiled into registers first, and the definition itself is made by
+  the same code the tree walker calls, since a method's body runs only when
+  it is called.
+- A class or module body compiles by the rules its statements follow there:
+  a bare `private` changes the visibility the next `def` takes, `@name =
+  value` sets the class's own instance variable, `attr_*` and `include` call
+  a method the program wrote under that name when there is one, and a bare
+  name answering a method calls it. Each such statement is compiled into
+  instructions that call the functions the tree walker's class and module
+  body loops call for the same statement.
+- `super` evaluates its arguments before looking for the parent's method,
+  as CRuby does, and `CallSuper` and the tree walker both call
+  `super_with`.
 - A call without a receiver, `name(arguments)`, decides how it is made
   before its arguments are evaluated, from what the scope binds `name` to
   and what `self` answers: `ResolveCall` and `eval_call` both call

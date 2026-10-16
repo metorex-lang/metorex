@@ -63,6 +63,11 @@ pub(crate) struct FiberContext {
     /// The block bodies and loops this fiber is inside, which say what a
     /// `break` written here returns from.
     pub(crate) running_block_breaks: Vec<Option<std::rc::Rc<std::cell::Cell<bool>>>>,
+    /// The classes the methods this fiber is running were found on, which
+    /// `super` reads to know where to look next.
+    pub(crate) method_owner_stack: Vec<Option<std::rc::Rc<crate::class::Class>>>,
+    /// The class and module bodies this fiber is running as compiled units.
+    pub(crate) body_contexts: Vec<crate::vm::units::BodyContext>,
 }
 
 /// One fiber the program made, and the coroutine it runs on.

@@ -87,6 +87,9 @@ pub struct VirtualMachine {
     /// itself and hands the rest to `execute_statement`, so the one it hands
     /// over is not counted twice.
     pub(crate) coverage_skip_line: Option<usize>,
+    /// The class and module bodies running as compiled units, the
+    /// innermost last, which their instructions define on.
+    pub(crate) body_contexts: Vec<crate::vm::units::BodyContext>,
 
     /// The last match and the last line read that each suspended fiber left
     /// behind, which it sees again when it is resumed.
@@ -616,6 +619,7 @@ impl VirtualMachine {
             current_file: None,
             coverage: None,
             coverage_skip_line: None,
+            body_contexts: Vec::new(),
             fiber_last_match_and_line: HashMap::new(),
             fiber_errors: HashMap::new(),
             fiber_source_files: HashMap::new(),

@@ -3,18 +3,19 @@
 //! the interpreter, to call a method, read a constant, or raise, calls the
 //! same `VirtualMachine` functions the tree walker does.
 
-use crate::ast::{BinaryOp, Expression, UnaryOp};
+use crate::ast::{BinaryOp, Expression, Statement, UnaryOp};
 use crate::bytecode::instruction::{
     BINARY_OPERATORS, Instruction, Operand, RANGE_EXCLUSIVE, RANGE_LITERAL_ENDS,
 };
 use crate::bytecode::unit::{
-    CallSite, HashEntry, HashShape, Piece, Receiver, StartKind, StatementStart, Target, Unit,
+    CallSite, Definition, HashEntry, HashShape, Piece, Receiver, StartKind, StatementStart, Target,
+    Unit,
 };
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::{Object, View};
 use crate::vm::errors::loop_control_error;
-use crate::vm::eval::CallRoute;
+use crate::vm::eval::{CallRoute, SuperArguments};
 use crate::vm::expression::{HashLiteral, Interpolation, WrittenPair};
 use crate::vm::method_lookup::WrittenReceiver;
 use crate::vm::program::ArgumentList;
@@ -680,6 +681,193 @@ impl VirtualMachine {
                 registers[base] = answer?;
             }
             Instruction::PushScope => self.environment_mut().push_scope(),
+            Instruction::BodyStatement { to, statement } => {
+                let body = self.running_body();
+                let statement = &unit.body_statements[index(statement)];
+                let mut last_value = registers[register(to)].clone();
+                if body.module {
+                    self.module_body_statement(&body.class, statement, &mut last_value)?;
+                } else {
+                    self.class_body_statement(
+                        &body.class,
+                        statement,
+                        body.position,
+                        &mut last_value,
+                    )?;
+                }
+                registers[register(to)] = last_value;
+            }
+            Instruction::BodyConstant { from, name } => {
+                let body = self.running_body();
+                let name = &unit.names[index(name)].text;
+                let value = registers[register(from)].clone();
+                if body.module {
+                    self.module_body_constant(&body.class, name, value, position)?;
+                } else if self
+                    .constant_home()
+                    .is_some_and(|home| Rc::ptr_eq(&home, &body.class))
+                {
+                    self.class_body_constant(&body.class, name, value, position)?;
+                } else {
+                    // A block run as the body keeps its constants where the
+                    // block was written, which the plain assignment handles.
+                    let target = Expression::Identifier {
+                        name: name.clone(),
+                        position,
+                    };
+                    self.assign_value(&target, value)?;
+                }
+            }
+            Instruction::BodyAttributes { to, names, kind } => {
+                let body = self.running_body();
+                let method = ["attr_reader", "attr_writer", "attr_accessor"][usize::from(kind)];
+                let values = match registers[register(names)].view() {
+                    View::Array(held) => held.borrow().clone(),
+                    _ => Vec::new(),
+                };
+                if let Some(answer) =
+                    self.class_body_attributes(&body.class, method, values, position)?
+                {
+                    registers[register(to)] = answer;
+                }
+            }
+            Instruction::BodyInstanceVariable { from, name } => {
+                let body = self.running_body();
+                let name = &unit.names[index(name)].text;
+                crate::vm::class_execution::class_body_instance_variable(
+                    &body.class,
+                    name,
+                    registers[register(from)].clone(),
+                );
+            }
+            Instruction::BodyClassVariable { from, name } => {
+                let body = self.running_body();
+                let name = &unit.names[index(name)].text;
+                crate::vm::class_execution::class_body_class_variable(
+                    &body.class,
+                    name,
+                    registers[register(from)].clone(),
+                );
+            }
+            Instruction::BodyAliasMethod { first } => {
+                let body = self.running_body();
+                let first = register(first);
+                let (new_value, old_value) =
+                    (registers[first].clone(), registers[first + 1].clone());
+                self.class_body_alias_method(&body.class, &new_value, &old_value, position)?;
+            }
+            Instruction::BodyDefineMethod { to, block, count } => {
+                let body = self.running_body();
+                let block = register(block);
+                let arguments = registers[block + 1..block + 1 + usize::from(count)].to_vec();
+                let made = registers[block].clone();
+                if let View::Block(held) = made.view() {
+                    held.attached_call_running.set(true);
+                    self.attached_block_flags
+                        .push(Rc::clone(&held.attached_call_running));
+                }
+                registers[register(to)] =
+                    self.class_body_define_method(&body.class, &arguments, made, position)?;
+            }
+            Instruction::BodyBlockAccessors { names } => {
+                let body = self.running_body();
+                let values = match registers[register(names)].view() {
+                    View::Array(held) => held.borrow().clone(),
+                    _ => Vec::new(),
+                };
+                let mut names = Vec::with_capacity(values.len());
+                for value in &values {
+                    names.push(self.coerce_method_name(value, "attr_accessor", body.position)?);
+                }
+                crate::vm::class_execution::define_block_accessors(&body.class, &names);
+            }
+            Instruction::InvokeIfMethod { register: held } => {
+                let value = registers[register(held)].clone();
+                if matches!(value.view(), View::Method(_)) {
+                    registers[register(held)] = self.invoke_callable(value, vec![], position)?;
+                }
+            }
+            Instruction::ModuleBlockStatement { names, statement } => {
+                let body = self.running_body();
+                let statement = &unit.body_statements[index(statement)];
+                let given = match statement {
+                    Statement::AttrReader { .. }
+                    | Statement::AttrWriter { .. }
+                    | Statement::AttrAccessor { .. } => {
+                        let values = match registers[register(names)].view() {
+                            View::Array(held) => held.borrow().clone(),
+                            _ => Vec::new(),
+                        };
+                        let mut names = Vec::with_capacity(values.len());
+                        for value in &values {
+                            names.push(self.coerce_method_name(
+                                value,
+                                "attr_accessor",
+                                Position::default(),
+                            )?);
+                        }
+                        Some(names)
+                    }
+                    _ => None,
+                };
+                self.module_block_statement(&body.class, statement, given)?;
+            }
+            Instruction::Define { to, definition } => {
+                registers[register(to)] =
+                    self.make_definition(&unit.definitions[index(definition)], registers)?;
+            }
+            Instruction::AttributeSplat { array, from } => {
+                let spread = registers[register(from)].clone();
+                let items = match self.splat_through_to_a(spread, position)? {
+                    Ok(items) => items,
+                    Err(held) => vec![held],
+                };
+                if let View::Array(names) = registers[register(array)].view() {
+                    names.borrow_mut().extend(items);
+                }
+            }
+            Instruction::AttachSuperBlock { from } => {
+                if let View::Block(held) = registers[register(from)].view() {
+                    held.attached_call_running.set(true);
+                    self.attached_block_flags
+                        .push(Rc::clone(&held.attached_call_running));
+                }
+            }
+            Instruction::ClearSuperBlock { written } => {
+                self.pending_block_from_ampersand = written != 0;
+                self.pending_block = None;
+            }
+            Instruction::CallSuper { base, site } => {
+                let site = &unit.call_sites[index(site)];
+                let base = register(base);
+                let (arguments, block) = call_inputs(site, base, registers, state);
+                let attached_by_this_call = block
+                    .as_ref()
+                    .is_some_and(|held| matches!(held.view(), View::Block(_)));
+                let attached = self.attached_block_flags.len() - usize::from(attached_by_this_call);
+                let super_block = block.clone().or_else(|| self.block_super_passes());
+                let arguments = if site.forwards_arguments {
+                    SuperArguments::Forwarded
+                } else {
+                    SuperArguments::Written {
+                        values: arguments,
+                        block_argument: site.block_argument,
+                    }
+                };
+                let calling_frame = self.current_method_frame;
+                crate::vm::program::enter_nesting(position)?;
+                let result = self.super_with(&arguments, super_block, position);
+                self.release_attached_blocks(attached);
+                crate::vm::program::leave_nesting();
+                // `break` in the block written on the `super` returns from
+                // the `super` call.
+                registers[base] = match result {
+                    Err(MetorexError::BlockBreak {
+                        value, home_frame, ..
+                    }) if block.is_some() && home_frame == calling_frame => value,
+                    other => other?,
+                };
+            }
             Instruction::EnterLoop => self.running_block_breaks.push(None),
             Instruction::LeaveLoop => {
                 self.running_block_breaks.pop();
@@ -735,6 +923,91 @@ impl VirtualMachine {
 }
 
 impl VirtualMachine {
+    /// The class or module body running as a compiled unit innermost.
+    fn running_body(&self) -> crate::vm::units::BodyContext {
+        self.body_contexts
+            .last()
+            .cloned()
+            .expect("a class or module body is running")
+    }
+
+    /// Make a definition, with what it needed evaluated in the registers,
+    /// answering what the statement answers.
+    fn make_definition(
+        &mut self,
+        definition: &Definition,
+        registers: &[Object],
+    ) -> Result<Object, MetorexError> {
+        let flow = match definition {
+            Definition::Statement(statement) => self.run_definition(statement)?,
+            Definition::Class {
+                statement:
+                    Statement::ClassDef {
+                        name,
+                        superclass,
+                        body,
+                        position,
+                        ..
+                    },
+                namespace,
+                superclass: superclass_value,
+            } => self.define_class(
+                name,
+                namespace.map(|held| registers[held].clone()),
+                superclass.as_deref(),
+                superclass_value.map(|held| registers[held].clone()),
+                body,
+                *position,
+            )?,
+            Definition::Module {
+                statement:
+                    Statement::ModuleDef {
+                        name,
+                        body,
+                        position,
+                        ..
+                    },
+                namespace,
+            } => self.define_module(
+                name,
+                namespace.map(|held| registers[held].clone()),
+                body,
+                *position,
+            )?,
+            Definition::SingletonClass {
+                target,
+                body,
+                position,
+            } => {
+                return self.open_singleton_class(
+                    registers[*target].clone(),
+                    None,
+                    body,
+                    *position,
+                );
+            }
+            Definition::Attributes {
+                method,
+                names,
+                position,
+            } => {
+                let mut arguments = vec![Object::symbol(method.to_string())];
+                if let View::Array(held) = registers[*names].view() {
+                    arguments.extend(held.borrow().iter().cloned());
+                }
+                let receiver = self.environment().get("self").unwrap_or(Object::Nil);
+                return self.send_to_object(receiver, "__send__", arguments, *position);
+            }
+            Definition::Class { .. } | Definition::Module { .. } => {
+                unreachable!("a class or module definition holds its statement")
+            }
+        };
+        Ok(match flow {
+            ControlFlow::Value(value) => value,
+            _ => Object::Nil,
+        })
+    }
+
     /// What happens as a statement starts, as the tree walker does for a
     /// statement in the same place.
     fn start_statement(&mut self, statement: StatementStart) -> Result<(), MetorexError> {
@@ -747,6 +1020,16 @@ impl VirtualMachine {
                 }
                 if self.coverage.is_some() {
                     self.coverage_count(line);
+                }
+                Ok(())
+            }
+            StartKind::BodyStatement { runs } => {
+                if self.coverage.is_some() {
+                    self.coverage_count(line);
+                    self.coverage_skip_line = Some(line);
+                }
+                if runs {
+                    self.begin_statement(statement.position, true)?;
                 }
                 Ok(())
             }

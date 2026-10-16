@@ -280,44 +280,7 @@ impl VirtualMachine {
                 body,
                 *position,
             ),
-            // A `def` nested inside a block or a `begin` within a class body
-            // reaches here rather than the class-body walk, so it installs on
-            // the innermost lexical class the same way that walk would.
-            Statement::MethodDef {
-                name,
-                parameters,
-                body,
-                is_class_method,
-                position,
-                ..
-            } => {
-                // Run from a method, such as in a default value, it installs
-                // on the class the method was written in.
-                let from_method_body = self.running_method_def_scope();
-                let Some(target) = from_method_body
-                    .clone()
-                    .or_else(|| self.def_scope_stack.last().cloned())
-                    .or_else(|| {
-                        self.method_nesting_stack
-                            .last()
-                            .and_then(|nesting| nesting.first().cloned())
-                    })
-                else {
-                    return Err(unimplemented_statement_error(statement));
-                };
-                let _ = (parameters, body);
-                self.apply_class_body_statements(
-                    &target,
-                    std::slice::from_ref(statement),
-                    *position,
-                )?;
-                // Run from a method body, it is public whatever visibility
-                // the class body left in force.
-                if from_method_body.is_some() && !is_class_method {
-                    target.clear_method_visibility(name);
-                }
-                Ok(ControlFlow::Value(Object::symbol(name.clone())))
-            }
+            Statement::MethodDef { .. } => self.run_definition(statement),
             Statement::Begin {
                 body,
                 rescue_clauses,
@@ -387,6 +350,89 @@ impl VirtualMachine {
                 old_name,
                 position,
             } => self.execute_alias(new_name, old_name, *position),
+        }
+    }
+
+    /// Define what a `def`, `alias`, `include`, or `extend` statement names,
+    /// which evaluates nothing the program wrote: a method's body runs when
+    /// the method is called.
+    pub(crate) fn run_definition(
+        &mut self,
+        statement: &Statement,
+    ) -> Result<ControlFlow, MetorexError> {
+        match statement {
+            Statement::FunctionDef {
+                name,
+                parameters,
+                body,
+                position,
+                singleton_class,
+                end_position,
+            } => self.execute_function_def(
+                name,
+                parameters,
+                body,
+                *position,
+                singleton_class.as_deref(),
+                end_position.line,
+            ),
+            Statement::Include {
+                module_name,
+                position,
+            } => self.execute_include(module_name, *position),
+            Statement::Extend {
+                module_name,
+                position,
+            } => self.execute_extend(module_name, *position),
+            Statement::Alias {
+                new_name,
+                old_name,
+                position,
+            } => self.execute_alias(new_name, old_name, *position),
+            Statement::MethodDef {
+                name,
+                parameters,
+                body,
+                is_class_method,
+                position,
+                ..
+            } => {
+                // Run from a method, such as in a default value, it installs
+                // on the class the method was written in.
+                let from_method_body = self.running_method_def_scope();
+                let Some(target) = from_method_body
+                    .clone()
+                    .or_else(|| self.def_scope_stack.last().cloned())
+                    .or_else(|| {
+                        self.method_nesting_stack
+                            .last()
+                            .and_then(|nesting| nesting.first().cloned())
+                    })
+                else {
+                    return Err(unimplemented_statement_error(statement));
+                };
+                let _ = (parameters, body);
+                // The definition runs as the one statement of a class body
+                // would, with no class variable home of the code around it.
+                if self.coverage.is_some() {
+                    let line = statement.position().line;
+                    self.coverage_count(line);
+                    self.coverage_skip_line = Some(line);
+                }
+                let held_home = std::mem::take(&mut self.class_var_home);
+                let mut last_value = Object::Nil;
+                let defined =
+                    self.class_body_statement(&target, statement, *position, &mut last_value);
+                self.class_var_home = held_home;
+                defined?;
+                // Run from a method body, it is public whatever visibility
+                // the class body left in force.
+                if from_method_body.is_some() && !is_class_method {
+                    target.clear_method_visibility(name);
+                }
+                Ok(ControlFlow::Value(Object::symbol(name.clone())))
+            }
+            other => Err(unimplemented_statement_error(other)),
         }
     }
 

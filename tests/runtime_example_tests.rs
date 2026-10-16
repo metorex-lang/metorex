@@ -15,6 +15,7 @@ mod integration {
         mod paths;
         mod ractors;
         mod signals;
+        mod sockets;
         mod threads;
     }
 }

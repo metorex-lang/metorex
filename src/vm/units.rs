@@ -7,11 +7,23 @@ use std::cell::OnceCell;
 use std::rc::Rc;
 
 use crate::ast::Statement;
+pub use crate::bytecode::compiler::UnitKind;
 use crate::error::MetorexError;
 use crate::object::Object;
 use crate::vm::ControlFlow;
 use crate::vm::errors::loop_control_error;
 use crate::vm::utils::position_to_location;
+
+/// A class or module body running as a compiled unit.
+#[derive(Debug, Clone)]
+pub struct BodyContext {
+    pub class: Rc<crate::class::Class>,
+    /// Whether the body is a `module` body, whose statements follow the
+    /// module body's rules rather than the class body's.
+    pub module: bool,
+    /// Where the body was opened.
+    pub position: crate::lexer::Position,
+}
 
 /// What compiling a body gave.
 #[derive(Debug)]
@@ -44,8 +56,8 @@ fn disassembly_wanted() -> bool {
 }
 
 /// Compile `body`, recording the result for the engine report.
-pub fn compile(body: &[Statement], of_a_method: bool) -> Compiled {
-    let compiled = match crate::bytecode::compiler::compile_as(body, of_a_method) {
+pub fn compile(body: &[Statement], kind: UnitKind) -> Compiled {
+    let compiled = match crate::bytecode::compiler::compile_as(body, kind) {
         Ok(unit) => Compiled::Unit(Box::new(unit)),
         Err(node) => Compiled::Fallback(node),
     };
@@ -54,14 +66,45 @@ pub fn compile(body: &[Statement], of_a_method: bool) -> Compiled {
 }
 
 impl crate::vm::VirtualMachine {
-    /// Record for the engine report a class or module body, which runs on
-    /// the tree walker under either engine: its statements follow rules of
-    /// their own, such as a bare `private` and `@name = value` declaring an
-    /// instance variable of the class. `node` names the definition.
-    pub(crate) fn body_on_the_tree_walker(&self, node: &'static str) {
-        if crate::vm::engine::engine() == crate::vm::engine::Engine::Bytecode {
-            crate::vm::engine_report::record(&Compiled::Fallback(node));
-        }
+    /// Run a class body, or a module body when `module`, through what it
+    /// compiled to, answering the value it answers, and taking a `return`
+    /// that ends it as the body's own rules take one.
+    pub(crate) fn run_compiled_body(
+        &mut self,
+        class: &Rc<crate::class::Class>,
+        body: &[Statement],
+        position: crate::lexer::Position,
+        module: bool,
+    ) -> Option<Result<Object, MetorexError>> {
+        let kind = if module {
+            UnitKind::ModuleBody
+        } else {
+            UnitKind::ClassBody
+        };
+        self.body_contexts.push(BodyContext {
+            class: Rc::clone(class),
+            module,
+            position,
+        });
+        let ran = self.run_compiled_unit(None, body, kind);
+        self.body_contexts.pop();
+        Some(ran?.and_then(|flow| match flow {
+            ControlFlow::Value(value) => Ok(value),
+            ControlFlow::Return { value, position } if !module => {
+                self.class_body_return(class, value, position)
+            }
+            ControlFlow::Return { position, .. } => Err(self.module_body_return(position)),
+            ControlFlow::Exception {
+                exception,
+                position,
+            } => Err(MetorexError::UncaughtException {
+                message: crate::vm::utils::format_exception(&exception),
+                exception,
+                location: position_to_location(position),
+            }),
+            // A `break`, `next`, or `redo` written in a body ends nothing.
+            _ => Ok(Object::Nil),
+        }))
     }
 
     /// Run `body` through what it compiled to, when the bytecode engine was
@@ -72,14 +115,14 @@ impl crate::vm::VirtualMachine {
         &mut self,
         slot: Option<&UnitSlot>,
         body: &[Statement],
-        of_a_method: bool,
+        kind: UnitKind,
     ) -> Option<Result<ControlFlow, MetorexError>> {
         if crate::vm::engine::engine() != crate::vm::engine::Engine::Bytecode {
             return None;
         }
         let compiled = match slot {
-            Some(slot) => slot.compiled(|| self.compile_body(body, of_a_method)),
-            None => Rc::new(self.compile_body(body, of_a_method)),
+            Some(slot) => slot.compiled(|| self.compile_body(body, kind)),
+            None => Rc::new(self.compile_body(body, kind)),
         };
         match &*compiled {
             Compiled::Unit(unit) => {
@@ -111,7 +154,7 @@ impl crate::vm::VirtualMachine {
         lambda_semantics: bool,
     ) -> Option<Result<Object, MetorexError>> {
         loop {
-            let ran = self.run_compiled_unit(Some(slot), body, true)?;
+            let ran = self.run_compiled_unit(Some(slot), body, UnitKind::Method)?;
             if let Ok(ControlFlow::Return { .. }) = &ran
                 && let Some(running) = self.running_code.last_mut()
             {
@@ -136,7 +179,7 @@ impl crate::vm::VirtualMachine {
         &mut self,
         body: &[Statement],
     ) -> Option<Result<Option<Object>, MetorexError>> {
-        let ran = self.run_compiled_unit(None, body, false)?;
+        let ran = self.run_compiled_unit(None, body, UnitKind::Plain)?;
         Some(ran.and_then(|flow| match flow {
             ControlFlow::Value(value) => Ok(Some(value)),
             ControlFlow::Next => Ok(None),
@@ -163,8 +206,8 @@ impl crate::vm::VirtualMachine {
     /// carries, whose file is named `<metorex>` or `<internal:...>`, is left
     /// out, and so is one Metorex made with no file, such as the body of a
     /// reader `attr_reader` defines.
-    fn compile_body(&self, body: &[Statement], of_a_method: bool) -> Compiled {
-        let compiled = compile(body, of_a_method);
+    fn compile_body(&self, body: &[Statement], kind: UnitKind) -> Compiled {
+        let compiled = compile(body, kind);
         let file = self
             .current_source_file
             .clone()

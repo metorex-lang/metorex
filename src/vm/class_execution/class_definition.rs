@@ -14,6 +14,37 @@ impl VirtualMachine {
         body: &[Statement],
         position: Position,
     ) -> Result<ControlFlow, MetorexError> {
+        let namespace = match namespace_expr {
+            Some(expression) => Some(self.evaluate_expression(expression)?),
+            None => None,
+        };
+        let superclass_value = match superclass_expression {
+            Some(expression) => Some(self.evaluate_expression(expression)?),
+            None => None,
+        };
+        self.define_class(
+            name,
+            namespace,
+            superclass_name,
+            superclass_value,
+            body,
+            position,
+        )
+    }
+
+    /// Open the class `class name` names, with the namespace written as
+    /// `class Namespace::Name` and the superclass written as an expression
+    /// evaluated already, and run its body.
+    pub(crate) fn define_class(
+        &mut self,
+        name: &str,
+        namespace: Option<Object>,
+        superclass_name: Option<&str>,
+        superclass_value: Option<Object>,
+        body: &[Statement],
+        position: Position,
+    ) -> Result<ControlFlow, MetorexError> {
+        let superclass_written = superclass_value.is_some();
         // `class ::Name` — the parser encodes the leading `::` as a name
         // prefix; it anchors the constant at the top level, bypassing the
         // lexical-scope fallback.
@@ -23,8 +54,8 @@ impl VirtualMachine {
         };
         // `class NS::Name` — evaluate NS and use it as the parent scope for
         // the new class's constant binding.
-        let parent_scope = if let Some(expr) = namespace_expr {
-            match self.evaluate_expression(expr)?.view() {
+        let parent_scope = if let Some(held) = namespace {
+            match held.view() {
                 View::Class(c) | View::Module(c) => {
                     self.refuse_private_reopening(c, name, position)?;
                     Some(c.clone())
@@ -50,8 +81,8 @@ impl VirtualMachine {
         // environment, then globals.
         // A superclass written as a call is evaluated here, which is what
         // `class Point < Struct.new(:x)` names.
-        let evaluated_parent = match superclass_expression {
-            Some(expression) => match self.evaluate_expression(expression)?.view() {
+        let evaluated_parent = match superclass_value {
+            Some(held) => match held.view() {
                 View::Class(class) => Some(class.clone()),
                 other => return Err(self.superclass_not_a_class(&other.to_object(), position)),
             },
@@ -177,7 +208,7 @@ impl VirtualMachine {
         // Reopening an existing class with a superclass written out names
         // the one it already has, or it is a TypeError.
         if let (Some(existing), Some(expected)) = (&existing_class, &superclass)
-            && (superclass_name.is_some() || superclass_expression.is_some())
+            && (superclass_name.is_some() || superclass_written)
         {
             let compatible = existing
                 .superclass()
@@ -283,7 +314,6 @@ impl VirtualMachine {
         // A trace sees a class body opening and closing, with the class
         // itself as the `self` those two events report.
         self.fire_event("class", position, Vec::new())?;
-        self.body_on_the_tree_walker("ClassDef");
         let body_result =
             self.with_body_nesting(&class, |vm| vm.apply_class_body(&class, body, position));
         self.fire_event("end", position, Vec::new())?;

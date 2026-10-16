@@ -19,6 +19,9 @@ pub(crate) use std::rc::Rc;
 mod aliasing;
 mod body_errors;
 mod class_body;
+pub(crate) use class_body::{
+    class_body_class_variable, class_body_instance_variable, define_block_accessors,
+};
 mod class_definition;
 mod class_eval;
 pub(crate) mod constants;

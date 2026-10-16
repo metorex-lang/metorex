@@ -235,7 +235,11 @@ impl VirtualMachine {
 
             // `redo` runs the block's body again over the same arguments.
             'again: loop {
-                if let Some(ran) = self.run_compiled_unit(Some(&block.unit), block.body(), false) {
+                if let Some(ran) = self.run_compiled_unit(
+                    Some(&block.unit),
+                    block.body(),
+                    crate::vm::units::UnitKind::Plain,
+                ) {
                     let flow = match ran {
                         // A `redo` inside a `begin` that has an ensure clause
                         // arrives as an unwinding signal once the clause ran.
@@ -572,9 +576,11 @@ impl VirtualMachine {
                     // `redo` runs the block's body again over the same arguments,
                     // which are already bound in this scope.
                     loop {
-                        if let Some(ran) =
-                            self.run_compiled_unit(Some(&block.unit), block.body(), false)
-                        {
+                        if let Some(ran) = self.run_compiled_unit(
+                            Some(&block.unit),
+                            block.body(),
+                            crate::vm::units::UnitKind::Plain,
+                        ) {
                             let flow = match ran {
                                 Err(MetorexError::BlockRedo { .. }) => continue,
                                 // A `break` raised by a C function called from

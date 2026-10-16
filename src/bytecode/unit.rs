@@ -33,6 +33,11 @@ pub struct Unit {
     pub defined: Vec<crate::ast::Expression>,
     /// The block and lambda literals `MakeBlock` makes Procs of.
     pub blocks: Vec<crate::ast::Expression>,
+    /// The statements of class and module bodies `BodyStatement` and
+    /// `ModuleBlockStatement` hand to the body's rules.
+    pub body_statements: Vec<crate::ast::Statement>,
+    /// The definitions `Define` makes.
+    pub definitions: Vec<Definition>,
     /// The `when` and `in` arms of `case` expressions, which `CaseArm` tests.
     pub case_arms: Vec<CaseArm>,
     /// The flip-flops written as conditions: where each was written and how
@@ -74,6 +79,9 @@ pub enum StartKind {
     /// expression: the line's coverage when it is not the line the branch
     /// belongs to.
     InBranch { enclosing_line: usize },
+    /// A statement of a class or module body: the line's coverage, and when
+    /// `runs`, what an ordinary statement does as it starts.
+    BodyStatement { runs: bool },
 }
 
 /// The place in the source an error is pointed at, and the method or
@@ -133,6 +141,11 @@ pub struct CallSite {
     pub written_with_arguments: bool,
     /// Whether one of the arguments is `**value`.
     pub keyword_splat: bool,
+    /// For `super`: whether it is bare, passing the running method's own
+    /// arguments.
+    pub forwards_arguments: bool,
+    /// Whether one of the arguments is `&block`.
+    pub block_argument: bool,
 }
 
 impl CallSite {
@@ -145,6 +158,8 @@ impl CallSite {
             has_block: false,
             written_with_arguments: argument_count > 0,
             keyword_splat: false,
+            forwards_arguments: false,
+            block_argument: false,
         }
     }
 
@@ -257,6 +272,40 @@ pub struct MultipleAssignment {
     pub targets: Vec<Target>,
     pub lone_value: bool,
     pub position: Position,
+}
+
+/// What a `Define` instruction defines.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Definition {
+    /// A `def`, `alias`, `include`, or `extend` statement, which evaluates
+    /// nothing the program wrote.
+    Statement(crate::ast::Statement),
+    /// A `class` statement, with the registers holding its namespace and
+    /// its superclass written as an expression, evaluated already.
+    Class {
+        statement: crate::ast::Statement,
+        namespace: Option<usize>,
+        superclass: Option<usize>,
+    },
+    /// A `module` statement, with the register holding its namespace.
+    Module {
+        statement: crate::ast::Statement,
+        namespace: Option<usize>,
+    },
+    /// `class << target; body; end`, with the target in a register.
+    SingletonClass {
+        target: usize,
+        body: Vec<crate::ast::Statement>,
+        position: Position,
+    },
+    /// An `attr_reader`, `attr_writer`, or `attr_accessor` statement run
+    /// outside a class body, as a call on `self`, with the attribute names
+    /// in the Array in `names`.
+    Attributes {
+        method: &'static str,
+        names: usize,
+        position: Position,
+    },
 }
 
 /// One arm of a `case` expression: its pattern and guard, where the arm
@@ -417,6 +466,16 @@ impl Unit {
     pub fn pattern(&mut self, pattern: crate::ast::MatchPattern, refuses: bool) -> usize {
         self.patterns.push((pattern, refuses));
         self.patterns.len() - 1
+    }
+
+    pub fn body_statement(&mut self, statement: crate::ast::Statement) -> usize {
+        self.body_statements.push(statement);
+        self.body_statements.len() - 1
+    }
+
+    pub fn definition(&mut self, definition: Definition) -> usize {
+        self.definitions.push(definition);
+        self.definitions.len() - 1
     }
 
     pub fn case_arm(&mut self, arm: CaseArm) -> usize {

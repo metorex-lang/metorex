@@ -48,7 +48,9 @@ fn counters_report_each_call_path_with_its_count() {
 
 #[test]
 fn counters_report_the_statements_and_expressions_evaluated() {
-    let (_, reported) = run_counted_calls(&[("METOREX_COUNTERS", "1")]);
+    // The tree walker counts statements and expressions, where the bytecode
+    // engine counts instructions.
+    let (_, reported) = run_counted_calls(&[("METOREX_COUNTERS", "1"), ("METOREX_ENGINE", "tree")]);
     assert!(reported.starts_with("metorex counters, process "));
     assert!(counted(&reported, "  While")[0] >= 1);
     assert!(counted(&reported, "  MethodCall")[0] >= 500);

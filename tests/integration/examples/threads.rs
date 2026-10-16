@@ -354,3 +354,9 @@ fn test_a_subclass_of_mutex_locks_as_mutex_does() {
         "[true, true]\n\"deadlock; recursive locking\"\n:inside\n"
     );
 }
+
+#[test]
+fn test_threads_super_after_a_thread_switch_execution() {
+    let output = run_example("threads/super_after_a_thread_switch.rb");
+    assert_eq!(output, "[:mine, :other]\n");
+}

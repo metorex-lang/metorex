@@ -7,8 +7,8 @@ use crate::bytecode::instruction::{
     BINARY_OPERATORS, FIRST_CONSTANT_OPERAND, Instruction, RANGE_EXCLUSIVE, RANGE_LITERAL_ENDS,
 };
 use crate::bytecode::unit::{
-    CallSite, CaseArm, ErrorSpot, HashEntry, HashShape, MultipleAssignment, Name, Piece, Receiver,
-    RegexLiteral, StartKind, Target, Unit,
+    CallSite, CaseArm, Definition, ErrorSpot, HashEntry, HashShape, MultipleAssignment, Name,
+    Piece, Receiver, RegexLiteral, StartKind, Target, Unit,
 };
 use crate::lexer::Position;
 use crate::object::Object;
@@ -35,13 +35,28 @@ fn naming(node: &'static str) -> impl Fn(&'static str) -> &'static str {
 /// Compile `body`, or name the first node type it holds that the compiler
 /// does not handle.
 pub fn compile(body: &[Statement]) -> Result<Unit, &'static str> {
-    compile_as(body, false)
+    compile_as(body, UnitKind::Plain)
 }
 
-/// Compile `body`, which is a method's body when `of_a_method`: its last
-/// statement answers the method's value the way the tree walker answers it,
-/// an `if` or `unless` there running as an `if` written as an expression.
-pub fn compile_as(body: &[Statement], of_a_method: bool) -> Result<Unit, &'static str> {
+/// What a body is the body of, which decides how some of its statements
+/// run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnitKind {
+    /// A block's body or a file's top level.
+    Plain,
+    /// A method's body: its last statement answers the method's value the
+    /// way the tree walker answers it, an `if` or `unless` there running as
+    /// an `if` written as an expression.
+    Method,
+    /// A `class` body: its statements follow the class body's rules.
+    ClassBody,
+    /// A `module` body: its statements follow the module body's rules.
+    ModuleBody,
+}
+
+/// Compile `body`, the body of what `kind` names.
+pub fn compile_as(body: &[Statement], kind: UnitKind) -> Result<Unit, &'static str> {
+    let of_a_method = kind == UnitKind::Method;
     let mut compiler = Compiler {
         unit: Unit::new(),
         next_register: ANSWER + 1,
@@ -60,13 +75,32 @@ pub fn compile_as(body: &[Statement], of_a_method: bool) -> Result<Unit, &'stati
     };
     match body.split_last() {
         Some((last, before)) if of_a_method && answers_its_own_value(last) => {
-            compiler.statements(before, ANSWER, true)?;
+            if !before.is_empty() {
+                compiler.statements(before, ANSWER, true)?;
+            }
             let start = compiler.unit.instructions.len();
             compiler
                 .terminal_statement(last)
                 .map_err(naming(last.kind_name()))?;
             compiler.unit.start_statement(start, last.position());
             compiler.unit.set_start_kind(start, StartKind::Terminal);
+        }
+        _ if matches!(kind, UnitKind::ClassBody | UnitKind::ModuleBody) => {
+            if body.is_empty() {
+                compiler.emit(Instruction::LoadNil { to: ANSWER as u8 }, end);
+            }
+            for statement in body {
+                let start = compiler.unit.instructions.len();
+                let held = compiler.next_register;
+                let runs = compiler
+                    .body_statement(statement, kind == UnitKind::ModuleBody)
+                    .map_err(naming(statement.kind_name()))?;
+                compiler.next_register = held;
+                compiler.unit.start_statement(start, statement.position());
+                compiler
+                    .unit
+                    .set_start_kind(start, StartKind::BodyStatement { runs });
+            }
         }
         _ => compiler.statements(body, ANSWER, true)?,
     }
@@ -126,7 +160,8 @@ impl Compiler {
         if let Instruction::Call { site, .. }
         | Instruction::CallResolved { site, .. }
         | Instruction::CallNativeName { site, .. }
-        | Instruction::CallBlock { site, .. } = instruction
+        | Instruction::CallBlock { site, .. }
+        | Instruction::CallSuper { site, .. } = instruction
         {
             if self.unit.call_sites[usize::from(site)].arguments_in_list {
                 self.pending.lists -= 1;
@@ -149,6 +184,358 @@ impl Compiler {
         self.next_register += 1;
         self.unit.use_registers(self.next_register);
         Ok(register)
+    }
+
+    /// Compile a statement of a class body, or of a module body when
+    /// `module`, by the rules the body runs it with, answering whether it
+    /// runs as a statement of its own, with a line event, rather than being
+    /// taken up by the body.
+    fn body_statement(
+        &mut self,
+        statement: &Statement,
+        module: bool,
+    ) -> Result<bool, &'static str> {
+        let unchanged = self.temporary()?;
+        let position = statement.position();
+        if let Statement::Expression {
+            expression: Expression::Identifier { name, .. },
+            ..
+        } = statement
+            && (matches!(
+                name.as_str(),
+                "private" | "public" | "protected" | "module_function"
+            ) || (!module && name == "freeze"))
+        {
+            self.body_statement_as_written(statement, ANSWER)?;
+            return Ok(false);
+        }
+        match statement {
+            Statement::MethodDef { .. } | Statement::Include { .. } | Statement::Extend { .. } => {
+                self.body_statement_as_written(statement, ANSWER)?;
+                Ok(false)
+            }
+            Statement::Alias { new_name, .. } if module && !new_name.starts_with('$') => {
+                self.body_statement_as_written(statement, ANSWER)?;
+                Ok(false)
+            }
+            Statement::Assignment {
+                target: target @ Expression::Identifier { name, .. },
+                value,
+                ..
+            } if starts_uppercase(name) => {
+                let decided = self.assigned_value(target, value, ANSWER)?;
+                let name = self.name(name)?;
+                self.emit(
+                    Instruction::BodyConstant {
+                        from: ANSWER as u8,
+                        name,
+                    },
+                    position,
+                );
+                if let Some(decided) = decided {
+                    self.jump_here(decided)?;
+                }
+                Ok(false)
+            }
+            _ if module => self.module_body_statement(statement, unchanged),
+            _ => self.class_body_statement(statement, unchanged),
+        }
+    }
+
+    /// The statements of a class body that follow the class body's own
+    /// rules, past those it shares with a module body.
+    fn class_body_statement(
+        &mut self,
+        statement: &Statement,
+        unchanged: usize,
+    ) -> Result<bool, &'static str> {
+        let position = statement.position();
+        match statement {
+            Statement::FunctionDef { .. }
+            | Statement::Expression {
+                expression: Expression::InstanceVariable { .. },
+                ..
+            } => {
+                self.body_statement_as_written(statement, ANSWER)?;
+                Ok(false)
+            }
+            Statement::Alias { new_name, .. } if !new_name.starts_with('$') => {
+                self.body_statement_as_written(statement, ANSWER)?;
+                Ok(false)
+            }
+            // `class << target` opens the target's singleton class whatever
+            // the target is written as, and the body answers what it did.
+            Statement::Expression {
+                expression:
+                    Expression::SingletonClass {
+                        target,
+                        body,
+                        position: opened_at,
+                        ..
+                    },
+                ..
+            } => {
+                let held = self.temporary()?;
+                self.expression(target, held)?;
+                self.define(
+                    Definition::SingletonClass {
+                        target: held,
+                        body: body.clone(),
+                        position: *opened_at,
+                    },
+                    ANSWER,
+                    *opened_at,
+                )?;
+                Ok(false)
+            }
+            // A `Block` in a class body defines the accessors of its
+            // `attr_accessor` statements, and nothing else in it runs.
+            Statement::Block { statements, .. } => {
+                for inner in statements {
+                    if let Statement::AttrAccessor { attributes, .. } = inner {
+                        let names = self.attribute_names(attributes, position)?;
+                        self.emit(
+                            Instruction::BodyBlockAccessors { names: names as u8 },
+                            position,
+                        );
+                    }
+                }
+                Ok(false)
+            }
+            Statement::AttrReader { attributes, .. }
+            | Statement::AttrWriter { attributes, .. }
+            | Statement::AttrAccessor { attributes, .. } => {
+                let kind = match statement {
+                    Statement::AttrReader { .. } => 0,
+                    Statement::AttrWriter { .. } => 1,
+                    _ => 2,
+                };
+                let names = self.attribute_names(attributes, position)?;
+                self.emit(
+                    Instruction::BodyAttributes {
+                        to: ANSWER as u8,
+                        names: names as u8,
+                        kind,
+                    },
+                    position,
+                );
+                Ok(false)
+            }
+            Statement::Assignment {
+                target: Expression::InstanceVariable { name, .. },
+                value,
+                ..
+            } => {
+                self.expression(value, unchanged)?;
+                let name = self.name(name)?;
+                self.emit(
+                    Instruction::BodyInstanceVariable {
+                        from: unchanged as u8,
+                        name,
+                    },
+                    position,
+                );
+                Ok(false)
+            }
+            Statement::Assignment {
+                target: Expression::ClassVariable { name, .. },
+                value,
+                ..
+            } => {
+                self.expression(value, unchanged)?;
+                let name = self.name(name)?;
+                self.emit(
+                    Instruction::BodyClassVariable {
+                        from: unchanged as u8,
+                        name,
+                    },
+                    position,
+                );
+                Ok(false)
+            }
+            Statement::Expression {
+                expression:
+                    Expression::Call {
+                        callee,
+                        arguments,
+                        trailing_block,
+                        ..
+                    },
+                ..
+            } if matches!(callee.as_ref(), Expression::Identifier { name, .. }
+                if (name == "alias_method" && arguments.len() == 2)
+                    || (name == "define_method" && trailing_block.is_some())
+                    || name == "refine") =>
+            {
+                let Expression::Identifier { name, .. } = callee.as_ref() else {
+                    unreachable!("matched an identifier above");
+                };
+                match name.as_str() {
+                    "alias_method" => {
+                        let first = self.temporary()?;
+                        self.expression(&arguments[0], first)?;
+                        let second = self.temporary()?;
+                        self.expression(&arguments[1], second)?;
+                        self.emit(
+                            Instruction::BodyAliasMethod { first: first as u8 },
+                            position,
+                        );
+                    }
+                    "define_method" => {
+                        // Each argument is evaluated on its own, and then
+                        // the block.
+                        let block = self.temporary()?;
+                        for argument in arguments {
+                            let register = self.temporary()?;
+                            self.expression(argument, register)?;
+                        }
+                        if let Some(written) = trailing_block {
+                            self.expression(written, block)?;
+                        }
+                        let count = u8::try_from(arguments.len()).map_err(|_| OVER_LIMIT)?;
+                        self.emit(
+                            Instruction::BodyDefineMethod {
+                                to: ANSWER as u8,
+                                block: block as u8,
+                                count,
+                            },
+                            position,
+                        );
+                    }
+                    _ => {
+                        let receiver = Expression::SelfExpr { position };
+                        self.method_call(
+                            &receiver,
+                            "refine",
+                            arguments,
+                            trailing_block.as_deref(),
+                            unchanged,
+                            position,
+                        )?;
+                    }
+                }
+                Ok(false)
+            }
+            // A bare expression is evaluated, and a name the class defines a
+            // method of is the call of that method.
+            Statement::Expression { expression, .. } => {
+                self.expression(expression, ANSWER)?;
+                if matches!(expression, Expression::Identifier { .. }) {
+                    self.emit(
+                        Instruction::InvokeIfMethod {
+                            register: ANSWER as u8,
+                        },
+                        position,
+                    );
+                }
+                Ok(false)
+            }
+            other => {
+                self.statement(other, ANSWER)?;
+                Ok(true)
+            }
+        }
+    }
+
+    /// The statements of a module body that follow the module body's own
+    /// rules, past those it shares with a class body.
+    fn module_body_statement(
+        &mut self,
+        statement: &Statement,
+        unchanged: usize,
+    ) -> Result<bool, &'static str> {
+        let position = statement.position();
+        match statement {
+            // `class << target` opens the target's singleton class whatever
+            // the target is written as.
+            Statement::Expression {
+                expression:
+                    Expression::SingletonClass {
+                        target,
+                        body,
+                        position: opened_at,
+                        ..
+                    },
+                ..
+            } => {
+                let held = self.temporary()?;
+                self.expression(target, held)?;
+                self.define(
+                    Definition::SingletonClass {
+                        target: held,
+                        body: body.clone(),
+                        position: *opened_at,
+                    },
+                    unchanged,
+                    *opened_at,
+                )?;
+                Ok(false)
+            }
+            Statement::Block { statements, .. } => {
+                for inner in statements {
+                    let start = self.unit.instructions.len();
+                    match inner {
+                        Statement::AttrReader { attributes, .. }
+                        | Statement::AttrWriter { attributes, .. }
+                        | Statement::AttrAccessor { attributes, .. } => {
+                            let names = self.attribute_names(attributes, position)?;
+                            let statement = wide(Some(self.unit.body_statement(inner.clone())))?;
+                            self.emit(
+                                Instruction::ModuleBlockStatement {
+                                    names: names as u8,
+                                    statement,
+                                },
+                                position,
+                            );
+                        }
+                        Statement::MethodDef { .. } => {
+                            let statement = wide(Some(self.unit.body_statement(inner.clone())))?;
+                            self.emit(
+                                Instruction::ModuleBlockStatement {
+                                    names: unchanged as u8,
+                                    statement,
+                                },
+                                position,
+                            );
+                        }
+                        other => {
+                            self.statement(other, unchanged)?;
+                            let live = self.next_register;
+                            self.unit
+                                .start_inner_statement(start, other.position(), live);
+                        }
+                    }
+                }
+                Ok(false)
+            }
+            Statement::ClassDef { .. } | Statement::ModuleDef { .. } => {
+                self.statement(statement, unchanged)?;
+                Ok(false)
+            }
+            other => {
+                self.statement(other, ANSWER)?;
+                Ok(true)
+            }
+        }
+    }
+
+    /// Hand a statement of a class or module body to the body's own rules,
+    /// which evaluate nothing the program wrote, leaving what the body then
+    /// answers in register `to`.
+    fn body_statement_as_written(
+        &mut self,
+        statement: &Statement,
+        to: usize,
+    ) -> Result<(), &'static str> {
+        let index = wide(Some(self.unit.body_statement(statement.clone())))?;
+        self.emit(
+            Instruction::BodyStatement {
+                to: to as u8,
+                statement: index,
+            },
+            statement.position(),
+        );
+        Ok(())
     }
 
     /// Compile the last statement of a method body, which answers the
@@ -225,8 +612,10 @@ impl Compiler {
         }
         for statement in list {
             let start = self.unit.instructions.len();
+            let held = self.next_register;
             self.statement(statement, to)
                 .map_err(naming(statement.kind_name()))?;
+            self.next_register = held;
             if of_the_body {
                 self.unit.start_statement(start, statement.position());
             } else {
@@ -430,6 +819,75 @@ impl Compiler {
                 self.emit(Instruction::PopScope, *position);
                 Ok(())
             }
+            Statement::FunctionDef { position, .. }
+            | Statement::MethodDef { position, .. }
+            | Statement::Include { position, .. }
+            | Statement::Extend { position, .. }
+            | Statement::Alias { position, .. } => {
+                let definition = Definition::Statement(statement.clone());
+                self.define(definition, to, *position)
+            }
+            Statement::AttrReader {
+                attributes,
+                position,
+            }
+            | Statement::AttrWriter {
+                attributes,
+                position,
+            }
+            | Statement::AttrAccessor {
+                attributes,
+                position,
+            } => {
+                let method = match statement {
+                    Statement::AttrReader { .. } => "attr_reader",
+                    Statement::AttrWriter { .. } => "attr_writer",
+                    _ => "attr_accessor",
+                };
+                let names = self.attribute_names(attributes, *position)?;
+                self.define(
+                    Definition::Attributes {
+                        method,
+                        names,
+                        position: *position,
+                    },
+                    to,
+                    *position,
+                )
+            }
+            Statement::ClassDef {
+                namespace,
+                superclass_expression,
+                position,
+                ..
+            } => {
+                let namespace = self.held_value(namespace.as_deref())?;
+                let superclass = self.held_value(superclass_expression.as_deref())?;
+                self.define(
+                    Definition::Class {
+                        statement: statement.clone(),
+                        namespace,
+                        superclass,
+                    },
+                    to,
+                    *position,
+                )
+            }
+            Statement::ModuleDef {
+                namespace,
+                position,
+                ..
+            } => {
+                let namespace = self.held_value(namespace.as_deref())?;
+                self.define(
+                    Definition::Module {
+                        statement: statement.clone(),
+                        namespace,
+                    },
+                    to,
+                    *position,
+                )
+            }
             Statement::Redo { position } => {
                 match self.loops.last().map(|inner| inner.redo_target) {
                     None => {
@@ -445,6 +903,131 @@ impl Compiler {
             }
             other => Err(other.kind_name()),
         }
+    }
+
+    /// Emit the definition, leaving what it answers in register `to`. The
+    /// registers holding what it needed evaluated are kept until it is made.
+    fn define(
+        &mut self,
+        definition: Definition,
+        to: usize,
+        position: Position,
+    ) -> Result<(), &'static str> {
+        let definition = wide(Some(self.unit.definition(definition)))?;
+        self.emit(
+            Instruction::Define {
+                to: to as u8,
+                definition,
+            },
+            position,
+        );
+        Ok(())
+    }
+
+    /// Evaluate `expression`, when there is one, into a register kept until
+    /// the statement using it is done, answering the register.
+    fn held_value(
+        &mut self,
+        expression: Option<&Expression>,
+    ) -> Result<Option<usize>, &'static str> {
+        let Some(expression) = expression else {
+            return Ok(None);
+        };
+        let register = self.temporary()?;
+        self.expression(expression, register)?;
+        Ok(Some(register))
+    }
+
+    /// Evaluate the names an `attr_*` statement is given into an Array, in
+    /// a register kept until the statement is done, each splat spread into
+    /// the names its list holds. Parentheses leave a splat inside a group.
+    fn attribute_names(
+        &mut self,
+        attributes: &[Expression],
+        position: Position,
+    ) -> Result<usize, &'static str> {
+        let names = self.temporary()?;
+        self.emit(
+            Instruction::NewArray {
+                to: names as u8,
+                first: 0,
+                count: 0,
+            },
+            position,
+        );
+        for attribute in attributes {
+            let mut attribute = attribute;
+            while let Expression::Grouped { expression, .. } = attribute {
+                attribute = expression;
+            }
+            let register = self.temporary()?;
+            let add = match attribute {
+                Expression::Splat { expression, .. } => {
+                    self.expression(expression, register)?;
+                    Instruction::AttributeSplat {
+                        array: names as u8,
+                        from: register as u8,
+                    }
+                }
+                _ => {
+                    self.expression(attribute, register)?;
+                    Instruction::AppendArray {
+                        array: names as u8,
+                        first: register as u8,
+                        count: 1,
+                    }
+                }
+            };
+            self.emit(add, position);
+            self.next_register = register;
+        }
+        Ok(names)
+    }
+
+    /// Store the value in register `from` through `target`, as an
+    /// assignment of it would.
+    fn store_register(
+        &mut self,
+        target: &Expression,
+        from: usize,
+        position: Position,
+    ) -> Result<(), &'static str> {
+        let from = from as u8;
+        let instruction = match target {
+            Expression::Identifier { name, .. } if self.assigned.contains(name) => {
+                Instruction::SetLocal {
+                    from,
+                    slot: wide(Some(self.unit.local(name)))?,
+                }
+            }
+            Expression::Identifier { name, .. } if starts_uppercase(name) => {
+                Instruction::SetConstant {
+                    from,
+                    name: self.name(name)?,
+                }
+            }
+            Expression::InstanceVariable { name, .. } => Instruction::SetInstanceVariable {
+                from,
+                name: self.name(name)?,
+            },
+            Expression::GlobalVariable { name, .. } => Instruction::SetGlobal {
+                from,
+                name: self.name(name)?,
+            },
+            Expression::ClassVariable { name, .. } => Instruction::SetClassVariable {
+                from,
+                name: self.name(name)?,
+            },
+            other => {
+                let shape = self.prepare(other)?;
+                Instruction::StoreTarget {
+                    from,
+                    target: wide(Some(self.unit.target(shape)))?,
+                }
+            }
+        };
+        self.emit(instruction, position);
+        Ok(())
     }
 
     /// The loop being compiled innermost.
@@ -1740,6 +2323,87 @@ impl Compiler {
                     from: base as u8,
                 }
             }
+            Expression::Super {
+                arguments,
+                forward_args,
+                trailing_block,
+                ..
+            } => {
+                let base = self.temporary()?;
+                let mut site = CallSite::new("super", 0, Receiver::SelfKeyword);
+                site.forwards_arguments = *forward_args;
+                // A block written on the call is evaluated before the
+                // arguments are.
+                if let Some(block) = trailing_block {
+                    let register = self.temporary()?;
+                    self.expression(block, register)?;
+                    self.emit(
+                        Instruction::AttachSuperBlock {
+                            from: register as u8,
+                        },
+                        position,
+                    );
+                    site.has_block = true;
+                }
+                if !*forward_args {
+                    site.block_argument = arguments
+                        .iter()
+                        .any(|argument| matches!(argument, Expression::BlockArg { .. }));
+                    if site.block_argument {
+                        self.emit(
+                            Instruction::ClearSuperBlock {
+                                written: u8::from(trailing_block.is_some()),
+                            },
+                            position,
+                        );
+                    }
+                    // The block follows the receiver's register when the
+                    // arguments are in a list, and the arguments otherwise,
+                    // so they are gathered in a list when a block was
+                    // written ahead of them.
+                    let listed =
+                        self.gathered_arguments("super", arguments, None, site.has_block)?;
+                    site.written_with_arguments = !arguments.is_empty();
+                    site.keyword_splat = listed.keyword_splat;
+                    site.argument_count = listed.argument_count;
+                    site.arguments_in_list = listed.arguments_in_list;
+                }
+                let site = wide(Some(self.unit.call_site(site)))?;
+                self.emit(
+                    Instruction::CallSuper {
+                        base: base as u8,
+                        site,
+                    },
+                    position,
+                );
+                Instruction::Move {
+                    to: to_register,
+                    from: base as u8,
+                }
+            }
+            Expression::SingletonClass {
+                target,
+                assign_to,
+                body,
+                position: opened_at,
+            } => {
+                let held = self.temporary()?;
+                self.expression(target, held)?;
+                // `class << @receiver = Object.new` stores the object first,
+                // so the body's `def`s land on the same one the name holds.
+                if let Some(destination) = assign_to {
+                    self.store_register(destination, held, *opened_at)?;
+                }
+                return self.define(
+                    Definition::SingletonClass {
+                        target: held,
+                        body: body.clone(),
+                        position: *opened_at,
+                    },
+                    to,
+                    *opened_at,
+                );
+            }
             Expression::Lambda { .. } => Instruction::MakeBlock {
                 to: to_register,
                 literal: wide(Some(self.unit.block(expression.clone())))?,
@@ -1983,7 +2647,19 @@ impl Compiler {
         arguments: &[Expression],
         trailing_block: Option<&Expression>,
     ) -> Result<CallSite, &'static str> {
-        let in_list = arguments.iter().any(gathered_in_a_list);
+        self.gathered_arguments(name, arguments, trailing_block, false)
+    }
+
+    /// Compile a call's arguments as `call_arguments` does, gathering them in
+    /// an argument list when `listed` even with none of `*`, `**`, or `&`.
+    fn gathered_arguments(
+        &mut self,
+        name: &str,
+        arguments: &[Expression],
+        trailing_block: Option<&Expression>,
+        listed: bool,
+    ) -> Result<CallSite, &'static str> {
+        let in_list = listed || arguments.iter().any(gathered_in_a_list);
         let mut site = CallSite::new(name, 0, Receiver::Other);
         site.written_with_arguments = !arguments.is_empty();
         site.keyword_splat = arguments
@@ -2004,7 +2680,11 @@ impl Compiler {
             Some(_) => Some(self.temporary()?),
             None => None,
         };
-        self.emit(Instruction::StartArguments, arguments[0].position());
+        let start_at = arguments
+            .first()
+            .map(Expression::position)
+            .unwrap_or_default();
+        self.emit(Instruction::StartArguments, start_at);
         for argument in arguments {
             let register = self.temporary()?;
             let (value, add): (&Expression, fn(u8) -> Instruction) = match argument {
