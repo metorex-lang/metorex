@@ -200,8 +200,8 @@ impl VirtualMachine {
         let caller_lexical_home = self.lexical_home_frame.take();
         // A `return` written at the top level ends the program, carrying its
         // value out however deep in blocks it was written.
-        let ran = match self.run_compiled_unit(None, statements) {
-            Some(ran) => ran.map(Some),
+        let ran = match self.run_compiled_program(statements) {
+            Some(ran) => ran,
             None => self.run_program_statements(statements),
         };
         let result = match ran {

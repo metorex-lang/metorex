@@ -90,13 +90,10 @@ fn the_engine_report_counts_a_compiled_method_and_one_that_falls_back() {
     let (bytecode_after, tree_after, fallbacks_after) = engine_report("engine_units.rb");
     assert_eq!(bytecode_after - bytecode_before, 1);
     assert_eq!(tree_after - tree_before, 1);
-    let while_loops = |fallbacks: &std::collections::HashMap<String, u64>| {
-        fallbacks.get("While").copied().unwrap_or(0)
+    let matches = |fallbacks: &std::collections::HashMap<String, u64>| {
+        fallbacks.get("Match").copied().unwrap_or(0)
     };
-    assert_eq!(
-        while_loops(&fallbacks_after) - while_loops(&fallbacks_before),
-        1
-    );
+    assert_eq!(matches(&fallbacks_after) - matches(&fallbacks_before), 1);
 }
 
 #[test]

@@ -72,3 +72,39 @@ fn test_bytecode_spread_subscripts_execution() {
         "[[2, 3], [1, :replaced, 4], :pair]\n[1, :both, 4, 5]\n"
     );
 }
+
+#[test]
+fn test_bytecode_branches_and_loops_execution() {
+    let output = run_example("bytecode/branches_and_loops.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[:large, :even, :positive]\n",
+            "[:medium, :odd, :positive]\n",
+            "[:small, :odd, :positive]\n",
+            "[[2, 4, 6], 0, 3, :carried]\n",
+            "[2, 20]\n",
+            "[6, 3]\n",
+            "[:integer, :letter, :range, :other]\n",
+            "[[2, 0, 6, 8], 6]\n",
+            "[:matched, 2, :right]\n",
+        )
+    );
+}
+
+#[test]
+fn test_bytecode_blocks_and_returns_execution() {
+    let output = run_example("bytecode/blocks_and_returns.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[[1, nil], [2, 3]]\n",
+            "3\n",
+            "\"no block given (yield)\"\n",
+            "[:negative, nil]\n",
+            "20\n",
+            "[8, :after]\n",
+            "[[3, 6], [5, 6]]\n",
+        )
+    );
+}

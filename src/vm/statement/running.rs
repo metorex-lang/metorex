@@ -170,20 +170,8 @@ impl VirtualMachine {
             Statement::Return { value, position } => {
                 // A `return` written at the top level ends the file, and the
                 // value written after it goes nowhere, which Ruby says so.
-                if value.is_some() && self.call_stack.is_empty() {
-                    let written_in = self
-                        .current_source_file
-                        .clone()
-                        .or_else(|| {
-                            self.reported_current_file()
-                                .map(|path| path.display().to_string())
-                        })
-                        .unwrap_or_else(|| "-".to_string());
-                    let notice = format!(
-                        "{}: warning: argument of top-level return is ignored",
-                        written_in
-                    );
-                    self.emit_warning_to_stderr(&notice, *position);
+                if value.is_some() {
+                    self.warn_top_level_return_value(*position);
                 }
                 let result = match value {
                     Some(expr) => self.evaluate_expression(expr)?,
@@ -412,6 +400,27 @@ impl VirtualMachine {
         let result = run(self);
         self.running_block_breaks.pop();
         result
+    }
+
+    /// A `return` written at the top level ends the file, and the value
+    /// written after it goes nowhere, which Ruby says so.
+    pub(crate) fn warn_top_level_return_value(&mut self, position: crate::lexer::Position) {
+        if !self.call_stack.is_empty() {
+            return;
+        }
+        let written_in = self
+            .current_source_file
+            .clone()
+            .or_else(|| {
+                self.reported_current_file()
+                    .map(|path| path.display().to_string())
+            })
+            .unwrap_or_else(|| "-".to_string());
+        let notice = format!(
+            "{}: warning: argument of top-level return is ignored",
+            written_in
+        );
+        self.emit_warning_to_stderr(&notice, position);
     }
 
     /// Execute statements within a new lexical scope.

@@ -7,16 +7,19 @@ use crate::ast::{BinaryOp, Expression, UnaryOp};
 use crate::bytecode::instruction::{
     BINARY_OPERATORS, Instruction, Operand, RANGE_EXCLUSIVE, RANGE_LITERAL_ENDS,
 };
-use crate::bytecode::unit::{CallSite, HashEntry, HashShape, Piece, Receiver, Target, Unit};
+use crate::bytecode::unit::{
+    CallSite, HashEntry, HashShape, Piece, Receiver, StartKind, StatementStart, Target, Unit,
+};
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::{Object, View};
-use crate::vm::VirtualMachine;
+use crate::vm::errors::loop_control_error;
 use crate::vm::eval::CallRoute;
 use crate::vm::expression::{HashLiteral, Interpolation, WrittenPair};
 use crate::vm::method_lookup::WrittenReceiver;
 use crate::vm::program::ArgumentList;
 use crate::vm::statement::{PreparedTarget, ReceiverTarget};
+use crate::vm::{ControlFlow, VirtualMachine};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -41,11 +44,8 @@ impl Extension {
 enum Next {
     Step,
     JumpTo(usize),
-    Finish(Object),
+    Finish(ControlFlow),
 }
-
-/// The first register past the one a unit's answer is left in.
-const FIRST_TEMPORARY: usize = 1;
 
 /// What one run of a unit keeps besides its registers.
 struct RunState {
@@ -63,8 +63,23 @@ struct RunState {
 }
 
 impl VirtualMachine {
-    /// Run `unit`, answering what its `Return` hands back.
+    /// Run `unit`, answering what its `Return` hands back. A `break`,
+    /// `next`, or `redo` that ends the unit is refused, as at the top level.
     pub fn run_unit(&mut self, unit: &Unit) -> Result<Object, MetorexError> {
+        match self.run_unit_flow(unit)? {
+            ControlFlow::Value(value) => Ok(value),
+            ControlFlow::Break { position, .. } => Err(loop_control_error("break", position)),
+            ControlFlow::Continue { position, .. } => Err(loop_control_error("next", position)),
+            ControlFlow::Redo { position } => Err(loop_control_error("redo", position)),
+            _ => Ok(Object::Nil),
+        }
+    }
+
+    /// Run `unit`, answering how it ended: with the value its `Return`
+    /// hands back, or with a `break`, `next`, or `redo` written outside any
+    /// loop of the unit, which the body the unit is takes as the tree walker
+    /// takes the same statement.
+    pub(crate) fn run_unit_flow(&mut self, unit: &Unit) -> Result<ControlFlow, MetorexError> {
         let mut state = RunState {
             cells: vec![None; unit.locals.len()],
             arguments: Vec::new(),
@@ -74,7 +89,16 @@ impl VirtualMachine {
         // its `callcc` was written in.
         self.run_restartable(|vm, statement| {
             let at = unit.statement_at(statement).unwrap_or(0);
-            vm.run_unit_from(unit, &mut state, at)
+            // A loop or a `case` arm the run leaves early, by an error or a
+            // jump, leaves what it opened for the run to close.
+            let scopes = vm.environment().current_depth();
+            let loops = vm.running_block_breaks.len();
+            let ran = vm.run_unit_from(unit, &mut state, at);
+            while vm.environment().current_depth() > scopes {
+                vm.environment_mut().pop_scope();
+            }
+            vm.running_block_breaks.truncate(loops);
+            ran
         })
     }
 
@@ -83,7 +107,7 @@ impl VirtualMachine {
         unit: &Unit,
         state: &mut RunState,
         start: usize,
-    ) -> Result<Object, MetorexError> {
+    ) -> Result<ControlFlow, MetorexError> {
         let mut registers = vec![Object::Nil; unit.register_count];
         let mut at = start;
         let mut extension = Extension::default();
@@ -105,21 +129,22 @@ impl VirtualMachine {
                 Some(statement) => {
                     // No temporary lives from one statement to the next, and
                     // one left holding a value would keep it from being freed.
-                    for register in registers.iter_mut().skip(FIRST_TEMPORARY) {
+                    for register in registers.iter_mut().skip(statement.live) {
                         *register = Object::Nil;
                     }
-                    self.mark_statement(statement.index);
-                    self.begin_statement(statement.position, true)
-                        .and_then(|()| {
-                            self.execute_instruction(
-                                unit,
-                                &mut registers,
-                                state,
-                                instruction,
-                                extension,
-                                position,
-                            )
-                        })
+                    if let Some(index) = statement.index {
+                        self.mark_statement(index);
+                    }
+                    self.start_statement(statement).and_then(|()| {
+                        self.execute_instruction(
+                            unit,
+                            &mut registers,
+                            state,
+                            instruction,
+                            extension,
+                            position,
+                        )
+                    })
                 }
                 None => self.execute_instruction(
                     unit,
@@ -134,7 +159,7 @@ impl VirtualMachine {
             match ran {
                 Ok(Next::Step) => at += 1,
                 Ok(Next::JumpTo(target)) => at = target,
-                Ok(Next::Finish(value)) => return Ok(value),
+                Ok(Next::Finish(flow)) => return Ok(flow),
                 Err(error) => {
                     if let Some(spot) = &unit.error_spots[at] {
                         self.note_compiled_error_spot(&error, spot);
@@ -612,7 +637,97 @@ impl VirtualMachine {
                 self.raise_exception(vec![raised], position)?;
             }
             Instruction::Return { from } => {
-                return Ok(Next::Finish(registers[register(from)].clone()));
+                return Ok(Next::Finish(ControlFlow::Value(
+                    registers[register(from)].clone(),
+                )));
+            }
+            Instruction::ExitBreak { from } => {
+                return Ok(Next::Finish(ControlFlow::Break {
+                    value: registers[register(from)].clone(),
+                    position,
+                }));
+            }
+            Instruction::ExitNext { from } => {
+                return Ok(Next::Finish(ControlFlow::Continue {
+                    value: registers[register(from)].clone(),
+                    position,
+                }));
+            }
+            Instruction::ExitRedo => return Ok(Next::Finish(ControlFlow::Redo { position })),
+            Instruction::ExitReturn { from, written } => {
+                if written != 0 {
+                    self.warn_top_level_return_value(position);
+                }
+                return Ok(Next::Finish(ControlFlow::Return {
+                    value: registers[register(from)].clone(),
+                    position,
+                }));
+            }
+            Instruction::FindBlock { to } => {
+                registers[register(to)] = self.block_to_yield(position)?;
+            }
+            Instruction::CallBlock { base, site } => {
+                let site = &unit.call_sites[index(site)];
+                let base = register(base);
+                let (arguments, _) = call_inputs(site, base, registers, state);
+                let View::Block(block) = registers[base].view() else {
+                    unreachable!("FindBlock puts a block in the register");
+                };
+                let block = Rc::clone(block);
+                crate::vm::program::enter_nesting(position)?;
+                let answer = block.call(self, arguments, position);
+                crate::vm::program::leave_nesting();
+                registers[base] = answer?;
+            }
+            Instruction::PushScope => self.environment_mut().push_scope(),
+            Instruction::EnterLoop => self.running_block_breaks.push(None),
+            Instruction::LeaveLoop => {
+                self.running_block_breaks.pop();
+            }
+            Instruction::Checkpoint => self.pass_checkpoint(position)?,
+            Instruction::CoverBranch { arm } => self.coverage_branch(position, usize::from(arm)),
+            Instruction::CoverLine => {
+                if self.coverage.is_some() {
+                    self.coverage_count(position.line);
+                }
+            }
+            Instruction::CaseArm { subject, arm } => {
+                let subject = register(subject);
+                let arm = &unit.case_arms[index(arm)];
+                let matched = self.enter_case_arm(arm, &registers[subject])?;
+                registers[subject + 1] = Object::Bool(matched);
+            }
+            Instruction::PopScope => {
+                self.environment_mut().pop_scope();
+            }
+            Instruction::Unwind {
+                lists,
+                routes,
+                scopes,
+            } => {
+                let lists = state.arguments.len().saturating_sub(usize::from(lists));
+                state.arguments.truncate(lists);
+                let routes = state.routes.len().saturating_sub(usize::from(routes));
+                state.routes.truncate(routes);
+                for _ in 0..scopes {
+                    self.environment_mut().pop_scope();
+                }
+            }
+            Instruction::FlipFlopState { to, flip } => {
+                let (written_at, integer_sides) = unit.flip_flops[index(flip)];
+                registers[register(to)] =
+                    Object::Bool(self.flip_flop_running(written_at, integer_sides));
+            }
+            Instruction::FlipFlopSet { on, flip } => {
+                self.set_flip_flop(unit.flip_flops[index(flip)].0, on != 0);
+            }
+            Instruction::LineIs { to, constant } => {
+                let line = unit.constants[index(constant)].clone();
+                let held = self.globals().get(".").unwrap_or(Object::Int(0));
+                registers[register(to)] = Object::Bool(held == line);
+            }
+            Instruction::LastLine { to } => {
+                registers[register(to)] = self.globals().get("_").unwrap_or(Object::Nil);
             }
         }
         Ok(Next::Step)
@@ -620,6 +735,30 @@ impl VirtualMachine {
 }
 
 impl VirtualMachine {
+    /// What happens as a statement starts, as the tree walker does for a
+    /// statement in the same place.
+    fn start_statement(&mut self, statement: StatementStart) -> Result<(), MetorexError> {
+        let line = statement.position.line;
+        match statement.kind {
+            StartKind::Statement => self.begin_statement(statement.position, true),
+            StartKind::Terminal => {
+                if !self.tracepoints.is_empty() {
+                    self.fire_line_event(statement.position)?;
+                }
+                if self.coverage.is_some() {
+                    self.coverage_count(line);
+                }
+                Ok(())
+            }
+            StartKind::InBranch { enclosing_line } => {
+                if self.coverage.is_some() && line != enclosing_line {
+                    self.coverage_count(line);
+                }
+                Ok(())
+            }
+        }
+    }
+
     /// The Hash `literal` makes once the entries of the registers `shape`
     /// lays out are added.
     fn build_hash(

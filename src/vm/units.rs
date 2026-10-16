@@ -7,6 +7,11 @@ use std::cell::OnceCell;
 use std::rc::Rc;
 
 use crate::ast::Statement;
+use crate::error::MetorexError;
+use crate::object::Object;
+use crate::vm::ControlFlow;
+use crate::vm::errors::loop_control_error;
+use crate::vm::utils::position_to_location;
 
 /// What compiling a body gave.
 #[derive(Debug)]
@@ -39,8 +44,8 @@ fn disassembly_wanted() -> bool {
 }
 
 /// Compile `body`, recording the result for the engine report.
-pub fn compile(body: &[Statement]) -> Compiled {
-    let compiled = match crate::bytecode::compiler::compile(body) {
+pub fn compile(body: &[Statement], of_a_method: bool) -> Compiled {
+    let compiled = match crate::bytecode::compiler::compile_as(body, of_a_method) {
         Ok(unit) => Compiled::Unit(Box::new(unit)),
         Err(node) => Compiled::Fallback(node),
     };
@@ -67,13 +72,14 @@ impl crate::vm::VirtualMachine {
         &mut self,
         slot: Option<&UnitSlot>,
         body: &[Statement],
-    ) -> Option<Result<crate::object::Object, crate::error::MetorexError>> {
+        of_a_method: bool,
+    ) -> Option<Result<ControlFlow, MetorexError>> {
         if crate::vm::engine::engine() != crate::vm::engine::Engine::Bytecode {
             return None;
         }
         let compiled = match slot {
-            Some(slot) => slot.compiled(|| self.compile_body(body)),
-            None => Rc::new(self.compile_body(body)),
+            Some(slot) => slot.compiled(|| self.compile_body(body, of_a_method)),
+            None => Rc::new(self.compile_body(body, of_a_method)),
         };
         match &*compiled {
             Compiled::Unit(unit) => {
@@ -87,18 +93,78 @@ impl crate::vm::VirtualMachine {
                         self.environment_mut().hoist(local.text.clone());
                     }
                 }
-                Some(self.run_unit(unit))
+                Some(self.run_unit_flow(unit))
             }
             Compiled::Fallback(_) => None,
         }
     }
 
+    /// Run a method body through what it compiled to, taking a `break`,
+    /// `next`, or `redo` that ends it as the tree walker takes one ending
+    /// the body: a body with lambda semantics, from `define_method` with a
+    /// block, answers the value `break` or `next` carries and runs again on
+    /// `redo`.
+    pub(crate) fn run_compiled_method_body(
+        &mut self,
+        slot: &UnitSlot,
+        body: &[Statement],
+        lambda_semantics: bool,
+    ) -> Option<Result<Object, MetorexError>> {
+        loop {
+            let ran = self.run_compiled_unit(Some(slot), body, true)?;
+            if let Ok(ControlFlow::Return { .. }) = &ran
+                && let Some(running) = self.running_code.last_mut()
+            {
+                running.returned_explicitly = true;
+            }
+            let answer = ran.and_then(|flow| method_body_answer(flow, lambda_semantics));
+            if !lambda_semantics {
+                return Some(answer);
+            }
+            match answer {
+                Err(MetorexError::BlockRedo { .. }) => continue,
+                Err(MetorexError::BlockNext { value, .. })
+                | Err(MetorexError::BlockBreak { value, .. }) => return Some(Ok(value)),
+                other => return Some(other),
+            }
+        }
+    }
+
+    /// Run a file's top level through what it compiled to. A `break`,
+    /// `next`, or `redo` that ends it has no loop to leave.
+    pub(crate) fn run_compiled_program(
+        &mut self,
+        body: &[Statement],
+    ) -> Option<Result<Option<Object>, MetorexError>> {
+        let ran = self.run_compiled_unit(None, body, false)?;
+        Some(ran.and_then(|flow| match flow {
+            ControlFlow::Value(value) => Ok(Some(value)),
+            ControlFlow::Next => Ok(None),
+            ControlFlow::Break { position, .. } => Err(loop_control_error("break", position)),
+            ControlFlow::Continue { position, .. } => Err(loop_control_error("next", position)),
+            ControlFlow::Redo { position } => Err(loop_control_error("redo", position)),
+            ControlFlow::Retry { position } => Err(MetorexError::BlockRetry {
+                location: position_to_location(position),
+            }),
+            ControlFlow::Return { value, .. } => Ok(Some(value)),
+            ControlFlow::Exception {
+                exception,
+                position,
+            } => Err(MetorexError::UncaughtException {
+                message: crate::vm::utils::format_exception(&exception),
+                exception,
+                location: position_to_location(position),
+            }),
+        }))
+    }
+
     /// Compile `body`, writing the unit to standard error when
     /// `METOREX_DISASM=1` asked for it. A unit of the libraries Metorex
     /// carries, whose file is named `<metorex>` or `<internal:...>`, is left
-    /// out.
-    fn compile_body(&self, body: &[Statement]) -> Compiled {
-        let compiled = compile(body);
+    /// out, and so is one Metorex made with no file, such as the body of a
+    /// reader `attr_reader` defines.
+    fn compile_body(&self, body: &[Statement], of_a_method: bool) -> Compiled {
+        let compiled = compile(body, of_a_method);
         let file = self
             .current_source_file
             .clone()
@@ -109,6 +175,7 @@ impl crate::vm::VirtualMachine {
             .unwrap_or_default();
         if disassembly_wanted()
             && let Compiled::Unit(unit) = &compiled
+            && !file.is_empty()
             && !file.starts_with('<')
         {
             let source = source_text(&file);
@@ -134,4 +201,34 @@ fn source_text(path: &str) -> Option<Rc<str>> {
             .or_insert_with(|| std::fs::read_to_string(path).ok().map(Rc::from))
             .clone()
     })
+}
+
+/// What a method body answers when it ends with `flow`.
+fn method_body_answer(flow: ControlFlow, lambda_semantics: bool) -> Result<Object, MetorexError> {
+    match flow {
+        ControlFlow::Value(value) | ControlFlow::Return { value, .. } => Ok(value),
+        ControlFlow::Next => Ok(Object::Nil),
+        ControlFlow::Break { value, .. } | ControlFlow::Continue { value, .. }
+            if lambda_semantics =>
+        {
+            Ok(value)
+        }
+        ControlFlow::Break { position, .. } => Err(loop_control_error("break", position)),
+        ControlFlow::Continue { position, .. } => Err(loop_control_error("next", position)),
+        ControlFlow::Redo { position } if lambda_semantics => Err(MetorexError::BlockRedo {
+            location: position_to_location(position),
+        }),
+        ControlFlow::Redo { position } => Err(loop_control_error("redo", position)),
+        ControlFlow::Retry { position } => Err(MetorexError::BlockRetry {
+            location: position_to_location(position),
+        }),
+        ControlFlow::Exception {
+            exception,
+            position,
+        } => Err(MetorexError::UncaughtException {
+            message: crate::vm::utils::format_exception(&exception),
+            exception,
+            location: position_to_location(position),
+        }),
+    }
 }

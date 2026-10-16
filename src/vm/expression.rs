@@ -825,46 +825,65 @@ impl VirtualMachine {
         else {
             return self.evaluate_expression(condition);
         };
-        // The state belongs to the flip-flop written at this place in this
-        // piece of code. Two `eval` calls over the same text are two pieces,
-        // so the name the code was read under is part of the key.
-        let site = (
-            self.current_source_file.clone().unwrap_or_default(),
-            position.line,
-            position.column,
-            position.offset,
-        );
-        let running = self.flip_flops.get(&site).copied().unwrap_or(false);
-        // A number written as a side of a flip-flop is compared against the
-        // line the last read left off at, which is rarely what the program
-        // meant, so Ruby says so about it.
-        if !self.flip_flops.contains_key(&site) {
-            self.flip_flops.insert(site.clone(), false);
-            let speaks_up = matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true)));
-            for side in [start.as_ref(), end.as_ref()] {
-                if speaks_up && matches!(side, Expression::IntLiteral { .. }) {
-                    self.emit_warning_to_stderr("warning: integer literal in flip-flop", *position);
-                }
-            }
-        }
+        let integer_sides = [start.as_ref(), end.as_ref()]
+            .into_iter()
+            .filter(|side| matches!(side, Expression::IntLiteral { .. }))
+            .count();
+        let running = self.flip_flop_running(*position, integer_sides);
         if !running {
             let opens = is_truthy(&self.flip_flop_side(start, *position)?);
             if !opens {
                 return Ok(Object::Bool(false));
             }
-            self.flip_flops.insert(site.clone(), true);
+            self.set_flip_flop(*position, true);
             // `..` reads its second side the moment the first one holds, so a
             // range whose sides hold together is on for that one turn alone.
             // `...` waits for the next turn.
             if !exclusive && is_truthy(&self.flip_flop_side(end, *position)?) {
-                self.flip_flops.insert(site, false);
+                self.set_flip_flop(*position, false);
             }
             return Ok(Object::Bool(true));
         }
         if is_truthy(&self.flip_flop_side(end, *position)?) {
-            self.flip_flops.insert(site, false);
+            self.set_flip_flop(*position, false);
         }
         Ok(Object::Bool(true))
+    }
+
+    /// The place a flip-flop's state is kept: the flip-flop written at this
+    /// place in this piece of code. Two `eval` calls over the same text are
+    /// two pieces, so the name the code was read under is part of the key.
+    fn flip_flop_site(&self, position: Position) -> (String, usize, usize, usize) {
+        (
+            self.current_source_file.clone().unwrap_or_default(),
+            position.line,
+            position.column,
+            position.offset,
+        )
+    }
+
+    /// Whether the flip-flop written at `position` is on. The first time it
+    /// is read, a number written as one of its `integer_sides` sides is
+    /// warned about in verbose mode: it is compared against the line the
+    /// last read left off at, which is rarely what the program meant.
+    pub(crate) fn flip_flop_running(&mut self, position: Position, integer_sides: usize) -> bool {
+        let site = self.flip_flop_site(position);
+        if let Some(running) = self.flip_flops.get(&site) {
+            return *running;
+        }
+        self.flip_flops.insert(site, false);
+        if matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true))) {
+            for _ in 0..integer_sides {
+                self.emit_warning_to_stderr("warning: integer literal in flip-flop", position);
+            }
+        }
+        false
+    }
+
+    /// Turn the flip-flop written at `position` on or off.
+    pub(crate) fn set_flip_flop(&mut self, position: Position, on: bool) {
+        let site = self.flip_flop_site(position);
+        self.flip_flops.insert(site, on);
     }
 
     /// Whether one side of a flip-flop holds. A number stands for the line

@@ -7,8 +7,8 @@ use crate::bytecode::instruction::{
     BINARY_OPERATORS, FIRST_CONSTANT_OPERAND, Instruction, RANGE_EXCLUSIVE, RANGE_LITERAL_ENDS,
 };
 use crate::bytecode::unit::{
-    CallSite, ErrorSpot, HashEntry, HashShape, MultipleAssignment, Name, Piece, Receiver,
-    RegexLiteral, Target, Unit,
+    CallSite, CaseArm, ErrorSpot, HashEntry, HashShape, MultipleAssignment, Name, Piece, Receiver,
+    RegexLiteral, StartKind, Target, Unit,
 };
 use crate::lexer::Position;
 use crate::object::Object;
@@ -35,11 +35,20 @@ fn naming(node: &'static str) -> impl Fn(&'static str) -> &'static str {
 /// Compile `body`, or name the first node type it holds that the compiler
 /// does not handle.
 pub fn compile(body: &[Statement]) -> Result<Unit, &'static str> {
+    compile_as(body, false)
+}
+
+/// Compile `body`, which is a method's body when `of_a_method`: its last
+/// statement answers the method's value the way the tree walker answers it,
+/// an `if` or `unless` there running as an `if` written as an expression.
+pub fn compile_as(body: &[Statement], of_a_method: bool) -> Result<Unit, &'static str> {
     let mut compiler = Compiler {
         unit: Unit::new(),
         next_register: ANSWER + 1,
         spots: Vec::new(),
         assigned: crate::ast::collect_assigned_locals(body),
+        loops: Vec::new(),
+        pending: Pending::default(),
     };
     compiler.unit.use_registers(ANSWER + 1);
     for name in compiler.assigned.clone() {
@@ -49,15 +58,17 @@ pub fn compile(body: &[Statement]) -> Result<Unit, &'static str> {
         Some(last) => last.position(),
         None => Position::default(),
     };
-    if body.is_empty() {
-        compiler.emit(Instruction::LoadNil { to: ANSWER as u8 }, end);
-    }
-    for statement in body {
-        let start = compiler.unit.instructions.len();
-        compiler
-            .statement(statement)
-            .map_err(naming(statement.kind_name()))?;
-        compiler.unit.start_statement(start, statement.position());
+    match body.split_last() {
+        Some((last, before)) if of_a_method && answers_its_own_value(last) => {
+            compiler.statements(before, ANSWER, true)?;
+            let start = compiler.unit.instructions.len();
+            compiler
+                .terminal_statement(last)
+                .map_err(naming(last.kind_name()))?;
+            compiler.unit.start_statement(start, last.position());
+            compiler.unit.set_start_kind(start, StartKind::Terminal);
+        }
+        _ => compiler.statements(body, ANSWER, true)?,
     }
     compiler.emit(Instruction::Return { from: ANSWER as u8 }, end);
     Ok(compiler.unit)
@@ -71,12 +82,59 @@ struct Compiler {
     spots: Vec<Option<ErrorSpot>>,
     /// The locals the body assigns, which the scope reserves on entry.
     assigned: Vec<String>,
+    /// The loops being compiled, the innermost last.
+    loops: Vec<Loop>,
+    /// What the code compiled so far has opened and not yet closed.
+    pending: Pending,
+}
+
+/// What a run has open at a place in the code: argument lists, call routes,
+/// and scopes `case` arms opened. A jump out of the place drops them.
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+struct Pending {
+    lists: usize,
+    routes: usize,
+    scopes: usize,
+}
+
+/// A loop being compiled.
+struct Loop {
+    /// The register the loop answers in, which a `break` writes.
+    to: usize,
+    /// Where `redo` goes: the start of the body.
+    redo_target: usize,
+    /// The jumps `break` makes, to the end of the loop.
+    breaks: Vec<usize>,
+    /// The jumps `next` makes, to where the condition is read.
+    nexts: Vec<usize>,
+    /// What was open where the loop began.
+    pending: Pending,
 }
 
 impl Compiler {
     /// Add an instruction, with the spot of the innermost expression being
     /// compiled that has one.
     fn emit(&mut self, instruction: Instruction, position: Position) -> usize {
+        match instruction {
+            Instruction::StartArguments => self.pending.lists += 1,
+            Instruction::ArgumentsToArray { .. } => self.pending.lists -= 1,
+            Instruction::ResolveCall { .. } | Instruction::ResolveScopedCall { .. } => {
+                self.pending.routes += 1;
+            }
+            _ => {}
+        }
+        if let Instruction::Call { site, .. }
+        | Instruction::CallResolved { site, .. }
+        | Instruction::CallNativeName { site, .. }
+        | Instruction::CallBlock { site, .. } = instruction
+        {
+            if self.unit.call_sites[usize::from(site)].arguments_in_list {
+                self.pending.lists -= 1;
+            }
+            if matches!(instruction, Instruction::CallResolved { .. }) {
+                self.pending.routes -= 1;
+            }
+        }
         let at = self.unit.emit(instruction, position);
         self.unit.error_spots[at] = self.spots.iter().rev().flatten().next().cloned();
         at
@@ -93,9 +151,103 @@ impl Compiler {
         Ok(register)
     }
 
-    fn statement(&mut self, statement: &Statement) -> Result<(), &'static str> {
+    /// Compile the last statement of a method body, which answers the
+    /// method's value without passing through the statement runner: an
+    /// assignment there is evaluated as an expression would be, and an `if`
+    /// or `unless` runs as one written as an expression.
+    fn terminal_statement(&mut self, statement: &Statement) -> Result<(), &'static str> {
         match statement {
-            Statement::Expression { expression, .. } => self.expression(expression, ANSWER),
+            Statement::Assignment {
+                target,
+                value,
+                position,
+            } => self.assignment(target, value, ANSWER, *position),
+            Statement::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+                position,
+            } => self.branches(
+                condition,
+                false,
+                then_branch,
+                elsif_branches,
+                else_branch.as_deref(),
+                ANSWER,
+                *position,
+                true,
+            ),
+            Statement::Unless {
+                condition,
+                then_branch,
+                else_branch,
+                position,
+            } => self.branches(
+                condition,
+                true,
+                then_branch,
+                &[],
+                else_branch.as_deref(),
+                ANSWER,
+                *position,
+                true,
+            ),
+            other => self.statement(other, ANSWER),
+        }
+    }
+
+    /// Compile a list of statements, leaving the value of the last in
+    /// register `to`, or nil when there are none. `of_the_body` is set for
+    /// the body's own statements, which a continuation can restart at.
+    fn statements(
+        &mut self,
+        list: &[Statement],
+        to: usize,
+        of_the_body: bool,
+    ) -> Result<(), &'static str> {
+        self.statements_in(list, to, of_the_body, None)
+    }
+
+    /// Compile a list of statements as `statements` does. The statements of
+    /// a branch of an `if` written as an expression say `enclosing_line`,
+    /// the line the branch belongs to.
+    fn statements_in(
+        &mut self,
+        list: &[Statement],
+        to: usize,
+        of_the_body: bool,
+        enclosing_line: Option<usize>,
+    ) -> Result<(), &'static str> {
+        if list.is_empty() {
+            let at = list.first().map(Statement::position).unwrap_or_default();
+            self.emit(Instruction::LoadNil { to: to as u8 }, at);
+        }
+        for statement in list {
+            let start = self.unit.instructions.len();
+            self.statement(statement, to)
+                .map_err(naming(statement.kind_name()))?;
+            if of_the_body {
+                self.unit.start_statement(start, statement.position());
+            } else {
+                let live = self.next_register;
+                self.unit
+                    .start_inner_statement(start, statement.position(), live);
+            }
+            if let (Some(enclosing_line), Statement::Expression { .. }) =
+                (enclosing_line, statement)
+            {
+                self.unit
+                    .set_start_kind(start, StartKind::InBranch { enclosing_line });
+            }
+        }
+        Ok(())
+    }
+
+    fn statement(&mut self, statement: &Statement, to: usize) -> Result<(), &'static str> {
+        let to_register = to as u8;
+        match statement {
+            Statement::Expression { expression, .. } => self.expression(expression, to),
             Statement::Assignment {
                 target,
                 value,
@@ -122,7 +274,7 @@ impl Compiler {
                     let slot = wide(Some(self.unit.local(name)))?;
                     self.emit(Instruction::Unhoist { slot }, *position);
                 }
-                let compiled = self.assignment(target, value, ANSWER, *position);
+                let compiled = self.assignment(target, value, to, *position);
                 self.spots.pop();
                 compiled
             }
@@ -130,17 +282,558 @@ impl Compiler {
                 targets,
                 values,
                 position,
-            } => self.multiple_assignment(targets, values, *position),
+            } => self.multiple_assignment(targets, values, to, *position),
             Statement::DeclareLocals { names, position } => {
                 for name in names {
                     let slot = wide(Some(self.unit.local(name)))?;
                     self.emit(Instruction::DeclareLocal { slot }, *position);
                 }
-                self.emit(Instruction::LoadNil { to: ANSWER as u8 }, *position);
+                self.emit(Instruction::LoadNil { to: to_register }, *position);
+                Ok(())
+            }
+            Statement::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+                position,
+            } => {
+                self.branches(
+                    condition,
+                    false,
+                    then_branch,
+                    elsif_branches,
+                    else_branch.as_deref(),
+                    to,
+                    *position,
+                    false,
+                )?;
+                self.unhoist_assigned(statement)
+            }
+            Statement::Unless {
+                condition,
+                then_branch,
+                else_branch,
+                position,
+            } => {
+                self.branches(
+                    condition,
+                    true,
+                    then_branch,
+                    &[],
+                    else_branch.as_deref(),
+                    to,
+                    *position,
+                    false,
+                )?;
+                self.unhoist_assigned(statement)
+            }
+            Statement::While {
+                condition,
+                body,
+                position,
+            } => {
+                self.while_loop(condition, body, to, *position)?;
+                self.unhoist_assigned(statement)
+            }
+            Statement::DoWhile {
+                condition,
+                body,
+                position,
+            } => {
+                self.do_while_loop(condition, body, to, *position)?;
+                self.unhoist_assigned(statement)
+            }
+            Statement::For {
+                variable,
+                iterable,
+                body,
+                position,
+            } => {
+                // `for name in iterable` is a call of `each` with a block
+                // that assigns `name`, which the tree walker runs the same
+                // way.
+                let looped = crate::ast::for_loop::for_over_each(
+                    vec![Expression::Identifier {
+                        name: variable.clone(),
+                        position: *position,
+                    }],
+                    false,
+                    iterable.clone(),
+                    body.clone(),
+                    *position,
+                );
+                // The desugared loop is a `begin` with no clauses around the
+                // names the loop binds and the call of `each`, which runs its
+                // statements in the scope holding the loop.
+                let Statement::Expression {
+                    expression: Expression::BeginRescue { body: looped, .. },
+                    ..
+                } = &looped
+                else {
+                    unreachable!("for_over_each answers a begin around the loop");
+                };
+                self.emit(Instruction::EnterLoop, *position);
+                self.statements(looped, to, false)?;
+                self.emit(Instruction::LeaveLoop, *position);
+                self.unhoist_assigned(statement)
+            }
+            Statement::Break { value, position } => {
+                let into = self.loops.last().map_or(to, |inner| inner.to);
+                self.optional_value(value.as_deref(), into, *position)?;
+                match self.loops.len() {
+                    0 => {
+                        self.emit(Instruction::ExitBreak { from: into as u8 }, *position);
+                    }
+                    _ => {
+                        self.unwind_to_loop(*position);
+                        let jump = self.emit(Instruction::Jump { target: 0 }, *position);
+                        self.innermost_loop().breaks.push(jump);
+                    }
+                }
+                Ok(())
+            }
+            Statement::Continue { value, position } => {
+                self.optional_value(value.as_deref(), to, *position)?;
+                match self.loops.len() {
+                    0 => {
+                        self.emit(Instruction::ExitNext { from: to_register }, *position);
+                    }
+                    _ => {
+                        self.unwind_to_loop(*position);
+                        let jump = self.emit(Instruction::Jump { target: 0 }, *position);
+                        self.innermost_loop().nexts.push(jump);
+                    }
+                }
+                Ok(())
+            }
+            Statement::Return { value, position } => {
+                self.optional_value(value.as_ref(), to, *position)?;
+                self.emit(
+                    Instruction::ExitReturn {
+                        from: to_register,
+                        written: u8::from(value.is_some()),
+                    },
+                    *position,
+                );
+                Ok(())
+            }
+            // A block of statements runs in a scope of its own.
+            Statement::Block {
+                statements,
+                position,
+            } => {
+                self.emit(Instruction::PushScope, *position);
+                self.pending.scopes += 1;
+                self.statements(statements, to, false)?;
+                self.pending.scopes -= 1;
+                self.emit(Instruction::PopScope, *position);
+                Ok(())
+            }
+            Statement::Redo { position } => {
+                match self.loops.last().map(|inner| inner.redo_target) {
+                    None => {
+                        self.emit(Instruction::ExitRedo, *position);
+                    }
+                    Some(target) => {
+                        self.unwind_to_loop(*position);
+                        let target = wide(Some(target))?;
+                        self.emit(Instruction::Jump { target }, *position);
+                    }
+                }
                 Ok(())
             }
             other => Err(other.kind_name()),
         }
+    }
+
+    /// The loop being compiled innermost.
+    fn innermost_loop(&mut self) -> &mut Loop {
+        self.loops.last_mut().expect("a loop is being compiled")
+    }
+
+    /// Before a jump out of the middle of the innermost loop's body, drop
+    /// what was opened since the loop began.
+    fn unwind_to_loop(&mut self, position: Position) {
+        let at_loop = self.innermost_loop().pending;
+        let now = self.pending;
+        if now == at_loop {
+            return;
+        }
+        self.emit(
+            Instruction::Unwind {
+                lists: (now.lists - at_loop.lists) as u8,
+                routes: (now.routes - at_loop.routes) as u8,
+                scopes: (now.scopes - at_loop.scopes) as u8,
+            },
+            position,
+        );
+        // The code after the jump is reached with what was open before it.
+        self.pending = now;
+    }
+
+    /// Compile the value written after `break` or `next`, nil when none was.
+    fn optional_value(
+        &mut self,
+        value: Option<&Expression>,
+        to: usize,
+        position: Position,
+    ) -> Result<(), &'static str> {
+        match value {
+            Some(value) => self.expression(value, to),
+            None => {
+                self.emit(Instruction::LoadNil { to: to as u8 }, position);
+                Ok(())
+            }
+        }
+    }
+
+    /// A local assigned inside a branch or a loop is a local from there on
+    /// whether or not the assignment ran, so a block written later closes
+    /// over it.
+    fn unhoist_assigned(&mut self, statement: &Statement) -> Result<(), &'static str> {
+        for name in crate::ast::collect_assigned_locals(std::slice::from_ref(statement)) {
+            let slot = wide(Some(self.unit.local(&name)))?;
+            self.emit(Instruction::Unhoist { slot }, statement.position());
+        }
+        Ok(())
+    }
+
+    /// Compile `if`, with its `elsif`s and `else`, or `unless` when
+    /// `negated`, leaving the value of the branch taken in register `to`, or
+    /// nil when none was.
+    #[allow(clippy::too_many_arguments)]
+    fn branches(
+        &mut self,
+        condition: &Expression,
+        negated: bool,
+        then_branch: &[Statement],
+        elsif_branches: &[crate::ast::ElsifBranch],
+        else_branch: Option<&[Statement]>,
+        to: usize,
+        position: Position,
+        as_expression: bool,
+    ) -> Result<(), &'static str> {
+        let condition_line = as_expression.then_some(condition.position().line);
+        let test = to as u8;
+        let mut done = Vec::new();
+        self.condition(condition, to)?;
+        let skip = if negated {
+            Instruction::JumpIfTrue { test, target: 0 }
+        } else {
+            Instruction::JumpIfFalse { test, target: 0 }
+        };
+        let mut not_taken = self.emit(skip, position);
+        self.emit(Instruction::CoverBranch { arm: 0 }, position);
+        self.statements_in(then_branch, to, false, condition_line)?;
+        done.push(self.emit(Instruction::Jump { target: 0 }, position));
+        for (index, elsif) in elsif_branches.iter().enumerate() {
+            self.jump_here(not_taken)?;
+            // Ruby counts an `elsif` line each time its condition is tested.
+            self.emit(Instruction::CoverLine, elsif.position);
+            self.condition(&elsif.condition, to)?;
+            not_taken = self.emit(Instruction::JumpIfFalse { test, target: 0 }, position);
+            let arm = u16::try_from(index + 1).map_err(|_| OVER_LIMIT)?;
+            self.emit(Instruction::CoverBranch { arm }, position);
+            let elsif_line = as_expression.then_some(elsif.position.line);
+            self.statements_in(&elsif.body, to, false, elsif_line)?;
+            done.push(self.emit(Instruction::Jump { target: 0 }, position));
+        }
+        self.jump_here(not_taken)?;
+        let arm = u16::try_from(elsif_branches.len() + 1).map_err(|_| OVER_LIMIT)?;
+        if negated {
+            self.emit(Instruction::CoverBranch { arm: 1 }, position);
+        } else {
+            self.emit(Instruction::CoverBranch { arm }, position);
+        }
+        match else_branch {
+            Some(else_branch) => self.statements_in(else_branch, to, false, condition_line)?,
+            None => {
+                self.emit(Instruction::LoadNil { to: test }, position);
+            }
+        }
+        for jump in done {
+            self.jump_here(jump)?;
+        }
+        Ok(())
+    }
+
+    /// Compile `while condition; body; end`, answering nil in register `to`,
+    /// or the value a `break` carries.
+    fn while_loop(
+        &mut self,
+        condition: &Expression,
+        body: &[Statement],
+        to: usize,
+        position: Position,
+    ) -> Result<(), &'static str> {
+        let test = to as u8;
+        self.emit(Instruction::EnterLoop, position);
+        let condition_at = self.unit.instructions.len();
+        // Each pass is a place the turn can be handed over, so a loop with
+        // nothing in its body still lets the other threads run.
+        self.emit(Instruction::Checkpoint, condition.position());
+        self.condition(condition, to)?;
+        let finished = self.emit(Instruction::JumpIfFalse { test, target: 0 }, position);
+        self.emit(Instruction::CoverBranch { arm: 0 }, position);
+        let body_at = self.unit.instructions.len();
+        self.loops.push(Loop {
+            to,
+            redo_target: body_at,
+            breaks: Vec::new(),
+            nexts: Vec::new(),
+            pending: self.pending,
+        });
+        let compiled = self.statements(body, to, false);
+        let inner = self.loops.pop().expect("the loop pushed above");
+        compiled?;
+        let back = wide(Some(condition_at))?;
+        self.emit(Instruction::Jump { target: back }, position);
+        for jump in inner.nexts {
+            self.jump_to(jump, condition_at)?;
+        }
+        self.jump_here(finished)?;
+        self.emit(Instruction::LoadNil { to: test }, position);
+        for jump in inner.breaks {
+            self.jump_here(jump)?;
+        }
+        self.emit(Instruction::LeaveLoop, position);
+        Ok(())
+    }
+
+    /// Compile `begin; body; end while condition`, which runs its body
+    /// before it first reads the condition.
+    fn do_while_loop(
+        &mut self,
+        condition: &Expression,
+        body: &[Statement],
+        to: usize,
+        position: Position,
+    ) -> Result<(), &'static str> {
+        let test = to as u8;
+        self.emit(Instruction::EnterLoop, position);
+        let top = self.unit.instructions.len();
+        self.emit(Instruction::CoverBranch { arm: 0 }, position);
+        let body_at = self.unit.instructions.len();
+        self.loops.push(Loop {
+            to,
+            redo_target: body_at,
+            breaks: Vec::new(),
+            nexts: Vec::new(),
+            pending: self.pending,
+        });
+        let compiled = self.statements(body, to, false);
+        let inner = self.loops.pop().expect("the loop pushed above");
+        compiled?;
+        for jump in inner.nexts {
+            self.jump_here(jump)?;
+        }
+        self.emit(Instruction::Checkpoint, condition.position());
+        self.condition(condition, to)?;
+        let again = wide(Some(top))?;
+        self.emit(
+            Instruction::JumpIfTrue {
+                test,
+                target: again,
+            },
+            position,
+        );
+        self.emit(Instruction::LoadNil { to: test }, position);
+        for jump in inner.breaks {
+            self.jump_here(jump)?;
+        }
+        self.emit(Instruction::LeaveLoop, position);
+        Ok(())
+    }
+
+    /// Compile an `if` or loop condition into register `to`, which the jump
+    /// after it reads. `a and b` reads each side as a condition of its own,
+    /// a Regexp on its own matches the last line read, and a Range written
+    /// as a condition is a flip-flop.
+    fn condition(&mut self, condition: &Expression, to: usize) -> Result<(), &'static str> {
+        let test = to as u8;
+        match condition {
+            Expression::BinaryOp {
+                op: op @ (BinaryOp::And | BinaryOp::Or),
+                left,
+                right,
+                position,
+            } => {
+                self.condition(left, to)?;
+                let decided = match op {
+                    BinaryOp::Or => Instruction::JumpIfTrue { test, target: 0 },
+                    _ => Instruction::JumpIfFalse { test, target: 0 },
+                };
+                let decided = self.emit(decided, *position);
+                self.condition(right, to)?;
+                self.jump_here(decided)
+            }
+            Expression::RegexLiteral { position, .. } => {
+                let base = self.temporary()?;
+                self.expression(condition, base)?;
+                self.emit(Instruction::LastLine { to: base as u8 + 1 }, *position);
+                self.temporary()?;
+                let site = CallSite::new("=~", 1, Receiver::Sent);
+                let site = wide(Some(self.unit.call_site(site)))?;
+                self.emit(
+                    Instruction::Call {
+                        base: base as u8,
+                        site,
+                    },
+                    *position,
+                );
+                self.emit(
+                    Instruction::Move {
+                        to: test,
+                        from: base as u8,
+                    },
+                    *position,
+                );
+                self.next_register = base;
+                Ok(())
+            }
+            Expression::Range {
+                start,
+                end,
+                exclusive,
+                position,
+            } => self.flip_flop(start, end, *exclusive, to, *position),
+            other => self.expression(other, to),
+        }
+    }
+
+    /// Compile a flip-flop, `start..end` written as a condition: on from
+    /// when `start` holds until when `end` holds.
+    fn flip_flop(
+        &mut self,
+        start: &Expression,
+        end: &Expression,
+        exclusive: bool,
+        to: usize,
+        position: Position,
+    ) -> Result<(), &'static str> {
+        let test = to as u8;
+        let integer_sides = [start, end]
+            .into_iter()
+            .filter(|side| matches!(side, Expression::IntLiteral { .. }))
+            .count();
+        let flip = wide(Some(self.unit.flip_flop(position, integer_sides)))?;
+        self.emit(Instruction::FlipFlopState { to: test, flip }, position);
+        let running = self.emit(Instruction::JumpIfTrue { test, target: 0 }, position);
+        self.flip_flop_side(start, to, position)?;
+        let off = self.emit(Instruction::JumpIfFalse { test, target: 0 }, position);
+        self.emit(Instruction::FlipFlopSet { on: 1, flip }, position);
+        let mut on = Vec::new();
+        // `..` reads its second side the moment the first one holds, so a
+        // range whose sides hold together is on for that one turn alone.
+        // `...` waits for the next turn.
+        if !exclusive {
+            self.flip_flop_side(end, to, position)?;
+            on.push(self.emit(Instruction::JumpIfFalse { test, target: 0 }, position));
+            self.emit(Instruction::FlipFlopSet { on: 0, flip }, position);
+        }
+        on.push(self.emit(Instruction::Jump { target: 0 }, position));
+        self.jump_here(running)?;
+        self.flip_flop_side(end, to, position)?;
+        on.push(self.emit(Instruction::JumpIfFalse { test, target: 0 }, position));
+        self.emit(Instruction::FlipFlopSet { on: 0, flip }, position);
+        on.push(self.emit(Instruction::Jump { target: 0 }, position));
+        self.jump_here(off)?;
+        self.emit(Instruction::LoadFalse { to: test }, position);
+        let done = self.emit(Instruction::Jump { target: 0 }, position);
+        for jump in on {
+            self.jump_here(jump)?;
+        }
+        self.emit(Instruction::LoadTrue { to: test }, position);
+        self.jump_here(done)
+    }
+
+    /// One side of a flip-flop. A number stands for the line the last read
+    /// left off at, which is what `$.` reports.
+    fn flip_flop_side(
+        &mut self,
+        side: &Expression,
+        to: usize,
+        position: Position,
+    ) -> Result<(), &'static str> {
+        let Expression::IntLiteral { value, .. } = side else {
+            return self.expression(side, to);
+        };
+        let constant = self.constant(Object::Int(*value))?;
+        self.emit(
+            Instruction::LineIs {
+                to: to as u8,
+                constant,
+            },
+            position,
+        );
+        Ok(())
+    }
+
+    /// Compile `case subject; when ...; else ...; end` written as an
+    /// expression, leaving the value of the arm taken in register `to`.
+    fn case_expression(
+        &mut self,
+        subject: &Expression,
+        cases: &[crate::ast::node::ExprMatchCase],
+        else_case: Option<&Expression>,
+        to: usize,
+        position: Position,
+    ) -> Result<(), &'static str> {
+        let held = self.temporary()?;
+        let matched = self.temporary()?;
+        self.expression(subject, held)?;
+        let mut done = Vec::new();
+        for (index, case) in cases.iter().enumerate() {
+            let arm = wide(Some(
+                self.unit.case_arm(CaseArm {
+                    pattern: case.pattern.clone(),
+                    guard: case.guard.clone(),
+                    position: case.position,
+                    case_position: position,
+                    index,
+                    counted_line: (!matches!(case.body, Expression::BeginRescue { .. }))
+                        .then(|| case.body.position().line),
+                }),
+            ))?;
+            self.emit(
+                Instruction::CaseArm {
+                    subject: held as u8,
+                    arm,
+                },
+                case.position,
+            );
+            let next_arm = self.emit(
+                Instruction::JumpIfFalse {
+                    test: matched as u8,
+                    target: 0,
+                },
+                case.position,
+            );
+            self.pending.scopes += 1;
+            self.expression(&case.body, to)?;
+            self.pending.scopes -= 1;
+            self.emit(Instruction::PopScope, case.position);
+            done.push(self.emit(Instruction::Jump { target: 0 }, case.position));
+            self.jump_here(next_arm)?;
+        }
+        let arm = u16::try_from(cases.len()).map_err(|_| OVER_LIMIT)?;
+        self.emit(Instruction::CoverBranch { arm }, position);
+        match else_case {
+            Some(else_case) => {
+                if !matches!(else_case, Expression::BeginRescue { .. }) {
+                    self.emit(Instruction::CoverLine, else_case.position());
+                }
+                self.expression(else_case, to)?;
+            }
+            None => {
+                self.emit(Instruction::LoadNil { to: to as u8 }, position);
+            }
+        }
+        for jump in done {
+            self.jump_here(jump)?;
+        }
+        Ok(())
     }
 
     /// Compile `target = value`, leaving what the assignment answers in
@@ -590,6 +1283,7 @@ impl Compiler {
         &mut self,
         targets: &[Expression],
         values: &[Expression],
+        to: usize,
         position: Position,
     ) -> Result<(), &'static str> {
         let held = self.next_register;
@@ -599,7 +1293,7 @@ impl Compiler {
         }
         let lone_value = match values {
             [single] if !matches!(single, Expression::Splat { .. }) => {
-                self.expression(single, ANSWER)?;
+                self.expression(single, to)?;
                 true
             }
             _ => {
@@ -607,7 +1301,7 @@ impl Compiler {
                     elements: values.to_vec(),
                     position,
                 };
-                self.expression(&gathered, ANSWER)?;
+                self.expression(&gathered, to)?;
                 false
             }
         };
@@ -618,7 +1312,7 @@ impl Compiler {
         })))?;
         self.emit(
             Instruction::AssignMultiple {
-                from: ANSWER as u8,
+                from: to as u8,
                 shape,
             },
             position,
@@ -647,7 +1341,13 @@ impl Compiler {
 
     /// Point the jump at `at` to the next instruction.
     fn jump_here(&mut self, at: usize) -> Result<(), &'static str> {
-        let here = wide(Some(self.unit.instructions.len()))?;
+        let here = self.unit.instructions.len();
+        self.jump_to(at, here)
+    }
+
+    /// Point the jump at `at` to the instruction at `target`.
+    fn jump_to(&mut self, at: usize, target: usize) -> Result<(), &'static str> {
+        let here = wide(Some(target))?;
         self.unit.instructions[at] = match self.unit.instructions[at] {
             Instruction::Jump { .. } => Instruction::Jump { target: here },
             Instruction::JumpIfTrue { test, .. } => Instruction::JumpIfTrue { test, target: here },
@@ -749,6 +1449,49 @@ impl Compiler {
                     first: first as u8,
                     flags,
                 }
+            }
+            Expression::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+                position,
+            } => {
+                return self.branches(
+                    condition,
+                    false,
+                    then_branch,
+                    elsif_branches,
+                    else_branch.as_deref(),
+                    to,
+                    *position,
+                    true,
+                );
+            }
+            Expression::Unless {
+                condition,
+                then_branch,
+                else_branch,
+                position,
+            } => {
+                return self.branches(
+                    condition,
+                    true,
+                    then_branch,
+                    &[],
+                    else_branch.as_deref(),
+                    to,
+                    *position,
+                    true,
+                );
+            }
+            Expression::Case {
+                expression: subject,
+                cases,
+                else_case,
+                position,
+            } => {
+                return self.case_expression(subject, cases, else_case.as_deref(), to, *position);
             }
             Expression::Defined { expression, .. } => Instruction::IsDefined {
                 to: to_register,
@@ -978,6 +1721,25 @@ impl Compiler {
             | Expression::BlockArg {
                 expression: inner, ..
             } => return self.expression(inner, to),
+            Expression::Yield { arguments, .. } => {
+                // The block is looked for before the arguments are evaluated,
+                // so a method called without one raises before they are.
+                let base = self.temporary()?;
+                self.emit(Instruction::FindBlock { to: base as u8 }, position);
+                let site = self.call_arguments("yield", arguments, None)?;
+                let site = wide(Some(self.unit.call_site(site)))?;
+                self.emit(
+                    Instruction::CallBlock {
+                        base: base as u8,
+                        site,
+                    },
+                    position,
+                );
+                Instruction::Move {
+                    to: to_register,
+                    from: base as u8,
+                }
+            }
             Expression::Lambda { .. } => Instruction::MakeBlock {
                 to: to_register,
                 literal: wide(Some(self.unit.block(expression.clone())))?,
@@ -1439,6 +2201,18 @@ fn gathered_in_a_list(argument: &Expression) -> bool {
     matches!(
         argument,
         Expression::Splat { .. } | Expression::KeywordSplat { .. } | Expression::BlockArg { .. }
+    )
+}
+
+/// Whether a method body's last statement answers the method's value
+/// itself, as the tree walker's `terminal_statement_value` does.
+fn answers_its_own_value(statement: &Statement) -> bool {
+    matches!(
+        statement,
+        Statement::Expression { .. }
+            | Statement::Assignment { .. }
+            | Statement::If { .. }
+            | Statement::Unless { .. }
     )
 }
 

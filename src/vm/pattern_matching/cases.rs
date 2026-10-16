@@ -203,6 +203,31 @@ impl VirtualMachine {
         Ok(is_truthy(&held))
     }
 
+    /// Test one arm of a `case` expression against `subject`. When it
+    /// matches, count it for coverage and open a scope holding what its
+    /// pattern bound, in which its body runs.
+    pub(crate) fn enter_case_arm(
+        &mut self,
+        arm: &crate::bytecode::unit::CaseArm,
+        subject: &Object,
+    ) -> Result<bool, MetorexError> {
+        let mut bindings: HashMap<String, Object> = HashMap::new();
+        if !self.match_pattern(&arm.pattern, subject, &mut bindings, arm.position)?
+            || !self.evaluate_guard_with_bindings(arm.guard.as_ref(), &bindings)?
+        {
+            return Ok(false);
+        }
+        self.coverage_branch(arm.case_position, arm.index);
+        self.environment_mut().push_scope();
+        self.apply_pattern_bindings(&bindings);
+        if let Some(line) = arm.counted_line
+            && self.coverage.is_some()
+        {
+            self.coverage_count(line);
+        }
+        Ok(true)
+    }
+
     /// Evaluate a case expression (pattern matching in expression context).
     /// Returns the value of the first matching case's body expression.
     pub(crate) fn evaluate_case_expression(

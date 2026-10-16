@@ -15,7 +15,7 @@ use crate::object::{OptionView, View};
 // ============================================================================
 
 /// Produce a runtime error for unsupported control-flow usage (e.g., break outside loop).
-pub(super) fn loop_control_error(keyword: &str, position: Position) -> MetorexError {
+pub(crate) fn loop_control_error(keyword: &str, position: Position) -> MetorexError {
     MetorexError::runtime_error(
         format!("{keyword} cannot be used outside of a loop"),
         position_to_location(position),

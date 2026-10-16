@@ -69,13 +69,13 @@ fn a_capitalized_name_is_read_as_a_constant() {
 #[test]
 fn each_statement_starts_at_its_first_instruction() {
     let unit = unit_of("first = 1\nsecond = 2\n");
-    let starts: Vec<(usize, usize, usize)> = unit
+    let starts: Vec<(usize, Option<usize>, usize)> = unit
         .statement_starts
         .iter()
         .enumerate()
         .filter_map(|(at, start)| start.map(|start| (at, start.index, start.position.line)))
         .collect();
-    assert_eq!(starts, vec![(0, 0, 1), (3, 1, 2)]);
+    assert_eq!(starts, vec![(0, Some(0), 1), (3, Some(1), 2)]);
 }
 
 #[test]
@@ -116,8 +116,14 @@ fn a_call_is_pointed_at_by_its_receiver_and_method_name() {
 
 #[test]
 fn a_body_holding_a_node_the_compiler_does_not_handle_names_it() {
-    assert_eq!(compiled("while false\nend\n").err(), Some("While"));
-    assert_eq!(compiled("held = if true then 1 end\n").err(), Some("If"));
+    assert_eq!(
+        compiled("case 1\nwhen 1 then 2\nend\n").err(),
+        Some("Match")
+    );
+    assert_eq!(
+        compiled("begin\n  1\nend while false\n").err(),
+        Some("Begin")
+    );
 }
 
 #[test]
@@ -430,4 +436,55 @@ fn a_safe_call_skips_its_arguments_when_there_is_no_receiver() {
             .any(|instruction| matches!(instruction, SafeNavigation { .. }))
     );
     assert_eq!(VirtualMachine::new().run_unit(&unit).unwrap(), Object::Nil);
+}
+
+#[test]
+fn branches_and_loops_of_every_form_compile() {
+    for source in [
+        "if held then 1 elsif other then 2 else 3 end\n",
+        "unless held then 1 else 2 end\n",
+        "found = if held then 1 end\n",
+        "count = 0\nwhile count < 3\n  count += 1\n  next if count == 1\n  break if count > 2\n  redo if count == 0\nend\n",
+        "count = 0\ncount += 1 until count > 3\n",
+        "sum = 0\nfor number in [1, 2]\n  sum += number\nend\n",
+        "named = case held\nwhen Integer then 1\nelse 2\nend\n",
+        "[1].each { |number| next number }\n",
+        "[1].each { |number| break number }\n",
+    ] {
+        assert_eq!(compiled(source).err(), None, "{source}");
+    }
+}
+
+#[test]
+fn a_do_while_loop_runs_its_body_before_it_reads_its_condition() {
+    let parsed = Parser::new(Lexer::new("count = 0\ncount += 1\ncount < 0\ncount\n").tokenize())
+        .parse()
+        .unwrap();
+    let metorex::ast::Statement::Expression {
+        expression: condition,
+        ..
+    } = parsed[2].clone()
+    else {
+        panic!("not an expression: {:?}", parsed[2]);
+    };
+    let looped = metorex::ast::Statement::DoWhile {
+        condition,
+        body: vec![parsed[1].clone()],
+        position: metorex::lexer::Position::new(2, 1, 0),
+    };
+    let unit = compile(&[parsed[0].clone(), looped, parsed[3].clone()]).unwrap();
+    assert_eq!(
+        VirtualMachine::new().run_unit(&unit).unwrap(),
+        Object::Int(1)
+    );
+}
+
+#[test]
+fn a_while_loop_answers_what_break_carries() {
+    let unit =
+        unit_of("count = 0\nwhile true\n  count += 1\n  break count * 10 if count == 3\nend\n");
+    assert_eq!(
+        VirtualMachine::new().run_unit(&unit).unwrap(),
+        Object::Int(30)
+    );
 }

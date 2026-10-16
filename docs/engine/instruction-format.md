@@ -111,8 +111,10 @@ registers than on the stack, since its literals each take an instruction.
   and global variables, constants, `defined?`, every binary and unary
   operator, `&&` and `||`, subscripts, assignment to every kind of target,
   the operator assignments, multiple assignment, block and lambda
-  literals, pattern tests, and calls with or without a receiver, with any
-  arguments, a block, and `&.`. A body holding any other node is refused
+  literals, pattern tests, calls with or without a receiver, with any
+  arguments, a block, and `&.`, `if`, `unless`, `while`, `until`, `for`,
+  `case` written as an expression, flip-flops, `break`, `next`, `redo`,
+  `return`, and `yield`. A body holding any other node is refused
   with that node's type name and runs on the tree walker. Class and module
   bodies run on the tree walker under either engine for now, since their
   statements follow rules of their own.
@@ -127,6 +129,16 @@ registers than on the stack, since its literals each take an instruction.
 - `defined?` and pattern tests call the tree walker's `eval_defined` and
   `match_pattern`, which evaluate the expressions inside them, such as a
   pinned expression or a receiver `defined?` asks about.
+- Branches and loops are jumps inside the unit. A `break`, `next`, or
+  `redo` inside a loop of the unit jumps, after dropping any argument list,
+  call route, or `case` scope it leaves open. One outside every loop ends
+  the unit with that control flow, which the method, block, or top level
+  the unit is the body of takes as the tree walker takes the same
+  statement: a block's `next` answers its value, its `break` returns from
+  the call the block was attached to, its `redo` runs it again, and its
+  `return` returns from the method the block was written in, or from the
+  block when it is a lambda.
+- `for` compiles to the call of `each` the tree walker turns it into.
 - No temporary register lives from one statement to the next, so the runner
   clears them as each statement starts, and a value only a temporary held
   can be freed.

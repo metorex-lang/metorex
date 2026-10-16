@@ -383,6 +383,89 @@ pub enum Instruction {
         to: u8,
         expression: u16,
     },
+    /// End the unit with `break`, carrying what `from` holds, for a `break`
+    /// written outside any loop of the unit.
+    ExitBreak {
+        from: u8,
+    },
+    /// End the unit with `next`, carrying what `from` holds.
+    ExitNext {
+        from: u8,
+    },
+    /// End the unit with `redo`.
+    ExitRedo,
+    /// End the unit with `return`, carrying what `from` holds. `written`
+    /// is 1 when a value was written after `return`, which the top level
+    /// warns is ignored.
+    ExitReturn {
+        from: u8,
+        written: u8,
+    },
+    /// The block the running method was called with, which `yield` calls,
+    /// raising LocalJumpError when there is none.
+    FindBlock {
+        to: u8,
+    },
+    /// Call the block in `base` with the arguments the site lays out, as
+    /// `yield` does, and put the answer in `base`.
+    CallBlock {
+        base: u8,
+        site: u16,
+    },
+    /// Open a scope, as a `Block` statement runs in one.
+    PushScope,
+    /// Begin a loop, during which a `break` ends the loop rather than
+    /// returning from the call a surrounding block was attached to.
+    EnterLoop,
+    /// End the loop `EnterLoop` began.
+    LeaveLoop,
+    /// A place the thread's turn can be handed over, as each pass through a
+    /// loop is.
+    Checkpoint,
+    /// Count a run of arm `arm` of the branch written at the instruction's
+    /// position, for coverage.
+    CoverBranch {
+        arm: u16,
+    },
+    /// Count the instruction's line, for coverage.
+    CoverLine,
+    /// Test the unit's `case` arm the operand numbers against the value in
+    /// `subject`, putting whether it matched in the register after it. A
+    /// match opens a scope holding what the pattern bound.
+    CaseArm {
+        subject: u8,
+        arm: u16,
+    },
+    /// Close the scope a matching `CaseArm` opened.
+    PopScope,
+    /// Drop what a jump out of the middle of a call leaves behind: `lists`
+    /// argument lists, `routes` call routes, and `scopes` scopes.
+    Unwind {
+        lists: u8,
+        routes: u8,
+        scopes: u8,
+    },
+    /// Whether the unit's flip-flop the operand numbers is on.
+    FlipFlopState {
+        to: u8,
+        flip: u16,
+    },
+    /// Turn the unit's flip-flop the operand numbers on, or off when `on`
+    /// is 0.
+    FlipFlopSet {
+        on: u8,
+        flip: u16,
+    },
+    /// Whether the line the last read left off at, `$.`, is the Integer
+    /// constant the operand numbers.
+    LineIs {
+        to: u8,
+        constant: u16,
+    },
+    /// The line the last read answered, `$_`.
+    LastLine {
+        to: u8,
+    },
     /// Raise what `from` holds, as `raise` does with one argument.
     Raise {
         from: u8,
@@ -469,6 +552,25 @@ impl Instruction {
             Instruction::ToText { .. } => "ToText",
             Instruction::Interpolate { .. } => "Interpolate",
             Instruction::Raise { .. } => "Raise",
+            Instruction::ExitBreak { .. } => "ExitBreak",
+            Instruction::ExitNext { .. } => "ExitNext",
+            Instruction::ExitRedo => "ExitRedo",
+            Instruction::ExitReturn { .. } => "ExitReturn",
+            Instruction::FindBlock { .. } => "FindBlock",
+            Instruction::CallBlock { .. } => "CallBlock",
+            Instruction::PushScope => "PushScope",
+            Instruction::EnterLoop => "EnterLoop",
+            Instruction::LeaveLoop => "LeaveLoop",
+            Instruction::Checkpoint => "Checkpoint",
+            Instruction::CoverBranch { .. } => "CoverBranch",
+            Instruction::CoverLine => "CoverLine",
+            Instruction::CaseArm { .. } => "CaseArm",
+            Instruction::PopScope => "PopScope",
+            Instruction::Unwind { .. } => "Unwind",
+            Instruction::FlipFlopState { .. } => "FlipFlopState",
+            Instruction::FlipFlopSet { .. } => "FlipFlopSet",
+            Instruction::LineIs { .. } => "LineIs",
+            Instruction::LastLine { .. } => "LastLine",
             Instruction::Index { .. } => "Index",
             Instruction::StoreTarget { .. } => "StoreTarget",
             Instruction::ReadTarget { .. } => "ReadTarget",

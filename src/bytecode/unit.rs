@@ -33,6 +33,11 @@ pub struct Unit {
     pub defined: Vec<crate::ast::Expression>,
     /// The block and lambda literals `MakeBlock` makes Procs of.
     pub blocks: Vec<crate::ast::Expression>,
+    /// The `when` and `in` arms of `case` expressions, which `CaseArm` tests.
+    pub case_arms: Vec<CaseArm>,
+    /// The flip-flops written as conditions: where each was written and how
+    /// many of its sides are Integer literals.
+    pub flip_flops: Vec<(Position, usize)>,
     /// The patterns `MatchPattern` matches, each with whether a value it does
     /// not match is refused, as `=>` refuses one.
     pub patterns: Vec<(crate::ast::MatchPattern, bool)>,
@@ -44,10 +49,31 @@ pub struct Unit {
 /// The statement an instruction starts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StatementStart {
-    /// The statement's place in the body, counting from 0.
-    pub index: usize,
+    /// The statement's place in the body, counting from 0, for a statement
+    /// of the body itself rather than one inside a branch or a loop.
+    pub index: Option<usize>,
     /// The statement's own position, which its line event reports.
     pub position: Position,
+    /// The registers below this one hold values the statement is part of
+    /// computing, and the ones from here on hold nothing yet.
+    pub live: usize,
+    pub kind: StartKind,
+}
+
+/// What happens as a statement starts, which follows what the tree walker
+/// does for a statement in the same place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StartKind {
+    /// A line event, signals, a due collection, the thread's turn, and the
+    /// line's coverage.
+    Statement,
+    /// The last statement of a method body, which answers the method's
+    /// value: a line event and the line's coverage.
+    Terminal,
+    /// An expression statement in a branch of an `if` written as an
+    /// expression: the line's coverage when it is not the line the branch
+    /// belongs to.
+    InBranch { enclosing_line: usize },
 }
 
 /// The place in the source an error is pointed at, and the method or
@@ -233,6 +259,20 @@ pub struct MultipleAssignment {
     pub position: Position,
 }
 
+/// One arm of a `case` expression: its pattern and guard, where the arm
+/// and the `case` were written, and its number among the arms.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CaseArm {
+    pub pattern: crate::ast::MatchPattern,
+    pub guard: Option<crate::ast::Expression>,
+    pub position: Position,
+    pub case_position: Position,
+    pub index: usize,
+    /// The line coverage counts when the arm's body runs, when the body
+    /// does not count its own lines.
+    pub counted_line: Option<usize>,
+}
+
 /// Instructions from `start` up to `end` that raise an exception jump to
 /// `target`, with the exception in `register`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -266,18 +306,46 @@ impl Unit {
         at
     }
 
-    /// Mark the instruction at `at` as the start of the next statement,
-    /// written at `position`.
+    /// Mark the instruction at `at` as the start of the next statement of
+    /// the body, written at `position`.
     pub fn start_statement(&mut self, at: usize, position: Position) {
-        let index = self.statement_starts.iter().flatten().count();
-        self.statement_starts[at] = Some(StatementStart { index, position });
+        let index = self
+            .statement_starts
+            .iter()
+            .flatten()
+            .filter(|start| start.index.is_some())
+            .count();
+        self.statement_starts[at] = Some(StatementStart {
+            index: Some(index),
+            position,
+            live: 1,
+            kind: StartKind::Statement,
+        });
     }
 
-    /// Where the statement numbered `index` starts.
+    /// Mark what happens as the statement starting at `at` starts.
+    pub fn set_start_kind(&mut self, at: usize, kind: StartKind) {
+        if let Some(start) = self.statement_starts[at].as_mut() {
+            start.kind = kind;
+        }
+    }
+
+    /// Mark the instruction at `at` as the start of a statement inside a
+    /// branch or a loop, with registers from `live` on holding nothing yet.
+    pub fn start_inner_statement(&mut self, at: usize, position: Position, live: usize) {
+        self.statement_starts[at] = Some(StatementStart {
+            index: None,
+            position,
+            live,
+            kind: StartKind::Statement,
+        });
+    }
+
+    /// Where the statement of the body numbered `index` starts.
     pub fn statement_at(&self, index: usize) -> Option<usize> {
         self.statement_starts
             .iter()
-            .position(|start| start.is_some_and(|start| start.index == index))
+            .position(|start| start.is_some_and(|start| start.index == Some(index)))
     }
 
     /// Give a register count of at least `count`.
@@ -349,6 +417,16 @@ impl Unit {
     pub fn pattern(&mut self, pattern: crate::ast::MatchPattern, refuses: bool) -> usize {
         self.patterns.push((pattern, refuses));
         self.patterns.len() - 1
+    }
+
+    pub fn case_arm(&mut self, arm: CaseArm) -> usize {
+        self.case_arms.push(arm);
+        self.case_arms.len() - 1
+    }
+
+    pub fn flip_flop(&mut self, position: Position, integer_sides: usize) -> usize {
+        self.flip_flops.push((position, integer_sides));
+        self.flip_flops.len() - 1
     }
 
     pub fn handler(&mut self, handler: Handler) {

@@ -4,7 +4,7 @@ def nothing
 end
 
 def answer
-  while false
+  case 42
+  when Integer then 42
   end
-  42
 end

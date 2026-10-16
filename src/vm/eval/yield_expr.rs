@@ -16,6 +16,18 @@ impl VirtualMachine {
         arguments: &[Expression],
         position: Position,
     ) -> Result<Object, MetorexError> {
+        let block = self.block_to_yield(position)?;
+        // A yield takes its arguments the way a call does: splats spread,
+        // and `**hash` passes keywords, or nothing when the hash is empty.
+        let evaluated_args = self.evaluate_arguments(arguments)?;
+        let View::Block(block) = block.view() else {
+            unreachable!("block_to_yield answers a block");
+        };
+        std::rc::Rc::clone(block).call(self, evaluated_args, position)
+    }
+
+    /// The block the running method was called with, which `yield` calls.
+    pub(crate) fn block_to_yield(&mut self, position: Position) -> Result<Object, MetorexError> {
         let block = self.environment().get("__block__").or_else(|| {
             // Also check if there's a named block parameter
             self.environment().get("block_given?").and_then(|bg| {
@@ -28,24 +40,18 @@ impl VirtualMachine {
             })
         });
 
-        let block = match block.view() {
-            Some(View::Block(b)) => b,
+        match block.view() {
+            Some(View::Block(_)) => Ok(block.expect("a block was found")),
             _ => {
                 // Ruby names this a jump with nowhere to land rather than a
                 // plain runtime failure.
                 let message = "no block given (yield)".to_string();
-                return Err(MetorexError::UncaughtException {
+                Err(MetorexError::UncaughtException {
                     exception: crate::object::Object::exception("LocalJumpError", message.clone()),
                     location: position_to_location(position),
                     message,
-                });
+                })
             }
-        };
-
-        // A yield takes its arguments the way a call does: splats spread,
-        // and `**hash` passes keywords, or nothing when the hash is empty.
-        let evaluated_args = self.evaluate_arguments(arguments)?;
-
-        block.call(self, evaluated_args, position)
+        }
     }
 }
