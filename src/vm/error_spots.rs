@@ -37,6 +37,19 @@ impl VirtualMachine {
         self.record_spot_hint(exception, start, name);
     }
 
+    /// Record on an error a compiled instruction raised the spot the
+    /// compiler found for it, as `note_error_spot` does for an expression.
+    pub(crate) fn note_compiled_error_spot(
+        &mut self,
+        error: &MetorexError,
+        spot: &crate::bytecode::unit::ErrorSpot,
+    ) {
+        let MetorexError::UncaughtException { exception, .. } = error else {
+            return;
+        };
+        self.record_spot_hint(exception, spot.start, spot.name.clone());
+    }
+
     /// Record on the exception a `raise` statement raises the place of the
     /// `raise`, which Ruby's node for the call to `raise` or `fail` names.
     #[inline(never)]
@@ -94,7 +107,7 @@ impl VirtualMachine {
 /// Where an expression that can raise one of the spotted errors starts, the
 /// way Ruby's node for it starts, and the name of the method or constant it
 /// reaches.
-fn spot_of(expression: &Expression) -> Option<(Position, Option<String>)> {
+pub(crate) fn spot_of(expression: &Expression) -> Option<(Position, Option<String>)> {
     match expression {
         Expression::Identifier { name, position } => Some((*position, Some(name.clone()))),
         Expression::TopLevelConstant { name, position } => Some((*position, Some(name.clone()))),

@@ -1093,6 +1093,7 @@ const C_THREADS_OUTPUT: &str = concat!(
     "[true, true]\n",
     "[1, 2, nil]\n",
     "[Thread, 42]\n",
+    "42\n",
     "RuntimeError: failed in the thread\n",
     "true\n",
     "[true, :woken]\n",

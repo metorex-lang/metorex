@@ -757,6 +757,9 @@ METOREX_COUNTERS=1 target/release/metorex path/to/program.rb
 # Run on the bytecode engine, which runs each body it cannot compile yet on
 # the tree walker, and write which bodies ran where and why
 METOREX_ENGINE=bytecode METOREX_ENGINE_REPORT=report.txt target/release/metorex path/to/program.rb
+
+# Write each body's instructions to standard error as it is compiled
+METOREX_ENGINE=bytecode METOREX_DISASM=1 target/release/metorex path/to/program.rb
 ```
 
 ### Running everything

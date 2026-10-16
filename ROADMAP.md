@@ -43,16 +43,16 @@ These come first because every instruction, frame, and native method is written 
   - Acceptance: the bytecode step runs in CI and fails the build when a test fails
 - [x] Instruction set for `VirtualMachine`: 4-byte register instructions with constant operands, dispatched by `match` in one loop, as `docs/engine/instruction-format.md` describes, over the value representation the design decisions chose. Replace `BytecodeVm`'s opcodes with instructions that call into `VirtualMachine` for method lookup, invocation, constants, instance variables, and exceptions. Each instruction carries a source position in a side table for backtraces, `error_highlight`, and line events. `src/bytecode/vm` and the `BytecodeVm` struct are removed once nothing uses them, and the parts of `src/compiler` and `src/bytecode/disassembler.rs` that fit are kept
   - Acceptance: `tests/bytecode` covers each instruction through `VirtualMachine`, no file under `src/` names `BytecodeVm`, and `METOREX_COUNTERS=1` counts each instruction executed beside the node kinds the tree walker evaluates
-- [ ] Locals in slots: each unit numbers its locals and keeps their names, so `binding`, `local_variables`, `eval` with a binding, and `Binding#local_variable_get` and `set` read and write the same slots. A block reaches its outer locals through shared cells, as `captured_vars` does now
+- [x] Locals in slots: each unit numbers its locals and keeps their names, so `binding`, `local_variables`, `eval` with a binding, and `Binding#local_variable_get` and `set` read and write the same slots. A block reaches its outer locals through shared cells, as `captured_vars` does now
   - Acceptance: the binding, eval, and closure examples pass with their units compiled, shown by the engine report naming no fallback for them
-- [ ] Disassembly: `METOREX_DISASM=1` prints each unit's instructions with their source lines as it compiles them, to standard error
+- [x] Disassembly: `METOREX_DISASM=1` prints each unit's instructions with their source lines as it compiles them, to standard error
   - Acceptance: a test compiles a three-line method and checks the listing
 
 ## The language on bytecode
 
 Each item compiles a group of node types. Its acceptance is the same in every case: the node types it names no longer appear in the engine report's fallback list for a full `cargo test` and ruby/spec run under `METOREX_ENGINE=bytecode`, and both pass.
 
-- [ ] Literals and names: `IntLiteral`, `BigIntLiteral`, `FloatLiteral`, `StringLiteral`, `Symbol`, `BoolLiteral`, `NilLiteral`, `Array`, `Dictionary`, `Range`, `RegexLiteral`, `InterpolatedString`, `Text`, `SelfExpr`, `MagicFile`, `MagicLine`, `MagicDir`, `Identifier`, `InstanceVariable`, `ClassVariable`, `GlobalVariable`, `ScopeResolution`, `TopLevelConstant`, `Grouped`
+- [x] Literals and names: `IntLiteral`, `BigIntLiteral`, `FloatLiteral`, `StringLiteral`, `Symbol`, `BoolLiteral`, `NilLiteral`, `Array`, `Dictionary`, `Range`, `RegexLiteral`, `InterpolatedString`, `Text`, `SelfExpr`, `MagicFile`, `MagicLine`, `MagicDir`, `Identifier`, `InstanceVariable`, `ClassVariable`, `GlobalVariable`, `ScopeResolution`, `TopLevelConstant`, `Grouped`
 - [ ] Assignment: `Assignment` for each target kind, the operator assignments, `MultipleAssignment` with splats and nesting, `DeclareLocals`, and `Index` reads and writes
 - [ ] Operators and calls: `BinaryOp`, `UnaryOp`, `Call`, `MethodCall` with positional, splat, keyword, keyword splat, and block arguments (`Splat`, `KeywordSplat`, `BlockArg`), safe navigation, `PatternTest`, and `Defined`
 - [ ] Branches and loops: `If`, `Unless` as statements and expressions, `Case`, `While`, `DoWhile`, `For`, `Break`, `Continue`, `Redo`, and `&&`, `||`, and `!` short-circuiting

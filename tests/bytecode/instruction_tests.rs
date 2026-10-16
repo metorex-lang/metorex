@@ -626,3 +626,100 @@ fn an_instruction_starting_a_statement_fires_a_line_event() {
         Some(Object::array(vec![Object::Int(101), Object::Int(102)]))
     );
 }
+
+#[test]
+fn load_symbol_names_the_symbol() {
+    let mut unit = unit_of(
+        1,
+        vec![],
+        &[LoadSymbol { to: 0, name: 0 }, Return { from: 0 }],
+    );
+    unit.name(Name::new("held"));
+    assert_eq!(run(&unit), Object::symbol("held"));
+}
+
+#[test]
+fn new_string_makes_a_new_string_each_time() {
+    let mut unit = unit_of(
+        2,
+        vec![],
+        &[
+            NewString { to: 0, text: 0 },
+            NewString { to: 1, text: 0 },
+            Call { base: 0, site: 0 },
+            Return { from: 0 },
+        ],
+    );
+    unit.name(Name::new("text"));
+    unit.call_site(CallSite::new("equal?", 1, Receiver::Other));
+    assert_eq!(run(&unit), Object::Bool(false));
+}
+
+#[test]
+fn set_local_writes_the_local_the_scope_holds() {
+    let mut machine = machine_after("count = 1\n");
+    let mut unit = unit_of(
+        1,
+        vec![],
+        &[
+            LoadInteger { to: 0, value: 5 },
+            SetLocal { from: 0, slot: 0 },
+            Return { from: 0 },
+        ],
+    );
+    unit.local("count");
+    machine.run_unit(&unit).unwrap();
+    let statements = Parser::new(Lexer::new("count").tokenize()).parse().unwrap();
+    assert_eq!(
+        machine.execute_program(&statements).unwrap(),
+        Some(Object::Int(5))
+    );
+}
+
+#[test]
+fn get_local_reads_what_a_binding_wrote_to_the_local() {
+    let mut machine = machine_after("count = 1\n");
+    let mut unit = unit_of(
+        3,
+        vec![],
+        &[
+            LoadInteger { to: 0, value: 2 },
+            SetLocal { from: 0, slot: 0 },
+            GetIdentifier { to: 0, name: 0 },
+            LoadSymbol { to: 1, name: 1 },
+            LoadInteger { to: 2, value: 9 },
+            Call { base: 0, site: 0 },
+            GetLocal { to: 0, slot: 0 },
+            Return { from: 0 },
+        ],
+    );
+    unit.local("count");
+    unit.name(Name::new("binding"));
+    unit.name(Name::new("count"));
+    unit.call_site(CallSite::new("local_variable_set", 2, Receiver::Other));
+    assert_eq!(machine.run_unit(&unit).unwrap(), Object::Int(9));
+}
+
+#[test]
+fn get_local_reads_the_scope_before_the_unit_writes_the_local() {
+    let mut machine = machine_after("count = 4\n");
+    let mut unit = unit_of(
+        1,
+        vec![],
+        &[GetLocal { to: 0, slot: 0 }, Return { from: 0 }],
+    );
+    unit.local("count");
+    assert_eq!(machine.run_unit(&unit).unwrap(), Object::Int(4));
+}
+
+#[test]
+fn get_identifier_calls_a_method_of_that_name() {
+    let mut machine = machine_after("def answer\n  42\nend\n");
+    let mut unit = unit_of(
+        1,
+        vec![],
+        &[GetIdentifier { to: 0, name: 0 }, Return { from: 0 }],
+    );
+    unit.name(Name::new("answer"));
+    assert_eq!(machine.run_unit(&unit).unwrap(), Object::Int(42));
+}

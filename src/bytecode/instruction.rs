@@ -41,6 +41,30 @@ pub enum Instruction {
     LoadSelf {
         to: u8,
     },
+    /// The Symbol the name names, in the encoding of the source it was
+    /// written in.
+    LoadSymbol {
+        to: u8,
+        name: u16,
+    },
+    /// A new String of the literal text the name holds.
+    NewString {
+        to: u8,
+        text: u16,
+    },
+    /// The Regexp of the unit's pattern the operand numbers.
+    LoadRegex {
+        to: u8,
+        pattern: u16,
+    },
+    /// `__FILE__`.
+    LoadFile {
+        to: u8,
+    },
+    /// `__dir__`.
+    LoadDirectory {
+        to: u8,
+    },
     Add {
         to: u8,
         left: u8,
@@ -122,6 +146,22 @@ pub enum Instruction {
         base: u8,
         site: u16,
     },
+    /// Read the local the slot numbers.
+    GetLocal {
+        to: u8,
+        slot: u16,
+    },
+    /// Write the local the slot numbers.
+    SetLocal {
+        from: u8,
+        slot: u16,
+    },
+    /// Read a name the unit does not assign: a local of the scope around
+    /// it, or a method called on self with no arguments.
+    GetIdentifier {
+        to: u8,
+        name: u16,
+    },
     GetInstanceVariable {
         to: u8,
         name: u16,
@@ -132,6 +172,25 @@ pub enum Instruction {
     },
     GetConstant {
         to: u8,
+        name: u16,
+    },
+    /// `::Name`.
+    GetTopLevelConstant {
+        to: u8,
+        name: u16,
+    },
+    /// The constant the name names in the class or module the register
+    /// holds, put in the same register.
+    GetScopedConstant {
+        namespace: u8,
+        name: u16,
+    },
+    GetClassVariable {
+        to: u8,
+        name: u16,
+    },
+    SetClassVariable {
+        from: u8,
         name: u16,
     },
     SetConstant {
@@ -151,6 +210,42 @@ pub enum Instruction {
         to: u8,
         first: u8,
         count: u8,
+    },
+    /// Append the `count` registers from `first` to the Array in `array`.
+    AppendArray {
+        array: u8,
+        first: u8,
+        count: u8,
+    },
+    /// A Hash of the registers the unit's Hash shape the operand numbers
+    /// lays out.
+    NewHash {
+        to: u8,
+        shape: u16,
+    },
+    /// Add the entries of the shape the operand numbers to the Hash literal
+    /// being built in `hash`.
+    AddToHash {
+        hash: u8,
+        shape: u16,
+    },
+    /// A Range from the register `first` to the one after it. `flags` holds
+    /// `RANGE_EXCLUSIVE` and `RANGE_LITERAL_ENDS`.
+    NewRange {
+        to: u8,
+        first: u8,
+        flags: u8,
+    },
+    /// The text the value in `from` puts in an interpolation's hole.
+    ToText {
+        to: u8,
+        from: u8,
+    },
+    /// A String of the pieces the unit's interpolation the operand numbers
+    /// lays out.
+    Interpolate {
+        to: u8,
+        shape: u16,
     },
     /// Raise what `from` holds, as `raise` does with one argument.
     Raise {
@@ -174,6 +269,11 @@ impl Instruction {
             Instruction::LoadTrue { .. } => "LoadTrue",
             Instruction::LoadFalse { .. } => "LoadFalse",
             Instruction::LoadSelf { .. } => "LoadSelf",
+            Instruction::LoadSymbol { .. } => "LoadSymbol",
+            Instruction::NewString { .. } => "NewString",
+            Instruction::LoadRegex { .. } => "LoadRegex",
+            Instruction::LoadFile { .. } => "LoadFile",
+            Instruction::LoadDirectory { .. } => "LoadDirectory",
             Instruction::Add { .. } => "Add",
             Instruction::Subtract { .. } => "Subtract",
             Instruction::Multiply { .. } => "Multiply",
@@ -191,13 +291,26 @@ impl Instruction {
             Instruction::JumpIfTrue { .. } => "JumpIfTrue",
             Instruction::JumpIfFalse { .. } => "JumpIfFalse",
             Instruction::Call { .. } => "Call",
+            Instruction::GetLocal { .. } => "GetLocal",
+            Instruction::SetLocal { .. } => "SetLocal",
+            Instruction::GetIdentifier { .. } => "GetIdentifier",
             Instruction::GetInstanceVariable { .. } => "GetInstanceVariable",
             Instruction::SetInstanceVariable { .. } => "SetInstanceVariable",
             Instruction::GetConstant { .. } => "GetConstant",
+            Instruction::GetTopLevelConstant { .. } => "GetTopLevelConstant",
+            Instruction::GetScopedConstant { .. } => "GetScopedConstant",
+            Instruction::GetClassVariable { .. } => "GetClassVariable",
+            Instruction::SetClassVariable { .. } => "SetClassVariable",
             Instruction::SetConstant { .. } => "SetConstant",
             Instruction::GetGlobal { .. } => "GetGlobal",
             Instruction::SetGlobal { .. } => "SetGlobal",
             Instruction::NewArray { .. } => "NewArray",
+            Instruction::AppendArray { .. } => "AppendArray",
+            Instruction::AddToHash { .. } => "AddToHash",
+            Instruction::NewHash { .. } => "NewHash",
+            Instruction::NewRange { .. } => "NewRange",
+            Instruction::ToText { .. } => "ToText",
+            Instruction::Interpolate { .. } => "Interpolate",
             Instruction::Raise { .. } => "Raise",
             Instruction::Return { .. } => "Return",
         }
@@ -210,6 +323,12 @@ pub enum Operand {
     Register(usize),
     Constant(usize),
 }
+
+/// `NewRange` builds a Range that leaves out its end.
+pub const RANGE_EXCLUSIVE: u8 = 1;
+/// `NewRange` builds a Range written with literal ends, which is one object
+/// however many times it runs.
+pub const RANGE_LITERAL_ENDS: u8 = 2;
 
 /// The first operand that names a constant rather than a register.
 pub const FIRST_CONSTANT_OPERAND: u8 = 128;

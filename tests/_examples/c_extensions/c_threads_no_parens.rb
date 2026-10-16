@@ -15,6 +15,9 @@ p [Thread.current[:written_from_c], threads.local_get(Thread.current, :written_f
 
 made = threads.create(->(value) { value * 2 }, 21)
 p [made.class, made.value]
+collected = threads.create(->(value) { value + 1 }, 41)
+GC.start
+p collected.value
 failing = threads.create(->(_) { Thread.current.report_on_exception = false; raise "failed in the thread" }, nil)
 report { failing.join }
 

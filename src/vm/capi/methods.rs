@@ -91,6 +91,13 @@ impl CFunction {
                 // `rb_thread_create`.
                 let function: extern "C-unwind" fn(usize) -> Value =
                     unsafe { std::mem::transmute(address) };
+                struct Release(usize);
+                impl Drop for Release {
+                    fn drop(&mut self) {
+                        super::collection::release_thread_data(self.0);
+                    }
+                }
+                let _release = Release(self.data);
                 function(self.data)
             }
             ENUMERATOR_SIZE_ARITY => {

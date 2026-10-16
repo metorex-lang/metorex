@@ -102,21 +102,46 @@ registers than on the stack, since its literals each take an instruction.
 
 - `src/bytecode/instruction.rs` defines `Instruction`, the enum of the
   decision, 4 bytes each. `src/bytecode/unit.rs` defines `Unit`: the
-  instructions, a source position for each, whether each starts a
-  statement, and the side tables of constants, names, call sites, and
-  rescue handlers.
+  instructions, a source position for each, the statement each starts, the
+  spot `error_highlight` points at for an error each raises, and the side
+  tables of constants, names, locals, call sites, and rescue handlers.
+- `src/bytecode/compiler.rs` compiles a body to a unit: literals of every
+  kind, including Arrays, Hashes, Ranges, Regexps, and interpolated
+  Strings, `__FILE__`, `__LINE__`, and `__dir__`, locals, instance, class,
+  and global variables, constants, the operators that have an instruction,
+  and method calls with a receiver and plain arguments. A body holding any
+  other node is refused with that node's type name and runs on the tree
+  walker.
+- A Hash literal's keys and values are all evaluated before any key's
+  `hash` is called, as in CRuby, on both engines. Each hole of an
+  interpolated String is converted to text before the next is evaluated.
+- An Array or Hash literal longer than 64 elements or pairs is built 64 at
+  a time, `NewArray` or `NewHash` for the first and `AppendArray` or
+  `AddToHash` for each after, so its registers stay under 256.
 - `VirtualMachine::run_unit`, in `src/vm/bytecode_runner.rs`, dispatches
   each instruction by `match` in one loop over a register file the unit's
   size. Registers are a `Vec` per run for now, not the frame's part of a
   shared value stack.
 - An instruction that needs the interpreter calls the function the tree
   walker calls: `operate_on_values` for an operator, `call_evaluated_method`
-  for a call, `eval_identifier` for a constant, `eval_instance_var_read` for
-  an instance variable, `read_global_variable` for a global, and
-  `assign_value` for a write.
+  for a call, `read_identifier` for a constant or a name the unit does not
+  assign, `eval_instance_var_read` for an instance variable,
+  `read_global_variable` for a global, and `assign_value` for a write.
+- A unit numbers the locals its body assigns and keeps their names. Each
+  local is held in the cell the scope holds it in, the same cell a block
+  closing over it, `binding`, `local_variables`, `eval`, and
+  `Binding#local_variable_get` and `local_variable_set` read and write. The
+  first `SetLocal` of a run writes through the scope and keeps the cell in
+  the local's slot, and later reads and writes of the run go to the cell.
+  Until then `GetLocal` reads the scope by name. The locals are not
+  registers for now.
 - An instruction that starts a statement runs what the tree walker runs
   before each statement: the line event, signals, a due collection, the
   thread's turn, and coverage.
 - An error raised inside a handler's range that a `rescue` can catch puts
   the exception in the handler's register and jumps to its target.
 - `METOREX_COUNTERS=1` counts each instruction run, by name.
+- `METOREX_DISASM=1` writes each unit to standard error as it is compiled,
+  one instruction a line under the source line it came from, with what a
+  side table operand names. Units of the libraries Metorex carries are left
+  out.

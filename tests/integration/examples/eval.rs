@@ -144,3 +144,12 @@ fn test_eval_refused_programs_no_parens_execution() {
     let output = run_example("eval/refused_programs_no_parens.rb");
     assert_eq!(output, REFUSED_PROGRAMS);
 }
+
+#[test]
+fn test_eval_locals_through_bindings_execution() {
+    let output = run_example("eval/locals_through_bindings.rb");
+    assert_eq!(
+        output,
+        "2\n3\n[:first, :second]\n5\n[:early, :late]\nfalse\n6\n8\nfalse\n"
+    );
+}

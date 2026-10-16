@@ -62,6 +62,7 @@ pub extern "C-unwind" fn rb_thread_create(function: *const (), data: *mut c_void
         arity: THREAD_FUNCTION_ARITY,
         data: data as usize,
     });
+    super::collection::keep_thread_data(data as Value);
     let target = Object::Method(Rc::new(method));
     let block = crate::vm::program::block_for_method(target, called_from());
     interpreter().pending_block = Some(block);

@@ -4,6 +4,8 @@ def nothing
 end
 
 def answer
+  while false
+  end
   42
 end
 

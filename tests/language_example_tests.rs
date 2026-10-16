@@ -13,6 +13,7 @@ mod integration {
         mod array_methods;
         mod backtraces;
         mod basics;
+        mod bytecode;
         mod callables;
         mod control_flow;
         mod data_structures;

@@ -19,6 +19,10 @@ thread_local! {
     static REGISTERED_ADDRESSES: RefCell<Vec<usize>> = const { RefCell::new(Vec::new()) };
     /// The objects C asked to have kept alive for good.
     static PINNED: RefCell<Vec<Value>> = const { RefCell::new(Vec::new()) };
+    /// The data pointers of the threads `rb_thread_create` made that have
+    /// not finished, each one an object C handed over, which the thread's
+    /// function reads when it runs.
+    static THREAD_DATA: RefCell<Vec<Value>> = const { RefCell::new(Vec::new()) };
     /// What the mark functions running now have marked, while a collection
     /// is under way.
     static MARKED: RefCell<Option<Vec<Value>>> = const { RefCell::new(None) };
@@ -44,10 +48,32 @@ pub extern "C-unwind" fn rb_gc_register_mark_object(object: Value) {
     PINNED.with(|held| held.borrow_mut().push(object));
 }
 
+/// Keep the object `data` names alive until `release_thread_data`, when
+/// `data` is the VALUE of an object handed to C. A thread function's data
+/// pointer can be such a VALUE, which nothing else holds once the function
+/// that made the thread returns.
+pub(super) fn keep_thread_data(data: Value) {
+    if super::values::references_to(data) > 0 {
+        THREAD_DATA.with(|held| held.borrow_mut().push(data));
+    }
+}
+
+/// Stop keeping alive what `keep_thread_data` kept for `data`.
+pub(super) fn release_thread_data(data: Value) {
+    THREAD_DATA.with(|held| {
+        let mut held = held.borrow_mut();
+        if let Some(at) = held.iter().position(|kept| *kept == data) {
+            held.swap_remove(at);
+        }
+    });
+}
+
 /// The VALUEs C asked to have kept alive: the ones stored at the addresses
-/// it registered, and the objects it pinned.
+/// it registered, the objects it pinned, and the data of threads it made
+/// that have not finished.
 pub(super) fn roots() -> Vec<Value> {
     let mut found = PINNED.with(|held| held.borrow().clone());
+    THREAD_DATA.with(|held| found.extend(held.borrow().iter().copied()));
     REGISTERED_ADDRESSES.with(|held| {
         for address in held.borrow().iter() {
             // SAFETY: C registered the address of a VALUE that outlives the

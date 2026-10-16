@@ -27,192 +27,193 @@ impl VirtualMachine {
         &mut self,
         parts: &[InterpolationPart],
     ) -> Result<Object, MetorexError> {
-        let (text, carried, raw) = self.interpolate(parts)?;
-        let escaped_bytes_written = parts.iter().any(|part| {
-            matches!(part, InterpolationPart::Text(written)
-                if crate::file_loader::escaped_source_bytes(written).is_some())
-        });
-        let ascii_literal = parts.iter().all(|part| match part {
-            InterpolationPart::Text(written) => written.is_ascii(),
-            InterpolationPart::Expression(_) => true,
-        });
+        let mut interpolation = Interpolation::default();
+        for part in parts {
+            match part {
+                InterpolationPart::Text(text) => interpolation.push_text(text),
+                InterpolationPart::Expression(expr) => {
+                    let value = self.evaluate_expression(expr)?;
+                    let written = self.interpolated_text(&value, expr.position())?;
+                    interpolation.push_value(&value, &written, expr.position())?;
+                }
+            }
+        }
+        Ok(interpolation.finish(self))
+    }
+
+    /// The text a value puts in an interpolation's hole, which is what its
+    /// `to_s` answers. Interpolation uses #to_s semantics: a Symbol renders
+    /// as its bare name, not the `:name` inspect form.
+    pub(crate) fn interpolated_text(
+        &mut self,
+        value: &Object,
+        position: Position,
+    ) -> Result<String, MetorexError> {
+        // A refinement in force says how a value writes itself, whatever kind
+        // it is, so it is asked before the kind's own rendering is used.
+        let asked = self.any_refinement_active()
+            && crate::vm::method_lookup::refinement_target_name(value, self)
+                .and_then(|target| self.find_refined_method(&target, "to_s"))
+                .is_some();
+        if !asked {
+            match value.view() {
+                View::Symbol(name) => return Ok(name.as_str().to_string()),
+                // `nil.to_s` is the empty string, so `"#{nil}"` adds nothing
+                // rather than the `nil` inspect form.
+                View::Nil => return Ok(String::new()),
+                // An object of the program's own is asked for its own `to_s`,
+                // which is the text Ruby puts in the hole, and so is an
+                // exception, whose `to_s` is its message. A pattern writes
+                // itself as the group it stands for, which is what
+                // `Regexp#to_s` answers, and an Array or a Hash as its
+                // `inspect` form.
+                View::Instance(_)
+                | View::Exception(_)
+                | View::Regex(_, _)
+                | View::Array(_)
+                | View::Dict(_) => {}
+                _ => return Ok(value.to_string()),
+            }
+        }
+        let written = self.send_to_object(value.clone(), "to_s", Vec::new(), position)?;
+        Ok(match written.view() {
+            View::String(text) => text.as_str().to_string(),
+            other => other.to_string(),
+        })
+    }
+}
+
+/// An interpolated literal as its pieces are added: the text they spell, the
+/// encoding of the first piece that held anything outside ASCII and whether
+/// that piece stood for bytes rather than characters, and the bytes
+/// themselves where any piece stood for bytes.
+#[derive(Default)]
+pub(crate) struct Interpolation {
+    buffer: String,
+    raw: Vec<u8>,
+    any_bytes: bool,
+    carried: Option<(String, bool)>,
+    escaped_bytes_written: bool,
+    non_ascii_text_written: bool,
+}
+
+impl Interpolation {
+    /// Add a piece of the literal's own text.
+    pub(crate) fn push_text(&mut self, text: &str) {
+        self.non_ascii_text_written |= !text.is_ascii();
+        // Bytes the literal escaped stand for themselves.
+        if let Some(bytes) = crate::file_loader::escaped_source_bytes(text) {
+            self.escaped_bytes_written = true;
+            self.any_bytes = true;
+            self.buffer.extend(bytes.iter().map(|byte| *byte as char));
+            self.raw.extend(bytes);
+            return;
+        }
+        self.buffer.push_str(text);
+        self.raw.extend(text.as_bytes());
+    }
+
+    /// Add the value of a hole, `written` being the text
+    /// `interpolated_text` gave for it.
+    pub(crate) fn push_value(
+        &mut self,
+        value: &Object,
+        written: &str,
+        position: Position,
+    ) -> Result<(), MetorexError> {
+        let wrote = self.buffer.len();
+        self.buffer.push_str(written);
+        // A UTF-16 or UTF-32 piece spells even ASCII text in bytes of its own,
+        // so its encoding carries whatever it holds.
+        if let View::String(spelled) = value.view()
+            && (!spelled.as_str().is_ascii()
+                || crate::vm::native_methods::string_methods::wide_encoding(
+                    &spelled.encoding_name(),
+                )
+                .is_some())
+        {
+            // Two pieces that each hold something outside ASCII have to be
+            // written in the same encoding, since the whole can only be
+            // written in one of them.
+            if let Some((held, _)) = &self.carried
+                && *held != spelled.encoding_name()
+            {
+                let message = format!(
+                    "incompatible character encodings: {} and {}",
+                    held,
+                    spelled.encoding_name()
+                );
+                return Err(MetorexError::UncaughtException {
+                    exception: Object::exception("Encoding::CompatibilityError", message.clone()),
+                    location: position_to_location(position),
+                    message,
+                });
+            }
+            if self.carried.is_none() {
+                self.carried = Some((spelled.encoding_name(), spelled.holds_bytes()));
+            }
+        }
+        if let View::String(spelled) = value.view()
+            && spelled.holds_bytes()
+        {
+            self.any_bytes = true;
+            self.raw
+                .extend(crate::vm::native_methods::string_methods::binary_bytes(
+                    spelled,
+                ));
+            return Ok(());
+        }
+        self.raw.extend(&self.buffer.as_bytes()[wrote..]);
+        Ok(())
+    }
+
+    /// The String the pieces make.
+    pub(crate) fn finish(self, vm: &VirtualMachine) -> Object {
+        let Interpolation {
+            buffer: text,
+            raw,
+            any_bytes,
+            carried,
+            escaped_bytes_written,
+            non_ascii_text_written,
+        } = self;
         // A piece standing for the bytes it was read from makes the whole
         // string stand for bytes, and every other piece is written out in the
         // bytes its own encoding spells it with.
-        if let Some(raw) = raw {
+        if any_bytes {
             let spelled = crate::object::StringValue::binary(raw);
             match &carried {
                 Some((encoding, _)) => spelled.set_encoding(encoding.clone()),
                 // Bytes the literal itself escaped are written in the
                 // encoding its source is written in.
                 None if escaped_bytes_written => {
-                    spelled.set_encoding(self.source_literal_encoding().unwrap_or_else(|| {
+                    spelled.set_encoding(vm.source_literal_encoding().unwrap_or_else(|| {
                         crate::object::string_value::DEFAULT_ENCODING.to_string()
                     }))
                 }
                 None => {}
             }
-            return Ok(Object::String(std::rc::Rc::new(spelled)));
+            return Object::String(std::rc::Rc::new(spelled));
         }
-        let Some((encoding, holds_bytes)) = carried.filter(|_| ascii_literal) else {
+        let Some((encoding, holds_bytes)) = carried.filter(|_| !non_ascii_text_written) else {
             // Nothing outside ASCII went in, so the whole is written in the
             // encoding its source is written in, the way a plain literal is.
-            return Ok(
-                match self.source_literal_encoding().filter(|_| text.is_ascii()) {
-                    Some(named) => Object::String(std::rc::Rc::new(
-                        crate::object::StringValue::with_encoding(text, named),
-                    )),
-                    None => Object::string(text),
-                },
-            );
+            return match vm.source_literal_encoding().filter(|_| text.is_ascii()) {
+                Some(named) => Object::String(std::rc::Rc::new(
+                    crate::object::StringValue::with_encoding(text, named),
+                )),
+                None => Object::string(text),
+            };
         };
         let spelled = crate::object::StringValue::with_encoding(text, encoding);
         if holds_bytes {
             spelled.mark_bytes();
         }
-        Ok(Object::String(std::rc::Rc::new(spelled)))
+        Object::String(std::rc::Rc::new(spelled))
     }
 }
 
-/// What interpolation answers: the text the parts spell, the encoding the
-/// first piece outside ASCII carried and whether that piece stood for bytes,
-/// and the bytes themselves where any piece stood for bytes.
-type Interpolated = (String, Option<(String, bool)>, Option<Vec<u8>>);
-
 impl VirtualMachine {
-    /// The text the parts spell, along with the encoding of the first piece
-    /// that held anything outside ASCII, and whether that piece stood for
-    /// bytes rather than characters.
-    fn interpolate(&mut self, parts: &[InterpolationPart]) -> Result<Interpolated, MetorexError> {
-        let mut carried: Option<(String, bool)> = None;
-        let mut buffer = String::new();
-        let mut raw: Vec<u8> = Vec::new();
-        let mut any_bytes = false;
-
-        for part in parts {
-            let wrote = buffer.len();
-            match part {
-                // Bytes the literal escaped stand for themselves.
-                InterpolationPart::Text(text) => {
-                    if let Some(bytes) = crate::file_loader::escaped_source_bytes(text) {
-                        any_bytes = true;
-                        buffer.extend(bytes.iter().map(|byte| *byte as char));
-                        raw.extend(bytes);
-                        continue;
-                    }
-                    buffer.push_str(text)
-                }
-                InterpolationPart::Expression(expr) => {
-                    let value = self.evaluate_expression(expr)?;
-                    // Interpolation uses #to_s semantics: a Symbol renders
-                    // as its bare name, not the `:name` inspect form.
-                    // A refinement in force says how a value writes itself,
-                    // whatever kind it is, so it is asked before the kind's
-                    // own rendering is used.
-                    if self.any_refinement_active()
-                        && crate::vm::method_lookup::refinement_target_name(&value, self)
-                            .and_then(|target| self.find_refined_method(&target, "to_s"))
-                            .is_some()
-                    {
-                        let written = self.send_to_object(
-                            value.clone(),
-                            "to_s",
-                            Vec::new(),
-                            expr.position(),
-                        )?;
-                        match written.view() {
-                            View::String(text) => buffer.push_str(&text.as_str()),
-                            other => buffer.push_str(&other.to_string()),
-                        }
-                        continue;
-                    }
-                    match value.view() {
-                        View::Symbol(s) => buffer.push_str(&s.as_str()),
-                        // `nil.to_s` is the empty string, so `"#{nil}"` adds
-                        // nothing rather than the `nil` inspect form.
-                        View::Nil => {}
-                        // An object of the program's own is asked for its own
-                        // `to_s`, which is the text Ruby puts in the hole, and
-                        // so is an exception, whose `to_s` is its message.
-                        View::Instance(_) | View::Exception(_) => {
-                            let written = self.send_to_object(
-                                value.clone(),
-                                "to_s",
-                                Vec::new(),
-                                expr.position(),
-                            )?;
-                            match written.view() {
-                                View::String(text) => buffer.push_str(&text.as_str()),
-                                other => buffer.push_str(&other.to_string()),
-                            }
-                        }
-                        // A pattern writes itself as the group it stands
-                        // for, which is what `Regexp#to_s` answers, and an
-                        // Array or a Hash as its `inspect` form.
-                        View::Regex(_, _) | View::Array(_) | View::Dict(_) => {
-                            let written = self.send_to_object(
-                                value.clone(),
-                                "to_s",
-                                Vec::new(),
-                                expr.position(),
-                            )?;
-                            match written.view() {
-                                View::String(text) => buffer.push_str(&text.as_str()),
-                                other => buffer.push_str(&other.to_string()),
-                            }
-                        }
-                        _ => buffer.push_str(&value.to_string()),
-                    }
-                    // A UTF-16 or UTF-32 piece spells even ASCII text in bytes
-                    // of its own, so its encoding carries whatever it holds.
-                    if let View::String(spelled) = value.view()
-                        && (!spelled.as_str().is_ascii()
-                            || crate::vm::native_methods::string_methods::wide_encoding(
-                                &spelled.encoding_name(),
-                            )
-                            .is_some())
-                    {
-                        // Two pieces that each hold something outside ASCII
-                        // have to be written in the same encoding, since the
-                        // whole can only be written in one of them.
-                        if let Some((held, _)) = &carried
-                            && *held != spelled.encoding_name()
-                        {
-                            let message = format!(
-                                "incompatible character encodings: {} and {}",
-                                held,
-                                spelled.encoding_name()
-                            );
-                            return Err(MetorexError::UncaughtException {
-                                exception: Object::exception(
-                                    "Encoding::CompatibilityError",
-                                    message.clone(),
-                                ),
-                                location: position_to_location(expr.position()),
-                                message,
-                            });
-                        }
-                        if carried.is_none() {
-                            carried = Some((spelled.encoding_name(), spelled.holds_bytes()));
-                        }
-                    }
-                    if let View::String(spelled) = value.view()
-                        && spelled.holds_bytes()
-                    {
-                        any_bytes = true;
-                        raw.extend(crate::vm::native_methods::string_methods::binary_bytes(
-                            spelled,
-                        ));
-                        continue;
-                    }
-                }
-            }
-            raw.extend(&buffer.as_bytes()[wrote..]);
-        }
-
-        Ok((buffer, carried, if any_bytes { Some(raw) } else { None }))
-    }
-
     /// Evaluate array literal expressions.
     pub(crate) fn evaluate_array_literal(
         &mut self,
@@ -299,92 +300,34 @@ impl VirtualMachine {
         &mut self,
         entries: &[(Expression, Expression)],
     ) -> Result<Object, MetorexError> {
-        let mut map = IndexMap::with_capacity(entries.len());
-        let mut key_objs: IndexMap<String, Object> = IndexMap::new();
-        // A key that came in through `**held` was not written twice, so
-        // writing it again is not the duplicate Ruby reports.
-        let mut spread_names: std::collections::HashSet<String> = std::collections::HashSet::new();
-
-        for (key_expr, value_expr) in flattened_entries(entries) {
+        // Every key and value is evaluated before any key's `hash` is
+        // called, as in CRuby.
+        let entries = flattened_entries(entries);
+        let mut evaluated = Vec::with_capacity(entries.len());
+        for (key_expr, value_expr) in &entries {
             // `{**held}` copies every pair `held` carries into the hash.
-            if let Expression::KeywordSplat {
-                expression,
-                position,
-            } = key_expr
-            {
-                let spread = self.evaluate_expression(expression)?;
-                let Some(pairs) = self.hash_for_splat(spread, *position)? else {
-                    continue;
-                };
-                let pairs = pairs.borrow();
-                if let Some(View::Dict(objects)) = pairs
-                    .get(crate::vm::native_methods::hash_methods::KEY_OBJECTS_KEY)
-                    .view()
-                {
-                    for (slot, held) in objects.borrow().iter() {
-                        key_objs.insert(slot.clone(), held.clone());
-                    }
-                }
-                for (name, held) in pairs.iter() {
-                    if crate::vm::native_methods::hash_methods::is_internal_key(name) {
-                        continue;
-                    }
-                    map.insert(name.clone(), held.clone());
-                    spread_names.insert(name.clone());
-                }
+            if let Expression::KeywordSplat { expression, .. } = key_expr {
+                evaluated.push((self.evaluate_expression(expression)?, Object::Nil));
                 continue;
             }
             let key_value = self.evaluate_expression(key_expr)?;
-            // A String key is copied and frozen, so changing the String it
-            // was written with afterwards leaves the key alone.
-            // The interpreter's own bookkeeping keys are left as they are, and
-            // so is a key spelled `:name`, which is how the parser writes the
-            // Symbol keys of the keywords a call passes.
-            let program_string_key = matches!(key_value.view(), View::String(text)
-                if !crate::vm::native_methods::hash_methods::is_internal_key(&text.as_str())
-                    && !text.as_str().starts_with(':'));
-            let key_value = match key_value.view() {
-                View::String(text) if program_string_key && !text.is_frozen() => {
-                    let copy = crate::object::StringValue::clone(text);
-                    copy.freeze();
-                    Object::String(Rc::new(copy))
-                }
-                _ => key_value,
+            evaluated.push((key_value, self.evaluate_expression(value_expr)?));
+        }
+        let mut literal = HashLiteral::default();
+        for ((key_expr, value_expr), (key_value, value)) in entries.iter().zip(evaluated) {
+            if let Expression::KeywordSplat { position, .. } = key_expr {
+                literal.spread(self, key_value, *position)?;
+                continue;
+            }
+            let key = literal.key(self, key_value, key_expr.position())?;
+            let written = WrittenPair {
+                key_position: key_expr.position(),
+                value_line: value_expr.position().line,
+                literal_key: is_literal_key(key_expr),
             };
-            let key_position = key_expr.position();
-            let mut probe = map.clone();
-            for (slot, held) in &key_objs {
-                probe.entry(slot.clone()).or_insert_with(|| held.clone());
-            }
-            probe.insert(
-                "__MX_KEY_OBJECTS__".to_string(),
-                Object::Dict(Rc::new(RefCell::new(key_objs.clone()))),
-            );
-            let key_string = self.dict_slot_in(&probe, &key_value, false, key_position)?;
-            if !crate::vm::utils::is_primitive_key(&key_value) || program_string_key {
-                key_objs
-                    .entry(key_string.clone())
-                    .or_insert_with(|| key_value.clone());
-            }
-
-            let value = self.evaluate_expression(value_expr)?;
-            if map.contains_key(&key_string)
-                && !spread_names.contains(&key_string)
-                && is_literal_key(key_expr)
-            {
-                self.warn_duplicated_key(&key_value, key_expr, value_expr)?;
-            }
-            map.insert(key_string, value);
+            literal.store(self, key, value, &written)?;
         }
-
-        if !key_objs.is_empty() {
-            map.insert(
-                "__MX_KEY_OBJECTS__".to_string(),
-                Object::Dict(Rc::new(RefCell::new(key_objs))),
-            );
-        }
-
-        Ok(Object::Dict(Rc::new(RefCell::new(map))))
+        Ok(literal.finish())
     }
 
     /// The Hash a `**value` spreads: the value itself, what its `to_hash`
@@ -439,10 +382,9 @@ impl VirtualMachine {
     fn warn_duplicated_key(
         &mut self,
         key: &Object,
-        key_expr: &Expression,
-        value_expr: &Expression,
+        written: &WrittenPair,
     ) -> Result<(), MetorexError> {
-        let position = key_expr.position();
+        let position = written.key_position;
         let file = self
             .current_source_file
             .clone()
@@ -461,10 +403,7 @@ impl VirtualMachine {
         let rendered = crate::vm::native_methods::array_methods::inspect_element(key);
         let message = format!(
             "{}:{}: warning: key {} is duplicated and overwritten on line {}\n",
-            file,
-            position.line,
-            rendered,
-            value_expr.position().line
+            file, position.line, rendered, written.value_line
         );
         self.warn_through_warning_module(message, position)
     }
@@ -1082,7 +1021,9 @@ type SharedPairs = Rc<RefCell<IndexMap<String, Object>>>;
 
 /// The pairs of a Hash literal with each `**{...}` literal written inside it
 /// spread in place, since its keys count as written in the outer literal.
-fn flattened_entries(entries: &[(Expression, Expression)]) -> Vec<(&Expression, &Expression)> {
+pub(crate) fn flattened_entries(
+    entries: &[(Expression, Expression)],
+) -> Vec<(&Expression, &Expression)> {
     let mut flat = Vec::with_capacity(entries.len());
     for (key, value) in entries {
         if let Expression::KeywordSplat { expression, .. } = key
@@ -1096,7 +1037,150 @@ fn flattened_entries(entries: &[(Expression, Expression)]) -> Vec<(&Expression, 
     flat
 }
 
-fn is_literal_key(key: &Expression) -> bool {
+/// Where a pair of a Hash literal was written, which the warning for a key
+/// written twice names.
+pub(crate) struct WrittenPair {
+    pub(crate) key_position: Position,
+    pub(crate) value_line: usize,
+    /// Whether the key was written as a literal, the only keys the warning
+    /// is given for.
+    pub(crate) literal_key: bool,
+}
+
+/// A Hash literal as its pairs are added.
+#[derive(Default)]
+pub(crate) struct HashLiteral {
+    map: IndexMap<String, Object>,
+    key_objs: IndexMap<String, Object>,
+    // A key that came in through `**held` was not written twice, so writing
+    // it again is not the duplicate Ruby reports.
+    spread_names: std::collections::HashSet<String>,
+}
+
+/// A key of a Hash literal, ready for its value.
+pub(crate) struct HashKey {
+    value: Object,
+    slot: String,
+}
+
+impl HashLiteral {
+    /// Copy every pair `spread` carries into the hash, as `**spread` does.
+    pub(crate) fn spread(
+        &mut self,
+        vm: &mut VirtualMachine,
+        spread: Object,
+        position: Position,
+    ) -> Result<(), MetorexError> {
+        let Some(pairs) = vm.hash_for_splat(spread, position)? else {
+            return Ok(());
+        };
+        let pairs = pairs.borrow();
+        if let Some(View::Dict(objects)) = pairs
+            .get(crate::vm::native_methods::hash_methods::KEY_OBJECTS_KEY)
+            .view()
+        {
+            for (slot, held) in objects.borrow().iter() {
+                self.key_objs.insert(slot.clone(), held.clone());
+            }
+        }
+        for (name, held) in pairs.iter() {
+            if crate::vm::native_methods::hash_methods::is_internal_key(name) {
+                continue;
+            }
+            self.map.insert(name.clone(), held.clone());
+            self.spread_names.insert(name.clone());
+        }
+        Ok(())
+    }
+
+    /// Read a key, before its value is stored.
+    pub(crate) fn key(
+        &mut self,
+        vm: &mut VirtualMachine,
+        key_value: Object,
+        key_position: Position,
+    ) -> Result<HashKey, MetorexError> {
+        // A String key is copied and frozen, so changing the String it was
+        // written with afterwards leaves the key alone. The interpreter's own
+        // bookkeeping keys are left as they are, and so is a key spelled
+        // `:name`, which is how the parser writes the Symbol keys of the
+        // keywords a call passes.
+        let program_string_key = matches!(key_value.view(), View::String(text)
+            if !crate::vm::native_methods::hash_methods::is_internal_key(&text.as_str())
+                && !text.as_str().starts_with(':'));
+        let key_value = match key_value.view() {
+            View::String(text) if program_string_key && !text.is_frozen() => {
+                let copy = crate::object::StringValue::clone(text);
+                copy.freeze();
+                Object::String(Rc::new(copy))
+            }
+            _ => key_value,
+        };
+        let mut probe = self.map.clone();
+        for (slot, held) in &self.key_objs {
+            probe.entry(slot.clone()).or_insert_with(|| held.clone());
+        }
+        probe.insert(
+            "__MX_KEY_OBJECTS__".to_string(),
+            Object::Dict(Rc::new(RefCell::new(self.key_objs.clone()))),
+        );
+        let slot = vm.dict_slot_in(&probe, &key_value, false, key_position)?;
+        if !crate::vm::utils::is_primitive_key(&key_value) || program_string_key {
+            self.key_objs
+                .entry(slot.clone())
+                .or_insert_with(|| key_value.clone());
+        }
+        Ok(HashKey {
+            value: key_value,
+            slot,
+        })
+    }
+
+    /// Store the value of a key `key` read.
+    pub(crate) fn store(
+        &mut self,
+        vm: &mut VirtualMachine,
+        key: HashKey,
+        value: Object,
+        written: &WrittenPair,
+    ) -> Result<(), MetorexError> {
+        if self.map.contains_key(&key.slot)
+            && !self.spread_names.contains(&key.slot)
+            && written.literal_key
+        {
+            vm.warn_duplicated_key(&key.value, written)?;
+        }
+        self.map.insert(key.slot, value);
+        Ok(())
+    }
+
+    /// Go on building the Hash a chunk of a long literal made.
+    pub(crate) fn resume(made: &Object) -> HashLiteral {
+        let mut literal = HashLiteral::default();
+        if let View::Dict(pairs) = made.view() {
+            literal.map = pairs.borrow().clone();
+            if let Some(View::Dict(objects)) = literal.map.shift_remove("__MX_KEY_OBJECTS__").view()
+            {
+                literal.key_objs = objects.borrow().clone();
+            }
+        }
+        literal
+    }
+
+    /// The Hash the pairs make.
+    pub(crate) fn finish(self) -> Object {
+        let mut map = self.map;
+        if !self.key_objs.is_empty() {
+            map.insert(
+                "__MX_KEY_OBJECTS__".to_string(),
+                Object::Dict(Rc::new(RefCell::new(self.key_objs))),
+            );
+        }
+        Object::Dict(Rc::new(RefCell::new(map)))
+    }
+}
+
+pub(crate) fn is_literal_key(key: &Expression) -> bool {
     matches!(
         key,
         Expression::Symbol { .. }

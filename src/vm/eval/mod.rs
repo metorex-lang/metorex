@@ -9,13 +9,15 @@
 //   - super_expr: Super dispatch
 //   - defined:    `defined?` introspection
 //   - yield_expr: yield to block
+//   - literals:   String and Symbol literals, and reading an identifier
 //   - vars:       SelfExpr / InstanceVariable / ClassVariable / GlobalVariable
 
 mod calls;
 mod defined;
 mod dispatch;
-pub(crate) use dispatch::binary_op_method_name;
+pub(crate) use dispatch::{binary_op_method_name, literal_range_end};
 mod identifier;
+mod literals;
 mod singleton_class_expr;
 mod super_expr;
 mod vars;

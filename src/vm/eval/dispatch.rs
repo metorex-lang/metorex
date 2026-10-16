@@ -118,116 +118,14 @@ impl VirtualMachine {
             Expression::IntLiteral { value, .. } => Ok(Object::Int(*value)),
             Expression::FloatLiteral { value, .. } => Ok(Object::Float(*value)),
             Expression::StringLiteral { value, position } => {
-                // A literal is written in the encoding its source is written
-                // in, which a magic comment at the top of the file names.
-                // A literal written in bytes carries its own encoding, so one
-                // reaching here with anything outside ASCII was spelled with a
-                // `\u` escape and stands for those codepoints.
-                let made = match self.source_literal_encoding() {
-                    Some(named) if value.is_ascii() => {
-                        crate::object::StringValue::with_encoding(value.clone(), named)
-                    }
-                    // A file written in an encoding of its own spells a
-                    // character with bytes of that encoding, so the literal
-                    // carries those bytes rather than the UTF-8 the source was
-                    // read into.
-                    Some(named)
-                        if let Some(bytes) =
-                            crate::vm::native_methods::string_methods::spelled_bytes(
-                                value, &named,
-                            )
-                            .or_else(|| crate::file_loader::escaped_source_bytes(value)) =>
-                    {
-                        let held = crate::object::StringValue::with_encoding(
-                            crate::vm::native_methods::string_methods::bytes_as_text(&bytes),
-                            named,
-                        );
-                        held.mark_bytes();
-                        held
-                    }
-                    _ => crate::object::StringValue::new(value.clone()),
-                };
-                // Ruby 3.4 hands a literal back with notice that a later
-                // release will freeze it, so the first change made to it says
-                // so. A source that asked for frozen literals produces a
-                // frozen one instead and never reaches here.
-                // A run told to report where a literal was written names the
-                // place instead of pointing at the flag that would name it.
-                match self.literal_birthplace(*position) {
-                    Some(written_at) => {
-                        made.set_created_at(written_at);
-                        made.chill(
-                            "warning: literal string will be frozen in the future".to_string(),
-                        );
-                    }
-                    None => made.chill(
-                        "warning: literal string will be frozen in the future (run with \
---debug-frozen-string-literal for more information)"
-                            .to_string(),
-                    ),
-                }
-                let made = Object::String(std::rc::Rc::new(made));
-                self.record_allocation(&made, *position);
-                Ok(made)
+                Ok(self.evaluate_string_literal(value, *position))
             }
-            Expression::Symbol { value, .. } => {
-                // A symbol is named in the encoding the source naming it is
-                // written in, which is what `Symbol#encoding` reports for one
-                // whose name is not all ASCII.
-                let named = self
-                    .current_source_encoding
-                    .clone()
-                    .map(|held| {
-                        crate::vm::native_methods::string_methods::canonical_encoding_name(&held)
-                    })
-                    .unwrap_or_else(|| crate::object::string_value::DEFAULT_ENCODING.to_string());
-                // A source written in bytes names its symbols in bytes, so
-                // each character of the name stands for one of them.
-                // A source written in an encoding of its own names its
-                // symbols in the bytes that encoding spells them with.
-                let plain = named == crate::object::string_value::DEFAULT_ENCODING;
-                if plain || value.is_ascii() {
-                    let made = crate::object::StringValue::with_encoding(value.clone(), named);
-                    return Ok(Object::Symbol(std::rc::Rc::new(made)));
-                }
-                // A source read as bytes names its symbols in the bytes the
-                // file itself holds, which is the text as it was written.
-                let spelled = if matches!(named.as_str(), "ASCII-8BIT" | "BINARY") {
-                    Some(value.as_bytes().to_vec())
-                } else {
-                    crate::vm::native_methods::string_methods::spelled_bytes(value, &named)
-                };
-                let Some(bytes) = spelled else {
-                    let made = crate::object::StringValue::with_encoding(value.clone(), named);
-                    return Ok(Object::Symbol(std::rc::Rc::new(made)));
-                };
-                let made = crate::object::StringValue::with_encoding(
-                    crate::vm::native_methods::string_methods::bytes_as_text(&bytes),
-                    named,
-                );
-                made.mark_bytes();
-                Ok(Object::Symbol(std::rc::Rc::new(made)))
-            }
+            Expression::Symbol { value, .. } => Ok(self.evaluate_symbol_literal(value)),
             Expression::RegexLiteral {
                 pattern,
                 flags,
                 position,
-            } => {
-                // A repetition written on a repetition reads as one, which
-                // Ruby says so about where the pattern is read.
-                if pattern.contains("}+")
-                    && let Ok(read) =
-                        crate::vm::native_methods::regexp_methods::read_pattern(pattern, flags)
-                {
-                    for warning in &read.warnings {
-                        self.emit_warning_to_stderr(&format!("warning: {warning}"), *position);
-                    }
-                }
-                Ok(Object::Regex(
-                    Rc::new(pattern.clone()),
-                    Rc::new(flags.clone()),
-                ))
-            }
+            } => Ok(self.evaluate_regex_literal(pattern, flags, *position)),
             Expression::BoolLiteral { value, .. } => Ok(Object::Bool(*value)),
             Expression::NilLiteral { .. } => Ok(Object::Nil),
             Expression::InterpolatedString { parts, .. } => {
@@ -235,21 +133,7 @@ impl VirtualMachine {
             }
 
             // ── Variables / identifiers ─────────────────────────────────────
-            Expression::Identifier { name, position } => {
-                let value = self.eval_identifier(name, *position)?;
-                if name.starts_with(|first: char| first.is_ascii_uppercase())
-                    && self.in_a_non_main_ractor()
-                {
-                    let (owner, found_where_written) = self.constant_owner_name(name);
-                    self.refuse_unshareable_constant(
-                        &format!("{owner}::{name}"),
-                        found_where_written,
-                        &value,
-                        *position,
-                    )?;
-                }
-                Ok(value)
-            }
+            Expression::Identifier { name, position } => self.read_identifier(name, *position),
             Expression::SelfExpr { position } => self.eval_self(*position),
             Expression::InstanceVariable { name, position } => {
                 self.eval_instance_var_read(name, *position)
@@ -260,20 +144,7 @@ impl VirtualMachine {
             Expression::GlobalVariable { name, position } => {
                 self.read_global_variable(name, *position)
             }
-            Expression::MagicFile { .. } => {
-                // The file the code was written in, which is not the file
-                // being run when a required file's method or block is what is
-                // executing.
-                let path = self
-                    .current_source_file
-                    .clone()
-                    .or_else(|| {
-                        self.reported_current_file()
-                            .map(|path| path.display().to_string())
-                    })
-                    .unwrap_or_else(|| "(eval)".to_string());
-                Ok(Object::string(path))
-            }
+            Expression::MagicFile { .. } => Ok(self.magic_file()),
             // `value => pattern` refuses a value the pattern does not cover,
             // and `value in pattern` answers whether it does.
             Expression::PatternTest {
@@ -298,45 +169,7 @@ impl VirtualMachine {
                 })
             }
             Expression::MagicLine { position, .. } => Ok(Object::Int(position.line as i64)),
-            Expression::MagicDir { .. } => {
-                // `__dir__` is nil where there is no file behind the code, and
-                // otherwise the directory holding it, which is "." for a bare
-                // filename the way `File.dirname` reports it.
-                // The directory is the one holding the file the code was
-                // written in, which is what `__FILE__` names, rather than the
-                // file being run when a required file's block is executing.
-                let written_in = self
-                    .current_source_file
-                    .clone()
-                    .map(std::path::PathBuf::from)
-                    .or_else(|| self.get_current_file().cloned());
-                let Some(file) = written_in else {
-                    return Ok(Object::Nil);
-                };
-                // Code handed to `eval` with no filename of its own is named
-                // for the place the eval was written, which is not a file and
-                // so holds no directory.
-                if file
-                    .to_str()
-                    .is_some_and(|named| named.starts_with(crate::vm::EVAL_FILE_PREFIX))
-                {
-                    return Ok(Object::Nil);
-                }
-                let file = file.as_path();
-                // A relative path expands against the working directory, so
-                // running `metorex script.rb` still names the real directory.
-                let directory = match std::fs::canonicalize(file) {
-                    Ok(resolved) => match resolved.parent() {
-                        Some(parent) => parent.display().to_string(),
-                        None => ".".to_string(),
-                    },
-                    Err(_) => match file.parent().map(|d| d.display().to_string()) {
-                        Some(directory) if !directory.is_empty() => directory,
-                        _ => ".".to_string(),
-                    },
-                };
-                Ok(Object::string(directory))
-            }
+            Expression::MagicDir { .. } => Ok(self.magic_dir()),
 
             // ── Closures, grouping ──────────────────────────────────────────
             Expression::Lambda { .. } => self.evaluate_block_literal(expression),
@@ -559,44 +392,7 @@ impl VirtualMachine {
             // `::Name` reads the top level directly, skipping the lexical
             // chain and any class-local constant of the same name.
             Expression::TopLevelConstant { name, position } => {
-                // `::Name` writes Object out as the scope, which a private
-                // constant refuses.
-                if let Some(View::Class(object_class)) = self.globals().get("Object").view()
-                    && object_class.is_private_constant(name)
-                {
-                    return self.private_constant_refused(
-                        object_class,
-                        object_class,
-                        name,
-                        *position,
-                    );
-                }
-                if let Some(value) = self
-                    .globals()
-                    .get(name)
-                    .or_else(|| self.object_constant(name))
-                {
-                    self.refuse_unshareable_constant(
-                        &format!("Object::{name}"),
-                        false,
-                        &value,
-                        *position,
-                    )?;
-                    return Ok(value);
-                }
-                // A name registered as an autoload at the top level is loaded
-                // the first time it is written out with `::`.
-                if let Some(View::Class(object_class)) = self.globals().get("Object").view()
-                    && let Some(value) = self.try_autoload_constant(object_class, name)?
-                {
-                    return Ok(value);
-                }
-                let message = format!("uninitialized constant {}", name);
-                Err(MetorexError::UncaughtException {
-                    exception: self.constant_name_error(&message, name),
-                    location: position_to_location(*position),
-                    message,
-                })
+                self.read_top_level_constant(name, *position)
             }
             Expression::KeywordSplat { expression, .. } => {
                 // Outside of an argument list, `**expr` is just `expr`.
@@ -626,54 +422,14 @@ impl VirtualMachine {
             } => {
                 let start_value = self.evaluate_expression(start)?;
                 let end_value = self.evaluate_expression(end)?;
-                self.check_range_ends(&start_value, &end_value, expression.position())?;
-                // A range written with literal ends is one object, however
-                // many times the line it sits on is run, so the mark it
-                // carries is kept against where it was written.
-                let written_at = matches!(
-                    (start.as_ref(), end.as_ref()),
-                    (
-                        Expression::IntLiteral { .. }
-                            | Expression::FloatLiteral { .. }
-                            | Expression::StringLiteral { .. }
-                            | Expression::NilLiteral { .. },
-                        Expression::IntLiteral { .. }
-                            | Expression::FloatLiteral { .. }
-                            | Expression::StringLiteral { .. }
-                            | Expression::NilLiteral { .. }
-                    )
-                )
-                .then(|| {
-                    let at = expression.position();
-                    (
-                        self.current_source_file.clone().unwrap_or_default(),
-                        at.line,
-                        at.column,
-                    )
-                });
-                // A range written with literal ends is built once, so the
-                // Strings at its ends are frozen with it.
-                if written_at.is_some() {
-                    for held in [&start_value, &end_value] {
-                        if let View::String(text) = held.view() {
-                            text.freeze();
-                        }
-                    }
-                }
-                let mark = match written_at {
-                    Some(place) => self
-                        .written_ranges
-                        .entry(place)
-                        .or_insert_with(|| std::rc::Rc::new(()))
-                        .clone(),
-                    None => std::rc::Rc::new(()),
-                };
-                Ok(Object::Range(
-                    Box::new(start_value),
-                    Box::new(end_value),
+                let literal_ends = literal_range_end(start) && literal_range_end(end);
+                self.build_range(
+                    start_value,
+                    end_value,
                     *exclusive,
-                    mark,
-                ))
+                    literal_ends,
+                    expression.position(),
+                )
             }
             Expression::Case {
                 expression,
@@ -687,20 +443,7 @@ impl VirtualMachine {
                 position,
             } => {
                 let ns_value = self.evaluate_expression(namespace)?;
-                let value = self.read_scoped_constant(ns_value.clone(), name, position)?;
-                if self.in_a_non_main_ractor() {
-                    let owner = match ns_value.view() {
-                        View::Class(held) | View::Module(held) => held.ruby_name(),
-                        other => format!("{other}"),
-                    };
-                    self.refuse_unshareable_constant(
-                        &format!("{owner}::{name}"),
-                        false,
-                        &value,
-                        *position,
-                    )?;
-                }
-                Ok(value)
+                self.read_scope_resolution(ns_value, name, *position)
             }
             Expression::If {
                 condition,
@@ -1136,4 +879,16 @@ impl VirtualMachine {
             }
         }
     }
+}
+
+/// Whether a Range end is written as a literal, which makes the Range one
+/// object however many times its line runs.
+pub(crate) fn literal_range_end(end: &Expression) -> bool {
+    matches!(
+        end,
+        Expression::IntLiteral { .. }
+            | Expression::FloatLiteral { .. }
+            | Expression::StringLiteral { .. }
+            | Expression::NilLiteral { .. }
+    )
 }

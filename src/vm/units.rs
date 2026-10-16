@@ -11,7 +11,7 @@ use crate::ast::Statement;
 /// What compiling a body gave.
 #[derive(Debug)]
 pub enum Compiled {
-    Unit(Unit),
+    Unit(Box<Unit>),
     /// The body runs on the tree walker, held back by the node named.
     Fallback(&'static str),
 }
@@ -24,40 +24,28 @@ pub use crate::bytecode::unit::Unit;
 pub struct UnitSlot(OnceCell<Rc<Compiled>>);
 
 impl UnitSlot {
-    /// What `body` compiles to, compiling it the first time.
-    pub fn compiled(&self, body: &[Statement]) -> Rc<Compiled> {
-        self.0.get_or_init(|| Rc::new(compile(body))).clone()
+    /// What the body compiles to, compiling it with `compile` the first
+    /// time.
+    pub fn compiled(&self, compile: impl FnOnce() -> Compiled) -> Rc<Compiled> {
+        self.0.get_or_init(|| Rc::new(compile())).clone()
     }
+}
+
+/// Whether `METOREX_DISASM=1` asked for each unit to be written to standard
+/// error as it is compiled.
+fn disassembly_wanted() -> bool {
+    static WANTED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *WANTED.get_or_init(|| std::env::var("METOREX_DISASM").is_ok_and(|value| value == "1"))
 }
 
 /// Compile `body`, recording the result for the engine report.
 pub fn compile(body: &[Statement]) -> Compiled {
-    let compiled = match body.first() {
-        None => Compiled::Unit(answering_nil()),
-        Some(statement) => Compiled::Fallback(unhandled_node(statement)),
+    let compiled = match crate::bytecode::compiler::compile(body) {
+        Ok(unit) => Compiled::Unit(Box::new(unit)),
+        Err(node) => Compiled::Fallback(node),
     };
     crate::vm::engine_report::record(&compiled);
     compiled
-}
-
-/// The unit of a body with no statements, which answers nil. The compiler
-/// handles no node yet, so this is the only body it compiles.
-fn answering_nil() -> Unit {
-    use crate::bytecode::instruction::Instruction;
-    let mut unit = Unit::new();
-    unit.use_registers(1);
-    let position = crate::lexer::Position::default();
-    unit.emit(Instruction::LoadNil { to: 0 }, position);
-    unit.emit(Instruction::Return { from: 0 }, position);
-    unit
-}
-
-/// The first node in `statement` the compiler cannot handle.
-fn unhandled_node(statement: &Statement) -> &'static str {
-    match statement {
-        Statement::Expression { expression, .. } => expression.kind_name(),
-        other => other.kind_name(),
-    }
 }
 
 impl crate::vm::VirtualMachine {
@@ -74,12 +62,59 @@ impl crate::vm::VirtualMachine {
             return None;
         }
         let compiled = match slot {
-            Some(slot) => slot.compiled(body),
-            None => Rc::new(compile(body)),
+            Some(slot) => slot.compiled(|| self.compile_body(body)),
+            None => Rc::new(self.compile_body(body)),
         };
         match &*compiled {
-            Compiled::Unit(unit) => Some(self.run_unit(unit)),
+            Compiled::Unit(unit) => {
+                // The scope reserves each local the body assigns before any
+                // of it runs, as the tree walker's runners do.
+                for local in &unit.locals {
+                    if self
+                        .environment()
+                        .assignment_introduces_a_local(&local.text)
+                    {
+                        self.environment_mut().hoist(local.text.clone());
+                    }
+                }
+                Some(self.run_unit(unit))
+            }
             Compiled::Fallback(_) => None,
         }
     }
+
+    /// Compile `body`, writing the unit to standard error when
+    /// `METOREX_DISASM=1` asked for it. A unit of the libraries Metorex
+    /// carries, whose file is named `<metorex>` or `<internal:...>`, is left
+    /// out.
+    fn compile_body(&self, body: &[Statement]) -> Compiled {
+        let compiled = compile(body);
+        let file = self.current_source_file.clone().unwrap_or_default();
+        if disassembly_wanted()
+            && let Compiled::Unit(unit) = &compiled
+            && !file.starts_with('<')
+        {
+            let source = source_text(&file);
+            eprint!(
+                "{}",
+                crate::bytecode::disassembly::disassemble(unit, &file, source.as_deref())
+            );
+        }
+        compiled
+    }
+}
+
+/// The text of the file at `path`, read once, for the lines a disassembly
+/// shows.
+fn source_text(path: &str) -> Option<Rc<str>> {
+    thread_local! {
+        static READ: std::cell::RefCell<std::collections::HashMap<String, Option<Rc<str>>>> =
+            Default::default();
+    }
+    READ.with(|read| {
+        read.borrow_mut()
+            .entry(path.to_string())
+            .or_insert_with(|| std::fs::read_to_string(path).ok().map(Rc::from))
+            .clone()
+    })
 }

@@ -106,7 +106,7 @@ impl VirtualMachine {
     }
 
     /// Evaluate a class variable read (`@@name`).
-    pub(super) fn eval_class_var_read(
+    pub(crate) fn eval_class_var_read(
         &self,
         name: &str,
         position: Position,
