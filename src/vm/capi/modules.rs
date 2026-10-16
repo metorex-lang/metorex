@@ -4,8 +4,8 @@
 
 use super::calls::{call, class_name_of, top_level_module};
 use super::exports::{class_from, rb_define_method, text};
-use super::handles::{Value, to_object, to_value};
 use super::symbols::symbol_name;
+use super::values::{Value, to_object, to_value};
 use super::{called_from, interpreter, or_raise, raise};
 use crate::object::View;
 use crate::object::{Method, Object};

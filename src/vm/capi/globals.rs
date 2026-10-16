@@ -4,7 +4,7 @@
 
 use super::calls::call;
 use super::exports::text;
-use super::handles::{Value, to_object, to_value};
+use super::values::{Value, to_object, to_value};
 use super::{Caller, called_from, enter, interpreter, or_raise};
 use crate::error::MetorexError;
 use crate::lexer::Position;
@@ -66,7 +66,7 @@ pub(crate) fn read_hooked_global(
     position: Position,
 ) -> Result<Object, MetorexError> {
     let value = match hooked.getter {
-        GlobalGetter::Variable if hooked.data == 0 => super::handles::QNIL,
+        GlobalGetter::Variable if hooked.data == 0 => super::values::QNIL,
         // SAFETY: C handed over the address of a VALUE it keeps for the life
         // of the program.
         GlobalGetter::Variable => unsafe { *(hooked.data as *const Value) },
@@ -229,17 +229,17 @@ pub extern "C-unwind" fn rb_lastline_set(line: Value) {
 }
 
 thread_local! {
-    static DEFAULT_SEPARATOR: std::cell::OnceCell<Value> = const { std::cell::OnceCell::new() };
+    static DEFAULT_SEPARATOR: std::cell::OnceCell<Object> = const { std::cell::OnceCell::new() };
 }
 
 /// `rb_default_rs`: the record separator Ruby starts with, a frozen "\n".
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_metorex_default_rs() -> Value {
     DEFAULT_SEPARATOR.with(|held| {
-        *held.get_or_init(|| {
+        to_value(held.get_or_init(|| {
             let separator = Object::string("\n");
             call(separator.clone(), "freeze", Vec::new());
-            to_value(&separator)
-        })
+            separator
+        }))
     })
 }

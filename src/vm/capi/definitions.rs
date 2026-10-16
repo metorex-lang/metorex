@@ -3,8 +3,8 @@
 //! the way Ruby code would, so an autoload registered for it runs first.
 
 use super::exports::{class_from, text};
-use super::handles::{Value, to_object, to_value};
 use super::symbols::symbol_name;
+use super::values::{Value, to_object, to_value};
 use super::{interpreter, or_raise};
 use crate::class::Class;
 use crate::error::MetorexError;

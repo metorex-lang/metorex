@@ -120,6 +120,8 @@ pub struct BlockStatement {
     /// so a trailing keyword hash gathered into its splat is marked. The flag
     /// is shared with every copy, which is what makes it reach a `dup`.
     pub ruby2_keywords: Rc<std::cell::Cell<bool>>,
+    /// What the body compiled to, once it has run on the bytecode engine.
+    pub unit: crate::vm::units::UnitSlot,
 }
 
 /// Two blocks are the same when they were written the same way. The captured
@@ -165,6 +167,7 @@ impl BlockStatement {
             written_within: Rc::default(),
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
             attached_call_running: Rc::new(std::cell::Cell::new(true)),
+            unit: Default::default(),
         }
     }
 
@@ -203,6 +206,7 @@ impl BlockStatement {
             written_within: Rc::default(),
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
             attached_call_running: Rc::new(std::cell::Cell::new(true)),
+            unit: Default::default(),
         }
     }
 

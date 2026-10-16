@@ -3,7 +3,7 @@
 //! encoding and the Encoding object it stands for.
 
 use super::calls::{call, class_name_of, top_level_module};
-use super::handles::{Value, to_object, to_value};
+use super::values::{Value, to_object, to_value};
 use crate::object::Object;
 use crate::object::{OptionView, View};
 use std::cell::RefCell;
@@ -44,7 +44,7 @@ pub(super) fn encoding_object(encoding: *const RbEncoding) -> Object {
         return Object::Nil;
     }
     // SAFETY: C hands back a pointer `encoding_struct` answered, which is
-    // never freed.
+    // never freed, and the Encoding it names stays pinned.
     to_object(unsafe { (*encoding).encoding })
 }
 
@@ -294,4 +294,9 @@ pub extern "C-unwind" fn rb_define_dummy_encoding(name: *const c_char) -> i32 {
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_enc_dummy_p(encoding: *const RbEncoding) -> i32 {
     i32::from(call(encoding_object(encoding), "dummy?", Vec::new()).is_truthy())
+}
+
+/// The VALUEs the `rb_encoding` structs name, which stay pinned.
+pub(super) fn named_values(found: &mut std::collections::HashSet<Value>) {
+    ENCODINGS.with(|held| found.extend(held.borrow().values().map(|one| one.encoding)));
 }

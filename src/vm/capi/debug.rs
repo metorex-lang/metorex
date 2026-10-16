@@ -4,7 +4,7 @@
 //! is the first frame, and has no binding.
 
 use super::calls::call;
-use super::handles::{QNIL, Value, to_object, to_value};
+use super::values::{QNIL, Value, to_object, to_value};
 use super::{called_from, interpreter, raise, running_method};
 use crate::object::Object;
 

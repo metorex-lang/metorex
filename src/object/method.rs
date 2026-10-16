@@ -110,6 +110,8 @@ pub struct Method {
     pub definee: Option<Rc<crate::class::Class>>,
     /// The C function a C extension defined this method with.
     pub c_function: Option<crate::vm::capi::CFunction>,
+    /// What the body compiled to, once it has run on the bytecode engine.
+    pub unit: crate::vm::units::UnitSlot,
 }
 
 impl Method {
@@ -145,6 +147,7 @@ impl Method {
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
             definee: None,
             c_function: None,
+            unit: Default::default(),
         }
     }
 
@@ -185,6 +188,7 @@ impl Method {
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
             definee: None,
             c_function: None,
+            unit: Default::default(),
         }
     }
 
@@ -225,6 +229,7 @@ impl Method {
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
             definee: None,
             c_function: None,
+            unit: Default::default(),
         }
     }
 
@@ -266,6 +271,7 @@ impl Method {
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
             definee: None,
             c_function: None,
+            unit: Default::default(),
         }
     }
 
@@ -301,6 +307,7 @@ impl Method {
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
             definee: None,
             c_function: None,
+            unit: Default::default(),
         }
     }
 
@@ -336,6 +343,7 @@ impl Method {
             ruby2_keywords: Rc::clone(&self.ruby2_keywords),
             definee: self.definee.clone(),
             c_function: self.c_function,
+            unit: self.unit.clone(),
         }
     }
 

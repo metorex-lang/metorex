@@ -35,6 +35,7 @@ impl VirtualMachine {
     pub(crate) fn collect_garbage(&mut self, position: Position) -> Result<(), MetorexError> {
         if crate::object::live::collecting() {
             let started = std::time::Instant::now();
+            self.collect_unreached_data(position)?;
             crate::object::collector::collect();
             self.record_gc_run(started.elapsed());
         }

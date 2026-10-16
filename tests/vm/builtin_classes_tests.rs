@@ -135,6 +135,7 @@ fn class_of_block() {
         written_within: Rc::default(),
         ruby2_keywords: std::rc::Rc::new(std::cell::Cell::new(false)),
         attached_call_running: std::rc::Rc::new(std::cell::Cell::new(true)),
+        unit: Default::default(),
     }));
     let class = builtins.class_of(&block);
     assert_eq!(class.name(), "Proc");

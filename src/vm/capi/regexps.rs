@@ -2,8 +2,8 @@
 //! last match `$~` holds.
 
 use super::calls::{call, top_level_module};
-use super::handles::{QNIL, Value, to_object, to_value};
 use super::interpreter;
+use super::values::{QNIL, Value, to_object, to_value};
 use crate::object::View;
 use crate::object::{Object, StringValue};
 use crate::vm::native_methods::regexp_methods::LAST_MATCH;

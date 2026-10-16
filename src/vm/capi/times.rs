@@ -3,8 +3,8 @@
 
 use super::arrays::array_of;
 use super::calls::{answers, call, top_level_module};
-use super::handles::{QNIL, Value, to_object, to_value};
 use super::numbers::long_from;
+use super::values::{QNIL, Value, to_object, to_value};
 use super::{called_from, interpreter, raise};
 use crate::object::Object;
 use crate::object::View;

@@ -345,7 +345,7 @@ struct RBasic {
 };
 struct RBasic *rb_metorex_rbasic(VALUE object);
 #define RBASIC(v) rb_metorex_rbasic((VALUE)(v))
-#define RB_SPECIAL_CONST_P(v) (FIXNUM_P(v) || (VALUE)(v) < (VALUE)0x40)
+#define RB_SPECIAL_CONST_P(v) ((((VALUE)(v)) & 7) != 0 || (VALUE)(v) == Qfalse || (VALUE)(v) == Qnil)
 #define SPECIAL_CONST_P(v) RB_SPECIAL_CONST_P(v)
 #define RUBY_FL_SHAREABLE ((VALUE)1 << 8)
 #define RUBY_FL_FREEZE ((VALUE)1 << 11)

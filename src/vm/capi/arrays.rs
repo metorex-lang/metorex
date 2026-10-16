@@ -5,7 +5,7 @@
 //! whenever control leaves C.
 
 use super::calls::{call, class_name_of};
-use super::handles::{QNIL, Value, objects_from, to_object, to_value};
+use super::values::{QNIL, Value, objects_from, to_object, to_value};
 use super::{called_from, raise};
 use crate::object::Object;
 use crate::object::View;
@@ -329,4 +329,9 @@ pub extern "C-unwind" fn rb_mem_clear(values: *mut Value, count: i64) {
         // SAFETY: C hands a pointer to at least `count` VALUEs.
         unsafe { *values.add(index) = QNIL };
     }
+}
+
+/// The VALUEs this table names, which stay pinned while it does.
+pub(super) fn named_values(found: &mut std::collections::HashSet<Value>) {
+    BUFFERS.with(|held| found.extend(held.borrow().keys().copied()));
 }

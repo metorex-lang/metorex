@@ -34,11 +34,11 @@ mod fibers;
 mod files;
 mod flags;
 mod globals;
-mod handles;
 mod hashes;
 mod integers;
 mod io;
 mod loading;
+mod values;
 pub(crate) use loading::static_extension;
 mod methods;
 mod modules;
@@ -133,9 +133,16 @@ impl Caller {
     }
 }
 
-/// Whether a call into C is under way, somewhere below the code running now.
-fn c_is_running() -> bool {
-    !RUNNING_INTERPRETER.with(Cell::get).is_null()
+thread_local! {
+    /// How many calls into C have not returned, on every thread and fiber
+    /// stack. A fiber that stops inside one keeps it counted.
+    static C_FRAMES: Cell<usize> = const { Cell::new(0) };
+}
+
+/// Whether any stack holds a call into C that has not returned, whose
+/// locals may hold VALUEs.
+pub(crate) fn c_frames_exist() -> bool {
+    C_FRAMES.with(Cell::get) > 0
 }
 
 /// Runs `wait`, which hands the turn to other threads, and puts back what
@@ -181,7 +188,9 @@ pub(crate) fn enter<T>(
         BLOCK_FROM_AMPERSAND.with(|held| held.replace(caller.block_from_ampersand));
     let outer_keywords = KEYWORDS_GIVEN.with(|held| held.replace(caller.keywords_given));
     let outer_method = RUNNING_METHOD.with(|held| held.replace(caller.method));
+    C_FRAMES.with(|frames| frames.set(frames.get() + 1));
     let answered = std::panic::catch_unwind(std::panic::AssertUnwindSafe(call));
+    C_FRAMES.with(|frames| frames.set(frames.get() - 1));
     strings::carry_writes_back();
     arrays::carry_element_writes_back();
     flags::carry_flag_writes_back();

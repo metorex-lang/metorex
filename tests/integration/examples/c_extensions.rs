@@ -1249,7 +1249,7 @@ const C_FLAGS_OUTPUT: &str = concat!(
     "true\n",
     "0\n",
     "0\n",
-    "true\n",
+    "false\n",
     "[true, true, true, false]\n",
 );
 
@@ -1841,4 +1841,25 @@ fn test_c_extensions_c_iteration_execution() {
 fn test_c_extensions_c_iteration_no_parens_execution() {
     let output = run_example("c_extensions/c_iteration_no_parens.rb");
     assert_eq!(output, C_ITERATION_OUTPUT);
+}
+
+/// The expected output of both `c_extensions/c_holding` variants.
+const C_HOLDING_OUTPUT: &str = concat!(
+    "after the first collection\n",
+    "\"held by C\"\n",
+    "held object freed\n",
+    "after the second collection\n",
+    "nil\n",
+);
+
+#[test]
+fn test_c_extensions_c_holding_execution() {
+    let output = run_example("c_extensions/c_holding.rb");
+    assert_eq!(output, C_HOLDING_OUTPUT);
+}
+
+#[test]
+fn test_c_extensions_c_holding_no_parens_execution() {
+    let output = run_example("c_extensions/c_holding_no_parens.rb");
+    assert_eq!(output, C_HOLDING_OUTPUT);
 }

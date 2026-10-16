@@ -407,6 +407,7 @@ fn format_object_block() {
         written_within: Rc::default(),
         ruby2_keywords: std::rc::Rc::new(std::cell::Cell::new(false)),
         attached_call_running: Rc::new(std::cell::Cell::new(true)),
+        unit: Default::default(),
     }));
     assert_eq!(ReplCore::format_object(&block), "<Block>");
 }

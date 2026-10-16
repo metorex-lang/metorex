@@ -7,7 +7,7 @@ use super::encodings::{
     RbEncoding, encoding_object, encoding_struct, rb_ascii8bit_encindex, rb_enc_from_index,
     rb_enc_get, rb_enc_to_index,
 };
-use super::handles::{Value, to_object, to_value};
+use super::values::{Value, to_object, to_value};
 use super::{called_from, interpreter, raise};
 use crate::object::Object;
 use crate::object::View;

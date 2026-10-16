@@ -753,13 +753,19 @@ ruby benchmarks/compare.rb
 # evaluates, calls, and allocates (docs/engine/profiling.md)
 scripts/profile.sh report.txt path/to/program.rb
 METOREX_COUNTERS=1 target/release/metorex path/to/program.rb
+
+# Run on the bytecode engine, which runs each body it cannot compile yet on
+# the tree walker, and write which bodies ran where and why
+METOREX_ENGINE=bytecode METOREX_ENGINE_REPORT=report.txt target/release/metorex path/to/program.rb
 ```
 
 ### Running everything
 
 `./test.sh` runs what CI runs, on this machine and on Linux, on both
-architectures: formatting, clippy, the Rust tests, the Ruby spec suite,
-coverage, and the check that no test sits in `src/`. It stops where a step
+architectures: formatting, clippy, the Rust tests, the Ruby spec suite, both
+of those again with `METOREX_ENGINE=bytecode`, coverage, and the check that no
+test sits in `src/`. On this machine the bytecode run's engine report is
+added up in `target/engine-report.txt`. It stops where a step
 fails, so what went wrong is the last thing on the screen.
 
 ```bash

@@ -271,7 +271,10 @@ impl VirtualMachine {
                 .with_location(Some(format!("{}:{}", position.line, position.column)))
                 .with_source_file(self.file_for_frames()),
         );
-        let answer = self.module_body_statements(module, body);
+        let answer = match self.run_compiled_unit(None, body) {
+            Some(ran) => ran,
+            None => self.module_body_statements(module, body),
+        };
         self.call_stack_pop();
         self.class_var_home = held_home;
         let written_at = body

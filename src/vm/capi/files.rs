@@ -3,9 +3,9 @@
 
 use super::calls::{answers, call};
 use super::exports::text;
-use super::handles::{Value, to_object, to_value};
 use super::interpreter;
 use super::strings::string_value;
+use super::values::{Value, to_object, to_value};
 use crate::object::Object;
 use crate::object::View;
 use std::ffi::c_char;

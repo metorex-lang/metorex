@@ -1,7 +1,7 @@
 //! Calling a method a C extension defined, with the arguments laid out the
 //! way its arity says the C function takes them.
 
-use super::handles::{QNIL, Value, to_object, to_value};
+use super::values::{QNIL, Value, to_object, to_value};
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
@@ -69,7 +69,7 @@ impl CFunction {
                     *const Value,
                     Value,
                 ) -> Value = unsafe { std::mem::transmute(address) };
-                let first = values.first().copied().unwrap_or(super::handles::QNIL);
+                let first = values.first().copied().unwrap_or(super::values::QNIL);
                 function(
                     first,
                     self.data,
@@ -84,7 +84,7 @@ impl CFunction {
                 let function: extern "C-unwind" fn(Value, usize) =
                     unsafe { std::mem::transmute(address) };
                 function(values[0], self.data);
-                super::handles::QNIL
+                super::values::QNIL
             }
             THREAD_FUNCTION_ARITY => {
                 // SAFETY: a thread function takes the data pointer C handed

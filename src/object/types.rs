@@ -35,9 +35,20 @@ thread_local! {
     static SYMBOLS: RefCell<Symbols> = RefCell::new(Symbols::default());
 }
 
-/// The id of the Symbol named `name`, giving it one the first time.
+/// The id of the Symbol named `name`, giving it one the first time. An
+/// ASCII name is one Symbol whatever ASCII-compatible encoding it was
+/// spelled in.
 fn symbol_id(name: Rc<crate::object::StringValue>) -> u64 {
-    let key = (name.as_str().to_string(), name.encoding_name());
+    let named = name.encoding_name();
+    let spelled_in_ascii = name.as_str().is_ascii()
+        && crate::vm::native_methods::string_methods::encoding_is_ascii_compatible(&named)
+        && !crate::vm::native_methods::class_methods::is_dummy_encoding(&named);
+    let encoding = if spelled_in_ascii {
+        String::new()
+    } else {
+        named
+    };
+    let key = (name.as_str().to_string(), encoding);
     SYMBOLS.with(|symbols| {
         let mut symbols = symbols.borrow_mut();
         if let Some(id) = symbols.ids.get(&key) {
@@ -184,6 +195,17 @@ impl Object {
     /// The value's bits, as a C extension's `VALUE` would read them.
     pub fn bits(&self) -> u64 {
         self.bits
+    }
+
+    /// The value held inline that `bits` spell, or None for bits that
+    /// point at the heap or spell no value.
+    pub fn inline_from_bits(bits: u64) -> Option<Object> {
+        let symbol_known =
+            || SYMBOLS.with(|symbols| (bits >> SYMBOL_SHIFT) < symbols.borrow().names.len() as u64);
+        let inline = bits & 3 != 0
+            || matches!(bits, FALSE | NIL | TRUE)
+            || (bits & 0xff == SYMBOL_FLAG && symbol_known());
+        inline.then(|| Object::from_bits(bits))
     }
 
     pub fn Bool(value: bool) -> Object {

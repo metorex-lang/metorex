@@ -3,7 +3,7 @@
 
 use super::calls::{call, class_name_of, top_level_module};
 use super::fibers::block_function_method;
-use super::handles::{QFALSE, QNIL, QTRUE, Value, objects_from, to_object, to_value};
+use super::values::{QFALSE, QNIL, QTRUE, Value, objects_from, to_object, to_value};
 use super::{called_from, interpreter, raise};
 use crate::object::Object;
 use crate::object::View;

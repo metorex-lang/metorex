@@ -8,10 +8,10 @@ use super::encodings::{
     RbEncoding, encoding_object, rb_default_external_encoding, rb_default_internal_encoding,
     rb_enc_get, rb_locale_encoding,
 };
-use super::handles::{QNIL, Value, to_object, to_value};
 use super::strings::{
     rb_rstring_ptr, rb_str_new, rb_str_new_cstr, static_string, string_from, string_value,
 };
+use super::values::{QNIL, Value, to_object, to_value};
 use super::{called_from, raise};
 use crate::object::Object;
 use crate::object::View;
@@ -102,7 +102,7 @@ pub extern "C-unwind" fn rb_str_new_shared(string: Value) -> Value {
 /// `string` itself when it is frozen, or a frozen copy.
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_str_new_frozen(string: Value) -> Value {
-    if super::objects::rb_obj_frozen_p(string) == super::handles::QTRUE {
+    if super::objects::rb_obj_frozen_p(string) == super::values::QTRUE {
         return string;
     }
     send(rb_str_dup(string), "freeze", Vec::new())
@@ -570,4 +570,9 @@ pub extern "C-unwind" fn rb_str_export(string: Value) -> Value {
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_str_export_locale(string: Value) -> Value {
     rb_str_export_to_enc(string, rb_locale_encoding())
+}
+
+/// The VALUEs this table names, which stay pinned while it does.
+pub(super) fn named_values(found: &mut std::collections::HashSet<Value>) {
+    HIDDEN.with(|held| found.extend(held.borrow().iter().copied()));
 }

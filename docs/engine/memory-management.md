@@ -155,6 +155,14 @@ zero. The specs under `core/gc` check what these methods answer and that
   binding's frame, so a cycle through one of those stays.
 - When the list has doubled, the next statement to start runs a collection.
   `GC.start` runs one at once.
+- An object handed to C is pinned in `src/vm/capi/values.rs`. Metorex
+  does not scan the native stack: while a call into C has not returned on
+  any thread or fiber stack, a collection unpins nothing, which keeps what
+  C locals hold, `RB_GC_GUARD`'s among them. Otherwise it unpins every
+  object that no registered address, `rb_gc_register_mark_object` object,
+  `dmark` function of a reached Data object, or table the C API keeps for
+  an object names. It runs again until nothing more is unpinned, then frees
+  the Data objects nothing reaches.
 
 ## Threads
 

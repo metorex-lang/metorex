@@ -6,7 +6,7 @@
 //! files loaded so far.
 
 use super::calls::call;
-use super::handles::{Value, to_object, to_value};
+use super::values::{Value, to_object, to_value};
 use crate::object::Object;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -146,4 +146,9 @@ pub extern "C-unwind" fn rb_obj_memsize_of(object: Value) -> usize {
 pub extern "C-unwind" fn rb_debug_inspector_current_depth() -> Value {
     let backtrace = to_object(super::calls::rb_make_backtrace());
     to_value(&call(backtrace, "size", Vec::new()))
+}
+
+/// The VALUEs this table names, which stay pinned while it does.
+pub(super) fn named_values(found: &mut std::collections::HashSet<Value>) {
+    WALKED.with(|held| found.extend(held.borrow().keys().copied()));
 }

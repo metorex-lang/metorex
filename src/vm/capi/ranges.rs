@@ -3,8 +3,8 @@
 //! given length.
 
 use super::calls::{answers, call, top_level_module};
-use super::handles::{QFALSE, QNIL, QTRUE, Value, to_object, to_value};
 use super::numbers::long_from;
+use super::values::{QFALSE, QNIL, QTRUE, Value, to_object, to_value};
 use super::{called_from, raise};
 use crate::object::Object;
 use crate::object::View;

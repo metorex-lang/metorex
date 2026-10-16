@@ -5,9 +5,9 @@
 
 use super::arrays::array_of;
 use super::calls::{answers, call, class_name_of, top_level_module};
-use super::handles::{QNIL, Value, to_object, to_value};
 use super::numbers::long_from;
 use super::symbols::symbol_name;
+use super::values::{QNIL, Value, to_object, to_value};
 use super::{called_from, interpreter, or_raise, raise};
 use crate::object::Object;
 use crate::object::View;

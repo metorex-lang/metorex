@@ -2,7 +2,7 @@
 //! walking them with a C function.
 
 use super::calls::{call, top_level_module};
-use super::handles::{Value, to_object, to_value};
+use super::values::{Value, to_object, to_value};
 use crate::object::View;
 
 /// What a walk's function answers to go on, stop, or drop the element.

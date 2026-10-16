@@ -3,7 +3,7 @@
 //! while the other threads take turns.
 
 use super::calls::call;
-use super::handles::{QFALSE, QNIL, QTRUE, Value, objects_from, to_object, to_value};
+use super::values::{QFALSE, QNIL, QTRUE, Value, objects_from, to_object, to_value};
 use super::{called_from, interpreter, keeping_call_state, raise};
 use crate::object::Object;
 use crate::object::{OptionView, View};
@@ -603,4 +603,9 @@ pub struct RbIoEncoding {
     external: *const super::encodings::RbEncoding,
     flags: i32,
     options: Value,
+}
+
+/// The VALUEs this table names, which stay pinned while it does.
+pub(super) fn named_values(found: &mut std::collections::HashSet<Value>) {
+    HANDED.with(|held| found.extend(held.borrow().keys().copied()));
 }

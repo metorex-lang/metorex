@@ -2,7 +2,7 @@
 //! set before an extension's `Init` function runs. One whose class metorex
 //! does not define stays nil.
 
-use super::handles::{QNIL, Value, to_value};
+use super::values::{QNIL, Value, to_value};
 use crate::lexer::Position;
 use crate::object::Object;
 use crate::object::{OptionView, View};
@@ -271,6 +271,12 @@ impl VirtualMachine {
         ];
         // SAFETY: as above.
         unsafe { rb_eFatal = to_value(&self.fatal_class()) };
+        // Each global is an address C reads a VALUE from, so it keeps its
+        // class pinned the way an address C registers does.
+        super::collection::rb_gc_register_address(&raw mut rb_eFatal);
+        for (global, _) in &globals {
+            super::collection::rb_gc_register_address(*global);
+        }
         for (global, path) in globals {
             let found = self.send_to_object(
                 object_class.clone(),

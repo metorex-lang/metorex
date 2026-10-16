@@ -149,3 +149,20 @@ fn test_symbols_and_ranges_range_cover_and_include_no_parens_execution() {
     let output = run_example("symbols_and_ranges/range_cover_and_include_no_parens.rb");
     assert_eq!(output, RANGE_COVER_AND_INCLUDE_OUTPUT);
 }
+
+/// The expected output of both `symbols_and_ranges/ascii_symbols_one_object`
+/// variants.
+const ASCII_SYMBOLS_ONE_OBJECT_OUTPUT: &str =
+    "true\ntrue\ntrue\n[#<Encoding:US-ASCII>, #<Encoding:US-ASCII>, #<Encoding:US-ASCII>]\ntrue\n";
+
+#[test]
+fn test_symbols_and_ranges_ascii_symbols_one_object_execution() {
+    let output = run_example("symbols_and_ranges/ascii_symbols_one_object.rb");
+    assert_eq!(output, ASCII_SYMBOLS_ONE_OBJECT_OUTPUT);
+}
+
+#[test]
+fn test_symbols_and_ranges_ascii_symbols_one_object_no_parens_execution() {
+    let output = run_example("symbols_and_ranges/ascii_symbols_one_object_no_parens.rb");
+    assert_eq!(output, ASCII_SYMBOLS_ONE_OBJECT_OUTPUT);
+}

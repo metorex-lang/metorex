@@ -2,7 +2,7 @@
 //! `at_exit` blocks, and `ruby_vm_at_exit` once the interpreter is done.
 
 use super::calls::kernel_function;
-use super::handles::{QNIL, Value};
+use super::values::{QNIL, Value};
 use super::{called_from, interpreter};
 use std::cell::RefCell;
 use std::sync::{Mutex, Once};
@@ -72,4 +72,10 @@ pub extern "C-unwind" fn ruby_vm_at_exit(function: *const ()) {
         // for the life of the process.
         unsafe { atexit(run_vm_exit_hooks) };
     });
+}
+
+/// The VALUEs the functions C asked to run at exit are handed, which stay
+/// pinned until then.
+pub(super) fn named_values(found: &mut std::collections::HashSet<Value>) {
+    END_PROCS.with(|held| found.extend(held.borrow().iter().map(|(_, data)| *data)));
 }

@@ -38,7 +38,20 @@ run_mac() {
   step "mac: build" cargo build
   step "mac: tests" cargo test
   step "mac: ruby spec" scripts/run_ruby_spec.sh
+  step "mac: tests on bytecode" run_on_bytecode cargo test
+  step "mac: ruby spec on bytecode" run_on_bytecode scripts/run_ruby_spec.sh
   step "mac: tests are in tests/" scripts/misplaced_tests.sh
+}
+
+# Run a command with METOREX_ENGINE=bytecode, each metorex process writing its
+# engine report into a fresh directory under target/, and add the reports up
+# in target/engine-report.txt.
+run_on_bytecode() {
+  local reports
+  mkdir -p target
+  reports=$(mktemp -d target/engine-report.XXXXXX)
+  METOREX_ENGINE=bytecode METOREX_ENGINE_REPORT="$ROOT/$reports" "$@" || return 1
+  scripts/engine_report_summary.sh "$reports" > target/engine-report.txt
 }
 
 # This machine's own architecture, which is the only one coverage can measure:
@@ -65,6 +78,10 @@ run_linux() {
   step "linux/$arch: build" scripts/linux.sh cargo build --verbose
   step "linux/$arch: tests" scripts/linux.sh cargo test --verbose
   step "linux/$arch: ruby spec" scripts/linux.sh bash -c 'cargo build && scripts/run_ruby_spec.sh'
+  step "linux/$arch: tests on bytecode" scripts/linux.sh \
+    env METOREX_ENGINE=bytecode cargo test --verbose
+  step "linux/$arch: ruby spec on bytecode" scripts/linux.sh \
+    env METOREX_ENGINE=bytecode bash -c 'cargo build && scripts/run_ruby_spec.sh'
   if [ "$arch" = "$(host_arch)" ]; then
     # One link per CPU runs the container out of memory once there are more
     # instrumented test binaries than its memory holds at once, so the build

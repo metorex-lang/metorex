@@ -44,7 +44,7 @@ mod regexps;
 mod threads;
 
 pub(crate) use aliasing::*;
-pub(crate) use encoding_settings::{add_dummy_encoding, add_encoding_alias};
+pub(crate) use encoding_settings::{add_dummy_encoding, add_encoding_alias, is_dummy_encoding};
 pub(crate) use encoding_support::*;
 pub(crate) use instance_methods::LINE_LOOP_METHODS;
 pub(crate) use method_tables::*;

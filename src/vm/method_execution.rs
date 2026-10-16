@@ -693,7 +693,10 @@ impl VirtualMachine {
                     .define(block_param.clone(), Object::Nil);
             }
 
-            self.execute_body_statements(method.body(), method.lambda_body)
+            match self.run_compiled_unit(Some(&method.unit), method.body()) {
+                Some(ran) => ran,
+                None => self.execute_body_statements(method.body(), method.lambda_body),
+            }
         })();
 
         // An error the interpreter raised in the body takes its backtrace
@@ -812,7 +815,10 @@ impl VirtualMachine {
                     .define(block_param.clone(), Object::Nil);
             }
 
-            self.execute_body_statements(function.body(), false)
+            match self.run_compiled_unit(Some(&function.unit), function.body()) {
+                Some(ran) => ran,
+                None => self.execute_body_statements(function.body(), false),
+            }
         })();
 
         self.current_method_frame = saved_frame;

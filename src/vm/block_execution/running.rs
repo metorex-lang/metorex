@@ -235,6 +235,10 @@ impl VirtualMachine {
 
             // `redo` runs the block's body again over the same arguments.
             'again: loop {
+                if let Some(ran) = self.run_compiled_unit(Some(&block.unit), block.body()) {
+                    last_value = ran?;
+                    break 'again;
+                }
                 last_value = Object::Nil;
                 for statement in block.body() {
                     if let Statement::Expression { expression, .. } = statement {
@@ -515,6 +519,10 @@ impl VirtualMachine {
                     // `redo` runs the block's body again over the same arguments,
                     // which are already bound in this scope.
                     loop {
+                        if let Some(ran) = self.run_compiled_unit(Some(&block.unit), block.body()) {
+                            last_value = ran?;
+                            return Ok(ControlFlow::Next);
+                        }
                         let mut again = false;
                         for statement in block.body() {
                             let flow = match self.execute_statement(statement) {

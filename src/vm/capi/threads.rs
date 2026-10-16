@@ -3,9 +3,9 @@
 //! operating system thread of its own while the other threads take turns.
 
 use super::calls::{call, top_level_module};
-use super::handles::{Value, to_object, to_value};
 use super::methods::{CFunction, THREAD_FUNCTION_ARITY};
 use super::symbols::symbol_name;
+use super::values::{Value, to_object, to_value};
 use super::{called_from, interpreter, keeping_call_state, on_interpreter_thread, raise};
 use crate::object::{Method, Object};
 use crate::object::{OptionView, View};

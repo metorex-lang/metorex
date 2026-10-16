@@ -2,8 +2,8 @@
 //! holds, and the FrozenError and SystemCallError helpers.
 
 use super::calls::{call, class_name_of, top_level_module};
-use super::handles::{QNIL, Value, objects_from, to_object, to_value};
 use super::strings::check_string;
+use super::values::{QNIL, Value, objects_from, to_object, to_value};
 use super::{ERROR_INFO, called_from, raise};
 use crate::object::Object;
 use crate::object::View;

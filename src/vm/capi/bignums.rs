@@ -3,7 +3,7 @@
 //! `NUM2DBL`, which reads a C double out of any number.
 
 use super::calls::{call, class_name_of};
-use super::handles::{Value, to_object, to_value};
+use super::values::{Value, to_object, to_value};
 use super::{called_from, interpreter, or_raise, raise};
 use crate::object::Object;
 use crate::object::View;

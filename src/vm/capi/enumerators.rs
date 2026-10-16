@@ -1,9 +1,9 @@
 //! Enumerators C builds with `rb_enumeratorize`, and the size function
 //! `rb_enumeratorize_with_size` names, which answers `Enumerator#size`.
 
-use super::handles::{Value, objects_from, to_object, to_value};
 use super::methods::{CFunction, ENUMERATOR_SIZE_ARITY};
 use super::symbols::symbol_name;
+use super::values::{Value, objects_from, to_object, to_value};
 use super::{interpreter, or_raise};
 use crate::error::MetorexError;
 use crate::lexer::Position;

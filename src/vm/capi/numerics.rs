@@ -1,8 +1,8 @@
 //! Floats, Rationals and Complex numbers made and read from C.
 
 use super::calls::{call, class_name_of, top_level_module};
-use super::handles::{Value, to_object, to_value};
 use super::raise;
+use super::values::{Value, to_object, to_value};
 use crate::object::Object;
 use crate::object::View;
 

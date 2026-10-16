@@ -65,6 +65,7 @@ pub(crate) fn cli_flags_example_stderr(flags: &[&str], script: &str) -> String {
 }
 
 mod counters;
+mod engines;
 mod errors;
 mod flags;
 mod running;

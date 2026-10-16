@@ -8,7 +8,7 @@
 //! until the string outgrows it.
 
 use super::calls::{answers, call, class_name_of};
-use super::handles::{Value, to_object, to_value};
+use super::values::{Value, to_object, to_value};
 use super::{interpreter, raise};
 use crate::object::View;
 use crate::object::{Object, StringValue};
@@ -411,4 +411,9 @@ pub extern "C-unwind" fn rb_metorex_adopt_encoding(string: Value, source: Value)
     made.set_encoding(named);
     made.clear_bytes();
     store_bytes(&made, &bytes);
+}
+
+/// The VALUEs this table names, which stay pinned while it does.
+pub(super) fn named_values(found: &mut std::collections::HashSet<Value>) {
+    BUFFERS.with(|held| found.extend(held.borrow().keys().copied()));
 }

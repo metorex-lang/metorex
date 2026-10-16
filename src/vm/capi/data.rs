@@ -2,7 +2,7 @@
 //! with a mark and a free function, and the allocator a class makes its
 //! instances with.
 
-use super::handles::{Value, to_object, to_value};
+use super::values::{Value, to_object, to_value};
 use super::{Caller, called_from, raise};
 use crate::class::Class;
 use crate::error::MetorexError;
@@ -46,6 +46,8 @@ struct Wrapped {
     slot: Box<DataSlot>,
     data_type: Option<*const DataType>,
     value: Value,
+    /// How many Data objects were made before this one.
+    made: u64,
 }
 
 /// A mark or free function, which C hands the wrapped pointer.
@@ -60,12 +62,13 @@ impl Wrapped {
         let (mark, free) = self.functions();
         Collectable {
             value: self.value,
+            made: self.made,
             mark,
             free,
             data: self.slot.data,
-            // The handle table holds one reference, and every other one is
+            // The pinned copy is one reference, and every other one is
             // something reaching the object.
-            outside: super::handles::references_to(self.value).saturating_sub(1),
+            outside: super::values::references_to(self.value).saturating_sub(1),
         }
     }
 
@@ -86,10 +89,11 @@ impl Wrapped {
 
 /// What a collection does with one Data object: its VALUE, its mark and free
 /// functions, the pointer they are handed, and how many references besides
-/// the handle table's reach it.
+/// its pinned copy reach it.
 #[derive(Clone, Copy)]
 struct Collectable {
     value: Value,
+    made: u64,
     mark: usize,
     free: usize,
     data: *mut c_void,
@@ -135,7 +139,7 @@ fn take_collectables(keep: impl Fn(&Collectable) -> bool) -> Vec<Collectable> {
             false
         });
         // Freed in the order they were made.
-        taken.sort_by_key(|found| found.value);
+        taken.sort_by_key(|found| found.made);
         taken
     })
 }
@@ -144,14 +148,20 @@ fn every_collectable() -> Vec<Collectable> {
     WRAPPED.with(|held| held.borrow().values().map(Wrapped::collectable).collect())
 }
 
-/// The VALUEs of the Data objects something reaches: Ruby, an address or
-/// object C asked to keep alive, or the mark function of one reached. Every
-/// reached object's mark function runs.
-fn reached_values(every: &[Collectable]) -> std::collections::HashSet<Value> {
-    let roots = super::collection::roots();
+/// The VALUEs of the Data objects something reaches, Ruby or a VALUE C
+/// keeps or the mark function of one reached, and every VALUE the reached
+/// ones' mark functions mark.
+fn reached_values(
+    every: &[Collectable],
+) -> (
+    std::collections::HashSet<Value>,
+    std::collections::HashSet<Value>,
+) {
+    let roots = kept_by_c();
     let by_value: HashMap<Value, &Collectable> =
         every.iter().map(|found| (found.value, found)).collect();
     let mut reached: std::collections::HashSet<Value> = std::collections::HashSet::new();
+    let mut marked: std::collections::HashSet<Value> = std::collections::HashSet::new();
     let mut waiting: Vec<&Collectable> = Vec::new();
     for found in every {
         if found.outside > 0 || roots.contains(&found.value) {
@@ -160,15 +170,43 @@ fn reached_values(every: &[Collectable]) -> std::collections::HashSet<Value> {
         }
     }
     while let Some(found) = waiting.pop() {
-        for marked in super::collection::marks_made_by(|| found.mark()) {
-            if let Some(next) = by_value.get(&marked)
-                && reached.insert(marked)
+        for one in super::collection::marks_made_by(|| found.mark()) {
+            marked.insert(one);
+            if let Some(next) = by_value.get(&one)
+                && reached.insert(one)
             {
                 waiting.push(next);
             }
         }
     }
-    reached
+    (reached, marked)
+}
+
+/// The VALUEs C keeps: the ones it asked to keep alive, and the ones the C
+/// API's own tables name.
+fn kept_by_c() -> std::collections::HashSet<Value> {
+    let mut kept: std::collections::HashSet<Value> =
+        super::collection::roots().into_iter().collect();
+    super::flags::named_values(&mut kept);
+    super::io::named_values(&mut kept);
+    super::arrays::named_values(&mut kept);
+    super::strings::named_values(&mut kept);
+    super::sequences::named_values(&mut kept);
+    super::string_functions::named_values(&mut kept);
+    super::digests::named_values(&mut kept);
+    super::objects::named_values(&mut kept);
+    super::encodings::named_values(&mut kept);
+    super::exiting::named_values(&mut kept);
+    kept
+}
+
+/// The VALUEs C may still reach: what it keeps, what the reached Data
+/// objects mark, and every Data object, which is freed apart from the rest.
+fn values_c_reaches(every: &[Collectable]) -> std::collections::HashSet<Value> {
+    let (_, mut kept) = reached_values(every);
+    kept.extend(kept_by_c());
+    kept.extend(every.iter().map(|found| found.value));
+    kept
 }
 
 /// The class variable holding the address of the allocator C gave a class.
@@ -176,9 +214,11 @@ pub(crate) const ALLOCATOR_VAR: &str = "__c_allocator__";
 
 thread_local! {
     /// The wrapped pointer of every Data object, by the address of the
-    /// instance. The handle table keeps each of them alive, so no address
-    /// is reused.
+    /// instance. Each stays pinned until it is freed, so no address is
+    /// reused while it is here.
     static WRAPPED: RefCell<HashMap<usize, Wrapped>> = RefCell::new(HashMap::new());
+    /// How many Data objects have been made.
+    static MADE: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
 fn instance_key(object: &Object) -> Option<usize> {
@@ -247,6 +287,7 @@ fn wrap(
                 slot,
                 data_type,
                 value,
+                made: MADE.with(|made| made.replace(made.get() + 1)),
             },
         )
     });
@@ -502,24 +543,33 @@ pub(crate) fn wrapped_size(object: &Object) -> usize {
 }
 
 impl VirtualMachine {
-    /// Free every Data object nothing reaches any more, running each one's
-    /// free function, and run the mark function of every one something does.
-    /// While C is running, a VALUE it holds in a local is a reference no
-    /// count shows, so nothing is collected then.
+    /// Let go of every object handed to C that C no longer reaches, and free
+    /// every Data object nothing reaches any more, running each one's free
+    /// function. A call into C that has not returned may hold VALUEs in its
+    /// locals, so nothing is let go of while one is on any stack.
     pub(crate) fn collect_unreached_data(
         &mut self,
         position: Position,
     ) -> Result<(), MetorexError> {
-        if super::c_is_running() {
+        if super::c_frames_exist() {
             return Ok(());
+        }
+        // Letting go of an object can leave a Data object it held with
+        // nothing else reaching it, so this runs until nothing more is let
+        // go of.
+        loop {
+            let every = every_collectable();
+            let kept = super::enter(self, Caller::at(position), || values_c_reaches(&every))?;
+            if super::values::unpin_all_but(&kept) == 0 {
+                break;
+            }
         }
         let every = every_collectable();
         if every.is_empty() {
             return Ok(());
         }
-        let caller = Caller::at(position);
-        let unreached = super::enter(self, caller, || {
-            let reached = reached_values(&every);
+        let unreached = super::enter(self, Caller::at(position), || {
+            let (reached, _) = reached_values(&every);
             let unreached = take_collectables(|found| reached.contains(&found.value));
             for found in &unreached {
                 found.free();
@@ -527,7 +577,7 @@ impl VirtualMachine {
             unreached
         })?;
         for found in unreached {
-            super::handles::release(found.value);
+            super::values::unpin(found.value);
         }
         Ok(())
     }

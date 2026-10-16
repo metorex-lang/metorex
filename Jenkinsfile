@@ -162,6 +162,58 @@ pipeline {
           }
         }
 
+        // The same tests with METOREX_ENGINE=bytecode. Each metorex process
+        // writes its engine report into engine-report/, and the total is
+        // kept with the build.
+        stage('test-bytecode') {
+          agent {
+            kubernetes {
+              defaultContainer 'ci'
+              yaml buildPod('risa', '3', '6')
+            }
+          }
+          environment {
+            CARGO_TARGET_DIR = '/cache/target-test-bytecode'
+            METOREX_ENGINE = 'bytecode'
+          }
+          steps {
+            sh 'mkdir -p engine-report'
+            sh 'cargo build'
+            sh 'METOREX_ENGINE_REPORT="$PWD/engine-report" cargo test'
+          }
+          post {
+            always {
+              sh 'scripts/engine_report_summary.sh engine-report > engine-report-tests.txt || true'
+              archiveArtifacts artifacts: 'engine-report-tests.txt', allowEmptyArchive: true
+            }
+          }
+        }
+
+        stage('ruby-spec-bytecode') {
+          agent {
+            kubernetes {
+              defaultContainer 'ci'
+              yaml buildPod('risa', '4', '8')
+            }
+          }
+          environment {
+            CARGO_TARGET_DIR = '/cache/target-spec-bytecode'
+            JOBS = '10'
+            METOREX_ENGINE = 'bytecode'
+          }
+          steps {
+            sh 'mkdir -p engine-report'
+            sh 'cargo build'
+            sh 'METOREX_ENGINE_REPORT="$PWD/engine-report" scripts/run_ruby_spec.sh'
+          }
+          post {
+            always {
+              sh 'scripts/engine_report_summary.sh engine-report > engine-report-ruby-spec.txt || true'
+              archiveArtifacts artifacts: 'engine-report-ruby-spec.txt', allowEmptyArchive: true
+            }
+          }
+        }
+
         stage('rspec-suites') {
           agent {
             kubernetes {

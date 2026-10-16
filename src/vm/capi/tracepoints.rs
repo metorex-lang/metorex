@@ -2,8 +2,8 @@
 //! and enabling, disabling and asking about any TracePoint.
 
 use super::calls::{call, top_level_module};
-use super::handles::{QNIL, Value, to_object, to_value};
 use super::methods::{CFunction, TRACEPOINT_HOOK_ARITY};
+use super::values::{QNIL, Value, to_object, to_value};
 use crate::object::{Method, Object};
 use std::rc::Rc;
 

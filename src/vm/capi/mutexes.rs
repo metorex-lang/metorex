@@ -2,7 +2,7 @@
 //! running a C function while holding it.
 
 use super::calls::{call, top_level_module};
-use super::handles::{QNIL, Value, to_object, to_value};
+use super::values::{QNIL, Value, to_object, to_value};
 use crate::object::Object;
 
 fn send(mutex: Value, name: &str, arguments: Vec<Object>) -> Value {

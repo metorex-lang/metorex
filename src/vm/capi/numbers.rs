@@ -2,7 +2,7 @@
 //! their unsigned forms, which take any Integer, a Float, or an object that
 //! answers `to_int`, and refuse one that does not fit the C type.
 
-use super::handles::{Value, to_object};
+use super::values::{Value, to_object};
 use super::{interpreter, or_raise, raise};
 use crate::object::View;
 use num_bigint::BigInt;

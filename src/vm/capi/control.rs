@@ -5,7 +5,7 @@
 
 use super::calls::{call, kernel_function, top_level_module};
 use super::exceptions::rb_syserr_new;
-use super::handles::{QNIL, Value, to_object, to_value};
+use super::values::{QNIL, Value, to_object, to_value};
 use super::{ERROR_INFO, called_from, called_with_block};
 use super::{interpreter, raise, running_method};
 use crate::error::MetorexError;
@@ -150,7 +150,7 @@ pub extern "C-unwind" fn rb_metorex_rescue2(
     count: i32,
     classes: *const Value,
 ) -> Value {
-    let classes = super::handles::objects_from(i64::from(count), classes);
+    let classes = super::values::objects_from(i64::from(count), classes);
     rescuing(body, data, rescue, rescue_data, |exception| {
         classes.iter().any(|class| {
             if !matches!(class.view(), View::Class(_) | View::Module(_)) {

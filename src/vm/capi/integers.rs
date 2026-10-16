@@ -2,7 +2,7 @@
 //! order and width C asks for, and `rb_int_positive_pow`.
 
 use super::calls::call;
-use super::handles::{Value, to_object, to_value};
+use super::values::{Value, to_object, to_value};
 use super::{interpreter, or_raise, raise};
 use crate::object::Object;
 use crate::object::View;

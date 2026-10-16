@@ -3,7 +3,7 @@
 //! hash with.
 
 use super::calls::{call, top_level_module};
-use super::handles::{QNIL, Value, objects_from, to_object, to_value};
+use super::values::{QNIL, Value, objects_from, to_object, to_value};
 use super::{called_from, called_with_block, interpreter, or_raise, raise};
 use crate::object::Object;
 use crate::object::View;

@@ -2,8 +2,8 @@
 //! function, and resuming, yielding, transferring and raising.
 
 use super::calls::{call, top_level_module};
-use super::handles::{Value, objects_from, to_object, to_value};
 use super::methods::{BLOCK_FUNCTION_ARITY, CFunction};
+use super::values::{Value, objects_from, to_object, to_value};
 use super::{called_from, interpreter};
 use crate::object::{Method, Object};
 use crate::vm::program::block_for_method;

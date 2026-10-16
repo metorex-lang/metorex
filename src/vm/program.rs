@@ -200,7 +200,11 @@ impl VirtualMachine {
         let caller_lexical_home = self.lexical_home_frame.take();
         // A `return` written at the top level ends the program, carrying its
         // value out however deep in blocks it was written.
-        let result = match self.run_program_statements(statements) {
+        let ran = match self.run_compiled_unit(None, statements) {
+            Some(ran) => ran.map(Some),
+            None => self.run_program_statements(statements),
+        };
+        let result = match ran {
             Err(MetorexError::NonLocalReturn { value, .. }) => Ok(Some(value)),
             other => other,
         };

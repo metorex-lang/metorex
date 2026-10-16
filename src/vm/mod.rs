@@ -13,6 +13,8 @@ mod control_structures;
 pub(crate) mod core;
 pub mod counters;
 pub(crate) mod coverage;
+pub mod engine;
+pub mod engine_report;
 pub(crate) mod error_spots;
 pub(crate) mod errors;
 mod eval;
@@ -23,6 +25,7 @@ mod format;
 mod global_registry;
 mod heap;
 pub(crate) mod init;
+pub mod units;
 
 /// The type the operating system names a resource limit with, which is a
 /// plain int on the BSDs and a typed enum on Linux.

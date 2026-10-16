@@ -3,7 +3,7 @@
 //! Digest::Base runs on a context it keeps for each instance.
 
 use super::calls::{call, kernel_function, top_level_module};
-use super::handles::{Value, to_object, to_value};
+use super::values::{Value, to_object, to_value};
 use crate::object::Object;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -39,8 +39,8 @@ fn named_metadata(digest: Value) -> Value {
     classes
         .iter()
         .map(|class| super::objects::rb_ivar_get(to_value(class), name))
-        .find(|held| *held != super::handles::QNIL)
-        .unwrap_or(super::handles::QNIL)
+        .find(|held| *held != super::values::QNIL)
+        .unwrap_or(super::values::QNIL)
 }
 
 /// The metadata the class of `digest`, or a class above it, names.
@@ -53,10 +53,10 @@ fn metadata_of(digest: Value) -> &'static Metadata {
 
 /// Whether the class of `digest` names a plugin.
 extern "C-unwind" fn plugin_named(digest: Value) -> Value {
-    if named_metadata(digest) == super::handles::QNIL {
-        super::handles::QFALSE
+    if named_metadata(digest) == super::values::QNIL {
+        super::values::QFALSE
     } else {
-        super::handles::QTRUE
+        super::values::QTRUE
     }
 }
 
@@ -132,4 +132,9 @@ pub extern "C-unwind" fn rb_digest_namespace() -> Value {
         super::exports::rb_define_method(base, name.as_ptr(), function, arity);
     }
     to_value(&digest)
+}
+
+/// The VALUEs this table names, which stay pinned while it does.
+pub(super) fn named_values(found: &mut std::collections::HashSet<Value>) {
+    CONTEXTS.with(|held| found.extend(held.borrow().keys().copied()));
 }

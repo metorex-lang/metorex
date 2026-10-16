@@ -1,7 +1,7 @@
 //! The `rb_*` functions the binary exports for a C extension to call.
 
-use super::handles::{Value, to_object, to_value};
 use super::methods::{CFunction, MAX_FIXED_ARITY};
+use super::values::{Value, to_object, to_value};
 use super::{interpreter, or_raise, raise};
 use crate::class::Class;
 use crate::object::View;
@@ -33,7 +33,7 @@ pub(super) fn class_from(value: Value) -> Rc<Class> {
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_class_of(object: Value) -> Value {
     if super::string_functions::is_hidden(object) {
-        return super::handles::QFALSE;
+        return super::values::QFALSE;
     }
     let machine = interpreter();
     let object = to_object(object);

@@ -1,8 +1,8 @@
 //! Calling into Ruby from C: methods by name, Marshal, and finalizers.
 
-use super::handles::{Value, objects_from, to_object, to_value};
 use super::methods::CFunction;
 use super::symbols::symbol_name;
+use super::values::{Value, objects_from, to_object, to_value};
 use super::{interpreter, or_raise, raise};
 use crate::object::Object;
 use crate::object::{OptionView, View};
@@ -195,7 +195,7 @@ pub(super) fn arguments_with_keywords(
 /// Calls `name` the way `public_send` does, refusing a private or
 /// protected method, with `block` unless it is nil.
 fn public_call(receiver: Value, name: Value, arguments: Vec<Object>, block: Value) -> Value {
-    if block != super::handles::QNIL {
+    if block != super::values::QNIL {
         interpreter().pending_block = Some(to_object(block));
     }
     let mut sent = vec![Object::symbol(symbol_name(name))];
@@ -223,7 +223,7 @@ pub extern "C-unwind" fn rb_funcallv_public(
     arguments: *const Value,
 ) -> Value {
     let arguments = objects_from(i64::from(count), arguments);
-    public_call(receiver, name, arguments, super::handles::QNIL)
+    public_call(receiver, name, arguments, super::values::QNIL)
 }
 
 #[unsafe(no_mangle)]
@@ -261,7 +261,7 @@ pub extern "C-unwind" fn rb_check_funcall(
     arguments: *const Value,
 ) -> Value {
     if !answers(&to_object(receiver), &symbol_name(name)) {
-        return super::handles::QUNDEF;
+        return super::values::QUNDEF;
     }
     rb_funcallv(receiver, name, count, arguments)
 }
@@ -330,7 +330,7 @@ fn marshal() -> Object {
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_marshal_dump(object: Value, port: Value) -> Value {
     let mut arguments = vec![to_object(object)];
-    if port != super::handles::QNIL {
+    if port != super::values::QNIL {
         arguments.push(to_object(port));
     }
     to_value(&call(marshal(), "dump", arguments))

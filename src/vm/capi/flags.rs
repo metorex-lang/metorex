@@ -5,7 +5,7 @@
 //! back into the object whenever control leaves C.
 
 use super::exports::rb_class_of;
-use super::handles::{Value, to_object};
+use super::values::{Value, to_object};
 use super::{interpreter, running_interpreter};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -77,4 +77,9 @@ pub extern "C-unwind" fn rb_metorex_rbasic(object: Value) -> *mut RBasic {
         held.flags = held.basic.flags;
         &mut *held.basic as *mut RBasic
     })
+}
+
+/// The VALUEs this table names, which stay pinned while it does.
+pub(super) fn named_values(found: &mut std::collections::HashSet<Value>) {
+    HANDED.with(|held| found.extend(held.borrow().keys().copied()));
 }

@@ -3,7 +3,7 @@
 
 use super::calls::{call, class_name_of, top_level_module};
 use super::exports::text;
-use super::handles::{QNIL, Value, to_object, to_value};
+use super::values::{QNIL, Value, to_object, to_value};
 use super::{called_from, interpreter, or_raise, raise};
 use crate::object::Object;
 use crate::object::View;
@@ -118,7 +118,7 @@ pub extern "C-unwind" fn rb_class_new_instance(
     values: *const Value,
     class: Value,
 ) -> Value {
-    let arguments = super::handles::objects_from(i64::from(count), values);
+    let arguments = super::values::objects_from(i64::from(count), values);
     to_value(&call(to_object(class), "new", arguments))
 }
 

@@ -3,8 +3,8 @@
 
 use super::calls::{call, class_name_of};
 use super::encodings::{RbEncoding, encoding_object};
-use super::handles::{Value, to_object, to_value};
 use super::raise;
+use super::values::{Value, to_object, to_value};
 use crate::object::Object;
 use crate::object::View;
 use std::cell::RefCell;
@@ -103,7 +103,7 @@ pub extern "C-unwind" fn rb_check_symbol_cstr(
 ) -> Value {
     let name = tagged_string(text, length, encoding).to_string();
     if !crate::symbol_registry::contains(&name) {
-        return super::handles::QNIL;
+        return super::values::QNIL;
     }
     to_value(&Object::symbol(name))
 }
@@ -113,7 +113,7 @@ pub extern "C-unwind" fn rb_check_symbol_cstr(
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_id2str(id: Value) -> Value {
     if id == 0 {
-        return super::handles::QFALSE;
+        return super::values::QFALSE;
     }
     symbol_name(id);
     to_value(&call(to_object(id), "to_s", Vec::new()))

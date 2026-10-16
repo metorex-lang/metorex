@@ -1,6 +1,6 @@
 //! Yielding from a C method to the block it was called with.
 
-use super::handles::{QUNDEF, Value, objects_from, to_object, to_value};
+use super::values::{QUNDEF, Value, objects_from, to_object, to_value};
 use super::{called_from, called_with_block, interpreter, or_raise, raise};
 use crate::object::Object;
 use crate::object::{OptionView, View};

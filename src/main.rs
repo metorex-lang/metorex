@@ -69,6 +69,11 @@ fn run_with_program_stack(program: fn()) {
 
 fn real_main() {
     metorex::vm::counters::enable_from_environment();
+    metorex::vm::engine_report::enable_from_environment();
+    if let Err(message) = metorex::vm::engine::choose_from_environment() {
+        eprintln!("metorex: {message}");
+        std::process::exit(1);
+    }
     // Ruby lets `-r`, `-I`, and `-W` carry their value attached (`-rfoo`),
     // which the argument parser only understands as two words.
     let mut arguments = interpreter_words(std::env::args_os().map(argument_text).collect());

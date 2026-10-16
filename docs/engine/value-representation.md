@@ -120,9 +120,16 @@ alive is the memory management decision's.
 - Copies of a value share one `Body`, so the count of a part's `Rc` does not
   count them. `Object::references` counts the copies and every other holder
   of the part. The C API's collection reads it to tell whether anything
-  besides the handle table reaches a Data object, and a Hash reads it before
+  besides its pinned copy reaches a Data object, and a Hash reads it before
   writing in place to the record of its key objects that its copies share.
-- A Symbol is its id over the tag `0x0c`. The id indexes a table of names
+- A C extension's `VALUE` is the value's bits, made in
+  `src/vm/capi/values.rs`. Copies of one object can point at different
+  `Body` cells, so the first `Body` an object is handed to C through is the
+  one C is handed for it from then on, which keeps two `VALUE`s for one
+  object equal.
+- A Symbol is its id over the tag `0x0c`. An ASCII name in an
+  ASCII-compatible encoding gets one id whatever the encoding, so a Symbol C
+  makes from ASCII bytes has the bits Ruby's has. The id indexes a table of names
   kept for each thread, and a name stays in the table for the life of the
   thread, where CRuby frees a Symbol made at runtime once nothing refers to
   it.

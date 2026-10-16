@@ -3,8 +3,8 @@
 //! including the ones C names without an `@`, which Ruby code cannot see.
 
 use super::calls::{answers, call, class_name_of, kernel_function};
-use super::handles::{QFALSE, QNIL, QTRUE, Value, objects_from, to_object, to_value};
 use super::symbols::symbol_name;
+use super::values::{QFALSE, QNIL, QTRUE, Value, objects_from, to_object, to_value};
 use super::{called_from, called_with_block, interpreter, raise, running_method};
 use crate::object::Object;
 use crate::object::View;
@@ -574,4 +574,15 @@ pub extern "C-unwind" fn rb_free_generic_ivar(object: Value) {
         call(to_object(object), "remove_instance_variable", vec![name]);
     }
     HIDDEN_IVARS.with(|held| held.borrow_mut().remove(&object));
+}
+
+/// The VALUEs the hidden instance variables name, the objects holding them
+/// and what they hold, which stay pinned while they are named.
+pub(super) fn named_values(found: &mut std::collections::HashSet<Value>) {
+    HIDDEN_IVARS.with(|held| {
+        for (object, variables) in held.borrow().iter() {
+            found.insert(*object);
+            found.extend(variables.values().copied());
+        }
+    });
 }

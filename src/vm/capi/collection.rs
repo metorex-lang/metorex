@@ -1,11 +1,11 @@
-//! The garbage collector as C sees it. Every object handed to C stays in the
-//! handle table, except a Data object that nothing reaches when a collection
-//! runs: not Ruby, not a mark function, and not an address or object C asked
-//! to keep alive. Turning collection on and off, running it and reading what
-//! it last did go to the GC module.
+//! The garbage collector as C sees it. An object handed to C stays pinned
+//! until a collection finds C no longer reaches it: not through a mark
+//! function, and not through an address or object C asked to keep alive.
+//! Turning collection on and off, running it and reading what it last did go
+//! to the GC module.
 
 use super::calls::{call, top_level_module};
-use super::handles::{Value, to_object, to_value};
+use super::values::{Value, to_object, to_value};
 use crate::object::Object;
 use crate::object::View;
 use std::cell::RefCell;

@@ -3,7 +3,7 @@
 //! and the type tag of any object.
 
 use super::calls::{call, top_level_module};
-use super::handles::{QFALSE, QNIL, Value, objects_from, to_object, to_value};
+use super::values::{QFALSE, QNIL, Value, objects_from, to_object, to_value};
 use super::{called_from, interpreter, or_raise, raise, running_method};
 use crate::class::Class;
 use crate::object::Object;

@@ -76,7 +76,10 @@ impl VirtualMachine {
         for name in crate::ast::collect_assigned_locals(body) {
             self.environment_mut().hoist(name);
         }
-        let answered = self.apply_class_body(class, body, position);
+        let answered = match self.run_compiled_unit(None, body) {
+            Some(ran) => ran,
+            None => self.apply_class_body(class, body, position),
+        };
         self.environment_mut().pop_scope();
         answered
     }

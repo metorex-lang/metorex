@@ -4,7 +4,7 @@
 //! int range check, and `ruby_strtod`.
 
 use super::calls::call;
-use super::handles::{QNIL, QUNDEF, Value, to_object, to_value};
+use super::values::{QNIL, QUNDEF, Value, to_object, to_value};
 use super::{called_from, called_with_block, interpreter, keywords_given, raise};
 use crate::error::MetorexError;
 use crate::object::Object;
