@@ -13,6 +13,7 @@
 //   - vars:       SelfExpr / InstanceVariable / ClassVariable / GlobalVariable
 
 mod calls;
+pub(crate) use calls::CallRoute;
 mod defined;
 mod dispatch;
 pub(crate) use dispatch::{binary_op_method_name, literal_range_end};

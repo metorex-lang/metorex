@@ -108,10 +108,33 @@ registers than on the stack, since its literals each take an instruction.
 - `src/bytecode/compiler.rs` compiles a body to a unit: literals of every
   kind, including Arrays, Hashes, Ranges, Regexps, and interpolated
   Strings, `__FILE__`, `__LINE__`, and `__dir__`, locals, instance, class,
-  and global variables, constants, the operators that have an instruction,
-  and method calls with a receiver and plain arguments. A body holding any
-  other node is refused with that node's type name and runs on the tree
-  walker.
+  and global variables, constants, `defined?`, every binary and unary
+  operator, `&&` and `||`, subscripts, assignment to every kind of target,
+  the operator assignments, multiple assignment, block and lambda
+  literals, pattern tests, and calls with or without a receiver, with any
+  arguments, a block, and `&.`. A body holding any other node is refused
+  with that node's type name and runs on the tree walker. Class and module
+  bodies run on the tree walker under either engine for now, since their
+  statements follow rules of their own.
+- A call without a receiver, `name(arguments)`, decides how it is made
+  before its arguments are evaluated, from what the scope binds `name` to
+  and what `self` answers: `ResolveCall` and `eval_call` both call
+  `resolve_bare_call`, and `CallResolved` and `eval_call` both call
+  `run_call_route`.
+- Arguments with `*`, `**`, or `&` among them are gathered in an argument
+  list, `StartArguments` and one instruction per argument, which call the
+  same `ArgumentList` the tree walker's `evaluate_arguments` uses.
+- `defined?` and pattern tests call the tree walker's `eval_defined` and
+  `match_pattern`, which evaluate the expressions inside them, such as a
+  pinned expression or a receiver `defined?` asks about.
+- No temporary register lives from one statement to the next, so the runner
+  clears them as each statement starts, and a value only a temporary held
+  can be freed.
+- An assignment through a setter, `[]=`, or `Ns::Name =` evaluates the
+  receiver, subscripts, or namespace into registers, and names them in the
+  unit's table of targets. `StoreTarget` and `ReadTarget` turn the entry
+  back into the tree walker's prepared target and write or read through
+  it, so both engines call the same setter and `[]=` code.
 - A Hash literal's keys and values are all evaluated before any key's
   `hash` is called, as in CRuby, on both engines. Each hole of an
   interpolated String is converted to text before the next is evaluated.

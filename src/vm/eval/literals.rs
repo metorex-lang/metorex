@@ -293,4 +293,76 @@ impl VirtualMachine {
             mark,
         ))
     }
+
+    /// `collection[key]`, with both evaluated.
+    pub(crate) fn index_value(
+        &mut self,
+        collection: Object,
+        key: Object,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
+        // Block/Lambda [] call syntax: proc[args]
+        if let View::Block(block) = collection.view() {
+            return block.call(self, vec![key], position);
+        }
+        // `native_fn [args]` — treat as a call with the bracketed array as a single argument.
+        // This matches Ruby's `private [:foo, :bar]` which passes an Array to `private`.
+        if let View::NativeFunction(name) = collection.view() {
+            return self.call_native_function(&name.clone(), vec![key], position);
+        }
+        // Check for user-defined [] method on instances
+        if let View::Instance(instance_rc) = collection.view() {
+            let class = Rc::clone(&instance_rc.borrow().class);
+            if let Some(method) = class.find_method("[]") {
+                return self.invoke_method(class, method, collection.clone(), vec![key], position);
+            }
+            // A Thread keeps its locals under `t[:k]`, which the
+            // Thread method table reads. Going through it here keeps
+            // one reading of the key for the subscript and the call.
+            if class.name() == "Thread" {
+                return self
+                    .call_thread_method(&collection, "[]", std::slice::from_ref(&key), position)?
+                    .ok_or_else(|| {
+                        MetorexError::runtime_error(
+                            "Thread lookup answered nothing",
+                            position_to_location(position),
+                        )
+                    });
+            }
+        }
+        // A number reads its own bits by subscript, where a pair of
+        // arguments arrives as the Array the subscript gathered.
+        if matches!(collection.view(), View::Int(_) | View::BigInt(_)) {
+            let spread = match key.view() {
+                View::Array(gathered) => gathered.borrow().clone(),
+                _ => vec![key.clone()],
+            };
+            return self.send_to_object(collection, "[]", spread, position);
+        }
+        self.evaluate_index_operation(collection, key, position)
+    }
+
+    /// `value => pattern`, which refuses a value the pattern does not cover,
+    /// and `value in pattern`, which answers whether it does.
+    pub(crate) fn test_pattern(
+        &mut self,
+        held: Object,
+        pattern: &crate::ast::MatchPattern,
+        refuses: bool,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
+        let mut bindings = std::collections::HashMap::new();
+        self.pattern_failure = None;
+        let matched = self.match_pattern(pattern, &held, &mut bindings, position)?;
+        if matched {
+            self.apply_pattern_bindings(&bindings);
+        } else if refuses {
+            return Err(self.detailed_no_matching_pattern(&held, position));
+        }
+        Ok(if refuses {
+            Object::Nil
+        } else {
+            Object::Bool(matched)
+        })
+    }
 }

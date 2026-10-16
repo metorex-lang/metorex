@@ -39,8 +39,10 @@ fn locals_are_numbered_in_the_order_the_body_assigns_them() {
     assert_eq!(
         unit.instructions,
         vec![
+            Unhoist { slot: 0 },
             LoadInteger { to: 0, value: 1 },
             SetLocal { from: 0, slot: 0 },
+            Unhoist { slot: 1 },
             GetLocal { to: 0, slot: 0 },
             SetLocal { from: 0, slot: 1 },
             Return { from: 0 },
@@ -73,7 +75,7 @@ fn each_statement_starts_at_its_first_instruction() {
         .enumerate()
         .filter_map(|(at, start)| start.map(|start| (at, start.index, start.position.line)))
         .collect();
-    assert_eq!(starts, vec![(0, 0, 1), (2, 1, 2)]);
+    assert_eq!(starts, vec![(0, 0, 1), (3, 1, 2)]);
 }
 
 #[test]
@@ -115,8 +117,7 @@ fn a_call_is_pointed_at_by_its_receiver_and_method_name() {
 #[test]
 fn a_body_holding_a_node_the_compiler_does_not_handle_names_it() {
     assert_eq!(compiled("while false\nend\n").err(), Some("While"));
-    assert_eq!(compiled("held = -> { 1 }\n").err(), Some("Lambda"));
-    assert_eq!(compiled("[1].each { |n| n }\n").err(), Some("MethodCall"));
+    assert_eq!(compiled("held = if true then 1 end\n").err(), Some("If"));
 }
 
 #[test]
@@ -165,8 +166,39 @@ fn a_long_hash_literal_is_built_a_chunk_at_a_time() {
 }
 
 #[test]
-fn an_assignment_to_a_target_not_compiled_is_refused_as_an_assignment() {
-    assert_eq!(compiled("Math::HELD = 1\n").err(), Some("Assignment"));
+fn an_operator_assignment_on_a_receiver_reads_and_writes_one_target() {
+    use metorex::bytecode::unit::Target;
+    let unit = unit_of("held = []\nheld[0] += 1\n");
+    let reads = unit
+        .instructions
+        .iter()
+        .filter(|instruction| matches!(instruction, ReadTarget { .. }))
+        .count();
+    let stores = unit
+        .instructions
+        .iter()
+        .filter(|instruction| matches!(instruction, StoreTarget { .. }))
+        .count();
+    assert_eq!((reads, stores), (1, 1));
+    assert!(matches!(
+        unit.targets[0],
+        Target::Subscript {
+            count: 1,
+            sends: false,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn a_safe_setter_skips_the_value_when_there_is_no_receiver() {
+    let unit = unit_of("held = nil\nheld&.size = 3\n");
+    assert!(
+        unit.instructions
+            .iter()
+            .any(|instruction| matches!(instruction, JumpIfNil { .. }))
+    );
+    assert_eq!(VirtualMachine::new().run_unit(&unit).unwrap(), Object::Nil);
 }
 
 #[test]
@@ -179,14 +211,15 @@ fn disassembly_notes_what_each_side_table_operand_names() {
         concat!(
             "== notes.rb\n",
             "    1 | held = 100000\n",
-            "        0000  LoadConstant { to: 0, constant: 0 }  ; 100000\n",
-            "        0001  SetLocal { from: 0, slot: 0 }  ; held\n",
+            "        0000  Unhoist { slot: 0 }  ; held\n",
+            "        0001  LoadConstant { to: 0, constant: 0 }  ; 100000\n",
+            "        0002  SetLocal { from: 0, slot: 0 }  ; held\n",
             "    2 | $total = held\n",
-            "        0002  GetLocal { to: 0, slot: 0 }  ; held\n",
-            "        0003  SetGlobal { from: 0, name: 0 }  ; $total\n",
+            "        0003  GetLocal { to: 0, slot: 0 }  ; held\n",
+            "        0004  SetGlobal { from: 0, name: 0 }  ; $total\n",
             "    3 | :done\n",
-            "        0004  LoadSymbol { to: 0, name: 1 }  ; :done\n",
-            "        0005  Return { from: 0 }\n",
+            "        0005  LoadSymbol { to: 0, name: 1 }  ; :done\n",
+            "        0006  Return { from: 0 }\n",
         )
     );
 }
@@ -300,4 +333,101 @@ fn magic_names_and_big_integers_load_what_they_name() {
                 .unwrap()
         )]
     );
+}
+
+#[test]
+fn constant_assignments_of_every_form_compile() {
+    let unit = compiled(
+        "LIMIT = 3\nLIMIT_TWICE ||= LIMIT * 2\nSettings::NESTED = 4\nSettings::NESTED ||= 5\n::TOP = 1\n",
+    );
+    assert_eq!(unit.err(), None);
+}
+
+#[test]
+fn multiple_assignments_of_every_form_compile() {
+    for source in [
+        "first, second = 1, 2\n",
+        "head, *rest = [1, 2, 3]\n",
+        "(inner, other), last = [4, 5], 6\n",
+        "*start, final = 7, 8, 9\n",
+        "box.size, box.label = 10, \"ten\"\n",
+        "values[0], values[1] = :x, :y\n",
+    ] {
+        assert_eq!(compiled(source).err(), None, "{source}");
+    }
+}
+
+#[test]
+fn declared_locals_are_bound_through_their_slots() {
+    let declared = metorex::ast::Statement::DeclareLocals {
+        names: vec!["item".to_string()],
+        position: metorex::lexer::Position::new(1, 1, 0),
+    };
+    let unit = compile(std::slice::from_ref(&declared)).unwrap();
+    assert_eq!(
+        unit.instructions,
+        vec![
+            DeclareLocal { slot: 0 },
+            LoadNil { to: 0 },
+            Return { from: 0 },
+        ]
+    );
+    assert_eq!(unit.locals[0].text, "item");
+    let mut machine = VirtualMachine::new();
+    machine.run_unit(&unit).unwrap();
+    let read = Parser::new(Lexer::new("item").tokenize()).parse().unwrap();
+    assert_eq!(machine.execute_program(&read).unwrap(), Some(Object::Nil));
+}
+
+#[test]
+fn a_call_with_a_splat_gathers_its_arguments_in_a_list() {
+    let unit = unit_of("held = [1]\nheld.push(*held) { }\n");
+    let site = &unit.call_sites[0];
+    assert!(site.arguments_in_list && site.has_block);
+    assert_eq!(site.block_offset(), 1);
+    let gathered: Vec<&str> = unit
+        .instructions
+        .iter()
+        .filter(|instruction| {
+            matches!(
+                instruction,
+                StartArguments | SplatArgument { .. } | MakeBlock { .. }
+            )
+        })
+        .map(Instruction::name)
+        .collect();
+    assert_eq!(
+        gathered,
+        vec!["StartArguments", "SplatArgument", "MakeBlock"]
+    );
+}
+
+#[test]
+fn a_call_without_a_receiver_decides_its_route_before_its_arguments() {
+    let names: Vec<&str> = instructions_of("format(\"%d\", 1)")
+        .iter()
+        .map(Instruction::name)
+        .collect();
+    assert_eq!(
+        names,
+        vec![
+            "ResolveCall",
+            "NewString",
+            "LoadInteger",
+            "CallResolved",
+            "Move",
+            "Return"
+        ]
+    );
+}
+
+#[test]
+fn a_safe_call_skips_its_arguments_when_there_is_no_receiver() {
+    let unit = unit_of("held = nil\nheld&.push(1)\n");
+    assert!(
+        unit.instructions
+            .iter()
+            .any(|instruction| matches!(instruction, SafeNavigation { .. }))
+    );
+    assert_eq!(VirtualMachine::new().run_unit(&unit).unwrap(), Object::Nil);
 }

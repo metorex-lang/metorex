@@ -27,6 +27,15 @@ pub struct Unit {
     pub regexes: Vec<RegexLiteral>,
     pub hashes: Vec<HashShape>,
     pub interpolations: Vec<Vec<Piece>>,
+    pub targets: Vec<Target>,
+    pub multiple_assignments: Vec<MultipleAssignment>,
+    /// The expressions `IsDefined` asks `defined?` about.
+    pub defined: Vec<crate::ast::Expression>,
+    /// The block and lambda literals `MakeBlock` makes Procs of.
+    pub blocks: Vec<crate::ast::Expression>,
+    /// The patterns `MatchPattern` matches, each with whether a value it does
+    /// not match is refused, as `=>` refuses one.
+    pub patterns: Vec<(crate::ast::MatchPattern, bool)>,
     pub handlers: Vec<Handler>,
     /// How many registers the unit's instructions name.
     pub register_count: usize,
@@ -72,6 +81,9 @@ pub enum Receiver {
     SelfKeyword,
     /// The identifier `self`.
     SelfName,
+    /// A value an operator assignment read, sent the method as `send` would
+    /// send it.
+    Sent,
     /// Any other expression.
     Other,
 }
@@ -80,8 +92,21 @@ pub enum Receiver {
 #[derive(Debug, Clone)]
 pub struct CallSite {
     pub name: String,
+    /// How many registers after the receiver hold the arguments, when they
+    /// are not gathered in an argument list.
     pub argument_count: usize,
     pub receiver: Receiver,
+    /// Whether the arguments are gathered in the argument list
+    /// `StartArguments` began, for a call with `*`, `**`, or `&` among them.
+    pub arguments_in_list: bool,
+    /// Whether a block written on the call is in the register after the
+    /// arguments, or after the receiver when the arguments are in a list.
+    pub has_block: bool,
+    /// Whether the call was written with arguments, which a call without a
+    /// receiver decides its route by.
+    pub written_with_arguments: bool,
+    /// Whether one of the arguments is `**value`.
+    pub keyword_splat: bool,
 }
 
 impl CallSite {
@@ -90,6 +115,19 @@ impl CallSite {
             name: name.to_string(),
             argument_count,
             receiver,
+            arguments_in_list: false,
+            has_block: false,
+            written_with_arguments: argument_count > 0,
+            keyword_splat: false,
+        }
+    }
+
+    /// The register holding the call's block, counted from the receiver's.
+    pub fn block_offset(&self) -> usize {
+        if self.arguments_in_list {
+            1
+        } else {
+            1 + self.argument_count
         }
     }
 }
@@ -144,6 +182,55 @@ pub enum Piece {
         register: usize,
         position: Position,
     },
+}
+
+/// An assignment target, with the registers holding what was evaluated
+/// ahead of the value.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Target {
+    /// A variable or a bare constant, which needs nothing evaluated first.
+    Named(crate::ast::Expression),
+    /// `receiver.reader = value`, or `receiver&.reader = value` when `safe`.
+    Setter {
+        receiver: usize,
+        reader: String,
+        safe: bool,
+        names_self: bool,
+        position: Position,
+    },
+    /// `receiver[subscripts] = value`, the subscripts in the `count`
+    /// registers from `first`, or the elements of the Array in `first` when
+    /// `spread`. `sends` is set for the forms that always write through a
+    /// `[]=` call.
+    Subscript {
+        receiver: usize,
+        first: usize,
+        count: usize,
+        spread: bool,
+        sends: bool,
+        position: Position,
+    },
+    /// `Namespace::Name = value`. `or_assigning` is set for `||=`, which
+    /// reads a constant not defined yet as nil.
+    ScopedConstant {
+        namespace: usize,
+        name: String,
+        or_assigning: bool,
+        position: Position,
+    },
+    /// `(a, b)` among the targets of a multiple assignment.
+    Group(Vec<Target>, Position),
+    /// `*rest` among the targets of a multiple assignment.
+    Splat(Box<Target>),
+}
+
+/// The targets of a multiple assignment, and whether the right-hand side
+/// was one value, which is spread across them, rather than several.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MultipleAssignment {
+    pub targets: Vec<Target>,
+    pub lone_value: bool,
+    pub position: Position,
 }
 
 /// Instructions from `start` up to `end` that raise an exception jump to
@@ -237,6 +324,31 @@ impl Unit {
     pub fn interpolation(&mut self, pieces: Vec<Piece>) -> usize {
         self.interpolations.push(pieces);
         self.interpolations.len() - 1
+    }
+
+    pub fn target(&mut self, target: Target) -> usize {
+        self.targets.push(target);
+        self.targets.len() - 1
+    }
+
+    pub fn multiple_assignment(&mut self, shape: MultipleAssignment) -> usize {
+        self.multiple_assignments.push(shape);
+        self.multiple_assignments.len() - 1
+    }
+
+    pub fn defined_expression(&mut self, expression: crate::ast::Expression) -> usize {
+        self.defined.push(expression);
+        self.defined.len() - 1
+    }
+
+    pub fn block(&mut self, literal: crate::ast::Expression) -> usize {
+        self.blocks.push(literal);
+        self.blocks.len() - 1
+    }
+
+    pub fn pattern(&mut self, pattern: crate::ast::MatchPattern, refuses: bool) -> usize {
+        self.patterns.push((pattern, refuses));
+        self.patterns.len() - 1
     }
 
     pub fn handler(&mut self, handler: Handler) {

@@ -13,4 +13,7 @@ pub(crate) use std::rc::Rc;
 mod assignment;
 mod running;
 
-pub(crate) use assignment::name_constant_value;
+pub(crate) use assignment::{
+    PreparedTarget, ReceiverTarget, constant_target_matches, logical_assignment,
+    name_constant_value,
+};

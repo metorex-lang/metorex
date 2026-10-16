@@ -283,11 +283,9 @@ impl VirtualMachine {
         // A trace sees a class body opening and closing, with the class
         // itself as the `self` those two events report.
         self.fire_event("class", position, Vec::new())?;
+        self.body_on_the_tree_walker("ClassDef");
         let body_result =
-            self.with_body_nesting(&class, |vm| match vm.run_compiled_unit(None, body) {
-                Some(ran) => ran,
-                None => vm.apply_class_body(&class, body, position),
-            });
+            self.with_body_nesting(&class, |vm| vm.apply_class_body(&class, body, position));
         self.fire_event("end", position, Vec::new())?;
         self.environment_mut().pop_scope();
         self.def_scope_stack.pop();

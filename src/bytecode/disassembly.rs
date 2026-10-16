@@ -52,7 +52,10 @@ fn note(unit: &Unit, instruction: &Instruction) -> Option<String> {
             .map(|value| value.to_string()),
         Instruction::LoadSymbol { name: index, .. } => name(index).map(|text| format!(":{text}")),
         Instruction::NewString { text, .. } => name(text).map(|text| format!("{text:?}")),
-        Instruction::GetLocal { slot, .. } | Instruction::SetLocal { slot, .. } => unit
+        Instruction::GetLocal { slot, .. }
+        | Instruction::SetLocal { slot, .. }
+        | Instruction::Unhoist { slot }
+        | Instruction::DeclareLocal { slot } => unit
             .locals
             .get(usize::from(slot))
             .map(|local| local.text.clone()),

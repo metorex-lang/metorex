@@ -116,7 +116,13 @@ impl VirtualMachine {
                     ..
                 } if const_name.starts_with(|c: char| c.is_uppercase()) => {
                     let assign_pos = statement.position();
-                    let const_value = self.evaluate_constant_assignment(statement, value)?;
+                    let const_value = match self.evaluate_constant_assignment(statement, value)? {
+                        Ok(written) => written,
+                        Err(kept) => {
+                            last_value = kept;
+                            continue;
+                        }
+                    };
                     if module.get_class_var(const_name).is_some() {
                         let owner = module.ruby_name();
                         let owner = if owner.is_empty() {

@@ -239,20 +239,28 @@ impl VirtualMachine {
         let Err(MetorexError::UncaughtException { exception, .. }) = result else {
             return;
         };
-        let (start, name) = match target {
-            Expression::MethodCall {
-                receiver, method, ..
-            } => {
-                let setter = if method.ends_with('=') {
-                    method.clone()
-                } else {
-                    format!("{method}=")
-                };
-                (start_of(receiver), setter)
-            }
-            Expression::Index { array, .. } => (start_of(array), "[]=".to_string()),
-            _ => return,
+        let Some((start, name)) = assignment_spot(target) else {
+            return;
         };
         self.record_spot_hint(exception, start, Some(name));
+    }
+}
+
+/// Where an error an assignment through a setter or `[]=` raised is pointed
+/// at, and the method it called.
+pub(crate) fn assignment_spot(target: &Expression) -> Option<(Position, String)> {
+    match target {
+        Expression::MethodCall {
+            receiver, method, ..
+        } => {
+            let setter = if method.ends_with('=') {
+                method.clone()
+            } else {
+                format!("{method}=")
+            };
+            Some((start_of(receiver), setter))
+        }
+        Expression::Index { array, .. } => Some((start_of(array), "[]=".to_string())),
+        _ => None,
     }
 }

@@ -4,14 +4,19 @@
 //! same `VirtualMachine` functions the tree walker does.
 
 use crate::ast::{BinaryOp, Expression, UnaryOp};
-use crate::bytecode::instruction::{Instruction, Operand, RANGE_EXCLUSIVE, RANGE_LITERAL_ENDS};
-use crate::bytecode::unit::{CallSite, HashEntry, HashShape, Piece, Receiver, Unit};
+use crate::bytecode::instruction::{
+    BINARY_OPERATORS, Instruction, Operand, RANGE_EXCLUSIVE, RANGE_LITERAL_ENDS,
+};
+use crate::bytecode::unit::{CallSite, HashEntry, HashShape, Piece, Receiver, Target, Unit};
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::{Object, View};
 use crate::vm::VirtualMachine;
+use crate::vm::eval::CallRoute;
 use crate::vm::expression::{HashLiteral, Interpolation, WrittenPair};
 use crate::vm::method_lookup::WrittenReceiver;
+use crate::vm::program::ArgumentList;
+use crate::vm::statement::{PreparedTarget, ReceiverTarget};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -39,27 +44,44 @@ enum Next {
     Finish(Object),
 }
 
-/// The cells a unit's locals are held in, shared with the scope the unit
-/// runs in, so `binding`, `local_variables`, and `eval` read and write them
-/// too. A slot holds its cell from the unit's first write of the local on.
-type LocalCells = Vec<Option<Rc<RefCell<Object>>>>;
+/// The first register past the one a unit's answer is left in.
+const FIRST_TEMPORARY: usize = 1;
+
+/// What one run of a unit keeps besides its registers.
+struct RunState {
+    /// The cells the unit's locals are held in, shared with the scope the
+    /// unit runs in, so `binding`, `local_variables`, and `eval` read and
+    /// write them too. A slot holds its cell from the unit's first write of
+    /// the local on.
+    cells: Vec<Option<Rc<RefCell<Object>>>>,
+    /// The argument lists being gathered, the innermost call's last.
+    arguments: Vec<ArgumentList>,
+    /// The routes decided for calls whose arguments are being evaluated,
+    /// the innermost call's last, each with whether the call was written
+    /// with no receiver.
+    routes: Vec<(CallRoute, bool)>,
+}
 
 impl VirtualMachine {
     /// Run `unit`, answering what its `Return` hands back.
     pub fn run_unit(&mut self, unit: &Unit) -> Result<Object, MetorexError> {
-        let mut cells: LocalCells = vec![None; unit.locals.len()];
+        let mut state = RunState {
+            cells: vec![None; unit.locals.len()],
+            arguments: Vec::new(),
+            routes: Vec::new(),
+        };
         // A continuation taken in the unit runs it again from the statement
         // its `callcc` was written in.
         self.run_restartable(|vm, statement| {
             let at = unit.statement_at(statement).unwrap_or(0);
-            vm.run_unit_from(unit, &mut cells, at)
+            vm.run_unit_from(unit, &mut state, at)
         })
     }
 
     fn run_unit_from(
         &mut self,
         unit: &Unit,
-        cells: &mut LocalCells,
+        state: &mut RunState,
         start: usize,
     ) -> Result<Object, MetorexError> {
         let mut registers = vec![Object::Nil; unit.register_count];
@@ -81,13 +103,18 @@ impl VirtualMachine {
             }
             let ran = match unit.statement_starts[at] {
                 Some(statement) => {
+                    // No temporary lives from one statement to the next, and
+                    // one left holding a value would keep it from being freed.
+                    for register in registers.iter_mut().skip(FIRST_TEMPORARY) {
+                        *register = Object::Nil;
+                    }
                     self.mark_statement(statement.index);
                     self.begin_statement(statement.position, true)
                         .and_then(|()| {
                             self.execute_instruction(
                                 unit,
                                 &mut registers,
-                                cells,
+                                state,
                                 instruction,
                                 extension,
                                 position,
@@ -97,7 +124,7 @@ impl VirtualMachine {
                 None => self.execute_instruction(
                     unit,
                     &mut registers,
-                    cells,
+                    state,
                     instruction,
                     extension,
                     position,
@@ -136,7 +163,7 @@ impl VirtualMachine {
         &mut self,
         unit: &Unit,
         registers: &mut [Object],
-        cells: &mut LocalCells,
+        state: &mut RunState,
         instruction: Instruction,
         extension: Extension,
         position: Position,
@@ -195,10 +222,22 @@ impl VirtualMachine {
                 registers[register(to)] =
                     self.operate_on_values(&operator, left, right, &position)?;
             }
+            Instruction::BinaryOperator { to, first, op } => {
+                let first = register(first);
+                let operator = &BINARY_OPERATORS[usize::from(op)];
+                let (left, right) = (registers[first].clone(), registers[first + 1].clone());
+                registers[register(to)] =
+                    self.operate_on_values(operator, left, right, &position)?;
+            }
             Instruction::Negate { to, from } => {
                 let value = registers[register(from)].clone();
                 registers[register(to)] =
                     self.apply_unary_operator(&UnaryOp::Minus, value, position)?;
+            }
+            Instruction::Positive { to, from } => {
+                let value = registers[register(from)].clone();
+                registers[register(to)] =
+                    self.apply_unary_operator(&UnaryOp::Plus, value, position)?;
             }
             Instruction::Not { to, from } => {
                 let value = registers[register(from)].clone();
@@ -216,16 +255,174 @@ impl VirtualMachine {
                     return Ok(Next::JumpTo(index(target)));
                 }
             }
+            Instruction::JumpIfNil { test, target } => {
+                if registers[register(test)].is_nil() {
+                    return Ok(Next::JumpTo(index(target)));
+                }
+            }
             Instruction::Call { base, site } => {
                 let site = &unit.call_sites[index(site)];
                 let base = register(base);
                 let receiver = registers[base].clone();
-                let arguments = registers[base + 1..base + 1 + site.argument_count].to_vec();
-                registers[base] = self.call_from_unit(receiver, site, arguments, position)?;
+                let (arguments, block) = call_inputs(site, base, registers, state);
+                registers[base] = match site.receiver {
+                    Receiver::Sent => {
+                        self.send_to_object(receiver, &site.name, arguments, position)?
+                    }
+                    _ => self.call_from_unit(receiver, site, arguments, block, position)?,
+                };
+            }
+            Instruction::StartArguments => state.arguments.push(ArgumentList::default()),
+            Instruction::PushArgument { from } => {
+                let value = registers[register(from)].clone();
+                open_list(state).push(value);
+            }
+            Instruction::SplatArgument { from } => {
+                let value = registers[register(from)].clone();
+                open_list(state).splat(self, value, position)?;
+            }
+            Instruction::KeywordSplatArgument { from } => {
+                let value = registers[register(from)].clone();
+                open_list(state).keyword_splat(self, value, position)?;
+            }
+            Instruction::BlockArgument { from } => {
+                let value = registers[register(from)].clone();
+                open_list(state).block_argument(self, value, position)?;
+            }
+            Instruction::ArgumentsToArray { to } => {
+                let list = state.arguments.pop().expect("an argument list was begun");
+                registers[register(to)] = Object::array(list.finish());
+            }
+            Instruction::ResolveCall { site } => {
+                let site = &unit.call_sites[index(site)];
+                let route = self.resolve_bare_call(
+                    &site.name,
+                    site.written_with_arguments,
+                    site.has_block,
+                    site.keyword_splat,
+                    position,
+                )?;
+                state.routes.push((route, true));
+            }
+            Instruction::ResolveScopedCall { namespace, site } => {
+                let site = &unit.call_sites[index(site)];
+                let owner = registers[register(namespace)].clone();
+                let route = if matches!(
+                    self.lookup_method(&owner, &site.name),
+                    Some((_, found)) if !found.is_undefined
+                ) {
+                    CallRoute::OnReceiver {
+                        receiver: owner,
+                        written: written_receiver(site.receiver),
+                    }
+                } else {
+                    match self.read_scope_resolution(owner, &site.name, position) {
+                        Ok(value) => CallRoute::Callable(value),
+                        Err(error) => CallRoute::Failed(error),
+                    }
+                };
+                state.routes.push((route, false));
+            }
+            Instruction::CallResolved { base, site } => {
+                let site = &unit.call_sites[index(site)];
+                let base = register(base);
+                let (route, bare) = state.routes.pop().expect("a call route was decided");
+                let (arguments, block) = call_inputs(site, base, registers, state);
+                crate::vm::program::enter_nesting(position)?;
+                let attached = self.attached_block_flags.len();
+                let result = self.run_call_route(route, &site.name, arguments, block, position);
+                self.release_attached_blocks(attached);
+                crate::vm::program::leave_nesting();
+                if bare {
+                    self.note_failed_call(&result, &site.name, true, position);
+                }
+                registers[base] = result?;
+            }
+            Instruction::IsNativeName { to, name } => {
+                let name = &unit.names[index(name)].text;
+                let native = self
+                    .environment()
+                    .get(name)
+                    .is_some_and(|held| matches!(held.view(), View::NativeFunction(_)));
+                registers[register(to)] = Object::Bool(native);
+            }
+            Instruction::CallNativeName { base, site } => {
+                let site = &unit.call_sites[index(site)];
+                let base = register(base);
+                let (arguments, _) = call_inputs(site, base, registers, state);
+                let native =
+                    self.environment()
+                        .get(&site.name)
+                        .and_then(|held| match held.view() {
+                            View::NativeFunction(native) => Some(native.to_string()),
+                            _ => None,
+                        });
+                let Some(native) = native else {
+                    return Err(MetorexError::runtime_error(
+                        format!("{} is no longer a Kernel function", site.name),
+                        crate::vm::utils::position_to_location(position),
+                    ));
+                };
+                registers[base] =
+                    self.call_native_function(&native, vec![Object::array(arguments)], position)?;
+            }
+            Instruction::SafeNavigation { test, target } => {
+                let missing = registers[register(test)].is_nil();
+                self.coverage_branch(position, usize::from(missing));
+                if missing {
+                    return Ok(Next::JumpTo(index(target)));
+                }
+            }
+            Instruction::MakeBlock { to, literal } => {
+                registers[register(to)] =
+                    self.evaluate_block_literal(&unit.blocks[index(literal)])?;
+            }
+            Instruction::SplatInto { array, from } => {
+                let spread = self.splat_elements(registers[register(from)].clone(), position)?;
+                if let View::Array(elements) = registers[register(array)].view() {
+                    elements.borrow_mut().extend(spread);
+                }
+            }
+            Instruction::IndexSpread {
+                to,
+                collection,
+                subscripts,
+            } => {
+                let collection = registers[register(collection)].clone();
+                let subscripts = match registers[register(subscripts)].view() {
+                    View::Array(elements) => elements.borrow().clone(),
+                    _ => Vec::new(),
+                };
+                registers[register(to)] =
+                    self.send_to_object(collection, "[]", subscripts, position)?;
+            }
+            Instruction::MatchPattern {
+                register: held,
+                pattern,
+            } => {
+                let (pattern, refuses) = &unit.patterns[index(pattern)];
+                let value = registers[register(held)].clone();
+                registers[register(held)] =
+                    self.test_pattern(value, pattern, *refuses, position)?;
+            }
+            Instruction::DeclareLocal { slot } => {
+                let name = &unit.locals[index(slot)].text;
+                if self.environment().get(name).is_none() {
+                    self.environment_mut().define(name.clone(), Object::Nil);
+                } else {
+                    // A `for` loop names what its body binds so the scope
+                    // holding the loop still reads it afterwards, which
+                    // means the block the loop runs closes over the name.
+                    self.environment_mut().unhoist(name);
+                }
+            }
+            Instruction::Unhoist { slot } => {
+                let name = &unit.locals[index(slot)].text;
+                self.environment_mut().unhoist(name);
             }
             Instruction::GetLocal { to, slot } => {
                 let slot = index(slot);
-                registers[register(to)] = match &cells[slot] {
+                registers[register(to)] = match &state.cells[slot] {
                     Some(cell) => cell.borrow().clone(),
                     None => self.read_identifier(&unit.locals[slot].text, position)?,
                 };
@@ -233,7 +430,7 @@ impl VirtualMachine {
             Instruction::SetLocal { from, slot } => {
                 let slot = index(slot);
                 let value = registers[register(from)].clone();
-                match &cells[slot] {
+                match &state.cells[slot] {
                     Some(cell) => *cell.borrow_mut() = value,
                     None => {
                         let name = unit.locals[slot].text.clone();
@@ -242,7 +439,7 @@ impl VirtualMachine {
                             position,
                         };
                         self.assign_value(&target, value)?;
-                        cells[slot] = self.environment().get_ref(&name);
+                        state.cells[slot] = self.environment().get_ref(&name);
                     }
                 }
             }
@@ -361,6 +558,55 @@ impl VirtualMachine {
                 }
                 registers[register(to)] = interpolation.finish(self);
             }
+            Instruction::Index {
+                to,
+                collection,
+                key,
+            } => {
+                let collection = registers[register(collection)].clone();
+                let key = registers[register(key)].clone();
+                registers[register(to)] = self.index_value(collection, key, position)?;
+            }
+            Instruction::StoreTarget { from, target } => {
+                let target = prepared(&unit.targets[index(target)], registers);
+                self.store_prepared(&target, registers[register(from)].clone())?;
+            }
+            Instruction::ReadTarget { to, target } => {
+                let shape = &unit.targets[index(target)];
+                let or_assigning = matches!(
+                    shape,
+                    Target::ScopedConstant {
+                        or_assigning: true,
+                        ..
+                    }
+                );
+                let PreparedTarget::Receiver(on_receiver) = prepared(shape, registers) else {
+                    unreachable!("an operator assignment reads only a target on a receiver");
+                };
+                registers[register(to)] = self.read_on_receiver(&on_receiver, or_assigning)?;
+            }
+            Instruction::AssignMultiple { from, shape } => {
+                let shape = &unit.multiple_assignments[index(shape)];
+                let value = registers[register(from)].clone();
+                let source = if shape.lone_value {
+                    self.block_argument_spread(&value, shape.position)?
+                        .unwrap_or_else(|| vec![value.clone()])
+                } else {
+                    match value.view() {
+                        View::Array(elements) => elements.borrow().clone(),
+                        _ => vec![value.clone()],
+                    }
+                };
+                let targets: Vec<PreparedTarget> = shape
+                    .targets
+                    .iter()
+                    .map(|target| prepared(target, registers))
+                    .collect();
+                self.spread_into_prepared(&targets, &source)?;
+            }
+            Instruction::IsDefined { to, expression } => {
+                registers[register(to)] = self.eval_defined(&unit.defined[index(expression)])?;
+            }
             Instruction::Raise { from } => {
                 let raised = registers[register(from)].clone();
                 self.raise_exception(vec![raised], position)?;
@@ -414,24 +660,110 @@ impl VirtualMachine {
         receiver: Object,
         site: &CallSite,
         arguments: Vec<Object>,
+        block: Option<Object>,
         position: Position,
     ) -> Result<Object, MetorexError> {
         crate::vm::program::enter_nesting(position)?;
         let attached = self.attached_block_flags.len();
-        let written = match site.receiver {
-            Receiver::SelfKeyword => WrittenReceiver::SelfKeyword,
-            Receiver::SelfName => WrittenReceiver::SelfName,
-            Receiver::Other => WrittenReceiver::Other,
-        };
-        let result = self
-            .refuse_moved_receiver(&receiver, position)
-            .and_then(|()| {
-                self.call_evaluated_method(receiver, &site.name, arguments, written, position)
-            });
+        let written = written_receiver(site.receiver);
+        let result =
+            self.call_with_block(receiver, &site.name, arguments, block, written, position);
         self.release_attached_blocks(attached);
         crate::vm::program::leave_nesting();
         self.note_failed_call(&result, &site.name, written.names_self(), position);
         result
+    }
+}
+
+/// How the tree walker names the way a call's receiver was written.
+fn written_receiver(receiver: Receiver) -> WrittenReceiver {
+    match receiver {
+        Receiver::SelfKeyword => WrittenReceiver::SelfKeyword,
+        Receiver::SelfName => WrittenReceiver::SelfName,
+        Receiver::Other | Receiver::Sent => WrittenReceiver::Other,
+    }
+}
+
+/// The argument list being gathered for the innermost call.
+fn open_list(state: &mut RunState) -> &mut ArgumentList {
+    state
+        .arguments
+        .last_mut()
+        .expect("an argument list was begun")
+}
+
+/// The arguments and the block of the call `site` names, whose receiver is
+/// in `base`.
+fn call_inputs(
+    site: &CallSite,
+    base: usize,
+    registers: &[Object],
+    state: &mut RunState,
+) -> (Vec<Object>, Option<Object>) {
+    let arguments = if site.arguments_in_list {
+        state
+            .arguments
+            .pop()
+            .expect("an argument list was begun")
+            .finish()
+    } else {
+        registers[base + 1..base + 1 + site.argument_count].to_vec()
+    };
+    let block = site
+        .has_block
+        .then(|| registers[base + site.block_offset()].clone());
+    (arguments, block)
+}
+
+/// The tree walker's form of an assignment target, reading what was
+/// evaluated ahead of the value from the registers.
+fn prepared<'a>(target: &'a Target, registers: &[Object]) -> PreparedTarget<'a> {
+    match target {
+        Target::Named(named) => PreparedTarget::Named(named),
+        Target::Setter {
+            receiver,
+            reader,
+            safe,
+            names_self,
+            position,
+        } => PreparedTarget::Receiver(ReceiverTarget::Setter {
+            names_self: *names_self,
+            receiver: registers[*receiver].clone(),
+            reader,
+            safe: *safe,
+            position: *position,
+        }),
+        Target::Subscript {
+            receiver,
+            first,
+            count,
+            spread,
+            sends,
+            position,
+        } => PreparedTarget::Receiver(ReceiverTarget::Subscript {
+            receiver: registers[*receiver].clone(),
+            subscripts: match registers[*first].view() {
+                View::Array(elements) if *spread => elements.borrow().clone(),
+                _ => registers[*first..*first + *count].to_vec(),
+            },
+            sends: *sends,
+            position: *position,
+        }),
+        Target::ScopedConstant {
+            namespace,
+            name,
+            position,
+            ..
+        } => PreparedTarget::Receiver(ReceiverTarget::ScopedConstant {
+            namespace: registers[*namespace].clone(),
+            name,
+            position: *position,
+        }),
+        Target::Group(parts, position) => PreparedTarget::Group(
+            parts.iter().map(|part| prepared(part, registers)).collect(),
+            *position,
+        ),
+        Target::Splat(inner) => PreparedTarget::Splat(Box::new(prepared(inner, registers))),
     }
 }
 

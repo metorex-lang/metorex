@@ -49,6 +49,16 @@ pub fn compile(body: &[Statement]) -> Compiled {
 }
 
 impl crate::vm::VirtualMachine {
+    /// Record for the engine report a class or module body, which runs on
+    /// the tree walker under either engine: its statements follow rules of
+    /// their own, such as a bare `private` and `@name = value` declaring an
+    /// instance variable of the class. `node` names the definition.
+    pub(crate) fn body_on_the_tree_walker(&self, node: &'static str) {
+        if crate::vm::engine::engine() == crate::vm::engine::Engine::Bytecode {
+            crate::vm::engine_report::record(&Compiled::Fallback(node));
+        }
+    }
+
     /// Run `body` through what it compiled to, when the bytecode engine was
     /// chosen and the body compiled, answering its value. None means the
     /// body runs on the tree walker. A body with no slot of its own to keep
@@ -89,7 +99,14 @@ impl crate::vm::VirtualMachine {
     /// out.
     fn compile_body(&self, body: &[Statement]) -> Compiled {
         let compiled = compile(body);
-        let file = self.current_source_file.clone().unwrap_or_default();
+        let file = self
+            .current_source_file
+            .clone()
+            .or_else(|| {
+                self.reported_current_file()
+                    .map(|path| path.display().to_string())
+            })
+            .unwrap_or_default();
         if disassembly_wanted()
             && let Compiled::Unit(unit) = &compiled
             && !file.starts_with('<')

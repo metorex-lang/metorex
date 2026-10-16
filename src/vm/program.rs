@@ -395,222 +395,34 @@ impl VirtualMachine {
         &mut self,
         argument_exprs: &[Expression],
     ) -> Result<Vec<Object>, MetorexError> {
-        let mut args = Vec::with_capacity(argument_exprs.len());
-        // Whether the last argument was spread out of a splat, which is what
-        // lets a hash marked by `ruby2_keywords` be passed on as keywords.
-        let mut tail_from_splat = false;
+        let mut arguments = ArgumentList::with_capacity(argument_exprs.len());
         for arg in argument_exprs {
-            tail_from_splat = matches!(arg, Expression::Splat { .. });
             match arg {
                 Expression::Splat {
                     expression,
-                    position: splat_at,
+                    position,
                 } => {
                     let value = self.evaluate_expression(expression)?;
-                    match value.view() {
-                        View::Array(arr) => {
-                            args.extend(arr.borrow().iter().cloned());
-                        }
-                        // `*nil` spreads into nothing, the way `[*nil]` does,
-                        // so a call written with one passes no argument there.
-                        View::Nil => {}
-                        _ => match self.splat_through_to_a(value.clone(), *splat_at)? {
-                            Ok(items) => args.extend(items),
-                            Err(held) => args.push(held),
-                        },
-                    }
+                    arguments.splat(self, value, *position)?;
                 }
                 Expression::KeywordSplat {
                     expression,
-                    position: splat_position,
+                    position,
                 } => {
-                    // `**hash`: an empty Hash contributes no argument, so
-                    // `f(**{})` calls `f` with nothing at all.
-                    let splat_position = *splat_position;
-                    let mut value = self.evaluate_expression(expression)?;
-                    // Anything else is asked for a Hash of its own, which is
-                    // how an object stands in for keyword arguments.
-                    if !matches!(value.view(), View::Dict(_))
-                        && self.lookup_method(&value, "to_hash").is_some()
-                    {
-                        value = self.send_to_object(value, "to_hash", vec![], splat_position)?;
-                    }
-                    match value.view() {
-                        // `**nil` passes no keywords, the same as `**{}`.
-                        View::Nil => {}
-                        View::Dict(entries) if entries.borrow().is_empty() => {}
-                        View::Dict(entries) => {
-                            // Keywords spread after other keywords join them,
-                            // a later key taking the place of an earlier one.
-                            if let Some(View::Dict(gathered)) = args.last().view()
-                                && gathered.borrow().contains_key("__MX_KWARGS__")
-                            {
-                                let mut joined = gathered.borrow().clone();
-                                for (key, value) in entries.borrow().iter() {
-                                    joined.insert(key.clone(), value.clone());
-                                }
-                                args.pop();
-                                args.push(Object::Dict(std::rc::Rc::new(std::cell::RefCell::new(
-                                    joined,
-                                ))));
-                                continue;
-                            }
-                            let mut keywords = entries.borrow().clone();
-                            keywords.insert("__MX_KWARGS__".to_string(), Object::Bool(true));
-                            args.push(Object::Dict(std::rc::Rc::new(std::cell::RefCell::new(
-                                keywords,
-                            ))));
-                        }
-                        _ => args.push(value),
-                    }
+                    let value = self.evaluate_expression(expression)?;
+                    arguments.keyword_splat(self, value, *position)?;
                 }
                 Expression::BlockArg {
                     expression,
-                    position: other_position,
+                    position,
                 } => {
-                    let other_position = *other_position;
-                    // `&expr`: bind the value as the pending block. If the
-                    // value is nil, the call is treated as if no block were
-                    // given (the arg is dropped, not pushed).
                     let value = self.evaluate_expression(expression)?;
-                    // A refinement in force may say how an object becomes a
-                    // block, which stands ahead of whatever its own kind does.
-                    let refined_to_proc = self.any_refinement_active()
-                        && crate::vm::method_lookup::refinement_target_name(&value, self)
-                            .and_then(|target| self.find_refined_method(&target, "to_proc"))
-                            .is_some();
-                    match value.view() {
-                        View::Nil => {}
-                        View::Block(_) => {
-                            self.pending_block = Some(value);
-                            self.pending_block_from_ampersand = true;
-                        }
-                        _ if refined_to_proc => {
-                            let made = self.send_to_object(
-                                value.clone(),
-                                "to_proc",
-                                Vec::new(),
-                                other_position,
-                            )?;
-                            self.pending_block = Some(made);
-                            self.pending_block_from_ampersand = true;
-                            self.pending_block_source = Some(value.clone());
-                        }
-                        View::Symbol(sym) => {
-                            // `&:method` is symbol-to-proc: synthesize a block
-                            // `|x| x.send(:method)`. The block has no captured
-                            // vars and a one-statement body that calls .send
-                            // on the parameter.
-                            self.pending_block = Some(Object::Block(std::rc::Rc::new(
-                                symbol_to_proc_block(&sym.as_str()),
-                            )));
-                            self.pending_block_from_ampersand = true;
-                        }
-                        // `&some_method` hands the method over as the block,
-                        // which is what `to_proc` on a Method answers.
-                        View::Method(_) => {
-                            self.pending_block =
-                                Some(block_for_method(value.clone(), other_position));
-                            self.pending_block_from_ampersand = true;
-                        }
-                        // An object of the program's own becomes a block
-                        // through `to_proc`, which is how a Yielder reaches
-                        // a method that takes one.
-                        View::Instance(_)
-                            if self
-                                .send_to_object(
-                                    value.clone(),
-                                    "respond_to?",
-                                    vec![Object::symbol("to_proc".to_string())],
-                                    other_position,
-                                )?
-                                .is_truthy() =>
-                        {
-                            let made = self.send_to_object(
-                                value.clone(),
-                                "to_proc",
-                                Vec::new(),
-                                other_position,
-                            )?;
-                            match made.view() {
-                                View::Block(_) => {
-                                    self.pending_block = Some(made);
-                                    self.pending_block_from_ampersand = true;
-                                    self.pending_block_source = Some(value.clone());
-                                }
-                                // A `to_proc` that answers a Method stands
-                                // for a block the same way `&method` does.
-                                View::Method(_) => {
-                                    self.pending_block =
-                                        Some(block_for_method(made.clone(), other_position));
-                                    self.pending_block_from_ampersand = true;
-                                }
-                                // Anything else is no block at all, which
-                                // Ruby names both sides of.
-                                _ => {
-                                    let named = self.builtins().class_of(&value).ruby_name();
-                                    let gives = self.builtins().class_of(&made).ruby_name();
-                                    let message = format!(
-                                        "can't convert {} into Proc ({}#to_proc gives {})",
-                                        named, named, gives
-                                    );
-                                    return Err(crate::vm::errors::simple_exception(
-                                        "TypeError",
-                                        &message,
-                                        other_position,
-                                    ));
-                                }
-                            }
-                        }
-                        // An object with no `to_proc` of its own is no block,
-                        // and Ruby refuses it rather than counting it among
-                        // the arguments.
-                        View::Instance(_) => {
-                            let named = self.builtins().class_of(&value).ruby_name();
-                            let message = format!("no implicit conversion of {} into Proc", named);
-                            return Err(crate::vm::errors::simple_exception(
-                                "TypeError",
-                                &message,
-                                other_position,
-                            ));
-                        }
-                        _ => {
-                            // Non-block, non-nil &arg: push as positional so
-                            // the existing trailing-block-extraction in
-                            // `invoke_method` can pick it up if it happens to
-                            // be a Method/Proc that the user wants to coerce.
-                            args.push(value.clone());
-                        }
-                    }
+                    arguments.block_argument(self, value, *position)?;
                 }
-                _ => {
-                    args.push(self.evaluate_expression(arg)?);
-                }
+                _ => arguments.push(self.evaluate_expression(arg)?),
             }
         }
-        // A hash marked by `ruby2_keywords` and spread out of a splat goes on
-        // as the keyword arguments it was gathered from.
-        if tail_from_splat
-            && let Some(View::Dict(entries)) = args.last().view()
-            && entries
-                .borrow()
-                .contains_key(crate::vm::native_methods::hash_methods::RUBY2_KEYWORDS_KEY)
-        {
-            let mut keywords: indexmap::IndexMap<String, Object> = entries
-                .borrow()
-                .iter()
-                .filter(|(key, _)| {
-                    key.as_str() != crate::vm::native_methods::hash_methods::RUBY2_KEYWORDS_KEY
-                })
-                .map(|(key, value)| (key.clone(), value.clone()))
-                .collect();
-            keywords.insert("__MX_KWARGS__".to_string(), Object::Bool(true));
-            args.pop();
-            args.push(Object::Dict(std::rc::Rc::new(std::cell::RefCell::new(
-                keywords,
-            ))));
-        }
-        Ok(args)
+        Ok(arguments.finish())
     }
 
     /// Evaluate an expression to a runtime value.
@@ -759,4 +571,236 @@ pub(crate) fn enter_nesting(position: crate::lexer::Position) -> Result<(), Meto
 /// Come back up the level `enter_nesting` went down.
 pub(crate) fn leave_nesting() {
     NESTING.with(|depth| depth.set(depth.get() - 1));
+}
+
+/// A call's arguments as they are evaluated, one at a time.
+#[derive(Default)]
+pub(crate) struct ArgumentList {
+    args: Vec<Object>,
+    /// Whether the last argument was spread out of a splat, which is what
+    /// lets a hash marked by `ruby2_keywords` be passed on as keywords.
+    tail_from_splat: bool,
+}
+
+impl ArgumentList {
+    pub(crate) fn with_capacity(capacity: usize) -> ArgumentList {
+        ArgumentList {
+            args: Vec::with_capacity(capacity),
+            tail_from_splat: false,
+        }
+    }
+
+    /// Add a plain argument.
+    pub(crate) fn push(&mut self, value: Object) {
+        self.tail_from_splat = false;
+        self.args.push(value);
+    }
+
+    /// Add what `*value` spreads.
+    pub(crate) fn splat(
+        &mut self,
+        vm: &mut VirtualMachine,
+        value: Object,
+        splat_at: Position,
+    ) -> Result<(), MetorexError> {
+        self.tail_from_splat = true;
+        match value.view() {
+            View::Array(arr) => {
+                self.args.extend(arr.borrow().iter().cloned());
+            }
+            // `*nil` spreads into nothing, the way `[*nil]` does,
+            // so a call written with one passes no argument there.
+            View::Nil => {}
+            _ => match vm.splat_through_to_a(value.clone(), splat_at)? {
+                Ok(items) => self.args.extend(items),
+                Err(held) => self.args.push(held),
+            },
+        }
+        Ok(())
+    }
+
+    /// Add the keywords `**value` passes.
+    pub(crate) fn keyword_splat(
+        &mut self,
+        vm: &mut VirtualMachine,
+        value: Object,
+        splat_position: Position,
+    ) -> Result<(), MetorexError> {
+        self.tail_from_splat = false;
+        let mut value = value;
+        // Anything else is asked for a Hash of its own, which is
+        // how an object stands in for keyword arguments.
+        if !matches!(value.view(), View::Dict(_)) && vm.lookup_method(&value, "to_hash").is_some() {
+            value = vm.send_to_object(value, "to_hash", vec![], splat_position)?;
+        }
+        match value.view() {
+            // `**nil` passes no keywords, the same as `**{}`.
+            View::Nil => {}
+            View::Dict(entries) if entries.borrow().is_empty() => {}
+            View::Dict(entries) => {
+                // Keywords spread after other keywords join them,
+                // a later key taking the place of an earlier one.
+                if let Some(View::Dict(gathered)) = self.args.last().view()
+                    && gathered.borrow().contains_key("__MX_KWARGS__")
+                {
+                    let mut joined = gathered.borrow().clone();
+                    for (key, value) in entries.borrow().iter() {
+                        joined.insert(key.clone(), value.clone());
+                    }
+                    self.args.pop();
+                    self.args
+                        .push(Object::Dict(std::rc::Rc::new(std::cell::RefCell::new(
+                            joined,
+                        ))));
+                    return Ok(());
+                }
+                let mut keywords = entries.borrow().clone();
+                keywords.insert("__MX_KWARGS__".to_string(), Object::Bool(true));
+                self.args
+                    .push(Object::Dict(std::rc::Rc::new(std::cell::RefCell::new(
+                        keywords,
+                    ))));
+            }
+            _ => self.args.push(value),
+        }
+        Ok(())
+    }
+
+    /// Take `&value` as the call's block.
+    pub(crate) fn block_argument(
+        &mut self,
+        vm: &mut VirtualMachine,
+        value: Object,
+        other_position: Position,
+    ) -> Result<(), MetorexError> {
+        self.tail_from_splat = false;
+        // A refinement in force may say how an object becomes a
+        // block, which stands ahead of whatever its own kind does.
+        let refined_to_proc = vm.any_refinement_active()
+            && crate::vm::method_lookup::refinement_target_name(&value, vm)
+                .and_then(|target| vm.find_refined_method(&target, "to_proc"))
+                .is_some();
+        match value.view() {
+            View::Nil => {}
+            View::Block(_) => {
+                vm.pending_block = Some(value);
+                vm.pending_block_from_ampersand = true;
+            }
+            _ if refined_to_proc => {
+                let made =
+                    vm.send_to_object(value.clone(), "to_proc", Vec::new(), other_position)?;
+                vm.pending_block = Some(made);
+                vm.pending_block_from_ampersand = true;
+                vm.pending_block_source = Some(value.clone());
+            }
+            View::Symbol(sym) => {
+                // `&:method` is symbol-to-proc: synthesize a block
+                // `|x| x.send(:method)`. The block has no captured
+                // vars and a one-statement body that calls .send
+                // on the parameter.
+                vm.pending_block = Some(Object::Block(std::rc::Rc::new(symbol_to_proc_block(
+                    &sym.as_str(),
+                ))));
+                vm.pending_block_from_ampersand = true;
+            }
+            // `&some_method` hands the method over as the block,
+            // which is what `to_proc` on a Method answers.
+            View::Method(_) => {
+                vm.pending_block = Some(block_for_method(value.clone(), other_position));
+                vm.pending_block_from_ampersand = true;
+            }
+            // An object of the program's own becomes a block
+            // through `to_proc`, which is how a Yielder reaches
+            // a method that takes one.
+            View::Instance(_)
+                if vm
+                    .send_to_object(
+                        value.clone(),
+                        "respond_to?",
+                        vec![Object::symbol("to_proc".to_string())],
+                        other_position,
+                    )?
+                    .is_truthy() =>
+            {
+                let made =
+                    vm.send_to_object(value.clone(), "to_proc", Vec::new(), other_position)?;
+                match made.view() {
+                    View::Block(_) => {
+                        vm.pending_block = Some(made);
+                        vm.pending_block_from_ampersand = true;
+                        vm.pending_block_source = Some(value.clone());
+                    }
+                    // A `to_proc` that answers a Method stands
+                    // for a block the same way `&method` does.
+                    View::Method(_) => {
+                        vm.pending_block = Some(block_for_method(made.clone(), other_position));
+                        vm.pending_block_from_ampersand = true;
+                    }
+                    // Anything else is no block at all, which
+                    // Ruby names both sides of.
+                    _ => {
+                        let named = vm.builtins().class_of(&value).ruby_name();
+                        let gives = vm.builtins().class_of(&made).ruby_name();
+                        let message = format!(
+                            "can't convert {} into Proc ({}#to_proc gives {})",
+                            named, named, gives
+                        );
+                        return Err(crate::vm::errors::simple_exception(
+                            "TypeError",
+                            &message,
+                            other_position,
+                        ));
+                    }
+                }
+            }
+            // An object with no `to_proc` of its own is no block,
+            // and Ruby refuses it rather than counting it among
+            // the arguments.
+            View::Instance(_) => {
+                let named = vm.builtins().class_of(&value).ruby_name();
+                let message = format!("no implicit conversion of {} into Proc", named);
+                return Err(crate::vm::errors::simple_exception(
+                    "TypeError",
+                    &message,
+                    other_position,
+                ));
+            }
+            _ => {
+                // Non-block, non-nil &arg: push as positional so
+                // the existing trailing-block-extraction in
+                // `invoke_method` can pick it up if it happens to
+                // be a Method/Proc that the user wants to coerce.
+                self.args.push(value.clone());
+            }
+        }
+        Ok(())
+    }
+
+    /// The arguments to call with.
+    pub(crate) fn finish(mut self) -> Vec<Object> {
+        // A hash marked by `ruby2_keywords` and spread out of a splat goes on
+        // as the keyword arguments it was gathered from.
+        if self.tail_from_splat
+            && let Some(View::Dict(entries)) = self.args.last().view()
+            && entries
+                .borrow()
+                .contains_key(crate::vm::native_methods::hash_methods::RUBY2_KEYWORDS_KEY)
+        {
+            let mut keywords: indexmap::IndexMap<String, Object> = entries
+                .borrow()
+                .iter()
+                .filter(|(key, _)| {
+                    key.as_str() != crate::vm::native_methods::hash_methods::RUBY2_KEYWORDS_KEY
+                })
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect();
+            keywords.insert("__MX_KWARGS__".to_string(), Object::Bool(true));
+            self.args.pop();
+            self.args
+                .push(Object::Dict(std::rc::Rc::new(std::cell::RefCell::new(
+                    keywords,
+                ))));
+        }
+        self.args
+    }
 }

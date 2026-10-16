@@ -120,11 +120,23 @@ pub enum Instruction {
         left: u8,
         right: u8,
     },
+    /// Apply the operator `BINARY_OPERATORS` holds at `op` to the register
+    /// `first` and the one after it.
+    BinaryOperator {
+        to: u8,
+        first: u8,
+        op: u8,
+    },
     Negate {
         to: u8,
         from: u8,
     },
     Not {
+        to: u8,
+        from: u8,
+    },
+    /// Unary `+`.
+    Positive {
         to: u8,
         from: u8,
     },
@@ -139,12 +151,106 @@ pub enum Instruction {
         test: u8,
         target: u16,
     },
+    JumpIfNil {
+        test: u8,
+        target: u16,
+    },
     /// Call the method the call site names on the receiver in `base`, with
     /// the arguments in the registers after it, and put the answer in
     /// `base`.
     Call {
         base: u8,
         site: u16,
+    },
+    /// Begin an argument list, for a call with `*`, `**`, or `&` among its
+    /// arguments.
+    StartArguments,
+    /// Add `from` to the argument list.
+    PushArgument {
+        from: u8,
+    },
+    /// Add what `*from` spreads to the argument list.
+    SplatArgument {
+        from: u8,
+    },
+    /// Add the keywords `**from` passes to the argument list.
+    KeywordSplatArgument {
+        from: u8,
+    },
+    /// Take `&from` as the block of the call the argument list is for.
+    BlockArgument {
+        from: u8,
+    },
+    /// End the argument list, putting its arguments in an Array.
+    ArgumentsToArray {
+        to: u8,
+    },
+    /// Decide how the call the site names, written without a receiver, is
+    /// made, before its arguments are evaluated.
+    ResolveCall {
+        site: u16,
+    },
+    /// Decide how `namespace::name(arguments)` is made: a method call on
+    /// the namespace, or a call of the constant it holds.
+    ResolveScopedCall {
+        namespace: u8,
+        site: u16,
+    },
+    /// Make the call the last `ResolveCall` or `ResolveScopedCall` decided,
+    /// with the arguments after `base`, and put the answer in `base`.
+    CallResolved {
+        base: u8,
+        site: u16,
+    },
+    /// Whether the name is bound to a Kernel function, which `name[...]`
+    /// calls with the subscripts in an Array.
+    IsNativeName {
+        to: u8,
+        name: u16,
+    },
+    /// Call the Kernel function the site's name is bound to with the
+    /// arguments after `base` gathered in an Array.
+    CallNativeName {
+        base: u8,
+        site: u16,
+    },
+    /// Count the branch `&.` takes for coverage, and jump when `test` is nil.
+    SafeNavigation {
+        test: u8,
+        target: u16,
+    },
+    /// A Proc of the unit's block literal the operand numbers.
+    MakeBlock {
+        to: u8,
+        literal: u16,
+    },
+    /// Append what `*from` spreads to the Array in `array`.
+    SplatInto {
+        array: u8,
+        from: u8,
+    },
+    /// `collection[*subscripts]`, the subscripts the Array in `subscripts`
+    /// holds.
+    IndexSpread {
+        to: u8,
+        collection: u8,
+        subscripts: u8,
+    },
+    /// Match the value in `register` against the unit's pattern the operand
+    /// numbers, binding what it captures, and put the answer in `register`.
+    MatchPattern {
+        register: u8,
+        pattern: u16,
+    },
+    /// Bind the local the slot numbers to nil when no scope binds it yet,
+    /// as a `for` loop does for the names it binds.
+    DeclareLocal {
+        slot: u16,
+    },
+    /// Say that the assignment the local the slot numbers was reserved for
+    /// has begun, so a block written in its value closes over the local.
+    Unhoist {
+        slot: u16,
     },
     /// Read the local the slot numbers.
     GetLocal {
@@ -247,6 +353,36 @@ pub enum Instruction {
         to: u8,
         shape: u16,
     },
+    /// `collection[key]`.
+    Index {
+        to: u8,
+        collection: u8,
+        key: u8,
+    },
+    /// Write `from` through the unit's assignment target the operand
+    /// numbers.
+    StoreTarget {
+        from: u8,
+        target: u16,
+    },
+    /// Read what the unit's assignment target the operand numbers holds now,
+    /// for an operator assignment.
+    ReadTarget {
+        to: u8,
+        target: u16,
+    },
+    /// Spread `from` across the targets of the unit's multiple assignment
+    /// the operand numbers.
+    AssignMultiple {
+        from: u8,
+        shape: u16,
+    },
+    /// What `defined?` answers for the unit's expression the operand
+    /// numbers.
+    IsDefined {
+        to: u8,
+        expression: u16,
+    },
     /// Raise what `from` holds, as `raise` does with one argument.
     Raise {
         from: u8,
@@ -286,12 +422,33 @@ impl Instruction {
             Instruction::Greater { .. } => "Greater",
             Instruction::GreaterEqual { .. } => "GreaterEqual",
             Instruction::Negate { .. } => "Negate",
+            Instruction::BinaryOperator { .. } => "BinaryOperator",
             Instruction::Not { .. } => "Not",
+            Instruction::Positive { .. } => "Positive",
             Instruction::Jump { .. } => "Jump",
             Instruction::JumpIfTrue { .. } => "JumpIfTrue",
             Instruction::JumpIfFalse { .. } => "JumpIfFalse",
+            Instruction::JumpIfNil { .. } => "JumpIfNil",
             Instruction::Call { .. } => "Call",
+            Instruction::StartArguments => "StartArguments",
+            Instruction::PushArgument { .. } => "PushArgument",
+            Instruction::SplatArgument { .. } => "SplatArgument",
+            Instruction::KeywordSplatArgument { .. } => "KeywordSplatArgument",
+            Instruction::BlockArgument { .. } => "BlockArgument",
+            Instruction::ArgumentsToArray { .. } => "ArgumentsToArray",
+            Instruction::ResolveCall { .. } => "ResolveCall",
+            Instruction::ResolveScopedCall { .. } => "ResolveScopedCall",
+            Instruction::CallResolved { .. } => "CallResolved",
+            Instruction::IsNativeName { .. } => "IsNativeName",
+            Instruction::CallNativeName { .. } => "CallNativeName",
+            Instruction::SafeNavigation { .. } => "SafeNavigation",
+            Instruction::MakeBlock { .. } => "MakeBlock",
+            Instruction::SplatInto { .. } => "SplatInto",
+            Instruction::IndexSpread { .. } => "IndexSpread",
+            Instruction::MatchPattern { .. } => "MatchPattern",
             Instruction::GetLocal { .. } => "GetLocal",
+            Instruction::Unhoist { .. } => "Unhoist",
+            Instruction::DeclareLocal { .. } => "DeclareLocal",
             Instruction::SetLocal { .. } => "SetLocal",
             Instruction::GetIdentifier { .. } => "GetIdentifier",
             Instruction::GetInstanceVariable { .. } => "GetInstanceVariable",
@@ -312,6 +469,11 @@ impl Instruction {
             Instruction::ToText { .. } => "ToText",
             Instruction::Interpolate { .. } => "Interpolate",
             Instruction::Raise { .. } => "Raise",
+            Instruction::Index { .. } => "Index",
+            Instruction::StoreTarget { .. } => "StoreTarget",
+            Instruction::ReadTarget { .. } => "ReadTarget",
+            Instruction::AssignMultiple { .. } => "AssignMultiple",
+            Instruction::IsDefined { .. } => "IsDefined",
             Instruction::Return { .. } => "Return",
         }
     }
@@ -323,6 +485,35 @@ pub enum Operand {
     Register(usize),
     Constant(usize),
 }
+
+/// The operators `BinaryOperator` applies, by its `op` operand.
+pub const BINARY_OPERATORS: [crate::ast::BinaryOp; 22] = {
+    use crate::ast::BinaryOp::*;
+    [
+        Add,
+        Subtract,
+        Multiply,
+        Divide,
+        Modulo,
+        Power,
+        Equal,
+        CaseEqual,
+        NotEqual,
+        Less,
+        Greater,
+        LessEqual,
+        GreaterEqual,
+        Spaceship,
+        BitwiseAnd,
+        BitwiseOr,
+        Xor,
+        AddAssign,
+        SubtractAssign,
+        MultiplyAssign,
+        DivideAssign,
+        Assign,
+    ]
+};
 
 /// `NewRange` builds a Range that leaves out its end.
 pub const RANGE_EXCLUSIVE: u8 = 1;

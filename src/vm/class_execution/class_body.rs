@@ -76,10 +76,8 @@ impl VirtualMachine {
         for name in crate::ast::collect_assigned_locals(body) {
             self.environment_mut().hoist(name);
         }
-        let answered = match self.run_compiled_unit(None, body) {
-            Some(ran) => ran,
-            None => self.apply_class_body(class, body, position),
-        };
+        self.body_on_the_tree_walker("SingletonClass");
+        let answered = self.apply_class_body(class, body, position);
         self.environment_mut().pop_scope();
         answered
     }
@@ -470,7 +468,13 @@ impl VirtualMachine {
                         continue;
                     }
                     let assign_pos = statement.position();
-                    let const_value = self.evaluate_constant_assignment(statement, value)?;
+                    let const_value = match self.evaluate_constant_assignment(statement, value)? {
+                        Ok(written) => written,
+                        Err(kept) => {
+                            last_value = kept;
+                            continue;
+                        }
+                    };
                     if class.get_class_var(const_name).is_some() {
                         let owner = class.ruby_name();
                         let owner = if owner.is_empty() {

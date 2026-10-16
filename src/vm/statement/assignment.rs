@@ -23,7 +23,9 @@ pub(crate) enum PreparedTarget<'a> {
 pub(crate) enum ReceiverTarget<'a> {
     /// `receiver.name = value`, or `receiver&.name = value` when `safe`.
     Setter {
-        receiver_expression: &'a Expression,
+        /// Whether the receiver was written as `self`, which lets a private
+        /// reader or writer be called.
+        names_self: bool,
         receiver: Object,
         reader: &'a str,
         safe: bool,
@@ -48,19 +50,27 @@ pub(crate) enum ReceiverTarget<'a> {
 impl VirtualMachine {
     /// Evaluate the value of a constant assignment inside a class or module
     /// body, honoring the `CONST ||= value` form for a constant that has no
-    /// value yet.
+    /// value yet. Answers Err with the constant's value when `||=` or `&&=`
+    /// leaves the constant as it is.
     pub(crate) fn evaluate_constant_assignment(
         &mut self,
         statement: &Statement,
         value: &Expression,
-    ) -> Result<Object, MetorexError> {
+    ) -> Result<Result<Object, Object>, MetorexError> {
         let Statement::Assignment { target, .. } = statement else {
-            return self.evaluate_expression(value);
+            return self.evaluate_expression(value).map(Ok);
         };
-        match self.conditional_assignment_to_new_constant(target, value) {
-            Some(right) => self.evaluate_expression(right),
-            None => self.evaluate_expression(value),
+        if let Some(right) = self.conditional_assignment_to_new_constant(target, value) {
+            return self.evaluate_expression(right).map(Ok);
         }
+        if let Some((or_assigning, reading, right)) = logical_assignment(target, value) {
+            let current = self.evaluate_expression(reading)?;
+            if is_truthy(&current) == or_assigning {
+                return Ok(Err(current));
+            }
+            return self.evaluate_expression(right).map(Ok);
+        }
+        self.evaluate_expression(value).map(Ok)
     }
 
     /// For `CONST ||= value` where `CONST` is not defined, the right-hand
@@ -213,7 +223,7 @@ impl VirtualMachine {
                     // there.
                     (crate::parser::SAFE_CALL, [Expression::Symbol { value: named, .. }]) => {
                         ReceiverTarget::Setter {
-                            receiver_expression,
+                            names_self: crate::vm::method_lookup::names_self(receiver_expression),
                             receiver,
                             reader: named,
                             safe: true,
@@ -223,7 +233,7 @@ impl VirtualMachine {
                     // The parser accepts no other call as a target than one
                     // without arguments, which names a setter.
                     _ => ReceiverTarget::Setter {
-                        receiver_expression,
+                        names_self: crate::vm::method_lookup::names_self(receiver_expression),
                         receiver,
                         reader: method,
                         safe: false,
@@ -267,7 +277,7 @@ impl VirtualMachine {
     }
 
     /// Write `value` through a target on a receiver evaluated already.
-    fn store_on_receiver(
+    pub(crate) fn store_on_receiver(
         &mut self,
         target: &ReceiverTarget,
         value: Object,
@@ -295,13 +305,13 @@ impl VirtualMachine {
                 ..
             } if receiver.is_nil() => Ok(()),
             ReceiverTarget::Setter {
-                receiver_expression,
+                names_self,
                 receiver,
                 reader,
                 position,
                 ..
             } => self.store_through_setter(
-                receiver_expression,
+                *names_self,
                 receiver.clone(),
                 format!("{}=", reader),
                 value,
@@ -319,20 +329,20 @@ impl VirtualMachine {
     /// assignment combines with its right-hand side. For `||=`, a constant
     /// not yet defined reads as nil, which is what lets `Ns::Name ||= value`
     /// define it. Any other operator refuses a constant that is not there.
-    fn read_on_receiver(
+    pub(crate) fn read_on_receiver(
         &mut self,
         target: &ReceiverTarget,
         or_assigning: bool,
     ) -> Result<Object, MetorexError> {
         match target {
             ReceiverTarget::Setter {
-                receiver_expression,
+                names_self,
                 receiver,
                 reader,
                 position,
                 ..
             } => {
-                self.refuse_private_reader(receiver_expression, receiver, reader, *position)?;
+                self.refuse_private_reader(*names_self, receiver, reader, *position)?;
                 self.send_to_object(receiver.clone(), reader, vec![], *position)
             }
             ReceiverTarget::Subscript {
@@ -362,7 +372,7 @@ impl VirtualMachine {
     /// as the setter it pairs with.
     fn refuse_private_reader(
         &mut self,
-        receiver_expression: &Expression,
+        names_self: bool,
         receiver: &Object,
         reader: &str,
         position: Position,
@@ -371,9 +381,7 @@ impl VirtualMachine {
             return Ok(());
         };
         let class = Rc::clone(&instance.borrow().class);
-        if crate::vm::method_lookup::names_self(receiver_expression)
-            || !self.refuses_explicit_receiver(&class, reader)
-        {
+        if names_self || !self.refuses_explicit_receiver(&class, reader) {
             return Ok(());
         }
         Err(visibility_error(&class, reader, position))
@@ -410,7 +418,19 @@ impl VirtualMachine {
             // undefined constant as nil rather than raising, so only the
             // right-hand side is evaluated.
             Some(right) => self.evaluate_expression(right)?,
-            None => self.evaluate_expression(value)?,
+            None => match logical_assignment(target, value) {
+                // `target ||= value` is `target || target = value`, and
+                // `target &&= value` is `target && target = value`, so the
+                // target is not written when what it reads decides the answer.
+                Some((or_assigning, reading, right)) => {
+                    let current = self.evaluate_expression(reading)?;
+                    if is_truthy(&current) == or_assigning {
+                        return Ok(current);
+                    }
+                    self.evaluate_expression(right)?
+                }
+                None => self.evaluate_expression(value)?,
+            },
         };
         self.store_prepared(&prepared, evaluated.clone())?;
         Ok(evaluated)
@@ -847,7 +867,7 @@ impl VirtualMachine {
     /// whether the call names `self`.
     fn store_through_setter(
         &mut self,
-        receiver: &Expression,
+        names_self: bool,
         receiver_obj: Object,
         setter_method: String,
         value: Object,
@@ -899,7 +919,7 @@ impl VirtualMachine {
                     // Visibility check: an explicit-receiver setter
                     // call (`obj.foo = …`) can only invoke public
                     // methods, mirroring `evaluate_method_call`.
-                    let is_explicit_receiver = !crate::vm::method_lookup::names_self(receiver);
+                    let is_explicit_receiver = !names_self;
                     if is_explicit_receiver
                         && self.refuses_explicit_receiver(&class, &setter_method)
                     {
@@ -1178,6 +1198,37 @@ impl VirtualMachine {
 
 /// Whether `target` is a constant-shaped assignment target that `left` reads,
 /// which is the shape `CONST ||= value` desugars to.
+/// For `target ||= value` and `target &&= value` written on a variable or
+/// a bare constant: whether it is `||=`, what reads the target, and the
+/// right-hand side. The parser writes the reading of a constant or a class
+/// variable as `defined?(target) && target`.
+pub(crate) fn logical_assignment<'a>(
+    target: &Expression,
+    value: &'a Expression,
+) -> Option<(bool, &'a Expression, &'a Expression)> {
+    let Expression::BinaryOp {
+        op: op @ (crate::ast::BinaryOp::Or | crate::ast::BinaryOp::And),
+        left,
+        right,
+        ..
+    } = value
+    else {
+        return None;
+    };
+    let reads_target = left.as_ref() == target
+        || matches!(left.as_ref(), Expression::BinaryOp {
+            op: crate::ast::BinaryOp::And,
+            left: guard,
+            right: read,
+            ..
+        } if read.as_ref() == target
+            && matches!(guard.as_ref(), Expression::Defined { expression, .. } if expression.as_ref() == target));
+    if !reads_target {
+        return None;
+    }
+    Some((matches!(op, crate::ast::BinaryOp::Or), left, right))
+}
+
 pub(crate) fn constant_target_matches(target: &Expression, left: &Expression) -> bool {
     match (target, left) {
         (
