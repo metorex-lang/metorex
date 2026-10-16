@@ -549,10 +549,6 @@ pub fn names_a_definition_under(name: &str, value: &Object) -> bool {
 pub fn names_a_definition(value: &Object) -> bool {
     matches!(
         value.view(),
-        View::Method(_)
-            | View::Class(_)
-            | View::Module(_)
-            | View::NativeFunction(_)
-            | View::CompiledFunction(_)
+        View::Method(_) | View::Class(_) | View::Module(_) | View::NativeFunction(_)
     )
 }

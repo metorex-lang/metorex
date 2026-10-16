@@ -1,9 +1,0 @@
-mod block_tests;
-mod class_tests;
-mod closure_tests;
-mod control_flow_tests;
-mod core_tests;
-mod expressions;
-mod function_tests;
-mod optimization_tests;
-mod statement_tests;

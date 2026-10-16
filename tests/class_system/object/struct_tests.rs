@@ -1,5 +1,5 @@
 // Coverage tests for object structs: Binding, Heap, CallFrame, GlobalRegistry,
-// CompiledFunction, ObjectHash, BlockStatement, Instance, Exception, Method
+// ObjectHash, BlockStatement, Instance, Exception, Method
 
 use metorex::object::{
     Binding, BlockStatement, Class, Exception, Instance, Method, Object, ObjectHash,
@@ -139,34 +139,6 @@ fn object_hash_from_array_holds_the_array() {
 fn object_hash_from_dict_holds_the_dict() {
     let h = ObjectHash::from_object(&Object::empty_dict());
     assert!(h.is_some());
-}
-
-// ── CompiledFunction ────────────────────────────────────────────────────────
-
-#[test]
-fn compiled_function_debug_script() {
-    use metorex::object::CompiledFunction;
-    let f = CompiledFunction::new(String::new(), 0);
-    assert_eq!(format!("{:?}", f), "<script>");
-    assert_eq!(format!("{}", f), "<script>");
-}
-
-#[test]
-fn compiled_function_debug_named() {
-    use metorex::object::CompiledFunction;
-    let f = CompiledFunction::new("foo".to_string(), 2);
-    assert_eq!(format!("{:?}", f), "<fn foo>");
-    assert_eq!(format!("{}", f), "<fn foo>");
-}
-
-#[test]
-fn compiled_function_equality() {
-    use metorex::object::CompiledFunction;
-    let a = CompiledFunction::new("foo".to_string(), 2);
-    let b = CompiledFunction::new("foo".to_string(), 2);
-    let c = CompiledFunction::new("bar".to_string(), 2);
-    assert_eq!(a, b);
-    assert_ne!(a, c);
 }
 
 // ── Instance ────────────────────────────────────────────────────────────────

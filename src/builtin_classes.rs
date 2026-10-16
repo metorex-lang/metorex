@@ -139,7 +139,6 @@ impl BuiltinClasses {
             View::Result(_) => Rc::clone(&self.object_class),
             View::NativeFunction(_) => Rc::clone(&self.object_class),
             View::Range { .. } => Rc::clone(&self.range_class),
-            View::CompiledFunction(_) => Rc::clone(&self.object_class),
             View::Regex(_, _) => Rc::clone(&self.regexp_class),
         }
     }

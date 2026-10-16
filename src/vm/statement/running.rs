@@ -33,6 +33,31 @@ impl VirtualMachine {
         Ok(())
     }
 
+    /// What happens before each statement runs, on either engine: a `:line`
+    /// event for whatever is tracing, which costs a check on an empty list
+    /// when nothing is, then signals, a collection when one is due, the
+    /// turn passed to another thread when this one's time is up, and the
+    /// line's coverage.
+    pub(crate) fn begin_statement(
+        &mut self,
+        position: crate::lexer::Position,
+        fires_line_event: bool,
+    ) -> Result<(), MetorexError> {
+        if fires_line_event && !self.tracepoints.is_empty() {
+            self.fire_line_event(position)?;
+        }
+        self.deliver_pending_signals(position)?;
+        if crate::object::live::collection_due() {
+            self.collect_garbage(position)?;
+        }
+        self.pass_checkpoint(position)?;
+        let line = position.line;
+        if self.coverage_skip_line.take() != Some(line) && self.coverage.is_some() {
+            self.coverage_count(line);
+        }
+        Ok(())
+    }
+
     /// Evaluate a statement and produce control-flow information for the caller.
     pub(crate) fn execute_statement(
         &mut self,
@@ -67,21 +92,11 @@ impl VirtualMachine {
         &mut self,
         statement: &Statement,
     ) -> Result<ControlFlow, MetorexError> {
-        // Every statement is a `:line` event for whatever is tracing, which
-        // costs a check on an empty list when nothing is. A `begin` is not
-        // one: the statements inside it are.
-        if !self.tracepoints.is_empty() && !matches!(statement, Statement::Begin { .. }) {
-            self.fire_line_event(statement.position())?;
-        }
-        self.deliver_pending_signals(statement.position())?;
-        if crate::object::live::collection_due() {
-            self.collect_garbage(statement.position())?;
-        }
-        self.pass_checkpoint(statement.position())?;
-        let line = statement.position().line;
-        if self.coverage_skip_line.take() != Some(line) && self.coverage.is_some() {
-            self.coverage_count(line);
-        }
+        // A `begin` is not a line event: the statements inside it are.
+        self.begin_statement(
+            statement.position(),
+            !matches!(statement, Statement::Begin { .. }),
+        )?;
         match statement {
             Statement::Expression {
                 expression,

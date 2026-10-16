@@ -184,15 +184,6 @@ fn class_of_result() {
     assert_eq!(class.name(), "Object");
 }
 
-#[test]
-fn class_of_compiled_function() {
-    let builtins = BuiltinClasses::new();
-    use metorex::object::CompiledFunction;
-    let func = Object::CompiledFunction(Rc::new(CompiledFunction::new("test".to_string(), 0)));
-    let class = builtins.class_of(&func);
-    assert_eq!(class.name(), "Object");
-}
-
 // ── builtin_classes.rs: is_instance_of ──────────────────────────────────────
 
 #[test]

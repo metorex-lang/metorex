@@ -349,24 +349,7 @@ impl VirtualMachine {
                 position,
             } => {
                 let value = self.evaluate_expression(operand)?;
-                // An object that defines `-@`, `+@`, or `!` names what the
-                // operator in front of it does, which is how a number a
-                // program writes negates and how a delegator passes `!` on.
-                if let View::Instance(_) = value.view()
-                    && let Some(name) = match op {
-                        crate::ast::UnaryOp::Minus => Some("-@"),
-                        crate::ast::UnaryOp::Plus => Some("+@"),
-                        crate::ast::UnaryOp::Not => Some("!"),
-                    }
-                    && (self
-                        .lookup_method(&value, name)
-                        .is_some_and(|(_, method)| !method.is_undefined)
-                        || crate::vm::native_methods::rational_parts(&value).is_some()
-                        || crate::vm::native_methods::complex_parts(&value).is_some())
-                {
-                    return self.send_to_object(value, name, vec![], *position);
-                }
-                self.evaluate_unary_operation(op, value, *position)
+                self.apply_unary_operator(op, value, *position)
             }
             Expression::BinaryOp {
                 op,
@@ -1009,6 +992,35 @@ impl VirtualMachine {
 }
 
 /// Map a binary operator to its operator method name for user-defined dispatch.
+impl VirtualMachine {
+    /// Apply a unary operator to a value. An object that defines `-@`,
+    /// `+@`, or `!` names what the operator in front of it does, which is
+    /// how a number a program writes negates and how a delegator passes `!`
+    /// on.
+    pub(crate) fn apply_unary_operator(
+        &mut self,
+        op: &crate::ast::UnaryOp,
+        value: Object,
+        position: crate::lexer::Position,
+    ) -> Result<Object, MetorexError> {
+        if let View::Instance(_) = value.view()
+            && let Some(name) = match op {
+                crate::ast::UnaryOp::Minus => Some("-@"),
+                crate::ast::UnaryOp::Plus => Some("+@"),
+                crate::ast::UnaryOp::Not => Some("!"),
+            }
+            && (self
+                .lookup_method(&value, name)
+                .is_some_and(|(_, method)| !method.is_undefined)
+                || crate::vm::native_methods::rational_parts(&value).is_some()
+                || crate::vm::native_methods::complex_parts(&value).is_some())
+        {
+            return self.send_to_object(value, name, vec![], position);
+        }
+        self.evaluate_unary_operation(op, value, position)
+    }
+}
+
 pub(crate) fn binary_op_method_name(op: &BinaryOp) -> Option<&'static str> {
     match op {
         BinaryOp::Add => Some("+"),

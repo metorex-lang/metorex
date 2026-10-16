@@ -4,7 +4,6 @@
 // Declare submodules
 mod binding;
 mod block;
-mod compiled_function;
 mod constructors;
 mod core_aliases;
 mod display;
@@ -27,7 +26,6 @@ pub use block::{
     BLOCK_LOCAL_PREFIX, BlockStatement, CodePlaces, DESTRUCTURED_GROUP_PREFIX, IMPLICIT_IT_PARAM,
     KEYWORD_PARAM_PREFIX, NO_KEYWORDS_PARAM, TRAILING_COMMA_PARAM, UNNAMED_PARAMETER,
 };
-pub use compiled_function::CompiledFunction;
 pub use exception::{Exception, SourceLocation};
 pub use hash::ObjectHash;
 pub use instance::Instance;

@@ -59,10 +59,7 @@ impl VirtualMachine {
             && let Some(held) = self.environment().get(name)
             && !matches!(
                 held.view(),
-                View::Method(_)
-                    | View::Block(_)
-                    | View::NativeFunction(_)
-                    | View::CompiledFunction(_)
+                View::Method(_) | View::Block(_) | View::NativeFunction(_)
             )
         {
             let receiver_defines = self.eval_self(position).ok().is_some_and(|receiver| {
@@ -227,7 +224,6 @@ impl VirtualMachine {
                         View::Block(_)
                             | View::Method(_)
                             | View::NativeFunction(_)
-                            | View::CompiledFunction(_)
                             | View::Class(_)
                             | View::Module(_)
                     )

@@ -181,7 +181,7 @@ impl VirtualMachine {
                 View::Class(_) | View::Module(_) if name.starts_with(char::is_uppercase) => {
                     "constant"
                 }
-                View::Method(_) | View::NativeFunction(_) | View::CompiledFunction(_) => "method",
+                View::Method(_) | View::NativeFunction(_) => "method",
                 _ => "local-variable",
             });
         }

@@ -7,7 +7,7 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-use super::{Binding, BlockStatement, CompiledFunction, Exception, Instance, Method, ObjectHash};
+use super::{Binding, BlockStatement, Exception, Instance, Method, ObjectHash};
 
 const FALSE: u64 = 0x00;
 const NIL: u64 = 0x08;
@@ -103,7 +103,6 @@ enum Body {
         mark: Rc<()>,
     },
     Binding(Rc<Binding>),
-    CompiledFunction(Rc<CompiledFunction>),
     Regex(Rc<String>, Rc<String>),
 }
 
@@ -148,8 +147,6 @@ pub enum View<'a> {
     },
     /// A namespace with captured variables.
     Binding(&'a Rc<Binding>),
-    /// A function compiled to bytecode.
-    CompiledFunction(&'a Rc<CompiledFunction>),
     /// A regular expression: its pattern and its flags.
     Regex(&'a Rc<String>, &'a Rc<String>),
 }
@@ -309,10 +306,6 @@ impl Object {
         Object::on_heap(Body::Binding(binding))
     }
 
-    pub fn CompiledFunction(function: Rc<CompiledFunction>) -> Object {
-        Object::on_heap(Body::CompiledFunction(function))
-    }
-
     pub fn Regex(pattern: Rc<String>, flags: Rc<String>) -> Object {
         Object::on_heap(Body::Regex(pattern, flags))
     }
@@ -368,7 +361,6 @@ impl Object {
                 mark,
             },
             Body::Binding(binding) => View::Binding(binding),
-            Body::CompiledFunction(function) => View::CompiledFunction(function),
             Body::Regex(pattern, flags) => View::Regex(pattern, flags),
         }
     }
@@ -394,7 +386,6 @@ impl Object {
             View::Exception(held) => Rc::strong_count(held),
             View::Set(held) => Rc::strong_count(held),
             View::Binding(held) => Rc::strong_count(held),
-            View::CompiledFunction(held) => Rc::strong_count(held),
             View::Regex(pattern, _) => Rc::strong_count(pattern),
             View::Range { mark, .. } => Rc::strong_count(mark),
             _ => 1,
@@ -522,7 +513,6 @@ impl<'a> View<'a> {
                 mark.clone(),
             ),
             View::Binding(binding) => Object::Binding(binding.clone()),
-            View::CompiledFunction(function) => Object::CompiledFunction(function.clone()),
             View::Regex(pattern, flags) => Object::Regex(pattern.clone(), flags.clone()),
         }
     }
@@ -549,7 +539,6 @@ impl<'a> View<'a> {
             View::NativeFunction(_) => "NativeFunction",
             View::Range { .. } => "Range",
             View::Binding(_) => "Binding",
-            View::CompiledFunction(_) => "CompiledFunction",
             View::Regex(_, _) => "Regexp",
         }
     }

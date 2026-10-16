@@ -139,13 +139,6 @@ fn type_name_binding() {
     assert_eq!(Object::Binding(b).type_name(), "Binding");
 }
 
-#[test]
-fn type_name_compiled_function() {
-    use metorex::object::CompiledFunction;
-    let f = Rc::new(CompiledFunction::new("f".to_string(), 0));
-    assert_eq!(Object::CompiledFunction(f).type_name(), "CompiledFunction");
-}
-
 // ── Display ─────────────────────────────────────────────────────────────────
 
 #[test]
@@ -302,13 +295,6 @@ fn display_binding() {
     use metorex::object::Binding;
     let b = Rc::new(Binding::new(HashMap::new()));
     assert_eq!(format!("{}", Object::Binding(b)), "<Binding with 0 vars>");
-}
-
-#[test]
-fn display_compiled_function() {
-    use metorex::object::CompiledFunction;
-    let f = Rc::new(CompiledFunction::new("my_fn".to_string(), 0));
-    assert_eq!(format!("{}", Object::CompiledFunction(f)), "<fn my_fn>");
 }
 
 // ── operations: is_truthy ───────────────────────────────────────────────────

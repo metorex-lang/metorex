@@ -47,7 +47,6 @@ fn identity(object: &Object) -> usize {
         View::Exception(held) => Rc::as_ptr(held) as *const () as usize,
         View::Set(held) => Rc::as_ptr(held) as *const () as usize,
         View::Binding(held) => Rc::as_ptr(held) as *const () as usize,
-        View::CompiledFunction(held) => Rc::as_ptr(held) as *const () as usize,
         View::Regex(pattern, _) => Rc::as_ptr(pattern) as *const () as usize,
         View::Range { mark, .. } => Rc::as_ptr(mark) as usize,
         _ => object.bits() as usize,

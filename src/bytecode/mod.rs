@@ -1,4 +1,2 @@
-pub mod chunk;
-pub mod disassembler;
-pub mod opcode;
-pub mod vm;
+pub mod instruction;
+pub mod unit;

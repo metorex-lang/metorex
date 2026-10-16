@@ -5,6 +5,7 @@
 pub(crate) mod allocation_sites;
 mod begin_rescue;
 mod block_execution;
+mod bytecode_runner;
 mod call_frame;
 pub(crate) mod capi;
 mod class_execution;

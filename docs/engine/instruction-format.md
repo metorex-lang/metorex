@@ -97,3 +97,26 @@ registers than on the stack, since its literals each take an instruction.
   their own: 1.08 to 1.23 times the time of constant operands.
 - **A function pointer per instruction**: 1.11 to 1.41 times the time of
   `match`, as above.
+
+## In Metorex
+
+- `src/bytecode/instruction.rs` defines `Instruction`, the enum of the
+  decision, 4 bytes each. `src/bytecode/unit.rs` defines `Unit`: the
+  instructions, a source position for each, whether each starts a
+  statement, and the side tables of constants, names, call sites, and
+  rescue handlers.
+- `VirtualMachine::run_unit`, in `src/vm/bytecode_runner.rs`, dispatches
+  each instruction by `match` in one loop over a register file the unit's
+  size. Registers are a `Vec` per run for now, not the frame's part of a
+  shared value stack.
+- An instruction that needs the interpreter calls the function the tree
+  walker calls: `operate_on_values` for an operator, `call_evaluated_method`
+  for a call, `eval_identifier` for a constant, `eval_instance_var_read` for
+  an instance variable, `read_global_variable` for a global, and
+  `assign_value` for a write.
+- An instruction that starts a statement runs what the tree walker runs
+  before each statement: the line event, signals, a due collection, the
+  thread's turn, and coverage.
+- An error raised inside a handler's range that a `rescue` can catch puts
+  the exception in the handler's register and jumps to its target.
+- `METOREX_COUNTERS=1` counts each instruction run, by name.

@@ -188,6 +188,21 @@ impl VirtualMachine {
             self.pending_block_from_ampersand = false;
         }
 
+        let written = WrittenReceiver::of(receiver_expr);
+        self.call_evaluated_method(receiver, method_name, arguments, written, position)
+    }
+
+    /// Call `method_name` on a receiver and arguments already evaluated.
+    /// `written` says whether the receiver was written as `self`, which is
+    /// what lets a private method be called.
+    pub(crate) fn call_evaluated_method(
+        &mut self,
+        receiver: Object,
+        method_name: &str,
+        arguments: Vec<Object>,
+        written: WrittenReceiver,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
         // Refinement dispatch: if an active refinement covers this receiver's
         // class and defines this method, use it.
         if let Some(method) = find_refinement(&receiver, method_name, self) {
@@ -215,7 +230,7 @@ impl VirtualMachine {
                 .and_then(|singleton| singleton.find_own_method(method_name))
                 .or_else(|| module_level_method(&class_rc, method_name));
             if let Some(method) = own {
-                let is_explicit_receiver = !names_self(receiver_expr);
+                let is_explicit_receiver = !written.names_self();
                 if is_explicit_receiver && self.method_is_restricted(&receiver, method_name) {
                     if let Some(handled) = self.restricted_call_via_method_missing(
                         &receiver,
@@ -281,7 +296,7 @@ impl VirtualMachine {
                 // `Expression::SelfExpr` as implicit self even though it's
                 // syntactically present, matching Ruby — `self.foo` is
                 // allowed regardless of visibility.
-                let is_explicit_receiver = !names_self(receiver_expr);
+                let is_explicit_receiver = !written.names_self();
                 let mut is_private = self.method_is_restricted(&receiver, method_name);
                 // A prepended module sits ahead of the class, so when one of
                 // them supplies the method its visibility is the one in force
@@ -357,7 +372,7 @@ impl VirtualMachine {
         // `private_class_method :new` refuses an explicit-receiver call the
         // way a table-backed one does.
         if let View::Class(class_rc) | View::Module(class_rc) = receiver.view()
-            && !matches!(receiver_expr, Expression::SelfExpr { .. })
+            && written != WrittenReceiver::SelfKeyword
             && self.method_is_restricted(&receiver, method_name)
         {
             let class_rc = Rc::clone(class_rc);
@@ -389,7 +404,7 @@ impl VirtualMachine {
 
         // A private method of every object refuses a call written with a
         // receiver other than `self`.
-        if !names_self(receiver_expr)
+        if !written.names_self()
             && let Some(answer) =
                 self.refuse_private_object_method(&receiver, method_name, &arguments, position)
         {
@@ -417,7 +432,7 @@ impl VirtualMachine {
         if let Some((object_class, method)) = self.object_table_method(method_name) {
             // A private one, as every top-level method is, refuses a call
             // written with a receiver.
-            if !names_self(receiver_expr) && object_class.is_method_private(method_name) {
+            if !written.names_self() && object_class.is_method_private(method_name) {
                 return Err(self.private_object_method_error(
                     &receiver,
                     method_name,
@@ -1403,6 +1418,32 @@ pub(crate) fn module_extended_method(
 /// implicit receiver: `self.name` reaches a private method the way a bare
 /// `name` does. The lexer reads `self` as an identifier, so the keyword form
 /// and the parser's own `SelfExpr` both have to be recognized here.
+/// How a call's receiver was written, as far as visibility asks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WrittenReceiver {
+    /// The keyword `self`.
+    SelfKeyword,
+    /// An identifier spelled `self`.
+    SelfName,
+    /// Anything else.
+    Other,
+}
+
+impl WrittenReceiver {
+    pub(crate) fn of(receiver_expr: &Expression) -> Self {
+        match receiver_expr {
+            Expression::SelfExpr { .. } => WrittenReceiver::SelfKeyword,
+            Expression::Identifier { name, .. } if name == "self" => WrittenReceiver::SelfName,
+            _ => WrittenReceiver::Other,
+        }
+    }
+
+    /// Whether the receiver was written as `self`, by keyword or by name.
+    pub(crate) fn names_self(self) -> bool {
+        self != WrittenReceiver::Other
+    }
+}
+
 pub(crate) fn names_self(receiver_expr: &Expression) -> bool {
     match receiver_expr {
         Expression::SelfExpr { .. } => true,

@@ -200,7 +200,6 @@ impl fmt::Display for Object {
             View::Binding(binding) => {
                 write!(f, "<Binding with {} vars>", binding.variable_count())
             }
-            View::CompiledFunction(func) => write!(f, "{}", func),
             View::Regex(pattern, flags) => {
                 if flags.is_empty() {
                     write!(f, "/{}/", pattern)

@@ -323,7 +323,6 @@ impl ReplCore {
             View::Binding(binding) => {
                 format!("<Binding with {} vars>", binding.variable_count())
             }
-            View::CompiledFunction(func) => format!("{}", func),
             View::Regex(pattern, flags) => {
                 if flags.is_empty() {
                     format!("/{}/", pattern)

@@ -92,7 +92,7 @@ impl VirtualMachine {
     ///      bound `Method` for non-zero-arg methods).
     ///   3. Bare `new` inside a class method instantiates the class.
     ///   4. Otherwise raise an undefined-variable error.
-    pub(super) fn eval_identifier(
+    pub(crate) fn eval_identifier(
         &mut self,
         name: &str,
         position: Position,

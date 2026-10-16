@@ -805,14 +805,6 @@ fn process_line_reset_command() {
     }
 }
 
-#[test]
-fn format_object_compiled_function() {
-    use metorex::object::CompiledFunction;
-    let func = Object::CompiledFunction(Rc::new(CompiledFunction::new("test_fn".to_string(), 0)));
-    let formatted = ReplCore::format_object(&func);
-    assert!(!formatted.is_empty());
-}
-
 // ── format_object on Regex (lines 313-318) ──────────────────────────────
 
 #[test]

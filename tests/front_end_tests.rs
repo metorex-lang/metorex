@@ -5,7 +5,6 @@ pub mod common;
 
 mod ast;
 mod bytecode;
-mod compiler;
 mod environment;
 mod lexer;
 mod parser;

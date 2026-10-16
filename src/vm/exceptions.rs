@@ -570,57 +570,13 @@ impl VirtualMachine {
         let mut handled_exception = false;
         let mut final_result = body_result;
 
-        // Convert UncaughtException errors to ControlFlow::Exception
-        if let Err(MetorexError::UncaughtException {
-            exception,
-            location,
-            ..
-        }) = &final_result
+        // An error a `rescue` can catch becomes the exception it stands for.
+        if let Err(error) = &final_result
+            && let Some((exception, position)) = rescuable_exception(error)
         {
             final_result = Ok(ControlFlow::Exception {
-                exception: exception.clone(),
-                position: Position {
-                    line: location.line,
-                    column: location.column,
-                    offset: 0,
-                    prelude: false,
-                },
-            });
-        }
-
-        // Also convert internal RuntimeError / TypeError / InternalError to rescuable exceptions.
-        // In Ruby, all internal errors (undefined method, type errors, etc.) are rescuable.
-        let runtime_exception = match &final_result {
-            Err(MetorexError::RuntimeError {
-                message, location, ..
-            }) => {
-                let msg = message.clone();
-                let pos = Position {
-                    line: location.line,
-                    column: location.column,
-                    offset: 0,
-                    prelude: false,
-                };
-                Some((Object::exception("RuntimeError", msg), pos))
-            }
-            Err(MetorexError::TypeError {
-                message, location, ..
-            }) => {
-                let msg = message.clone();
-                let pos = Position {
-                    line: location.line,
-                    column: location.column,
-                    offset: 0,
-                    prelude: false,
-                };
-                Some((Object::exception("TypeError", msg), pos))
-            }
-            _ => None,
-        };
-        if let Some((exception_obj, pos)) = runtime_exception {
-            final_result = Ok(ControlFlow::Exception {
-                exception: exception_obj,
-                position: pos,
+                exception,
+                position,
             });
         }
 
@@ -1093,4 +1049,37 @@ pub(crate) fn backtrace_sites(
         }
     }
     (sites, columns)
+}
+
+/// The exception a `rescue` catches for an error, and where it was raised,
+/// or None for an error no `rescue` catches, such as a `break` or a
+/// `throw` on its way out. In Ruby every error the interpreter raises, an
+/// undefined method or a wrong type among them, can be rescued.
+pub(crate) fn rescuable_exception(error: &MetorexError) -> Option<(Object, Position)> {
+    let at = |location: &crate::error::SourceLocation| Position {
+        line: location.line,
+        column: location.column,
+        offset: 0,
+        prelude: false,
+    };
+    match error {
+        MetorexError::UncaughtException {
+            exception,
+            location,
+            ..
+        } => Some((exception.clone(), at(location))),
+        MetorexError::RuntimeError {
+            message, location, ..
+        } => Some((
+            Object::exception("RuntimeError", message.clone()),
+            at(location),
+        )),
+        MetorexError::TypeError {
+            message, location, ..
+        } => Some((
+            Object::exception("TypeError", message.clone()),
+            at(location),
+        )),
+        _ => None,
+    }
 }

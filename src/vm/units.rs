@@ -16,11 +16,7 @@ pub enum Compiled {
     Fallback(&'static str),
 }
 
-/// The instructions a body compiled to. The compiler handles no node yet,
-/// so the only body it compiles is one with no statements, which answers
-/// nil.
-#[derive(Debug)]
-pub struct Unit;
+pub use crate::bytecode::unit::Unit;
 
 /// Where a `Method` or `BlockStatement` keeps what its body compiled to.
 /// Copies share it, since they share the body.
@@ -37,11 +33,23 @@ impl UnitSlot {
 /// Compile `body`, recording the result for the engine report.
 pub fn compile(body: &[Statement]) -> Compiled {
     let compiled = match body.first() {
-        None => Compiled::Unit(Unit),
+        None => Compiled::Unit(answering_nil()),
         Some(statement) => Compiled::Fallback(unhandled_node(statement)),
     };
     crate::vm::engine_report::record(&compiled);
     compiled
+}
+
+/// The unit of a body with no statements, which answers nil. The compiler
+/// handles no node yet, so this is the only body it compiles.
+fn answering_nil() -> Unit {
+    use crate::bytecode::instruction::Instruction;
+    let mut unit = Unit::new();
+    unit.use_registers(1);
+    let position = crate::lexer::Position::default();
+    unit.emit(Instruction::LoadNil { to: 0 }, position);
+    unit.emit(Instruction::Return { from: 0 }, position);
+    unit
 }
 
 /// The first node in `statement` the compiler cannot handle.
@@ -49,16 +57,6 @@ fn unhandled_node(statement: &Statement) -> &'static str {
     match statement {
         Statement::Expression { expression, .. } => expression.kind_name(),
         other => other.kind_name(),
-    }
-}
-
-impl Unit {
-    /// Run the unit, answering the body's value.
-    pub fn run(
-        &self,
-        _machine: &mut crate::vm::VirtualMachine,
-    ) -> Result<crate::object::Object, crate::error::MetorexError> {
-        Ok(crate::object::Object::Nil)
     }
 }
 
@@ -80,7 +78,7 @@ impl crate::vm::VirtualMachine {
             None => Rc::new(compile(body)),
         };
         match &*compiled {
-            Compiled::Unit(unit) => Some(unit.run(self)),
+            Compiled::Unit(unit) => Some(self.run_unit(unit)),
             Compiled::Fallback(_) => None,
         }
     }

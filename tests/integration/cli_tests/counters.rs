@@ -72,3 +72,23 @@ fn counters_stay_off_when_set_to_zero() {
     let (_, reported) = run_counted_calls(&[("METOREX_COUNTERS", "0")]);
     assert_eq!(reported, "");
 }
+
+#[test]
+fn counters_report_the_instructions_executed_on_the_bytecode_engine() {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let output = metorex_cmd()
+        .current_dir(manifest_dir)
+        .env("METOREX_COUNTERS", "1")
+        .env("METOREX_ENGINE", "bytecode")
+        .arg(format!(
+            "{manifest_dir}/tests/_examples/cli_flags/engine_units.rb"
+        ))
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+    let reported = String::from_utf8(output.stderr).unwrap();
+    assert!(reported.contains("\ninstructions executed: "), "{reported}");
+    assert!(counted(&reported, "LoadNil")[0] >= 1);
+    assert!(counted(&reported, "Return")[0] >= 1);
+    assert!(counted(&reported, "MethodDef")[0] >= 1);
+}
