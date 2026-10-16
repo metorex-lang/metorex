@@ -25,8 +25,8 @@ fn no() -> Option<Object> {
     Some(Object::Bool(false))
 }
 
-/// A map holding two entries under keys the test can reach.
-const TWO_ENTRIES: &str = "map = ObjectSpace::WeakMap.new\nfirst = Object.new\nsecond = Object.new\nmap[first] = \"one\"\nmap[second] = \"two\"\n";
+/// A map holding two entries whose keys and values the test holds.
+const TWO_ENTRIES: &str = "map = ObjectSpace::WeakMap.new\nfirst = Object.new\nsecond = Object.new\none = \"one\"\ntwo = \"two\"\nmap[first] = one\nmap[second] = two\n";
 
 // ── The map keyed by identity ──────────────────────────────────────────────
 
@@ -139,15 +139,19 @@ fn deleting_from_a_weak_map_answers_what_was_there() {
 #[test]
 fn a_weak_key_map_compares_its_keys_by_value() {
     assert_eq!(
-        run("map = ObjectSpace::WeakKeyMap.new\nmap[\"a\".upcase] = 1\nmap[\"a\".upcase]"),
+        run(
+            "map = ObjectSpace::WeakKeyMap.new\nkey = \"a\".upcase\nmap[key] = 1\nmap[\"a\".upcase]"
+        ),
         Some(Object::Int(1))
     );
     assert_eq!(
-        run("map = ObjectSpace::WeakKeyMap.new\nmap[\"a\".upcase] = 1\nmap.key?(\"A\")"),
+        run("map = ObjectSpace::WeakKeyMap.new\nkey = \"a\".upcase\nmap[key] = 1\nmap.key?(\"A\")"),
         yes()
     );
     assert_eq!(
-        run("map = ObjectSpace::WeakKeyMap.new\nmap[\"a\".upcase] = 1\nmap.getkey(\"A\")"),
+        run(
+            "map = ObjectSpace::WeakKeyMap.new\nkey = \"a\".upcase\nmap[key] = 1\nmap.getkey(\"A\")"
+        ),
         text("A")
     );
     assert_eq!(
@@ -156,7 +160,7 @@ fn a_weak_key_map_compares_its_keys_by_value() {
     );
     assert_eq!(
         run(
-            "map = ObjectSpace::WeakKeyMap.new\nmap[\"a\"] = 1\nmap[\"b\"] = 2\nmap.delete(\"a\")\nmap.size"
+            "map = ObjectSpace::WeakKeyMap.new\nfirst = \"a\"\nsecond = \"b\"\nmap[first] = 1\nmap[second] = 2\nmap.delete(\"a\")\nmap.size"
         ),
         Some(Object::Int(1))
     );
@@ -205,7 +209,9 @@ fn a_weak_key_map_writes_its_size_when_it_is_inspected() {
         yes()
     );
     assert_eq!(
-        run("map = ObjectSpace::WeakKeyMap.new\nmap[\"a\"] = 1\nmap.inspect.include?(\"size=1\")"),
+        run(
+            "map = ObjectSpace::WeakKeyMap.new\nkey = \"a\"\nmap[key] = 1\nmap.inspect.include?(\"size=1\")"
+        ),
         yes()
     );
 }

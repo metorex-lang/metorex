@@ -191,18 +191,35 @@ impl VirtualMachine {
             // object a handle names while anything else still holds it.
             "__weak_reference__" => {
                 let target = arguments.first().cloned().unwrap_or(Object::Nil);
-                self.weak_references
-                    .push(crate::vm::core::WeakTarget::of(&target));
-                Ok(Object::Int(self.weak_references.len() as i64 - 1))
+                let made = crate::vm::core::WeakTarget::of(&target);
+                let handle = match self.weak_references_released.pop() {
+                    Some(free) => {
+                        self.weak_references[free] = made;
+                        free
+                    }
+                    None => {
+                        self.weak_references.push(made);
+                        self.weak_references.len() - 1
+                    }
+                };
+                Ok(Object::Int(handle as i64))
             }
-            "__weak_target__" => Ok(match arguments.first().view() {
-                Some(View::Int(handle)) => usize::try_from(handle)
-                    .ok()
-                    .and_then(|at| self.weak_references.get(at))
-                    .and_then(|target| target.reach())
-                    .unwrap_or(Object::Nil),
-                _ => Object::Nil,
-            }),
+            "__weak_alive__" => Ok(Object::Bool(
+                self.weak_handle(arguments.first())
+                    .is_some_and(|at| self.weak_references[at].alive()),
+            )),
+            // A handle nothing names any more, given to the next one made.
+            "__weak_release__" => {
+                if let Some(at) = self.weak_handle(arguments.first()) {
+                    self.weak_references[at] = crate::vm::core::WeakTarget::Held(Object::Nil);
+                    self.weak_references_released.push(at);
+                }
+                Ok(Object::Nil)
+            }
+            "__weak_target__" => Ok(self
+                .weak_handle(arguments.first())
+                .and_then(|at| self.weak_references[at].reach())
+                .unwrap_or(Object::Nil)),
             "require_relative" => self.require_relative_feature(arguments, position),
             "print" => self.print_values(arguments, position),
             "printf" => self.print_formatted(arguments, position),

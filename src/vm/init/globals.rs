@@ -307,7 +307,13 @@ pub(crate) fn register_native_functions(globals: &mut GlobalRegistry) {
         "__header_directory__",
         Object::NativeFunction("__header_directory__".to_string()),
     );
-    for primitive in ["__weak_reference__", "__weak_target__", "__wrapped_size__"] {
+    for primitive in [
+        "__weak_reference__",
+        "__weak_target__",
+        "__weak_alive__",
+        "__weak_release__",
+        "__wrapped_size__",
+    ] {
         globals.set(primitive, Object::NativeFunction(primitive.to_string()));
     }
     globals.set(

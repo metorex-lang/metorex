@@ -74,6 +74,9 @@ impl VirtualMachine {
             self.fire_line_event(statement.position())?;
         }
         self.deliver_pending_signals(statement.position())?;
+        if crate::object::live::collection_due() {
+            self.collect_garbage(statement.position())?;
+        }
         self.pass_checkpoint(statement.position())?;
         let line = statement.position().line;
         if self.coverage_skip_line.take() != Some(line) && self.coverage.is_some() {

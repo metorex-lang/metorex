@@ -87,3 +87,45 @@ fn test_object_space_gc_answers_object_methods_no_parens_execution() {
     let output = run_example("object_space/gc_answers_object_methods_no_parens.rb");
     assert_eq!(output, GC_ANSWERS_OBJECT_METHODS_OUTPUT);
 }
+
+/// The expected output of both `object_space/cycles` variants.
+const CYCLES_OUTPUT: &str = concat!(
+    "before\n",
+    "pair finalized\n",
+    "holder finalized\n",
+    "after\n",
+    "true\n",
+    "2\n",
+    "1\n",
+    "kept value\n",
+    "true\n",
+    "true\n",
+    "true\n",
+);
+
+#[test]
+fn test_object_space_cycles_execution() {
+    let output = run_example("object_space/cycles.rb");
+    assert_eq!(output, CYCLES_OUTPUT);
+}
+
+#[test]
+fn test_object_space_cycles_no_parens_execution() {
+    let output = run_example("object_space/cycles_no_parens.rb");
+    assert_eq!(output, CYCLES_OUTPUT);
+}
+
+/// The expected output of both `object_space/cycle_shapes` variants.
+const CYCLE_SHAPES_OUTPUT: &str = "first finalized\n0\n0\n0\n0\n";
+
+#[test]
+fn test_object_space_cycle_shapes_execution() {
+    let output = run_example("object_space/cycle_shapes.rb");
+    assert_eq!(output, CYCLE_SHAPES_OUTPUT);
+}
+
+#[test]
+fn test_object_space_cycle_shapes_no_parens_execution() {
+    let output = run_example("object_space/cycle_shapes_no_parens.rb");
+    assert_eq!(output, CYCLE_SHAPES_OUTPUT);
+}

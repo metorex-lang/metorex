@@ -524,6 +524,11 @@ pub struct VirtualMachine {
     pub(crate) method_running_stack: Vec<Rc<crate::object::Method>>,
     /// What each WeakRef handle points at, indexed by the handle.
     pub(crate) weak_references: Vec<WeakTarget>,
+    /// The WeakRef handles let go of, which the next ones made reuse.
+    pub(crate) weak_references_released: Vec<usize>,
+    /// Each object a finalizer was defined for, without keeping it alive,
+    /// and the id its finalizers are filed under.
+    pub(crate) finalized_objects: Vec<(WeakTarget, Object)>,
     /// The libraries metorex carries that have run, each named by where its
     /// text sits, so a second name for one does not run it again.
     pub(crate) embedded_sources_run: std::collections::HashSet<usize>,
@@ -741,6 +746,8 @@ impl VirtualMachine {
             method_arg_stack: Vec::new(),
             method_running_stack: Vec::new(),
             weak_references: Vec::new(),
+            weak_references_released: Vec::new(),
+            finalized_objects: Vec::new(),
             embedded_sources_run: std::collections::HashSet::new(),
             method_owner_stack: Vec::new(),
             method_nesting_stack: Vec::new(),
@@ -1401,6 +1408,11 @@ pub(crate) enum WeakTarget {
     Array(std::rc::Weak<RefCell<Vec<Object>>>),
     Dict(std::rc::Weak<RefCell<indexmap::IndexMap<String, Object>>>),
     String(std::rc::Weak<crate::object::StringValue>),
+    Set(std::rc::Weak<RefCell<indexmap::IndexSet<crate::object::ObjectHash>>>),
+    Exception(std::rc::Weak<RefCell<crate::object::Exception>>),
+    Block(std::rc::Weak<crate::object::BlockStatement>),
+    Method(std::rc::Weak<crate::object::Method>),
+    Binding(std::rc::Weak<crate::object::Binding>),
     Held(Object),
 }
 
@@ -1411,7 +1423,28 @@ impl WeakTarget {
             View::Array(held) => WeakTarget::Array(Rc::downgrade(held)),
             View::Dict(held) => WeakTarget::Dict(Rc::downgrade(held)),
             View::String(held) => WeakTarget::String(Rc::downgrade(held)),
+            View::Set(held) => WeakTarget::Set(Rc::downgrade(held)),
+            View::Exception(held) => WeakTarget::Exception(Rc::downgrade(held)),
+            View::Block(held) => WeakTarget::Block(Rc::downgrade(held)),
+            View::Method(held) => WeakTarget::Method(Rc::downgrade(held)),
+            View::Binding(held) => WeakTarget::Binding(Rc::downgrade(held)),
             _ => WeakTarget::Held(object.clone()),
+        }
+    }
+
+    /// Whether something still holds the object.
+    pub(crate) fn alive(&self) -> bool {
+        match self {
+            WeakTarget::Instance(held) => held.strong_count() > 0,
+            WeakTarget::Array(held) => held.strong_count() > 0,
+            WeakTarget::Dict(held) => held.strong_count() > 0,
+            WeakTarget::String(held) => held.strong_count() > 0,
+            WeakTarget::Set(held) => held.strong_count() > 0,
+            WeakTarget::Exception(held) => held.strong_count() > 0,
+            WeakTarget::Block(held) => held.strong_count() > 0,
+            WeakTarget::Method(held) => held.strong_count() > 0,
+            WeakTarget::Binding(held) => held.strong_count() > 0,
+            WeakTarget::Held(_) => true,
         }
     }
 
@@ -1422,6 +1455,11 @@ impl WeakTarget {
             WeakTarget::Array(held) => held.upgrade().map(Object::Array),
             WeakTarget::Dict(held) => held.upgrade().map(Object::Dict),
             WeakTarget::String(held) => held.upgrade().map(Object::String),
+            WeakTarget::Set(held) => held.upgrade().map(Object::Set),
+            WeakTarget::Exception(held) => held.upgrade().map(Object::Exception),
+            WeakTarget::Block(held) => held.upgrade().map(Object::Block),
+            WeakTarget::Method(held) => held.upgrade().map(Object::Method),
+            WeakTarget::Binding(held) => held.upgrade().map(Object::Binding),
             WeakTarget::Held(object) => Some(object.clone()),
         }
     }

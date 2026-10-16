@@ -138,7 +138,7 @@ fn an_undumped_object_cannot_be_marshaled() {
 #[test]
 fn a_reference_to_a_local_object_loads_back_as_the_object() {
     assert_eq!(
-        served("Marshal.load(Marshal.dump(DRbObject.new(Front.new))).class"),
+        served("front = Front.new\nMarshal.load(Marshal.dump(DRbObject.new(front))).class"),
         "Front"
     );
 }

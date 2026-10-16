@@ -30,7 +30,7 @@ Trial deletion needs no roots. A value a Rust `Vec` holds adds one to the
 count of the object it refers to, and no listed object accounts for that
 one, so the object stays.
 
-## Cycles leak now
+## Cycles before the collector
 
 `benchmarks/memory/cycles.rb` makes 200,000 objects that each hold a lambda
 referring back to the object, which is how an object that keeps a callback
@@ -105,29 +105,28 @@ covers `RB_GC_GUARD`, `rb_gc_register_address`, `rb_global_variable`,
 ### ObjectSpace
 
 `each_object` walks the list of heap objects, so it reaches every kind of
-object rather than only instances, classes, and modules as now, and
-`count_objects` counts each `T_` kind from the same list. `_id2ref`, which
+object, and `count_objects` counts each `T_` kind from the same list. `_id2ref`, which
 Ruby 4.0 deprecated, reads a weak table from object ids to objects, filled
 when an id is first asked for.
 
 ### WeakMap, WeakKeyMap, and WeakRef
 
-A header keeps a weak count beside the strong one, as `Rc` does now, and a
-weak reference reads the object only while the strong count is above zero.
-`ObjectSpace::WeakMap` and `WeakKeyMap` hold their entries through weak
-references and drop an entry when its object is freed, in place of the array
-of strong references `WeakMap` keeps now. `WeakRef` already holds a Rust
-`Weak`. `library/weakref`'s `make_dead_weakref` finds a dead reference on its
+A header keeps a weak count beside the strong one, as `Rc` does, and a weak
+reference reads the object only while the strong count is above zero.
+`ObjectSpace::WeakMap` holds its keys and values through weak references and
+drops an entry when either is freed. `WeakKeyMap` holds its keys that way and
+drops an entry when its key is freed. `WeakRef` holds a Rust `Weak`. `library/weakref`'s `make_dead_weakref` finds a dead reference on its
 first try, since counting frees the object as soon as the last reference
 goes.
 
 ### Finalizers
 
 A finalizer runs after its object is freed, whether by counting or by a
-collection. The free queues the finalizer, and the interpreter runs the queue
-at its next safe point, since a finalizer is Ruby code and a free can happen
-inside a native method. The finalizers of objects still alive when the
-program ends run at exit, as they all do now, which is what
+collection. Defining one adds a weak reference to the object to a list, and
+each collection runs the finalizers of the objects on the list that are no
+longer alive. A collection runs at the start of a statement or in `GC.start`,
+never inside a native method, since a finalizer is Ruby code. The finalizers
+of objects still alive when the program ends run at exit, which is what
 `core/objectspace/define_finalizer_spec.rb` checks.
 
 ### GC
@@ -137,6 +136,25 @@ reports the objects allocated, freed, and alive from the list. `GC.disable`
 stops collections, and counting still frees objects whose count reaches
 zero. The specs under `core/gc` check what these methods answer and that
 `GC.start` returns nil, which they keep doing.
+
+## In Metorex
+
+- `src/object/live.rs` keeps the list: a weak reference to each String,
+  Array, Hash, Set, instance, exception, block, Method, Binding, class, and
+  module. An object goes on the list the first time a value is made for it,
+  which is when its `Rc` has no weak reference yet.
+- `src/object/collector.rs` runs trial deletion. The nodes it counts are the
+  listed objects and the parts they share: the cell a pointer value points
+  at, which the value's copies share, the locals a block closes over, and
+  each local's cell. Each node reports the references it holds, one per
+  reference.
+- A node borrowed for writing when the collector reads it is in use, so it
+  is kept with everything it reaches. A reference the collector does not
+  read only keeps its target alive. It does not read a class's constants,
+  methods, or class variables, an instance's singleton methods, or a
+  binding's frame, so a cycle through one of those stays.
+- When the list has doubled, the next statement to start runs a collection.
+  `GC.start` runs one at once.
 
 ## Threads
 

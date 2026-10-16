@@ -143,6 +143,15 @@ pub enum View<'a> {
     Regex(&'a Rc<String>, &'a Rc<String>),
 }
 
+/// List an object the first time a value is made for it. The list's own
+/// reference is the only weak one an object is given before then.
+#[inline]
+fn list_once<T>(made: &Rc<T>, record: fn(&Rc<T>)) {
+    if Rc::weak_count(made) == 0 {
+        record(made);
+    }
+}
+
 #[allow(non_upper_case_globals, non_snake_case)]
 impl Object {
     pub const Nil: Object = Object::from_bits(NIL);
@@ -158,7 +167,8 @@ impl Object {
         Object::from_bits(Rc::into_raw(Rc::new(body)) as u64)
     }
 
-    fn is_pointer(&self) -> bool {
+    /// Whether the value points at a cell on the heap.
+    pub(crate) fn is_pointer(&self) -> bool {
         self.bits & 7 == 0 && self.bits > NIL
     }
 
@@ -205,6 +215,7 @@ impl Object {
     }
 
     pub fn String(text: Rc<crate::object::StringValue>) -> Object {
+        list_once(&text, super::live::record_string);
         Object::on_heap(Body::String(text))
     }
 
@@ -213,10 +224,12 @@ impl Object {
     }
 
     pub fn Array(elements: Rc<RefCell<Vec<Object>>>) -> Object {
+        list_once(&elements, super::live::record_array);
         Object::on_heap(Body::Array(elements))
     }
 
     pub fn Dict(entries: Rc<RefCell<IndexMap<String, Object>>>) -> Object {
+        list_once(&entries, super::live::record_hash);
         Object::on_heap(Body::Dict(entries))
     }
 
@@ -233,18 +246,22 @@ impl Object {
     }
 
     pub fn Method(method: Rc<Method>) -> Object {
+        list_once(&method, super::live::record_method);
         Object::on_heap(Body::Method(method))
     }
 
     pub fn Block(block: Rc<BlockStatement>) -> Object {
+        list_once(&block, super::live::record_block);
         Object::on_heap(Body::Block(block))
     }
 
     pub fn Exception(exception: Rc<RefCell<Exception>>) -> Object {
+        list_once(&exception, super::live::record_exception);
         Object::on_heap(Body::Exception(exception))
     }
 
     pub fn Set(members: Rc<RefCell<indexmap::IndexSet<ObjectHash>>>) -> Object {
+        list_once(&members, super::live::record_set);
         Object::on_heap(Body::Set(members))
     }
 
@@ -266,6 +283,7 @@ impl Object {
     }
 
     pub fn Binding(binding: Rc<Binding>) -> Object {
+        list_once(&binding, super::live::record_binding);
         Object::on_heap(Body::Binding(binding))
     }
 
@@ -360,6 +378,17 @@ impl Object {
             _ => 1,
         };
         Rc::strong_count(&cell) + parts - 1
+    }
+
+    /// How many values share this value's cell. A value held inline
+    /// answers 0.
+    pub(crate) fn cell_count(&self) -> usize {
+        if !self.is_pointer() {
+            return 0;
+        }
+        // SAFETY: see `body`. The `Rc` is only read, never dropped.
+        let cell = std::mem::ManuallyDrop::new(unsafe { Rc::from_raw(self.bits as *const Body) });
+        Rc::strong_count(&cell)
     }
 
     pub fn is_nil(&self) -> bool {

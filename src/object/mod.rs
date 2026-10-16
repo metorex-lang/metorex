@@ -12,6 +12,7 @@ pub mod string_value;
 pub(crate) use display::{
     begin_rendering, end_rendering, inspect_symbol, render_guarded, rendering_in_progress,
 };
+pub mod collector;
 mod exception;
 mod hash;
 mod instance;

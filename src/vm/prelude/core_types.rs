@@ -63,7 +63,8 @@ end
 
 module ObjectSpace
   # Keyed by identity: two objects that are equal but not the same are two
-  # keys.
+  # keys. Keys and values are held through weak references, and an entry
+  # goes once its key or its value is freed.
   class WeakMap
     include Enumerable
 
@@ -73,17 +74,18 @@ module ObjectSpace
 
     def []=(key, value)
       place = place_of(key)
-      if place.nil?
-        @entries.push([key, value])
-      else
-        @entries[place] = [key, value]
+      unless place.nil?
+        __weak_release__(@entries[place][1])
+        @entries[place][1] = __weak_reference__(value)
+        return value
       end
+      @entries.push([__weak_reference__(key), __weak_reference__(value)])
       value
     end
 
     def [](key)
       place = place_of(key)
-      place.nil? ? nil : @entries[place][1]
+      place.nil? ? nil : __weak_target__(@entries[place][1])
     end
 
     def delete(key)
@@ -92,7 +94,10 @@ module ObjectSpace
         return yield(key) if block_given?
         return nil
       end
-      @entries.delete_at(place)[1]
+      entry = @entries.delete_at(place)
+      value = __weak_target__(entry[1])
+      release(entry)
+      value
     end
 
     def key?(key)
@@ -112,14 +117,14 @@ module ObjectSpace
     end
 
     def key(value)
-      @entries.each do |entry|
-        return entry[0] if entry[1].equal?(value)
+      pairs.each do |pair|
+        return pair[0] if pair[1].equal?(value)
       end
       nil
     end
 
     def size
-      @entries.size
+      pairs.size
     end
 
     def length
@@ -127,21 +132,22 @@ module ObjectSpace
     end
 
     def keys
-      @entries.map { |entry| entry[0] }
+      pairs.map { |pair| pair[0] }
     end
 
     def values
-      @entries.map { |entry| entry[1] }
+      pairs.map { |pair| pair[1] }
     end
 
     # A walk with no block is refused once there is anything to walk, which
     # is what Ruby does with a map that cannot answer an enumerator.
     def each
+      held = pairs
       unless block_given?
-        return self if @entries.empty?
+        return self if held.empty?
         raise LocalJumpError, "no block given (yield)"
       end
-      @entries.each { |entry| yield entry[0], entry[1] }
+      held.each { |pair| yield pair[0], pair[1] }
       self
     end
 
@@ -150,20 +156,22 @@ module ObjectSpace
     end
 
     def each_key
+      held = pairs
       unless block_given?
-        return self if @entries.empty?
+        return self if held.empty?
         raise LocalJumpError, "no block given (yield)"
       end
-      @entries.each { |entry| yield entry[0] }
+      held.each { |pair| yield pair[0] }
       self
     end
 
     def each_value
+      held = pairs
       unless block_given?
-        return self if @entries.empty?
+        return self if held.empty?
         raise LocalJumpError, "no block given (yield)"
       end
-      @entries.each { |entry| yield entry[1] }
+      held.each { |pair| yield pair[1] }
       self
     end
 
@@ -171,8 +179,8 @@ module ObjectSpace
     # key or a value writes itself as is read through Kernel, since an object
     # rooted at BasicObject answers no `inspect` of its own.
     def inspect
-      written = @entries.map do |entry|
-        "#{ObjectSpace::WeakMap.written(entry[0])} => #{ObjectSpace::WeakMap.written(entry[1])}"
+      written = pairs.map do |pair|
+        "#{ObjectSpace::WeakMap.written(pair[0])} => #{ObjectSpace::WeakMap.written(pair[1])}"
       end
       named = format("#<ObjectSpace::WeakMap:0x%016x", object_id)
       written.empty? ? "#{named}>" : "#{named}: #{written.join(", ")}>"
@@ -182,10 +190,35 @@ module ObjectSpace
       ::Kernel.instance_method(:inspect).bind(held).call
     end
 
+    # The entries whose key and value are both alive, as key and value. The
+    # rest are dropped.
+    def pairs
+      kept = []
+      found = []
+      @entries.each do |entry|
+        if __weak_alive__(entry[0]) && __weak_alive__(entry[1])
+          kept.push(entry)
+          found.push([__weak_target__(entry[0]), __weak_target__(entry[1])])
+        else
+          release(entry)
+        end
+      end
+      @entries = kept
+      found
+    end
+    private :pairs
+
+    def release(entry)
+      __weak_release__(entry[0])
+      __weak_release__(entry[1])
+    end
+    private :release
+
     # Where a key sits, found by identity rather than by value.
     def place_of(key)
+      pairs
       @entries.each_with_index do |entry, place|
-        return place if entry[0].equal?(key)
+        return place if __weak_target__(entry[0]).equal?(key)
       end
       nil
     end
@@ -193,7 +226,8 @@ module ObjectSpace
   end
 
   # Keyed by value, and only by something the collector could free, so a
-  # number or a symbol is refused as a key.
+  # number or a symbol is refused as a key. Keys are held through weak
+  # references, and an entry goes once its key is freed.
   class WeakKeyMap
     def initialize
       @entries = []
@@ -227,7 +261,7 @@ module ObjectSpace
       end
       place = place_of(key)
       if place.nil?
-        @entries.push([key, value])
+        @entries.push([__weak_reference__(key), value])
       else
         @entries[place][1] = value
       end
@@ -246,13 +280,15 @@ module ObjectSpace
         return yield(key) if block_given?
         return nil
       end
-      @entries.delete_at(place)[1]
+      entry = @entries.delete_at(place)
+      __weak_release__(entry[0])
+      entry[1]
     end
 
     def getkey(key)
       return nil unless collectable?(key)
       place = place_of(key)
-      place.nil? ? nil : @entries[place][0]
+      place.nil? ? nil : __weak_target__(@entries[place][0])
     end
 
     def key?(key)
@@ -261,11 +297,13 @@ module ObjectSpace
     end
 
     def clear
+      @entries.each { |entry| __weak_release__(entry[0]) }
       @entries = []
       self
     end
 
     def size
+      settle
       @entries.size
     end
 
@@ -292,12 +330,27 @@ module ObjectSpace
     end
     private :collectable?
 
+    # Drop the entries whose key was freed.
+    def settle
+      kept = []
+      @entries.each do |entry|
+        if __weak_alive__(entry[0])
+          kept.push(entry)
+        else
+          __weak_release__(entry[0])
+        end
+      end
+      @entries = kept
+    end
+    private :settle
+
     # Where a key sits. The hash decides which entries are worth comparing,
     # and the same object is its own match however its `eql?` answers.
     def place_of(key)
+      settle
       wanted = key.__send__(:hash)
       @entries.each_with_index do |entry, place|
-        held = entry[0]
+        held = __weak_target__(entry[0])
         next unless held.__send__(:hash) == wanted
         return place if held.equal?(key) || key.__send__(:eql?, held)
       end

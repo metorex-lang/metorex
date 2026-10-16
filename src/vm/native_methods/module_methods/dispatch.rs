@@ -302,10 +302,6 @@ impl VirtualMachine {
         {
             return Ok(Some(result));
         }
-        // The two readings GC keeps a real account of. Metorex frees an
-        // object when the last reference to it goes, so there is no collector
-        // to time; `start` still counts as a collection having been asked for,
-        // which is what makes the count climb.
         if module_rc.name() == "GC" {
             match method_name {
                 "count" => {
@@ -316,11 +312,38 @@ impl VirtualMachine {
                 }
                 "start" | "garbage_collect" => {
                     self.collect_unreached_data(position)?;
-                    self.record_gc_run();
+                    self.collect_garbage(position)?;
                     return Ok(Some(Object::Nil));
+                }
+                "__collecting__" => {
+                    let wanted = arguments.first().is_some_and(crate::vm::utils::is_truthy);
+                    let was_off = crate::object::live::set_collecting(wanted);
+                    return Ok(Some(Object::Bool(was_off)));
+                }
+                "__allocated__" => {
+                    return Ok(Some(Object::Int(
+                        crate::object::live::allocated_count() as i64
+                    )));
+                }
+                "__alive__" => {
+                    return Ok(Some(Object::Int(crate::object::live::alive_count() as i64)));
                 }
                 _ => {}
             }
+        }
+
+        if module_rc.name() == "ObjectSpace" && method_name == "__counted__" {
+            return Ok(Some(self.counted_objects()));
+        }
+
+        // Watch an object for being freed, so the finalizers filed under its
+        // id run once it is.
+        if module_rc.name() == "ObjectSpace" && method_name == "__watch_freed__" {
+            if let [held, id] = arguments {
+                self.finalized_objects
+                    .push((crate::vm::core::WeakTarget::of(held), id.clone()));
+            }
+            return Ok(Some(Object::Nil));
         }
 
         // Every object the running program can still reach, which is what
@@ -347,15 +370,26 @@ impl VirtualMachine {
         }
 
         // Every object still alive that is a kind of the module given, oldest
-        // first: the instances the program made, then its classes and
-        // modules. The singleton class of a singleton class is the
-        // interpreter's own and is left out.
+        // first within each kind, with classes and modules last. The singleton
+        // class of a singleton class is the interpreter's own and is left out.
         if module_rc.name() == "ObjectSpace" && method_name == "__each_object__" {
             let wanted = arguments.first().cloned().unwrap_or(Object::Nil);
-            let mut candidates: Vec<Object> = crate::object::live::live_instances()
-                .into_iter()
-                .map(Object::Instance)
-                .collect();
+            let mut candidates: Vec<Object> = crate::object::live::with_lists(|lists| {
+                let mut listed: Vec<Object> = lists
+                    .instances
+                    .alive()
+                    .into_iter()
+                    .map(Object::Instance)
+                    .collect();
+                listed.extend(lists.strings.alive().into_iter().map(Object::String));
+                listed.extend(lists.arrays.alive().into_iter().map(Object::Array));
+                listed.extend(lists.hashes.alive().into_iter().map(Object::Dict));
+                listed.extend(lists.sets.alive().into_iter().map(Object::Set));
+                listed.extend(lists.exceptions.alive().into_iter().map(Object::Exception));
+                listed.extend(lists.blocks.alive().into_iter().map(Object::Block));
+                listed.extend(lists.methods.alive().into_iter().map(Object::Method));
+                listed
+            });
             for class in crate::object::live::live_classes() {
                 if class.is_singleton_class()
                     && matches!(

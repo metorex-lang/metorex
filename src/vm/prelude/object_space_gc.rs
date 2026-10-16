@@ -1,8 +1,8 @@
 pub(super) const SOURCE: &str = r##"
 module ObjectSpace
   # The finalizers a program has asked for, under the id of the object each
-  # one belongs to. Metorex frees an object when its last reference goes and
-  # nothing watches for that, so a finalizer runs as the program ends.
+  # one belongs to. They run once the object is found freed, and the ones
+  # left run as the program ends.
   def self.__finalizers__
     @finalizers = {} if @finalizers.nil?
     @finalizers
@@ -26,11 +26,17 @@ module ObjectSpace
     same = listed.find { |one| one == finalizer }
     return [0, same] unless same.nil?
     ObjectSpace.__finalizers__[named] = listed + [finalizer]
-    unless @armed
-      @armed = true
-      at_exit { ObjectSpace.__run_finalizers__ }
-    end
+    __watch_freed__(held, named) if listed.empty?
+    __arm_finalizers__
     [0, finalizer]
+  end
+
+  # The block run at exit is made here, where it closes over no object a
+  # finalizer is defined for.
+  def self.__arm_finalizers__
+    return if @armed
+    @armed = true
+    at_exit { ObjectSpace.__run_finalizers__ }
   end
 
   # The object a finalizer runs as: a block's `self`, or the object a method
@@ -42,22 +48,32 @@ module ObjectSpace
   end
 
   # Run every finalizer as the program ends, including the ones a finalizer
-  # defines while it runs. One that raises is reported unless warnings are
-  # switched off, and the rest still run.
+  # defines while it runs.
   def self.__run_finalizers__
     until __finalizers__.empty?
       pending = __finalizers__.to_a
       __finalizers__.clear
-      pending.each do |id, listed|
-        listed.each do |one|
-          begin
-            one.call id
-          rescue Exception => error
-            unless $VERBOSE.nil?
-              warn "warning: Exception in finalizer #{one.inspect}"
-              $stderr.write error.full_message(highlight: false)
-            end
-          end
+      pending.each { |id, listed| __call_finalizers__(id, listed) }
+    end
+  end
+
+  # Run the finalizers filed under the id of an object that was freed.
+  def self.__finalize__(id)
+    listed = __finalizers__.delete(id)
+    __call_finalizers__(id, listed) unless listed.nil?
+    nil
+  end
+
+  # One finalizer that raises is reported unless warnings are switched off,
+  # and the rest still run.
+  def self.__call_finalizers__(id, listed)
+    listed.each do |one|
+      begin
+        one.call id
+      rescue Exception => error
+        unless $VERBOSE.nil?
+          warn "warning: Exception in finalizer #{one.inspect}"
+          $stderr.write error.full_message(highlight: false)
         end
       end
     end
@@ -68,7 +84,9 @@ module ObjectSpace
   def self.__carry_finalizers__(from, to)
     listed = __finalizers__[from.object_id]
     return nil if listed.nil?
-    __finalizers__[to.object_id] = __finalizers__.fetch(to.object_id, []) + listed
+    already = __finalizers__.fetch(to.object_id, [])
+    __finalizers__[to.object_id] = already + listed
+    __watch_freed__(to, to.object_id) if already.empty?
     nil
   end
 
@@ -92,24 +110,13 @@ module ObjectSpace
     found.size
   end
 
-  # How many objects of each kind are alive, keyed as MRI keys them. Metorex
-  # tracks the objects `each_object` can reach, which are instances,
-  # classes, and modules, and frees the rest as soon as the last reference
-  # goes, so nothing is ever counted free.
+  # How many objects of each kind are alive, keyed as MRI keys them. An
+  # object is taken off the list as it is freed, so nothing is counted free.
   def self.count_objects(result = nil)
     unless result.nil? || result.is_a?(Hash)
       raise TypeError, "non-hash given"
     end
-    counted = { T_OBJECT: 0, T_CLASS: 0, T_MODULE: 0 }
-    __each_object__(nil).each do |one|
-      # Asking the class rather than the object, which may answer `is_a?`
-      # in a way of its own.
-      kind = if Class === one then :T_CLASS
-             elsif Module === one then :T_MODULE
-             else :T_OBJECT
-             end
-      counted[kind] += 1
-    end
+    counted = __counted__.to_h
     answer = result.nil? ? {} : result
     answer[:TOTAL] = counted.values.sum
     answer[:FREE] = 0
@@ -117,7 +124,7 @@ module ObjectSpace
   end
 
   # Ruby 4.0 deprecated reading an object back from its id. Metorex keeps no
-  # table of every live object, so only the values whose id is derived from
+  # table from ids to objects, so only the values whose id is derived from
   # the value itself can be answered at all.
   def self._id2ref(id)
     warn "ObjectSpace._id2ref is deprecated", uplevel: 1, category: :deprecated
@@ -131,8 +138,8 @@ end
 
 module GC
   # The collector's settings. `:implementation` names the collector and is
-  # read-only, and the rest are whatever the collector takes. Metorex frees
-  # an object when its last reference goes, so it takes none.
+  # read-only, and the rest are whatever the collector takes. The cycle
+  # collector takes none.
   def self.config(options = :__none__)
     @settings = {} if @settings.nil?
     current = { implementation: "metorex" }.merge(@settings)
@@ -153,25 +160,19 @@ module GC
     nil
   end
 
-  # Metorex frees an object when its last reference goes, so switching the
-  # collector off leaves nothing running differently. The switch is still read
-  # back the way it was written, which is what a program that saves and
-  # restores it depends on.
+  # Switching the collector off stops the cycle collector, and an object is
+  # still freed when its last reference goes.
   def self.disable
-    was = @disabled == true
-    @disabled = true
-    was
+    __collecting__(false)
   end
 
   def self.enable
-    was = @disabled == true
-    @disabled = false
-    was
+    __collecting__(true)
   end
 
-  # The readings Ruby's collector reports. Metorex frees an object when the
-  # last reference to it goes, so what these count is the work the program
-  # has asked for rather than a collector's own bookkeeping.
+  # The readings Ruby's collector reports. The object counts are read from
+  # the list of heap objects, and the readings with no counterpart in
+  # Metorex's heap are fixed.
   def self.stat(target = nil)
     readings = __stat_readings__
     return readings if target.nil?
@@ -186,8 +187,8 @@ module GC
 
   def self.__stat_readings__
     runs = GC.count
-    counted = ObjectSpace.count_objects
-    live = counted.nil? ? 1 : counted[:TOTAL].to_i
+    live = __alive__
+    allocated = __allocated__
     {
       count: runs,
       time: GC.total_time,
@@ -205,8 +206,8 @@ module GC
       heap_tomb_pages: 0,
       total_allocated_pages: 1,
       total_freed_pages: 0,
-      total_allocated_objects: live,
-      total_freed_objects: 0,
+      total_allocated_objects: allocated,
+      total_freed_objects: allocated - live,
       malloc_increase_bytes: 0,
       malloc_increase_bytes_limit: 0,
       minor_gc_count: 0,
@@ -224,9 +225,8 @@ module GC
   end
 
   # What the collector's last run was, as Ruby reports it: one reading by
-  # name, or all of them added to a Hash. Metorex runs the collector only
-  # when the program asks, so a run is one that was forced by a method call
-  # and swept at once.
+  # name, or all of them added to a Hash. A run is reported as one forced by
+  # a method call and swept at once.
   def self.latest_gc_info(target = nil)
     ran = GC.count > 0
     readings = {
@@ -265,7 +265,7 @@ module GC
   end
 
   # Ruby collects on every allocation while this is set, which is a way to
-  # shake out collector bugs. There is no collector here to drive that hard,
+  # shake out collector bugs. The cycle collector does not run that often,
   # so the switch is read back the way it was written and nothing else.
   def self.stress
     @stress == true
@@ -276,8 +276,8 @@ module GC
   end
 
   # Ruby's collector reports what each run cost when the profiler is enabled.
-  # There are no runs to report here, so the report stays empty however the
-  # switch is set.
+  # The cycle collector keeps no record of its runs, so the report stays
+  # empty however the switch is set.
   module Profiler
     def self.enabled?
       @enabled == true

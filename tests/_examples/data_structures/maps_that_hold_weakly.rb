@@ -8,8 +8,11 @@ p map.size
 
 first = Object.new
 second = Object.new
-map[first] = "one"
-map[second] = "two"
+# A weak map holds its values weakly too, so these are held here.
+one = "one"
+two = "two"
+map[first] = one
+map[second] = two
 p map.size
 p map[first]
 p map.key?(second)
@@ -34,12 +37,15 @@ p map.delete(first) { |key| "gone" }
 # A weak-key map compares its keys by value, and refuses a key that lives for
 # the whole run.
 keyed = ObjectSpace::WeakKeyMap.new
-keyed["a".upcase] = 1
+# The keys are held here, since the map holds them weakly.
+upper_a = "a".upcase
+upper_b = "b".upcase
+keyed[upper_a] = 1
 p keyed["a".upcase]
 p keyed.key?("A")
 p keyed.getkey("A")
 p keyed.size
-keyed["b".upcase] = 2
+keyed[upper_b] = 2
 p keyed.size
 p keyed.delete("B")
 p keyed.clear.size
