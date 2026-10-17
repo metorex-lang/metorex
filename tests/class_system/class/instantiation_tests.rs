@@ -22,7 +22,7 @@ fn test_simple_class_definition() {
         namespace: None,
         superclass: None,
         superclass_expression: None,
-        body: vec![],
+        body: vec![].into(),
         position: pos(1, 1),
     }];
 
@@ -78,10 +78,12 @@ fn test_class_with_initialize_method() {
                     },
                     position: pos(4, 5),
                 },
-            ],
+            ]
+            .into(),
             position: pos(2, 3),
             end_position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
     }];
 
@@ -105,7 +107,7 @@ fn test_create_instance_without_initialize() {
             namespace: None,
             superclass: None,
             superclass_expression: None,
-            body: vec![],
+            body: vec![].into(),
             position: pos(1, 1),
         },
         Statement::Assignment {
@@ -181,10 +183,12 @@ fn test_create_instance_with_initialize() {
                         },
                         position: pos(4, 5),
                     },
-                ],
+                ]
+                .into(),
                 position: pos(2, 3),
                 end_position: pos(2, 3),
-            }],
+            }]
+            .into(),
             position: pos(1, 1),
         },
         Statement::Assignment {
@@ -257,7 +261,8 @@ fn test_instance_variable_access() {
                             position: pos(3, 14),
                         },
                         position: pos(3, 5),
-                    }],
+                    }]
+                    .into(),
                     position: pos(2, 3),
                     end_position: pos(2, 3),
                 },
@@ -271,11 +276,13 @@ fn test_instance_variable_access() {
                             position: pos(6, 5),
                         }),
                         position: pos(6, 5),
-                    }],
+                    }]
+                    .into(),
                     position: pos(5, 3),
                     end_position: pos(5, 3),
                 },
-            ],
+            ]
+            .into(),
             position: pos(1, 1),
         },
         Statement::Assignment {
@@ -379,7 +386,8 @@ fn test_class_variable_access() {
                             position: pos(4, 15),
                         },
                         position: pos(4, 5),
-                    }],
+                    }]
+                    .into(),
                     position: pos(3, 3),
                     end_position: pos(3, 3),
                 },
@@ -393,11 +401,13 @@ fn test_class_variable_access() {
                             position: pos(7, 5),
                         }),
                         position: pos(7, 5),
-                    }],
+                    }]
+                    .into(),
                     position: pos(6, 3),
                     end_position: pos(6, 3),
                 },
-            ],
+            ]
+            .into(),
             position: pos(1, 1),
         },
         Statement::Assignment {
@@ -491,10 +501,12 @@ fn test_class_with_inheritance() {
                         position: pos(3, 10),
                     },
                     position: pos(3, 5),
-                }],
+                }]
+                .into(),
                 position: pos(2, 3),
                 end_position: pos(2, 3),
-            }],
+            }]
+            .into(),
             position: pos(1, 1),
         },
         Statement::ClassDef {
@@ -502,7 +514,7 @@ fn test_class_with_inheritance() {
             namespace: None,
             superclass: Some("Base".to_string()),
             superclass_expression: None,
-            body: vec![],
+            body: vec![].into(),
             position: pos(6, 1),
         },
         Statement::Assignment {
@@ -553,7 +565,7 @@ fn test_error_when_superclass_not_found() {
         namespace: None,
         superclass: Some("NonExistent".to_string()),
         superclass_expression: None,
-        body: vec![],
+        body: vec![].into(),
         position: pos(1, 1),
     }];
 
@@ -587,7 +599,7 @@ fn test_error_when_superclass_not_a_class() {
             namespace: None,
             superclass: Some("x".to_string()),
             superclass_expression: None,
-            body: vec![],
+            body: vec![].into(),
             position: pos(2, 1),
         },
     ];
@@ -611,7 +623,7 @@ fn test_error_when_calling_class_with_wrong_argument_count() {
             namespace: None,
             superclass: None,
             superclass_expression: None,
-            body: vec![],
+            body: vec![].into(),
             position: pos(1, 1),
         },
         Statement::Assignment {

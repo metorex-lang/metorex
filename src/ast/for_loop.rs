@@ -65,7 +65,7 @@ pub fn for_over_each(
             trailing_block: Some(Box::new(Expression::Lambda {
                 parameters: vec![HANDED_OVER.to_string()],
                 parameter_defaults: Vec::new(),
-                body: statements,
+                body: statements.into(),
                 captured_vars: None,
                 outer_locals: Vec::new(),
                 is_lambda: false,

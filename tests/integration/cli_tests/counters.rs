@@ -153,3 +153,37 @@ fn fib_calls_prints_the_twentieth_fibonacci_number() {
         .expect("failed to execute");
     assert_eq!(String::from_utf8(output.stdout).unwrap(), "6765\n");
 }
+
+/// The names under the "libraries parsed from source" line of the report
+/// a run of the example `script` writes.
+fn libraries_parsed(script: &str) -> Vec<String> {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let output = metorex_cmd()
+        .current_dir(manifest_dir)
+        .env("METOREX_COUNTERS", "1")
+        .arg(format!("{manifest_dir}/tests/_examples/cli_flags/{script}"))
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+    let report = String::from_utf8(output.stderr).unwrap();
+    let mut lines = report
+        .lines()
+        .skip_while(|line| !line.starts_with("libraries parsed from source: "));
+    let count: usize = lines
+        .next()
+        .and_then(|line| line.strip_prefix("libraries parsed from source: "))
+        .expect("a libraries parsed line")
+        .parse()
+        .unwrap();
+    lines.take(count).map(|line| line.trim().to_string()).collect()
+}
+
+#[test]
+fn a_default_start_parses_no_library_from_source() {
+    assert_eq!(libraries_parsed("counted_calls.rb"), Vec::<String>::new());
+}
+
+#[test]
+fn a_library_required_after_startup_is_parsed_from_source() {
+    assert_eq!(libraries_parsed("requires_shellwords.rb"), ["shellwords"]);
+}

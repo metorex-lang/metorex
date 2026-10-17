@@ -36,7 +36,8 @@ fn block_returns_last_expression() {
                         position: pos(1, 13),
                     },
                     position: pos(1, 9),
-                }],
+                }]
+                .into(),
                 captured_vars: None,
                 is_lambda: false,
                 position: pos(1, 5),
@@ -108,7 +109,8 @@ fn block_captures_outer_variable() {
                         position: pos(2, 19),
                     },
                     position: pos(2, 11),
-                }],
+                }]
+                .into(),
                 captured_vars: Some(vec!["outer".to_string()]),
                 is_lambda: false,
                 position: pos(2, 5),
@@ -160,7 +162,8 @@ fn block_argument_mismatch_raises_error() {
                         position: pos(1, 12),
                     },
                     position: pos(1, 12),
-                }],
+                }]
+                .into(),
                 captured_vars: None,
                 outer_locals: Vec::new(),
                 is_lambda: true,
@@ -223,7 +226,8 @@ fn block_return_statement_exits_early() {
                         },
                         position: pos(1, 21),
                     },
-                ],
+                ]
+                .into(),
                 captured_vars: None,
                 is_lambda: true,
                 position: pos(1, 5),

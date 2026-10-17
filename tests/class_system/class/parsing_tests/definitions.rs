@@ -10,7 +10,7 @@ fn test_empty_class() {
         namespace: None,
         superclass: None,
         superclass_expression: None,
-        body: vec![],
+        body: vec![].into(),
         position: pos(1, 1),
     };
 
@@ -26,7 +26,7 @@ fn test_class_with_simple_name() {
         namespace: None,
         superclass: None,
         superclass_expression: None,
-        body: vec![],
+        body: vec![].into(),
         position: pos(1, 1),
     };
 
@@ -41,7 +41,7 @@ fn test_class_with_uppercase_name() {
         namespace: None,
         superclass: None,
         superclass_expression: None,
-        body: vec![],
+        body: vec![].into(),
         position: pos(1, 1),
     };
 
@@ -57,7 +57,7 @@ fn test_class_with_superclass() {
         namespace: None,
         superclass: Some("Animal".to_string()),
         superclass_expression: None,
-        body: vec![],
+        body: vec![].into(),
         position: pos(1, 1),
     };
 
@@ -73,7 +73,7 @@ fn test_class_inheritance_chain() {
         namespace: None,
         superclass: None,
         superclass_expression: None,
-        body: vec![],
+        body: vec![].into(),
         position: pos(1, 1),
     };
 
@@ -83,7 +83,7 @@ fn test_class_inheritance_chain() {
         namespace: None,
         superclass: Some("LivingThing".to_string()),
         superclass_expression: None,
-        body: vec![],
+        body: vec![].into(),
         position: pos(5, 1),
     };
 
@@ -93,7 +93,7 @@ fn test_class_inheritance_chain() {
         namespace: None,
         superclass: Some("Animal".to_string()),
         superclass_expression: None,
-        body: vec![],
+        body: vec![].into(),
         position: pos(10, 1),
     };
 
@@ -119,10 +119,12 @@ fn test_class_with_single_method() {
                     position: pos(3, 5),
                 }),
                 position: pos(3, 5),
-            }],
+            }]
+            .into(),
             position: pos(2, 3),
             end_position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
     };
 
@@ -159,7 +161,8 @@ fn test_class_with_multiple_methods() {
                         position: pos(3, 7),
                     }),
                     position: pos(3, 5),
-                }],
+                }]
+                .into(),
                 position: pos(2, 3),
                 end_position: pos(2, 3),
             },
@@ -184,11 +187,13 @@ fn test_class_with_multiple_methods() {
                         position: pos(7, 7),
                     }),
                     position: pos(7, 5),
-                }],
+                }]
+                .into(),
                 position: pos(6, 3),
                 end_position: pos(6, 3),
             },
-        ],
+        ]
+        .into(),
         position: pos(1, 1),
     };
 
@@ -234,10 +239,12 @@ fn test_class_with_constructor() {
                     },
                     position: pos(4, 5),
                 },
-            ],
+            ]
+            .into(),
             position: pos(2, 3),
             end_position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
     };
 
@@ -282,7 +289,8 @@ fn test_class_with_constructor_and_methods() {
                         },
                         position: pos(4, 5),
                     },
-                ],
+                ]
+                .into(),
                 position: pos(2, 3),
                 end_position: pos(2, 3),
             },
@@ -304,11 +312,13 @@ fn test_class_with_constructor_and_methods() {
                         position: pos(8, 12),
                     }),
                     position: pos(8, 5),
-                }],
+                }]
+                .into(),
                 position: pos(7, 3),
                 end_position: pos(7, 3),
             },
-        ],
+        ]
+        .into(),
         position: pos(1, 1),
     };
 
@@ -338,10 +348,12 @@ fn test_class_with_instance_variable_initialization() {
                     position: pos(3, 14),
                 },
                 position: pos(3, 5),
-            }],
+            }]
+            .into(),
             position: pos(2, 3),
             end_position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
     };
 
@@ -397,10 +409,12 @@ fn test_class_with_multiple_instance_variables() {
                     },
                     position: pos(5, 5),
                 },
-            ],
+            ]
+            .into(),
             position: pos(2, 3),
             end_position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
     };
 
@@ -430,10 +444,12 @@ fn test_class_with_class_variable() {
                     position: pos(3, 15),
                 },
                 position: pos(3, 5),
-            }],
+            }]
+            .into(),
             position: pos(2, 3),
             end_position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
     };
 
@@ -463,10 +479,11 @@ fn test_class_method_with_default_parameters() {
                     pos(2, 18),
                 ),
             ],
-            body: vec![],
+            body: vec![].into(),
             position: pos(2, 3),
             end_position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
     };
 

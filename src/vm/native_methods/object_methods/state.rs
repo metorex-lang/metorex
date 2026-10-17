@@ -107,8 +107,8 @@ impl VirtualMachine {
             "__code_lines__" if arguments.len() == 1 => {
                 let body = match arguments[0].view() {
                     View::Method(method) => method.body.clone(),
-                    View::Block(block) => block.body.to_vec(),
-                    _ => Vec::new(),
+                    View::Block(block) => block.body.clone(),
+                    _ => crate::ast::Body::from([]),
                 };
                 Ok(Some(Object::array(
                     body.iter()

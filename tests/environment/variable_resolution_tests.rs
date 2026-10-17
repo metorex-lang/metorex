@@ -107,7 +107,8 @@ fn test_variable_shadowing_warning() {
                 position: Position::default(),
             },
             position: Position::default(),
-        }],
+        }]
+        .into(),
         position: Position::default(),
         singleton_class: None,
         end_position: Default::default(),
@@ -145,7 +146,8 @@ fn test_function_parameters_in_scope() {
                 position: Position::default(),
             },
             position: Position::default(),
-        }],
+        }]
+        .into(),
         position: Position::default(),
         singleton_class: None,
         end_position: Default::default(),
@@ -182,7 +184,8 @@ fn test_nested_scopes() {
                 position: Position::default(),
             },
             position: Position::default(),
-        }],
+        }]
+        .into(),
         position: Position::default(),
         singleton_class: None,
         end_position: Default::default(),
@@ -402,7 +405,8 @@ fn test_lambda_parameter_scope() {
                     position: Position::default(),
                 },
                 position: Position::default(),
-            }],
+            }]
+            .into(),
             captured_vars: None,
             outer_locals: Vec::new(),
             is_lambda: false,
@@ -508,10 +512,12 @@ fn test_class_definition_scope() {
                     position: Position::default(),
                 },
                 position: Position::default(),
-            }],
+            }]
+            .into(),
             position: Position::default(),
             end_position: Position::default(),
-        }],
+        }]
+        .into(),
         position: Position::default(),
     };
 
@@ -601,7 +607,8 @@ fn test_return_statement_resolution() {
                 }),
                 position: Position::default(),
             },
-        ],
+        ]
+        .into(),
         position: Position::default(),
         singleton_class: None,
         end_position: Default::default(),

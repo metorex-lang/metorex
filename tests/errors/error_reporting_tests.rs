@@ -239,7 +239,8 @@ fn test_nested_method_call_shows_stack_trace() {
                         position: pos_at(3, 5),
                     },
                     position: pos_at(3, 5),
-                }],
+                }]
+                .into(),
                 position: pos_at(2, 3),
                 end_position: pos_at(2, 3),
             },
@@ -258,7 +259,8 @@ fn test_nested_method_call_shows_stack_trace() {
                         position: pos_at(6, 5),
                     },
                     position: pos_at(6, 5),
-                }],
+                }]
+                .into(),
                 position: pos_at(5, 3),
                 end_position: pos_at(5, 3),
             },
@@ -272,11 +274,13 @@ fn test_nested_method_call_shows_stack_trace() {
                         position: pos_at(9, 5),
                     },
                     position: pos_at(9, 5),
-                }],
+                }]
+                .into(),
                 position: pos_at(8, 3),
                 end_position: pos_at(8, 3),
             },
-        ],
+        ]
+        .into(),
         position: pos_at(1, 1),
     };
 
@@ -432,10 +436,12 @@ fn test_method_argument_count_error_has_location() {
                         position: pos(),
                     },
                     position: pos(),
-                }],
+                }]
+                .into(),
                 position: pos(),
                 end_position: pos(),
-            }],
+            }]
+            .into(),
             position: pos(),
         },
         Statement::Assignment {
@@ -609,7 +615,8 @@ fn test_error_in_deeply_nested_calls() {
                     position: pos(),
                 },
                 position: pos(),
-            }],
+            }]
+            .into(),
             position: pos(),
             end_position: pos(),
         });
@@ -624,7 +631,8 @@ fn test_error_in_deeply_nested_calls() {
                 position: pos(),
             },
             position: pos(),
-        }],
+        }]
+        .into(),
         position: pos(),
         end_position: pos(),
     });
@@ -635,7 +643,7 @@ fn test_error_in_deeply_nested_calls() {
             namespace: None,
             superclass: None,
             superclass_expression: None,
-            body: methods,
+            body: methods.into(),
             position: pos(),
         },
         Statement::Assignment {

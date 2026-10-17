@@ -143,7 +143,7 @@ fn resolver_module_def() {
     let stmt = Statement::ModuleDef {
         name: "MyMod".to_string(),
         namespace: None,
-        body: vec![],
+        body: vec![].into(),
         position: pos(),
     };
     let result = r.resolve(&[stmt]);
@@ -386,7 +386,7 @@ fn resolver_call_expression() {
     let func = Statement::FunctionDef {
         name: "add".to_string(),
         parameters: vec![],
-        body: vec![assign("r", int_lit(0))],
+        body: vec![assign("r", int_lit(0))].into(),
         position: pos(),
         singleton_class: None,
         end_position: Default::default(),
@@ -498,7 +498,8 @@ fn resolver_lambda_expression() {
                     right: Box::new(ident("y")),
                     position: pos(),
                 },
-            )],
+            )]
+            .into(),
             captured_vars: None,
             outer_locals: Vec::new(),
             is_lambda: false,
@@ -707,7 +708,7 @@ fn resolver_function_def_with_default_param() {
     let stmt = Statement::FunctionDef {
         name: "f".to_string(),
         parameters: vec![param],
-        body: vec![],
+        body: vec![].into(),
         position: pos(),
         singleton_class: None,
         end_position: Default::default(),
@@ -725,7 +726,7 @@ fn resolver_method_def_with_default_param() {
         is_class_method: false,
         name: "greet".to_string(),
         parameters: vec![param],
-        body: vec![],
+        body: vec![].into(),
         position: pos(),
         end_position: pos(),
     };
@@ -745,7 +746,7 @@ fn resolver_variable_redeclaration_via_duplicate_params() {
             Parameter::simple("x".to_string(), pos()),
             Parameter::simple("x".to_string(), pos()),
         ],
-        body: vec![],
+        body: vec![].into(),
         position: pos(),
         singleton_class: None,
         end_position: Default::default(),
@@ -828,11 +829,12 @@ fn resolver_module_def_with_body() {
         body: vec![Statement::FunctionDef {
             name: "greet".to_string(),
             parameters: vec![],
-            body: vec![assign("msg", int_lit(1))],
+            body: vec![assign("msg", int_lit(1))].into(),
             position: pos(),
             singleton_class: None,
             end_position: Default::default(),
-        }],
+        }]
+        .into(),
         position: pos(),
     };
     let result = r.resolve(&[stmt]);
@@ -928,7 +930,8 @@ fn resolver_variable_reassignment_in_function_scope() {
                 value: int_lit(99),
                 position: pos(),
             },
-        ],
+        ]
+        .into(),
         position: pos(),
         singleton_class: None,
         end_position: Default::default(),

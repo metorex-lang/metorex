@@ -336,19 +336,10 @@ impl VirtualMachine {
             return Ok(false);
         }
 
-        let tokens = crate::lexer::Lexer::for_embedded_library(source).tokenize();
-        let statements = crate::parser::Parser::new(tokens)
-            .parse()
-            .map_err(|errors| {
-                let first = errors
-                    .first()
-                    .map(|error| error.to_string())
-                    .unwrap_or_default();
-                MetorexError::runtime_error(
-                    format!("require('{}') reports {}", name, first),
-                    SourceLocation::new(0, 0, 0),
-                )
-            })?;
+        let statements = match crate::vm::parsed_sources::library(source) {
+            Some(statements) => statements,
+            None => parse_embedded_library(name, source)?,
+        };
         // A library metorex carries runs at top level however deep the
         // `require` was written, so a `module Foo` at its top names ::Foo
         // rather than nesting inside the class or module body it was asked
@@ -399,4 +390,26 @@ impl VirtualMachine {
         }
         Some(named)
     }
+}
+
+/// The statements of a library metorex carries that the binary does not
+/// hold parsed.
+fn parse_embedded_library(
+    name: &str,
+    source: &str,
+) -> Result<Vec<crate::ast::Statement>, MetorexError> {
+    crate::vm::counters::count_library_parsed(name);
+    let tokens = crate::lexer::Lexer::for_embedded_library(source).tokenize();
+    crate::parser::Parser::new(tokens)
+        .parse()
+        .map_err(|errors| {
+            let first = errors
+                .first()
+                .map(|error| error.to_string())
+                .unwrap_or_default();
+            MetorexError::runtime_error(
+                format!("require('{}') reports {}", name, first),
+                SourceLocation::new(0, 0, 0),
+            )
+        })
 }

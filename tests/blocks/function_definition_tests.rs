@@ -21,7 +21,8 @@ fn test_simple_function_definition() {
                 position: pos(2, 3),
             }),
             position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
         singleton_class: None,
         end_position: Default::default(),
@@ -42,7 +43,8 @@ fn test_function_with_no_parameters() {
                 position: pos(2, 3),
             }),
             position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
         singleton_class: None,
         end_position: Default::default(),
@@ -73,7 +75,8 @@ fn test_function_with_multiple_parameters() {
                 position: pos(2, 5),
             }),
             position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
         singleton_class: None,
         end_position: Default::default(),
@@ -130,7 +133,8 @@ fn test_function_with_default_parameters() {
                 position: pos(2, 12),
             }),
             position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
         singleton_class: None,
         end_position: Default::default(),
@@ -162,7 +166,7 @@ fn test_function_with_multiple_default_parameters() {
                 pos(1, 48),
             ),
         ],
-        body: vec![],
+        body: vec![].into(),
         position: pos(1, 1),
         singleton_class: None,
         end_position: Default::default(),
@@ -207,7 +211,8 @@ fn test_function_with_variadic_parameter() {
                 }),
                 position: pos(3, 3),
             },
-        ],
+        ]
+        .into(),
         position: pos(1, 1),
         singleton_class: None,
         end_position: Default::default(),
@@ -224,7 +229,7 @@ fn test_function_with_regular_and_variadic_parameters() {
             Parameter::simple("first".to_string(), pos(1, 13)),
             Parameter::variadic("rest".to_string(), pos(1, 20)),
         ],
-        body: vec![],
+        body: vec![].into(),
         position: pos(1, 1),
         singleton_class: None,
         end_position: Default::default(),
@@ -264,7 +269,8 @@ fn test_function_with_keyword_parameter() {
                 position: pos(2, 3),
             },
             position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
         singleton_class: None,
         end_position: Default::default(),
@@ -292,7 +298,7 @@ fn test_function_with_all_parameter_types() {
             Parameter::variadic("args".to_string(), pos(1, 52)),
             Parameter::keyword("kwargs".to_string(), pos(1, 59)),
         ],
-        body: vec![],
+        body: vec![].into(),
         position: pos(1, 1),
         singleton_class: None,
         end_position: Default::default(),
@@ -315,7 +321,8 @@ fn test_simple_method_definition() {
                 position: pos(2, 3),
             }),
             position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
         end_position: pos(1, 1),
     };
@@ -340,7 +347,8 @@ fn test_method_with_parameters() {
                 position: pos(2, 12),
             },
             position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
         end_position: pos(1, 1),
     };
@@ -387,7 +395,8 @@ fn test_method_with_default_parameters() {
                 },
                 position: pos(3, 3),
             },
-        ],
+        ]
+        .into(),
         position: pos(1, 1),
         end_position: pos(1, 1),
     };
@@ -434,7 +443,8 @@ fn test_function_with_conditional_body() {
                 position: pos(5, 5),
             }]),
             position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
         singleton_class: None,
         end_position: Default::default(),
@@ -522,7 +532,8 @@ fn test_function_with_loop_body() {
                 }),
                 position: pos(7, 3),
             },
-        ],
+        ]
+        .into(),
         position: pos(1, 1),
         singleton_class: None,
         end_position: Default::default(),
@@ -568,7 +579,8 @@ fn test_function_with_exception_handling() {
             else_clause: None,
             ensure_block: None,
             position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
         singleton_class: None,
         end_position: Default::default(),
@@ -601,11 +613,13 @@ fn test_nested_function_definition() {
                     position: pos(3, 7),
                 }),
                 position: pos(3, 5),
-            }],
+            }]
+            .into(),
             position: pos(2, 3),
             singleton_class: None,
             end_position: Default::default(),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
         singleton_class: None,
         end_position: Default::default(),
@@ -671,7 +685,7 @@ fn test_function_with_empty_body() {
     let stmt = Statement::FunctionDef {
         name: "noop".to_string(),
         parameters: vec![],
-        body: vec![],
+        body: vec![].into(),
         position: pos(1, 1),
         singleton_class: None,
         end_position: Default::default(),
@@ -687,7 +701,7 @@ fn test_method_with_empty_body() {
         is_class_method: false,
         name: "noop".to_string(),
         parameters: vec![],
-        body: vec![],
+        body: vec![].into(),
         position: pos(1, 1),
         end_position: pos(1, 1),
     };

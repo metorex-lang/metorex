@@ -575,7 +575,7 @@ fn method_def_at_top_level_error() {
         is_class_method: false,
         name: "foo".to_string(),
         parameters: vec![Parameter::simple("x".to_string(), pos)],
-        body: vec![],
+        body: vec![].into(),
         position: pos,
         end_position: pos,
     };

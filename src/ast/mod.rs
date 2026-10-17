@@ -2,10 +2,11 @@
 
 pub mod for_loop;
 pub mod node;
+pub mod parameter_marks;
 pub mod scope_locals;
 
 pub use node::{
-    BinaryOp, ElsifBranch, Expression, HashPatternRest, InterpolationPart, MatchCase, MatchPattern,
-    Parameter, RescueClause, Statement, UnaryOp,
+    BinaryOp, Body, ElsifBranch, Expression, HashPatternRest, InterpolationPart, MatchCase,
+    MatchPattern, Parameter, RescueClause, Statement, UnaryOp,
 };
 pub use scope_locals::collect_assigned_locals;

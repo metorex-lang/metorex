@@ -355,7 +355,7 @@ impl Parser {
                 return Ok(Statement::MethodDef {
                     name,
                     parameters,
-                    body,
+                    body: body.into(),
                     is_class_method: _singleton_receiver.is_some(),
                     position: start_pos,
                     // An endless definition closes where its body does.
@@ -366,7 +366,7 @@ impl Parser {
                 Statement::FunctionDef {
                     name,
                     parameters,
-                    body,
+                    body: body.into(),
                     position: start_pos,
                     singleton_class: _singleton_receiver,
                     end_position: self.previous().position,
@@ -427,7 +427,7 @@ impl Parser {
             Ok(Statement::MethodDef {
                 name,
                 parameters,
-                body,
+                body: body.into(),
                 is_class_method,
                 position: start_pos,
                 end_position: closing,
@@ -437,7 +437,7 @@ impl Parser {
                 Statement::FunctionDef {
                     name,
                     parameters,
-                    body,
+                    body: body.into(),
                     position: start_pos,
                     singleton_class: _singleton_receiver,
                     end_position: closing,
@@ -555,7 +555,7 @@ impl Parser {
                     // all. It is recorded so the method can report it, and
                     // nothing is ever bound under the name.
                     params.push(Parameter::keyword(
-                        crate::object::NO_KEYWORDS_PARAM.to_string(),
+                        crate::ast::parameter_marks::NO_KEYWORDS_PARAM.to_string(),
                         param_pos,
                     ));
                 } else {
@@ -593,7 +593,11 @@ impl Parser {
                 // in the group, which the binder undoes by the marker.
                 let names = self.read_parameter_group()?;
                 params.push(Parameter::simple(
-                    format!("{}{}", crate::object::DESTRUCTURED_GROUP_PREFIX, names),
+                    format!(
+                        "{}{}",
+                        crate::ast::parameter_marks::DESTRUCTURED_GROUP_PREFIX,
+                        names
+                    ),
                     param_pos,
                 ));
             } else {
@@ -697,7 +701,7 @@ impl Parser {
                     // all. It is recorded so the method can report it, and
                     // nothing is ever bound under the name.
                     params.push(Parameter::keyword(
-                        crate::object::NO_KEYWORDS_PARAM.to_string(),
+                        crate::ast::parameter_marks::NO_KEYWORDS_PARAM.to_string(),
                         param_pos,
                     ));
                 } else {
@@ -737,7 +741,11 @@ impl Parser {
                 // in the group, which the binder undoes by the marker.
                 let names = self.read_parameter_group()?;
                 params.push(Parameter::simple(
-                    format!("{}{}", crate::object::DESTRUCTURED_GROUP_PREFIX, names),
+                    format!(
+                        "{}{}",
+                        crate::ast::parameter_marks::DESTRUCTURED_GROUP_PREFIX,
+                        names
+                    ),
                     param_pos,
                 ));
             } else {

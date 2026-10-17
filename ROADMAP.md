@@ -39,7 +39,7 @@ These come first because every instruction, frame, and native method is written 
   - Acceptance: under `METOREX_ENGINE=bytecode` with an empty compiler, `cargo test` and ruby/spec pass, every unit falls back, and the fallback is visible in the report below
 - [x] Engine report: `METOREX_ENGINE_REPORT=path` writes, at exit, the count of units run on bytecode and on the tree walker, and the node types that caused each fallback with their counts
   - Acceptance: a test runs a file with one compiled method and one that falls back and checks both counts and the named node type
-- [ ] Test harness on both engines: `scripts/run_ruby_spec.sh` and the example runners take the engine from the environment, and `test.sh` and the Jenkinsfile run `cargo test` and ruby/spec under `METOREX_ENGINE=bytecode` as a step of their own, with the engine report kept as a build artifact
+- [x] Test harness on both engines: `scripts/run_ruby_spec.sh` and the example runners take the engine from the environment, and `test.sh` and the Jenkinsfile run `cargo test` and ruby/spec under `METOREX_ENGINE=bytecode` as a step of their own, with the engine report kept as a build artifact
   - Acceptance: the bytecode step runs in CI and fails the build when a test fails
 - [x] Instruction set for `VirtualMachine`: 4-byte register instructions with constant operands, dispatched by `match` in one loop, as `docs/engine/instruction-format.md` describes, over the value representation the design decisions chose. Replace `BytecodeVm`'s opcodes with instructions that call into `VirtualMachine` for method lookup, invocation, constants, instance variables, and exceptions. Each instruction carries a source position in a side table for backtraces, `error_highlight`, and line events. `src/bytecode/vm` and the `BytecodeVm` struct are removed once nothing uses them, and the parts of `src/compiler` and `src/bytecode/disassembler.rs` that fit are kept
   - Acceptance: `tests/bytecode` covers each instruction through `VirtualMachine`, no file under `src/` names `BytecodeVm`, and `METOREX_COUNTERS=1` counts each instruction executed beside the node kinds the tree walker evaluates
@@ -86,7 +86,7 @@ These start once the tree walker is removed.
 - [x] Specialized instructions for Integer and Float arithmetic and comparison, Array and Hash indexing, and `send` of a literal name, each falling back to a method call when the method is redefined
 - [x] Block calls: `yield` and the common Enumerable and Integer iterators run a block without building a Proc
 - [x] Allocation: removing the allocations the profiler shows on hot paths
-- [ ] Startup: the prelude and the libraries loaded at startup are compiled once at build time and loaded from the binary rather than parsed on each start
+- [x] Startup: the prelude and the libraries loaded at startup are compiled once at build time and loaded from the binary rather than parsed on each start
 
 ## Speed with a JIT
 
@@ -104,5 +104,5 @@ Each is run with `ruby benchmarks/compare.rb` on one machine, and the README's s
 - [ ] Cycle collection: `cycles` with a peak memory within 10% of `no_cycles`
 - [ ] Bytecode baseline: the table on bytecode beside CRuby 4.0.6 with and without `--yjit`
 - [ ] Speed in the interpreter: the table after each of its items, against the bytecode baseline, by time and peak memory
-- [ ] Startup: `empty` starts no slower than CRuby's
+- [x] Startup: `empty` starts no slower than CRuby's
 - [ ] JIT: faster than the interpreter on every benchmark, with the table showing Metorex beside CRuby with `--yjit` on each

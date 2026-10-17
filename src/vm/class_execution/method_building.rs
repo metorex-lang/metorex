@@ -9,7 +9,7 @@ use super::*;
 pub(crate) fn build_method_from_params(
     name: String,
     parameters: &[crate::ast::Parameter],
-    body: Vec<Statement>,
+    body: impl Into<crate::ast::Body>,
     refinements: Vec<(Rc<Class>, Vec<String>)>,
     nesting: Vec<Rc<Class>>,
 ) -> Method {

@@ -328,7 +328,7 @@ pub enum Definition {
     /// `class << target; body; end`, with the target in a register.
     SingletonClass {
         target: usize,
-        body: Vec<crate::ast::Statement>,
+        body: crate::ast::Body,
         position: Position,
     },
     /// An `attr_reader`, `attr_writer`, or `attr_accessor` statement run
@@ -564,7 +564,7 @@ impl Unit {
 
     pub fn block(&mut self, literal: crate::ast::Expression) -> usize {
         let body = match &literal {
-            crate::ast::Expression::Lambda { body, .. } => body.as_slice().into(),
+            crate::ast::Expression::Lambda { body, .. } => std::rc::Rc::clone(body),
             _ => std::rc::Rc::from([]),
         };
         self.block_bodies.push(SharedBody {

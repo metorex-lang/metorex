@@ -459,7 +459,7 @@ pub(super) fn push_escaped_bytes(text: &mut String, bytes: &[u8]) {
         if byte.is_ascii() {
             text.push(*byte as char);
         } else {
-            text.push(crate::file_loader::escaped_byte(*byte));
+            text.push(super::escaped_bytes::escaped_byte(*byte));
         }
     }
 }
@@ -467,8 +467,8 @@ pub(super) fn push_escaped_bytes(text: &mut String, bytes: &[u8]) {
 /// A literal's text read as bytes, one character to each: a marked byte for
 /// itself, and any other character for the bytes that spell it in UTF-8.
 pub(super) fn byte_text(text: &str) -> String {
-    let bytes =
-        crate::file_loader::escaped_source_bytes(text).unwrap_or_else(|| text.as_bytes().to_vec());
+    let bytes = super::escaped_bytes::escaped_source_bytes(text)
+        .unwrap_or_else(|| text.as_bytes().to_vec());
     bytes.iter().map(|byte| *byte as char).collect()
 }
 

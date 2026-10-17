@@ -31,6 +31,9 @@ standard error at exit:
 - the blocks a block literal built. A literal run again in the scope where it
   ran last, while nothing holds the block it made there, hands out that block
   again, so a block written in a loop is built once
+- each library parsed from its source, with its name. The core library and
+  the libraries a default start loads are parsed when Metorex is built, and
+  the binary holds what the parse produced, so a default start lists none
 - each kind of instruction executed, with its count
 - the 100 most frequent call paths, each written `caller -> callee`, with the
   number of calls and the heap allocations made while those calls ran. A
@@ -152,3 +155,25 @@ written in a loop is built once rather than on each pass.
 PASSES=1000 METOREX_COUNTERS=1 target/debug/metorex tests/_examples/cli_flags/calls_in_a_loop.rb
 PASSES=2000 METOREX_COUNTERS=1 target/debug/metorex tests/_examples/cli_flags/calls_in_a_loop.rb
 ```
+
+## Startup
+
+Recorded on 2026-10-17 on the machine above with a release build.
+
+`build.rs` parses the core library (`src/vm/prelude`) and the libraries a
+default start loads with the crate's own lexer and parser, and the binary
+holds the statements and the symbol names each parse recorded. A default
+start then parses only the program. The class and module bodies the core
+library runs still compile to instructions when they first run, which takes
+1.8 ms of a start. A unit shares the bodies of the methods, blocks, classes,
+and modules written in it rather than copying them, which took that from
+7.8 ms.
+
+| `metorex -e 1` | Wall time | Heap allocations |
+| :-- | --: | --: |
+| Parsing the core library and RubyGems at each start | 60 ms | 770,859 |
+| Reading them parsed from the binary | 20 ms | 303,474 |
+
+`ruby benchmarks/compare.rb --only=empty` times an empty script at 25.8 ms
+under Metorex, 27.3 ms under CRuby 4.0.6, and 27.2 ms under CRuby with
+`--yjit`.

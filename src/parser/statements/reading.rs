@@ -73,7 +73,10 @@ impl Parser {
                 let Expression::Lambda { body, .. } = block else {
                     return Err(self.error_at_previous("BEGIN expects a block"));
                 };
-                return Ok(Statement::BeginBlock { body, position });
+                return Ok(Statement::BeginBlock {
+                    body: body.to_vec(),
+                    position,
+                });
             }
             return Ok(Statement::Expression {
                 expression: Expression::Call {

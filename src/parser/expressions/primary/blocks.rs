@@ -78,7 +78,7 @@ impl Parser {
         Ok(Expression::Lambda {
             parameters,
             parameter_defaults,
-            body,
+            body: body.into(),
             captured_vars: Some(Vec::new()),
             outer_locals: Vec::new(),
             is_lambda: false,
@@ -247,7 +247,10 @@ impl Parser {
             // which is a declaration rather than a parameter.
             if prefix == "**" && self.check(&[TokenKind::Nil]) {
                 self.advance();
-                return Some((crate::object::NO_KEYWORDS_PARAM.to_string(), None));
+                return Some((
+                    crate::ast::parameter_marks::NO_KEYWORDS_PARAM.to_string(),
+                    None,
+                ));
             }
             self.skip_whitespace();
         }
@@ -257,7 +260,11 @@ impl Parser {
             self.advance();
             let names = self.read_parameter_group().ok()?;
             return Some((
-                format!("{}{}", crate::object::DESTRUCTURED_GROUP_PREFIX, names),
+                format!(
+                    "{}{}",
+                    crate::ast::parameter_marks::DESTRUCTURED_GROUP_PREFIX,
+                    names
+                ),
                 None,
             ));
         }
@@ -271,7 +278,11 @@ impl Parser {
         // optional one. Either way the value that follows is its default.
         if prefix.is_empty() && self.check(&[TokenKind::Colon]) && !self.peek().had_leading_space {
             self.advance();
-            let named = format!("{}{}", crate::object::KEYWORD_PARAM_PREFIX, name);
+            let named = format!(
+                "{}{}",
+                crate::ast::parameter_marks::KEYWORD_PARAM_PREFIX,
+                name
+            );
             self.skip_whitespace();
             if self.check(&[
                 TokenKind::Comma,
@@ -342,7 +353,9 @@ impl Parser {
                 // `-> () { it }` and `-> (x) { it }` wrote a parameter list,
                 // which rules out the implicit `it` the body was read as
                 // taking.
-                let refusal = if read.len() == 1 && read[0] == crate::object::IMPLICIT_IT_PARAM {
+                let refusal = if read.len() == 1
+                    && read[0] == crate::ast::parameter_marks::IMPLICIT_IT_PARAM
+                {
                     Some("'it' is not allowed when an ordinary parameter is defined")
                 } else if !read.is_empty()
                     && read

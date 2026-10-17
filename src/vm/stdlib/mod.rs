@@ -5,6 +5,7 @@ mod gem_libraries;
 mod prism_libraries;
 mod rex_libraries;
 mod rubygems_libraries;
+pub(crate) mod source_digest;
 use gem_libraries::GEM_LIBRARIES;
 use prism_libraries::PRISM_LIBRARIES;
 use rex_libraries::REX_LIBRARIES;

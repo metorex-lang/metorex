@@ -226,7 +226,7 @@ impl Resolver {
             } => {
                 self.resolve_expression(condition);
                 self.push_scope();
-                for stmt in body {
+                for stmt in body.iter() {
                     self.resolve_statement(stmt);
                 }
                 self.pop_scope();
@@ -291,7 +291,7 @@ impl Resolver {
                 }
 
                 // Resolve function body
-                for stmt in body {
+                for stmt in body.iter() {
                     self.resolve_statement(stmt);
                 }
 
@@ -314,7 +314,7 @@ impl Resolver {
                 }
 
                 // Resolve method body
-                for stmt in body {
+                for stmt in body.iter() {
                     self.resolve_statement(stmt);
                 }
 
@@ -326,7 +326,7 @@ impl Resolver {
                 self.push_scope();
 
                 // Resolve class body
-                for stmt in body {
+                for stmt in body.iter() {
                     self.resolve_statement(stmt);
                 }
 
@@ -397,7 +397,7 @@ impl Resolver {
             } => {
                 self.resolve_expression(condition);
                 self.push_scope();
-                for stmt in body {
+                for stmt in body.iter() {
                     self.resolve_statement(stmt);
                 }
                 self.pop_scope();
@@ -412,7 +412,7 @@ impl Resolver {
                 self.resolve_expression(iterable);
                 self.push_scope();
                 self.declare(variable.clone(), *position);
-                for stmt in body {
+                for stmt in body.iter() {
                     self.resolve_statement(stmt);
                 }
                 self.pop_scope();
@@ -449,7 +449,7 @@ impl Resolver {
                 ..
             } => {
                 self.push_scope();
-                for stmt in body {
+                for stmt in body.iter() {
                     self.resolve_statement(stmt);
                 }
                 self.pop_scope();
@@ -501,7 +501,7 @@ impl Resolver {
 
             Statement::ModuleDef { name, body, .. } => {
                 self.push_scope();
-                for stmt in body {
+                for stmt in body.iter() {
                     self.resolve_statement(stmt);
                 }
                 self.pop_scope();
@@ -663,7 +663,7 @@ impl Resolver {
                 }
 
                 // Resolve lambda body
-                for stmt in body {
+                for stmt in body.iter() {
                     self.resolve_statement(stmt);
                 }
 
@@ -783,7 +783,7 @@ impl Resolver {
             Expression::SingletonClass { target, body, .. } => {
                 self.resolve_expression(target);
                 self.push_scope();
-                for stmt in body {
+                for stmt in body.iter() {
                     self.resolve_statement(stmt);
                 }
                 self.pop_scope();

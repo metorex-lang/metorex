@@ -99,7 +99,7 @@ pub struct Method {
     /// Variadic (splat) parameter: (positional_index, name) for `*args`
     pub variadic_param: Option<(usize, String)>,
     /// Method body (AST statements)
-    pub body: Vec<Statement>,
+    pub body: crate::ast::Body,
     /// Optional receiver (for bound methods)
     pub receiver: Option<Box<Object>>,
     /// Receiver this method must run against no matter where it is installed.
@@ -166,7 +166,8 @@ pub struct Method {
 
 impl Method {
     /// Create a new method
-    pub fn new(name: String, parameters: Vec<String>, body: Vec<Statement>) -> Self {
+    pub fn new(name: String, parameters: Vec<String>, body: impl Into<crate::ast::Body>) -> Self {
+        let body = body.into();
         Self {
             name,
             parameters,
@@ -206,7 +207,7 @@ impl Method {
     pub fn with_owner(
         name: String,
         parameters: Vec<String>,
-        body: Vec<Statement>,
+        body: impl Into<crate::ast::Body>,
         owner: String,
     ) -> Self {
         Self {
@@ -219,7 +220,7 @@ impl Method {
             native_alias: None,
             block_parameter: None,
             variadic_param: None,
-            body,
+            body: body.into(),
             receiver: None,
             bound_self: None,
             owner: Some(owner),
@@ -248,7 +249,7 @@ impl Method {
     pub fn with_source_location(
         name: String,
         parameters: Vec<String>,
-        body: Vec<Statement>,
+        body: impl Into<crate::ast::Body>,
         source_location: SourceLocation,
     ) -> Self {
         Self {
@@ -261,7 +262,7 @@ impl Method {
             native_alias: None,
             block_parameter: None,
             variadic_param: None,
-            body,
+            body: body.into(),
             receiver: None,
             bound_self: None,
             owner: None,
@@ -290,7 +291,7 @@ impl Method {
     pub fn with_owner_and_location(
         name: String,
         parameters: Vec<String>,
-        body: Vec<Statement>,
+        body: impl Into<crate::ast::Body>,
         owner: String,
         source_location: SourceLocation,
     ) -> Self {
@@ -304,7 +305,7 @@ impl Method {
             native_alias: None,
             block_parameter: None,
             variadic_param: None,
-            body,
+            body: body.into(),
             receiver: None,
             bound_self: None,
             owner: Some(owner),
@@ -341,7 +342,7 @@ impl Method {
             native_alias: None,
             block_parameter: None,
             variadic_param: None,
-            body: vec![],
+            body: crate::ast::Body::from([]),
             receiver: None,
             bound_self: None,
             owner: None,

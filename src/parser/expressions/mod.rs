@@ -423,7 +423,7 @@ impl Parser {
                 {
                     self.advance();
                     self.advance();
-                    params.push(crate::object::NO_KEYWORDS_PARAM.to_string());
+                    params.push(crate::ast::parameter_marks::NO_KEYWORDS_PARAM.to_string());
                     self.skip_line_breaks();
                     if !self.match_token(&[TokenKind::Comma]) {
                         break;
@@ -446,7 +446,7 @@ impl Parser {
                     let names = self.read_parameter_group()?;
                     params.push(format!(
                         "{}{}",
-                        crate::object::DESTRUCTURED_GROUP_PREFIX,
+                        crate::ast::parameter_marks::DESTRUCTURED_GROUP_PREFIX,
                         names
                     ));
                 } else if !prefix.is_empty() && self.check(&[TokenKind::Pipe, TokenKind::Comma]) {
@@ -467,7 +467,7 @@ impl Parser {
                                 self.advance();
                                 params.push(format!(
                                     "{}{}",
-                                    crate::object::KEYWORD_PARAM_PREFIX,
+                                    crate::ast::parameter_marks::KEYWORD_PARAM_PREFIX,
                                     name
                                 ));
                                 // `|x: 1|` gives the keyword a default, which
@@ -501,7 +501,7 @@ impl Parser {
                 // `|a,|` — trailing comma before the closing pipe. Record it:
                 // it is what makes a lone array argument destructure.
                 if self.check(&[TokenKind::Pipe]) {
-                    params.push(crate::object::TRAILING_COMMA_PARAM.to_string());
+                    params.push(crate::ast::parameter_marks::TRAILING_COMMA_PARAM.to_string());
                     break;
                 }
             }
@@ -517,7 +517,11 @@ impl Parser {
                 match self.advance().kind {
                     TokenKind::Ident(name) => {
                         self.declare_local(&name);
-                        params.push(format!("{}{}", crate::object::BLOCK_LOCAL_PREFIX, name))
+                        params.push(format!(
+                            "{}{}",
+                            crate::ast::parameter_marks::BLOCK_LOCAL_PREFIX,
+                            name
+                        ))
                     }
                     _ => return Err(self.error_at_previous("Expected a name after ';'")),
                 }
@@ -610,7 +614,7 @@ impl Parser {
         Ok(Expression::Lambda {
             parameters,
             parameter_defaults,
-            body,
+            body: body.into(),
             captured_vars: None, // Will be filled by semantic analysis
             outer_locals,
             is_lambda: false,
@@ -709,7 +713,8 @@ impl Parser {
         // it is written, so the body reads it as an ordinary variable.
         let names_it = declared.iter().any(|held| {
             held.trim_start_matches(['*', '&']) == "it"
-                || held.trim_start_matches(crate::object::KEYWORD_PARAM_PREFIX) == "it"
+                || held.trim_start_matches(crate::ast::parameter_marks::KEYWORD_PARAM_PREFIX)
+                    == "it"
         });
         if mentions_it && wrote_parameter_list && !names_it {
             return Err(MetorexError::syntax_error(
@@ -891,7 +896,7 @@ impl Parser {
         // first argument under that name, which is the implicit parameter
         // Ruby gives it.
         if self.mentions_implicit_it(opened_at, closed_at) {
-            return vec![crate::object::IMPLICIT_IT_PARAM.to_string()];
+            return vec![crate::ast::parameter_marks::IMPLICIT_IT_PARAM.to_string()];
         }
         Vec::new()
     }
@@ -1049,7 +1054,7 @@ impl Parser {
         Ok(Expression::Lambda {
             parameters,
             parameter_defaults,
-            body,
+            body: body.into(),
             captured_vars: None, // Will be filled by semantic analysis
             outer_locals,
             is_lambda: false,

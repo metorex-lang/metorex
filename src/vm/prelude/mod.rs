@@ -5,72 +5,19 @@
 // methods can. Kernel#warn relies on that: the specs alias `Warning.warn`
 // away and put their own back.
 //
-// The Ruby source is split across the sibling modules below. Each holds one
-// `SOURCE` string, and they are concatenated in order, so a chunk boundary
-// falls between two definitions. A class whose body runs long is carried
-// across more than one module, so a boundary may sit inside a class body.
+// The Ruby source is split across the modules chunks.rs lists. Each holds
+// one `SOURCE` string, and they are concatenated in order, so a chunk
+// boundary falls between two definitions. A class whose body runs long is
+// carried across more than one module, so a boundary may sit inside a class
+// body. The build script parses the source, and the binary holds what it
+// parsed.
 
 use crate::object::OptionView;
 use crate::vm::core::VirtualMachine;
 
-mod collections;
-mod core_types;
-mod encoding;
-mod enumerable;
-mod enumerator;
-mod enumerator_lazy;
-mod enumerator_parts;
-mod file;
-mod io;
-mod io_reading;
-mod io_streams;
-mod io_writing;
-mod kernel_argf;
-mod match_data_thread;
-mod object_space_gc;
-mod proc_random;
-mod process;
-mod ractor;
-mod ruby_vm;
-mod string_io;
-mod threading;
-mod time;
-mod time_reading;
-mod tracepoint_marshal;
-mod warning_math_numeric;
-
 /// What names the core library's own Ruby source. Ruby reports a method
 /// written there as coming from `<internal:...>` rather than from a file.
 pub(crate) const PRELUDE_FILE: &str = "<internal:prelude>";
-
-/// The Ruby source evaluated into every fresh VM, in the order it is read.
-const PRELUDE_CHUNKS: &[&str] = &[
-    warning_math_numeric::SOURCE,
-    enumerable::SOURCE,
-    match_data_thread::SOURCE,
-    string_io::SOURCE,
-    enumerator::SOURCE,
-    enumerator_lazy::SOURCE,
-    enumerator_parts::SOURCE,
-    collections::SOURCE,
-    time::SOURCE,
-    time_reading::SOURCE,
-    proc_random::SOURCE,
-    process::SOURCE,
-    io::SOURCE,
-    io_reading::SOURCE,
-    io_writing::SOURCE,
-    file::SOURCE,
-    tracepoint_marshal::SOURCE,
-    core_types::SOURCE,
-    kernel_argf::SOURCE,
-    threading::SOURCE,
-    ractor::SOURCE,
-    ruby_vm::SOURCE,
-    object_space_gc::SOURCE,
-    encoding::SOURCE,
-    io_streams::SOURCE,
-];
 
 impl VirtualMachine {
     /// Build an `Enumerator` over `method_name` sent to `receiver`, which is
@@ -132,14 +79,11 @@ impl VirtualMachine {
         self.send_to_object(enumerator_class, "over", arguments, position)
     }
 
-    /// Evaluate the Ruby-level core library. A parse or runtime failure here
-    /// is a defect in `PRELUDE_SOURCE` itself, so it panics rather than
-    /// leaving a half-built VM behind.
+    /// Evaluate the Ruby-level core library. A runtime failure here is a
+    /// defect in the library itself, so it panics rather than leaving a
+    /// half-built VM behind.
     pub(crate) fn load_prelude(&mut self) {
-        let tokens = crate::lexer::Lexer::for_prelude(&PRELUDE_CHUNKS.concat()).tokenize();
-        let statements = crate::parser::Parser::new(tokens)
-            .parse()
-            .unwrap_or_else(|errors| panic!("prelude failed to parse: {:?}", errors));
+        let statements = crate::vm::parsed_sources::prelude();
         // The core library is no file of the program's, so a method written
         // here names itself the way Ruby names its own Ruby-level core.
         let held_file = self

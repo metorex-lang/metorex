@@ -3,7 +3,7 @@
 use super::*;
 
 /// Binary operators in Metorex
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum BinaryOp {
     // Arithmetic operators
     Add,      // +
@@ -41,7 +41,7 @@ pub enum BinaryOp {
 }
 
 /// Unary operators in Metorex
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum UnaryOp {
     Plus,  // +
     Minus, // -
@@ -49,7 +49,7 @@ pub enum UnaryOp {
 }
 
 /// Expressions in Metorex - values that can be evaluated
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Expression {
     // Literals
     IntLiteral {
@@ -182,7 +182,7 @@ pub enum Expression {
         /// Default values for optional parameters, keyed by index into
         /// `parameters` (e.g. `{ |a, b = 1| }` records `(1, <1>)`).
         parameter_defaults: Vec<(usize, Expression)>,
-        body: Vec<Statement>,
+        body: Body,
         captured_vars: Option<Vec<String>>, // Variables captured from outer scope
         /// The locals of the enclosing scope the body reads or assigns, in
         /// the order it first names them, each with whether its scope assigns
@@ -213,7 +213,7 @@ pub enum Expression {
         /// Where to store `target` before opening its singleton class, for
         /// `class << @receiver = Object.new`.
         assign_to: Option<Box<Expression>>,
-        body: Vec<Statement>,
+        body: Body,
         position: Position,
     },
 
@@ -333,7 +333,7 @@ pub enum Expression {
 }
 
 /// Parts of an interpolated string
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum InterpolationPart {
     Text(String),
     Expression(Box<Expression>),

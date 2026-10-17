@@ -515,7 +515,7 @@ fn test_begin_in_method() {
         is_class_method: false,
         name: "safe_method".to_string(),
         parameters: vec![],
-        body: vec![begin_stmt],
+        body: vec![begin_stmt].into(),
         position: pos(1, 1),
         end_position: pos(1, 1),
     };

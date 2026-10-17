@@ -352,7 +352,8 @@ fn test_lambda_expression() {
                 position: pos(1, 12),
             },
             position: pos(1, 10),
-        }],
+        }]
+        .into(),
         captured_vars: None,
         is_lambda: false,
         position: pos(1, 1),

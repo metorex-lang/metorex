@@ -427,7 +427,7 @@ fn made_by_an_attribute_call(method: &crate::object::Method) -> bool {
     if method.source_location.is_some() {
         return false;
     }
-    match method.body.as_slice() {
+    match &method.body[..] {
         [
             Statement::Return {
                 value: Some(Expression::InstanceVariable { .. }),

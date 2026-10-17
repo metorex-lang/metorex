@@ -12,7 +12,8 @@ fn test_lambda_without_captured_vars() {
                 position: pos(1, 10),
             },
             position: pos(1, 10),
-        }],
+        }]
+        .into(),
         captured_vars: None,
         outer_locals: Vec::new(),
         is_lambda: false,
@@ -42,7 +43,8 @@ fn test_lambda_with_captured_vars() {
                 position: pos(1, 12),
             },
             position: pos(1, 10),
-        }],
+        }]
+        .into(),
         captured_vars: Some(vec!["y".to_string()]),
         is_lambda: false,
         position: pos(1, 1),
@@ -79,7 +81,8 @@ fn test_lambda_with_multiple_captured_vars() {
                 position: pos(1, 12),
             },
             position: pos(1, 10),
-        }],
+        }]
+        .into(),
         captured_vars: Some(vec!["a".to_string(), "b".to_string(), "c".to_string()]),
         is_lambda: false,
         position: pos(1, 1),
@@ -108,7 +111,8 @@ fn test_lambda_implicit_return() {
                 position: pos(1, 12),
             },
             position: pos(1, 10),
-        }],
+        }]
+        .into(),
         captured_vars: None,
         is_lambda: false,
         position: pos(1, 1),
@@ -150,7 +154,8 @@ fn test_lambda_with_multiple_statements() {
                 },
                 position: pos(3, 3),
             },
-        ],
+        ]
+        .into(),
         captured_vars: None,
         is_lambda: false,
         position: pos(1, 1),
@@ -170,7 +175,8 @@ fn test_lambda_no_parameters() {
                 position: pos(1, 5),
             },
             position: pos(1, 5),
-        }],
+        }]
+        .into(),
         captured_vars: None,
         outer_locals: Vec::new(),
         is_lambda: false,
@@ -200,7 +206,8 @@ fn test_lambda_with_instance_var_capture() {
                 position: pos(1, 12),
             },
             position: pos(1, 10),
-        }],
+        }]
+        .into(),
         captured_vars: Some(vec!["@count".to_string()]),
         is_lambda: false,
         position: pos(1, 1),
@@ -229,7 +236,8 @@ fn test_nested_lambdas() {
                 position: pos(2, 12),
             },
             position: pos(2, 10),
-        }],
+        }]
+        .into(),
         captured_vars: Some(vec!["x".to_string()]),
         is_lambda: false,
         position: pos(2, 1),
@@ -241,7 +249,8 @@ fn test_nested_lambdas() {
         body: vec![Statement::Expression {
             expression: inner_lambda,
             position: pos(2, 1),
-        }],
+        }]
+        .into(),
         captured_vars: None,
         outer_locals: Vec::new(),
         is_lambda: false,

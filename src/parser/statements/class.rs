@@ -197,7 +197,7 @@ impl Parser {
             name,
             namespace: namespace_expr,
             superclass,
-            body,
+            body: body.into(),
             position: start_pos,
         })
     }
@@ -249,13 +249,13 @@ impl Parser {
             Some(value) => Expression::SingletonClass {
                 target: Box::new(value),
                 assign_to: Some(Box::new(target)),
-                body,
+                body: body.into(),
                 position: start_pos,
             },
             None => Expression::SingletonClass {
                 target: Box::new(target),
                 assign_to: None,
-                body,
+                body: body.into(),
                 position: start_pos,
             },
         })
@@ -354,7 +354,7 @@ impl Parser {
         Ok(Statement::ModuleDef {
             name,
             namespace: namespace_expr,
-            body,
+            body: body.into(),
             position: start_pos,
         })
     }

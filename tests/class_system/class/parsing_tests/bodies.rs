@@ -12,10 +12,11 @@ fn test_class_method_with_variadic_parameters() {
             is_class_method: false,
             name: "log".to_string(),
             parameters: vec![Parameter::variadic("messages".to_string(), pos(2, 11))],
-            body: vec![],
+            body: vec![].into(),
             position: pos(2, 3),
             end_position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
     };
 
@@ -33,10 +34,11 @@ fn test_class_method_with_keyword_parameters() {
             is_class_method: false,
             name: "configure".to_string(),
             parameters: vec![Parameter::keyword("options".to_string(), pos(2, 17))],
-            body: vec![],
+            body: vec![].into(),
             position: pos(2, 3),
             end_position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
     };
 
@@ -67,7 +69,8 @@ fn test_class_with_getter_and_setter() {
                         position: pos(3, 14),
                     },
                     position: pos(3, 5),
-                }],
+                }]
+                .into(),
                 position: pos(2, 3),
                 end_position: pos(2, 3),
             },
@@ -81,7 +84,8 @@ fn test_class_with_getter_and_setter() {
                         position: pos(7, 5),
                     }),
                     position: pos(7, 5),
-                }],
+                }]
+                .into(),
                 position: pos(6, 3),
                 end_position: pos(6, 3),
             },
@@ -99,11 +103,13 @@ fn test_class_with_getter_and_setter() {
                         position: pos(11, 14),
                     },
                     position: pos(11, 5),
-                }],
+                }]
+                .into(),
                 position: pos(10, 3),
                 end_position: pos(10, 3),
             },
-        ],
+        ]
+        .into(),
         position: pos(1, 1),
     };
 
@@ -152,10 +158,12 @@ fn test_class_method_with_conditional() {
                     position: pos(6, 7),
                 }]),
                 position: pos(3, 5),
-            }],
+            }]
+            .into(),
             position: pos(2, 3),
             end_position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
     };
 
@@ -258,10 +266,12 @@ fn test_class_method_with_loop() {
                     }),
                     position: pos(9, 5),
                 },
-            ],
+            ]
+            .into(),
             position: pos(2, 3),
             end_position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
     };
 
@@ -287,10 +297,12 @@ fn test_inherited_class_with_override() {
                     position: pos(3, 5),
                 }),
                 position: pos(3, 5),
-            }],
+            }]
+            .into(),
             position: pos(2, 3),
             end_position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
     };
 
@@ -309,10 +321,12 @@ fn test_inherited_class_with_override() {
                     position: pos(9, 5),
                 }),
                 position: pos(9, 5),
-            }],
+            }]
+            .into(),
             position: pos(8, 3),
             end_position: pos(8, 3),
-        }],
+        }]
+        .into(),
         position: pos(7, 1),
     };
 
@@ -337,7 +351,8 @@ fn test_inherited_class_with_additional_methods() {
                         position: pos(3, 5),
                     }),
                     position: pos(3, 5),
-                }],
+                }]
+                .into(),
                 position: pos(2, 3),
                 end_position: pos(2, 3),
             },
@@ -351,11 +366,13 @@ fn test_inherited_class_with_additional_methods() {
                         position: pos(7, 5),
                     }),
                     position: pos(7, 5),
-                }],
+                }]
+                .into(),
                 position: pos(6, 3),
                 end_position: pos(6, 3),
             },
-        ],
+        ]
+        .into(),
         position: pos(1, 1),
     };
 
@@ -392,14 +409,17 @@ fn test_class_with_nested_function() {
                         position: pos(4, 9),
                     }),
                     position: pos(4, 7),
-                }],
+                }]
+                .into(),
                 position: pos(3, 5),
                 singleton_class: None,
                 end_position: Default::default(),
-            }],
+            }]
+            .into(),
             position: pos(2, 3),
             end_position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
     };
 
@@ -435,10 +455,12 @@ fn test_class_with_self_reference() {
                     }),
                     position: pos(4, 5),
                 },
-            ],
+            ]
+            .into(),
             position: pos(2, 3),
             end_position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
     };
 
@@ -491,10 +513,12 @@ fn test_class_with_exception_handling() {
                 else_clause: None,
                 ensure_block: None,
                 position: pos(3, 5),
-            }],
+            }]
+            .into(),
             position: pos(2, 3),
             end_position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
     };
 
@@ -510,7 +534,7 @@ fn test_multiple_empty_classes() {
         namespace: None,
         superclass: None,
         superclass_expression: None,
-        body: vec![],
+        body: vec![].into(),
         position: pos(1, 1),
     };
 
@@ -519,7 +543,7 @@ fn test_multiple_empty_classes() {
         namespace: None,
         superclass: None,
         superclass_expression: None,
-        body: vec![],
+        body: vec![].into(),
         position: pos(5, 1),
     };
 
@@ -528,7 +552,7 @@ fn test_multiple_empty_classes() {
         namespace: None,
         superclass: None,
         superclass_expression: None,
-        body: vec![],
+        body: vec![].into(),
         position: pos(9, 1),
     };
 
@@ -554,7 +578,7 @@ fn test_class_name_variations() {
             namespace: None,
             superclass: None,
             superclass_expression: None,
-            body: vec![],
+            body: vec![].into(),
             position: pos(1, 1),
         };
         assert!(stmt.is_definition());

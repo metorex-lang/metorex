@@ -5,7 +5,30 @@
 // spec suite rebuilds an extension older than that file, so any change to
 // the headers rebuilds every extension compiled against them.
 
+// It also parses the core library and the libraries a default start loads,
+// with the crate's own lexer and parser, and writes what it parsed where the
+// binary includes it.
+
+#![allow(dead_code, unused_imports, clippy::upper_case_acronyms)]
+
 use std::path::{Path, PathBuf};
+
+#[path = "src/ast/mod.rs"]
+mod ast;
+#[path = "build/front_end_error.rs"]
+mod error;
+#[path = "src/lexer/mod.rs"]
+mod lexer;
+#[path = "src/parser/mod.rs"]
+mod parser;
+#[path = "src/vm/prelude/chunks.rs"]
+mod prelude_chunks;
+#[path = "src/regexp/mod.rs"]
+mod regexp;
+#[path = "src/vm/stdlib/source_digest.rs"]
+mod source_digest;
+#[path = "src/symbol_registry.rs"]
+mod symbol_registry;
 
 const ABI_HEADER: &str = "include/ruby/internal/abi.h";
 
@@ -20,6 +43,99 @@ fn main() {
     write_abi_header();
     compile_prism();
     compile_nkf();
+    parse_carried_sources();
+}
+
+/// The libraries a default start loads, under src/vm/stdlib.
+const STARTUP_LIBRARIES: &[&str] = &[
+    "rubygems.rb",
+    "rbconfig.rb",
+    "rubygems/defaults.rb",
+    "rubygems/deprecate.rb",
+    "rubygems/errors.rb",
+    "rubygems/target_rbconfig.rb",
+    "rubygems/win_platform.rb",
+    "rubygems/exceptions.rb",
+    "rubygems/unknown_command_spell_checker.rb",
+    "rubygems/specification.rb",
+    "rubygems/basic_specification.rb",
+    "rubygems/stub_specification.rb",
+    "rubygems/platform.rb",
+    "rubygems/specification_record.rb",
+    "rubygems/util/list.rb",
+    "rubygems/requirement.rb",
+    "rubygems/version.rb",
+    "rubygems/defaults/operating_system.rb",
+    "rubygems/path_support.rb",
+    "rubygems/util.rb",
+    "rubygems/core_ext/kernel_gem.rb",
+    "error_highlight.rb",
+    "did_you_mean.rb",
+    "syntax_suggest_core_ext.rb",
+];
+
+/// Parse `source` and write its statements, with the symbol names parsing
+/// it recorded, to `written`. Each parse runs on a thread of its own, so the
+/// symbol names are its own.
+fn write_parsed(source: String, prelude: bool, written: PathBuf) -> std::thread::JoinHandle<()> {
+    std::thread::Builder::new()
+        .stack_size(256 * 1024 * 1024)
+        .spawn(move || {
+            let lexer = if prelude {
+                lexer::Lexer::for_prelude(&source)
+            } else {
+                lexer::Lexer::for_embedded_library(&source)
+            };
+            let statements = parser::Parser::new(lexer.tokenize())
+                .parse()
+                .unwrap_or_else(|errors| {
+                    panic!("{} failed to parse: {errors:?}", written.display())
+                });
+            let parsed = rmp_serde::to_vec(&(statements, symbol_registry::all()))
+                .expect("statements serialize");
+            std::fs::write(&written, parsed).expect("OUT_DIR is writable");
+        })
+        .expect("a thread starts")
+}
+
+fn parse_carried_sources() {
+    println!("cargo:rerun-if-changed=src/ast");
+    println!("cargo:rerun-if-changed=src/lexer");
+    println!("cargo:rerun-if-changed=src/parser");
+    println!("cargo:rerun-if-changed=src/regexp");
+    println!("cargo:rerun-if-changed=src/symbol_registry.rs");
+    println!("cargo:rerun-if-changed=src/vm/prelude");
+    println!("cargo:rerun-if-changed=build");
+    println!("cargo:rerun-if-changed=src/vm/stdlib/source_digest.rs");
+    let out = PathBuf::from(std::env::var("OUT_DIR").expect("cargo sets OUT_DIR"));
+    let mut parsing = vec![write_parsed(
+        prelude_chunks::PRELUDE_CHUNKS.concat(),
+        true,
+        out.join("prelude.parsed"),
+    )];
+    let mut libraries = String::new();
+    for (index, library) in STARTUP_LIBRARIES.iter().enumerate() {
+        let path = Path::new("src/vm/stdlib").join(library);
+        println!("cargo:rerun-if-changed={}", path.display());
+        let source = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("{} could not be read: {error}", path.display()));
+        let written = out.join(format!("library{index}.parsed"));
+        libraries.push_str(&format!(
+            "    ({}, {}, include_bytes!({:?})),\n",
+            source_digest::source_digest(&source),
+            source.len(),
+            written.display().to_string()
+        ));
+        parsing.push(write_parsed(source, false, written));
+    }
+    for parse in parsing {
+        parse.join().expect("every carried source parses");
+    }
+    let included = format!(
+        "const PRELUDE: &[u8] = include_bytes!({:?});\n\nconst LIBRARIES: &[(u64, usize, &[u8])] = &[\n{libraries}];\n",
+        out.join("prelude.parsed").display().to_string()
+    );
+    std::fs::write(out.join("parsed_sources.rs"), included).expect("OUT_DIR is writable");
 }
 
 /// nkf's C extension, which `require "nkf"` starts with `Init_nkf`, compiled

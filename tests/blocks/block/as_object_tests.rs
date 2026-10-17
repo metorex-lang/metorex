@@ -41,7 +41,8 @@ fn test_block_assigned_to_variable() {
                         position: pos(1, 22),
                     },
                     position: pos(1, 20),
-                }],
+                }]
+                .into(),
                 captured_vars: None,
                 is_lambda: false,
                 position: pos(1, 13),
@@ -134,7 +135,8 @@ fn test_block_passed_as_argument_with_function() {
                     },
                     position: pos(3, 3),
                 },
-            ],
+            ]
+            .into(),
             position: pos(1, 1),
             singleton_class: None,
             end_position: Default::default(),
@@ -163,7 +165,8 @@ fn test_block_passed_as_argument_with_function() {
                         position: pos(6, 25),
                     },
                     position: pos(6, 23),
-                }],
+                }]
+                .into(),
                 captured_vars: None,
                 is_lambda: false,
                 position: pos(6, 13),
@@ -241,13 +244,15 @@ fn test_block_returned_from_function_standalone() {
                             position: pos(2, 15),
                         },
                         position: pos(2, 13),
-                    }],
+                    }]
+                    .into(),
                     captured_vars: Some(vec!["n".to_string()]),
                     is_lambda: false,
                     position: pos(2, 3),
                 },
                 position: pos(2, 3),
-            }],
+            }]
+            .into(),
             position: pos(1, 1),
             singleton_class: None,
             end_position: Default::default(),
@@ -328,7 +333,8 @@ fn test_block_with_multiple_parameters() {
                         position: pos(1, 28),
                     },
                     position: pos(1, 26),
-                }],
+                }]
+                .into(),
                 captured_vars: None,
                 is_lambda: false,
                 position: pos(1, 13),
@@ -387,7 +393,8 @@ fn test_block_with_no_parameters() {
                         position: pos(1, 21),
                     },
                     position: pos(1, 21),
-                }],
+                }]
+                .into(),
                 captured_vars: None,
                 outer_locals: Vec::new(),
                 is_lambda: false,
@@ -453,7 +460,8 @@ fn test_block_stored_in_array() {
                                 position: pos(2, 15),
                             },
                             position: pos(2, 13),
-                        }],
+                        }]
+                        .into(),
                         captured_vars: None,
                         is_lambda: false,
                         position: pos(2, 3),
@@ -476,7 +484,8 @@ fn test_block_stored_in_array() {
                                 position: pos(3, 15),
                             },
                             position: pos(3, 13),
-                        }],
+                        }]
+                        .into(),
                         captured_vars: None,
                         is_lambda: false,
                         position: pos(3, 3),
@@ -499,7 +508,8 @@ fn test_block_stored_in_array() {
                                 position: pos(4, 15),
                             },
                             position: pos(4, 13),
-                        }],
+                        }]
+                        .into(),
                         captured_vars: None,
                         is_lambda: false,
                         position: pos(4, 3),
@@ -585,16 +595,19 @@ fn test_block_returned_from_method() {
                                 position: pos(3, 17),
                             },
                             position: pos(3, 15),
-                        }],
+                        }]
+                        .into(),
                         captured_vars: Some(vec!["factor".to_string()]),
                         is_lambda: false,
                         position: pos(3, 12),
                     }),
                     position: pos(3, 5),
-                }],
+                }]
+                .into(),
                 position: pos(2, 3),
                 end_position: pos(2, 3),
-            }],
+            }]
+            .into(),
             position: pos(1, 1),
         },
         Statement::Assignment {
@@ -720,13 +733,15 @@ fn test_nested_block_closures() {
                                 position: pos(3, 25),
                             },
                             position: pos(3, 15),
-                        }],
+                        }]
+                        .into(),
                         captured_vars: Some(vec!["outer".to_string(), "x".to_string()]),
                         is_lambda: false,
                         position: pos(3, 3),
                     },
                     position: pos(3, 3),
-                }],
+                }]
+                .into(),
                 captured_vars: Some(vec!["outer".to_string()]),
                 is_lambda: false,
                 position: pos(2, 15),
@@ -838,7 +853,8 @@ fn test_array_map_with_block() {
                             position: pos(2, 30),
                         },
                         position: pos(2, 28),
-                    }],
+                    }]
+                    .into(),
                     captured_vars: None,
                     is_lambda: false,
                     position: pos(2, 24),
@@ -906,7 +922,8 @@ fn test_range_map_with_block() {
                         position: pos(1, 30),
                     },
                     position: pos(1, 28),
-                }],
+                }]
+                .into(),
                 captured_vars: None,
                 is_lambda: false,
                 position: pos(1, 24),

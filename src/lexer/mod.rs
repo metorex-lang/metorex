@@ -13,6 +13,7 @@ pub mod token;
 
 mod cursor;
 mod dispatch;
+pub mod escaped_bytes;
 mod heredoc;
 pub(crate) use heredoc::split_pattern_interpolation_parts;
 mod identifiers;

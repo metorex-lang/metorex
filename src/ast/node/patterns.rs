@@ -3,7 +3,7 @@
 use super::*;
 
 /// Pattern for match statement cases
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum MatchPattern {
     // Literal patterns
     IntLiteral(i64),
@@ -89,7 +89,7 @@ pub enum MatchPattern {
 }
 
 /// What a hash pattern says about the keys it did not name.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum HashPatternRest {
     /// The pattern says nothing, so other keys are allowed and dropped.
     Silent,
@@ -102,7 +102,7 @@ pub enum HashPatternRest {
 }
 
 /// A single case in a match statement
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct MatchCase {
     pub pattern: MatchPattern,
     pub guard: Option<Expression>, // Optional guard condition (if ...)
@@ -113,7 +113,7 @@ pub struct MatchCase {
 /// A single case in a case expression (expression context)
 /// Unlike MatchCase which uses Vec<Statement> for body,
 /// ExprMatchCase uses a single Expression for the body.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ExprMatchCase {
     pub pattern: MatchPattern,
     pub guard: Option<Expression>, // Optional guard condition (if ...)
@@ -122,7 +122,7 @@ pub struct ExprMatchCase {
 }
 
 /// A rescue clause in a begin/rescue/ensure block
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct RescueClause {
     pub exception_types: Vec<String>, // Exception types to catch (empty means catch all)
     pub variable_name: Option<String>, // Variable to bind the exception to (e.g., "=> e")
@@ -137,7 +137,7 @@ pub struct RescueClause {
 }
 
 /// An elsif branch in an if statement
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ElsifBranch {
     pub condition: Expression,
     pub body: Vec<Statement>,
@@ -145,7 +145,7 @@ pub struct ElsifBranch {
 }
 
 /// Function parameter definition
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Parameter {
     pub name: String,
     pub default_value: Option<Expression>, // Default value for the parameter

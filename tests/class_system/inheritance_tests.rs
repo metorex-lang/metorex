@@ -39,10 +39,12 @@ fn test_basic_inheritance_method_lookup() {
                         position: pos(3, 5),
                     }),
                     position: pos(3, 5),
-                }],
+                }]
+                .into(),
                 position: pos(2, 3),
                 end_position: pos(2, 3),
-            }],
+            }]
+            .into(),
             position: pos(1, 1),
         },
         Statement::ClassDef {
@@ -50,7 +52,7 @@ fn test_basic_inheritance_method_lookup() {
             namespace: None,
             superclass: Some("Animal".to_string()),
             superclass_expression: None,
-            body: vec![],
+            body: vec![].into(),
             position: pos(6, 1),
         },
         Statement::Assignment {
@@ -127,10 +129,12 @@ fn test_method_overriding() {
                         position: pos(3, 5),
                     }),
                     position: pos(3, 5),
-                }],
+                }]
+                .into(),
                 position: pos(2, 3),
                 end_position: pos(2, 3),
-            }],
+            }]
+            .into(),
             position: pos(1, 1),
         },
         Statement::ClassDef {
@@ -148,10 +152,12 @@ fn test_method_overriding() {
                         position: pos(8, 5),
                     }),
                     position: pos(8, 5),
-                }],
+                }]
+                .into(),
                 position: pos(7, 3),
                 end_position: pos(7, 3),
-            }],
+            }]
+            .into(),
             position: pos(6, 1),
         },
         Statement::Assignment {
@@ -233,10 +239,12 @@ fn test_inheritance_chain_method_lookup() {
                         position: pos(3, 5),
                     }),
                     position: pos(3, 5),
-                }],
+                }]
+                .into(),
                 position: pos(2, 3),
                 end_position: pos(2, 3),
-            }],
+            }]
+            .into(),
             position: pos(1, 1),
         },
         Statement::ClassDef {
@@ -254,10 +262,12 @@ fn test_inheritance_chain_method_lookup() {
                         position: pos(8, 5),
                     }),
                     position: pos(8, 5),
-                }],
+                }]
+                .into(),
                 position: pos(7, 3),
                 end_position: pos(7, 3),
-            }],
+            }]
+            .into(),
             position: pos(6, 1),
         },
         Statement::ClassDef {
@@ -275,10 +285,12 @@ fn test_inheritance_chain_method_lookup() {
                         position: pos(13, 5),
                     }),
                     position: pos(13, 5),
-                }],
+                }]
+                .into(),
                 position: pos(12, 3),
                 end_position: pos(12, 3),
-            }],
+            }]
+            .into(),
             position: pos(11, 1),
         },
         Statement::Assignment {
@@ -360,7 +372,8 @@ fn test_inherited_initialize_method() {
                             position: pos(3, 13),
                         },
                         position: pos(3, 5),
-                    }],
+                    }]
+                    .into(),
                     position: pos(2, 3),
                     end_position: pos(2, 3),
                 },
@@ -374,11 +387,13 @@ fn test_inherited_initialize_method() {
                             position: pos(6, 5),
                         }),
                         position: pos(6, 5),
-                    }],
+                    }]
+                    .into(),
                     position: pos(5, 3),
                     end_position: pos(5, 3),
                 },
-            ],
+            ]
+            .into(),
             position: pos(1, 1),
         },
         Statement::ClassDef {
@@ -386,7 +401,7 @@ fn test_inherited_initialize_method() {
             namespace: None,
             superclass: Some("Animal".to_string()),
             superclass_expression: None,
-            body: vec![],
+            body: vec![].into(),
             position: pos(9, 1),
         },
         Statement::Assignment {
@@ -489,7 +504,8 @@ fn test_overriding_with_instance_variables() {
                             },
                             position: pos(4, 5),
                         },
-                    ],
+                    ]
+                    .into(),
                     position: pos(2, 3),
                     end_position: pos(2, 3),
                 },
@@ -503,11 +519,13 @@ fn test_overriding_with_instance_variables() {
                             position: pos(7, 5),
                         }),
                         position: pos(7, 5),
-                    }],
+                    }]
+                    .into(),
                     position: pos(6, 3),
                     end_position: pos(6, 3),
                 },
-            ],
+            ]
+            .into(),
             position: pos(1, 1),
         },
         Statement::ClassDef {
@@ -542,10 +560,12 @@ fn test_overriding_with_instance_variables() {
                         },
                         position: pos(13, 5),
                     },
-                ],
+                ]
+                .into(),
                 position: pos(11, 3),
                 end_position: pos(11, 3),
-            }],
+            }]
+            .into(),
             position: pos(10, 1),
         },
         Statement::Assignment {
@@ -617,10 +637,12 @@ fn test_multiple_inheritance_levels() {
                         position: pos(3, 5),
                     }),
                     position: pos(3, 5),
-                }],
+                }]
+                .into(),
                 position: pos(2, 3),
                 end_position: pos(2, 3),
-            }],
+            }]
+            .into(),
             position: pos(1, 1),
         },
         Statement::ClassDef {
@@ -638,10 +660,12 @@ fn test_multiple_inheritance_levels() {
                         position: pos(8, 5),
                     }),
                     position: pos(8, 5),
-                }],
+                }]
+                .into(),
                 position: pos(7, 3),
                 end_position: pos(7, 3),
-            }],
+            }]
+            .into(),
             position: pos(6, 1),
         },
         Statement::ClassDef {
@@ -659,10 +683,12 @@ fn test_multiple_inheritance_levels() {
                         position: pos(13, 5),
                     }),
                     position: pos(13, 5),
-                }],
+                }]
+                .into(),
                 position: pos(12, 3),
                 end_position: pos(12, 3),
-            }],
+            }]
+            .into(),
             position: pos(11, 1),
         },
         Statement::Assignment {

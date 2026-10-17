@@ -3,7 +3,7 @@
 use super::*;
 
 /// Statements in Metorex - instructions that can be executed
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Statement {
     // Expression statement (an expression used as a statement)
     Expression {
@@ -51,7 +51,7 @@ pub enum Statement {
     FunctionDef {
         name: String,
         parameters: Vec<Parameter>,
-        body: Vec<Statement>,
+        body: Body,
         position: Position,
         /// For `def (expr).method_name`, the singleton receiver class name
         singleton_class: Option<String>,
@@ -64,7 +64,7 @@ pub enum Statement {
     MethodDef {
         name: String,
         parameters: Vec<Parameter>,
-        body: Vec<Statement>,
+        body: Body,
         is_class_method: bool,
         position: Position,
         /// Where the `end` closing the definition sits, which is what
@@ -85,7 +85,7 @@ pub enum Statement {
         /// which is what `class C < Struct.new(:a)` names. When set, it is
         /// evaluated and the class it answers becomes the parent.
         superclass_expression: Option<Box<Expression>>,
-        body: Vec<Statement>,
+        body: Body,
         position: Position,
     },
 
@@ -94,7 +94,7 @@ pub enum Statement {
         /// Optional namespace for `module Foo::Bar` forms — same shape as
         /// `ClassDef::namespace`. None means install in current lexical scope.
         namespace: Option<Box<Expression>>,
-        body: Vec<Statement>,
+        body: Body,
         position: Position,
     },
 

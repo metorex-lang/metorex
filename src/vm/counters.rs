@@ -1,7 +1,8 @@
 //! What a run with `METOREX_COUNTERS=1` counts, and the report it prints to
 //! standard error at exit: each kind of instruction executed, each call by the method it was made from and the method it reached with
-//! the heap allocations made while it ran, every heap allocation, and each
-//! block a literal built.
+//! the heap allocations made while it ran, every heap allocation, each
+//! block a literal built, and each library metorex carries that was parsed
+//! from its source.
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -22,6 +23,7 @@ const CALL_PATHS_REPORTED: usize = 100;
 struct Counts {
     instructions: HashMap<&'static str, u64>,
     calls: HashMap<String, CallCount>,
+    libraries_parsed: Vec<String>,
 }
 
 #[derive(Default)]
@@ -114,6 +116,12 @@ pub fn count_block_built() {
     }
 }
 
+/// Count a library metorex carries, or its core library, parsed from its
+/// source rather than read already parsed from the binary.
+pub fn count_library_parsed(name: &str) {
+    with_counts(|counts| counts.libraries_parsed.push(name.to_string()));
+}
+
 /// How many heap allocations this run has made so far.
 pub fn allocations_so_far() -> u64 {
     ALLOCATIONS.load(Ordering::Relaxed)
@@ -156,6 +164,13 @@ pub fn report(out: &mut dyn Write) {
         "blocks built: {}\n",
         BLOCKS_BUILT.load(Ordering::Relaxed)
     ));
+    text.push_str(&format!(
+        "libraries parsed from source: {}\n",
+        counts.libraries_parsed.len()
+    ));
+    for name in &counts.libraries_parsed {
+        text.push_str(&format!("{:>14}  {name}\n", ""));
+    }
     let total: u64 = counts.instructions.values().sum();
     text.push_str(&format!("\ninstructions executed: {total}\n"));
     let mut rows: Vec<_> = counts.instructions.iter().collect();

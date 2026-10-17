@@ -55,7 +55,8 @@ fn test_method_def() {
                 position: pos(2, 5),
             },
             position: pos(2, 3),
-        }],
+        }]
+        .into(),
         position: pos(1, 1),
         end_position: pos(1, 1),
     };
@@ -71,7 +72,7 @@ fn test_class_def_no_superclass() {
         namespace: None,
         superclass: None,
         superclass_expression: None,
-        body: vec![],
+        body: vec![].into(),
         position: pos(1, 1),
     };
     assert_eq!(stmt.position(), pos(1, 1));
@@ -85,7 +86,7 @@ fn test_class_def_with_superclass() {
         namespace: None,
         superclass: Some("Person".to_string()),
         superclass_expression: None,
-        body: vec![],
+        body: vec![].into(),
         position: pos(1, 1),
     };
     assert!(stmt.is_definition());

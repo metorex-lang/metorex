@@ -396,8 +396,8 @@ pub(crate) fn nested_bodies(statement: &Statement) -> Vec<&[Statement]> {
         Statement::ClassDef { body, .. }
         | Statement::ModuleDef { body, .. }
         | Statement::MethodDef { body, .. }
-        | Statement::FunctionDef { body, .. }
-        | Statement::While { body, .. }
+        | Statement::FunctionDef { body, .. } => vec![&body[..]],
+        Statement::While { body, .. }
         | Statement::DoWhile { body, .. }
         | Statement::For { body, .. } => vec![body.as_slice()],
         Statement::Block { statements, .. } => vec![statements.as_slice()],
@@ -486,7 +486,7 @@ pub(crate) fn own_expressions(statement: &Statement) -> Vec<&Expression> {
 fn gather_blocks<'a>(expression: &'a Expression, found: &mut Vec<&'a [Statement]>) {
     match expression {
         Expression::Lambda { body, .. } | Expression::SingletonClass { body, .. } => {
-            found.push(body.as_slice())
+            found.push(&body[..])
         }
         Expression::BeginRescue { body, .. } => found.push(body.as_slice()),
         Expression::MethodCall {
@@ -647,8 +647,8 @@ fn branch_statement(statement: &Statement, found: &mut FileBranches) {
             }
             register_branches(body, found);
         }
-        Statement::ModuleDef { body, .. }
-        | Statement::Block {
+        Statement::ModuleDef { body, .. } => register_branches(body, found),
+        Statement::Block {
             statements: body, ..
         } => register_branches(body, found),
         Statement::If {

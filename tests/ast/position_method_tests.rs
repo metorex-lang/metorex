@@ -201,7 +201,7 @@ fn module_def_statement_position() {
     let stmt = Statement::ModuleDef {
         name: "MyMod".to_string(),
         namespace: None,
-        body: vec![],
+        body: vec![].into(),
         position: pos(),
     };
     let _ = stmt.position();

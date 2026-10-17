@@ -635,7 +635,7 @@ On an Apple M5 Max (18 CPUs, macOS 27.0.1), Metorex 0.1.0 built with rustc 1.96.
 
 | Benchmark | CRuby | CRuby --yjit | Metorex | Metorex ÷ CRuby | Metorex ÷ YJIT | CRuby peak | YJIT peak | Metorex peak |
 | :-- | --: | --: | --: | --: | --: | --: | --: | --: |
-| empty | 26.5 ms | 26.3 ms | 47.9 ms | 1.8× | 1.8× | 19 MB | 19 MB | 49 MB |
+| empty | 27.3 ms | 27.2 ms | 25.8 ms | 0.9× | 0.9× | 19 MB | 19 MB | 33 MB |
 | block_calls | 34.5 ms | 33.7 ms | 567.6 ms | 16.4× | 16.9× | 19 MB | 19 MB | 49 MB |
 | hash_access | 48.5 ms | 47.2 ms | 323.3 ms | 6.7× | 6.8× | 28 MB | 29 MB | 74 MB |
 | method_calls | 33.0 ms | 30.3 ms | 469.2 ms | 14.2× | 15.5× | 19 MB | 19 MB | 49 MB |

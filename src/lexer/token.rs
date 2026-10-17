@@ -13,7 +13,7 @@ pub enum InterpolationPart {
 }
 
 /// Represents the position of a token in the source code
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub struct Position {
     pub line: usize,
     pub column: usize,
