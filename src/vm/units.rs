@@ -178,6 +178,7 @@ impl crate::vm::VirtualMachine {
     pub(crate) fn run_compiled_program(
         &mut self,
         body: &[Statement],
+        a_return_unwinds: bool,
     ) -> Option<Result<Option<Object>, MetorexError>> {
         let ran = self.run_compiled_unit(None, body, UnitKind::Plain)?;
         Some(ran.and_then(|flow| match flow {
@@ -189,6 +190,9 @@ impl crate::vm::VirtualMachine {
             ControlFlow::Retry { position } => Err(MetorexError::BlockRetry {
                 location: position_to_location(position),
             }),
+            ControlFlow::Return { value, position } if a_return_unwinds => {
+                Err(self.unwinding_return(value, position))
+            }
             ControlFlow::Return { value, .. } => Ok(Some(value)),
             ControlFlow::Exception {
                 exception,

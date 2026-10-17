@@ -749,6 +749,13 @@ impl VirtualMachine {
         let mut last_value: Option<Object> = None;
         for (idx, statement) in body.iter().enumerate() {
             let is_last = idx == body.len() - 1;
+            if is_last
+                && !matches!(statement, Statement::Begin { .. })
+                && !self.tracepoints.is_empty()
+                && crate::bytecode::compiler::answers_its_own_value(statement)
+            {
+                self.fire_line_event(statement.position())?;
+            }
             if is_last && let Some(value) = self.terminal_statement_value(statement)? {
                 // The last statement answered here rather than through
                 // `execute_statement`, so it is counted here too.

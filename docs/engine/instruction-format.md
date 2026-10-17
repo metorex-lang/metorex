@@ -121,6 +121,15 @@ registers than on the stack, since its literals each take an instruction.
 - Each `BEGIN` body is compiled ahead of the unit's first statement, in the
   order they were written. `BeginBlockOnce` answers whether the body has
   run before, so a program `-n` or `-p` runs once per line runs it once.
+- Code handed over as a String, to `eval`, `instance_eval`, `class_eval`,
+  `module_eval`, `Binding#eval`, `RubyVM::InstructionSequence#eval`, or a
+  `trace_var` hook, is compiled to a unit each time it runs. A `return` in
+  code handed to `eval` leaves the method the `eval` was written in.
+- A unit's registers and the index of the instruction it is running are
+  locals of the Rust function running it. A fiber, and the fiber each
+  thread runs on, has a stack of its own, so a suspend in the middle of a
+  unit keeps both, and the resume returns into the instruction that
+  suspended.
 - A method, class, or module definition, `alias`, `include`, and
   `extend` is a `Define` instruction. What the statement needs evaluated,
   such as the namespace of `class A::B` or the target of `class << target`,

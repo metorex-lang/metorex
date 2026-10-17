@@ -65,8 +65,20 @@ impl VirtualMachine {
                                     crate::vm::utils::position_to_location(position),
                                 )
                             })?;
-                    for statement in &statements {
-                        self.execute_statement(statement)?;
+                    let compiled = self.run_compiled_unit(
+                        None,
+                        &statements,
+                        crate::bytecode::compiler::UnitKind::Plain,
+                    );
+                    match compiled {
+                        Some(ran) => {
+                            ran?;
+                        }
+                        None => {
+                            for statement in &statements {
+                                self.execute_statement(statement)?;
+                            }
+                        }
                     }
                 }
                 _ => {

@@ -200,7 +200,7 @@ impl VirtualMachine {
         let caller_lexical_home = self.lexical_home_frame.take();
         // A `return` written at the top level ends the program, carrying its
         // value out however deep in blocks it was written.
-        let ran = match self.run_compiled_program(statements) {
+        let ran = match self.run_compiled_program(statements, false) {
             Some(ran) => ran,
             None => self.run_program_statements(statements),
         };
@@ -221,7 +221,10 @@ impl VirtualMachine {
         &mut self,
         statements: &[Statement],
     ) -> Result<Option<Object>, MetorexError> {
-        self.run_statements_of_a_unit(statements, true)
+        match self.run_compiled_program(statements, true) {
+            Some(ran) => ran,
+            None => self.run_statements_of_a_unit(statements, true),
+        }
     }
 
     pub(crate) fn run_program_statements(
@@ -378,7 +381,7 @@ impl VirtualMachine {
 
     /// A `return` leaving an eval, which unwinds to the invocation the code
     /// around the eval belongs to.
-    fn unwinding_return(&self, value: Object, at: crate::lexer::Position) -> MetorexError {
+    pub(crate) fn unwinding_return(&self, value: Object, at: crate::lexer::Position) -> MetorexError {
         // The return belongs to the innermost lambda or method around the
         // eval, whichever the unwinding reaches first, so it names no frame
         // of its own.

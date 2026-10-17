@@ -61,9 +61,9 @@ Each item compiles a group of node types. Its acceptance is the same in every ca
 - [x] Exceptions: `Begin`, `BeginRescue`, `Raise`, `Retry`, `ensure`, method-level `rescue`, `throw` and `catch`, and the `ControlFlow` exits that pass through an `ensure`
 - [x] Pattern matching: `CaseIn` and `Match`, with array, find, hash, alternative, pin, and guard patterns, and `deconstruct` and `deconstruct_keys` caching as MRI does
 - [x] `BeginBlock` and `END`, `__END__` and `DATA`, and `-n` and `-p` loops around the main program
-- [ ] Code compiled at runtime: `eval`, `instance_eval`, `class_eval`, `module_eval` with strings, `define_method` with a block, `Binding#eval`, and `RubyVM::InstructionSequence.compile` and `#eval`
-- [ ] Fibers and threads: a fiber or thread runs its block's bytecode, and suspending saves the instruction position and value stack so the block resumes where it stopped
-- [ ] Tracing and coverage from instructions: TracePoint `:line`, `:call`, `:return`, `:b_call`, `:b_return`, `:class`, `:end`, `:raise`, `:c_call`, and `:c_return` events, `set_trace_func`, line and branch coverage for Rex's `--coverage` and the `Coverage` module, and `caller`, `caller_locations`, and backtraces naming the same lines as the tree walker did
+- [x] Code compiled at runtime: `eval`, `instance_eval`, `class_eval`, `module_eval` with strings, `define_method` with a block, `Binding#eval`, and `RubyVM::InstructionSequence.compile` and `#eval`
+- [x] Fibers and threads: a fiber or thread runs its block's bytecode, and suspending saves the instruction position and value stack so the block resumes where it stopped
+- [x] Tracing and coverage from instructions: TracePoint `:line`, `:call`, `:return`, `:b_call`, `:b_return`, `:class`, `:end`, `:raise`, `:c_call`, and `:c_return` events, `set_trace_func`, line and branch coverage for Rex's `--coverage` and the `Coverage` module, and `caller`, `caller_locations`, and backtraces naming the same lines as the tree walker did
   - Acceptance also: Rex's coverage report for `tests/_examples/rex/site/ledger` is unchanged
 
 ## Removing the tree walker

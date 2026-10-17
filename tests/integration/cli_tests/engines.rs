@@ -194,3 +194,21 @@ fn the_tree_walker_compiles_nothing_to_disassemble() {
         (String::new(), String::new())
     );
 }
+
+#[test]
+fn code_handed_to_eval_instance_eval_class_eval_and_a_binding_is_compiled_as_a_unit_of_its_own() {
+    let (written, _) = disassembly_of("code_from_strings.rb", "bytecode", "1");
+    let evaluated: Vec<&str> = written
+        .lines()
+        .filter(|line| line.starts_with("== (eval"))
+        .collect();
+    assert_eq!(
+        evaluated,
+        [
+            "== (eval at tests/_examples/disassembly/code_from_strings.rb:3)",
+            "== (eval at tests/_examples/disassembly/code_from_strings.rb:4)",
+            "== (eval at tests/_examples/disassembly/code_from_strings.rb:5)",
+            "== (eval at tests/_examples/disassembly/code_from_strings.rb:6)",
+        ]
+    );
+}

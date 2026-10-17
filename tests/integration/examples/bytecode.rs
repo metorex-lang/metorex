@@ -192,3 +192,53 @@ fn test_bytecode_begin_blocks_execution() {
         )
     );
 }
+
+#[test]
+fn test_bytecode_runtime_code_execution() {
+    let output = run_example("bytecode/runtime_code.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "2\n",
+            "[2, \"main\"]\n",
+            ":left\n",
+            "12\n",
+            "10\n",
+            "15\n",
+            "30\n",
+            "6\n",
+            "4\n",
+            "6\n",
+            "20\n",
+        )
+    );
+}
+
+#[test]
+fn test_bytecode_fibers_and_threads_execution() {
+    let output = run_example("bytecode/fibers_and_threads.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "2\n",
+            "[1, 5, 10]\n",
+            "116\n",
+            "[\"ab\", \"c19\"]\n",
+            "[33, 63]\n",
+        )
+    );
+}
+
+#[test]
+fn test_bytecode_tracing_execution() {
+    let output = run_example("bytecode/tracing.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[[:line, 14], [:call, 2], [:line, 3], [:b_call, 3], [:line, 4], [:line, 6], ",
+            "[:return, 7], [:line, 15], [:class, 15], [:line, 18], [:raise, 18], [:line, 21]]\n",
+            "[[\"call\", 2, :tally], [\"line\", 3, :tally]]\n",
+            "33\n",
+        )
+    );
+}

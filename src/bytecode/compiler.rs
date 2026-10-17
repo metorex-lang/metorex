@@ -692,6 +692,11 @@ impl Compiler {
                 self.unit
                     .start_inner_statement(start, statement.position(), live);
             }
+            // A `begin` is not a line event: the statements inside it are.
+            if let Statement::Begin { .. } = statement {
+                self.unit
+                    .set_start_kind(start, StartKind::Statement { line_event: false });
+            }
             if let (Some(enclosing_line), Statement::Expression { .. }) =
                 (enclosing_line, statement)
             {
@@ -3520,7 +3525,7 @@ fn gathered_in_a_list(argument: &Expression) -> bool {
 
 /// Whether a method body's last statement answers the method's value
 /// itself, as the tree walker's `terminal_statement_value` does.
-fn answers_its_own_value(statement: &Statement) -> bool {
+pub(crate) fn answers_its_own_value(statement: &Statement) -> bool {
     matches!(
         statement,
         Statement::Expression { .. }
