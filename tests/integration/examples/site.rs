@@ -91,16 +91,24 @@ fn test_site_differences_description_names_metorex_and_the_followed_release() {
 }
 
 #[test]
-fn test_site_differences_disasm_lists_syntax_tree_nodes() {
-    let expected = "== disasm: #<ISeq:<compiled>@<compiled>:1 (1,0)-(1,13)>\n0000 lasgn :total                          \n0001 opcall :+                             \n0002 integer 2                             \n0003 list nil                              \n0004 integer 3                             \n0005 leave                                 \n";
+fn test_site_differences_disasm_lists_instructions() {
+    let expected = concat!(
+        "== disasm: #<ISeq:<compiled>@<compiled>:1 (1,0)-(1,13)>\n",
+        "0000 Unhoist slot: 0  ; total               (   1)[Li]\n",
+        "0001 LoadInteger to: 0, value: 2            (   1)\n",
+        "0002 LoadInteger to: 1, value: 3            (   1)\n",
+        "0003 Add to: 0, left: 0, right: 1           (   1)\n",
+        "0004 SetLocal from: 0, slot: 0  ; total     (   1)\n",
+        "0005 Return from: 0                         (   1)\n",
+    );
     let output = run_example("site/differences_disasm.rb");
     assert_eq!(output, expected);
 }
 
 #[test]
-fn test_site_differences_vm_stat_is_all_zero() {
+fn test_site_differences_vm_stat_counts_compiled_units() {
     let output = run_example("site/differences_stat.rb");
-    assert_eq!(output, "true\n");
+    assert_eq!(output, "true\ntrue\n");
 }
 
 #[test]

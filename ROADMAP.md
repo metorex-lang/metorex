@@ -71,9 +71,9 @@ Each item compiles a group of node types. Its acceptance is the same in every ca
 - [x] No fallback: the engine report for a full `cargo test` and ruby/spec run under `METOREX_ENGINE=bytecode` lists no tree walker units
 - [x] Bytecode is the default engine
   - Acceptance: `cargo test` and ruby/spec pass with `METOREX_ENGINE` unset, and CI runs the tree walker step only as the second engine
-- [ ] Remove the tree walker: the statement and expression evaluation in `src/vm/statement`, `src/vm/eval`, and the modules only they call, the engine switch, and its CI step. `parse`, `Method#body`, and the other syntax tree readers stay
+- [x] Remove the tree walker: the statement and expression evaluation in `src/vm/statement`, `src/vm/eval`, and the modules only they call, the engine switch, and its CI step. `parse`, `Method#body`, and the other syntax tree readers stay
   - Acceptance: `cargo test`, ruby/spec, clippy, and coverage at its current floor pass, and no code path evaluates a `Statement` or `Expression` directly
-- [ ] `RubyVM::InstructionSequence#disasm` and `#to_a` list the bytecode instructions, and `RubyVM.stat` counts what the machine keeps
+- [x] `RubyVM::InstructionSequence#disasm` and `#to_a` list the bytecode instructions, and `RubyVM.stat` counts what the machine keeps
   - Acceptance: the instruction sequence examples show instructions, and the README and metorex.org's architecture and differences pages say Metorex compiles to bytecode
 
 ## Speed in the interpreter

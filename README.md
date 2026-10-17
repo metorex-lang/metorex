@@ -12,7 +12,7 @@
 
 ## Project Status
 
-Metorex runs programs with a tree-walking interpreter. [ROADMAP.md](ROADMAP.md) moves execution onto bytecode that the same interpreter runs.
+Metorex compiles each method, block, class body, and file to bytecode the first time it runs, and its interpreter runs those instructions.
 
 ## Key Features
 
@@ -285,7 +285,7 @@ Metorex runs programs with a tree-walking interpreter. [ROADMAP.md](ROADMAP.md) 
 - **A time in UTC says so**: a zone written as "UTC", "Z", or "-00:00" names UTC itself, `Time.now`, `Time.new`, and `Time.at` take it through `in:`, and `Time#zone` answers in US-ASCII
 - **A String changes what it holds**: `<<`, `concat`, `replace`, `prepend`, `insert`, `clear`, `setbyte`, `slice!`, and the `!` forms of `sub`, `gsub`, `strip`, `chomp`, `chop`, `squeeze`, `delete`, `tr`, `tr_s`, `upcase`, `downcase`, `capitalize`, `swapcase`, `reverse`, `succ`, and `encode` all change the string every reference to it sees. A method whose name ends in `!` answers nil when it found nothing to change
 - **`freeze` and `frozen?` mean what they say**: a String reports itself frozen only after it has been frozen, a change to a frozen one raises FrozenError, `+str` answers one that changes, and `-str` answers one that does not
-- **RubyVM**: names MRI's instructions in `RubyVM::INSTRUCTION_NAMES`, its options in `RubyVM::OPTS` and its stack sizes in `RubyVM::DEFAULT_PARAMS`, answers `RubyVM.stat` with MRI's keys at zero since metorex keeps no inline caches or object shapes, and remembers `RubyVM.keep_script_lines`. `RubyVM::YJIT` and `RubyVM::ZJIT` answer that they are not running and cannot be turned on. `RubyVM.new` is undefined and `RubyVM.allocate` refused. `RubyVM::AbstractSyntaxTree.parse` and `parse_file` build MRI's node tree, with MRI's node types and line and column spans, for literals, variables, calls, assignments, control flow, method, class, module, block and lambda definitions with their parameters and locals, strings, symbols, regexps, word lists and heredocs, pattern matching, and `BEGIN` and `END` blocks. `keep_script_lines: true` lets a node answer its `source` and `script_lines`, `keep_tokens: true` lets it answer `tokens` and `all_tokens` named as MRI's parser names them, `of` answers the node a Proc, a Method or a backtrace location was written as, and `locations` answers `RubyVM::AbstractSyntaxTree::Location` spans for a node and for the keywords and operators MRI records for its type, such as an `if`'s `if`, `then` and `end`. A program it refuses raises SyntaxError with MRI's message, quoting the line at fault with a caret beneath it. `RubyVM::InstructionSequence` compiles a program with `compile` or `compile_file`, runs it with `eval`, and names the method or block a Proc or a Method was compiled into with `of`. Metorex runs the syntax tree rather than instructions, so `disasm` and `to_a` list the tree's nodes
+- **RubyVM**: names MRI's instructions in `RubyVM::INSTRUCTION_NAMES`, its options in `RubyVM::OPTS` and its stack sizes in `RubyVM::DEFAULT_PARAMS`, answers `RubyVM.stat` with MRI's keys at zero since metorex keeps no inline caches or object shapes, beside the units of code it has compiled and the instructions they hold, and remembers `RubyVM.keep_script_lines`. `RubyVM::YJIT` and `RubyVM::ZJIT` answer that they are not running and cannot be turned on. `RubyVM.new` is undefined and `RubyVM.allocate` refused. `RubyVM::AbstractSyntaxTree.parse` and `parse_file` build MRI's node tree, with MRI's node types and line and column spans, for literals, variables, calls, assignments, control flow, method, class, module, block and lambda definitions with their parameters and locals, strings, symbols, regexps, word lists and heredocs, pattern matching, and `BEGIN` and `END` blocks. `keep_script_lines: true` lets a node answer its `source` and `script_lines`, `keep_tokens: true` lets it answer `tokens` and `all_tokens` named as MRI's parser names them, `of` answers the node a Proc, a Method or a backtrace location was written as, and `locations` answers `RubyVM::AbstractSyntaxTree::Location` spans for a node and for the keywords and operators MRI records for its type, such as an `if`'s `if`, `then` and `end`. A program it refuses raises SyntaxError with MRI's message, quoting the line at fault with a caret beneath it. `RubyVM::InstructionSequence` compiles a program with `compile` or `compile_file`, runs it with `eval`, and names the method or block a Proc or a Method was compiled into with `of`. `disasm` and `to_a` list the instructions Metorex compiles the code to, which are its own rather than YARV's
 - **Ractor**: `Ractor.new` runs its block on a thread of its own with `self` as the new Ractor and the arguments it was given copied in, unless they are shareable. `value` and `join` wait for the block, and what it raised comes back as `Ractor::RemoteError` with the original as its `cause`. `Ractor.current`, `Ractor.main`, `Ractor.main?`, `Ractor.count`, `#name` and `#inspect` answer as MRI's do, and a thread made inside a Ractor belongs to it. A block given to `Ractor.new` may not name a local of the scope it was written in, and a Ractor other than the main one may not reach most globals, any class variable, or a constant holding an object that is not shareable. `Ractor.make_shareable` freezes an object and everything it refers to, or a deep copy of it with `copy: true`, and makes a Proc shareable when its `self` and the outer locals it reads are shareable and none of them is assigned more than once. `Ractor.shareable_proc` and `Ractor.shareable_lambda` make one with `self` set to nil or the `self:` given. A `Ractor::Port` receives what any Ractor sends it, and only the Ractor that made it receives from it. `Ractor#send` and `Ractor.receive` use each Ractor's default port, a value sent is copied unless it is shareable, one sent with `move: true` answers `Ractor::MovedError` to any method called on it afterwards, and `Ractor.select` answers the first port or finished Ractor with its value. `Ractor[]`, `Ractor[]=` and `Ractor.store_if_absent` keep values per Ractor
 - **Threads run a step at a time**: `Thread.new` starts its block on a coroutine, a thread hands the turn over at the next statement or loop pass once it has held it for 100 ms, as MRI's timer marks a turn spent, so one that never waits still lets the others run, and a socket that has nothing to give hands every waiting thread a turn rather than waiting alone, as do `system`, a backtick command and `Process.wait` while the child runs. Every Kernel, IO, File, Socket and Process call that waits lets the other threads run meanwhile: reads and writes on pipes and sockets, `select`, `IO.copy_stream`, `flock`, opening a FIFO, accepting a connection and looking a host name up. `IO#write` waits for room on a full pipe and writes everything, `syswrite` waits and writes what fits, and `write_nonblock` never waits. Every thread runs on the one operating system thread the interpreter runs on, so `Thread#native_thread_id` answers that thread's id for the thread running now and nil for the rest, as MRI answers for a thread scheduled M:N while it is off a native thread, and the `RUBY_MN_THREADS` and `RUBY_MAX_CPU` settings are accepted. A server written in one thread answers a client written in another, which is what `Net::HTTP` talking to a `TCPServer` in the same program rests on
 - **The locale names the default external encoding**: without `-E`, the text a program reads and writes is in the locale's encoding, US-ASCII under the C locale. A file name, `Dir.pwd`, `Dir.home` or an argument that US-ASCII cannot hold is tagged binary, as Ruby tags it
@@ -516,7 +516,7 @@ Metorex runs programs with a tree-walking interpreter. [ROADMAP.md](ROADMAP.md) 
 | **Primary Paradigms**   | **Full Object-Oriented**, **Imperative**, **Functional** (with ADTs and immutable structures)                                     |
 | **Key Differentiator**  | **Code-as-Object (The Meta Core)**: The Abstract Syntax Tree (AST) is directly exposed as native, manipulable objects at runtime. |
 | **Typing**              | **Dynamic by default**, with **optional static typing** and gradual type inference                                                |
-| **Performance**         | A tree-walking interpreter today. [ROADMAP.md](ROADMAP.md) moves execution onto bytecode                                         |
+| **Performance**         | Compiles to bytecode that an interpreter runs. [ROADMAP.md](ROADMAP.md) works on speed next                                       |
 
 ## Syntax Overview
 
@@ -574,7 +574,7 @@ See [examples/dsl_example.rb](examples/advanced/dsl_example.rb)
 
 ### Execution
 
-Source is read by the lexer in `src/lexer` and the parser in `src/parser` into the syntax tree in `src/ast`, and `VirtualMachine` (`src/vm/core.rs`) runs that tree. [ROADMAP.md](ROADMAP.md) moves execution onto bytecode compiled from the tree.
+Source is read by the lexer in `src/lexer` and the parser in `src/parser` into the syntax tree in `src/ast`. `src/bytecode/compiler.rs` compiles each body of the tree to instructions the first time it runs, and `VirtualMachine` (`src/vm/core.rs`, with the loop in `src/vm/bytecode_runner.rs`) runs them.
 
 ## Design Principles
 
@@ -584,7 +584,7 @@ Source is read by the lexer in `src/lexer` and the parser in `src/parser` into t
 | **OO Purity**         | Everything is an object rooted in `Object` class. No standalone functions.             |
 | **Meta-First**        | AST is always accessible as first-class objects. Code can inspect and modify itself.   |
 | **Gradual Typing**    | Dynamic by default, optional static types for performance. Best of both worlds.        |
-| **Performance**       | A tree-walking interpreter today, moving onto bytecode per ROADMAP.md.                 |
+| **Performance**       | Compiles to bytecode that an interpreter runs, with speed work next per ROADMAP.md.    |
 | **Safety**            | Exception handling, memory safety from Rust, optional sandboxing.                      |
 | **Concurrency**       | Multiple models: fibers, async/await, OS threads, channels. Choose the right tool.     |
 | **Productivity**      | Built-in testing, documentation, linting, formatting. Everything you need included.    |
@@ -754,25 +754,22 @@ ruby benchmarks/compare.rb
 scripts/profile.sh report.txt path/to/program.rb
 METOREX_COUNTERS=1 target/release/metorex path/to/program.rb
 
-# Write how many bodies ran on bytecode and how many on the tree walker,
-# which runs a body too deep to compile, and why
+# Write how many bodies were compiled and how many were refused for being
+# nested too deep, and the node types that ran out of registers
 METOREX_ENGINE_REPORT=report.txt target/release/metorex path/to/program.rb
 
 # Write each body's instructions to standard error as it is compiled
 METOREX_DISASM=1 target/release/metorex path/to/program.rb
 
-# Run on the tree walker instead of bytecode
-METOREX_ENGINE=tree target/release/metorex path/to/program.rb
 ```
 
 ### Running everything
 
 `./test.sh` runs what CI runs, on this machine and on Linux, on both
-architectures: formatting, clippy, the Rust tests, the Ruby spec suite, both
-of those again with `METOREX_ENGINE=tree`, coverage, and the check that no
-test sits in `src/`. On this machine the engine report of the bytecode runs
-is added up in `target/engine-report.txt`. It stops where a step
-fails, so what went wrong is the last thing on the screen.
+architectures: formatting, clippy, the Rust tests, the Ruby spec suite,
+coverage, and the check that no test sits in `src/`. On this machine the
+engine report of those runs is added up in `target/engine-report.txt`. It
+stops where a step fails, so what went wrong is the last thing on the screen.
 
 ```bash
 ./test.sh              # all of it

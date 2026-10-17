@@ -231,15 +231,16 @@ impl VirtualMachine {
                 }
             }
 
-            let mut last_value;
+            let last_value;
 
             // `redo` runs the block's body again over the same arguments.
             'again: loop {
-                if let Some(ran) = self.run_compiled_unit(
-                    Some(&block.unit),
-                    block.body(),
-                    crate::vm::units::UnitKind::Plain,
-                ) {
+                {
+                    let ran = self.run_compiled_unit(
+                        Some(&block.unit),
+                        block.body(),
+                        crate::vm::units::UnitKind::Plain,
+                    );
                     let flow = match ran {
                         // A `redo` inside a `begin` that has an ensure clause
                         // arrives as an unwinding signal once the clause ran.
@@ -269,16 +270,6 @@ impl VirtualMachine {
                                 home_frame: block.home_frame,
                             });
                         }
-                        ControlFlow::Exception {
-                            exception,
-                            position,
-                        } => {
-                            return Err(MetorexError::UncaughtException {
-                                exception: exception.clone(),
-                                location: position_to_location(position),
-                                message: format_exception(&exception),
-                            });
-                        }
                         // `break` in a lambda ends the lambda, and in any
                         // other block returns from the call the block was
                         // attached to.
@@ -296,90 +287,6 @@ impl VirtualMachine {
                     }
                     break 'again;
                 }
-                last_value = Object::Nil;
-                for statement in block.body() {
-                    if let Statement::Expression { expression, .. } = statement {
-                        if !self.tracepoints.is_empty() {
-                            self.fire_line_event(statement.position())?;
-                        }
-                        self.pass_checkpoint(statement.position())?;
-                        // A `redo` inside a `begin` that has an ensure clause
-                        // arrives as an unwinding signal once the clause ran.
-                        last_value = match self.evaluate_expression(expression) {
-                            Err(MetorexError::BlockRedo { .. }) => continue 'again,
-                            other => other?,
-                        };
-                        continue;
-                    }
-
-                    let flow = match self.execute_statement(statement) {
-                        Err(MetorexError::BlockRedo { .. }) => continue 'again,
-                        other => other?,
-                    };
-                    match flow {
-                        // A statement that answers nothing, such as an `if`
-                        // whose branch did not run, leaves the block's value
-                        // nil.
-                        ControlFlow::Next => last_value = Object::Nil,
-                        ControlFlow::Value(value) => {
-                            last_value = value;
-                        }
-                        // `return` in a lambda returns from the lambda. In a
-                        // proc or ordinary block it is a long return: it unwinds
-                        // to the method that lexically created the block.
-                        ControlFlow::Return { value, position } => {
-                            if block.is_lambda {
-                                last_value = value;
-                                break 'again;
-                            }
-                            // The invocation the block was written in may have
-                            // returned already, and then the return has nowhere
-                            // to go.
-                            if let Some(home) = block.home_frame
-                                && !self.live_frames.contains(&home)
-                            {
-                                return Err(orphaned_return_error(value, position));
-                            }
-                            return Err(MetorexError::NonLocalReturn {
-                                value,
-                                location: position_to_location(position),
-                                home_frame: block.home_frame,
-                            });
-                        }
-                        ControlFlow::Exception {
-                            exception,
-                            position,
-                        } => {
-                            return Err(MetorexError::UncaughtException {
-                                exception: exception.clone(),
-                                location: position_to_location(position),
-                                message: format_exception(&exception),
-                            });
-                        }
-                        ControlFlow::Break { value, position } => {
-                            // `break` in a lambda ends the lambda, the way a
-                            // `return` written there does.
-                            if block.is_lambda {
-                                last_value = value;
-                                break 'again;
-                            }
-                            // Ruby: `break <value>` inside a block unwinds to the
-                            // method that received the block, returning `value`
-                            // from that method call. Uses BlockBreak so the signal
-                            // survives `execute_method_body` (which only swallows
-                            // NonLocalReturn) and is caught at the invoke boundary.
-                            return Err(self.break_signal(value, position_to_location(position)));
-                        }
-                        ControlFlow::Redo { .. } | ControlFlow::Retry { .. } => continue 'again,
-                        // `next <value>` ends this run of the block with that
-                        // value, which is what the method holding the block sees.
-                        ControlFlow::Continue { value, .. } => {
-                            last_value = value;
-                            break 'again;
-                        }
-                    }
-                }
-                break;
             }
 
             Ok(last_value)
@@ -576,11 +483,12 @@ impl VirtualMachine {
                     // `redo` runs the block's body again over the same arguments,
                     // which are already bound in this scope.
                     loop {
-                        if let Some(ran) = self.run_compiled_unit(
-                            Some(&block.unit),
-                            block.body(),
-                            crate::vm::units::UnitKind::Plain,
-                        ) {
+                        {
+                            let ran = self.run_compiled_unit(
+                                Some(&block.unit),
+                                block.body(),
+                                crate::vm::units::UnitKind::Plain,
+                            );
                             let flow = match ran {
                                 Err(MetorexError::BlockRedo { .. }) => continue,
                                 // A `break` raised by a C function called from
@@ -602,50 +510,8 @@ impl VirtualMachine {
                                 ControlFlow::Retry { .. } | ControlFlow::Redo { .. } => continue,
                                 flow @ (ControlFlow::Return { .. }
                                 | ControlFlow::Break { .. }
-                                | ControlFlow::Continue { .. }
-                                | ControlFlow::Exception { .. }) => return Ok(flow),
+                                | ControlFlow::Continue { .. }) => return Ok(flow),
                             }
-                            return Ok(ControlFlow::Next);
-                        }
-                        let mut again = false;
-                        for statement in block.body() {
-                            let flow = match self.execute_statement(statement) {
-                                // A `redo` inside a `begin` that has an ensure
-                                // clause arrives as an unwinding signal.
-                                Err(MetorexError::BlockRedo { .. }) => {
-                                    again = true;
-                                    break;
-                                }
-                                // A `break` raised from inside an expression,
-                                // or by a C function called from this body,
-                                // that has not yet passed a block boundary
-                                // belongs to this block.
-                                Err(MetorexError::BlockBreak {
-                                    value,
-                                    home_frame: None,
-                                    ..
-                                }) => ControlFlow::Break {
-                                    value,
-                                    position: statement.position(),
-                                },
-                                other => other?,
-                            };
-                            match flow {
-                                ControlFlow::Next => last_value = Object::Nil,
-                                ControlFlow::Value(value) => last_value = value,
-                                ControlFlow::Retry { .. } | ControlFlow::Redo { .. } => {
-                                    again = true;
-                                    break;
-                                }
-                                flow @ (ControlFlow::Return { .. }
-                                | ControlFlow::Break { .. }
-                                | ControlFlow::Continue { .. }
-                                | ControlFlow::Exception { .. }) => {
-                                    return Ok(flow);
-                                }
-                            }
-                        }
-                        if !again {
                             return Ok(ControlFlow::Next);
                         }
                     }

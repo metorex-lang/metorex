@@ -11,19 +11,7 @@ impl VirtualMachine {
     ) -> Result<Object, MetorexError> {
         module.set_current_visibility("public");
         let opened_at = body.first().map(Statement::position).unwrap_or_default();
-        if let Some(ran) = self.run_compiled_body(module, body, opened_at, true) {
-            return ran;
-        }
-        let mut last_value = Object::Nil;
-        for statement in body {
-            if self.coverage.is_some() {
-                let line = statement.position().line;
-                self.coverage_count(line);
-                self.coverage_skip_line = Some(line);
-            }
-            self.module_body_statement(module, statement, &mut last_value)?;
-        }
-        Ok(last_value)
+        self.run_compiled_body(module, body, opened_at, true)
     }
 
     /// Run one statement of a module body, the way a module body runs it,
@@ -246,16 +234,6 @@ impl VirtualMachine {
                     return Err(return_in_a_body_error(position));
                 }
                 // An exception the body raised leaves it.
-                ControlFlow::Exception {
-                    exception,
-                    position,
-                } => {
-                    return Err(MetorexError::UncaughtException {
-                        message: crate::vm::utils::format_exception(&exception),
-                        exception,
-                        location: position_to_location(position),
-                    });
-                }
                 _ => {}
             },
         }

@@ -1,8 +1,8 @@
-//! What `METOREX_ENGINE_REPORT=path` writes at exit: how many units ran on
-//! bytecode and how many on the tree walker, and which node types sent each
-//! one there. When the path is a directory, each process writes a file of its
-//! own there, named for its process id, which `scripts/engine_report_summary.sh`
-//! adds up.
+//! What `METOREX_ENGINE_REPORT=path` writes at exit: how many units were
+//! compiled and how many were refused for needing more registers than an
+//! instruction names, and which node types ran out. When the path is a
+//! directory, each process writes a file of its own there, named for its
+//! process id, which `scripts/engine_report_summary.sh` adds up.
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
@@ -11,9 +11,9 @@ use crate::vm::units::Compiled;
 
 #[derive(Default)]
 struct Report {
-    on_bytecode: u64,
-    on_tree_walker: u64,
-    fallbacks: BTreeMap<&'static str, u64>,
+    compiled: u64,
+    refused: u64,
+    refusals: BTreeMap<&'static str, u64>,
 }
 
 static REPORT: Mutex<Option<Report>> = Mutex::new(None);
@@ -28,10 +28,10 @@ pub fn record(compiled: &Compiled) {
         return;
     };
     match compiled {
-        Compiled::Unit(_) => report.on_bytecode += 1,
-        Compiled::Fallback(node) => {
-            report.on_tree_walker += 1;
-            *report.fallbacks.entry(node).or_default() += 1;
+        Compiled::Unit(_) => report.compiled += 1,
+        Compiled::Refused(node) => {
+            report.refused += 1;
+            *report.refusals.entry(node).or_default() += 1;
         }
     }
 }
@@ -74,10 +74,10 @@ fn write_report() {
         return;
     };
     let mut written = format!(
-        "units on bytecode: {}\nunits on the tree walker: {}\nfallbacks:\n",
-        report.on_bytecode, report.on_tree_walker
+        "units compiled: {}\nunits refused: {}\nrefusals:\n",
+        report.compiled, report.refused
     );
-    let mut by_count: Vec<(&&'static str, &u64)> = report.fallbacks.iter().collect();
+    let mut by_count: Vec<(&&'static str, &u64)> = report.refusals.iter().collect();
     by_count.sort_by(|left, right| right.1.cmp(left.1).then(left.0.cmp(right.0)));
     for (node, count) in by_count {
         written.push_str(&format!("  {count} {node}\n"));

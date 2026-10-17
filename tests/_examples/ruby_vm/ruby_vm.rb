@@ -1,6 +1,7 @@
-# RubyVM names MRI's instructions and settings, answers MRI's counters, and
-# remembers whether script lines are kept. It cannot be instantiated, and
-# neither just-in-time compiler is running.
+# RubyVM names MRI's instructions and settings, answers MRI's counters and
+# the units Metorex has compiled, and remembers whether script lines are
+# kept. It cannot be instantiated, and neither just-in-time compiler is
+# running.
 
 p(RubyVM.class, RubyVM.superclass)
 p(RubyVM::OPTS)

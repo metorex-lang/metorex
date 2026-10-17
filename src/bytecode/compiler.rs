@@ -1,6 +1,6 @@
-//! Compiling a body's statements to a `Unit`. A body holding a node the
-//! compiler does not handle yet is refused with that node's type name, and
-//! runs on the tree walker.
+//! Compiling a body's statements to a `Unit`. A body needing more registers
+//! than an instruction names is refused with the type name of the node that
+//! ran out.
 
 use crate::ast::{BinaryOp, Expression, InterpolationPart, Statement, UnaryOp};
 use crate::bytecode::instruction::{
@@ -48,9 +48,8 @@ pub fn compile(body: &[Statement]) -> Result<Unit, &'static str> {
 pub enum UnitKind {
     /// A block's body or a file's top level.
     Plain,
-    /// A method's body: its last statement answers the method's value the
-    /// way the tree walker answers it, an `if` or `unless` there running as
-    /// an `if` written as an expression.
+    /// A method's body: its last statement answers the method's value, an
+    /// `if` or `unless` there running as an `if` written as an expression.
     Method,
     /// A `class` body: its statements follow the class body's rules.
     ClassBody,
@@ -61,20 +60,7 @@ pub enum UnitKind {
 /// Compile `body`, the body of what `kind` names.
 pub fn compile_as(body: &[Statement], kind: UnitKind) -> Result<Unit, &'static str> {
     let of_a_method = kind == UnitKind::Method;
-    let mut compiler = Compiler {
-        unit: Unit::new(),
-        next_register: ANSWER + 1,
-        spots: Vec::new(),
-        assigned: crate::ast::collect_assigned_locals(body),
-        loops: Vec::new(),
-        pending: Pending::default(),
-        protections: Vec::new(),
-        begins: 0,
-    };
-    compiler.unit.use_registers(ANSWER + 1);
-    for name in compiler.assigned.clone() {
-        compiler.unit.local(&name);
-    }
+    let mut compiler = Compiler::for_body(body);
     let end = match body.last() {
         Some(last) => last.position(),
         None => Position::default(),
@@ -125,6 +111,32 @@ pub fn compile_as(body: &[Statement], kind: UnitKind) -> Result<Unit, &'static s
         _ => compiler.statements(body, ANSWER, true)?,
     }
     compiler.emit(Instruction::Return { from: ANSWER as u8 }, end);
+    Ok(compiler.unit)
+}
+
+/// Compile `expression` alone, as code that runs where something other
+/// than a unit's own statements asks for its value: a parameter's default,
+/// a value a pattern compares against. It starts no statement of its own.
+pub fn compile_expression(expression: &Expression) -> Result<Unit, &'static str> {
+    let position = expression.position();
+    let mut compiler = Compiler::for_body(&[Statement::Expression {
+        expression: expression.clone(),
+        position,
+    }]);
+    compiler.expression(expression, ANSWER)?;
+    compiler.emit(Instruction::Return { from: ANSWER as u8 }, position);
+    Ok(compiler.unit)
+}
+
+/// Compile `statement` alone, as a unit of one statement.
+pub fn compile_statement(statement: &Statement) -> Result<Unit, &'static str> {
+    let body = std::slice::from_ref(statement);
+    let mut compiler = Compiler::for_body(body);
+    compiler.statements(body, ANSWER, true)?;
+    compiler.emit(
+        Instruction::Return { from: ANSWER as u8 },
+        statement.position(),
+    );
     Ok(compiler.unit)
 }
 
@@ -201,6 +213,25 @@ struct Loop {
 }
 
 impl Compiler {
+    /// A compiler for `body`, with a slot for each local it assigns.
+    fn for_body(body: &[Statement]) -> Compiler {
+        let mut compiler = Compiler {
+            unit: Unit::new(),
+            next_register: ANSWER + 1,
+            spots: Vec::new(),
+            assigned: crate::ast::collect_assigned_locals(body),
+            loops: Vec::new(),
+            pending: Pending::default(),
+            protections: Vec::new(),
+            begins: 0,
+        };
+        compiler.unit.use_registers(ANSWER + 1);
+        for name in compiler.assigned.clone() {
+            compiler.unit.local(&name);
+        }
+        compiler
+    }
+
     /// Add an instruction, with the spot of the innermost expression being
     /// compiled that has one.
     fn emit(&mut self, instruction: Instruction, position: Position) -> usize {
@@ -827,8 +858,7 @@ impl Compiler {
                 position,
             } => {
                 // `for name in iterable` is a call of `each` with a block
-                // that assigns `name`, which the tree walker runs the same
-                // way.
+                // that assigns `name`.
                 let looped = crate::ast::for_loop::for_over_each(
                     vec![Expression::Identifier {
                         name: variable.clone(),
@@ -1309,8 +1339,7 @@ impl Compiler {
     /// Compile `begin`, with its rescue clauses, `else`, and `ensure`,
     /// leaving its value in register `to`. `expression_form` is set where the
     /// value is used as an expression, and for a method body's last
-    /// statement, which the tree walker evaluates the way it does an
-    /// expression.
+    /// statement, which answers the method's value as an expression does.
     #[allow(clippy::too_many_arguments)]
     fn begin(
         &mut self,
@@ -3597,7 +3626,7 @@ fn gathered_in_a_list(argument: &Expression) -> bool {
 }
 
 /// Whether a method body's last statement answers the method's value
-/// itself, as the tree walker's `terminal_statement_value` does.
+/// itself.
 pub(crate) fn answers_its_own_value(statement: &Statement) -> bool {
     matches!(
         statement,

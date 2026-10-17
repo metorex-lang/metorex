@@ -124,6 +124,29 @@ impl VirtualMachine {
                     crate::vm::sequence_outline::outline_of_source(&source).unwrap_or(Object::Nil),
                 ))
             }
+            // The units compiled so far and the instructions they hold.
+            "__compiled_so_far__" => {
+                let (units, instructions) = crate::vm::units::compiled_so_far();
+                Ok(Some(Object::array(vec![
+                    Object::Int(units as i64),
+                    Object::Int(instructions as i64),
+                ])))
+            }
+            // The instructions the scope of a kind opening on a line of a
+            // program compiles to, each `[name, [[field, value], ...], line,
+            // line event, note]`, or nil when there is no such scope.
+            "__unit_listing__" if arguments.len() == 3 => {
+                let source = arguments[0].to_string();
+                let kind = arguments[1].to_string();
+                let line = match arguments[2].view() {
+                    View::Int(line) => usize::try_from(line).unwrap_or(0),
+                    _ => 0,
+                };
+                Ok(Some(
+                    crate::vm::sequence_outline::listing_of_scope(&source, &kind, line)
+                        .unwrap_or(Object::Nil),
+                ))
+            }
             // Run a block with tracing switched off, so an event the block
             // causes reaches the tracepoints again. `TracePoint.allow_reentry`
             // is what asks for this.

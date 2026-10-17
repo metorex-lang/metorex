@@ -590,7 +590,7 @@ pub(crate) fn keep_exception(
 }
 
 /// Raise `class_name` with a fixed message.
-pub(super) fn simple_exception(
+pub(crate) fn simple_exception(
     class_name: &str,
     message: &str,
     position: Position,

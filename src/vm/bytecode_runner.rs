@@ -1,7 +1,7 @@
 //! Running a compiled unit: one loop dispatching each instruction by
 //! `match`, over a register file the unit's size. An instruction that needs
-//! the interpreter, to call a method, read a constant, or raise, calls the
-//! same `VirtualMachine` functions the tree walker does.
+//! the interpreter, to call a method, read a constant, or raise, calls a
+//! `VirtualMachine` function.
 
 use crate::ast::{BinaryOp, Expression, Statement, UnaryOp};
 use crate::bytecode::instruction::{
@@ -81,8 +81,8 @@ impl VirtualMachine {
 
     /// Run `unit`, answering how it ended: with the value its `Return`
     /// hands back, or with a `break`, `next`, or `redo` written outside any
-    /// loop of the unit, which the body the unit is takes as the tree walker
-    /// takes the same statement.
+    /// loop of the unit, which the body the unit is decides what to do
+    /// with.
     pub(crate) fn run_unit_flow(&mut self, unit: &Unit) -> Result<ControlFlow, MetorexError> {
         let mut state = RunState {
             cells: vec![None; unit.locals.len()],
@@ -1200,8 +1200,7 @@ impl VirtualMachine {
         self.running_block_breaks.truncate(base.loops + open.loops);
     }
 
-    /// What happens as a statement starts, as the tree walker does for a
-    /// statement in the same place.
+    /// What happens as a statement starts.
     fn start_statement(&mut self, statement: StatementStart) -> Result<(), MetorexError> {
         let line = statement.position.line;
         match statement.kind {
@@ -1269,8 +1268,8 @@ impl VirtualMachine {
         Ok(literal.finish())
     }
 
-    /// Call the method a call site names, with what the tree walker does
-    /// around a method call it evaluates.
+    /// Call the method a call site names, with what is done around any
+    /// method call.
     fn call_from_unit(
         &mut self,
         receiver: Object,
@@ -1291,7 +1290,7 @@ impl VirtualMachine {
     }
 }
 
-/// How the tree walker names the way a call's receiver was written.
+/// How method lookup names the way a call's receiver was written.
 fn written_receiver(receiver: Receiver) -> WrittenReceiver {
     match receiver {
         Receiver::SelfKeyword => WrittenReceiver::SelfKeyword,
@@ -1331,8 +1330,8 @@ fn call_inputs(
     (arguments, block)
 }
 
-/// The tree walker's form of an assignment target, reading what was
-/// evaluated ahead of the value from the registers.
+/// The prepared form of an assignment target, reading what was evaluated
+/// ahead of the value from the registers.
 fn prepared<'a>(target: &'a Target, registers: &[Object]) -> PreparedTarget<'a> {
     match target {
         Target::Named(named) => PreparedTarget::Named(named),

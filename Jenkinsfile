@@ -178,42 +178,6 @@ pipeline {
           }
         }
 
-        // The same tests on the tree walker, the second engine.
-        stage('test-tree') {
-          agent {
-            kubernetes {
-              defaultContainer 'ci'
-              yaml buildPod('risa', '3', '6')
-            }
-          }
-          environment {
-            CARGO_TARGET_DIR = '/cache/target-test-tree'
-            METOREX_ENGINE = 'tree'
-          }
-          steps {
-            sh 'cargo build'
-            sh 'cargo test'
-          }
-        }
-
-        stage('ruby-spec-tree') {
-          agent {
-            kubernetes {
-              defaultContainer 'ci'
-              yaml buildPod('risa', '4', '8')
-            }
-          }
-          environment {
-            CARGO_TARGET_DIR = '/cache/target-spec-tree'
-            JOBS = '10'
-            METOREX_ENGINE = 'tree'
-          }
-          steps {
-            sh 'cargo build'
-            sh 'scripts/run_ruby_spec.sh'
-          }
-        }
-
         stage('rspec-suites') {
           agent {
             kubernetes {

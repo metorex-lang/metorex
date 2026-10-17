@@ -1,5 +1,4 @@
-// The literals and names the tree walker and the bytecode runner read the
-// same way.
+// The literals and names the bytecode runner reads.
 
 use crate::error::MetorexError;
 use crate::lexer::Position;

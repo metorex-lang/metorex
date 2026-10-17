@@ -139,26 +139,6 @@ impl VirtualMachine {
         }
     }
 
-    /// Count a statement evaluated in place rather than through
-    /// `execute_statement`, unless it sits on the line of the `if` or `case`
-    /// holding it, which Ruby counts once.
-    pub(crate) fn coverage_count_inline(&mut self, statement: &Statement, enclosing_line: usize) {
-        let line = statement.position().line;
-        if self.coverage.is_some() && line != enclosing_line {
-            self.coverage_count(line);
-        }
-    }
-
-    /// Count the line of a `case` arm written as one expression, which runs
-    /// without passing through a statement of its own. An arm of several
-    /// statements counts them as they run.
-    pub(crate) fn coverage_count_arm(&mut self, body: &Expression) {
-        if self.coverage.is_none() || matches!(body, Expression::BeginRescue { .. }) {
-            return;
-        }
-        self.coverage_count(body.position().line);
-    }
-
     /// Count one run of arm `arm` of the branch site written at `position` in
     /// the file being run now.
     pub(crate) fn coverage_branch(&mut self, position: Position, arm: usize) {

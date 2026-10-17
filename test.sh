@@ -38,8 +38,6 @@ run_mac() {
   step "mac: build" cargo build
   step "mac: tests" with_engine_report cargo test
   step "mac: ruby spec" with_engine_report scripts/run_ruby_spec.sh
-  step "mac: tests on the tree walker" env METOREX_ENGINE=tree cargo test
-  step "mac: ruby spec on the tree walker" env METOREX_ENGINE=tree scripts/run_ruby_spec.sh
   step "mac: tests are in tests/" scripts/misplaced_tests.sh
 }
 
@@ -78,10 +76,6 @@ run_linux() {
   step "linux/$arch: build" scripts/linux.sh cargo build --verbose
   step "linux/$arch: tests" scripts/linux.sh cargo test --verbose
   step "linux/$arch: ruby spec" scripts/linux.sh bash -c 'cargo build && scripts/run_ruby_spec.sh'
-  step "linux/$arch: tests on the tree walker" scripts/linux.sh \
-    env METOREX_ENGINE=tree cargo test --verbose
-  step "linux/$arch: ruby spec on the tree walker" scripts/linux.sh \
-    env METOREX_ENGINE=tree bash -c 'cargo build && scripts/run_ruby_spec.sh'
   if [ "$arch" = "$(host_arch)" ]; then
     # One link per CPU runs the container out of memory once there are more
     # instrumented test binaries than its memory holds at once, so the build

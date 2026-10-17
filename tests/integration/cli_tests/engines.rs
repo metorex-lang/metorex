@@ -1,47 +1,10 @@
-// What METOREX_ENGINE chooses.
+// The engine report, disassembly, and what a body too deep to compile does.
 
 use super::metorex_cmd;
 
-/// Run `cli_flags/counted_calls.rb` with `METOREX_ENGINE` set to `engine`.
-fn run_on(engine: &str) -> std::process::Output {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let path = format!("{manifest_dir}/tests/_examples/cli_flags/counted_calls.rb");
-    metorex_cmd()
-        .current_dir(manifest_dir)
-        .env("METOREX_ENGINE", engine)
-        .arg(path)
-        .output()
-        .expect("failed to execute")
-}
-
-#[test]
-fn the_tree_engine_prints_the_programs_output() {
-    let output = run_on("tree");
-    assert!(output.status.success());
-    assert_eq!(String::from_utf8(output.stdout).unwrap(), "250\n");
-}
-
-#[test]
-fn the_bytecode_engine_prints_the_programs_output() {
-    let output = run_on("bytecode");
-    assert!(output.status.success());
-    assert_eq!(String::from_utf8(output.stdout).unwrap(), "250\n");
-}
-
-#[test]
-fn an_unknown_engine_ends_the_run_naming_the_two_allowed() {
-    let output = run_on("jit");
-    assert!(!output.status.success());
-    assert_eq!(String::from_utf8(output.stdout).unwrap(), "");
-    assert_eq!(
-        String::from_utf8(output.stderr).unwrap(),
-        "metorex: METOREX_ENGINE must be tree or bytecode, not \"jit\"\n"
-    );
-}
-
-/// What `METOREX_ENGINE_REPORT` wrote for `cli_flags/<example>` run on the
-/// bytecode engine: the units on bytecode, the units on the tree walker,
-/// and the count of each node type a unit fell back for.
+/// What `METOREX_ENGINE_REPORT` wrote for `cli_flags/<example>`: the units
+/// compiled, the units refused, and the count of each node type a unit was
+/// refused for.
 fn engine_report(example: &str) -> (u64, u64, std::collections::HashMap<String, u64>) {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let report_path = std::env::temp_dir().join(format!(
@@ -50,7 +13,6 @@ fn engine_report(example: &str) -> (u64, u64, std::collections::HashMap<String, 
     ));
     let output = metorex_cmd()
         .current_dir(manifest_dir)
-        .env("METOREX_ENGINE", "bytecode")
         .env("METOREX_ENGINE_REPORT", &report_path)
         .arg(format!(
             "{manifest_dir}/tests/_examples/cli_flags/{example}"
@@ -67,9 +29,9 @@ fn engine_report(example: &str) -> (u64, u64, std::collections::HashMap<String, 
             .and_then(|count| count.trim().parse().ok())
             .unwrap_or_else(|| panic!("no {label:?} line in:\n{report}"))
     };
-    let fallbacks = report
+    let refusals = report
         .lines()
-        .skip_while(|line| *line != "fallbacks:")
+        .skip_while(|line| *line != "refusals:")
         .skip(1)
         .filter_map(|line| {
             let (count, node) = line.trim().split_once(' ')?;
@@ -77,24 +39,24 @@ fn engine_report(example: &str) -> (u64, u64, std::collections::HashMap<String, 
         })
         .collect();
     (
-        count_after("units on bytecode:"),
-        count_after("units on the tree walker:"),
-        fallbacks,
+        count_after("units compiled:"),
+        count_after("units refused:"),
+        refusals,
     )
 }
 
 #[test]
-fn the_engine_report_counts_compiled_methods_and_a_file_that_falls_back() {
-    let (bytecode_before, tree_before, fallbacks_before) =
+fn the_engine_report_counts_compiled_methods_and_a_refused_file() {
+    let (compiled_before, refused_before, refusals_before) =
         engine_report("engine_units_uncalled.rb");
-    let (bytecode_after, tree_after, fallbacks_after) = engine_report("engine_units.rb");
+    let (compiled_after, refused_after, refusals_after) = engine_report("engine_units.rb");
     // The two methods and the method of the prelude `load` runs.
-    assert_eq!(bytecode_after - bytecode_before, 3);
-    assert_eq!(tree_after - tree_before, 1);
-    let sums = |fallbacks: &std::collections::HashMap<String, u64>| {
-        fallbacks.get("BinaryOp").copied().unwrap_or(0)
+    assert_eq!(compiled_after - compiled_before, 3);
+    assert_eq!(refused_after - refused_before, 1);
+    let powers = |refusals: &std::collections::HashMap<String, u64>| {
+        refusals.get("BinaryOp").copied().unwrap_or(0)
     };
-    assert_eq!(sums(&fallbacks_after) - sums(&fallbacks_before), 1);
+    assert_eq!(powers(&refusals_after) - powers(&refusals_before), 1);
 }
 
 #[test]
@@ -105,7 +67,6 @@ fn an_engine_report_named_by_a_directory_is_written_there_under_the_process_id()
     std::fs::create_dir_all(&directory).unwrap();
     let child = metorex_cmd()
         .current_dir(manifest_dir)
-        .env("METOREX_ENGINE", "bytecode")
         .env("METOREX_ENGINE_REPORT", &directory)
         .arg(format!(
             "{manifest_dir}/tests/_examples/cli_flags/engine_units.rb"
@@ -117,16 +78,15 @@ fn an_engine_report_named_by_a_directory_is_written_there_under_the_process_id()
     let written = std::fs::read_to_string(directory.join(format!("metorex-{process_id}.txt")))
         .expect("no report written under the process id");
     std::fs::remove_dir_all(&directory).unwrap();
-    assert!(written.starts_with("units on bytecode: "));
+    assert!(written.starts_with("units compiled: "));
 }
 
 /// What `disassembly/<example>` wrote to standard error and standard output
-/// run with `METOREX_DISASM` set to `wanted` on `engine`.
-fn disassembly_of(example: &str, engine: &str, wanted: &str) -> (String, String) {
+/// run with `METOREX_DISASM` set to `wanted`.
+fn disassembly_of(example: &str, wanted: &str) -> (String, String) {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let output = metorex_cmd()
         .current_dir(manifest_dir)
-        .env("METOREX_ENGINE", engine)
         .env("METOREX_DISASM", wanted)
         .arg(format!("tests/_examples/disassembly/{example}"))
         .output()
@@ -140,7 +100,7 @@ fn disassembly_of(example: &str, engine: &str, wanted: &str) -> (String, String)
 
 #[test]
 fn disassembly_writes_each_unit_under_its_source_lines_to_standard_error() {
-    let (written, printed) = disassembly_of("locals_and_calls.rb", "bytecode", "1");
+    let (written, printed) = disassembly_of("locals_and_calls.rb", "1");
     assert_eq!(printed, "");
     assert_eq!(
         written,
@@ -180,40 +140,14 @@ fn disassembly_writes_each_unit_under_its_source_lines_to_standard_error() {
 #[test]
 fn disassembly_is_written_only_when_asked_for() {
     assert_eq!(
-        disassembly_of("locals_and_calls.rb", "bytecode", "0"),
-        (String::new(), String::new())
-    );
-}
-
-#[test]
-fn a_program_runs_on_bytecode_when_no_engine_is_chosen() {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let output = metorex_cmd()
-        .current_dir(manifest_dir)
-        .env_remove("METOREX_ENGINE")
-        .env("METOREX_DISASM", "1")
-        .arg("tests/_examples/disassembly/locals_and_calls.rb")
-        .output()
-        .expect("failed to execute");
-    assert!(output.status.success());
-    assert!(
-        String::from_utf8(output.stderr)
-            .unwrap()
-            .starts_with("== tests/_examples/disassembly/locals_and_calls.rb\n")
-    );
-}
-
-#[test]
-fn the_tree_walker_compiles_nothing_to_disassemble() {
-    assert_eq!(
-        disassembly_of("locals_and_calls.rb", "tree", "1"),
+        disassembly_of("locals_and_calls.rb", "0"),
         (String::new(), String::new())
     );
 }
 
 #[test]
 fn code_handed_to_eval_instance_eval_class_eval_and_a_binding_is_compiled_as_a_unit_of_its_own() {
-    let (written, _) = disassembly_of("code_from_strings.rb", "bytecode", "1");
+    let (written, _) = disassembly_of("code_from_strings.rb", "1");
     let evaluated: Vec<&str> = written
         .lines()
         .filter(|line| line.starts_with("== (eval"))
@@ -226,5 +160,21 @@ fn code_handed_to_eval_instance_eval_class_eval_and_a_binding_is_compiled_as_a_u
             "== (eval at tests/_examples/disassembly/code_from_strings.rb:5)",
             "== (eval at tests/_examples/disassembly/code_from_strings.rb:6)",
         ]
+    );
+}
+
+#[test]
+fn a_body_nested_deeper_than_an_instruction_has_registers_for_raises_system_stack_error() {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let output = metorex_cmd()
+        .current_dir(manifest_dir)
+        .arg("tests/_examples/cli_flags/engine_units_refused.rb")
+        .output()
+        .expect("failed to execute");
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8(output.stderr)
+            .unwrap()
+            .contains("stack level too deep (SystemStackError)")
     );
 }

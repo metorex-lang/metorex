@@ -62,16 +62,6 @@ impl VirtualMachine {
                                 home_frame: block.home_frame,
                             });
                         }
-                        crate::vm::ControlFlow::Exception {
-                            exception,
-                            position,
-                        } => {
-                            return Err(MetorexError::UncaughtException {
-                                exception: exception.clone(),
-                                location: crate::vm::utils::position_to_location(position),
-                                message: crate::vm::utils::format_exception(&exception),
-                            });
-                        }
                     }
                 }
                 Ok(Some(Object::Int(*n)))
@@ -273,16 +263,6 @@ impl VirtualMachine {
                                 value,
                                 location: crate::vm::utils::position_to_location(position),
                                 home_frame: block.home_frame,
-                            });
-                        }
-                        crate::vm::ControlFlow::Exception {
-                            exception,
-                            position,
-                        } => {
-                            return Err(MetorexError::UncaughtException {
-                                exception: exception.clone(),
-                                location: crate::vm::utils::position_to_location(position),
-                                message: crate::vm::utils::format_exception(&exception),
                             });
                         }
                     }

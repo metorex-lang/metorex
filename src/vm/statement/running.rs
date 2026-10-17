@@ -33,7 +33,7 @@ impl VirtualMachine {
         Ok(())
     }
 
-    /// What happens before each statement runs, on either engine: a `:line`
+    /// What happens before each statement runs: a `:line`
     /// event for whatever is tracing, which costs a check on an empty list
     /// when nothing is, then signals, a collection when one is due, the
     /// turn passed to another thread when this one's time is up, and the
@@ -58,15 +58,12 @@ impl VirtualMachine {
         Ok(())
     }
 
-    /// Evaluate a statement and produce control-flow information for the caller.
+    /// Run a statement alone, compiled, answering how it ended.
     pub(crate) fn execute_statement(
         &mut self,
         statement: &Statement,
     ) -> Result<ControlFlow, MetorexError> {
-        if crate::vm::counters::enabled() {
-            crate::vm::counters::count_statement(statement.kind_name());
-        }
-        let flow = self.execute_statement_body(statement)?;
+        let flow = self.run_statement(statement)?;
         // A local assigned inside a branch or a loop is a local from there
         // on whether or not the assignment ran, so a block written later
         // closes over it.
@@ -86,271 +83,6 @@ impl VirtualMachine {
             }
         }
         Ok(flow)
-    }
-
-    fn execute_statement_body(
-        &mut self,
-        statement: &Statement,
-    ) -> Result<ControlFlow, MetorexError> {
-        // A `begin` is not a line event: the statements inside it are.
-        self.begin_statement(
-            statement.position(),
-            !matches!(statement, Statement::Begin { .. }),
-        )?;
-        match statement {
-            Statement::Expression {
-                expression,
-                position: _,
-            } => {
-                let result = self.evaluate_expression(expression)?;
-
-                // The value travels with the flow, so the last expression in
-                // an `if` branch is what the `if` answers.
-                Ok(ControlFlow::Value(result))
-            }
-            Statement::Assignment {
-                target,
-                value,
-                position: _,
-            } => {
-                // Ruby's parser introduces the local where the assignment is
-                // written, ahead of the value, so a block on the right-hand
-                // side closes over the name being assigned. That is what
-                // lets `walk = -> { walk.call }` call itself.
-                if let crate::ast::Expression::Identifier { name, .. } = target {
-                    self.environment_mut().unhoist(name);
-                }
-                let assigned = self.evaluate_assignment(target, value);
-                if assigned.is_err() {
-                    self.note_assignment_spot(&assigned, target);
-                }
-                let evaluated = assigned?;
-                // An assignment answers the value it assigned, so a block or
-                // an `if` branch ending in one has that as its value.
-                Ok(ControlFlow::Value(evaluated))
-            }
-            Statement::MultipleAssignment {
-                targets,
-                values,
-                position,
-            } => {
-                // Ruby evaluates the receivers and subscripts the targets
-                // name, left to right, before anything on the right.
-                let prepared = self.prepare_targets(targets)?;
-                // One value on the right is spread across the targets when it
-                // is an Array or converts to one with `to_ary`, and otherwise
-                // reaches the first target alone. Several values, or a
-                // splat, are gathered the way an Array literal gathers them.
-                let lone_value = match values.as_slice() {
-                    [single] if !matches!(single, Expression::Splat { .. }) => Some(single),
-                    _ => None,
-                };
-                let (answer, source): (Object, Vec<Object>) = match lone_value {
-                    Some(single) => {
-                        let single = self.evaluate_expression(single)?;
-                        let spread = self
-                            .block_argument_spread(&single, *position)?
-                            .unwrap_or_else(|| vec![single.clone()]);
-                        (single, spread)
-                    }
-                    None => {
-                        let gathered = self.evaluate_array_literal(values)?;
-                        let each = match gathered.view() {
-                            View::Array(elements) => elements.borrow().clone(),
-                            _ => vec![gathered.clone()],
-                        };
-                        (gathered, each)
-                    }
-                };
-                self.spread_into_prepared(&prepared, &source)?;
-                // The assignment answers the right-hand side as it was
-                // written, which is what `(a, b = 1, 2)` reads back as.
-                Ok(ControlFlow::Value(answer))
-            }
-            Statement::Return { value, position } => {
-                // A `return` written at the top level ends the file, and the
-                // value written after it goes nowhere, which Ruby says so.
-                if value.is_some() {
-                    self.warn_top_level_return_value(*position);
-                }
-                let result = match value {
-                    Some(expr) => self.evaluate_expression(expr)?,
-                    None => Object::Nil,
-                };
-                Ok(ControlFlow::Return {
-                    value: result,
-                    position: *position,
-                })
-            }
-            Statement::Break { value, position } => {
-                let resolved = match value {
-                    Some(expr) => self.evaluate_expression(expr)?,
-                    None => Object::Nil,
-                };
-                Ok(ControlFlow::Break {
-                    value: resolved,
-                    position: *position,
-                })
-            }
-            Statement::Continue { value, position } => {
-                let resolved = match value {
-                    Some(expr) => self.evaluate_expression(expr)?,
-                    None => Object::Nil,
-                };
-                Ok(ControlFlow::Continue {
-                    value: resolved,
-                    position: *position,
-                })
-            }
-            // `retry` inside a rescue body runs the begin body again, which
-            // the begin handler does when it sees this.
-            Statement::Retry { position } => Ok(ControlFlow::Retry {
-                position: *position,
-            }),
-            Statement::Redo { position } => Ok(ControlFlow::Redo {
-                position: *position,
-            }),
-            Statement::Block {
-                statements,
-                position: _,
-            } => self.execute_block(statements),
-            Statement::If {
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-                position,
-            } => self.execute_if(
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-                *position,
-            ),
-            Statement::Unless {
-                condition,
-                then_branch,
-                else_branch,
-                position,
-            } => self.execute_unless(condition, then_branch, else_branch, *position),
-            Statement::While {
-                condition,
-                body,
-                position,
-            } => self.inside_loop(|vm| vm.execute_while(condition, body, *position)),
-            Statement::DoWhile {
-                condition,
-                body,
-                position,
-            } => self.inside_loop(|vm| vm.execute_do_while(condition, body, *position)),
-            Statement::For {
-                variable,
-                iterable,
-                body,
-                position,
-            } => self.inside_loop(|vm| vm.execute_for(variable, iterable, body, *position)),
-            // A `BEGIN` body already ran before the rest of its code unit,
-            // so reaching it where it was written does nothing.
-            Statement::BeginBlock { .. } => Ok(ControlFlow::Next),
-            Statement::DeclareLocals { names, .. } => {
-                for name in names {
-                    if self.environment().get(name).is_none() {
-                        self.environment_mut().define(name.clone(), Object::Nil);
-                    } else {
-                        // A `for` loop names what its body binds so the scope
-                        // holding the loop still reads it afterwards, which
-                        // means the block the loop runs closes over the name.
-                        self.environment_mut().unhoist(name);
-                    }
-                }
-                Ok(ControlFlow::Next)
-            }
-            Statement::ClassDef {
-                name,
-                namespace,
-                superclass,
-                superclass_expression,
-                body,
-                position,
-            } => self.execute_class_def(
-                name,
-                namespace.as_deref(),
-                superclass.as_deref(),
-                superclass_expression.as_deref(),
-                body,
-                *position,
-            ),
-            Statement::MethodDef { .. } => self.run_definition(statement),
-            Statement::Begin {
-                body,
-                rescue_clauses,
-                else_clause,
-                ensure_block,
-                position,
-            } => self.execute_begin(body, rescue_clauses, else_clause, ensure_block, *position),
-            Statement::Raise {
-                exception,
-                position,
-            } => self.execute_raise(exception, *position),
-            Statement::Match {
-                expression,
-                cases,
-                position,
-            } => self.execute_match(expression, cases, *position),
-            Statement::CaseIn {
-                expression,
-                cases,
-                position,
-            } => self.execute_case_in(expression, cases, *position),
-            Statement::FunctionDef {
-                name,
-                parameters,
-                body,
-                position,
-                singleton_class,
-                end_position,
-            } => self.execute_function_def(
-                name,
-                parameters,
-                body,
-                *position,
-                singleton_class.as_deref(),
-                end_position.line,
-            ),
-            // Outside a class body, as in a block a class body runs, the
-            // statement is the call to the method of that name on `self`.
-            Statement::AttrReader {
-                attributes,
-                position,
-            } => self.call_attribute_method("attr_reader", attributes, *position),
-            Statement::AttrWriter {
-                attributes,
-                position,
-            } => self.call_attribute_method("attr_writer", attributes, *position),
-            Statement::AttrAccessor {
-                attributes,
-                position,
-            } => self.call_attribute_method("attr_accessor", attributes, *position),
-            Statement::ModuleDef {
-                name,
-                namespace,
-                body,
-                position,
-            } => self.execute_module_def(name, namespace.as_deref(), body, *position),
-            Statement::Include {
-                module_name,
-                position,
-            } => self.execute_include(module_name, *position),
-            Statement::Extend {
-                module_name,
-                position,
-            } => self.execute_extend(module_name, *position),
-            Statement::Alias {
-                new_name,
-                old_name,
-                position,
-            } => self.execute_alias(new_name, old_name, *position),
-        }
     }
 
     /// Define what a `def`, `alias`, `include`, or `extend` statement names,
@@ -436,18 +168,6 @@ impl VirtualMachine {
         }
     }
 
-    /// Run a loop, during which a `break` ends the loop rather than
-    /// returning from the call a surrounding block was attached to.
-    fn inside_loop(
-        &mut self,
-        run: impl FnOnce(&mut Self) -> Result<ControlFlow, MetorexError>,
-    ) -> Result<ControlFlow, MetorexError> {
-        self.running_block_breaks.push(None);
-        let result = run(self);
-        self.running_block_breaks.pop();
-        result
-    }
-
     /// A `return` written at the top level ends the file, and the value
     /// written after it goes nowhere, which Ruby says so.
     pub(crate) fn warn_top_level_return_value(&mut self, position: crate::lexer::Position) {
@@ -496,54 +216,5 @@ impl VirtualMachine {
             format!("warning: already initialized constant {}::{}", named, name)
         };
         self.emit_warning_to_stderr(&message, position);
-    }
-
-    pub(crate) fn execute_block(
-        &mut self,
-        statements: &[Statement],
-    ) -> Result<ControlFlow, MetorexError> {
-        self.environment_mut().push_scope();
-        let result = self.execute_statements_internal(statements);
-        self.environment_mut().pop_scope();
-        result
-    }
-
-    /// Core statement execution loop used by program and block execution.
-    pub(crate) fn execute_statements_internal(
-        &mut self,
-        statements: &[Statement],
-    ) -> Result<ControlFlow, MetorexError> {
-        self.run_restartable(|vm, start| {
-            let mut last = ControlFlow::Next;
-            for (index, statement) in statements.iter().enumerate().skip(start) {
-                vm.mark_statement(index);
-                match vm.execute_statement(statement)? {
-                    ControlFlow::Next => last = ControlFlow::Next,
-                    // A statement that produced a value does not end the run;
-                    // the last one to produce one is what the group answers.
-                    ControlFlow::Value(value) => last = ControlFlow::Value(value),
-                    flow => return Ok(flow),
-                }
-            }
-            Ok(last)
-        })
-    }
-}
-
-impl VirtualMachine {
-    /// `attr_accessor name` and its siblings written where no class body
-    /// reads them, sent to `self` the way any private call is.
-    #[inline(never)]
-    fn call_attribute_method(
-        &mut self,
-        method: &str,
-        attributes: &[Expression],
-        position: crate::lexer::Position,
-    ) -> Result<ControlFlow, MetorexError> {
-        let mut arguments = vec![Object::symbol(method.to_string())];
-        arguments.extend(self.attribute_values(attributes, position)?);
-        let receiver = self.environment().get("self").unwrap_or(Object::Nil);
-        let answer = self.send_to_object(receiver, "__send__", arguments, position)?;
-        Ok(ControlFlow::Value(answer))
     }
 }

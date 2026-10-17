@@ -483,16 +483,17 @@ fn test_method_argument_count_error_has_location() {
 }
 
 #[test]
-fn test_callable_not_callable_error() {
+fn test_calling_an_integer_is_an_undefined_method_error() {
     let mut vm = VirtualMachine::new();
 
-    // Try to call an integer as if it were a function
+    // 42.()
     let stmt = Statement::Expression {
-        expression: Expression::Call {
-            callee: Box::new(Expression::IntLiteral {
+        expression: Expression::MethodCall {
+            receiver: Box::new(Expression::IntLiteral {
                 value: 42,
                 position: pos_at(35, 1),
             }),
+            method: "call".to_string(),
             arguments: vec![],
             trailing_block: None,
             position: pos_at(35, 1),
@@ -504,7 +505,7 @@ fn test_callable_not_callable_error() {
     assert!(result.is_err());
 
     let error = result.unwrap_err();
-    assert!(error.to_string().contains("not callable"));
+    assert!(error.to_string().contains("undefined method 'call'"));
     assert!(error.to_string().contains("35:1"));
 }
 

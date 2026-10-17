@@ -27,9 +27,4 @@ pub(crate) enum ControlFlow {
     /// A retry statement was encountered inside a rescue body — run the
     /// begin body it belongs to again.
     Retry { position: Position },
-    /// An exception was raised and is propagating.
-    Exception {
-        exception: Object,
-        position: Position,
-    },
 }

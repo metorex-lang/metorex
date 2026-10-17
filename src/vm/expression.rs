@@ -6,8 +6,7 @@
 //! - Dictionary literals
 //! - Index operations (array/dictionary access)
 
-use crate::ast::node::ElsifBranch;
-use crate::ast::{Expression, InterpolationPart, Statement};
+use crate::ast::Expression;
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
@@ -17,30 +16,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use super::core::VirtualMachine;
-use super::utils::{format_exception, is_truthy, position_to_location};
+use super::utils::position_to_location;
 
 impl VirtualMachine {
-    /// The String an interpolated literal makes. A piece holding anything
-    /// outside ASCII carries its encoding out to the whole, which is what
-    /// keeps a byte spliced into an ASCII literal a byte.
-    pub(crate) fn evaluate_interpolated_object(
-        &mut self,
-        parts: &[InterpolationPart],
-    ) -> Result<Object, MetorexError> {
-        let mut interpolation = Interpolation::default();
-        for part in parts {
-            match part {
-                InterpolationPart::Text(text) => interpolation.push_text(text),
-                InterpolationPart::Expression(expr) => {
-                    let value = self.evaluate_expression(expr)?;
-                    let written = self.interpolated_text(&value, expr.position())?;
-                    interpolation.push_value(&value, &written, expr.position())?;
-                }
-            }
-        }
-        Ok(interpolation.finish(self))
-    }
-
     /// The text a value puts in an interpolation's hole, which is what its
     /// `to_s` answers. Interpolation uses #to_s semantics: a Symbol renders
     /// as its bare name, not the `:name` inspect form.
@@ -214,29 +192,6 @@ impl Interpolation {
 }
 
 impl VirtualMachine {
-    /// Evaluate array literal expressions.
-    pub(crate) fn evaluate_array_literal(
-        &mut self,
-        elements: &[Expression],
-    ) -> Result<Object, MetorexError> {
-        let mut evaluated = Vec::with_capacity(elements.len());
-        for element in elements {
-            // `[first, *rest]` splices the splatted array in place rather
-            // than nesting it as one element.
-            if let Expression::Splat {
-                expression,
-                position: splat_at,
-            } = element
-            {
-                let spread = self.evaluate_expression(expression)?;
-                evaluated.extend(self.splat_elements(spread, *splat_at)?);
-                continue;
-            }
-            evaluated.push(self.evaluate_expression(element)?);
-        }
-        Ok(Object::Array(Rc::new(RefCell::new(evaluated))))
-    }
-
     /// The values `*value` spreads into: an Array's elements, nothing for
     /// nil, an Array subclass's elements, what `to_a` answers, or the value
     /// alone.
@@ -293,41 +248,6 @@ impl VirtualMachine {
                 ))
             }
         }
-    }
-
-    /// Evaluate dictionary literal expressions.
-    pub(crate) fn evaluate_dictionary_literal(
-        &mut self,
-        entries: &[(Expression, Expression)],
-    ) -> Result<Object, MetorexError> {
-        // Every key and value is evaluated before any key's `hash` is
-        // called, as in CRuby.
-        let entries = flattened_entries(entries);
-        let mut evaluated = Vec::with_capacity(entries.len());
-        for (key_expr, value_expr) in &entries {
-            // `{**held}` copies every pair `held` carries into the hash.
-            if let Expression::KeywordSplat { expression, .. } = key_expr {
-                evaluated.push((self.evaluate_expression(expression)?, Object::Nil));
-                continue;
-            }
-            let key_value = self.evaluate_expression(key_expr)?;
-            evaluated.push((key_value, self.evaluate_expression(value_expr)?));
-        }
-        let mut literal = HashLiteral::default();
-        for ((key_expr, value_expr), (key_value, value)) in entries.iter().zip(evaluated) {
-            if let Expression::KeywordSplat { position, .. } = key_expr {
-                literal.spread(self, key_value, *position)?;
-                continue;
-            }
-            let key = literal.key(self, key_value, key_expr.position())?;
-            let written = WrittenPair {
-                key_position: key_expr.position(),
-                value_line: value_expr.position().line,
-                literal_key: is_literal_key(key_expr),
-            };
-            literal.store(self, key, value, &written)?;
-        }
-        Ok(literal.finish())
     }
 
     /// The Hash a `**value` spreads: the value itself, what its `to_hash`
@@ -780,76 +700,6 @@ impl VirtualMachine {
         }
     }
 
-    /// Evaluate an if expression, returning the value of the matching branch.
-    /// Whether a condition holds. A range written where a condition goes is
-    /// not a range at all: it turns on when its first side holds and stays on
-    /// until its second side does, which is what Ruby calls a flip-flop.
-    pub(crate) fn evaluate_condition(
-        &mut self,
-        condition: &Expression,
-    ) -> Result<Object, MetorexError> {
-        // `a..b or c..d` is two flip-flops, so each side of a conjunction is
-        // read as a condition of its own.
-        if let Expression::BinaryOp {
-            op: op @ (crate::ast::BinaryOp::Or | crate::ast::BinaryOp::And),
-            left,
-            right,
-            ..
-        } = condition
-        {
-            let held = is_truthy(&self.evaluate_condition(left)?);
-            let wants_more = match op {
-                crate::ast::BinaryOp::Or => !held,
-                _ => held,
-            };
-            if !wants_more {
-                return Ok(Object::Bool(held));
-            }
-            let other = is_truthy(&self.evaluate_condition(right)?);
-            return Ok(Object::Bool(other));
-        }
-        // A pattern written on its own as a condition matches against the
-        // last line read. The parser warned about it where it was written.
-        if let Expression::RegexLiteral { position, .. } = condition {
-            let pattern = self.evaluate_expression(condition)?;
-            let line = self.globals().get("_").unwrap_or(Object::Nil);
-            let matched = self.send_to_object(pattern, "=~", vec![line], *position)?;
-            return Ok(Object::Bool(!matches!(matched.view(), View::Nil)));
-        }
-        let Expression::Range {
-            start,
-            end,
-            exclusive,
-            position,
-        } = condition
-        else {
-            return self.evaluate_expression(condition);
-        };
-        let integer_sides = [start.as_ref(), end.as_ref()]
-            .into_iter()
-            .filter(|side| matches!(side, Expression::IntLiteral { .. }))
-            .count();
-        let running = self.flip_flop_running(*position, integer_sides);
-        if !running {
-            let opens = is_truthy(&self.flip_flop_side(start, *position)?);
-            if !opens {
-                return Ok(Object::Bool(false));
-            }
-            self.set_flip_flop(*position, true);
-            // `..` reads its second side the moment the first one holds, so a
-            // range whose sides hold together is on for that one turn alone.
-            // `...` waits for the next turn.
-            if !exclusive && is_truthy(&self.flip_flop_side(end, *position)?) {
-                self.set_flip_flop(*position, false);
-            }
-            return Ok(Object::Bool(true));
-        }
-        if is_truthy(&self.flip_flop_side(end, *position)?) {
-            self.set_flip_flop(*position, false);
-        }
-        Ok(Object::Bool(true))
-    }
-
     /// The place a flip-flop's state is kept: the flip-flop written at this
     /// place in this piece of code. Two `eval` calls over the same text are
     /// two pieces, so the name the code was read under is part of the key.
@@ -884,152 +734,6 @@ impl VirtualMachine {
     pub(crate) fn set_flip_flop(&mut self, position: Position, on: bool) {
         let site = self.flip_flop_site(position);
         self.flip_flops.insert(site, on);
-    }
-
-    /// Whether one side of a flip-flop holds. A number stands for the line
-    /// the last read left off at, which is what `$.` reports.
-    fn flip_flop_side(
-        &mut self,
-        side: &Expression,
-        position: crate::lexer::Position,
-    ) -> Result<Object, MetorexError> {
-        let Expression::IntLiteral { value, .. } = side else {
-            return self.evaluate_expression(side);
-        };
-        let held = self.globals().get(".").unwrap_or(Object::Int(0));
-        let _ = position;
-        Ok(Object::Bool(
-            matches!(held.view(), View::Int(read) if read == *value),
-        ))
-    }
-
-    pub(crate) fn evaluate_if_expression(
-        &mut self,
-        condition: &Expression,
-        then_branch: &[Statement],
-        elsif_branches: &[ElsifBranch],
-        else_branch: &Option<Vec<Statement>>,
-        position: Position,
-    ) -> Result<Object, MetorexError> {
-        if is_truthy(&self.evaluate_condition(condition)?) {
-            self.coverage_branch(position, 0);
-            return self.evaluate_branch_value(then_branch, condition.position().line);
-        }
-        for (index, elsif) in elsif_branches.iter().enumerate() {
-            // Ruby counts an `elsif` line each time its condition is tested.
-            if self.coverage.is_some() {
-                self.coverage_count(elsif.position.line);
-            }
-            if is_truthy(&self.evaluate_condition(&elsif.condition)?) {
-                self.coverage_branch(position, index + 1);
-                return self.evaluate_branch_value(&elsif.body, elsif.position.line);
-            }
-        }
-        self.coverage_branch(position, elsif_branches.len() + 1);
-        if let Some(else_stmts) = else_branch {
-            return self.evaluate_branch_value(else_stmts, condition.position().line);
-        }
-        Ok(Object::Nil)
-    }
-
-    /// Evaluate an unless expression, returning the value of the matching branch.
-    pub(crate) fn evaluate_unless_expression(
-        &mut self,
-        condition: &Expression,
-        then_branch: &[Statement],
-        else_branch: &Option<Vec<Statement>>,
-        position: Position,
-    ) -> Result<Object, MetorexError> {
-        if !is_truthy(&self.evaluate_condition(condition)?) {
-            self.coverage_branch(position, 0);
-            return self.evaluate_branch_value(then_branch, condition.position().line);
-        }
-        self.coverage_branch(position, 1);
-        if let Some(else_stmts) = else_branch {
-            return self.evaluate_branch_value(else_stmts, condition.position().line);
-        }
-        Ok(Object::Nil)
-    }
-
-    /// Execute a list of statements and return the value of the last expression statement.
-    fn evaluate_branch_value(
-        &mut self,
-        stmts: &[Statement],
-        enclosing_line: usize,
-    ) -> Result<Object, MetorexError> {
-        use super::ControlFlow;
-        self.environment_mut().push_scope();
-        let result = (|| -> Result<Object, MetorexError> {
-            let mut last_value = Object::Nil;
-            for stmt in stmts {
-                if let Statement::Expression { expression, .. } = stmt {
-                    self.coverage_count_inline(stmt, enclosing_line);
-                    last_value = self.evaluate_expression(expression)?;
-                    continue;
-                }
-                match self.execute_statement(stmt)? {
-                    ControlFlow::Next => {}
-                    ControlFlow::Value(v) => {
-                        last_value = v;
-                    }
-                    ControlFlow::Return { value, position } => {
-                        // Bubble out to enclosing method, not the if branch.
-                        return Err(MetorexError::NonLocalReturn {
-                            value,
-                            location: position_to_location(position),
-                            home_frame: self.current_method_frame,
-                        });
-                    }
-                    ControlFlow::Break { value, position } => {
-                        // `break` inside an if/elsif/else branch must
-                        // unwind to the enclosing iterator/block, not be
-                        // silently swallowed by the if-as-expression
-                        // wrapper. BlockBreak is the signal that
-                        // execute_block_callable / each-style natives
-                        // recognize.
-                        return Err(MetorexError::BlockBreak {
-                            value,
-                            location: position_to_location(position),
-                            home_frame: None,
-                        });
-                    }
-                    ControlFlow::Retry { position } => {
-                        // A `retry` written in a branch belongs to the begin
-                        // whose rescue body holds it, so it unwinds there.
-                        return Err(MetorexError::BlockRetry {
-                            location: position_to_location(position),
-                        });
-                    }
-                    ControlFlow::Redo { position } => {
-                        // Like `break` above, `redo` and `next` inside an
-                        // if-as-expression must unwind to the enclosing body
-                        // rather than be swallowed here.
-                        return Err(MetorexError::BlockRedo {
-                            location: position_to_location(position),
-                        });
-                    }
-                    ControlFlow::Continue { value, position } => {
-                        return Err(MetorexError::BlockNext {
-                            value,
-                            location: position_to_location(position),
-                        });
-                    }
-                    ControlFlow::Exception {
-                        exception,
-                        position,
-                    } => {
-                        return Err(MetorexError::UncaughtException {
-                            exception: exception.clone(),
-                            location: position_to_location(position),
-                            message: format_exception(&exception),
-                        });
-                    }
-                }
-            }
-            Ok(last_value)
-        })();
-        self.environment_mut().pop_scope();
-        result
     }
 }
 

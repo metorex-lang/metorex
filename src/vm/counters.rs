@@ -1,7 +1,5 @@
 //! What a run with `METOREX_COUNTERS=1` counts, and the report it prints to
-//! standard error at exit: each kind of statement and expression evaluated,
-//! each kind of instruction executed,
-//! each call by the method it was made from and the method it reached with
+//! standard error at exit: each kind of instruction executed, each call by the method it was made from and the method it reached with
 //! the heap allocations made while it ran, and every heap allocation.
 
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -20,8 +18,6 @@ const CALL_PATHS_REPORTED: usize = 100;
 
 #[derive(Default)]
 struct Counts {
-    statements: HashMap<&'static str, u64>,
-    expressions: HashMap<&'static str, u64>,
     instructions: HashMap<&'static str, u64>,
     calls: HashMap<String, CallCount>,
 }
@@ -105,16 +101,8 @@ fn with_counts(change: impl FnOnce(&mut Counts)) {
     }
 }
 
-pub fn count_statement(kind: &'static str) {
-    with_counts(|counts| *counts.statements.entry(kind).or_default() += 1);
-}
-
 pub fn count_instruction(kind: &'static str) {
     with_counts(|counts| *counts.instructions.entry(kind).or_default() += 1);
-}
-
-pub fn count_expression(kind: &'static str) {
-    with_counts(|counts| *counts.expressions.entry(kind).or_default() += 1);
 }
 
 /// How many heap allocations this run has made so far.
@@ -155,23 +143,12 @@ pub fn report(out: &mut dyn Write) {
         ALLOCATIONS.load(Ordering::Relaxed),
         ALLOCATED_BYTES.load(Ordering::Relaxed)
     ));
-    for (title, table) in [
-        ("statements", &counts.statements),
-        ("expressions", &counts.expressions),
-        ("instructions", &counts.instructions),
-    ] {
-        let total: u64 = table.values().sum();
-        let done = if title == "instructions" {
-            "executed"
-        } else {
-            "evaluated"
-        };
-        text.push_str(&format!("\n{title} {done}: {total}\n"));
-        let mut rows: Vec<_> = table.iter().collect();
-        rows.sort_by(|left, right| right.1.cmp(left.1).then(left.0.cmp(right.0)));
-        for (kind, count) in rows {
-            text.push_str(&format!("{count:>14}  {kind}\n"));
-        }
+    let total: u64 = counts.instructions.values().sum();
+    text.push_str(&format!("\ninstructions executed: {total}\n"));
+    let mut rows: Vec<_> = counts.instructions.iter().collect();
+    rows.sort_by(|left, right| right.1.cmp(left.1).then(left.0.cmp(right.0)));
+    for (kind, count) in rows {
+        text.push_str(&format!("{count:>14}  {kind}\n"));
     }
     let total: u64 = counts.calls.values().map(|held| held.calls).sum();
     text.push_str(&format!(

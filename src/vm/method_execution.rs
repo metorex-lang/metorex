@@ -4,10 +4,9 @@
 //! function bodies (without self), including scope management, parameter
 //! binding, and last-expression value capture.
 
-use super::errors::*;
 use super::utils::*;
-use super::{CallFrame, ControlFlow, VirtualMachine};
-use crate::ast::{Expression, Statement, collect_assigned_locals};
+use super::{CallFrame, VirtualMachine};
+use crate::ast::{Expression, Statement};
 use crate::callable::Callable;
 use crate::class::Class;
 use crate::error::{MetorexError, StackFrame};
@@ -693,10 +692,7 @@ impl VirtualMachine {
                     .define(block_param.clone(), Object::Nil);
             }
 
-            match self.run_compiled_method_body(&method.unit, method.body(), method.lambda_body) {
-                Some(ran) => ran,
-                None => self.execute_body_statements(method.body(), method.lambda_body),
-            }
+            self.run_compiled_method_body(&method.unit, method.body(), method.lambda_body)
         })();
 
         // An error the interpreter raised in the body takes its backtrace
@@ -815,10 +811,7 @@ impl VirtualMachine {
                     .define(block_param.clone(), Object::Nil);
             }
 
-            match self.run_compiled_method_body(&function.unit, function.body(), false) {
-                Some(ran) => ran,
-                None => self.execute_body_statements(function.body(), false),
-            }
+            self.run_compiled_method_body(&function.unit, function.body(), false)
         })();
 
         self.current_method_frame = saved_frame;
@@ -843,179 +836,6 @@ impl VirtualMachine {
             }
             other => other,
         }
-    }
-
-    /// Execute a list of statements as a method/function body, capturing the
-    /// value of the last expression. Shared between execute_method_body and
-    /// execute_function_body to eliminate duplication.
-    fn execute_body_statements(
-        &mut self,
-        body: &[Statement],
-        lambda_semantics: bool,
-    ) -> Result<Object, MetorexError> {
-        if !lambda_semantics {
-            return self.run_body_statements(body, false);
-        }
-        // A lambda-style body follows Proc-from-lambda control flow: `break`
-        // and `next` finish the body with a value, and `redo` restarts it.
-        loop {
-            match self.run_body_statements(body, true) {
-                Err(MetorexError::BlockRedo { .. }) => continue,
-                Err(MetorexError::BlockNext { value, .. })
-                | Err(MetorexError::BlockBreak { value, .. }) => return Ok(value),
-                other => return other,
-            }
-        }
-    }
-
-    /// The value a statement produces when it is the last one in a body.
-    /// Ruby's `if`, `unless`, `begin`, and assignment are expressions, so a
-    /// method or block ending in one evaluates to its value. Returns `None`
-    /// for statement kinds that carry no value of their own.
-    pub(crate) fn terminal_statement_value(
-        &mut self,
-        statement: &Statement,
-    ) -> Result<Option<Object>, MetorexError> {
-        let value = match statement {
-            Statement::Expression { expression, .. } => self.evaluate_expression(expression)?,
-            Statement::Assignment { value, target, .. } => {
-                self.evaluate_assignment(target, value)?
-            }
-            Statement::If {
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-                position,
-            } => self.evaluate_if_expression(
-                condition,
-                then_branch,
-                elsif_branches,
-                else_branch,
-                *position,
-            )?,
-            Statement::Unless {
-                condition,
-                then_branch,
-                else_branch,
-                position,
-            } => self.evaluate_unless_expression(condition, then_branch, else_branch, *position)?,
-            Statement::Begin {
-                body,
-                rescue_clauses,
-                else_clause,
-                ensure_block,
-                ..
-            } => self.evaluate_begin_value(
-                body,
-                rescue_clauses,
-                else_clause.as_deref(),
-                ensure_block.as_deref(),
-            )?,
-            _ => return Ok(None),
-        };
-        Ok(Some(value))
-    }
-
-    /// Run a method body once, without the lambda-style restart loop.
-    fn run_body_statements(
-        &mut self,
-        body: &[Statement],
-        lambda_semantics: bool,
-    ) -> Result<Object, MetorexError> {
-        // Pre-define every local syntactically assigned-to in this body as
-        // `nil`, matching Ruby's parser-level local hoisting. Without this,
-        // an `ensure`/`rescue` clause that reads a variable defined later in
-        // the body raises NameError when the body short-circuited via raise
-        // before the assignment actually ran.
-        for name in collect_assigned_locals(body) {
-            if self.environment().assignment_introduces_a_local(&name) {
-                self.environment_mut().hoist(name);
-            }
-        }
-
-        self.run_restartable(|vm, start| {
-            let mut last_value = Object::Nil;
-
-            for (i, statement) in body.iter().enumerate().skip(start) {
-                vm.mark_statement(i);
-                let is_last = i == body.len() - 1;
-
-                // The last statement is answered below rather than through
-                // `execute_statement`, and it is a `:line` event all the same.
-                if is_last
-                    && !vm.tracepoints.is_empty()
-                    && answers_its_own_value(statement)
-                    && !matches!(statement, Statement::Begin { .. })
-                {
-                    vm.fire_line_event(statement.position())?;
-                }
-                // If this is the last statement, capture its value
-                if is_last && let Some(value) = vm.terminal_statement_value(statement)? {
-                    // The last statement answered here rather than through
-                    // `execute_statement`, so it is counted here too.
-                    if vm.coverage.is_some() {
-                        vm.coverage_count(statement.position().line);
-                    }
-                    last_value = value;
-                    continue;
-                }
-
-                let is_last = i == body.len() - 1;
-                match vm.execute_statement(statement)? {
-                    ControlFlow::Next => continue,
-                    ControlFlow::Value(v) => {
-                        if is_last {
-                            last_value = v;
-                        }
-                        continue;
-                    }
-                    ControlFlow::Return { value, .. } => {
-                        if let Some(running) = vm.running_code.last_mut() {
-                            running.returned_explicitly = true;
-                        }
-                        return Ok(value);
-                    }
-                    ControlFlow::Exception {
-                        exception,
-                        position,
-                    } => {
-                        return Err(MetorexError::UncaughtException {
-                            exception: exception.clone(),
-                            location: position_to_location(position),
-                            message: format_exception(&exception),
-                        });
-                    }
-                    ControlFlow::Break { value, position } => {
-                        if lambda_semantics {
-                            return Ok(value);
-                        }
-                        return Err(loop_control_error("break", position));
-                    }
-                    ControlFlow::Retry { position } => {
-                        return Err(MetorexError::BlockRetry {
-                            location: position_to_location(position),
-                        });
-                    }
-                    ControlFlow::Redo { position } => {
-                        if lambda_semantics {
-                            return Err(MetorexError::BlockRedo {
-                                location: position_to_location(position),
-                            });
-                        }
-                        return Err(loop_control_error("redo", position));
-                    }
-                    ControlFlow::Continue { value, position } => {
-                        if lambda_semantics {
-                            return Ok(value);
-                        }
-                        return Err(loop_control_error("next", position));
-                    }
-                }
-            }
-
-            Ok(last_value)
-        })
     }
 
     /// Refuse the keywords a call passed that the method declared no
@@ -1176,19 +996,6 @@ pub(crate) fn written_by_the_program(method: &std::rc::Rc<crate::object::Method>
         .body
         .first()
         .is_some_and(|statement| !statement.position().prelude)
-}
-
-/// Whether `terminal_statement_value` answers for this statement, rather
-/// than leaving it to `execute_statement`.
-fn answers_its_own_value(statement: &Statement) -> bool {
-    matches!(
-        statement,
-        Statement::Expression { .. }
-            | Statement::Assignment { .. }
-            | Statement::If { .. }
-            | Statement::Unless { .. }
-            | Statement::Begin { .. }
-    )
 }
 
 /// `**nil` says a method takes no keyword arguments, so a call that passes

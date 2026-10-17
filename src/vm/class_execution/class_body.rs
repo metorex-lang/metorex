@@ -115,19 +115,7 @@ impl VirtualMachine {
         body: &[Statement],
         position: Position,
     ) -> Result<Object, MetorexError> {
-        if let Some(ran) = self.run_compiled_body(class, body, position, false) {
-            return ran;
-        }
-        let mut last_value = Object::Nil;
-        for statement in body {
-            if self.coverage.is_some() {
-                let line = statement.position().line;
-                self.coverage_count(line);
-                self.coverage_skip_line = Some(line);
-            }
-            self.class_body_statement(class, statement, position, &mut last_value)?;
-        }
-        Ok(last_value)
+        self.run_compiled_body(class, body, position, false)
     }
 
     /// Run one statement of a class body, the way a class body runs it,
@@ -643,16 +631,6 @@ impl VirtualMachine {
                                 return Err(return_in_a_body_error(position));
                             }
                             // An exception the body raised leaves it.
-                            ControlFlow::Exception {
-                                exception,
-                                position,
-                            } => {
-                                return Err(MetorexError::UncaughtException {
-                                    message: crate::vm::utils::format_exception(&exception),
-                                    exception,
-                                    location: position_to_location(position),
-                                });
-                            }
                             _ => {}
                         },
                     }

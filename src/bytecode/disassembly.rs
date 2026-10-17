@@ -4,7 +4,7 @@
 use std::fmt::Write;
 
 use crate::bytecode::instruction::{Instruction, Operand};
-use crate::bytecode::unit::Unit;
+use crate::bytecode::unit::{StartKind, Unit};
 
 /// `unit` as text. `file` names where the unit was written and `source` is
 /// that file's text, which the line each instruction came from is read
@@ -103,4 +103,60 @@ fn note(unit: &Unit, instruction: &Instruction) -> Option<String> {
         }
         _ => None,
     }
+}
+
+/// One instruction of a unit as `RubyVM::InstructionSequence` lists it.
+pub struct Listed {
+    pub name: &'static str,
+    /// Each operand's field name and value, in the order the instruction
+    /// declares them.
+    pub operands: Vec<(String, i64)>,
+    pub line: usize,
+    /// Whether the instruction starts a statement that is a line event.
+    pub line_event: bool,
+    /// What a side table operand names.
+    pub note: Option<String>,
+}
+
+/// The instructions of `unit`, in order.
+pub fn listing(unit: &Unit) -> Vec<Listed> {
+    unit.instructions
+        .iter()
+        .enumerate()
+        .map(|(at, instruction)| Listed {
+            name: instruction.name(),
+            operands: operands(instruction),
+            line: unit.positions[at].line,
+            line_event: unit
+                .statement_starts
+                .get(at)
+                .copied()
+                .flatten()
+                .is_some_and(|start| match start.kind {
+                    StartKind::Statement { line_event } | StartKind::Terminal { line_event } => {
+                        line_event
+                    }
+                    StartKind::BodyStatement { runs } => runs,
+                    StartKind::InBranch { .. } => false,
+                }),
+            note: note(unit, instruction),
+        })
+        .collect()
+}
+
+/// The operands of `instruction`, read from its derived `Debug` text, which
+/// is `Name { field: value, ... }` with every value an integer.
+fn operands(instruction: &Instruction) -> Vec<(String, i64)> {
+    let written = format!("{instruction:?}");
+    let Some((_, fields)) = written.split_once(" { ") else {
+        return Vec::new();
+    };
+    fields
+        .trim_end_matches(" }")
+        .split(", ")
+        .filter_map(|field| {
+            let (name, value) = field.split_once(": ")?;
+            Some((name.to_string(), value.parse().ok()?))
+        })
+        .collect()
 }

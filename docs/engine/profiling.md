@@ -28,9 +28,7 @@ With `METOREX_COUNTERS` set to anything but `0` or nothing, Metorex prints to
 standard error at exit:
 
 - the heap allocations the run made, and their bytes
-- each kind of statement and of expression evaluated, with its count. Until
-  Metorex runs bytecode, these node kinds are what it executes in place of
-  instructions.
+- each kind of instruction executed, with its count
 - the 100 most frequent call paths, each written `caller -> callee`, with the
   number of calls and the heap allocations made while those calls ran. A
   method of a class or module itself is written `Name.method`, and a method

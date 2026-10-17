@@ -514,8 +514,8 @@ fn test_block_stored_in_array() {
                 name: "result".to_string(),
                 position: pos(6, 1),
             },
-            value: Expression::Call {
-                callee: Box::new(Expression::Index {
+            value: Expression::MethodCall {
+                receiver: Box::new(Expression::Index {
                     array: Box::new(Expression::Identifier {
                         name: "operations".to_string(),
                         position: pos(6, 10),
@@ -526,6 +526,7 @@ fn test_block_stored_in_array() {
                     }),
                     position: pos(6, 10),
                 }),
+                method: "call".to_string(),
                 arguments: vec![Expression::IntLiteral {
                     value: 5,
                     position: pos(6, 24),

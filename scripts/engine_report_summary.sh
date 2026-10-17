@@ -16,14 +16,14 @@ if [ ${#reports[@]} -eq 0 ]; then
 fi
 
 awk '
-  /^units on bytecode:/ { bytecode += $4; next }
-  /^units on the tree walker:/ { tree += $6; next }
-  /^fallbacks:/ { next }
-  NF == 2 { fallbacks[$2] += $1 }
+  /^units compiled:/ { compiled += $3; next }
+  /^units refused:/ { refused += $3; next }
+  /^refusals:/ { next }
+  NF == 2 { refusals[$2] += $1 }
   END {
-    printf "units on bytecode: %d\n", bytecode
-    printf "units on the tree walker: %d\n", tree
-    print "fallbacks:"
-    for (node in fallbacks) printf "  %d %s\n", fallbacks[node], node | "sort -k1,1nr -k2,2"
+    printf "units compiled: %d\n", compiled
+    printf "units refused: %d\n", refused
+    print "refusals:"
+    for (node in refusals) printf "  %d %s\n", refusals[node], node | "sort -k1,1nr -k2,2"
   }
 ' "${reports[@]}"

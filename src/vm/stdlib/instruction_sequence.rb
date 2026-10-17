@@ -1,8 +1,7 @@
-# RubyVM::InstructionSequence for a program metorex reads. Metorex runs the
-# syntax tree rather than instructions, so an instruction sequence holds the
-# source it was compiled from and the node that source parses to. Its
-# listing names the nodes MRI's compiler would have read, not YARV
-# instructions.
+# RubyVM::InstructionSequence for a program metorex reads. An instruction
+# sequence holds the source it was compiled from and the node that source
+# parses to, and lists the instructions Metorex compiles that code to, not
+# YARV's.
 class RubyVM
   class InstructionSequence
     # The compile options MRI answers, kept as given.
@@ -269,8 +268,8 @@ class RubyVM
       self
     end
 
-    # The sequence as MRI's SimpleDataFormat Array, with the instructions
-    # standing for the nodes of the syntax tree.
+    # The sequence as MRI's SimpleDataFormat Array, with Metorex's
+    # instructions.
     def to_a
       scope = scope_node
       locals = scope ? scope.children[0].compact : []
@@ -282,11 +281,15 @@ class RubyVM
       ]
     end
 
-    # A listing of the nodes the sequence holds, under MRI's heading.
+    # The instructions the sequence compiles to, under MRI's heading: each
+    # with its operands, what a side table operand names, and its line,
+    # marked `[Li]` where a statement that is a line event starts.
     def disasm
       heading = "== disasm: #<ISeq:#{@label}@#{@path}:#{@first_lineno} (#{code_location[0]},#{code_location[1]})-(#{code_location[2]},#{code_location[3]})>\n"
-      lines = instructions.select { |item| item.is_a?(Array) }.each_with_index.map do |(name, *operands), index|
-        format("%04d %-38s\n", index, [name, *operands.map(&:inspect)].join(" ").rstrip)
+      lines = listing.each_with_index.map do |(name, operands, line, line_event, note), index|
+        text = [name, operands.map { |field, value| "#{field}: #{value}" }.join(", ")].reject(&:empty?).join(" ")
+        text = "#{text}  ; #{note}" if note
+        format("%04d %-38s (%4d)%s\n", index, text, line, line_event ? "[Li]" : "")
       end
       heading + lines.join
     end
@@ -413,34 +416,29 @@ class RubyVM
       [@node.first_lineno, @node.first_column, @node.last_lineno, @node.last_column]
     end
 
-    # The nodes in the order MRI's compiler reads them: the line of each
-    # statement, then each node before the nodes it holds, as [type,
-    # values...].
+    # The instructions as `to_a` lists them: the line an instruction is on
+    # where it changes, `:RUBY_EVENT_LINE` where a statement that is a line
+    # event starts, and each instruction as [name, operands...].
     def instructions
-      if @outline
-        return trace_points.flat_map { |line, event| [line, :"RUBY_EVENT_#{event.upcase}"] } << [:leave]
-      end
-
       listed = []
-      statements(body_node).each do |statement|
-        listed << statement.first_lineno << :RUBY_EVENT_LINE
-        walk(statement) { |node| listed << [node.type.downcase, *node.children.grep_v(RubyVM::AbstractSyntaxTree::Node).grep_v(Array)] }
+      written = nil
+      listing.each do |name, operands, line, line_event, _note|
+        listed << line if line != written && line.positive?
+        written = line
+        listed << :RUBY_EVENT_LINE if line_event
+        listed << [name.to_sym, *operands.map(&:last)]
       end
-      listed << [:leave]
+      listed
     end
 
-    # Visits a node and those it holds. A method, class or block is a
-    # sequence of its own, so only a block's call is visited.
-    def walk(node, &visit)
-      return unless node.is_a?(RubyVM::AbstractSyntaxTree::Node)
+    # Each instruction the sequence's code compiles to, as [name,
+    # [[field, value], ...], line, line event, note], from the source it was
+    # compiled from or the file it names.
+    def listing
+      source = @source || (@path.is_a?(String) && File.file?(@path) ? File.read(@path) : nil)
+      return [] if source.nil?
 
-      visit.call(node)
-      return walk(node.children[0], &visit) if node.type == :ITER
-      return if %i[DEFN DEFS CLASS MODULE SCLASS LAMBDA].include?(node.type)
-
-      node.children.each do |child|
-        (child.is_a?(Array) ? child : [child]).each { |item| walk(item, &visit) }
-      end
+      __unit_listing__(source, @type.to_s, @first_lineno) || []
     end
 
     def statements(body)

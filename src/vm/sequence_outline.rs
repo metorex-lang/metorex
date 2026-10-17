@@ -7,7 +7,10 @@
 //! lines, parameters, children]`, with the parameters as `Method#parameters`
 //! lists them.
 
+use std::cell::RefCell;
+
 use crate::ast::{Expression, Parameter, Statement};
+use crate::bytecode::compiler::UnitKind;
 use crate::lexer::Position;
 use crate::object::Object;
 use crate::vm::coverage::{nested_bodies, own_expressions};
@@ -15,23 +18,99 @@ use crate::vm::native_methods::method_object_methods::block_parameter_pairs;
 
 /// The outline of a whole program, or None where it does not parse.
 pub(crate) fn outline_of_source(source: &str) -> Option<Object> {
+    let (statements, closing) = parsed(source)?;
+    let context = Context {
+        closing,
+        wanted: None,
+        found: RefCell::new(None),
+    };
+    Some(outline(
+        top_scope(source),
+        &statements,
+        "<main>",
+        0,
+        &context,
+    ))
+}
+
+/// The body of the scope of `kind` that opens on `line` of a program, and
+/// what kind of body it is, or None where the program does not parse or
+/// holds no such scope. A `top` or `eval` scope is the whole program.
+pub(crate) fn body_of_scope(
+    source: &str,
+    kind: &str,
+    line: usize,
+) -> Option<(Vec<Statement>, UnitKind)> {
+    let (statements, closing) = parsed(source)?;
+    if matches!(kind, "top" | "eval") {
+        return Some((statements, UnitKind::Plain));
+    }
+    let context = Context {
+        closing,
+        wanted: Some((kind.to_string(), line)),
+        found: RefCell::new(None),
+    };
+    outline(top_scope(source), &statements, "<main>", 0, &context);
+    context.found.into_inner()
+}
+
+/// The instructions the scope `body_of_scope` finds compiles to, as
+/// `__unit_listing__` answers them.
+pub(crate) fn listing_of_scope(source: &str, kind: &str, line: usize) -> Option<Object> {
+    let (body, unit_kind) = body_of_scope(source, kind, line)?;
+    let unit = crate::bytecode::compiler::compile_as(&body, unit_kind).ok()?;
+    let listed = crate::bytecode::disassembly::listing(&unit)
+        .into_iter()
+        .map(|listed| {
+            Object::array(vec![
+                Object::string(listed.name),
+                Object::array(
+                    listed
+                        .operands
+                        .into_iter()
+                        .map(|(field, value)| {
+                            Object::array(vec![Object::symbol(field), Object::Int(value)])
+                        })
+                        .collect(),
+                ),
+                Object::Int(listed.line as i64),
+                Object::Bool(listed.line_event),
+                listed.note.map_or(Object::Nil, Object::string),
+            ])
+        })
+        .collect();
+    Some(Object::array(listed))
+}
+
+/// A program's statements and the lines its scopes close on.
+fn parsed(source: &str) -> Option<(Vec<Statement>, ClosingLines)> {
     let tokens = crate::lexer::Lexer::new(source).tokenize();
     let mut parser = crate::parser::Parser::new(tokens);
     let statements = parser.parse().ok()?;
-    let closing = parser.closing_lines();
-    let last = source.lines().count().max(1);
-    let top = Scope {
+    let closing = parser.closing_lines().clone();
+    Some((statements, closing))
+}
+
+fn top_scope(source: &str) -> Scope {
+    Scope {
         kind: "top",
         label: "<main>".to_string(),
         first: 1,
-        last,
+        last: source.lines().count().max(1),
         parameters: Vec::new(),
-    };
-    Some(outline(top, &statements, "<main>", 0, closing))
+    }
 }
 
 /// The lines each class, module and block closes on, by where it opens.
 type ClosingLines = std::collections::HashMap<(usize, usize), usize>;
+
+/// What a walk over a program reads by and looks for.
+struct Context {
+    closing: ClosingLines,
+    /// The kind of scope and the line it opens on whose body is wanted.
+    wanted: Option<(String, usize)>,
+    found: RefCell<Option<(Vec<Statement>, UnitKind)>>,
+}
 
 /// What an outline says of one scope before its body is read.
 struct Scope {
@@ -50,14 +129,27 @@ fn outline(
     body: &[Statement],
     base: &str,
     levels: usize,
-    closing: &ClosingLines,
+    context: &Context,
 ) -> Object {
+    if let Some((kind, line)) = &context.wanted
+        && kind == scope.kind
+        && *line == scope.first
+        && context.found.borrow().is_none()
+    {
+        let unit_kind = match scope.kind {
+            "method" => UnitKind::Method,
+            "class" if scope.label.starts_with("<module:") => UnitKind::ModuleBody,
+            "class" => UnitKind::ClassBody,
+            _ => UnitKind::Plain,
+        };
+        *context.found.borrow_mut() = Some((body.to_vec(), unit_kind));
+    }
     let mut walk = Walk {
         lines: Vec::new(),
         children: Vec::new(),
         base,
         levels,
-        closing,
+        context,
     };
     walk.statements(body);
     walk.lines.dedup();
@@ -83,7 +175,7 @@ struct Walk<'a> {
     children: Vec<Object>,
     base: &'a str,
     levels: usize,
-    closing: &'a ClosingLines,
+    context: &'a Context,
 }
 
 impl Walk<'_> {
@@ -132,7 +224,7 @@ impl Walk<'_> {
                     parameters: parameters.iter().map(parameter_pair).collect(),
                 };
                 self.children
-                    .push(outline(scope, body, name, 0, self.closing));
+                    .push(outline(scope, body, name, 0, self.context));
             }
             _ => {
                 if !matches!(statement, Statement::Begin { .. } | Statement::Block { .. }) {
@@ -163,7 +255,7 @@ impl Walk<'_> {
             parameters: Vec::new(),
         };
         self.children
-            .push(outline(scope, body, &label, 0, self.closing));
+            .push(outline(scope, body, &label, 0, self.context));
     }
 
     /// The blocks written in an expression, each a scope of its own.
@@ -197,7 +289,7 @@ impl Walk<'_> {
                     ),
                 };
                 self.children
-                    .push(outline(scope, body, self.base, levels, self.closing));
+                    .push(outline(scope, body, self.base, levels, self.context));
             }
             Expression::SingletonClass { body, position, .. } => {
                 let scope = Scope {
@@ -208,7 +300,7 @@ impl Walk<'_> {
                     parameters: Vec::new(),
                 };
                 self.children
-                    .push(outline(scope, body, "singleton class", 0, self.closing));
+                    .push(outline(scope, body, "singleton class", 0, self.context));
             }
             Expression::MethodCall {
                 receiver: callee,
@@ -343,7 +435,8 @@ impl Walk<'_> {
     /// The line the scope opened at `opened` closes on, which the parser
     /// noted as it read the scope.
     fn closing_line(&self, opened: Position) -> usize {
-        self.closing
+        self.context
+            .closing
             .get(&(opened.line, opened.column))
             .copied()
             .unwrap_or(opened.line)

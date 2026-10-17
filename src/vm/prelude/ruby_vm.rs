@@ -1,7 +1,7 @@
 pub(super) const SOURCE: &str = r##"
-# What MRI says about its own virtual machine. Metorex runs the syntax tree
-# rather than instructions, so the names and settings here are MRI's, kept
-# so code that reads them runs.
+# What MRI says about its own virtual machine. Metorex runs instructions of
+# its own, so the instruction names and settings here are MRI's, kept so
+# code that reads them runs.
 class RubyVM
   OPTS = ["direct threaded code", "operands unification", "inline method cache"]
 
@@ -48,10 +48,15 @@ class RubyVM
 
   # The counters MRI keeps about its caches and object shapes. Metorex keeps
   # neither, so each one is zero.
-  STAT_KEYS = %i[
+  CACHE_STAT_KEYS = %i[
     constant_cache_invalidations constant_cache_misses global_cvar_state
     next_shape_id shape_cache_size
   ].freeze
+
+  # The units of code Metorex has compiled and the instructions they hold.
+  COMPILED_STAT_KEYS = %i[units_compiled instructions_compiled].freeze
+
+  STAT_KEYS = (CACHE_STAT_KEYS + COMPILED_STAT_KEYS).freeze
 
   __undefine_allocator__ self
 
@@ -59,16 +64,16 @@ class RubyVM
     undef_method :new
 
     def stat(wanted = nil)
+      counts = CACHE_STAT_KEYS.to_h { |key| [key, 0] }.merge(COMPILED_STAT_KEYS.zip(__compiled_so_far__).to_h)
       if wanted.is_a?(Symbol)
         raise ArgumentError, "unknown key: #{wanted}" unless STAT_KEYS.include?(wanted)
-        return 0
+        return counts[wanted]
       end
       unless wanted.nil? || wanted.is_a?(Hash)
         raise TypeError, "non-hash or symbol given"
       end
       filled = wanted.nil? ? {} : wanted
-      STAT_KEYS.each { |key| filled[key] = 0 }
-      filled
+      filled.merge!(counts)
     end
 
     def keep_script_lines

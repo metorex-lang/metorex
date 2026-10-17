@@ -226,26 +226,6 @@ impl VirtualMachine {
         error
     }
 }
-
-impl VirtualMachine {
-    /// Record on an error an assignment through a setter raised the setter
-    /// it called, which Ruby's node for the assignment names.
-    #[inline(never)]
-    pub(crate) fn note_assignment_spot(
-        &mut self,
-        result: &Result<Object, MetorexError>,
-        target: &Expression,
-    ) {
-        let Err(MetorexError::UncaughtException { exception, .. }) = result else {
-            return;
-        };
-        let Some((start, name)) = assignment_spot(target) else {
-            return;
-        };
-        self.record_spot_hint(exception, start, Some(name));
-    }
-}
-
 /// Where an error an assignment through a setter or `[]=` raised is pointed
 /// at, and the method it called.
 pub(crate) fn assignment_spot(target: &Expression) -> Option<(Position, String)> {

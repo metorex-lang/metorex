@@ -234,20 +234,8 @@ impl VirtualMachine {
                                     location: super::super::utils::position_to_location(position),
                                     home_frame: block.home_frame,
                                 });
-                            }
-                            // The exception the block raised carries on as
-                            // itself, so a rescue naming its class catches it.
-                            super::super::ControlFlow::Exception {
-                                exception,
-                                position,
-                            } => {
-                                let message = super::super::utils::format_exception(&exception);
-                                return Err(MetorexError::UncaughtException {
-                                    exception,
-                                    location: super::super::utils::position_to_location(position),
-                                    message,
-                                });
-                            }
+                            } // The exception the block raised carries on as
+                              // itself, so a rescue naming its class catches it.
                         }
                     }
                     Ok(None)

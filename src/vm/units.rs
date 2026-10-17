@@ -1,13 +1,16 @@
 //! A method body, block body, class or module body, or file top level,
-//! compiled the first time it runs under `METOREX_ENGINE=bytecode`. A body
-//! holding a node the compiler does not handle yet runs on the tree walker,
-//! and the node is recorded for the engine report.
+//! compiled the first time it runs. A body nested deeper than an
+//! instruction has registers for raises SystemStackError, and the node that
+//! ran out is recorded for the engine report.
 
-use std::cell::OnceCell;
+use std::cell::{OnceCell, RefCell};
+use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::ast::Statement;
+use crate::ast::{Expression, Statement};
 pub use crate::bytecode::compiler::UnitKind;
+use crate::bytecode::compiler::{compile_expression, compile_statement};
 use crate::error::MetorexError;
 use crate::object::Object;
 use crate::vm::ControlFlow;
@@ -29,8 +32,9 @@ pub struct BodyContext {
 #[derive(Debug)]
 pub enum Compiled {
     Unit(Box<Unit>),
-    /// The body runs on the tree walker, held back by the node named.
-    Fallback(&'static str),
+    /// The body needs more registers than an instruction names, which the
+    /// node named ran out of.
+    Refused(&'static str),
 }
 
 pub use crate::bytecode::unit::Unit;
@@ -55,11 +59,33 @@ fn disassembly_wanted() -> bool {
     *WANTED.get_or_init(|| std::env::var("METOREX_DISASM").is_ok_and(|value| value == "1"))
 }
 
+/// How many units have been compiled, and how many instructions they hold,
+/// which `RubyVM.stat` answers.
+static UNITS_COMPILED: AtomicU64 = AtomicU64::new(0);
+static INSTRUCTIONS_COMPILED: AtomicU64 = AtomicU64::new(0);
+
+/// The units compiled so far and the instructions they hold.
+pub fn compiled_so_far() -> (u64, u64) {
+    (
+        UNITS_COMPILED.load(Ordering::Relaxed),
+        INSTRUCTIONS_COMPILED.load(Ordering::Relaxed),
+    )
+}
+
+/// Count `unit` among those compiled.
+fn count_compiled(unit: &Unit) {
+    UNITS_COMPILED.fetch_add(1, Ordering::Relaxed);
+    INSTRUCTIONS_COMPILED.fetch_add(unit.instructions.len() as u64, Ordering::Relaxed);
+}
+
 /// Compile `body`, recording the result for the engine report.
 pub fn compile(body: &[Statement], kind: UnitKind) -> Compiled {
     let compiled = match crate::bytecode::compiler::compile_as(body, kind) {
-        Ok(unit) => Compiled::Unit(Box::new(unit)),
-        Err(node) => Compiled::Fallback(node),
+        Ok(unit) => {
+            count_compiled(&unit);
+            Compiled::Unit(Box::new(unit))
+        }
+        Err(node) => Compiled::Refused(node),
     };
     crate::vm::engine_report::record(&compiled);
     compiled
@@ -75,7 +101,7 @@ impl crate::vm::VirtualMachine {
         body: &[Statement],
         position: crate::lexer::Position,
         module: bool,
-    ) -> Option<Result<Object, MetorexError>> {
+    ) -> Result<Object, MetorexError> {
         let kind = if module {
             UnitKind::ModuleBody
         } else {
@@ -88,63 +114,111 @@ impl crate::vm::VirtualMachine {
         });
         let ran = self.run_compiled_unit(None, body, kind);
         self.body_contexts.pop();
-        Some(ran?.and_then(|flow| match flow {
+        ran.and_then(|flow| match flow {
             ControlFlow::Value(value) => Ok(value),
             ControlFlow::Return { value, position } if !module => {
                 self.class_body_return(class, value, position)
             }
             ControlFlow::Return { position, .. } => Err(self.module_body_return(position)),
-            ControlFlow::Exception {
-                exception,
-                position,
-            } => Err(MetorexError::UncaughtException {
-                message: crate::vm::utils::format_exception(&exception),
-                exception,
-                location: position_to_location(position),
-            }),
             // A `break`, `next`, or `redo` written in a body ends nothing.
             _ => Ok(Object::Nil),
-        }))
+        })
     }
 
-    /// Run `body` through what it compiled to, when the bytecode engine was
-    /// chosen and the body compiled, answering its value. None means the
-    /// body runs on the tree walker. A body with no slot of its own to keep
-    /// the result in is compiled each time it runs.
+    /// Run `body` through what it compiled to, answering how it ended. A
+    /// body with no slot of its own to keep the result in is compiled each
+    /// time it runs.
     pub(crate) fn run_compiled_unit(
         &mut self,
         slot: Option<&UnitSlot>,
         body: &[Statement],
         kind: UnitKind,
-    ) -> Option<Result<ControlFlow, MetorexError>> {
-        if crate::vm::engine::engine() != crate::vm::engine::Engine::Bytecode {
-            return None;
-        }
+    ) -> Result<ControlFlow, MetorexError> {
         let compiled = match slot {
             Some(slot) => slot.compiled(|| self.compile_body(body, kind)),
             None => Rc::new(self.compile_body(body, kind)),
         };
         match &*compiled {
             Compiled::Unit(unit) => {
-                // The scope reserves each local the body assigns before any
-                // of it runs, as the tree walker's runners do.
-                for local in &unit.locals {
-                    if self
-                        .environment()
-                        .assignment_introduces_a_local(&local.text)
-                    {
-                        self.environment_mut().hoist(local.text.clone());
-                    }
-                }
-                Some(self.run_unit_flow(unit))
+                self.hoist_unit_locals(unit);
+                self.run_unit_flow(unit)
             }
-            Compiled::Fallback(_) => None,
+            Compiled::Refused(_) => Err(too_deep(
+                body.first().map(Statement::position).unwrap_or_default(),
+            )),
+        }
+    }
+
+    /// Reserve in the scope each local `unit` assigns, before any of it
+    /// runs.
+    fn hoist_unit_locals(&mut self, unit: &Unit) {
+        for local in &unit.locals {
+            if self
+                .environment()
+                .assignment_introduces_a_local(&local.text)
+            {
+                self.environment_mut().hoist(local.text.clone());
+            }
+        }
+    }
+
+    /// Run `expression` alone, compiled the first time it runs here,
+    /// answering its value. A jump it ends with unwinds as one written
+    /// where a value goes does.
+    pub(crate) fn run_expression(
+        &mut self,
+        expression: &Expression,
+    ) -> Result<Object, MetorexError> {
+        let unit = EXPRESSION_UNITS
+            .with(|units| node_unit(units, expression, compile_expression))
+            .map_err(|_| too_deep(expression.position()))?;
+        self.hoist_unit_locals(&unit);
+        let flow = self.run_unit_flow(&unit)?;
+        self.flow_as_value(flow)
+    }
+
+    /// Run `statement` alone, compiled the first time it runs here,
+    /// answering how it ended.
+    pub(crate) fn run_statement(
+        &mut self,
+        statement: &Statement,
+    ) -> Result<ControlFlow, MetorexError> {
+        let unit = STATEMENT_UNITS
+            .with(|units| node_unit(units, statement, compile_statement))
+            .map_err(|_| too_deep(statement.position()))?;
+        self.hoist_unit_locals(&unit);
+        self.run_unit_flow(&unit)
+    }
+
+    /// The value code written where a value goes answers when it ends with
+    /// `flow`: a jump unwinds to what it leaves.
+    fn flow_as_value(&self, flow: ControlFlow) -> Result<Object, MetorexError> {
+        match flow {
+            ControlFlow::Value(value) => Ok(value),
+            ControlFlow::Next => Ok(Object::Nil),
+            ControlFlow::Return { value, position } => Err(MetorexError::NonLocalReturn {
+                value,
+                location: position_to_location(position),
+                home_frame: self.current_method_frame,
+            }),
+            ControlFlow::Break { value, position } => {
+                Err(self.break_signal(value, position_to_location(position)))
+            }
+            ControlFlow::Retry { position } => Err(MetorexError::BlockRetry {
+                location: position_to_location(position),
+            }),
+            ControlFlow::Redo { position } => Err(MetorexError::BlockRedo {
+                location: position_to_location(position),
+            }),
+            ControlFlow::Continue { value, position } => Err(MetorexError::BlockNext {
+                value,
+                location: position_to_location(position),
+            }),
         }
     }
 
     /// Run a method body through what it compiled to, taking a `break`,
-    /// `next`, or `redo` that ends it as the tree walker takes one ending
-    /// the body: a body with lambda semantics, from `define_method` with a
+    /// `next`, or `redo` that ends it: a body with lambda semantics, from `define_method` with a
     /// block, answers the value `break` or `next` carries and runs again on
     /// `redo`.
     pub(crate) fn run_compiled_method_body(
@@ -152,9 +226,9 @@ impl crate::vm::VirtualMachine {
         slot: &UnitSlot,
         body: &[Statement],
         lambda_semantics: bool,
-    ) -> Option<Result<Object, MetorexError>> {
+    ) -> Result<Object, MetorexError> {
         loop {
-            let ran = self.run_compiled_unit(Some(slot), body, UnitKind::Method)?;
+            let ran = self.run_compiled_unit(Some(slot), body, UnitKind::Method);
             if let Ok(ControlFlow::Return { .. }) = &ran
                 && let Some(running) = self.running_code.last_mut()
             {
@@ -162,13 +236,13 @@ impl crate::vm::VirtualMachine {
             }
             let answer = ran.and_then(|flow| method_body_answer(flow, lambda_semantics));
             if !lambda_semantics {
-                return Some(answer);
+                return answer;
             }
             match answer {
                 Err(MetorexError::BlockRedo { .. }) => continue,
                 Err(MetorexError::BlockNext { value, .. })
-                | Err(MetorexError::BlockBreak { value, .. }) => return Some(Ok(value)),
-                other => return Some(other),
+                | Err(MetorexError::BlockBreak { value, .. }) => return Ok(value),
+                other => return other,
             }
         }
     }
@@ -179,9 +253,9 @@ impl crate::vm::VirtualMachine {
         &mut self,
         body: &[Statement],
         a_return_unwinds: bool,
-    ) -> Option<Result<Option<Object>, MetorexError>> {
-        let ran = self.run_compiled_unit(None, body, UnitKind::Plain)?;
-        Some(ran.and_then(|flow| match flow {
+    ) -> Result<Option<Object>, MetorexError> {
+        let ran = self.run_compiled_unit(None, body, UnitKind::Plain);
+        ran.and_then(|flow| match flow {
             ControlFlow::Value(value) => Ok(Some(value)),
             ControlFlow::Next => Ok(None),
             ControlFlow::Break { position, .. } => Err(loop_control_error("break", position)),
@@ -194,15 +268,7 @@ impl crate::vm::VirtualMachine {
                 Err(self.unwinding_return(value, position))
             }
             ControlFlow::Return { value, .. } => Ok(Some(value)),
-            ControlFlow::Exception {
-                exception,
-                position,
-            } => Err(MetorexError::UncaughtException {
-                message: crate::vm::utils::format_exception(&exception),
-                exception,
-                location: position_to_location(position),
-            }),
-        }))
+        })
     }
 
     /// Compile `body`, writing the unit to standard error when
@@ -233,6 +299,48 @@ impl crate::vm::VirtualMachine {
         }
         compiled
     }
+}
+
+/// The units compiled from nodes run alone, by the node's address. Each is
+/// kept with a copy of its node, since a node freed and another made at the
+/// same address needs a unit of its own.
+type NodeUnits<Node> = RefCell<HashMap<usize, (Node, Rc<Unit>)>>;
+
+/// How many units of nodes run alone are kept before they are compiled
+/// afresh.
+const MOST_NODE_UNITS: usize = 65_536;
+
+thread_local! {
+    static EXPRESSION_UNITS: NodeUnits<Expression> = RefCell::default();
+    static STATEMENT_UNITS: NodeUnits<Statement> = RefCell::default();
+}
+
+/// The unit `node` compiles to, compiled with `compile` unless `units`
+/// holds it.
+fn node_unit<Node: Clone + PartialEq>(
+    units: &NodeUnits<Node>,
+    node: &Node,
+    compile: fn(&Node) -> Result<Unit, &'static str>,
+) -> Result<Rc<Unit>, &'static str> {
+    let address = node as *const Node as usize;
+    if let Some((held, unit)) = units.borrow().get(&address)
+        && held == node
+    {
+        return Ok(Rc::clone(unit));
+    }
+    let unit = Rc::new(compile(node)?);
+    count_compiled(&unit);
+    let mut held = units.borrow_mut();
+    if held.len() >= MOST_NODE_UNITS {
+        held.clear();
+    }
+    held.insert(address, (node.clone(), Rc::clone(&unit)));
+    Ok(unit)
+}
+
+/// What code nested deeper than an instruction has registers for raises.
+fn too_deep(position: crate::lexer::Position) -> MetorexError {
+    crate::vm::errors::simple_exception("SystemStackError", "stack level too deep", position)
 }
 
 /// The text of the file at `path`, read once, for the lines a disassembly
@@ -267,14 +375,6 @@ fn method_body_answer(flow: ControlFlow, lambda_semantics: bool) -> Result<Objec
         }),
         ControlFlow::Redo { position } => Err(loop_control_error("redo", position)),
         ControlFlow::Retry { position } => Err(MetorexError::BlockRetry {
-            location: position_to_location(position),
-        }),
-        ControlFlow::Exception {
-            exception,
-            position,
-        } => Err(MetorexError::UncaughtException {
-            message: crate::vm::utils::format_exception(&exception),
-            exception,
             location: position_to_location(position),
         }),
     }

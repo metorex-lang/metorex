@@ -116,59 +116,17 @@ impl VirtualMachine {
         }
         self.method_nesting_stack.push(nesting);
         let mut last = Object::Nil;
-        let compiled = self
+        let result = self
             .run_compiled_unit(
                 None,
                 &statements,
                 crate::bytecode::compiler::UnitKind::Plain,
             )
-            .map(|ran| {
-                ran.and_then(|flow| match flow {
-                    ControlFlow::Value(value) => {
-                        last = value;
-                        Ok(())
-                    }
-                    ControlFlow::Exception {
-                        exception,
-                        position,
-                    } => Err(MetorexError::UncaughtException {
-                        message: crate::vm::utils::format_exception(&exception),
-                        exception,
-                        location: position_to_location(position),
-                    }),
-                    _ => Ok(()),
-                })
-            });
-        let result = compiled.unwrap_or_else(|| {
-            (|| -> Result<(), MetorexError> {
-                for statement in &statements {
-                    if let Statement::Expression { expression, .. } = statement {
-                        if !self.tracepoints.is_empty() {
-                            self.fire_line_event(statement.position())?;
-                        }
-                        last = self.evaluate_expression(expression)?;
-                        continue;
-                    }
-                    match self.execute_statement(statement)? {
-                        ControlFlow::Value(value) => last = value,
-                        // An exception raised here is the caller's to handle,
-                        // rather than something the run swallows.
-                        ControlFlow::Exception {
-                            exception,
-                            position,
-                        } => {
-                            return Err(MetorexError::UncaughtException {
-                                message: crate::vm::utils::format_exception(&exception),
-                                exception,
-                                location: position_to_location(position),
-                            });
-                        }
-                        _ => {}
-                    }
+            .map(|flow| {
+                if let ControlFlow::Value(value) = flow {
+                    last = value;
                 }
-                Ok(())
-            })()
-        });
+            });
         // An error the code raised natively is traced while its file is
         // still the one the code was named for.
         if let Err(error) = &result {
@@ -424,16 +382,6 @@ impl VirtualMachine {
                             ControlFlow::Return { value, .. } => {
                                 last_value = value;
                                 break 'again;
-                            }
-                            ControlFlow::Exception {
-                                exception,
-                                position,
-                            } => {
-                                return Err(MetorexError::UncaughtException {
-                                    exception: exception.clone(),
-                                    location: position_to_location(position),
-                                    message: format_exception(&exception),
-                                });
                             }
                             ControlFlow::Break { value, position } => {
                                 // The break belongs to the call that was

@@ -5,62 +5,6 @@ use super::*;
 use crate::object::View;
 
 impl VirtualMachine {
-    /// Execute a match statement for pattern matching.
-    pub(crate) fn execute_match(
-        &mut self,
-        expression: &Expression,
-        cases: &[crate::ast::MatchCase],
-        position: Position,
-    ) -> Result<ControlFlow, MetorexError> {
-        // Evaluate the value to match against
-        let match_value = self.evaluate_expression(expression)?;
-        self.warn_duplicated_when_clauses(cases, position)?;
-
-        // Try each case in order
-        for (index, case) in cases.iter().enumerate() {
-            // Try to match the pattern
-            let mut bindings: HashMap<String, Object> = HashMap::new();
-            if self.match_pattern(&case.pattern, &match_value, &mut bindings, position)? {
-                // Pattern matched! Now check guard if present
-                if !self.evaluate_guard_with_bindings(case.guard.as_ref(), &bindings)? {
-                    continue;
-                }
-                self.coverage_branch(position, index);
-
-                // Ruby case/when branches do NOT introduce a new scope — assignments
-                // leak out, matching Ruby semantics. Pattern bindings are applied in-place.
-                self.apply_pattern_bindings(&bindings);
-
-                // Execute the body and capture the last expression's value so that
-                // case-as-expression produces a value without triggering a real return.
-                let mut last_value = Object::Nil;
-                for statement in &case.body {
-                    if let Statement::Expression { expression, .. } = statement {
-                        self.coverage_count_inline(statement, position.line);
-                        last_value = self.evaluate_expression(expression)?;
-                        continue;
-                    }
-
-                    match self.execute_statement(statement)? {
-                        ControlFlow::Next => {}
-                        ControlFlow::Value(v) => {
-                            last_value = v;
-                        }
-                        flow => return Ok(flow),
-                    }
-                }
-
-                return Ok(ControlFlow::Value(last_value));
-            }
-        }
-
-        // No branch matched and there is no `else`. Ruby's `case/when`
-        // evaluates to nil; only `case/in` raises.
-        self.coverage_branch(position, cases.len());
-        let _ = match_value;
-        Ok(ControlFlow::Value(Object::Nil))
-    }
-
     /// Ruby names a `when` clause written twice with the same literal, since
     /// the second one can never be reached.
     pub(crate) fn warn_duplicated_when_clauses(
@@ -87,84 +31,6 @@ impl VirtualMachine {
         Ok(())
     }
 
-    /// Execute a `case/in` statement (Ruby 2.7+ pattern matching).
-    /// Raises `NoMatchingPatternError` if no arm matches and no else clause is present.
-    pub(crate) fn execute_case_in(
-        &mut self,
-        expression: &Expression,
-        cases: &[crate::ast::MatchCase],
-        position: Position,
-    ) -> Result<ControlFlow, MetorexError> {
-        let match_value = self.evaluate_expression(expression)?;
-        // The value is asked for its elements once for the whole `case`.
-        self.deconstructed_values.push((match_value.clone(), None));
-        let held = self.run_in_clauses(cases, &match_value, position);
-        self.deconstructed_values.pop();
-        held
-    }
-
-    /// Try each `in` clause against the value in turn.
-    pub(crate) fn run_in_clauses(
-        &mut self,
-        cases: &[crate::ast::MatchCase],
-        match_value: &Object,
-        position: Position,
-    ) -> Result<ControlFlow, MetorexError> {
-        let match_value = match_value.clone();
-        for (index, case) in cases.iter().enumerate() {
-            let mut bindings: HashMap<String, Object> = HashMap::new();
-            self.pattern_failure = None;
-            if self.match_pattern(&case.pattern, &match_value, &mut bindings, position)? {
-                // A pattern's names are locals of the scope the `case` was
-                // written in, so the guard and the body read them there and
-                // they are still readable once the `case` is over.
-                self.apply_pattern_bindings(&bindings);
-                if !self.evaluate_guard(case.guard.as_ref())? {
-                    self.note_pattern_failure(PatternFailure::Detail(
-                        "guard clause does not return true".to_string(),
-                    ));
-                    continue;
-                }
-
-                self.coverage_branch(position, index);
-                let result = (|| -> Result<ControlFlow, MetorexError> {
-                    let mut last_value = Object::Nil;
-                    for statement in &case.body {
-                        if let Statement::Expression { expression, .. } = statement {
-                            self.coverage_count_inline(statement, position.line);
-                            last_value = self.evaluate_expression(expression)?;
-                            continue;
-                        }
-                        // A statement that answers a value, such as an
-                        // assignment, goes on to the next one.
-                        match self.execute_statement(statement)? {
-                            ControlFlow::Next => {}
-                            ControlFlow::Value(value) => last_value = value,
-                            flow => {
-                                return Ok(flow);
-                            }
-                        }
-                    }
-
-                    Ok(ControlFlow::Value(last_value))
-                })();
-
-                return result;
-            }
-            // A name the pattern reached before it failed is still a local of
-            // the scope, holding nil, the way Ruby leaves one behind.
-            self.apply_pattern_bindings(&bindings);
-        }
-
-        // A `case` with one `in` clause and no `else` has nowhere to go when
-        // the clause fails, so Ruby reports what went wrong rather than the
-        // value alone.
-        if cases.len() == 1 {
-            return Err(self.detailed_no_matching_pattern(&match_value, position));
-        }
-        Err(self.no_matching_pattern(&match_value, position))
-    }
-
     /// Evaluate a guard expression with pattern bindings in a new scope.
     /// Returns true if the guard passes (is truthy) or if there's no guard.
     /// Returns false if the guard fails (is not truthy).
@@ -188,19 +54,6 @@ impl VirtualMachine {
             // No guard means it always passes
             Ok(true)
         }
-    }
-
-    /// Whether an `in` clause's guard lets the match stand. The pattern's
-    /// names are already locals of the scope, so the guard reads them there.
-    pub(crate) fn evaluate_guard(
-        &mut self,
-        guard_expr: Option<&Expression>,
-    ) -> Result<bool, MetorexError> {
-        let Some(guard) = guard_expr else {
-            return Ok(true);
-        };
-        let held = self.evaluate_expression(guard)?;
-        Ok(is_truthy(&held))
     }
 
     /// Test one `when` arm of a `case`/`when` statement against `subject`.
@@ -262,51 +115,6 @@ impl VirtualMachine {
             self.coverage_count(line);
         }
         Ok(true)
-    }
-
-    /// Evaluate a case expression (pattern matching in expression context).
-    /// Returns the value of the first matching case's body expression.
-    pub(crate) fn evaluate_case_expression(
-        &mut self,
-        expression: &Expression,
-        cases: &[ExprMatchCase],
-        else_case: Option<&Expression>,
-        position: Position,
-    ) -> Result<Object, MetorexError> {
-        // Evaluate the value to match against
-        let match_value = self.evaluate_expression(expression)?;
-
-        // Try each case in order
-        for (index, case) in cases.iter().enumerate() {
-            // Try to match the pattern
-            let mut bindings: HashMap<String, Object> = HashMap::new();
-            if self.match_pattern(&case.pattern, &match_value, &mut bindings, case.position)? {
-                // Pattern matched! Now check guard if present
-                if !self.evaluate_guard_with_bindings(case.guard.as_ref(), &bindings)? {
-                    continue;
-                }
-
-                // Pattern and guard matched! Evaluate the body expression with bindings
-                self.coverage_branch(position, index);
-                self.environment_mut().push_scope();
-                self.apply_pattern_bindings(&bindings);
-
-                self.coverage_count_arm(&case.body);
-                let result = self.evaluate_expression(&case.body);
-                self.environment_mut().pop_scope();
-
-                return result;
-            }
-        }
-
-        // No pattern matched - evaluate else case if present, otherwise return nil
-        self.coverage_branch(position, cases.len());
-        if let Some(else_expr) = else_case {
-            self.coverage_count_arm(else_expr);
-            self.evaluate_expression(else_expr)
-        } else {
-            Ok(Object::Nil)
-        }
     }
 }
 

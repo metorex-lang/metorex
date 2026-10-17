@@ -4,5 +4,6 @@ def nothing
 end
 
 def answer
-  load File.join(__dir__, "engine_units_fallback.rb")
+  load File.join(__dir__, "engine_units_refused.rb")
+rescue SystemStackError
 end

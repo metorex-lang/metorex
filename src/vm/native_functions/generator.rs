@@ -65,21 +65,11 @@ impl VirtualMachine {
                                     crate::vm::utils::position_to_location(position),
                                 )
                             })?;
-                    let compiled = self.run_compiled_unit(
+                    self.run_compiled_unit(
                         None,
                         &statements,
                         crate::bytecode::compiler::UnitKind::Plain,
-                    );
-                    match compiled {
-                        Some(ran) => {
-                            ran?;
-                        }
-                        None => {
-                            for statement in &statements {
-                                self.execute_statement(statement)?;
-                            }
-                        }
-                    }
+                    )?;
                 }
                 _ => {
                     self.invoke_callable(hook.clone(), vec![value.clone()], position)?;

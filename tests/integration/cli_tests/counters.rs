@@ -47,16 +47,6 @@ fn counters_report_each_call_path_with_its_count() {
 }
 
 #[test]
-fn counters_report_the_statements_and_expressions_evaluated() {
-    // The tree walker counts statements and expressions, where the bytecode
-    // engine counts instructions.
-    let (_, reported) = run_counted_calls(&[("METOREX_COUNTERS", "1"), ("METOREX_ENGINE", "tree")]);
-    assert!(reported.starts_with("metorex counters, process "));
-    assert!(counted(&reported, "  While")[0] >= 1);
-    assert!(counted(&reported, "  MethodCall")[0] >= 500);
-}
-
-#[test]
 fn counters_report_heap_allocations_for_each_call_path() {
     let (_, reported) = run_counted_calls(&[("METOREX_COUNTERS", "1")]);
     let total: u64 = reported
@@ -76,12 +66,11 @@ fn counters_stay_off_when_set_to_zero() {
 }
 
 #[test]
-fn counters_report_the_instructions_executed_on_the_bytecode_engine() {
+fn counters_report_the_instructions_executed() {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let output = metorex_cmd()
         .current_dir(manifest_dir)
         .env("METOREX_COUNTERS", "1")
-        .env("METOREX_ENGINE", "bytecode")
         .arg(format!(
             "{manifest_dir}/tests/_examples/cli_flags/engine_counted.rb"
         ))

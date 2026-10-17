@@ -1,6 +1,5 @@
 // `yield` expression: invoke the block bound to the current method.
 
-use crate::ast::Expression;
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
@@ -10,22 +9,6 @@ use crate::vm::core::VirtualMachine;
 use crate::vm::utils::position_to_location;
 
 impl VirtualMachine {
-    /// Evaluate a `yield` expression by invoking the current method's block.
-    pub(super) fn eval_yield(
-        &mut self,
-        arguments: &[Expression],
-        position: Position,
-    ) -> Result<Object, MetorexError> {
-        let block = self.block_to_yield(position)?;
-        // A yield takes its arguments the way a call does: splats spread,
-        // and `**hash` passes keywords, or nothing when the hash is empty.
-        let evaluated_args = self.evaluate_arguments(arguments)?;
-        let View::Block(block) = block.view() else {
-            unreachable!("block_to_yield answers a block");
-        };
-        std::rc::Rc::clone(block).call(self, evaluated_args, position)
-    }
-
     /// The block the running method was called with, which `yield` calls.
     pub(crate) fn block_to_yield(&mut self, position: Position) -> Result<Object, MetorexError> {
         let block = self.environment().get("__block__").or_else(|| {

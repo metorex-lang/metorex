@@ -1,14 +1,14 @@
 # RubyVM::InstructionSequence compiles a program, or names the method or
-# block a Proc or a Method was compiled into. Metorex runs the syntax tree,
-# so an instruction sequence holds the source and the node it parses to.
-# MRI answers this way when it compiles with parse.y, as `ruby
-# --parser=parse.y` does.
+# block a Proc or a Method was compiled into. An instruction sequence holds
+# the source and the node it parses to, and its `disasm` and `to_a` list the
+# instructions Metorex compiles that code to rather than YARV's.
 program = RubyVM::InstructionSequence.compile("total = 4 * 5\ntotal + 1")
 p program
 p [program.path, program.absolute_path, program.label, program.base_label, program.first_lineno]
 p program.eval
 p program.trace_points
-puts program.disasm.lines.first
+puts program.disasm
+p program.to_a.last
 
 whole = RubyVM::InstructionSequence.compile_file(__FILE__)
 p [whole.label, whole.path == __FILE__, whole.absolute_path == File.expand_path(__FILE__), whole.first_lineno]
@@ -19,6 +19,7 @@ p [named, named.path, named.absolute_path, named.first_lineno, named.eval]
 def area(width, height) = width * height
 measured = RubyVM::InstructionSequence.of(method(:area))
 p [measured.label, measured.base_label, measured.first_lineno, measured.path == __FILE__]
+puts measured.disasm.lines.drop(1)
 begin
   measured.eval
 rescue TypeError => error

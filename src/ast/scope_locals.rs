@@ -3,9 +3,8 @@
 //! Ruby pre-defines local variables as `nil` at parse time the moment the
 //! parser sees an assignment to that name in the current scope, so a read
 //! that runs before the assignment line returns `nil` rather than raising
-//! `NameError`. Our tree-walking interpreter approximates that by walking
-//! the AST once at scope entry and pre-binding every assignment target it
-//! finds to `nil`.
+//! `NameError`. Metorex approximates that by walking the AST once at scope
+//! entry and pre-binding every assignment target it finds to `nil`.
 //!
 //! Walks recursively through control flow (if/while/begin/case/etc.) but
 //! stops at scope boundaries — `def`, `class`, `module`, lambda/proc — so

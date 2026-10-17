@@ -1,35 +1,16 @@
 // Exception handling for the Metorex VM.
 // This module handles raise and begin/rescue/else/ensure blocks.
 
-use super::ControlFlow;
 use super::core::VirtualMachine;
 use super::utils::*;
 use crate::object::{OptionView, View};
 
-use crate::ast::Statement;
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
 use std::rc::Rc;
 
 impl VirtualMachine {
-    /// Execute a raise statement to throw an exception.
-    pub(crate) fn execute_raise(
-        &mut self,
-        exception: &Option<crate::ast::Expression>,
-        position: Position,
-    ) -> Result<ControlFlow, MetorexError> {
-        let value = match exception {
-            Some(expr) => Some(self.evaluate_expression(expr)?),
-            None => None,
-        };
-        let exception_obj = self.statement_raise(value, position)?;
-        Ok(ControlFlow::Exception {
-            exception: exception_obj,
-            position,
-        })
-    }
-
     /// The exception a `raise` statement raises, given what was written
     /// after it evaluated, or None for a bare `raise`.
     pub(crate) fn statement_raise(
@@ -543,173 +524,6 @@ impl VirtualMachine {
         }
     }
 
-    /// Execute a begin/rescue/else/ensure block.
-    pub(crate) fn execute_begin(
-        &mut self,
-        body: &[Statement],
-        rescue_clauses: &[crate::ast::RescueClause],
-        else_clause: &Option<Vec<Statement>>,
-        ensure_block: &Option<Vec<Statement>>,
-        _position: Position,
-    ) -> Result<ControlFlow, MetorexError> {
-        // `retry` in a rescue body runs the whole begin body again, which is
-        // what this loop is for.
-        loop {
-            let outcome = self.begin_pass(body, rescue_clauses, else_clause, ensure_block);
-            match &outcome {
-                Ok(ControlFlow::Retry { .. }) => continue,
-                Err(MetorexError::BlockRetry { .. }) => continue,
-                _ => return outcome,
-            }
-        }
-    }
-
-    /// One pass over a begin body and whichever clause answers for it.
-    fn begin_pass(
-        &mut self,
-        body: &[Statement],
-        rescue_clauses: &[crate::ast::RescueClause],
-        else_clause: &Option<Vec<Statement>>,
-        ensure_block: &Option<Vec<Statement>>,
-    ) -> Result<ControlFlow, MetorexError> {
-        // What `$!` named before this form ran, which a clause handling an
-        // exception of its own puts back when it is done.
-        let standing = self.globals().get("!").unwrap_or(Object::Nil);
-        // Execute the try block
-        let body_result = self.execute_begin_branch(body);
-
-        // Track whether an exception was handled
-        let mut handled_exception = false;
-        let mut final_result = body_result;
-
-        // An error a `rescue` can catch becomes the exception it stands for.
-        if let Err(error) = &final_result
-            && let Some((exception, position)) = rescuable_exception(error)
-        {
-            final_result = Ok(ControlFlow::Exception {
-                exception,
-                position,
-            });
-        }
-
-        // If an exception occurred, try to match rescue clauses
-        if let Ok(ControlFlow::Exception {
-            exception,
-            position: ex_pos,
-        }) = &final_result
-        {
-            // Store the current exception in $! for access in rescue blocks
-            self.note_exception_location(
-                exception,
-                &crate::vm::utils::position_to_location(*ex_pos),
-            );
-            self.set_current_exception(exception.clone());
-
-            // Try each rescue clause in order
-            for rescue_clause in rescue_clauses {
-                if self.rescue_clause_matches(rescue_clause, exception, rescue_clause.position)? {
-                    // A trace sees the clause take the exception.
-                    self.fire_event(
-                        "rescue",
-                        rescue_clause.position,
-                        vec![("raised_exception", exception.clone())],
-                    )?;
-                    // Bind exception to variable if specified (=> e)
-                    if let Some(var_name) = &rescue_clause.variable_name {
-                        match var_name.strip_prefix('$') {
-                            Some(global) => {
-                                self.globals_mut().set(global, exception.clone());
-                            }
-                            // Assigned the way `=` assigns it, so a
-                            // variable of an enclosing scope is the one set.
-                            None => {
-                                if !self.environment_mut().set(var_name, exception.clone()) {
-                                    self.environment_mut()
-                                        .define(var_name.clone(), exception.clone());
-                                }
-                            }
-                        }
-                    }
-                    // `rescue E => held.error` stores the exception wherever
-                    // the target names, the way an assignment would.
-                    if let Some(target) = &rescue_clause.variable_target {
-                        let target = target.clone();
-                        self.assign_value(&target, exception.clone())?;
-                    }
-
-                    // Execute the rescue block
-                    let handled_cause = exception.clone();
-                    final_result = self.execute_begin_branch(&rescue_clause.body);
-                    // An exception raised by the rescue body takes the one
-                    // being handled as its cause.
-                    if let Err(MetorexError::UncaughtException {
-                        exception: raised, ..
-                    }) = &final_result
-                    {
-                        Self::record_cause(raised, &handled_cause);
-                    }
-                    handled_exception = true;
-                    break;
-                }
-            }
-
-            // If exception wasn't handled, it will propagate
-            if !handled_exception {
-                // Keep the exception result to propagate it
-                // Don't execute else clause
-            } else {
-                // A handled exception leaves `$!` naming whatever it was
-                // before, so an outer handler still names what it handles.
-                self.restore_current_exception(standing);
-                // `retry` runs the body again before the begin is left, so
-                // ensure waits for the pass that does leave it.
-                if matches!(
-                    final_result,
-                    Ok(ControlFlow::Retry { .. }) | Err(MetorexError::BlockRetry { .. })
-                ) {
-                    return final_result;
-                }
-            }
-        } else if final_result.is_ok()
-            && matches!(
-                final_result,
-                Ok(ControlFlow::Next) | Ok(ControlFlow::Value(_))
-            )
-        {
-            // No exception occurred - execute else clause if present
-            if let Some(else_stmts) = else_clause {
-                final_result = self.execute_begin_branch(else_stmts);
-            }
-        }
-
-        // Always execute ensure block, regardless of what happened
-        if let Some(ensure_stmts) = ensure_block {
-            let ensure_result = self.execute_statements_internal(ensure_stmts);
-
-            // If ensure block raises an exception or changes control flow,
-            // it overrides the previous result
-            match ensure_result {
-                Ok(ControlFlow::Exception { .. }) => {
-                    final_result = ensure_result;
-                }
-                Ok(ControlFlow::Next) | Ok(ControlFlow::Value(_)) => {
-                    // Ensure completed normally. Its value is discarded, since
-                    // the begin body decides what the whole form answers.
-                }
-                Ok(_) => {
-                    // Other control flow (return, break, continue)
-                    final_result = ensure_result;
-                }
-                Err(_) => {
-                    // Error in ensure block overrides previous result
-                    final_result = ensure_result;
-                }
-            }
-        }
-
-        final_result
-    }
-
     /// What a rescue clause does as it takes `exception`: a `rescue` event
     /// for a trace, and the name it is given bound the way `=` binds it, so
     /// a variable of an enclosing scope is the one set. The statement form
@@ -738,66 +552,6 @@ impl VirtualMachine {
             }
         }
         Ok(())
-    }
-
-    /// Run a begin/rescue/else clause body, returning `ControlFlow::Value`
-    /// holding the value of the last expression statement when the body
-    /// completes normally — so e.g. `begin; raise; rescue => e; e; end`
-    /// evaluates to the rescued exception. Non-expression terminal
-    /// statements still return their natural ControlFlow.
-    fn execute_begin_branch(&mut self, body: &[Statement]) -> Result<ControlFlow, MetorexError> {
-        let mut last_value: Option<Object> = None;
-        for (idx, statement) in body.iter().enumerate() {
-            let is_last = idx == body.len() - 1;
-            if is_last
-                && !matches!(statement, Statement::Begin { .. })
-                && !self.tracepoints.is_empty()
-                && crate::bytecode::compiler::answers_its_own_value(statement)
-            {
-                self.fire_line_event(statement.position())?;
-            }
-            if is_last && let Some(value) = self.terminal_statement_value(statement)? {
-                // The last statement answered here rather than through
-                // `execute_statement`, so it is counted here too.
-                if self.coverage.is_some() {
-                    self.coverage_count(statement.position().line);
-                }
-                return Ok(ControlFlow::Value(value));
-            }
-            match self.execute_statement(statement)? {
-                ControlFlow::Next => {}
-                ControlFlow::Value(v) => last_value = Some(v),
-                // A `break` whose block's call has returned raises here, so
-                // this `begin` can rescue it.
-                ControlFlow::Break { value, position } => {
-                    return match self.break_signal(value.clone(), position_to_location(position)) {
-                        error @ MetorexError::UncaughtException { .. } => Err(error),
-                        _ => Ok(ControlFlow::Break { value, position }),
-                    };
-                }
-                flow => return Ok(flow),
-            }
-        }
-        match last_value {
-            Some(v) => Ok(ControlFlow::Value(v)),
-            None => Ok(ControlFlow::Next),
-        }
-    }
-
-    /// Whether a rescue clause handles this exception. The classes it names
-    /// are read where the clause is reached, which is what lets a local hold
-    /// one and a splat name several.
-    pub(crate) fn rescue_clause_matches(
-        &mut self,
-        rescue_clause: &crate::ast::RescueClause,
-        exception: &Object,
-        position: Position,
-    ) -> Result<bool, MetorexError> {
-        let mut spreads = Vec::with_capacity(rescue_clause.splatted_types.len());
-        for expression in rescue_clause.splatted_types.clone() {
-            spreads.push(self.evaluate_expression(&expression)?);
-        }
-        self.rescue_clause_takes(rescue_clause, spreads, exception, position)
     }
 
     /// Whether a rescue clause handles this exception, with the values of

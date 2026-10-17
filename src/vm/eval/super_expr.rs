@@ -1,6 +1,5 @@
 // `super` expression: dispatch to the same method in the parent class.
 
-use crate::ast::Expression;
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
@@ -41,59 +40,12 @@ impl SuperArguments {
 }
 
 impl VirtualMachine {
-    /// Evaluate a `super` call. Walks the inheritance chain from the receiver's
-    /// class to find the class defining the current method, then invokes the
-    /// same-named method on that class's superclass.
-    pub(super) fn eval_super(
-        &mut self,
-        arguments: &[Expression],
-        forward_args: bool,
-        trailing_block: Option<&Expression>,
-        position: Position,
-    ) -> Result<Object, MetorexError> {
-        // A block written on the super call stands in for the one the caller
-        // supplied, and it is evaluated once no matter which branch below
-        // ends up reaching the parent method.
-        let super_block = match trailing_block {
-            Some(block) => Some(self.attach_trailing_block(block)?),
-            None => self.block_super_passes(),
-        };
-        let arguments = if forward_args {
-            SuperArguments::Forwarded
-        } else {
-            let block_argument = self.prepare_super_block_argument(arguments, &super_block);
-            SuperArguments::Written {
-                values: self.evaluate_arguments(arguments)?,
-                block_argument,
-            }
-        };
-        self.super_with(&arguments, super_block, position)
-    }
-
     /// The block `super` hands on when none is written on it: the one this
     /// method was called with.
     pub(crate) fn block_super_passes(&self) -> Option<Object> {
         self.environment()
             .get("__block__")
             .filter(|held| matches!(held.view(), View::Block(_)))
-    }
-
-    /// Before the arguments of a `super` call written with `&block` are
-    /// evaluated, the block they name is the one the parent receives, and
-    /// none stands until they are. Answers whether one was written.
-    pub(crate) fn prepare_super_block_argument(
-        &mut self,
-        arguments: &[Expression],
-        super_block: &Option<Object>,
-    ) -> bool {
-        let block_argument = arguments
-            .iter()
-            .any(|argument| matches!(argument, Expression::BlockArg { .. }));
-        if block_argument {
-            self.pending_block_from_ampersand = super_block.is_some();
-            self.pending_block = None;
-        }
-        block_argument
     }
 
     /// Call the parent's method of the running method's name, with the

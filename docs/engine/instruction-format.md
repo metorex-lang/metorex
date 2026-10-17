@@ -117,7 +117,7 @@ registers than on the stack, since its literals each take an instruction.
   `return`, `yield`, `super`, definitions, `begin` with its clauses,
   pattern matching, and `BEGIN`. A body needing more registers than an
   instruction can name is refused with the type name of the node that ran
-  out, and runs on the tree walker.
+  out, and raises SystemStackError when it would run.
 - A long list does not hold a register per element. A call with more than
   64 arguments gathers them in an argument list, an interpolated String
   with more than 32 holes is joined 32 holes at a time, and Array and Hash
@@ -142,56 +142,54 @@ registers than on the stack, since its literals each take an instruction.
 - A method, class, or module definition, `alias`, `include`, and
   `extend` is a `Define` instruction. What the statement needs evaluated,
   such as the namespace of `class A::B` or the target of `class << target`,
-  is compiled into registers first, and the definition itself is made by
-  the same code the tree walker calls, since a method's body runs only when
-  it is called.
+  is compiled into registers first, and `run_definition` makes the
+  definition from the statement, since a method's body runs only when it is
+  called.
 - A class or module body compiles by the rules its statements follow there:
   a bare `private` changes the visibility the next `def` takes, `@name =
   value` sets the class's own instance variable, `attr_*` and `include` call
   a method the program wrote under that name when there is one, and a bare
   name answering a method calls it. Each such statement is compiled into
-  instructions that call the functions the tree walker's class and module
-  body loops call for the same statement.
+  `BodyStatement` and the other `Body` instructions, which call
+  `class_body_statement` and `module_body_statement`.
 - `super` evaluates its arguments before looking for the parent's method,
-  as CRuby does, and `CallSuper` and the tree walker both call
-  `super_with`.
+  as CRuby does, and `CallSuper` calls `super_with`.
 - A call without a receiver, `name(arguments)`, decides how it is made
   before its arguments are evaluated, from what the scope binds `name` to
-  and what `self` answers: `ResolveCall` and `eval_call` both call
-  `resolve_bare_call`, and `CallResolved` and `eval_call` both call
-  `run_call_route`.
+  and what `self` answers: `ResolveCall` calls `resolve_bare_call`, and
+  `CallResolved` calls `run_call_route`.
 - Arguments with `*`, `**`, or `&` among them are gathered in an argument
-  list, `StartArguments` and one instruction per argument, which call the
-  same `ArgumentList` the tree walker's `evaluate_arguments` uses.
+  list, `StartArguments` and one instruction per argument, which add to an
+  `ArgumentList`.
 - `case`/`when` and `case`/`in` test each arm with an instruction that
-  calls the tree walker's `match_pattern`, and the arms' bodies and an `in`
-  clause's guard compile. The value a `case`/`in` matches is asked for its
+  calls `match_pattern`, and the arms' bodies and an `in` clause's guard
+  compile. The value a `case`/`in` matches is asked for its
   elements once for the whole `case`, and is let go of however the `case` is
   left.
-- `defined?`, patterns, and a `when` clause's guard call the tree walker's
-  `eval_defined`, `match_pattern`, and guard evaluation, which evaluate the
-  expressions inside them, such as a pinned expression or a receiver
-  `defined?` asks about.
+- `defined?`, patterns, and a `when` clause's guard call `eval_defined`,
+  `match_pattern`, and guard evaluation. An expression inside them, such
+  as a pinned expression or a receiver `defined?` asks about, is compiled
+  alone the first time it runs there and kept by its node. So is a
+  parameter's default and a statement a class body hands back to
+  `execute_statement`.
 - Branches and loops are jumps inside the unit. A `break`, `next`, or
   `redo` inside a loop of the unit jumps, after dropping any argument list,
   call route, or `case` scope it leaves open. One outside every loop ends
   the unit with that control flow, which the method, block, or top level
-  the unit is the body of takes as the tree walker takes the same
-  statement: a block's `next` answers its value, its `break` returns from
+  the unit is the body of takes as Ruby does: a block's `next` answers its value, its `break` returns from
   the call the block was attached to, its `redo` runs it again, and its
   `return` returns from the method the block was written in, or from the
   block when it is a lambda.
-- `for` compiles to the call of `each` the tree walker turns it into.
+- `for` compiles to a call of `each`.
 - No temporary register lives from one statement to the next, so the runner
   clears them as each statement starts, and a value only a temporary held
   can be freed.
 - An assignment through a setter, `[]=`, or `Ns::Name =` evaluates the
   receiver, subscripts, or namespace into registers, and names them in the
   unit's table of targets. `StoreTarget` and `ReadTarget` turn the entry
-  back into the tree walker's prepared target and write or read through
-  it, so both engines call the same setter and `[]=` code.
+  into a prepared target and write or read through it.
 - A Hash literal's keys and values are all evaluated before any key's
-  `hash` is called, as in CRuby, on both engines. Each hole of an
+  `hash` is called, as in CRuby. Each hole of an
   interpolated String is converted to text before the next is evaluated.
 - An Array or Hash literal longer than 64 elements or pairs is built 64 at
   a time, `NewArray` or `NewHash` for the first and `AppendArray` or
@@ -200,8 +198,8 @@ registers than on the stack, since its literals each take an instruction.
   each instruction by `match` in one loop over a register file the unit's
   size. Registers are a `Vec` per run for now, not the frame's part of a
   shared value stack.
-- An instruction that needs the interpreter calls the function the tree
-  walker calls: `operate_on_values` for an operator, `call_evaluated_method`
+- An instruction that needs the interpreter calls a function of
+  `VirtualMachine`: `operate_on_values` for an operator, `call_evaluated_method`
   for a call, `read_identifier` for a constant or a name the unit does not
   assign, `eval_instance_var_read` for an instance variable,
   `read_global_variable` for a global, and `assign_value` for a write.
@@ -213,9 +211,8 @@ registers than on the stack, since its literals each take an instruction.
   the local's slot, and later reads and writes of the run go to the cell.
   Until then `GetLocal` reads the scope by name. The locals are not
   registers for now.
-- An instruction that starts a statement runs what the tree walker runs
-  before each statement: the line event, signals, a due collection, the
-  thread's turn, and coverage.
+- An instruction that starts a statement runs `begin_statement`: the line
+  event, signals, a due collection, the thread's turn, and coverage.
 - `begin` with its `rescue`, `else`, and `ensure` clauses compiles to
   handlers over ranges of instructions. A rescue handler takes an error a
   `rescue` can catch, puts the exception in its register, keeps the error,

@@ -1,8 +1,6 @@
 // Top-level program execution and the expression-evaluation entrypoint.
 
-use super::ControlFlow;
 use super::core::VirtualMachine;
-use super::errors::*;
 use super::utils::*;
 use crate::object::{OptionView, View};
 
@@ -200,10 +198,7 @@ impl VirtualMachine {
         let caller_lexical_home = self.lexical_home_frame.take();
         // A `return` written at the top level ends the program, carrying its
         // value out however deep in blocks it was written.
-        let ran = match self.run_compiled_program(statements, false) {
-            Some(ran) => ran,
-            None => self.run_program_statements(statements),
-        };
+        let ran = self.run_compiled_program(statements, false);
         let result = match ran {
             Err(MetorexError::NonLocalReturn { value, .. }) => Ok(Some(value)),
             other => other,
@@ -221,162 +216,7 @@ impl VirtualMachine {
         &mut self,
         statements: &[Statement],
     ) -> Result<Option<Object>, MetorexError> {
-        match self.run_compiled_program(statements, true) {
-            Some(ran) => ran,
-            None => self.run_statements_of_a_unit(statements, true),
-        }
-    }
-
-    pub(crate) fn run_program_statements(
-        &mut self,
-        statements: &[Statement],
-    ) -> Result<Option<Object>, MetorexError> {
-        self.run_statements_of_a_unit(statements, false)
-    }
-
-    fn run_statements_of_a_unit(
-        &mut self,
-        statements: &[Statement],
-        a_return_unwinds: bool,
-    ) -> Result<Option<Object>, MetorexError> {
-        // Ruby's parser reserves every local a file assigns to before any of
-        // it runs, so a name read ahead of its assignment answers nil and
-        // TOPLEVEL_BINDING names it from the start.
-        for name in crate::ast::scope_locals::collect_assigned_locals(statements) {
-            if self.environment().assignment_introduces_a_local(&name) {
-                self.environment_mut().hoist(name);
-            }
-        }
-        // Every `BEGIN` body runs before the rest of the unit, in the order
-        // they were written, and shares the unit's own scope.
-        for statement in statements {
-            if let Statement::BeginBlock { body, position } = statement {
-                // A program read one line at a time runs the same unit once
-                // per line, and the body belongs to the unit rather than to
-                // each pass over it.
-                let site = (
-                    self.current_source_file.clone().unwrap_or_default(),
-                    position.line,
-                    position.column,
-                );
-                if self.opened_blocks.insert(site)
-                    && let ControlFlow::Return {
-                        value,
-                        position: at,
-                    } = self.execute_statements_internal(body)?
-                    && a_return_unwinds
-                {
-                    return Err(self.unwinding_return(value, at));
-                }
-            }
-        }
-        self.run_restartable(|vm, start| {
-            let mut last_value = None;
-
-            for (index, statement) in statements.iter().enumerate().skip(start) {
-                vm.mark_statement(index);
-                // If it's an expression statement, track its value
-                if let Statement::Expression {
-                    expression,
-                    position,
-                } = statement
-                {
-                    if vm.coverage.is_some() {
-                        vm.coverage_count(position.line);
-                    }
-                    if !vm.tracepoints.is_empty() {
-                        vm.fire_line_event(*position)?;
-                    }
-                    let result = vm.evaluate_expression(expression)?;
-                    last_value = Some(result);
-                    continue;
-                }
-
-                // Match/CaseIn statements also produce values
-                if matches!(
-                    statement,
-                    Statement::Match { .. } | Statement::CaseIn { .. }
-                ) {
-                    match vm.execute_statement(statement)? {
-                        ControlFlow::Return { value, .. } | ControlFlow::Value(value) => {
-                            last_value = Some(value);
-                            continue;
-                        }
-                        ControlFlow::Next => {}
-                        ControlFlow::Exception {
-                            exception,
-                            position,
-                        } => {
-                            // Carrying the exception keeps it reachable as `$!`
-                            // for the `at_exit` handlers that run next.
-                            return Err(MetorexError::UncaughtException {
-                                message: format_exception(&exception),
-                                exception,
-                                location: position_to_location(position),
-                            });
-                        }
-                        ControlFlow::Break { position, .. } => {
-                            return Err(loop_control_error("break", position));
-                        }
-                        ControlFlow::Retry { position } => {
-                            return Err(MetorexError::BlockRetry {
-                                location: position_to_location(position),
-                            });
-                        }
-                        ControlFlow::Redo { position } => {
-                            return Err(loop_control_error("redo", position));
-                        }
-                        ControlFlow::Continue { position, .. } => {
-                            return Err(loop_control_error("next", position));
-                        }
-                    }
-                    continue;
-                }
-
-                // Execute other statements
-                match vm.execute_statement(statement)? {
-                    ControlFlow::Next => {}
-                    ControlFlow::Value(value) => {
-                        last_value = Some(value);
-                    }
-                    ControlFlow::Return {
-                        value,
-                        position: at,
-                    } => {
-                        if a_return_unwinds {
-                            return Err(vm.unwinding_return(value, at));
-                        }
-                        return Ok(Some(value));
-                    }
-                    ControlFlow::Exception {
-                        exception,
-                        position,
-                    } => {
-                        return Err(MetorexError::UncaughtException {
-                            message: format_exception(&exception),
-                            exception,
-                            location: position_to_location(position),
-                        });
-                    }
-                    ControlFlow::Break { position, .. } => {
-                        return Err(loop_control_error("break", position));
-                    }
-                    ControlFlow::Retry { position } => {
-                        return Err(MetorexError::BlockRetry {
-                            location: position_to_location(position),
-                        });
-                    }
-                    ControlFlow::Redo { position } => {
-                        return Err(loop_control_error("redo", position));
-                    }
-                    ControlFlow::Continue { position, .. } => {
-                        return Err(loop_control_error("next", position));
-                    }
-                }
-            }
-
-            Ok(last_value)
-        })
+        self.run_compiled_program(statements, true)
     }
 
     /// A `return` leaving an eval, which unwinds to the invocation the code
@@ -432,13 +272,13 @@ impl VirtualMachine {
         Ok(arguments.finish())
     }
 
-    /// Evaluate an expression to a runtime value.
+    /// Run an expression alone, compiled, answering its value.
     pub(crate) fn evaluate_expression(
         &mut self,
         expression: &Expression,
     ) -> Result<Object, MetorexError> {
         enter_nesting(expression.position())?;
-        let result = self.evaluate_expression_inner(expression);
+        let result = self.run_expression(expression);
         leave_nesting();
         if result.is_err() {
             self.note_error_spot(&result, expression);

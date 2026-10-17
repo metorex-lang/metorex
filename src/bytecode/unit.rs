@@ -75,8 +75,7 @@ pub struct StatementStart {
     pub kind: StartKind,
 }
 
-/// What happens as a statement starts, which follows what the tree walker
-/// does for a statement in the same place.
+/// What happens as a statement starts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StartKind {
     /// A line event, signals, a due collection, the thread's turn, and the
