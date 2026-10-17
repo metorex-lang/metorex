@@ -203,6 +203,42 @@ impl VirtualMachine {
         Ok(is_truthy(&held))
     }
 
+    /// Test one `when` arm of a `case`/`when` statement against `subject`.
+    /// A match is counted for coverage and binds what the pattern bound in
+    /// the scope the `case` is in.
+    pub(crate) fn enter_when_arm(
+        &mut self,
+        arm: &crate::bytecode::unit::PatternArm,
+        subject: &Object,
+    ) -> Result<bool, MetorexError> {
+        let mut bindings: HashMap<String, Object> = HashMap::new();
+        if !self.match_pattern(&arm.pattern, subject, &mut bindings, arm.case_position)?
+            || !self.evaluate_guard_with_bindings(arm.guard.as_ref(), &bindings)?
+        {
+            return Ok(false);
+        }
+        self.coverage_branch(arm.case_position, arm.index);
+        self.apply_pattern_bindings(&bindings);
+        Ok(true)
+    }
+
+    /// Test one `in` arm's pattern of a `case`/`in` statement against
+    /// `subject`. The names the pattern reached are locals of the scope the
+    /// `case` is in, whether or not it matched, the ones it did not bind
+    /// holding nil.
+    pub(crate) fn enter_in_arm(
+        &mut self,
+        arm: &crate::bytecode::unit::PatternArm,
+        subject: &Object,
+    ) -> Result<bool, MetorexError> {
+        let mut bindings: HashMap<String, Object> = HashMap::new();
+        self.pattern_failure = None;
+        let matched =
+            self.match_pattern(&arm.pattern, subject, &mut bindings, arm.case_position)?;
+        self.apply_pattern_bindings(&bindings);
+        Ok(matched)
+    }
+
     /// Test one arm of a `case` expression against `subject`. When it
     /// matches, count it for coverage and open a scope holding what its
     /// pattern bound, in which its body runs.

@@ -360,3 +360,9 @@ fn test_threads_super_after_a_thread_switch_execution() {
     let output = run_example("threads/super_after_a_thread_switch.rb");
     assert_eq!(output, "[:mine, :other]\n");
 }
+
+#[test]
+fn test_threads_break_in_a_thread_execution() {
+    let output = run_example("threads/break_in_a_thread.rb");
+    assert_eq!(output, "LocalJumpError\n");
+}

@@ -115,15 +115,15 @@ fn a_call_is_pointed_at_by_its_receiver_and_method_name() {
 }
 
 #[test]
-fn a_body_holding_a_node_the_compiler_does_not_handle_names_it() {
-    assert_eq!(
-        compiled("case 1\nwhen 1 then 2\nend\n").err(),
-        Some("Match")
-    );
-    assert_eq!(
-        compiled("begin\n  1\nend while false\n").err(),
-        Some("Begin")
-    );
+fn a_body_needing_more_registers_than_an_instruction_names_names_the_node_holding_them() {
+    let arguments = vec!["held"; 300].join(", ");
+    assert_eq!(compiled(&format!("puts({arguments})\n")).err(), Some("Call"));
+}
+
+#[test]
+fn a_begin_body_runs_ahead_of_the_statements_written_before_it() {
+    let unit = unit_of("first = seen\nBEGIN { seen = 1 }\n");
+    assert_eq!(unit.instructions[0].name(), "BeginBlockOnce");
 }
 
 #[test]

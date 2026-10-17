@@ -8,8 +8,8 @@ use crate::bytecode::instruction::{
     BINARY_OPERATORS, Instruction, Operand, RANGE_EXCLUSIVE, RANGE_LITERAL_ENDS,
 };
 use crate::bytecode::unit::{
-    CallSite, Definition, HashEntry, HashShape, Piece, Receiver, StartKind, StatementStart, Target,
-    Unit,
+    CallSite, Definition, HandlerKind, HashEntry, HashShape, OpenAtHandler, Piece, Receiver,
+    StartKind, StatementStart, Target, Unit,
 };
 use crate::error::MetorexError;
 use crate::lexer::Position;
@@ -57,6 +57,9 @@ struct RunState {
     cells: Vec<Option<Rc<RefCell<Object>>>>,
     /// The argument lists being gathered, the innermost call's last.
     arguments: Vec<ArgumentList>,
+    /// The errors handlers keep while a `rescue` or an `ensure` deals with
+    /// them, by slot.
+    errors: Vec<Option<MetorexError>>,
     /// The routes decided for calls whose arguments are being evaluated,
     /// the innermost call's last, each with whether the call was written
     /// with no receiver.
@@ -85,11 +88,17 @@ impl VirtualMachine {
             cells: vec![None; unit.locals.len()],
             arguments: Vec::new(),
             routes: Vec::new(),
+            errors: (0..unit.error_slots).map(|_| None).collect(),
         };
         // A continuation taken in the unit runs it again from the statement
         // its `callcc` was written in.
         self.run_restartable(|vm, statement| {
-            let at = unit.statement_at(statement).unwrap_or(0);
+            // The first run starts ahead of the first statement, where the
+            // unit's `BEGIN` bodies are.
+            let at = match statement {
+                0 => 0,
+                _ => unit.statement_at(statement).unwrap_or(0),
+            };
             // A loop or a `case` arm the run leaves early, by an error or a
             // jump, leaves what it opened for the run to close.
             let scopes = vm.environment().current_depth();
@@ -112,6 +121,14 @@ impl VirtualMachine {
         let mut registers = vec![Object::Nil; unit.register_count];
         let mut at = start;
         let mut extension = Extension::default();
+        // What the run had open as it began, which a handler goes back to
+        // with what was open where its instructions begin added.
+        let base = OpenAtHandler {
+            lists: state.arguments.len(),
+            routes: state.routes.len(),
+            scopes: self.environment().current_depth(),
+            loops: self.running_block_breaks.len(),
+        };
         loop {
             let instruction = unit.instructions[at];
             let position = unit.positions[at];
@@ -165,21 +182,10 @@ impl VirtualMachine {
                     if let Some(spot) = &unit.error_spots[at] {
                         self.note_compiled_error_spot(&error, spot);
                     }
-                    let Some(handler) = unit.handler_for(at) else {
-                        return Err(error);
-                    };
-                    let Some((exception, raised_at)) =
-                        crate::vm::exceptions::rescuable_exception(&error)
-                    else {
-                        return Err(error);
-                    };
-                    self.note_exception_location(
-                        &exception,
-                        &crate::vm::utils::position_to_location(raised_at),
-                    );
-                    self.set_current_exception(exception.clone());
-                    registers[handler.register] = exception;
-                    at = handler.target;
+                    match self.handle_error(unit, at, error, &mut registers, state, base)? {
+                        Some(target) => at = target,
+                        None => unreachable!("an error no handler took is answered above"),
+                    }
                 }
             }
         }
@@ -655,6 +661,54 @@ impl VirtualMachine {
                 }));
             }
             Instruction::ExitRedo => return Ok(Next::Finish(ControlFlow::Redo { position })),
+            Instruction::ExitRetry => return Ok(Next::Finish(ControlFlow::Retry { position })),
+            Instruction::BreakCheck { from } => {
+                let value = registers[register(from)].clone();
+                let location = crate::vm::utils::position_to_location(position);
+                if let error @ MetorexError::UncaughtException { .. } =
+                    self.break_signal(value, location)
+                {
+                    return Err(error);
+                }
+            }
+            Instruction::SaveCurrentException { to } => {
+                registers[register(to)] = self.globals().get("!").unwrap_or(Object::Nil);
+            }
+            Instruction::RestoreCurrentException { from } => {
+                self.restore_current_exception(registers[register(from)].clone());
+            }
+            Instruction::RescueMatches {
+                register: held,
+                clause,
+            } => {
+                let held = register(held);
+                let clause = &unit.rescue_clauses[index(clause)].clause;
+                let count = clause.splatted_types.len();
+                let spreads = registers[held + 2..held + 2 + count].to_vec();
+                let exception = registers[held].clone();
+                let takes =
+                    self.rescue_clause_takes(clause, spreads, &exception, clause.position)?;
+                registers[held + 1] = Object::Bool(takes);
+            }
+            Instruction::EnterRescue { from, clause } => {
+                let shape = &unit.rescue_clauses[index(clause)];
+                let exception = registers[register(from)].clone();
+                self.enter_rescue(&shape.clause, exception, shape.expression_form)?;
+            }
+            Instruction::Reraise { slot } => {
+                return Err(state.errors[index(slot)]
+                    .take()
+                    .expect("a handler kept the error"));
+            }
+            Instruction::RaiseStatement { from, written } => {
+                let value = (written != 0).then(|| registers[register(from)].clone());
+                let exception = self.statement_raise(value, position)?;
+                return Err(MetorexError::UncaughtException {
+                    message: crate::vm::utils::format_exception(&exception),
+                    exception,
+                    location: crate::vm::utils::position_to_location(position),
+                });
+            }
             Instruction::ExitReturn { from, written } => {
                 if written != 0 {
                     self.warn_top_level_return_value(position);
@@ -681,6 +735,17 @@ impl VirtualMachine {
                 registers[base] = answer?;
             }
             Instruction::PushScope => self.environment_mut().push_scope(),
+            Instruction::BeginBlockOnce { to } => {
+                // A program read one line at a time runs the same unit once
+                // per line, and the body belongs to the unit rather than to
+                // each pass over it.
+                let site = (
+                    self.current_source_file.clone().unwrap_or_default(),
+                    position.line,
+                    position.column,
+                );
+                registers[register(to)] = Object::Bool(self.opened_blocks.insert(site));
+            }
             Instruction::BodyStatement { to, statement } => {
                 let body = self.running_body();
                 let statement = &unit.body_statements[index(statement)];
@@ -885,6 +950,42 @@ impl VirtualMachine {
                 let matched = self.enter_case_arm(arm, &registers[subject])?;
                 registers[subject + 1] = Object::Bool(matched);
             }
+            Instruction::WarnDuplicatedWhen { list } => {
+                let (cases, written_at) = &unit.when_lists[index(list)];
+                self.warn_duplicated_when_clauses(cases, *written_at)?;
+            }
+            Instruction::WhenArm { subject, arm } => {
+                let subject = register(subject);
+                let arm = &unit.pattern_arms[index(arm)];
+                let matched = self.enter_when_arm(arm, &registers[subject])?;
+                registers[subject + 1] = Object::Bool(matched);
+            }
+            Instruction::InArm { subject, arm } => {
+                let subject = register(subject);
+                let arm = &unit.pattern_arms[index(arm)];
+                let matched = self.enter_in_arm(arm, &registers[subject])?;
+                registers[subject + 1] = Object::Bool(matched);
+            }
+            Instruction::GuardFailed => {
+                self.note_pattern_failure(crate::vm::pattern_matching::PatternFailure::Detail(
+                    "guard clause does not return true".to_string(),
+                ));
+            }
+            Instruction::PushDeconstructed { from } => {
+                self.deconstructed_values
+                    .push((registers[register(from)].clone(), None));
+            }
+            Instruction::PopDeconstructed => {
+                self.deconstructed_values.pop();
+            }
+            Instruction::NoMatchingPattern { subject, single } => {
+                let value = registers[register(subject)].clone();
+                return Err(if single != 0 {
+                    self.detailed_no_matching_pattern(&value, position)
+                } else {
+                    self.no_matching_pattern(&value, position)
+                });
+            }
             Instruction::PopScope => {
                 self.environment_mut().pop_scope();
             }
@@ -1008,14 +1109,107 @@ impl VirtualMachine {
         })
     }
 
+    /// Take an error raised at `at` to the innermost handler covering it
+    /// that takes it, answering where the run goes on, or answer the error
+    /// when none does.
+    fn handle_error(
+        &mut self,
+        unit: &Unit,
+        at: usize,
+        error: MetorexError,
+        registers: &mut [Object],
+        state: &mut RunState,
+        base: OpenAtHandler,
+    ) -> Result<Option<usize>, MetorexError> {
+        for handler in unit.handlers_for(at) {
+            match handler.kind {
+                HandlerKind::Rescue { slot } => {
+                    let Some((exception, raised_at)) =
+                        crate::vm::exceptions::rescuable_exception(&error)
+                    else {
+                        continue;
+                    };
+                    self.close_back_to(handler.open, base, state);
+                    self.note_exception_location(
+                        &exception,
+                        &crate::vm::utils::position_to_location(raised_at),
+                    );
+                    self.set_current_exception(exception.clone());
+                    registers[handler.register] = exception;
+                    if let Some(kept) = state.errors.get_mut(slot) {
+                        *kept = Some(error);
+                    }
+                    return Ok(Some(handler.target));
+                }
+                HandlerKind::Ensure { slot } => {
+                    self.close_back_to(handler.open, base, state);
+                    // An exception on its way out is what `$!` names while
+                    // the `ensure` clause runs, and what an exception raised
+                    // there takes as its cause.
+                    if let Some((exception, raised_at)) =
+                        crate::vm::exceptions::rescuable_exception(&error)
+                    {
+                        self.note_exception_location(
+                            &exception,
+                            &crate::vm::utils::position_to_location(raised_at),
+                        );
+                        self.set_current_exception(exception);
+                    }
+                    state.errors[slot] = Some(error);
+                    return Ok(Some(handler.target));
+                }
+                HandlerKind::Cleanup { slot } => {
+                    self.close_back_to(handler.open, base, state);
+                    state.errors[slot] = Some(error);
+                    return Ok(Some(handler.target));
+                }
+                HandlerKind::RescueBody {
+                    handled,
+                    standing,
+                    expression_form,
+                } => {
+                    // An exception raised by the rescue body takes the one
+                    // being handled as its cause.
+                    if let MetorexError::UncaughtException {
+                        exception: raised, ..
+                    } = &error
+                    {
+                        Self::record_cause(raised, &registers[handled]);
+                        if expression_form {
+                            // A clause that raised leaves `$!` naming what
+                            // it raised.
+                            self.set_current_exception(raised.clone());
+                            continue;
+                        }
+                    }
+                    self.restore_current_exception(registers[standing].clone());
+                }
+            }
+        }
+        Err(error)
+    }
+
+    /// Close what the run opened past what `open` names, counted from what
+    /// it had open as it began.
+    fn close_back_to(&mut self, open: OpenAtHandler, base: OpenAtHandler, state: &mut RunState) {
+        state.arguments.truncate(base.lists + open.lists);
+        state.routes.truncate(base.routes + open.routes);
+        while self.environment().current_depth() > base.scopes + open.scopes {
+            self.environment_mut().pop_scope();
+        }
+        self.running_block_breaks.truncate(base.loops + open.loops);
+    }
+
     /// What happens as a statement starts, as the tree walker does for a
     /// statement in the same place.
     fn start_statement(&mut self, statement: StatementStart) -> Result<(), MetorexError> {
         let line = statement.position.line;
         match statement.kind {
-            StartKind::Statement => self.begin_statement(statement.position, true),
-            StartKind::Terminal => {
-                if !self.tracepoints.is_empty() {
+            StartKind::Statement { line_event } => {
+                self.begin_statement(statement.position, line_event)
+            }
+            StartKind::Terminal { line_event } => {
+                if line_event && !self.tracepoints.is_empty() {
                     self.fire_line_event(statement.position)?;
                 }
                 if self.coverage.is_some() {

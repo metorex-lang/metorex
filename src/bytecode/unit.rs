@@ -40,6 +40,13 @@ pub struct Unit {
     pub definitions: Vec<Definition>,
     /// The `when` and `in` arms of `case` expressions, which `CaseArm` tests.
     pub case_arms: Vec<CaseArm>,
+    /// The patterns of `case`/`when` and `case`/`in` arms, which `WhenArm`
+    /// and `InArm` test, each with the arm's guard and where the `case` was
+    /// written.
+    pub pattern_arms: Vec<PatternArm>,
+    /// The `when` clauses of each `case`/`when`, which are warned about when
+    /// two are written the same, with where the `case` was written.
+    pub when_lists: Vec<(Vec<crate::ast::MatchCase>, Position)>,
     /// The flip-flops written as conditions: where each was written and how
     /// many of its sides are Integer literals.
     pub flip_flops: Vec<(Position, usize)>,
@@ -47,6 +54,9 @@ pub struct Unit {
     /// not match is refused, as `=>` refuses one.
     pub patterns: Vec<(crate::ast::MatchPattern, bool)>,
     pub handlers: Vec<Handler>,
+    pub rescue_clauses: Vec<RescueClause>,
+    /// How many errors the unit's handlers keep at once.
+    pub error_slots: usize,
     /// How many registers the unit's instructions name.
     pub register_count: usize,
 }
@@ -70,11 +80,13 @@ pub struct StatementStart {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StartKind {
     /// A line event, signals, a due collection, the thread's turn, and the
-    /// line's coverage.
-    Statement,
-    /// The last statement of a method body, which answers the method's
-    /// value: a line event and the line's coverage.
-    Terminal,
+    /// line's coverage. A `begin` is no line event, since the statements in
+    /// it are.
+    Statement { line_event: bool },
+    /// The last statement of a method body or a `begin` clause, which
+    /// answers the value: a line event, unless the statement is a `begin`,
+    /// and the line's coverage.
+    Terminal { line_event: bool },
     /// An expression statement in a branch of an `if` written as an
     /// expression: the line's coverage when it is not the line the branch
     /// belongs to.
@@ -308,6 +320,15 @@ pub enum Definition {
     },
 }
 
+/// One arm of a `case`/`when` or `case`/`in` statement.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PatternArm {
+    pub pattern: crate::ast::MatchPattern,
+    pub guard: Option<crate::ast::Expression>,
+    pub case_position: Position,
+    pub index: usize,
+}
+
 /// One arm of a `case` expression: its pattern and guard, where the arm
 /// and the `case` were written, and its number among the arms.
 #[derive(Debug, Clone, PartialEq)]
@@ -322,14 +343,74 @@ pub struct CaseArm {
     pub counted_line: Option<usize>,
 }
 
-/// Instructions from `start` up to `end` that raise an exception jump to
-/// `target`, with the exception in `register`.
+/// Instructions from `start` up to `end` that raise an error go to
+/// `target`, as `kind` says.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Handler {
     pub start: usize,
     pub end: usize,
     pub target: usize,
+    /// The register the exception a `rescue` catches is put in.
     pub register: usize,
+    pub kind: HandlerKind,
+    /// What the run had open where the covered instructions begin, which
+    /// it goes back to before going to `target`.
+    pub open: OpenAtHandler,
+}
+
+/// What a handler does with an error raised in its range.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HandlerKind {
+    /// Catch an error a `rescue` can catch, putting its exception in the
+    /// register and the error in the error slot, and pass any other on.
+    Rescue { slot: usize },
+    /// Catch every error, keeping it in the error slot for `Reraise` once
+    /// the `ensure` clause has run.
+    Ensure { slot: usize },
+    /// Catch every error, keeping it in the error slot for `Reraise` once
+    /// the code at `target` has closed what the covered instructions opened,
+    /// with `$!` left as it is.
+    Cleanup { slot: usize },
+    /// Pass every error on, after giving an exception raised in a rescue
+    /// body the exception being handled, in `handled`, as its cause, and
+    /// putting `$!` back to what `standing` holds. In the expression form
+    /// of `begin`, `$!` names what was raised instead.
+    RescueBody {
+        handled: usize,
+        standing: usize,
+        expression_form: bool,
+    },
+}
+
+/// The argument lists, call routes, scopes, and loops a run has open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct OpenAtHandler {
+    pub lists: usize,
+    pub routes: usize,
+    pub scopes: usize,
+    pub loops: usize,
+}
+
+impl Handler {
+    /// A handler that catches what a `rescue` can, with nothing open.
+    pub fn rescue(start: usize, end: usize, target: usize, register: usize) -> Handler {
+        Handler {
+            start,
+            end,
+            target,
+            register,
+            kind: HandlerKind::Rescue { slot: 0 },
+            open: OpenAtHandler::default(),
+        }
+    }
+}
+
+/// A `rescue` clause of a compiled `begin`: the clause itself, and whether
+/// the `begin` is the expression form.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RescueClause {
+    pub clause: crate::ast::RescueClause,
+    pub expression_form: bool,
 }
 
 /// Each table answers the index of the entry it adds. An index past 65,535
@@ -368,7 +449,7 @@ impl Unit {
             index: Some(index),
             position,
             live: 1,
-            kind: StartKind::Statement,
+            kind: StartKind::Statement { line_event: true },
         });
     }
 
@@ -386,7 +467,7 @@ impl Unit {
             index: None,
             position,
             live,
-            kind: StartKind::Statement,
+            kind: StartKind::Statement { line_event: true },
         });
     }
 
@@ -483,6 +564,16 @@ impl Unit {
         self.case_arms.len() - 1
     }
 
+    pub fn pattern_arm(&mut self, arm: PatternArm) -> usize {
+        self.pattern_arms.push(arm);
+        self.pattern_arms.len() - 1
+    }
+
+    pub fn when_list(&mut self, cases: Vec<crate::ast::MatchCase>, position: Position) -> usize {
+        self.when_lists.push((cases, position));
+        self.when_lists.len() - 1
+    }
+
     pub fn flip_flop(&mut self, position: Position, integer_sides: usize) -> usize {
         self.flip_flops.push((position, integer_sides));
         self.flip_flops.len() - 1
@@ -492,11 +583,25 @@ impl Unit {
         self.handlers.push(handler);
     }
 
-    /// The handler covering the instruction at `at`, the innermost first.
-    pub fn handler_for(&self, at: usize) -> Option<&Handler> {
-        self.handlers
+    /// The handlers covering the instruction at `at`, the innermost first.
+    pub fn handlers_for(&self, at: usize) -> Vec<&Handler> {
+        let mut covering: Vec<&Handler> = self
+            .handlers
             .iter()
             .filter(|handler| handler.start <= at && at < handler.end)
-            .min_by_key(|handler| handler.end - handler.start)
+            .collect();
+        covering.sort_by_key(|handler| handler.end - handler.start);
+        covering
+    }
+
+    pub fn rescue_clause(&mut self, clause: RescueClause) -> usize {
+        self.rescue_clauses.push(clause);
+        self.rescue_clauses.len() - 1
+    }
+
+    /// A slot an error is kept in while a handler deals with it.
+    pub fn error_slot(&mut self) -> usize {
+        self.error_slots += 1;
+        self.error_slots - 1
     }
 }

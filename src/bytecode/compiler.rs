@@ -7,8 +7,9 @@ use crate::bytecode::instruction::{
     BINARY_OPERATORS, FIRST_CONSTANT_OPERAND, Instruction, RANGE_EXCLUSIVE, RANGE_LITERAL_ENDS,
 };
 use crate::bytecode::unit::{
-    CallSite, CaseArm, Definition, ErrorSpot, HashEntry, HashShape, MultipleAssignment, Name,
-    Piece, Receiver, RegexLiteral, StartKind, Target, Unit,
+    CallSite, CaseArm, Definition, ErrorSpot, Handler, HandlerKind, HashEntry, HashShape,
+    MultipleAssignment, Name, OpenAtHandler, PatternArm, Piece, Receiver, RegexLiteral,
+    RescueClause, StartKind, Target, Unit,
 };
 use crate::lexer::Position;
 use crate::object::Object;
@@ -64,6 +65,8 @@ pub fn compile_as(body: &[Statement], kind: UnitKind) -> Result<Unit, &'static s
         assigned: crate::ast::collect_assigned_locals(body),
         loops: Vec::new(),
         pending: Pending::default(),
+        protections: Vec::new(),
+        begins: 0,
     };
     compiler.unit.use_registers(ANSWER + 1);
     for name in compiler.assigned.clone() {
@@ -73,6 +76,15 @@ pub fn compile_as(body: &[Statement], kind: UnitKind) -> Result<Unit, &'static s
         Some(last) => last.position(),
         None => Position::default(),
     };
+    // Every `BEGIN` body runs before the rest of the unit, in the order they
+    // were written, and shares the unit's own scope.
+    for statement in body {
+        if let Statement::BeginBlock { body, position } = statement {
+            compiler
+                .begin_block(body, *position)
+                .map_err(naming(statement.kind_name()))?;
+        }
+    }
     match body.split_last() {
         Some((last, before)) if of_a_method && answers_its_own_value(last) => {
             if !before.is_empty() {
@@ -80,10 +92,15 @@ pub fn compile_as(body: &[Statement], kind: UnitKind) -> Result<Unit, &'static s
             }
             let start = compiler.unit.instructions.len();
             compiler
-                .terminal_statement(last)
+                .terminal_statement(last, ANSWER)
                 .map_err(naming(last.kind_name()))?;
             compiler.unit.start_statement(start, last.position());
-            compiler.unit.set_start_kind(start, StartKind::Terminal);
+            compiler.unit.set_start_kind(
+                start,
+                StartKind::Terminal {
+                    line_event: !matches!(last, Statement::Begin { .. }),
+                },
+            );
         }
         _ if matches!(kind, UnitKind::ClassBody | UnitKind::ModuleBody) => {
             if body.is_empty() {
@@ -120,15 +137,48 @@ struct Compiler {
     loops: Vec<Loop>,
     /// What the code compiled so far has opened and not yet closed.
     pending: Pending,
+    /// The regions being compiled that something has to run on the way out
+    /// of, the innermost last.
+    protections: Vec<Protection>,
+    /// How many `begin`s the code being compiled is inside.
+    begins: usize,
 }
 
 /// What a run has open at a place in the code: argument lists, call routes,
-/// and scopes `case` arms opened. A jump out of the place drops them.
+/// scopes `case` arms and `Block` statements opened, and loops. A jump out of
+/// the place drops them.
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 struct Pending {
     lists: usize,
     routes: usize,
     scopes: usize,
+    loops: usize,
+}
+
+/// A region of code that something has to run on the way out of, by a jump
+/// or an exit from the unit as much as by an error.
+#[derive(Debug, Clone)]
+enum Protection {
+    /// The statements of an `ensure` clause.
+    Ensure {
+        body: Vec<Statement>,
+        pending: Pending,
+    },
+    /// The body of a rescue clause, which puts `$!` back to what the
+    /// register `standing` holds as it is left, and whose `retry` runs its
+    /// `begin` again from `retry_target`.
+    RescueBody {
+        standing: usize,
+        retry_target: usize,
+        pending: Pending,
+    },
+    /// An `ensure` clause running while an error is on its way out, in the
+    /// expression form of `begin`: leaving it by a jump drops the error, and
+    /// `$!` goes back to what `standing` holds.
+    DroppedError { standing: usize, pending: Pending },
+    /// The arms of a `case`/`in`, which let go of the value they asked for
+    /// its elements as they are left.
+    Deconstructing { pending: Pending },
 }
 
 /// A loop being compiled.
@@ -143,6 +193,8 @@ struct Loop {
     nexts: Vec<usize>,
     /// What was open where the loop began.
     pending: Pending,
+    /// How many protections stood where the loop began.
+    protections: usize,
 }
 
 impl Compiler {
@@ -151,6 +203,8 @@ impl Compiler {
     fn emit(&mut self, instruction: Instruction, position: Position) -> usize {
         match instruction {
             Instruction::StartArguments => self.pending.lists += 1,
+            Instruction::EnterLoop => self.pending.loops += 1,
+            Instruction::LeaveLoop => self.pending.loops -= 1,
             Instruction::ArgumentsToArray { .. } => self.pending.lists -= 1,
             Instruction::ResolveCall { .. } | Instruction::ResolveScopedCall { .. } => {
                 self.pending.routes += 1;
@@ -542,13 +596,28 @@ impl Compiler {
     /// method's value without passing through the statement runner: an
     /// assignment there is evaluated as an expression would be, and an `if`
     /// or `unless` runs as one written as an expression.
-    fn terminal_statement(&mut self, statement: &Statement) -> Result<(), &'static str> {
+    fn terminal_statement(&mut self, statement: &Statement, to: usize) -> Result<(), &'static str> {
         match statement {
             Statement::Assignment {
                 target,
                 value,
                 position,
-            } => self.assignment(target, value, ANSWER, *position),
+            } => self.assignment(target, value, to, *position),
+            Statement::Begin {
+                body,
+                rescue_clauses,
+                else_clause,
+                ensure_block,
+                position,
+            } => self.begin(
+                body,
+                rescue_clauses,
+                else_clause.as_deref(),
+                ensure_block.as_deref(),
+                to,
+                *position,
+                true,
+            ),
             Statement::If {
                 condition,
                 then_branch,
@@ -561,7 +630,7 @@ impl Compiler {
                 then_branch,
                 elsif_branches,
                 else_branch.as_deref(),
-                ANSWER,
+                to,
                 *position,
                 true,
             ),
@@ -576,11 +645,11 @@ impl Compiler {
                 then_branch,
                 &[],
                 else_branch.as_deref(),
-                ANSWER,
+                to,
                 *position,
                 true,
             ),
-            other => self.statement(other, ANSWER),
+            other => self.statement(other, to),
         }
     }
 
@@ -772,10 +841,17 @@ impl Compiler {
                 self.optional_value(value.as_deref(), into, *position)?;
                 match self.loops.len() {
                     0 => {
+                        // A `break` whose block's call has returned raises
+                        // where it stands, so a `begin` around it can rescue
+                        // the LocalJumpError.
+                        if self.begins > 0 {
+                            self.emit(Instruction::BreakCheck { from: into as u8 }, *position);
+                        }
+                        self.leave_protections(0, *position)?;
                         self.emit(Instruction::ExitBreak { from: into as u8 }, *position);
                     }
                     _ => {
-                        self.unwind_to_loop(*position);
+                        self.leave_to_loop(*position)?;
                         let jump = self.emit(Instruction::Jump { target: 0 }, *position);
                         self.innermost_loop().breaks.push(jump);
                     }
@@ -786,18 +862,92 @@ impl Compiler {
                 self.optional_value(value.as_deref(), to, *position)?;
                 match self.loops.len() {
                     0 => {
+                        self.leave_protections(0, *position)?;
                         self.emit(Instruction::ExitNext { from: to_register }, *position);
                     }
                     _ => {
-                        self.unwind_to_loop(*position);
+                        self.leave_to_loop(*position)?;
                         let jump = self.emit(Instruction::Jump { target: 0 }, *position);
                         self.innermost_loop().nexts.push(jump);
                     }
                 }
                 Ok(())
             }
+            Statement::Retry { position } => {
+                let rescued = self
+                    .protections
+                    .iter()
+                    .rposition(|protection| matches!(protection, Protection::RescueBody { .. }));
+                match rescued {
+                    None => {
+                        self.leave_protections(0, *position)?;
+                        self.emit(Instruction::ExitRetry, *position);
+                    }
+                    Some(at) => {
+                        let Protection::RescueBody { retry_target, .. } = self.protections[at]
+                        else {
+                            unreachable!("found a rescue body above");
+                        };
+                        self.leave_protections(at, *position)?;
+                        let target = wide(Some(retry_target))?;
+                        self.emit(Instruction::Jump { target }, *position);
+                    }
+                }
+                Ok(())
+            }
+            Statement::Match {
+                expression,
+                cases,
+                position,
+            } => {
+                self.case_when(expression, cases, to, *position)?;
+                self.unhoist_assigned(statement)
+            }
+            Statement::CaseIn {
+                expression,
+                cases,
+                position,
+            } => {
+                self.case_in(expression, cases, to, *position)?;
+                self.unhoist_assigned(statement)
+            }
+            Statement::Raise {
+                exception,
+                position,
+            } => {
+                if let Some(written) = exception {
+                    self.expression(written, to)?;
+                }
+                self.emit(
+                    Instruction::RaiseStatement {
+                        from: to_register,
+                        written: u8::from(exception.is_some()),
+                    },
+                    *position,
+                );
+                Ok(())
+            }
+            Statement::Begin {
+                body,
+                rescue_clauses,
+                else_clause,
+                ensure_block,
+                position,
+            } => {
+                self.begin(
+                    body,
+                    rescue_clauses,
+                    else_clause.as_deref(),
+                    ensure_block.as_deref(),
+                    to,
+                    *position,
+                    false,
+                )?;
+                self.unhoist_assigned(statement)
+            }
             Statement::Return { value, position } => {
                 self.optional_value(value.as_ref(), to, *position)?;
+                self.leave_protections(0, *position)?;
                 self.emit(
                     Instruction::ExitReturn {
                         from: to_register,
@@ -888,20 +1038,32 @@ impl Compiler {
                     *position,
                 )
             }
+            // A `BEGIN` body already ran before the rest of its code unit, so
+            // reaching it where it was written does nothing.
+            Statement::BeginBlock { position, .. } => {
+                let unused = self.temporary()?;
+                self.emit(
+                    Instruction::LoadNil {
+                        to: unused as u8,
+                    },
+                    *position,
+                );
+                Ok(())
+            }
             Statement::Redo { position } => {
                 match self.loops.last().map(|inner| inner.redo_target) {
                     None => {
+                        self.leave_protections(0, *position)?;
                         self.emit(Instruction::ExitRedo, *position);
                     }
                     Some(target) => {
-                        self.unwind_to_loop(*position);
+                        self.leave_to_loop(*position)?;
                         let target = wide(Some(target))?;
                         self.emit(Instruction::Jump { target }, *position);
                     }
                 }
                 Ok(())
             }
-            other => Err(other.kind_name()),
         }
     }
 
@@ -1030,29 +1192,483 @@ impl Compiler {
         Ok(())
     }
 
+    /// Run a `BEGIN` body the first time its unit runs.
+    fn begin_block(&mut self, body: &[Statement], position: Position) -> Result<(), &'static str> {
+        let held = self.next_register;
+        let runs = self.temporary()?;
+        self.emit(Instruction::BeginBlockOnce { to: runs as u8 }, position);
+        let ran = self.emit(
+            Instruction::JumpIfFalse {
+                test: runs as u8,
+                target: 0,
+            },
+            position,
+        );
+        self.statements(body, runs, false)?;
+        self.jump_here(ran)?;
+        self.next_register = held;
+        Ok(())
+    }
+
     /// The loop being compiled innermost.
     fn innermost_loop(&mut self) -> &mut Loop {
         self.loops.last_mut().expect("a loop is being compiled")
     }
 
-    /// Before a jump out of the middle of the innermost loop's body, drop
-    /// what was opened since the loop began.
-    fn unwind_to_loop(&mut self, position: Position) {
-        let at_loop = self.innermost_loop().pending;
+    /// Before a jump out of the middle of the innermost loop's body, run
+    /// what the regions inside the loop that the jump leaves have to run, and
+    /// drop what was opened since the loop began.
+    fn leave_to_loop(&mut self, position: Position) -> Result<(), &'static str> {
+        let (at_loop, protections) = {
+            let inner = self.innermost_loop();
+            (inner.pending, inner.protections)
+        };
+        self.leave_protections(protections, position)?;
+        self.unwind_to(at_loop, position);
+        Ok(())
+    }
+
+    /// Drop what was opened past `target`: argument lists, call routes,
+    /// scopes, and loops.
+    fn unwind_to(&mut self, target: Pending, position: Position) {
         let now = self.pending;
-        if now == at_loop {
-            return;
+        if (now.lists, now.routes, now.scopes) != (target.lists, target.routes, target.scopes) {
+            self.emit(
+                Instruction::Unwind {
+                    lists: (now.lists - target.lists) as u8,
+                    routes: (now.routes - target.routes) as u8,
+                    scopes: (now.scopes - target.scopes) as u8,
+                },
+                position,
+            );
         }
+        for _ in target.loops..now.loops {
+            self.emit(Instruction::LeaveLoop, position);
+        }
+        // The code after the jump is reached with what was open before it.
+        self.pending = now;
+    }
+
+    /// On the way out of the protected regions from the one numbered
+    /// `down_to` on, run what each has to run, the innermost first: an
+    /// `ensure` clause's statements, and the putting back of `$!` a rescue
+    /// body does.
+    fn leave_protections(
+        &mut self,
+        down_to: usize,
+        position: Position,
+    ) -> Result<(), &'static str> {
+        let held = self.pending;
+        for at in (down_to..self.protections.len()).rev() {
+            match self.protections[at].clone() {
+                Protection::Ensure { body, pending } => {
+                    self.unwind_to(pending, position);
+                    // Inside the clause, the region it protects is left.
+                    let outer = self.protections.split_off(at);
+                    let value = self.temporary()?;
+                    let compiled = self.statements(&body, value, false);
+                    self.next_register = value;
+                    self.protections.extend(outer);
+                    compiled?;
+                }
+                Protection::Deconstructing { pending } => {
+                    self.unwind_to(pending, position);
+                    self.emit(Instruction::PopDeconstructed, position);
+                }
+                Protection::RescueBody {
+                    standing, pending, ..
+                }
+                | Protection::DroppedError { standing, pending } => {
+                    self.unwind_to(pending, position);
+                    self.emit(
+                        Instruction::RestoreCurrentException {
+                            from: standing as u8,
+                        },
+                        position,
+                    );
+                }
+            }
+        }
+        self.pending = held;
+        Ok(())
+    }
+
+    /// Compile `begin`, with its rescue clauses, `else`, and `ensure`,
+    /// leaving its value in register `to`. `expression_form` is set where the
+    /// value is used as an expression, and for a method body's last
+    /// statement, which the tree walker evaluates the way it does an
+    /// expression.
+    #[allow(clippy::too_many_arguments)]
+    fn begin(
+        &mut self,
+        body: &[Statement],
+        rescue_clauses: &[crate::ast::RescueClause],
+        else_clause: Option<&[Statement]>,
+        ensure_block: Option<&[Statement]>,
+        to: usize,
+        position: Position,
+        expression_form: bool,
+    ) -> Result<(), &'static str> {
+        self.begins += 1;
+        let compiled = self.begin_in_place(
+            body,
+            rescue_clauses,
+            else_clause,
+            ensure_block,
+            to,
+            position,
+            expression_form,
+        );
+        self.begins -= 1;
+        compiled
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn begin_in_place(
+        &mut self,
+        body: &[Statement],
+        rescue_clauses: &[crate::ast::RescueClause],
+        else_clause: Option<&[Statement]>,
+        ensure_block: Option<&[Statement]>,
+        to: usize,
+        position: Position,
+        expression_form: bool,
+    ) -> Result<(), &'static str> {
+        let held = self.next_register;
+        let standing = self.temporary()?;
+        let retry_target = self.unit.instructions.len();
         self.emit(
-            Instruction::Unwind {
-                lists: (now.lists - at_loop.lists) as u8,
-                routes: (now.routes - at_loop.routes) as u8,
-                scopes: (now.scopes - at_loop.scopes) as u8,
+            Instruction::SaveCurrentException { to: standing as u8 },
+            position,
+        );
+        let region_start = self.unit.instructions.len();
+        let region_open = self.pending;
+        if let Some(ensure) = ensure_block {
+            self.protections.push(Protection::Ensure {
+                body: ensure.to_vec(),
+                pending: self.pending,
+            });
+        }
+        let body_start = self.unit.instructions.len();
+        let body_open = self.pending;
+        self.clause_statements(body, to)?;
+        let body_end = self.unit.instructions.len();
+        let mut done = Vec::new();
+        if let Some(else_clause) = else_clause {
+            self.clause_statements(else_clause, to)?;
+        }
+        done.push(self.emit(Instruction::Jump { target: 0 }, position));
+        if !rescue_clauses.is_empty() {
+            let exception = self.temporary()?;
+            let slot = self.unit.error_slot();
+            self.unit.handler(Handler {
+                start: body_start,
+                end: body_end,
+                target: self.unit.instructions.len(),
+                register: exception,
+                kind: HandlerKind::Rescue { slot },
+                open: open_at(body_open),
+            });
+            for clause in rescue_clauses {
+                let base = self.temporary()?;
+                self.temporary()?;
+                self.emit(
+                    Instruction::Move {
+                        to: base as u8,
+                        from: exception as u8,
+                    },
+                    clause.position,
+                );
+                for splatted in &clause.splatted_types {
+                    let register = self.temporary()?;
+                    self.expression(splatted, register)?;
+                }
+                let index = wide(Some(self.unit.rescue_clause(RescueClause {
+                    clause: clause.clone(),
+                    expression_form,
+                })))?;
+                self.emit(
+                    Instruction::RescueMatches {
+                        register: base as u8,
+                        clause: index,
+                    },
+                    clause.position,
+                );
+                let next_clause = self.emit(
+                    Instruction::JumpIfFalse {
+                        test: base as u8 + 1,
+                        target: 0,
+                    },
+                    clause.position,
+                );
+                self.next_register = base;
+                self.emit(
+                    Instruction::EnterRescue {
+                        from: exception as u8,
+                        clause: index,
+                    },
+                    clause.position,
+                );
+                if let Some(target) = &clause.variable_target {
+                    self.store_register(target, exception, clause.position)?;
+                }
+                self.protections.push(Protection::RescueBody {
+                    standing,
+                    retry_target,
+                    pending: self.pending,
+                });
+                let rescue_start = self.unit.instructions.len();
+                let compiled = self.clause_statements(&clause.body, to);
+                let rescue_end = self.unit.instructions.len();
+                self.protections.pop();
+                compiled?;
+                self.unit.handler(Handler {
+                    start: rescue_start,
+                    end: rescue_end,
+                    target: 0,
+                    register: 0,
+                    kind: HandlerKind::RescueBody {
+                        handled: exception,
+                        standing,
+                        expression_form,
+                    },
+                    open: open_at(self.pending),
+                });
+                // A handled exception leaves `$!` naming whatever it was
+                // before, so an outer handler still names what it handles.
+                self.emit(
+                    Instruction::RestoreCurrentException {
+                        from: standing as u8,
+                    },
+                    clause.position,
+                );
+                done.push(self.emit(Instruction::Jump { target: 0 }, clause.position));
+                self.jump_here(next_clause)?;
+            }
+            // No clause takes the exception, which goes on as it was raised.
+            let slot = wide(Some(slot))?;
+            self.emit(Instruction::Reraise { slot }, position);
+        }
+        for jump in done {
+            self.jump_here(jump)?;
+        }
+        if let Some(ensure) = ensure_block {
+            self.protections.pop();
+            let region_end = self.unit.instructions.len();
+            let slot = self.unit.error_slot();
+            let value = self.temporary()?;
+            self.statements(ensure, value, false)?;
+            let finished = self.emit(Instruction::Jump { target: 0 }, position);
+            self.unit.handler(Handler {
+                start: region_start,
+                end: region_end,
+                target: self.unit.instructions.len(),
+                register: 0,
+                kind: HandlerKind::Ensure { slot },
+                open: open_at(region_open),
+            });
+            if expression_form {
+                self.protections.push(Protection::DroppedError {
+                    standing,
+                    pending: self.pending,
+                });
+            }
+            let compiled = self.statements(ensure, value, false);
+            if expression_form {
+                self.protections.pop();
+            }
+            compiled?;
+            let slot = wide(Some(slot))?;
+            self.emit(Instruction::Reraise { slot }, position);
+            self.jump_here(finished)?;
+        }
+        self.next_register = held;
+        Ok(())
+    }
+
+    /// Compile `case subject; when ...; end` written as a statement, leaving
+    /// the value of the arm taken in register `to`, nil when none is.
+    fn case_when(
+        &mut self,
+        subject: &Expression,
+        cases: &[crate::ast::MatchCase],
+        to: usize,
+        position: Position,
+    ) -> Result<(), &'static str> {
+        let held = self.next_register;
+        let value = self.temporary()?;
+        let matched = self.temporary()?;
+        self.expression(subject, value)?;
+        let list = wide(Some(self.unit.when_list(cases.to_vec(), position)))?;
+        self.emit(Instruction::WarnDuplicatedWhen { list }, position);
+        let mut done = Vec::new();
+        for (index, case) in cases.iter().enumerate() {
+            let arm = wide(Some(self.unit.pattern_arm(PatternArm {
+                pattern: case.pattern.clone(),
+                guard: case.guard.clone(),
+                case_position: position,
+                index,
+            })))?;
+            self.emit(
+                Instruction::WhenArm {
+                    subject: value as u8,
+                    arm,
+                },
+                case.position,
+            );
+            let next_arm = self.emit(
+                Instruction::JumpIfFalse {
+                    test: matched as u8,
+                    target: 0,
+                },
+                case.position,
+            );
+            self.statements_in(&case.body, to, false, Some(position.line))?;
+            done.push(self.emit(Instruction::Jump { target: 0 }, case.position));
+            self.jump_here(next_arm)?;
+        }
+        let arm = u16::try_from(cases.len()).map_err(|_| OVER_LIMIT)?;
+        self.emit(Instruction::CoverBranch { arm }, position);
+        self.emit(Instruction::LoadNil { to: to as u8 }, position);
+        for jump in done {
+            self.jump_here(jump)?;
+        }
+        self.next_register = held;
+        Ok(())
+    }
+
+    /// Compile `case subject; in pattern; ...; end`, leaving the value of the
+    /// arm taken in register `to`, and raising NoMatchingPatternError when no
+    /// arm is. The value is asked for its elements once for the whole `case`.
+    fn case_in(
+        &mut self,
+        subject: &Expression,
+        cases: &[crate::ast::MatchCase],
+        to: usize,
+        position: Position,
+    ) -> Result<(), &'static str> {
+        let held = self.next_register;
+        let value = self.temporary()?;
+        let matched = self.temporary()?;
+        self.expression(subject, value)?;
+        self.emit(
+            Instruction::PushDeconstructed { from: value as u8 },
+            position,
+        );
+        let slot = self.unit.error_slot();
+        let region_start = self.unit.instructions.len();
+        let region_open = self.pending;
+        self.protections.push(Protection::Deconstructing {
+            pending: self.pending,
+        });
+        let mut done = Vec::new();
+        for (index, case) in cases.iter().enumerate() {
+            let arm = wide(Some(self.unit.pattern_arm(PatternArm {
+                pattern: case.pattern.clone(),
+                guard: None,
+                case_position: position,
+                index,
+            })))?;
+            self.emit(
+                Instruction::InArm {
+                    subject: value as u8,
+                    arm,
+                },
+                case.position,
+            );
+            let mut next_arm = vec![self.emit(
+                Instruction::JumpIfFalse {
+                    test: matched as u8,
+                    target: 0,
+                },
+                case.position,
+            )];
+            // The pattern's names are locals of the scope the `case` is in,
+            // so the guard reads them there.
+            if let Some(guard) = &case.guard {
+                let test = self.temporary()?;
+                self.expression(guard, test)?;
+                let passed = self.emit(
+                    Instruction::JumpIfTrue {
+                        test: test as u8,
+                        target: 0,
+                    },
+                    case.position,
+                );
+                self.emit(Instruction::GuardFailed, case.position);
+                next_arm.push(self.emit(Instruction::Jump { target: 0 }, case.position));
+                self.jump_here(passed)?;
+                self.next_register = test;
+            }
+            let arm_number = u16::try_from(index).map_err(|_| OVER_LIMIT)?;
+            self.emit(Instruction::CoverBranch { arm: arm_number }, position);
+            self.statements_in(&case.body, to, false, Some(position.line))?;
+            done.push(self.emit(Instruction::Jump { target: 0 }, case.position));
+            for jump in next_arm {
+                self.jump_here(jump)?;
+            }
+        }
+        // A `case` with one `in` clause and no `else` has nowhere to go when
+        // the clause fails, so Ruby reports what went wrong rather than the
+        // value alone.
+        self.emit(
+            Instruction::NoMatchingPattern {
+                subject: value as u8,
+                single: u8::from(cases.len() == 1),
             },
             position,
         );
-        // The code after the jump is reached with what was open before it.
-        self.pending = now;
+        self.protections.pop();
+        let region_end = self.unit.instructions.len();
+        for jump in done {
+            self.jump_here(jump)?;
+        }
+        self.emit(Instruction::PopDeconstructed, position);
+        let finished = self.emit(Instruction::Jump { target: 0 }, position);
+        self.unit.handler(Handler {
+            start: region_start,
+            end: region_end,
+            target: self.unit.instructions.len(),
+            register: 0,
+            kind: HandlerKind::Cleanup { slot },
+            open: open_at(region_open),
+        });
+        self.emit(Instruction::PopDeconstructed, position);
+        let slot = wide(Some(slot))?;
+        self.emit(Instruction::Reraise { slot }, position);
+        self.jump_here(finished)?;
+        self.next_register = held;
+        Ok(())
+    }
+
+    /// Compile the statements of a `begin` clause, leaving the value of the
+    /// last in register `to`. The last answers it the way a method body's
+    /// last statement does.
+    fn clause_statements(&mut self, list: &[Statement], to: usize) -> Result<(), &'static str> {
+        let Some((last, before)) = list.split_last() else {
+            self.emit(Instruction::LoadNil { to: to as u8 }, Position::default());
+            return Ok(());
+        };
+        if !before.is_empty() {
+            self.statements(before, to, false)?;
+        }
+        if !answers_its_own_value(last) {
+            return self.statements(std::slice::from_ref(last), to, false);
+        }
+        let start = self.unit.instructions.len();
+        let held = self.next_register;
+        self.terminal_statement(last, to)
+            .map_err(naming(last.kind_name()))?;
+        self.next_register = held;
+        self.unit
+            .start_inner_statement(start, last.position(), self.next_register);
+        self.unit.set_start_kind(
+            start,
+            StartKind::Terminal {
+                line_event: !matches!(last, Statement::Begin { .. }),
+            },
+        );
+        Ok(())
     }
 
     /// Compile the value written after `break` or `next`, nil when none was.
@@ -1166,6 +1782,7 @@ impl Compiler {
             breaks: Vec::new(),
             nexts: Vec::new(),
             pending: self.pending,
+            protections: self.protections.len(),
         });
         let compiled = self.statements(body, to, false);
         let inner = self.loops.pop().expect("the loop pushed above");
@@ -1204,6 +1821,7 @@ impl Compiler {
             breaks: Vec::new(),
             nexts: Vec::new(),
             pending: self.pending,
+            protections: self.protections.len(),
         });
         let compiled = self.statements(body, to, false);
         let inner = self.loops.pop().expect("the loop pushed above");
@@ -2304,6 +2922,23 @@ impl Compiler {
             | Expression::BlockArg {
                 expression: inner, ..
             } => return self.expression(inner, to),
+            Expression::BeginRescue {
+                body,
+                rescue_clauses,
+                else_clause,
+                ensure_block,
+                ..
+            } => {
+                return self.begin(
+                    body,
+                    rescue_clauses,
+                    else_clause.as_deref(),
+                    ensure_block.as_deref(),
+                    to,
+                    position,
+                    true,
+                );
+            }
             Expression::Yield { arguments, .. } => {
                 // The block is looked for before the arguments are evaluated,
                 // so a method called without one raises before they are.
@@ -2469,7 +3104,6 @@ impl Compiler {
                     position,
                 );
             }
-            other => return Err(other.kind_name()),
         };
         self.emit(instruction, position);
         Ok(())
@@ -2893,7 +3527,19 @@ fn answers_its_own_value(statement: &Statement) -> bool {
             | Statement::Assignment { .. }
             | Statement::If { .. }
             | Statement::Unless { .. }
+            | Statement::Begin { .. }
     )
+}
+
+/// What a handler's instructions find open, counted from what the run had
+/// open as it began.
+fn open_at(pending: Pending) -> OpenAtHandler {
+    OpenAtHandler {
+        lists: pending.lists,
+        routes: pending.routes,
+        scopes: pending.scopes,
+        loops: pending.loops,
+    }
 }
 
 fn starts_uppercase(name: &str) -> bool {

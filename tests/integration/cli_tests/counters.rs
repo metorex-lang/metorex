@@ -92,5 +92,5 @@ fn counters_report_the_instructions_executed_on_the_bytecode_engine() {
     assert!(reported.contains("\ninstructions executed: "), "{reported}");
     assert!(counted(&reported, "LoadNil")[0] >= 1);
     assert!(counted(&reported, "Return")[0] >= 1);
-    assert!(counted(&reported, "MethodDef")[0] >= 1);
+    assert!(counted(&reported, "Define")[0] >= 1);
 }

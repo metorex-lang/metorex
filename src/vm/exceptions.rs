@@ -19,10 +19,26 @@ impl VirtualMachine {
         exception: &Option<crate::ast::Expression>,
         position: Position,
     ) -> Result<ControlFlow, MetorexError> {
-        let exception_obj = if let Some(expr) = exception {
-            // Evaluate the exception expression
-            let value = self.evaluate_expression(expr)?;
+        let value = match exception {
+            Some(expr) => Some(self.evaluate_expression(expr)?),
+            None => None,
+        };
+        let exception_obj = self.statement_raise(value, position)?;
+        Ok(ControlFlow::Exception {
+            exception: exception_obj,
+            position,
+        })
+    }
 
+    /// The exception a `raise` statement raises, given what was written
+    /// after it evaluated, or None for a bare `raise`.
+    pub(crate) fn statement_raise(
+        &mut self,
+        written: Option<Object>,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
+        let written_one = written.is_some();
+        let exception_obj = if let Some(value) = written {
             // If it's already an Exception object, use it directly
             // If it's a String, create a RuntimeError exception
             // If it's a Class (exception class), instantiate it
@@ -71,7 +87,7 @@ impl VirtualMachine {
         };
         // Capture stack trace and add source location to exception
         let exception_obj = self.add_stack_trace_to_exception(exception_obj, position);
-        if exception.is_some() {
+        if written_one {
             self.note_raise_spot(&exception_obj, position);
         }
         // The cause is settled where the exception is raised, so raising it
@@ -86,11 +102,7 @@ impl VirtualMachine {
             position,
             vec![("raised_exception", exception_obj.clone())],
         )?;
-
-        Ok(ControlFlow::Exception {
-            exception: exception_obj,
-            position,
-        })
+        Ok(exception_obj)
     }
 
     /// Build the exception `raise`/`fail` was handed. A String becomes a
@@ -698,6 +710,36 @@ impl VirtualMachine {
         final_result
     }
 
+    /// What a rescue clause does as it takes `exception`: a `rescue` event
+    /// for a trace, and the name it is given bound the way `=` binds it, so
+    /// a variable of an enclosing scope is the one set. The statement form
+    /// of `begin` binds a `$global` named there as the global.
+    pub(crate) fn enter_rescue(
+        &mut self,
+        rescue_clause: &crate::ast::RescueClause,
+        exception: Object,
+        expression_form: bool,
+    ) -> Result<(), MetorexError> {
+        self.fire_event(
+            "rescue",
+            rescue_clause.position,
+            vec![("raised_exception", exception.clone())],
+        )?;
+        if let Some(var_name) = &rescue_clause.variable_name {
+            match var_name.strip_prefix('$').filter(|_| !expression_form) {
+                Some(global) => {
+                    self.globals_mut().set(global, exception);
+                }
+                None => {
+                    if !self.environment_mut().set(var_name, exception.clone()) {
+                        self.environment_mut().define(var_name.clone(), exception);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Run a begin/rescue/else clause body, returning `ControlFlow::Value`
     /// holding the value of the last expression statement when the body
     /// completes normally — so e.g. `begin; raise; rescue => e; e; end`
@@ -744,8 +786,23 @@ impl VirtualMachine {
         exception: &Object,
         position: Position,
     ) -> Result<bool, MetorexError> {
+        let mut spreads = Vec::with_capacity(rescue_clause.splatted_types.len());
         for expression in rescue_clause.splatted_types.clone() {
-            let spread = self.evaluate_expression(&expression)?;
+            spreads.push(self.evaluate_expression(&expression)?);
+        }
+        self.rescue_clause_takes(rescue_clause, spreads, exception, position)
+    }
+
+    /// Whether a rescue clause handles this exception, with the values of
+    /// the classes it names with a splat evaluated.
+    pub(crate) fn rescue_clause_takes(
+        &mut self,
+        rescue_clause: &crate::ast::RescueClause,
+        spreads: Vec<Object>,
+        exception: &Object,
+        position: Position,
+    ) -> Result<bool, MetorexError> {
+        for spread in spreads {
             // Ruby asks a splatted value for its Array form, which is what
             // lets anything answering `to_a` name the classes.
             let listed = match self.splat_through_to_a(spread, position)? {

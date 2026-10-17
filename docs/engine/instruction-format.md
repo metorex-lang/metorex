@@ -114,8 +114,13 @@ registers than on the stack, since its literals each take an instruction.
   literals, pattern tests, calls with or without a receiver, with any
   arguments, a block, and `&.`, `if`, `unless`, `while`, `until`, `for`,
   `case` written as an expression, flip-flops, `break`, `next`, `redo`,
-  `return`, `yield`, `super`, and definitions. A body holding any other node is refused
-  with that node's type name and runs on the tree walker.
+  `return`, `yield`, `super`, definitions, `begin` with its clauses,
+  pattern matching, and `BEGIN`. A body needing more registers than an
+  instruction can name is refused with the type name of the node that ran
+  out, and runs on the tree walker.
+- Each `BEGIN` body is compiled ahead of the unit's first statement, in the
+  order they were written. `BeginBlockOnce` answers whether the body has
+  run before, so a program `-n` or `-p` runs once per line runs it once.
 - A method, class, or module definition, `alias`, `include`, and
   `extend` is a `Define` instruction. What the statement needs evaluated,
   such as the namespace of `class A::B` or the target of `class << target`,
@@ -140,9 +145,15 @@ registers than on the stack, since its literals each take an instruction.
 - Arguments with `*`, `**`, or `&` among them are gathered in an argument
   list, `StartArguments` and one instruction per argument, which call the
   same `ArgumentList` the tree walker's `evaluate_arguments` uses.
-- `defined?` and pattern tests call the tree walker's `eval_defined` and
-  `match_pattern`, which evaluate the expressions inside them, such as a
-  pinned expression or a receiver `defined?` asks about.
+- `case`/`when` and `case`/`in` test each arm with an instruction that
+  calls the tree walker's `match_pattern`, and the arms' bodies and an `in`
+  clause's guard compile. The value a `case`/`in` matches is asked for its
+  elements once for the whole `case`, and is let go of however the `case` is
+  left.
+- `defined?`, patterns, and a `when` clause's guard call the tree walker's
+  `eval_defined`, `match_pattern`, and guard evaluation, which evaluate the
+  expressions inside them, such as a pinned expression or a receiver
+  `defined?` asks about.
 - Branches and loops are jumps inside the unit. A `break`, `next`, or
   `redo` inside a loop of the unit jumps, after dropping any argument list,
   call route, or `case` scope it leaves open. One outside every loop ends
@@ -187,8 +198,20 @@ registers than on the stack, since its literals each take an instruction.
 - An instruction that starts a statement runs what the tree walker runs
   before each statement: the line event, signals, a due collection, the
   thread's turn, and coverage.
-- An error raised inside a handler's range that a `rescue` can catch puts
-  the exception in the handler's register and jumps to its target.
+- `begin` with its `rescue`, `else`, and `ensure` clauses compiles to
+  handlers over ranges of instructions. A rescue handler takes an error a
+  `rescue` can catch, puts the exception in its register, keeps the error,
+  and jumps to the clauses, each of which asks `rescue_clause_takes` whether
+  it takes the exception. When none does, the kept error is raised again. An
+  ensure handler takes any error, runs the `ensure` statements, and raises
+  the error again. A handler over a rescue body gives an exception raised
+  there the handled one as its cause and puts `$!` back. Before a handler's
+  target runs, the run closes the argument lists, call routes, scopes, and
+  loops opened in its range.
+- A `break`, `next`, `redo`, `retry`, or `return` that leaves an `ensure`
+  clause's region, or a rescue body, runs that clause's statements, or puts
+  `$!` back, on the way out, the innermost first. A `retry` jumps back to
+  the start of the `begin` whose rescue body it is in.
 - `METOREX_COUNTERS=1` counts each instruction run, by name.
 - `METOREX_DISASM=1` writes each unit to standard error as it is compiled,
   one instruction a line under the source line it came from, with what a

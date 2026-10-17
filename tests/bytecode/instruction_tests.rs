@@ -493,12 +493,7 @@ fn a_handler_catches_what_its_instructions_raise() {
             Return { from: 0 },
         ],
     );
-    unit.handler(Handler {
-        start: 0,
-        end: 3,
-        target: 3,
-        register: 0,
-    });
+    unit.handler(Handler::rescue(0, 3, 3, 0));
     unit.call_site(CallSite::new("message", 0, Receiver::Other));
     assert_eq!(run(&unit), Object::string("boom"));
 }
@@ -516,12 +511,7 @@ fn a_handler_catches_an_error_the_interpreter_raises() {
             Return { from: 0 },
         ],
     );
-    unit.handler(Handler {
-        start: 0,
-        end: 3,
-        target: 3,
-        register: 0,
-    });
+    unit.handler(Handler::rescue(0, 3, 3, 0));
     unit.call_site(CallSite::new("no_such_method", 0, Receiver::Other));
     unit.call_site(CallSite::new("class", 0, Receiver::Other));
     let class = run(&unit);

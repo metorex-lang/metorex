@@ -388,12 +388,53 @@ pub enum Instruction {
     ExitBreak {
         from: u8,
     },
+    /// Raise LocalJumpError when the call the running block was attached
+    /// to has returned, which is what a `break` from the block does then,
+    /// before it leaves the `begin` it is written in.
+    BreakCheck {
+        from: u8,
+    },
     /// End the unit with `next`, carrying what `from` holds.
     ExitNext {
         from: u8,
     },
     /// End the unit with `redo`.
     ExitRedo,
+    /// End the unit with `retry`, written outside the rescue bodies of the
+    /// unit's own `begin`s.
+    ExitRetry,
+    /// Put what `$!` names in `to`.
+    SaveCurrentException {
+        to: u8,
+    },
+    /// Make `$!` name what `from` holds again, as a `begin` that handled an
+    /// exception leaves it.
+    RestoreCurrentException {
+        from: u8,
+    },
+    /// Whether the unit's rescue clause the operand numbers takes the
+    /// exception in `register`, put in the register after it. The values of
+    /// the clause's splatted classes are in the registers after that.
+    RescueMatches {
+        register: u8,
+        clause: u16,
+    },
+    /// What a rescue clause does as it takes the exception in `from`: a
+    /// `rescue` event for a trace, and the name it is given bound.
+    EnterRescue {
+        from: u8,
+        clause: u16,
+    },
+    /// Raise again the error kept in the slot the operand numbers.
+    Reraise {
+        slot: u16,
+    },
+    /// `raise`, written as a statement, with the exception, or what makes
+    /// one, in `from` when `written` is 1, and `$!` raised again otherwise.
+    RaiseStatement {
+        from: u8,
+        written: u8,
+    },
     /// End the unit with `return`, carrying what `from` holds. `written`
     /// is 1 when a value was written after `return`, which the top level
     /// warns is ignored.
@@ -414,6 +455,11 @@ pub enum Instruction {
     },
     /// Open a scope, as a `Block` statement runs in one.
     PushScope,
+    /// Whether the `BEGIN` block written at the instruction's position runs
+    /// now: it runs the first time its code unit does and not again.
+    BeginBlockOnce {
+        to: u8,
+    },
     /// Run the unit's class or module body statement the operand numbers by
     /// the body's own rules, with `to` holding the value the body answers.
     BodyStatement {
@@ -523,6 +569,40 @@ pub enum Instruction {
     CaseArm {
         subject: u8,
         arm: u16,
+    },
+    /// Warn about the `when` clauses of the unit's list the operand numbers
+    /// that are written the same as one before them.
+    WarnDuplicatedWhen {
+        list: u16,
+    },
+    /// Test the unit's `when` arm the operand numbers against the value in
+    /// `subject`, putting whether it matched in the register after it. A
+    /// match binds what the pattern bound.
+    WhenArm {
+        subject: u8,
+        arm: u16,
+    },
+    /// Test the unit's `in` pattern the operand numbers against the value in
+    /// `subject`, putting whether it matched in the register after it, and
+    /// binding the names the pattern reached.
+    InArm {
+        subject: u8,
+        arm: u16,
+    },
+    /// Record that an `in` clause's guard did not let the match stand.
+    GuardFailed,
+    /// Make the value in `from` the one a `case`/`in` asks for its elements
+    /// once for the whole `case`.
+    PushDeconstructed {
+        from: u8,
+    },
+    /// Let go of the value `PushDeconstructed` held.
+    PopDeconstructed,
+    /// Raise NoMatchingPatternError for the value in `subject`, with what
+    /// the one pattern found when `single` is 1.
+    NoMatchingPattern {
+        subject: u8,
+        single: u8,
     },
     /// Close the scope a matching `CaseArm` opened.
     PopScope,
@@ -643,10 +723,19 @@ impl Instruction {
             Instruction::ExitBreak { .. } => "ExitBreak",
             Instruction::ExitNext { .. } => "ExitNext",
             Instruction::ExitRedo => "ExitRedo",
+            Instruction::BreakCheck { .. } => "BreakCheck",
+            Instruction::ExitRetry => "ExitRetry",
+            Instruction::SaveCurrentException { .. } => "SaveCurrentException",
+            Instruction::RestoreCurrentException { .. } => "RestoreCurrentException",
+            Instruction::RescueMatches { .. } => "RescueMatches",
+            Instruction::EnterRescue { .. } => "EnterRescue",
+            Instruction::Reraise { .. } => "Reraise",
+            Instruction::RaiseStatement { .. } => "RaiseStatement",
             Instruction::ExitReturn { .. } => "ExitReturn",
             Instruction::FindBlock { .. } => "FindBlock",
             Instruction::CallBlock { .. } => "CallBlock",
             Instruction::PushScope => "PushScope",
+            Instruction::BeginBlockOnce { .. } => "BeginBlockOnce",
             Instruction::Define { .. } => "Define",
             Instruction::BodyStatement { .. } => "BodyStatement",
             Instruction::BodyConstant { .. } => "BodyConstant",
@@ -669,6 +758,13 @@ impl Instruction {
             Instruction::CoverLine => "CoverLine",
             Instruction::CaseArm { .. } => "CaseArm",
             Instruction::PopScope => "PopScope",
+            Instruction::WarnDuplicatedWhen { .. } => "WarnDuplicatedWhen",
+            Instruction::WhenArm { .. } => "WhenArm",
+            Instruction::InArm { .. } => "InArm",
+            Instruction::GuardFailed => "GuardFailed",
+            Instruction::PushDeconstructed { .. } => "PushDeconstructed",
+            Instruction::PopDeconstructed => "PopDeconstructed",
+            Instruction::NoMatchingPattern { .. } => "NoMatchingPattern",
             Instruction::Unwind { .. } => "Unwind",
             Instruction::FlipFlopState { .. } => "FlipFlopState",
             Instruction::FlipFlopSet { .. } => "FlipFlopSet",

@@ -136,3 +136,59 @@ fn test_bytecode_supers_execution() {
         )
     );
 }
+
+#[test]
+fn test_bytecode_exceptions_execution() {
+    let output = run_example("bytecode/exceptions.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[:splatted, [:body, Custom, :ensure], nil]\n",
+            "[:listed, [:body, \"argument\", :ensure], nil]\n",
+            "[:listed, [:body, \"invalid value for Integer(): \\\"x\\\"\", :ensure], nil]\n",
+            "[:splatted, [:body, KeyError, :ensure], nil]\n",
+            "[:else_value, [:body, :else, :ensure], nil]\n",
+            "3\n",
+            "[\"ensure 1\", 2, \"ensure 2\", \"ensure 3\", :loop_ensure]\n",
+            "[:returned, [:ensured]]\n",
+            "[:method_level, \"passes\"]\n",
+            "[\"second\", \"first\"]\n",
+            "20\n",
+            "nil\n",
+        )
+    );
+}
+
+#[test]
+fn test_bytecode_pattern_matching_execution() {
+    let output = run_example("bytecode/pattern_matching.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[:number, :number, :early, :zed, :other]\n",
+            "[:array, 3, [4, 5]]\n",
+            "[:array, 1, [:needle, :after]]\n",
+            "[:find, [:after]]\n",
+            "[:hash, \"ann\"]\n",
+            "[:array, 1, [2]]\n",
+            "[:alternative, :two]\n",
+            ":nothing\n",
+            "[NoMatchingPatternError, \"7: String === 7 does not return true\"]\n",
+            "[:deconstruct]\n",
+        )
+    );
+}
+
+#[test]
+fn test_bytecode_begin_blocks_execution() {
+    let output = run_example("bytecode/begin_blocks.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "first statement\n",
+            "[:begin_one, :begin_two]\n",
+            "end two\n",
+            "end one\n",
+        )
+    );
+}

@@ -4,7 +4,5 @@ def nothing
 end
 
 def answer
-  case 42
-  when Integer then 42
-  end
+  load File.join(__dir__, "engine_units_fallback.rb")
 end

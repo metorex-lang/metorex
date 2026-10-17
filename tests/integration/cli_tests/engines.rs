@@ -84,16 +84,18 @@ fn engine_report(example: &str) -> (u64, u64, std::collections::HashMap<String, 
 }
 
 #[test]
-fn the_engine_report_counts_a_compiled_method_and_one_that_falls_back() {
+fn the_engine_report_counts_compiled_methods_and_a_file_that_falls_back() {
     let (bytecode_before, tree_before, fallbacks_before) =
         engine_report("engine_units_uncalled.rb");
     let (bytecode_after, tree_after, fallbacks_after) = engine_report("engine_units.rb");
-    assert_eq!(bytecode_after - bytecode_before, 1);
+    // The two methods, the method of the prelude `load` runs, and the method
+    // the loaded file calls.
+    assert_eq!(bytecode_after - bytecode_before, 4);
     assert_eq!(tree_after - tree_before, 1);
-    let matches = |fallbacks: &std::collections::HashMap<String, u64>| {
-        fallbacks.get("Match").copied().unwrap_or(0)
+    let calls = |fallbacks: &std::collections::HashMap<String, u64>| {
+        fallbacks.get("Call").copied().unwrap_or(0)
     };
-    assert_eq!(matches(&fallbacks_after) - matches(&fallbacks_before), 1);
+    assert_eq!(calls(&fallbacks_after) - calls(&fallbacks_before), 1);
 }
 
 #[test]
