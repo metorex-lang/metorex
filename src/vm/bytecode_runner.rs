@@ -43,17 +43,43 @@ impl Extension {
 }
 
 /// Where the loop goes after an instruction.
-enum Next {
+pub(crate) enum Next {
     Step,
     JumpTo(usize),
     Finish(ControlFlow),
 }
 
-/// What one run of a unit keeps besides its registers.
+/// One run of a unit: what it runs, the registers and state it runs over,
+/// and the high operand bits an `Extend` left for the next instruction.
+pub(crate) struct UnitRun<'a> {
+    unit: &'a Unit,
+    state: &'a mut RunState,
+    registers: &'a mut [Object],
+    base: OpenAtHandler,
+    extension: Extension,
+}
+
+impl UnitRun<'_> {
+    /// Where the registers start, which machine code reads and writes
+    /// through.
+    pub(crate) fn registers_pointer(&mut self) -> *mut Object {
+        self.registers.as_mut_ptr()
+    }
+
+    pub(crate) fn unit(&self) -> &Unit {
+        self.unit
+    }
+
+    pub(crate) fn set_register(&mut self, register: usize, value: Object) {
+        self.registers[register] = value;
+    }
+}
+
 /// How many emptied register lists the machine keeps for the next units it
 /// runs.
 const SPARE_REGISTER_LISTS: usize = 64;
 
+/// What one run of a unit keeps besides its registers.
 struct RunState {
     /// The cells the unit's locals are held in, shared with the scope the
     /// unit runs in, so `binding`, `local_variables`, and `eval` read and
@@ -140,8 +166,6 @@ impl VirtualMachine {
         start: usize,
         registers: &mut [Object],
     ) -> Result<ControlFlow, MetorexError> {
-        let mut at = start;
-        let mut extension = Extension::default();
         // What the run had open as it began, which a handler goes back to
         // with what was open where its instructions begin added.
         let base = OpenAtHandler {
@@ -150,65 +174,91 @@ impl VirtualMachine {
             scopes: self.environment().current_depth(),
             loops: self.running_block_breaks.len(),
         };
+        let mut run = UnitRun {
+            unit,
+            state,
+            registers,
+            base,
+            extension: Extension::default(),
+        };
+        let mut at = start;
+        if let Some(code) = crate::vm::jit::code_for(self, unit) {
+            match crate::vm::jit::run(self, &code, &mut run, start) {
+                crate::vm::jit::Ran::Finished(ended) => return ended,
+                crate::vm::jit::Ran::Deoptimized(resume) => at = resume,
+            }
+        }
         loop {
-            let instruction = unit.instructions[at];
-            let position = unit.positions[at];
-            if crate::vm::counters::enabled() {
-                crate::vm::counters::count_instruction(instruction.name());
+            match self.step(&mut run, at)? {
+                Next::Step => at += 1,
+                Next::JumpTo(target) => at = target,
+                Next::Finish(flow) => return Ok(flow),
             }
-            if let Instruction::Extend { high, wide } = instruction {
-                extension = Extension {
-                    high: usize::from(high),
-                    wide: usize::from(wide),
-                };
-                at += 1;
-                continue;
-            }
-            let ran = match unit.statement_starts[at] {
-                Some(statement) => {
-                    // No temporary lives from one statement to the next, and
-                    // one left holding a value would keep it from being freed.
-                    for register in registers.iter_mut().skip(statement.live) {
-                        *register = Object::Nil;
-                    }
-                    if let Some(index) = statement.index {
-                        self.mark_statement(index);
-                    }
-                    self.start_statement(statement).and_then(|()| {
-                        self.execute_instruction(
-                            unit,
-                            registers,
-                            state,
-                            instruction,
-                            extension,
-                            position,
-                        )
-                    })
-                }
-                None => self.execute_instruction(
-                    unit,
-                    registers,
-                    state,
-                    instruction,
-                    extension,
-                    position,
-                ),
+        }
+    }
+
+    /// Run the instruction at `at`, with the statement it starts, if any,
+    /// and the handler that takes an error it raises.
+    #[inline(always)]
+    pub(crate) fn step(&mut self, run: &mut UnitRun, at: usize) -> Result<Next, MetorexError> {
+        let unit = run.unit;
+        let instruction = unit.instructions[at];
+        let position = unit.positions[at];
+        if crate::vm::counters::enabled() {
+            crate::vm::counters::count_instruction(instruction.name());
+        }
+        if let Instruction::Extend { high, wide } = instruction {
+            run.extension = Extension {
+                high: usize::from(high),
+                wide: usize::from(wide),
             };
-            extension = Extension::default();
-            match ran {
-                Ok(Next::Step) => at += 1,
-                Ok(Next::JumpTo(target)) => at = target,
-                Ok(Next::Finish(flow)) => return Ok(flow),
-                Err(error) => {
-                    if let Some(spot) = &unit.error_spots[at] {
-                        self.note_compiled_error_spot(&error, spot);
-                    }
-                    match self.handle_error(unit, at, error, registers, state, base)? {
-                        Some(target) => at = target,
-                        None => unreachable!("an error no handler took is answered above"),
-                    }
+            return Ok(Next::Step);
+        }
+        let extension = std::mem::take(&mut run.extension);
+        if crate::vm::jit::enabled() {
+            crate::vm::jit::observe(unit, at, instruction, run.registers, extension.high);
+        }
+        let ran = match unit.statement_starts[at] {
+            Some(statement) => {
+                // No temporary lives from one statement to the next, and
+                // one left holding a value would keep it from being freed.
+                for register in run.registers.iter_mut().skip(statement.live) {
+                    *register = Object::Nil;
+                }
+                if let Some(index) = statement.index {
+                    self.mark_statement(index);
+                }
+                self.start_statement(statement).and_then(|()| {
+                    self.execute_instruction(
+                        unit,
+                        run.registers,
+                        run.state,
+                        instruction,
+                        extension,
+                        position,
+                    )
+                })
+            }
+            None => self.execute_instruction(
+                unit,
+                run.registers,
+                run.state,
+                instruction,
+                extension,
+                position,
+            ),
+        };
+        match ran {
+            Err(error) => {
+                if let Some(spot) = &unit.error_spots[at] {
+                    self.note_compiled_error_spot(&error, spot);
+                }
+                match self.handle_error(unit, at, error, run.registers, run.state, run.base)? {
+                    Some(target) => Ok(Next::JumpTo(target)),
+                    None => unreachable!("an error no handler took is answered above"),
                 }
             }
+            other => other,
         }
     }
 
@@ -1321,6 +1371,22 @@ impl VirtualMachine {
     /// method call.
     /// The instance variable `name` of `self` when `self` is an instance,
     /// read from its slot.
+    /// The value in `slot` of `self`'s instance variables, when `self` is an
+    /// instance whose variables have `shape`.
+    pub(crate) fn read_slot_of_shape(
+        &self,
+        shape: *const crate::object::shape::Shape,
+        slot: usize,
+    ) -> Option<Object> {
+        let held = self.environment().get("self")?;
+        let View::Instance(instance) = held.view() else {
+            return None;
+        };
+        let instance = instance.borrow();
+        let variables = &instance.instance_vars;
+        std::ptr::eq(Rc::as_ptr(variables.shape()), shape).then(|| variables.slot(slot).clone())
+    }
+
     fn read_slot(&self, name: &str, cache: &SlotCache) -> Option<Object> {
         let held = self.environment().get("self")?;
         let View::Instance(instance) = held.view() else {

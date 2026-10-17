@@ -8,6 +8,8 @@ use crate::object::Object;
 #[derive(Debug, Default)]
 pub struct Unit {
     pub instructions: Vec<Instruction>,
+    /// How often the unit has run and the machine code it was compiled to.
+    pub jit: crate::vm::jit::JitSlot,
     /// The source position of each instruction, which backtraces,
     /// `error_highlight`, and line events read.
     pub positions: Vec<Position>,

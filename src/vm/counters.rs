@@ -1,8 +1,9 @@
 //! What a run with `METOREX_COUNTERS=1` counts, and the report it prints to
 //! standard error at exit: each kind of instruction executed, each call by the method it was made from and the method it reached with
 //! the heap allocations made while it ran, every heap allocation, each
-//! block a literal built, and each library metorex carries that was parsed
-//! from its source.
+//! block a literal built, the units the JIT compiled and the runs of their
+//! machine code that went back to the interpreter, and each library
+//! metorex carries that was parsed from its source.
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -14,6 +15,8 @@ static ENABLED: AtomicBool = AtomicBool::new(false);
 static ALLOCATIONS: AtomicU64 = AtomicU64::new(0);
 static ALLOCATED_BYTES: AtomicU64 = AtomicU64::new(0);
 static BLOCKS_BUILT: AtomicU64 = AtomicU64::new(0);
+static UNITS_COMPILED_TO_MACHINE_CODE: AtomicU64 = AtomicU64::new(0);
+static DEOPTIMIZATIONS: AtomicU64 = AtomicU64::new(0);
 static COUNTS: Mutex<Option<Counts>> = Mutex::new(None);
 
 /// How many call paths the report lists, the most frequent first.
@@ -116,6 +119,20 @@ pub fn count_block_built() {
     }
 }
 
+/// Count a unit compiled to machine code.
+pub fn count_unit_compiled_to_machine_code() {
+    if enabled() {
+        UNITS_COMPILED_TO_MACHINE_CODE.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+/// Count a run of machine code that went back to the interpreter.
+pub fn count_deoptimization() {
+    if enabled() {
+        DEOPTIMIZATIONS.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
 /// Count a library metorex carries, or its core library, parsed from its
 /// source rather than read already parsed from the binary.
 pub fn count_library_parsed(name: &str) {
@@ -163,6 +180,14 @@ pub fn report(out: &mut dyn Write) {
     text.push_str(&format!(
         "blocks built: {}\n",
         BLOCKS_BUILT.load(Ordering::Relaxed)
+    ));
+    text.push_str(&format!(
+        "units compiled to machine code: {}\n",
+        UNITS_COMPILED_TO_MACHINE_CODE.load(Ordering::Relaxed)
+    ));
+    text.push_str(&format!(
+        "returns from machine code to the interpreter: {}\n",
+        DEOPTIMIZATIONS.load(Ordering::Relaxed)
     ));
     text.push_str(&format!(
         "libraries parsed from source: {}\n",

@@ -302,6 +302,7 @@ impl Object {
     }
 
     pub fn Binding(binding: Rc<Binding>) -> Object {
+        crate::vm::jit::assumptions_changed();
         list_once(&binding, super::live::record_binding);
         Object::on_heap(Body::Binding(binding))
     }

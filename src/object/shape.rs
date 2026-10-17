@@ -214,6 +214,12 @@ impl Default for SlotCache {
 }
 
 impl SlotCache {
+    /// The shape this site saw last and the slot its name has there.
+    pub fn seen(&self) -> Option<(*const Shape, usize)> {
+        let (shape, slot) = self.seen.get();
+        (!shape.is_null()).then_some((shape, slot))
+    }
+
     /// The slot of `name` in `variables`, answered without a search when
     /// their shape is the one this site saw last.
     pub fn slot_in(&self, variables: &InstanceVariables, name: &str) -> Option<usize> {

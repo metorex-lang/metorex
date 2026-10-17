@@ -761,13 +761,19 @@ METOREX_ENGINE_REPORT=report.txt target/release/metorex path/to/program.rb
 # Write each body's instructions to standard error as it is compiled
 METOREX_DISASM=1 target/release/metorex path/to/program.rb
 
+# Run with the JIT off, or compile each body to machine code on its first
+# run rather than its thirtieth (docs/engine/jit.md)
+METOREX_JIT=0 target/release/metorex path/to/program.rb
+METOREX_JIT_CALL_THRESHOLD=1 target/release/metorex path/to/program.rb
+
 ```
 
 ### Running everything
 
 `./test.sh` runs what CI runs, on this machine and on Linux, on both
 architectures: formatting, clippy, the Rust tests, the Ruby spec suite,
-coverage, and the check that no test sits in `src/`. On this machine the
+both again with the JIT compiling every body on its first run, coverage,
+and the check that no test sits in `src/`. On this machine the
 engine report of those runs is added up in `target/engine-report.txt`. It
 stops where a step fails, so what went wrong is the last thing on the screen.
 

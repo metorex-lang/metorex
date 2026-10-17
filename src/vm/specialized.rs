@@ -63,6 +63,12 @@ impl VirtualMachine {
             })
     }
 
+    /// Whether the Integer operators the arithmetic and comparison
+    /// instructions apply are the core library's.
+    pub(crate) fn integer_operators_in_force(&self) -> bool {
+        self.operators_in_force(&INTEGER_OPERATORS, &Object::Int(0))
+    }
+
     /// Whether `[]` on `collection`, an Array, still reads it directly.
     pub(crate) fn array_read_in_force(&self, collection: &Object) -> bool {
         self.core_method_in_force(&ARRAY_READ, collection, "[]")

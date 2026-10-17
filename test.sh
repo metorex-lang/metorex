@@ -38,6 +38,8 @@ run_mac() {
   step "mac: build" cargo build
   step "mac: tests" with_engine_report cargo test
   step "mac: ruby spec" with_engine_report scripts/run_ruby_spec.sh
+  step "mac: tests, JIT on every unit" env METOREX_JIT=1 METOREX_JIT_CALL_THRESHOLD=1 cargo test
+  step "mac: ruby spec, JIT on every unit" env METOREX_JIT=1 METOREX_JIT_CALL_THRESHOLD=1 scripts/run_ruby_spec.sh
   step "mac: tests are in tests/" scripts/misplaced_tests.sh
 }
 
@@ -75,6 +77,7 @@ run_linux() {
   step "linux/$arch: clippy" scripts/linux.sh cargo clippy --all-targets -- -D warnings
   step "linux/$arch: build" scripts/linux.sh cargo build --verbose
   step "linux/$arch: tests" scripts/linux.sh cargo test --verbose
+  step "linux/$arch: tests, JIT on every unit" scripts/linux.sh env METOREX_JIT=1 METOREX_JIT_CALL_THRESHOLD=1 cargo test
   step "linux/$arch: ruby spec" scripts/linux.sh bash -c 'cargo build && scripts/run_ruby_spec.sh'
   if [ "$arch" = "$(host_arch)" ]; then
     # One link per CPU runs the container out of memory once there are more

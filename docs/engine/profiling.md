@@ -31,6 +31,10 @@ standard error at exit:
 - the blocks a block literal built. A literal run again in the scope where it
   ran last, while nothing holds the block it made there, hands out that block
   again, so a block written in a loop is built once
+- the units the JIT compiled to machine code, and the runs of machine code
+  that returned to the interpreter. An instruction the machine code runs
+  itself, an Integer operation or a `Jump`, is not counted among the
+  instructions executed
 - each library parsed from its source, with its name. The core library and
   the libraries a default start loads are parsed when Metorex is built, and
   the binary holds what the parse produced, so a default start lists none

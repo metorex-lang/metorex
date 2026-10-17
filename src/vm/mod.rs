@@ -6,7 +6,7 @@ pub(crate) mod allocation_sites;
 mod begin_rescue;
 mod block_execution;
 pub(crate) mod block_reuse;
-mod bytecode_runner;
+pub(crate) mod bytecode_runner;
 mod call_frame;
 pub(crate) mod capi;
 mod class_execution;
@@ -25,6 +25,7 @@ mod format;
 mod global_registry;
 mod heap;
 pub(crate) mod init;
+pub(crate) mod jit;
 pub mod units;
 
 /// The type the operating system names a resource limit with, which is a

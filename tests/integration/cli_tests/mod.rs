@@ -68,4 +68,5 @@ mod counters;
 mod engines;
 mod errors;
 mod flags;
+mod jit;
 mod running;

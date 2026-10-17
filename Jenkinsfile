@@ -178,6 +178,28 @@ pipeline {
           }
         }
 
+        // The same suites with the JIT compiling every unit on its first
+        // run, so each instruction runs from machine code.
+        stage('jit') {
+          agent {
+            kubernetes {
+              defaultContainer 'ci'
+              yaml buildPod('risa', '4', '8')
+            }
+          }
+          environment {
+            CARGO_TARGET_DIR = '/cache/target-jit'
+            JOBS = '10'
+            METOREX_JIT = '1'
+            METOREX_JIT_CALL_THRESHOLD = '1'
+          }
+          steps {
+            sh 'cargo build'
+            sh 'cargo test'
+            sh 'scripts/run_ruby_spec.sh'
+          }
+        }
+
         stage('rspec-suites') {
           agent {
             kubernetes {

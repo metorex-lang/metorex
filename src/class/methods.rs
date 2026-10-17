@@ -13,6 +13,7 @@ thread_local! {
 /// Mark every cached method lookup out of date.
 pub(crate) fn method_state_changed() {
     METHOD_STATE.with(|state| state.set(state.get() + 1));
+    crate::vm::jit::assumptions_changed();
 }
 
 /// The number `method_state_changed` moves on: the class lookup caches and

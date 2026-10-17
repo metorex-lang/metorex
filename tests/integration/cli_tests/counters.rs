@@ -175,7 +175,10 @@ fn libraries_parsed(script: &str) -> Vec<String> {
         .expect("a libraries parsed line")
         .parse()
         .unwrap();
-    lines.take(count).map(|line| line.trim().to_string()).collect()
+    lines
+        .take(count)
+        .map(|line| line.trim().to_string())
+        .collect()
 }
 
 #[test]

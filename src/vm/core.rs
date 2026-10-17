@@ -950,6 +950,7 @@ impl VirtualMachine {
 
     /// Activate a refinement module in the innermost scope.
     pub(crate) fn activate_refinement(&mut self, module: Rc<crate::class::Class>) {
+        crate::vm::jit::refinement_activated();
         let entries = Self::refinement_entries_for(&module);
         if let Some(top) = self.refinement_scopes.last_mut() {
             top.extend(entries);

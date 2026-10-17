@@ -90,12 +90,12 @@ These start once the tree walker is removed.
 
 ## Speed with a JIT
 
-- [ ] Baseline JIT: hot methods and blocks compiled to machine code for x86-64 and arm64, with the choice between a code generator library and hand-written emitters recorded in `docs/engine/jit.md`
+- [x] Baseline JIT: hot methods and blocks compiled to machine code for x86-64 and arm64, with the choice between a code generator library and hand-written emitters recorded in `docs/engine/jit.md`
   - Acceptance: `cargo test` and ruby/spec pass with the JIT compiling every unit on its first call
-- [ ] Deoptimization: JIT code returns to the interpreter at the current instruction when an assumption breaks: a method redefined, a constant set, a shape changed, TracePoint or `set_trace_func` enabled, or `binding` taken
+- [x] Deoptimization: JIT code returns to the interpreter at the current instruction when an assumption breaks: a method redefined, a constant set, a shape changed, TracePoint or `set_trace_func` enabled, or `binding` taken
   - Acceptance: a test for each of those causes runs the same output under the interpreter and with the JIT forced on
-- [ ] Type specialization in JIT code from the types the inline caches observed, with guards that deoptimize
-- [ ] JIT on by default once it passes ruby/spec
+- [x] Type specialization in JIT code from the types the inline caches observed, with guards that deoptimize
+- [x] JIT on by default once it passes ruby/spec
 
 ## Benchmarks
 

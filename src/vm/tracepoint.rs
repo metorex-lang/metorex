@@ -56,6 +56,7 @@ impl VirtualMachine {
         self.tracepoints
             .retain(|held| !same_tracepoint(held, tracepoint));
         if switched_on {
+            crate::vm::jit::assumptions_changed();
             self.tracepoints.push(tracepoint.clone());
         }
     }
