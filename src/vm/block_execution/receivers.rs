@@ -117,7 +117,11 @@ impl VirtualMachine {
         self.method_nesting_stack.push(nesting);
         let mut last = Object::Nil;
         let compiled = self
-            .run_compiled_unit(None, &statements, crate::bytecode::compiler::UnitKind::Plain)
+            .run_compiled_unit(
+                None,
+                &statements,
+                crate::bytecode::compiler::UnitKind::Plain,
+            )
             .map(|ran| {
                 ran.and_then(|flow| match flow {
                     ControlFlow::Value(value) => {
@@ -135,34 +139,36 @@ impl VirtualMachine {
                     _ => Ok(()),
                 })
             });
-        let result = compiled.unwrap_or_else(|| (|| -> Result<(), MetorexError> {
-            for statement in &statements {
-                if let Statement::Expression { expression, .. } = statement {
-                    if !self.tracepoints.is_empty() {
-                        self.fire_line_event(statement.position())?;
+        let result = compiled.unwrap_or_else(|| {
+            (|| -> Result<(), MetorexError> {
+                for statement in &statements {
+                    if let Statement::Expression { expression, .. } = statement {
+                        if !self.tracepoints.is_empty() {
+                            self.fire_line_event(statement.position())?;
+                        }
+                        last = self.evaluate_expression(expression)?;
+                        continue;
                     }
-                    last = self.evaluate_expression(expression)?;
-                    continue;
-                }
-                match self.execute_statement(statement)? {
-                    ControlFlow::Value(value) => last = value,
-                    // An exception raised here is the caller's to handle,
-                    // rather than something the run swallows.
-                    ControlFlow::Exception {
-                        exception,
-                        position,
-                    } => {
-                        return Err(MetorexError::UncaughtException {
-                            message: crate::vm::utils::format_exception(&exception),
+                    match self.execute_statement(statement)? {
+                        ControlFlow::Value(value) => last = value,
+                        // An exception raised here is the caller's to handle,
+                        // rather than something the run swallows.
+                        ControlFlow::Exception {
                             exception,
-                            location: position_to_location(position),
-                        });
+                            position,
+                        } => {
+                            return Err(MetorexError::UncaughtException {
+                                message: crate::vm::utils::format_exception(&exception),
+                                exception,
+                                location: position_to_location(position),
+                            });
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
-            }
-            Ok(())
-        })());
+                Ok(())
+            })()
+        });
         // An error the code raised natively is traced while its file is
         // still the one the code was named for.
         if let Err(error) = &result {

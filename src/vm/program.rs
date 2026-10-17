@@ -381,7 +381,11 @@ impl VirtualMachine {
 
     /// A `return` leaving an eval, which unwinds to the invocation the code
     /// around the eval belongs to.
-    pub(crate) fn unwinding_return(&self, value: Object, at: crate::lexer::Position) -> MetorexError {
+    pub(crate) fn unwinding_return(
+        &self,
+        value: Object,
+        at: crate::lexer::Position,
+    ) -> MetorexError {
         // The return belongs to the innermost lambda or method around the
         // eval, whichever the unwinding reaches first, so it names no frame
         // of its own.

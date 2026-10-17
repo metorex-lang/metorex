@@ -11,20 +11,20 @@ pub enum Engine {
 
 static CHOSEN: OnceLock<Engine> = OnceLock::new();
 
-/// The engine the program runs on, the tree walker unless
-/// `METOREX_ENGINE` chose bytecode.
+/// The engine the program runs on, bytecode unless `METOREX_ENGINE` chose
+/// the tree walker.
 pub fn engine() -> Engine {
-    CHOSEN.get().copied().unwrap_or(Engine::Tree)
+    CHOSEN.get().copied().unwrap_or(Engine::Bytecode)
 }
 
 /// Read `METOREX_ENGINE`, answering the message to end the run with when it
 /// names neither engine.
 pub fn choose_from_environment() -> Result<(), String> {
     let chosen = match std::env::var("METOREX_ENGINE") {
-        Err(_) => Engine::Tree,
+        Err(_) => Engine::Bytecode,
         Ok(named) => match named.as_str() {
-            "" | "tree" => Engine::Tree,
-            "bytecode" => Engine::Bytecode,
+            "tree" => Engine::Tree,
+            "" | "bytecode" => Engine::Bytecode,
             _ => {
                 return Err(format!(
                     "METOREX_ENGINE must be tree or bytecode, not {named:?}"

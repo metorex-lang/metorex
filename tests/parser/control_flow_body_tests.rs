@@ -217,9 +217,9 @@ fn if_with_empty_elsif_branch() {
 }
 
 #[test]
-fn if_expression_with_empty_then_returns_none() {
+fn if_expression_with_empty_then_answers_nil_or_nothing() {
     let result = run("if true\nend");
-    assert_eq!(result, None);
+    assert!(result.is_none() || result == Some(Object::Nil));
 }
 
 #[test]

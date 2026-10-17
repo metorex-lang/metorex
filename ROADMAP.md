@@ -68,8 +68,8 @@ Each item compiles a group of node types. Its acceptance is the same in every ca
 
 ## Removing the tree walker
 
-- [ ] No fallback: the engine report for a full `cargo test` and ruby/spec run under `METOREX_ENGINE=bytecode` lists no tree walker units
-- [ ] Bytecode is the default engine
+- [x] No fallback: the engine report for a full `cargo test` and ruby/spec run under `METOREX_ENGINE=bytecode` lists no tree walker units
+- [x] Bytecode is the default engine
   - Acceptance: `cargo test` and ruby/spec pass with `METOREX_ENGINE` unset, and CI runs the tree walker step only as the second engine
 - [ ] Remove the tree walker: the statement and expression evaluation in `src/vm/statement`, `src/vm/eval`, and the modules only they call, the engine switch, and its CI step. `parse`, `Method#body`, and the other syntax tree readers stay
   - Acceptance: `cargo test`, ruby/spec, clippy, and coverage at its current floor pass, and no code path evaluates a `Statement` or `Expression` directly

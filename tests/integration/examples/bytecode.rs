@@ -242,3 +242,28 @@ fn test_bytecode_tracing_execution() {
         )
     );
 }
+
+#[test]
+fn test_bytecode_long_lists_execution() {
+    let output = run_example("bytecode/long_lists.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[300, 0]\n",
+            "[300, 300]\n",
+            "[300, 0]\n",
+            "[301, 0]\n",
+            "[0, 300]\n",
+            "45150\n",
+            "300\n",
+            "300\n",
+            "300\n",
+            "[1392, \"<1><2><3>\", \"><299><300>\"]\n",
+            "300\n",
+            "300\n",
+            "45151\n",
+            "300\n",
+            "300\n",
+        )
+    );
+}

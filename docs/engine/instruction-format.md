@@ -118,6 +118,15 @@ registers than on the stack, since its literals each take an instruction.
   pattern matching, and `BEGIN`. A body needing more registers than an
   instruction can name is refused with the type name of the node that ran
   out, and runs on the tree walker.
+- A long list does not hold a register per element. A call with more than
+  64 arguments gathers them in an argument list, an interpolated String
+  with more than 32 holes is joined 32 holes at a time, and Array and Hash
+  literals are built 64 elements or pairs at a time. A left-nested chain
+  such as `a + b + c` or `a.b.c` computes each left operand or receiver in
+  the register its answer goes to. What still needs a register per level is
+  nesting to the right, such as `a ** b ** c` or `a + (b + (c))`, which
+  runs out past 256 levels, or past 128 for the operators with arithmetic
+  and comparison instructions of their own.
 - Each `BEGIN` body is compiled ahead of the unit's first statement, in the
   order they were written. `BeginBlockOnce` answers whether the body has
   run before, so a program `-n` or `-p` runs once per line runs it once.

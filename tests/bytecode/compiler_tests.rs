@@ -84,11 +84,10 @@ fn a_method_call_puts_its_arguments_after_the_receiver() {
     assert_eq!(
         unit.instructions,
         vec![
-            LoadInteger { to: 1, value: 1 },
-            LoadInteger { to: 2, value: 0 },
-            LoadInteger { to: 3, value: 2 },
-            Call { base: 1, site: 0 },
-            Move { to: 0, from: 1 },
+            LoadInteger { to: 0, value: 1 },
+            LoadInteger { to: 1, value: 0 },
+            LoadInteger { to: 2, value: 2 },
+            Call { base: 0, site: 0 },
             Return { from: 0 },
         ]
     );
@@ -116,8 +115,16 @@ fn a_call_is_pointed_at_by_its_receiver_and_method_name() {
 
 #[test]
 fn a_body_needing_more_registers_than_an_instruction_names_names_the_node_holding_them() {
-    let arguments = vec!["held"; 300].join(", ");
-    assert_eq!(compiled(&format!("puts({arguments})\n")).err(), Some("Call"));
+    let power = format!("{}\n", vec!["held"; 300].join(" ** "));
+    // Parsing and compiling a power nested this deep takes more stack than a
+    // test thread starts with.
+    let refused = std::thread::Builder::new()
+        .stack_size(64 * 1024 * 1024)
+        .spawn(move || compiled(&power).err())
+        .unwrap()
+        .join()
+        .unwrap();
+    assert_eq!(refused, Some("BinaryOp"));
 }
 
 #[test]
@@ -164,7 +171,7 @@ fn a_long_hash_literal_is_built_a_chunk_at_a_time() {
         .map(|number| format!("{number} => {number}"))
         .collect();
     let unit = unit_of(&format!("{{{}}}.size", pairs.join(", ")));
-    assert!(unit.instructions.contains(&AddToHash { hash: 1, shape: 1 }));
+    assert!(unit.instructions.contains(&AddToHash { hash: 0, shape: 1 }));
     assert_eq!(
         VirtualMachine::new().run_unit(&unit).unwrap(),
         Object::Int(100)

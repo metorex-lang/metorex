@@ -24,6 +24,9 @@ const REGISTER_LIMIT: usize = 256;
 /// a time.
 const LITERAL_CHUNK: usize = 64;
 
+/// How many holes of a long interpolated String are joined at a time.
+const INTERPOLATION_CHUNK: usize = 32;
+
 /// What a register or table index past what an operand holds refuses with,
 /// which the node being compiled is reported in place of.
 const OVER_LIMIT: &str = "over limit";
@@ -238,6 +241,16 @@ impl Compiler {
         self.next_register += 1;
         self.unit.use_registers(self.next_register);
         Ok(register)
+    }
+
+    /// A register to compute into ahead of the registers after it: `to`
+    /// itself when it is the last one held, so a chain such as `a.b.c`
+    /// takes no more registers for each call, or else a new one.
+    fn register_after(&mut self, to: usize) -> Result<usize, &'static str> {
+        match to + 1 == self.next_register {
+            true => Ok(to),
+            false => self.temporary(),
+        }
     }
 
     /// Compile a statement of a class body, or of a module body when
@@ -1047,12 +1060,7 @@ impl Compiler {
             // reaching it where it was written does nothing.
             Statement::BeginBlock { position, .. } => {
                 let unused = self.temporary()?;
-                self.emit(
-                    Instruction::LoadNil {
-                        to: unused as u8,
-                    },
-                    *position,
-                );
+                self.emit(Instruction::LoadNil { to: unused as u8 }, *position);
                 Ok(())
             }
             Statement::Redo { position } => {
@@ -2758,7 +2766,7 @@ impl Compiler {
                 return Ok(());
             }
             Expression::InterpolatedString { parts, .. } => {
-                let pieces = self.pieces(parts)?;
+                let pieces = self.chunked_pieces(parts)?;
                 Instruction::Interpolate {
                     to: to_register,
                     shape: wide(Some(self.unit.interpolation(pieces)))?,
@@ -2825,7 +2833,7 @@ impl Compiler {
                 op, left, right, ..
             } => {
                 let Some(make) = binary_instruction(op) else {
-                    let first = self.temporary()?;
+                    let first = self.register_after(to)?;
                     self.expression(left, first)?;
                     let second = self.temporary()?;
                     self.expression(right, second)?;
@@ -2839,7 +2847,12 @@ impl Compiler {
                     );
                     return Ok(());
                 };
-                let left_register = self.operand_temporary(expression)?;
+                // A chain such as `a + b + c` takes no more registers for
+                // each operator, its left operands all computed in `to`.
+                let left_register = match to < usize::from(FIRST_CONSTANT_OPERAND) {
+                    true => to,
+                    false => self.operand_temporary(expression)?,
+                };
                 self.expression(left, left_register)?;
                 let right_register = self.operand_temporary(expression)?;
                 self.expression(right, right_register)?;
@@ -3171,7 +3184,7 @@ impl Compiler {
             self.jump_here(not_native)?;
             self.next_register = base;
         }
-        let base = self.temporary()?;
+        let base = self.register_after(to)?;
         self.expression(receiver, base)?;
         // `held&.name(args) { block }` runs none of what follows when there
         // is no receiver, so the arguments are never evaluated.
@@ -3298,7 +3311,8 @@ impl Compiler {
         trailing_block: Option<&Expression>,
         listed: bool,
     ) -> Result<CallSite, &'static str> {
-        let in_list = listed || arguments.iter().any(gathered_in_a_list);
+        let in_list =
+            listed || arguments.len() > LITERAL_CHUNK || arguments.iter().any(gathered_in_a_list);
         let mut site = CallSite::new(name, 0, Receiver::Other);
         site.written_with_arguments = !arguments.is_empty();
         site.keyword_splat = arguments
@@ -3430,6 +3444,65 @@ impl Compiler {
         }
         self.next_register = held;
         u8::try_from(held).map_err(|_| OVER_LIMIT)
+    }
+
+    /// Compile an interpolated String's holes as `pieces` does, a long run
+    /// of them first joined into a String a chunk at a time.
+    fn chunked_pieces(&mut self, parts: &[InterpolationPart]) -> Result<Vec<Piece>, &'static str> {
+        let holes = parts
+            .iter()
+            .filter(|part| matches!(part, InterpolationPart::Expression(_)))
+            .count();
+        if holes <= INTERPOLATION_CHUNK {
+            return self.pieces(parts);
+        }
+        let mut pieces = Vec::new();
+        let mut chunk_start = 0;
+        let mut chunk_holes = 0;
+        for (at, part) in parts.iter().enumerate() {
+            if let InterpolationPart::Expression(_) = part {
+                chunk_holes += 1;
+            }
+            if chunk_holes == INTERPOLATION_CHUNK || at + 1 == parts.len() {
+                pieces.push(self.joined_chunk(&parts[chunk_start..=at])?);
+                chunk_start = at + 1;
+                chunk_holes = 0;
+            }
+        }
+        Ok(pieces)
+    }
+
+    /// Join `parts` into a String in a register followed by one holding the
+    /// same String, answering the piece naming them.
+    fn joined_chunk(&mut self, parts: &[InterpolationPart]) -> Result<Piece, &'static str> {
+        let register = self.temporary()?;
+        let text = self.temporary()?;
+        let position = parts
+            .iter()
+            .find_map(|part| match part {
+                InterpolationPart::Expression(hole) => Some(hole.position()),
+                InterpolationPart::Text(_) => None,
+            })
+            .unwrap_or_default();
+        let held = self.next_register;
+        let pieces = self.pieces(parts)?;
+        self.next_register = held;
+        let shape = wide(Some(self.unit.interpolation(pieces)))?;
+        self.emit(
+            Instruction::Interpolate {
+                to: register as u8,
+                shape,
+            },
+            position,
+        );
+        self.emit(
+            Instruction::Move {
+                to: text as u8,
+                from: register as u8,
+            },
+            position,
+        );
+        Ok(Piece::Value { register, position })
     }
 
     /// Compile an interpolated String's holes, each to a register followed

@@ -83,7 +83,7 @@ fn counters_report_the_instructions_executed_on_the_bytecode_engine() {
         .env("METOREX_COUNTERS", "1")
         .env("METOREX_ENGINE", "bytecode")
         .arg(format!(
-            "{manifest_dir}/tests/_examples/cli_flags/engine_units.rb"
+            "{manifest_dir}/tests/_examples/cli_flags/engine_counted.rb"
         ))
         .output()
         .expect("failed to execute");

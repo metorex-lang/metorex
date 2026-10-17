@@ -88,14 +88,13 @@ fn the_engine_report_counts_compiled_methods_and_a_file_that_falls_back() {
     let (bytecode_before, tree_before, fallbacks_before) =
         engine_report("engine_units_uncalled.rb");
     let (bytecode_after, tree_after, fallbacks_after) = engine_report("engine_units.rb");
-    // The two methods, the method of the prelude `load` runs, and the method
-    // the loaded file calls.
-    assert_eq!(bytecode_after - bytecode_before, 4);
+    // The two methods and the method of the prelude `load` runs.
+    assert_eq!(bytecode_after - bytecode_before, 3);
     assert_eq!(tree_after - tree_before, 1);
-    let calls = |fallbacks: &std::collections::HashMap<String, u64>| {
-        fallbacks.get("Call").copied().unwrap_or(0)
+    let sums = |fallbacks: &std::collections::HashMap<String, u64>| {
+        fallbacks.get("BinaryOp").copied().unwrap_or(0)
     };
-    assert_eq!(calls(&fallbacks_after) - calls(&fallbacks_before), 1);
+    assert_eq!(sums(&fallbacks_after) - sums(&fallbacks_before), 1);
 }
 
 #[test]
@@ -166,15 +165,14 @@ fn disassembly_writes_each_unit_under_its_source_lines_to_standard_error() {
             "== tests/_examples/disassembly/locals_and_calls.rb\n",
             "    2 |   product = width * height\n",
             "        0000  Unhoist { slot: 0 }  ; product\n",
-            "        0001  GetIdentifier { to: 1, name: 0 }  ; width\n",
-            "        0002  GetIdentifier { to: 2, name: 1 }  ; height\n",
-            "        0003  Multiply { to: 0, left: 1, right: 2 }\n",
+            "        0001  GetIdentifier { to: 0, name: 0 }  ; width\n",
+            "        0002  GetIdentifier { to: 1, name: 1 }  ; height\n",
+            "        0003  Multiply { to: 0, left: 0, right: 1 }\n",
             "        0004  SetLocal { from: 0, slot: 0 }  ; product\n",
             "    3 |   product.to_s\n",
-            "        0005  GetLocal { to: 1, slot: 0 }  ; product\n",
-            "        0006  Call { base: 1, site: 0 }  ; to_s/0\n",
-            "        0007  Move { to: 0, from: 1 }\n",
-            "        0008  Return { from: 0 }\n",
+            "        0005  GetLocal { to: 0, slot: 0 }  ; product\n",
+            "        0006  Call { base: 0, site: 0 }  ; to_s/0\n",
+            "        0007  Return { from: 0 }\n",
         )
     );
 }
@@ -184,6 +182,24 @@ fn disassembly_is_written_only_when_asked_for() {
     assert_eq!(
         disassembly_of("locals_and_calls.rb", "bytecode", "0"),
         (String::new(), String::new())
+    );
+}
+
+#[test]
+fn a_program_runs_on_bytecode_when_no_engine_is_chosen() {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let output = metorex_cmd()
+        .current_dir(manifest_dir)
+        .env_remove("METOREX_ENGINE")
+        .env("METOREX_DISASM", "1")
+        .arg("tests/_examples/disassembly/locals_and_calls.rb")
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+    assert!(
+        String::from_utf8(output.stderr)
+            .unwrap()
+            .starts_with("== tests/_examples/disassembly/locals_and_calls.rb\n")
     );
 }
 
