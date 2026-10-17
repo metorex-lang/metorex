@@ -19,6 +19,13 @@ pub enum FrameKind {
     Boundary,
 }
 
+/// Where a frame was entered from.
+#[derive(Debug, Clone)]
+enum FrameLocation {
+    Written(String),
+    At { line: usize, column: usize },
+}
+
 /// Call frame information stored on the VM call stack for debugging.
 #[derive(Debug, Clone)]
 pub struct CallFrame {
@@ -26,10 +33,10 @@ pub struct CallFrame {
     /// a method's frames reuse the one name the method caches.
     name: Rc<str>,
     /// Optional source location ("file:line") to aid debugging.
-    location: Option<String>,
+    location: Option<FrameLocation>,
     /// The file the call site sits in, when known. `location` carries only a
     /// line and column, so this is what names the file for a backtrace.
-    source_file: Option<String>,
+    source_file: Option<Rc<str>>,
     /// What the frame is running.
     kind: FrameKind,
     /// How many blocks deep the frame sits inside the scope it names. Zero
@@ -37,11 +44,11 @@ pub struct CallFrame {
     /// it, which is what tells `foo` from `block in foo`.
     block_depth: u32,
     /// The scope the block this frame runs was written in, for a block frame.
-    written_in: Option<String>,
+    written_in: Option<Rc<str>>,
     /// The class path of the module the running method was defined in, for
     /// a method frame or a block written in one. None for a singleton
     /// method.
-    owner_path: Option<String>,
+    owner_path: Option<Rc<str>>,
     /// The class or module the method a block frame was written in was
     /// defined on.
     owner_class: Option<Rc<crate::class::Class>>,
@@ -54,7 +61,7 @@ impl CallFrame {
     pub fn new(name: impl Into<Rc<str>>, location: Option<String>) -> Self {
         Self {
             name: name.into(),
-            location,
+            location: location.map(FrameLocation::Written),
             source_file: None,
             kind: FrameKind::Block,
             block_depth: 1,
@@ -74,7 +81,7 @@ impl CallFrame {
     ) -> Self {
         Self {
             name: name.into(),
-            location,
+            location: location.map(FrameLocation::Written),
             source_file: None,
             kind: FrameKind::Method {
                 callee: callee.into(),
@@ -114,20 +121,32 @@ impl CallFrame {
     }
 
     /// Return the optional source location.
-    pub fn location(&self) -> Option<&str> {
-        self.location.as_deref()
+    pub fn location(&self) -> Option<std::borrow::Cow<'_, str>> {
+        self.location.as_ref().map(|location| match location {
+            FrameLocation::Written(text) => std::borrow::Cow::Borrowed(text.as_str()),
+            FrameLocation::At { line, column } => {
+                std::borrow::Cow::Owned(format!("{line}:{column}"))
+            }
+        })
     }
 
     /// Record the file the call site sits in.
     /// Record where the frame was entered from, which is what pairs a
     /// backtrace entry with the frame that made the call.
     pub fn with_location(mut self, location: Option<String>) -> Self {
-        self.location = location;
+        self.location = location.map(FrameLocation::Written);
         self
     }
 
-    pub fn with_source_file(mut self, source_file: Option<String>) -> Self {
-        self.source_file = source_file;
+    /// Record that the frame was entered from `line` and `column`, which
+    /// `location` writes out as `line:column` when it is read.
+    pub fn entered_at(mut self, line: usize, column: usize) -> Self {
+        self.location = Some(FrameLocation::At { line, column });
+        self
+    }
+
+    pub fn with_source_file(mut self, source_file: Option<impl Into<Rc<str>>>) -> Self {
+        self.source_file = source_file.map(Into::into);
         self
     }
 
@@ -149,8 +168,8 @@ impl CallFrame {
     }
 
     /// Say which scope the block this frame runs was written in.
-    pub fn written_in_scope(mut self, scope: Option<String>) -> Self {
-        self.written_in = scope;
+    pub fn written_in_scope(mut self, scope: Option<impl Into<Rc<str>>>) -> Self {
+        self.written_in = scope.map(Into::into);
         self
     }
 
@@ -160,8 +179,8 @@ impl CallFrame {
     }
 
     /// Say which module the running method was defined in, by class path.
-    pub fn owned_by(mut self, owner_path: Option<String>) -> Self {
-        self.owner_path = owner_path;
+    pub fn owned_by(mut self, owner_path: Option<impl Into<Rc<str>>>) -> Self {
+        self.owner_path = owner_path.map(Into::into);
         self
     }
 

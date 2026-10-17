@@ -54,8 +54,8 @@ pub struct BlockStatement {
     /// Default values for optional parameters, keyed by index into
     /// `parameters` (e.g. `{ |a, b = 1| }` records `(1, <1>)`).
     pub parameter_defaults: Vec<(usize, crate::ast::Expression)>,
-    /// Block body (AST statements)
-    pub body: Vec<Statement>,
+    /// Block body (AST statements), shared by every block a literal makes.
+    pub body: Rc<[Statement]>,
     /// Captured variables from outer scope (shared mutable references),
     /// shared by every call of the block rather than copied into each.
     pub captured_vars: Rc<indexmap::IndexMap<String, Rc<RefCell<Object>>>>,
@@ -75,9 +75,9 @@ pub struct BlockStatement {
     /// The method that lexically encloses this block, as the (callee, defined)
     /// pair `__callee__` and `__method__` report. None for a block created
     /// outside any method.
-    pub defining_method: Option<(String, String)>,
+    pub defining_method: Option<(Rc<str>, Rc<str>)>,
     /// The class path of the module the enclosing method was defined in.
-    pub defining_owner: Option<String>,
+    pub defining_owner: Option<Rc<str>>,
     /// The class or module the enclosing method was defined on, which is
     /// where a `super` in the block starts from.
     pub defining_class: Option<Rc<Class>>,
@@ -103,7 +103,7 @@ pub struct BlockStatement {
     pub from_symbol: Option<String>,
     /// The scope the block was written in, which is what a backtrace names it
     /// by however far from there it is called.
-    pub written_in: Option<String>,
+    pub written_in: Option<Rc<str>>,
     /// How many blocks deep the block was written, counting itself, which
     /// is the depth a backtrace names it by however it is called.
     pub written_depth: Option<u32>,
@@ -147,7 +147,7 @@ impl BlockStatement {
         Self {
             parameters,
             parameter_defaults: Vec::new(),
-            body,
+            body: body.into(),
             captured_vars: Rc::new(captured_vars),
             reserved_names: Rc::new(Vec::new()),
             captured_def_scope: Vec::new(),
@@ -177,10 +177,10 @@ impl BlockStatement {
     pub fn with_def_scope(
         parameters: Vec<String>,
         parameter_defaults: Vec<(usize, crate::ast::Expression)>,
-        body: Vec<Statement>,
+        body: Rc<[Statement]>,
         captured_vars: indexmap::IndexMap<String, Rc<RefCell<Object>>>,
         captured_def_scope: Vec<Rc<Class>>,
-        defining_method: Option<(String, String)>,
+        defining_method: Option<(Rc<str>, Rc<str>)>,
         is_lambda: bool,
     ) -> Self {
         Self {
@@ -247,16 +247,16 @@ impl BlockStatement {
     }
 
     /// Parameters that actually bind a name, excluding the trailing-comma marker.
-    pub fn binding_parameters(&self) -> Vec<String> {
-        self.parameters
-            .iter()
-            .filter(|p| {
-                *p != TRAILING_COMMA_PARAM
-                    && *p != NO_KEYWORDS_PARAM
-                    && !p.starts_with(BLOCK_LOCAL_PREFIX)
-            })
-            .cloned()
-            .collect()
+    pub fn binding_parameters(&self) -> std::borrow::Cow<'_, [String]> {
+        let binds = |p: &&String| {
+            *p != TRAILING_COMMA_PARAM
+                && *p != NO_KEYWORDS_PARAM
+                && !p.starts_with(BLOCK_LOCAL_PREFIX)
+        };
+        if self.parameters.iter().all(|p| binds(&p)) {
+            return std::borrow::Cow::Borrowed(&self.parameters);
+        }
+        self.parameters.iter().filter(binds).cloned().collect()
     }
 
     /// The names written after the `;`, which are locals of the block rather

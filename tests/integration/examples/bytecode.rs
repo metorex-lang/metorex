@@ -267,3 +267,149 @@ fn test_bytecode_long_lists_execution() {
         )
     );
 }
+
+#[test]
+fn test_bytecode_method_caches_execution() {
+    let output = run_example("bytecode/method_caches.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[0, 100]\n",
+            "[1, 99]\n",
+            "[0, 100]\n",
+            "[100, 0]\n",
+            "[1, 100]\n",
+            "[10]\n",
+            "[20]\n",
+            "[:child]\n",
+            "[:base]\n",
+            "[:mixed]\n",
+            "\"private method 'x' called for an instance of Child\"\n",
+            "[:own]\n",
+            "[:refined]\n",
+            ":refined\n",
+            "[:label]\n",
+        )
+    );
+}
+
+#[test]
+fn test_bytecode_constant_caches_execution() {
+    let output = run_example("bytecode/constant_caches.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "true\n",
+            "true\n",
+            "[2]\n",
+            "0\n",
+            "4\n",
+            ":top\n",
+            ":named\n",
+            ":loaded\n",
+            ":loaded\n",
+            ":top\n",
+            ":top\n",
+        )
+    );
+}
+
+#[test]
+fn test_bytecode_stat_changes_no_constants_execution() {
+    let output = run_example("bytecode/stat_changes_no_constants.rb");
+    assert_eq!(output, "[0, 0]\n");
+}
+
+#[test]
+fn test_bytecode_constant_cache_loop_lengths_execution() {
+    let output = run_example("bytecode/constant_cache_loop_lengths.rb");
+    assert_eq!(output, "true\n");
+}
+
+#[test]
+fn test_bytecode_shapes_execution() {
+    let output = run_example("bytecode/shapes.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "0\n",
+            "0\n",
+            "1\n",
+            "106\n",
+            "[11, 11, 11]\n",
+            "[:@y, :@z]\n",
+            "[nil, 2]\n",
+            "[:@y, :@z, :@x]\n",
+            "[5, 2]\n",
+            "FrozenError\n",
+            "1\n",
+        )
+    );
+}
+
+#[test]
+fn test_bytecode_literal_sends_execution() {
+    let output = run_example("bytecode/literal_sends.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"hello you!\"\n",
+            "\"hello you?\"\n",
+            "\"hello them!\"\n",
+            "[\"one\", \"two\"]\n",
+            ":secret\n",
+            "\"private method 'secret' called for an instance of Greeter\"\n",
+            "6\n",
+            ":broke\n",
+            "\"mailed greet\"\n",
+            ":own\n",
+        )
+    );
+}
+
+#[test]
+fn test_bytecode_redefined_operators_execution() {
+    let output = run_example("bytecode/redefined_operators.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[9, 5, 14, 3, 1]\n",
+            "[9.0, 5.0, 14.0, 3.5, 1.0]\n",
+            "[false, true, true, true, false, false]\n",
+            "[true, false, false, true, false, true]\n",
+            "1\n",
+            "1\n",
+            "1\n",
+            "[109, 5, 14, 3, 1]\n",
+            "[9.0, 5.0, :times, 3.5, 1.0]\n",
+            "[false, true, :less, true, false, false]\n",
+            ":indexed\n",
+            ":looked_up\n",
+            ":sent\n",
+        )
+    );
+}
+
+#[test]
+fn test_bytecode_prepended_core_methods_execution() {
+    let output = run_example("bytecode/prepended_core_methods.rb");
+    assert_eq!(output, ":sent\n:sent\n:sent\n:sent\n:fetched\n:fetched\n");
+}
+
+#[test]
+fn test_bytecode_reopened_core_method_owner_execution() {
+    let output = run_example("bytecode/reopened_core_method_owner.rb");
+    assert_eq!(output, "Hash\n3\n:fetched\n");
+}
+
+#[test]
+fn test_bytecode_block_units_execution() {
+    let output = run_example("bytecode/block_units.rb");
+    assert_eq!(output, "2\n");
+}
+
+#[test]
+fn test_bytecode_kept_blocks_execution() {
+    let output = run_example("bytecode/kept_blocks.rb");
+    assert_eq!(output, "0\n10\n20\n[0, 1, 2]\n3\n6\n4\nnil\n");
+}

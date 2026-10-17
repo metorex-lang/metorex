@@ -50,8 +50,8 @@ fn the_engine_report_counts_compiled_methods_and_a_refused_file() {
     let (compiled_before, refused_before, refusals_before) =
         engine_report("engine_units_uncalled.rb");
     let (compiled_after, refused_after, refusals_after) = engine_report("engine_units.rb");
-    // The two methods and the method of the prelude `load` runs.
-    assert_eq!(compiled_after - compiled_before, 3);
+    // The two methods.
+    assert_eq!(compiled_after - compiled_before, 2);
     assert_eq!(refused_after - refused_before, 1);
     let powers = |refusals: &std::collections::HashMap<String, u64>| {
         refusals.get("BinaryOp").copied().unwrap_or(0)

@@ -42,7 +42,7 @@ pub use crate::bytecode::unit::Unit;
 /// Where a `Method` or `BlockStatement` keeps what its body compiled to.
 /// Copies share it, since they share the body.
 #[derive(Debug, Clone, Default)]
-pub struct UnitSlot(OnceCell<Rc<Compiled>>);
+pub struct UnitSlot(Rc<OnceCell<Rc<Compiled>>>);
 
 impl UnitSlot {
     /// What the body compiles to, compiling it with `compile` the first

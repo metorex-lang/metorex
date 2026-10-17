@@ -101,7 +101,8 @@ impl VirtualMachine {
         mut arguments: Vec<Object>,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let method_name = method.name.clone();
+        let named = Rc::clone(&method);
+        let method_name: &str = &named.name;
         // A Proc cut from a bound Method carries the object it was bound to,
         // so the native tables answer for that one rather than for whatever
         // the new name was called on.
@@ -116,7 +117,7 @@ impl VirtualMachine {
         if method.is_undefined {
             let reported = method_name
                 .strip_prefix("__class__")
-                .unwrap_or(&method_name)
+                .unwrap_or(method_name)
                 .to_string();
             let wording = self.receiver_wording_for(&receiver, position);
             return Err(crate::vm::errors::undefined_method_error_worded(
@@ -128,7 +129,7 @@ impl VirtualMachine {
             return self.call_c_function(
                 function,
                 class,
-                method_name,
+                method_name.to_string(),
                 receiver,
                 arguments,
                 position,
@@ -150,7 +151,7 @@ impl VirtualMachine {
             View::Class(held) | View::Module(held) => {
                 held.singleton_class_slot()
                     .as_ref()
-                    .is_some_and(|singleton| singleton.find_own_method(&method_name).is_some())
+                    .is_some_and(|singleton| singleton.find_own_method(method_name).is_some())
                     || held
                         .find_own_method(&format!("__class__{}", method_name))
                         .is_some_and(|written| written_by_the_program(&written))
@@ -162,7 +163,7 @@ impl VirtualMachine {
         // stand one in for `Regexp#match` on a single pattern.
         let stands_on_its_own_singleton = class.is_singleton_class()
             && !matches!(receiver.view(), View::Class(_) | View::Module(_))
-            && class.find_own_method(&method_name).is_some();
+            && class.find_own_method(method_name).is_some();
         // A method a refinement puts in place of one the interpreter answers
         // natively runs its own body, which is the whole point of writing it.
         let stands_in_a_refinement = method.owner_class.as_ref().is_some_and(|owner| {
@@ -188,13 +189,29 @@ impl VirtualMachine {
             View::Class(held) | View::Module(held) => {
                 written_by_the_program(&method)
                     && (class.is_module()
-                        || crate::vm::method_lookup::module_extended_method(held, &method_name)
+                        || crate::vm::method_lookup::module_extended_method(held, method_name)
                             .is_some_and(|extended| Rc::ptr_eq(&extended, &method)))
             }
             _ => false,
         };
+        // A method the program writes on a core value's own class, or on a
+        // module prepended to it, runs in place of the native one, the way a
+        // reopened class's method does.
+        let stands_on_a_core_class = !matches!(
+            receiver.view(),
+            View::Instance(_) | View::Class(_) | View::Module(_) | View::Exception(_)
+        ) && written_by_the_program(&method)
+            && method.owner_class.as_ref().is_some_and(|owner| {
+                let core = self.builtins().class_of(&receiver);
+                Rc::ptr_eq(owner, &core)
+                    || core
+                        .transitive_prepends()
+                        .iter()
+                        .any(|prepended| Rc::ptr_eq(prepended, owner))
+            });
         let overrides_builtin = !method.body.is_empty()
-            && ((backs_a_core_value(&receiver) && written_by_the_program(&method))
+            && (stands_on_a_core_class
+                || (backs_a_core_value(&receiver) && written_by_the_program(&method))
                 || stands_in_an_extended_module
                 || stands_for_a_class_method
                 || stands_on_its_own_singleton
@@ -205,7 +222,7 @@ impl VirtualMachine {
             && let Some(result) = self.call_native_method(
                 class.as_ref(),
                 &receiver,
-                &method_name,
+                method_name,
                 &arguments,
                 position,
             )?
@@ -276,7 +293,7 @@ impl VirtualMachine {
         if method.body.is_empty()
             && method.captured_vars.is_none()
             && let Some(original) = &method.original_name
-            && original != &method_name
+            && original != method_name
         {
             let original = original.clone();
             for owner in [Rc::clone(&class), self.builtins().class_of(&receiver)] {
@@ -298,10 +315,10 @@ impl VirtualMachine {
         if method.body.is_empty()
             && method.captured_vars.is_none()
             && method.owner.as_deref() == Some("Kernel")
-            && crate::vm::native_methods::is_kernel_private_function(&method_name)
+            && crate::vm::native_methods::is_kernel_private_function(method_name)
         {
             let held = self.kernel_function_receiver.replace(receiver.clone());
-            let answered = self.call_native_function(&method_name, arguments, position);
+            let answered = self.call_native_function(method_name, arguments, position);
             self.kernel_function_receiver = held;
             return answered;
         }
@@ -315,7 +332,7 @@ impl VirtualMachine {
             && method.source_location.is_none()
         {
             self.bound_stub_depth += 1;
-            let answered = self.call_object_method(&receiver, &method_name, &arguments, position);
+            let answered = self.call_object_method(&receiver, method_name, &arguments, position);
             self.bound_stub_depth -= 1;
             if let Some(result) = answered? {
                 return Ok(result);
@@ -378,17 +395,15 @@ impl VirtualMachine {
         // A method on a class or module is named with a dot, the way Ruby
         // writes `Foo.bar` in a backtrace, and an instance method with a hash.
         let on_a_module = matches!(receiver.view(), View::Class(_) | View::Module(_));
-        let (frame_name, defined_name) =
-            self.frame_names_for(&method, &class, &method_name, on_a_module);
-        let frame_location = position_to_location(position);
-        let frame_location_string = Some(format!("{}", frame_location));
+        let (callee_name, frame_name, defined_name) =
+            self.frame_names_for(&method, &class, method_name, on_a_module);
 
         let method_for_body = Rc::clone(&method);
         let self_for_body = method
             .receiver()
             .cloned()
             .unwrap_or_else(|| receiver.clone());
-        let arguments_for_body = arguments.clone();
+        let arguments_for_body = arguments;
         self.user_def_nesting += 1;
         // Activate the lexically-captured refinements from when this method
         // was defined, as a fresh scope. Reset the live user_def_nesting to 0
@@ -423,7 +438,9 @@ impl VirtualMachine {
                 })
                 .collect()
         };
-        let caller_scopes = std::mem::replace(&mut self.refinement_scopes, vec![captured_scope]);
+        let mut method_scopes = std::mem::take(&mut self.spare_refinement_scopes);
+        method_scopes.push(captured_scope);
+        let caller_scopes = std::mem::replace(&mut self.refinement_scopes, method_scopes);
         // Snapshot the positional args so `super` (bare form, inside the
         // body) can forward them to the parent method.
         self.method_arg_stack.push(arguments_for_body.clone());
@@ -460,42 +477,33 @@ impl VirtualMachine {
                 !owner.is_singleton_class()
                     && !matches!(receiver.view(), View::Class(held) | View::Module(held) if Rc::ptr_eq(held, owner))
             })
-            .map(|owner| owner.ruby_name())
-            .filter(|path| !path.is_empty());
-        let written = method
+            .and_then(|owner| method.body_facts.owner_path(owner));
+        let opened_on = method
             .source_location
             .as_ref()
-            .and_then(|written| Some((written.filename.clone()?, written.line)));
-        let opened_on = written.as_ref().map_or(position.line, |(_, line)| *line);
-        self.enter_running_code(Rc::new(written.into_iter().collect()), opened_on);
+            .filter(|written| written.filename.is_some())
+            .map_or(position.line, |written| written.line);
+        self.enter_running_code(method.body_facts.places(&method), opened_on);
         self.warn_block_the_method_ignores(&method, &class, position)?;
         // The call event fires inside the method's frame, which is what a
         // trace's block sees on the stack.
-        let called_name = method_name.clone();
         let called_class = Rc::clone(&class);
+        let frame_file = self.frames_file();
         let execution_result = self.with_call_frame(
-            CallFrame::method(
-                frame_name.clone(),
-                frame_location_string,
-                method_name.clone(),
-                defined_name.clone(),
-            )
-            .owned_by(allocation_owner)
-            .with_source_file(self.file_for_frames()),
+            CallFrame::method(Rc::clone(&frame_name), None, callee_name, defined_name)
+                .entered_at(position.line, position.column)
+                .owned_by(allocation_owner)
+                .with_source_file(frame_file),
             move |vm| {
                 vm.fire_method_event(
                     "call",
-                    &called_name,
+                    &method_for_body.name,
                     &method_for_body,
                     &called_class,
                     None,
                     position,
                 )?;
-                vm.execute_method_body(
-                    method_for_body.as_ref(),
-                    self_for_body.clone(),
-                    arguments_for_body.clone(),
-                )
+                vm.execute_method_body(method_for_body.as_ref(), self_for_body, arguments_for_body)
             },
         );
         self.method_nesting_stack.pop();
@@ -503,23 +511,26 @@ impl VirtualMachine {
         self.method_owner_stack.pop();
         self.method_arg_stack.pop();
         self.method_running_stack.pop();
-        self.refinement_scopes = caller_scopes;
+        let mut method_scopes = std::mem::replace(&mut self.refinement_scopes, caller_scopes);
+        method_scopes.clear();
+        self.spare_refinement_scopes = method_scopes;
         self.user_def_nesting = self.user_def_nesting.saturating_sub(1);
 
         let finished = match execution_result {
             Ok(value) => self
                 .fire_method_event(
                     "return",
-                    &method_name,
+                    method_name,
                     &method,
                     &class,
                     Some(&value),
                     position,
                 )
                 .map(|()| value),
-            Err(error) => {
-                Err(error.with_stack_frame(StackFrame::new(frame_name.to_string(), frame_location)))
-            }
+            Err(error) => Err(error.with_stack_frame(StackFrame::new(
+                frame_name.to_string(),
+                position_to_location(position),
+            ))),
         };
         self.leave_running_code();
         finished
@@ -567,22 +578,21 @@ impl VirtualMachine {
         // class, not to a block somewhere up the call stack.
         let saved_class_var_home = std::mem::take(&mut self.class_var_home);
         // The body runs in the file the method was defined in, which is what
-        // a backtrace entry for a call made from here has to name.
-        let saved_source_file = std::mem::replace(
-            &mut self.current_source_file,
-            method
-                .source_location
-                .as_ref()
-                .and_then(|location| location.filename.clone()),
-        );
-        // A literal in the body is written in the encoding that file names,
-        // not the one the caller's file names.
-        let saved_source_encoding = std::mem::replace(
-            &mut self.current_source_encoding,
-            self.current_source_file
-                .as_ref()
-                .and_then(|named| self.file_encodings.get(named).cloned()),
-        );
+        // a backtrace entry for a call made from here has to name, and a
+        // literal in it is written in the encoding that file names.
+        let written_in = method
+            .source_location
+            .as_ref()
+            .and_then(|location| location.filename.as_ref());
+        let saved_file = if written_in == self.current_source_file.as_ref() {
+            None
+        } else {
+            let encoding = written_in.and_then(|named| self.file_encodings.get(named).cloned());
+            Some((
+                std::mem::replace(&mut self.current_source_file, written_in.cloned()),
+                std::mem::replace(&mut self.current_source_encoding, encoding),
+            ))
+        };
 
         // A call of a method written in a measured file is what the methods
         // mode counts.
@@ -703,8 +713,10 @@ impl VirtualMachine {
         if let Some(previous) = saved_def_scope {
             self.def_scope_stack = previous;
         }
-        self.current_source_file = saved_source_file;
-        self.current_source_encoding = saved_source_encoding;
+        if let Some((file, encoding)) = saved_file {
+            self.current_source_file = file;
+            self.current_source_encoding = encoding;
+        }
         self.class_var_home = saved_class_var_home;
         self.current_method_frame = saved_frame;
         self.lexical_home_frame = saved_lexical_home;
@@ -1036,14 +1048,14 @@ impl VirtualMachine {
         class: &Rc<crate::class::Class>,
         method_name: &str,
         on_a_module: bool,
-    ) -> (Rc<str>, Rc<str>) {
+    ) -> (Rc<str>, Rc<str>, Rc<str>) {
         let slot = usize::from(on_a_module);
         let cacheable = method.alias_origin.is_none() && method.owner.is_some();
         if cacheable
             && let Some((callee, frame_name, defined)) = &method.frame_names.0.borrow()[slot]
             && **callee == *method_name
         {
-            return (Rc::clone(frame_name), Rc::clone(defined));
+            return (Rc::clone(callee), Rc::clone(frame_name), Rc::clone(defined));
         }
         // Prefer the method's original owner class (if recorded) over the
         // class we dispatched through. For aliased/mixed-in methods this
@@ -1064,13 +1076,14 @@ impl VirtualMachine {
             .into();
         let separator = if on_a_module { "." } else { "#" };
         let frame_name: Rc<str> = format!("{owning_class_name}{separator}{defined}").into();
+        let callee: Rc<str> = method_name.into();
         if cacheable {
             method.frame_names.0.borrow_mut()[slot] = Some((
-                method_name.into(),
+                Rc::clone(&callee),
                 Rc::clone(&frame_name),
                 Rc::clone(&defined),
             ));
         }
-        (frame_name, defined)
+        (callee, frame_name, defined)
     }
 }

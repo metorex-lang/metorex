@@ -26,8 +26,11 @@ class WeakRef < Delegator
     @weakref_handle = __weak_reference__(object)
   end
 
-  # Whether the object is still there to be reached.
+  # true while the object is still there to be reached, and nil once it is
+  # gone, as MRI answers.
   def weakref_alive?
-    !@weakref_handle.nil? && !__weak_target__(@weakref_handle).nil?
+    return nil if @weakref_handle.nil? || __weak_target__(@weakref_handle).nil?
+
+    true
   end
 end

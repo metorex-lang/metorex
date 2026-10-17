@@ -58,13 +58,11 @@ fn test_pop_scope() {
     assert_eq!(env.current_depth(), 2);
 
     // Pop first scope
-    let popped = env.pop_scope();
-    assert!(popped.is_some(), "Popping from depth 2 should return Some");
+    assert!(env.pop_scope(), "Popping from depth 2 should pop a scope");
     assert_eq!(env.current_depth(), 1);
 
     // Pop second scope
-    let popped = env.pop_scope();
-    assert!(popped.is_some(), "Popping from depth 1 should return Some");
+    assert!(env.pop_scope(), "Popping from depth 1 should pop a scope");
     assert_eq!(env.current_depth(), 0);
 }
 
@@ -73,8 +71,7 @@ fn test_cannot_pop_global_scope() {
     let mut env = Environment::new();
 
     // Try to pop the global scope
-    let popped = env.pop_scope();
-    assert!(popped.is_none(), "Popping global scope should return None");
+    assert!(!env.pop_scope(), "Popping global scope should pop nothing");
     assert_eq!(env.current_depth(), 0, "Depth should remain 0");
 }
 

@@ -107,7 +107,7 @@ impl VirtualMachine {
             "__code_lines__" if arguments.len() == 1 => {
                 let body = match arguments[0].view() {
                     View::Method(method) => method.body.clone(),
-                    View::Block(block) => block.body.clone(),
+                    View::Block(block) => block.body.to_vec(),
                     _ => Vec::new(),
                 };
                 Ok(Some(Object::array(
@@ -130,6 +130,25 @@ impl VirtualMachine {
                 Ok(Some(Object::array(vec![
                     Object::Int(units as i64),
                     Object::Int(instructions as i64),
+                ])))
+            }
+            // The times a constant or an autoload changed and the constant
+            // reads that looked the constant up.
+            "__constant_cache_counts__" => Ok(Some(Object::array(vec![
+                Object::Int(crate::class::constant_state() as i64),
+                Object::Int(crate::bytecode::constant_cache::misses() as i64),
+            ]))),
+            // The object shapes made so far.
+            "__shapes_made__" => Ok(Some(
+                Object::Int(crate::object::shape::shapes_made() as i64),
+            )),
+            // The calls answered from a call site's method cache and those
+            // that looked the method up.
+            "__method_cache_counts__" => {
+                let (hits, misses) = crate::bytecode::call_cache::hits_and_misses();
+                Ok(Some(Object::array(vec![
+                    Object::Int(hits as i64),
+                    Object::Int(misses as i64),
                 ])))
             }
             // The instructions the scope of a kind opening on a line of a

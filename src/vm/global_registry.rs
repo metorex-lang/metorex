@@ -3,6 +3,7 @@
 //! This module provides a registry that owns global objects accessible throughout the VM,
 //! including built-in classes and singleton values.
 
+use crate::class::{constant_state_changed, names_a_constant};
 use crate::object::Object;
 use std::collections::BTreeSet;
 
@@ -23,13 +24,21 @@ impl GlobalRegistry {
 
     /// Insert or replace a named global object.
     pub fn set(&mut self, name: impl Into<String>, object: Object) {
-        self.objects.insert(name.into(), object);
+        let name = name.into();
+        crate::vm::block_reuse::scope_state_changed();
+        if names_a_constant(&name) {
+            constant_state_changed();
+        }
+        self.objects.insert(name, object);
     }
 
     /// Insert or replace a global *variable*, recording its name so
     /// `global_variables` can report it.
     pub fn set_variable(&mut self, name: impl Into<String>, object: Object) {
         let name = name.into();
+        if names_a_constant(&name) {
+            constant_state_changed();
+        }
         self.variable_names.insert(name.clone());
         self.objects.insert(name, object);
     }
@@ -52,6 +61,9 @@ impl GlobalRegistry {
     /// Fetch a named global object if present.
     /// Remove a named global object, returning it when present.
     pub fn remove(&mut self, name: &str) -> Option<Object> {
+        if names_a_constant(name) {
+            constant_state_changed();
+        }
         self.objects.remove(name)
     }
 

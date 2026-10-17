@@ -326,17 +326,20 @@ impl VirtualMachine {
         arguments: Vec<Object>,
         block: Option<Object>,
         position: Position,
+        cache: Option<&std::rc::Rc<crate::bytecode::call_cache::CallCache>>,
     ) -> Result<Object, MetorexError> {
         let has_block = block.is_some();
         match route {
             CallRoute::OnSelf => {
                 let receiver = self.eval_self(position)?;
                 let written = crate::vm::method_lookup::WrittenReceiver::SelfKeyword;
-                self.call_with_block(receiver, name, arguments, block, written, position)
+                self.call_with_block_through(
+                    receiver, name, arguments, block, written, position, cache,
+                )
             }
-            CallRoute::OnReceiver { receiver, written } => {
-                self.call_with_block(receiver, name, arguments, block, written, position)
-            }
+            CallRoute::OnReceiver { receiver, written } => self.call_with_block_through(
+                receiver, name, arguments, block, written, position, cache,
+            ),
             CallRoute::Native {
                 native,
                 catches_break,
@@ -356,7 +359,7 @@ impl VirtualMachine {
                     return Ok(result);
                 }
                 let route = self.resolve_after_conversion(name, position)?;
-                self.run_call_route(route, name, arguments, block, position)
+                self.run_call_route(route, name, arguments, block, position, cache)
             }
             CallRoute::Callable(value) => {
                 self.attach_block(block);
@@ -382,11 +385,33 @@ impl VirtualMachine {
         written: crate::vm::method_lookup::WrittenReceiver,
         position: Position,
     ) -> Result<Object, MetorexError> {
+        self.call_with_block_through(receiver, name, arguments, block, written, position, None)
+    }
+
+    /// `call_with_block`, answering from the call site's `cache` when one is
+    /// given.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn call_with_block_through(
+        &mut self,
+        receiver: Object,
+        name: &str,
+        arguments: Vec<Object>,
+        block: Option<Object>,
+        written: crate::vm::method_lookup::WrittenReceiver,
+        position: Position,
+        cache: Option<&std::rc::Rc<crate::bytecode::call_cache::CallCache>>,
+    ) -> Result<Object, MetorexError> {
         let has_block = block.is_some();
         let calling_frame = self.current_method_frame;
         self.refuse_moved_receiver(&receiver, position)?;
         self.attach_block(block);
-        match self.call_evaluated_method(receiver, name, arguments, written, position) {
+        let reached = match cache {
+            Some(cache) => {
+                self.call_through_cache(receiver, name, arguments, written, position, cache)
+            }
+            None => self.call_evaluated_method(receiver, name, arguments, written, position),
+        };
+        match reached {
             Err(MetorexError::BlockBreak {
                 value, home_frame, ..
             }) if has_block && home_frame == calling_frame => Ok(value),

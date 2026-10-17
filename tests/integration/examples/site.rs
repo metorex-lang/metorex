@@ -108,7 +108,7 @@ fn test_site_differences_disasm_lists_instructions() {
 #[test]
 fn test_site_differences_vm_stat_counts_compiled_units() {
     let output = run_example("site/differences_stat.rb");
-    assert_eq!(output, "true\ntrue\n");
+    assert_eq!(output, "true\ntrue\ntrue\n");
 }
 
 #[test]

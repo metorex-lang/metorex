@@ -20,6 +20,11 @@ pub struct Unit {
     pub error_spots: Vec<Option<ErrorSpot>>,
     pub constants: Vec<Object>,
     pub names: Vec<Name>,
+    /// A cache for each name, which a `GetConstant` naming it reads through.
+    pub constant_caches: Vec<crate::bytecode::constant_cache::ConstantCache>,
+    /// A cache for each name, which an instance variable read or write
+    /// naming it reads through.
+    pub slot_caches: Vec<crate::object::shape::SlotCache>,
     /// The unit's locals, numbered by their place here. `GetLocal` and
     /// `SetLocal` name one by that number.
     pub locals: Vec<Name>,
@@ -33,6 +38,9 @@ pub struct Unit {
     pub defined: Vec<crate::ast::Expression>,
     /// The block and lambda literals `MakeBlock` makes Procs of.
     pub blocks: Vec<crate::ast::Expression>,
+    /// The body of each block literal and what it compiles to, which every
+    /// block the literal makes shares.
+    pub block_bodies: Vec<SharedBody>,
     /// The statements of class and module bodies `BodyStatement` and
     /// `ModuleBlockStatement` hand to the body's rules.
     pub body_statements: Vec<crate::ast::Statement>,
@@ -133,6 +141,14 @@ pub enum Receiver {
     Other,
 }
 
+/// A block literal's body and what it compiles to.
+#[derive(Debug, Clone)]
+pub struct SharedBody {
+    pub body: std::rc::Rc<[crate::ast::Statement]>,
+    pub unit: crate::vm::units::UnitSlot,
+    pub kept: std::rc::Rc<crate::vm::block_reuse::KeptBlock>,
+}
+
 /// What a `Call` instruction calls.
 #[derive(Debug, Clone)]
 pub struct CallSite {
@@ -157,6 +173,10 @@ pub struct CallSite {
     pub forwards_arguments: bool,
     /// Whether one of the arguments is `&block`.
     pub block_argument: bool,
+    /// Whether the call is `send`, `__send__`, or `public_send` with a
+    /// Symbol written as its first argument.
+    pub sends_literal_name: bool,
+    pub cache: std::rc::Rc<crate::bytecode::call_cache::CallCache>,
 }
 
 impl CallSite {
@@ -171,6 +191,8 @@ impl CallSite {
             keyword_splat: false,
             forwards_arguments: false,
             block_argument: false,
+            sends_literal_name: false,
+            cache: Default::default(),
         }
     }
 
@@ -489,6 +511,8 @@ impl Unit {
 
     pub fn name(&mut self, name: Name) -> usize {
         self.names.push(name);
+        self.constant_caches.push(Default::default());
+        self.slot_caches.push(Default::default());
         self.names.len() - 1
     }
 
@@ -539,6 +563,15 @@ impl Unit {
     }
 
     pub fn block(&mut self, literal: crate::ast::Expression) -> usize {
+        let body = match &literal {
+            crate::ast::Expression::Lambda { body, .. } => body.as_slice().into(),
+            _ => std::rc::Rc::from([]),
+        };
+        self.block_bodies.push(SharedBody {
+            body,
+            unit: Default::default(),
+            kept: Default::default(),
+        });
         self.blocks.push(literal);
         self.blocks.len() - 1
     }

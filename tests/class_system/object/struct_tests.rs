@@ -15,7 +15,7 @@ use std::rc::Rc;
 fn call_frame_new_and_accessors() {
     let frame = CallFrame::new("my_method", Some("file.rb:10".to_string()));
     assert_eq!(frame.name(), "my_method");
-    assert_eq!(frame.location(), Some("file.rb:10"));
+    assert_eq!(frame.location().as_deref(), Some("file.rb:10"));
 }
 
 #[test]

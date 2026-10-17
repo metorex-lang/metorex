@@ -7,12 +7,20 @@ use super::VirtualMachine;
 use crate::object::{OptionView, View};
 
 use crate::ast::Expression;
+use crate::bytecode::call_cache::CallCache;
 use crate::class::Class;
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::{Method, Object};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+
+thread_local! {
+    /// Whether deciding a call's visibility asked where the call was made
+    /// from, which a protected method does. Such a decision holds for that
+    /// caller alone, so the call site does not keep it.
+    static CALLER_CONSULTED: Cell<bool> = const { Cell::new(false) };
+}
 
 /// Build the refinement lookup key for a receiver. For user-defined class
 /// instances we key by pointer (to avoid anonymous-class name collisions);
@@ -195,6 +203,42 @@ impl VirtualMachine {
     /// Call `method_name` on a receiver and arguments already evaluated.
     /// `written` says whether the receiver was written as `self`, which is
     /// what lets a private method be called.
+    pub(crate) fn call_through_cache(
+        &mut self,
+        receiver: Object,
+        method_name: &str,
+        arguments: Vec<Object>,
+        written: WrittenReceiver,
+        position: Position,
+        cache: &Rc<CallCache>,
+    ) -> Result<Object, MetorexError> {
+        if let Some(class) = self.class_deciding_dispatch(&receiver) {
+            if let Some(method) = cache.find(&class) {
+                return self.invoke_method(class, method, receiver, arguments, position);
+            }
+            self.recording_call_cache = Some(Rc::clone(cache));
+        }
+        self.call_evaluated_method(receiver, method_name, arguments, written, position)
+    }
+
+    /// The class of an object whose calls its class alone decides: an
+    /// instance with no methods of its own, while no refinement is active.
+    fn class_deciding_dispatch(&self, receiver: &Object) -> Option<Rc<Class>> {
+        let View::Instance(instance) = receiver.view() else {
+            return None;
+        };
+        if self.any_refinement_active() {
+            return None;
+        }
+        let instance = instance.borrow();
+        if !instance.singleton_methods.borrow().is_empty()
+            || instance.singleton_class.borrow().is_some()
+        {
+            return None;
+        }
+        Some(Rc::clone(&instance.class))
+    }
+
     pub(crate) fn call_evaluated_method(
         &mut self,
         receiver: Object,
@@ -203,6 +247,7 @@ impl VirtualMachine {
         written: WrittenReceiver,
         position: Position,
     ) -> Result<Object, MetorexError> {
+        let mut recording = self.recording_call_cache.take();
         // Refinement dispatch: if an active refinement covers this receiver's
         // class and defines this method, use it.
         if let Some(method) = find_refinement(&receiver, method_name, self) {
@@ -266,6 +311,7 @@ impl VirtualMachine {
         // counts as the class's own, which is what puts Struct#to_h ahead of
         // Enumerable#to_h the way Ruby's ancestor order does.
         if self.enumerable_stands_in(&receiver, method_name) {
+            recording = None;
             let class = self.builtins().class_of(&receiver);
             if let Some(result) =
                 self.call_native_method(&class, &receiver, method_name, &arguments, position)?
@@ -297,6 +343,7 @@ impl VirtualMachine {
                 // syntactically present, matching Ruby — `self.foo` is
                 // allowed regardless of visibility.
                 let is_explicit_receiver = !written.names_self();
+                CALLER_CONSULTED.set(false);
                 let mut is_private = self.method_is_restricted(&receiver, method_name);
                 // A prepended module sits ahead of the class, so when one of
                 // them supplies the method its visibility is the one in force
@@ -362,6 +409,11 @@ impl VirtualMachine {
                         location: crate::vm::utils::position_to_location(position),
                         message: msg,
                     });
+                }
+                if let Some(cache) = recording
+                    && !CALLER_CONSULTED.get()
+                {
+                    cache.store(&class, &method);
                 }
                 return self.invoke_method(class, method, receiver, arguments, position);
             }
@@ -859,6 +911,7 @@ impl VirtualMachine {
     /// Whether the code making this call is running as an object the given
     /// class or module answers for, which is what a protected method asks.
     fn calling_from_within(&self, owner: &Rc<Class>) -> bool {
+        CALLER_CONSULTED.set(true);
         let Some(caller) = self.environment().get("self") else {
             return false;
         };

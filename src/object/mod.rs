@@ -18,6 +18,7 @@ mod instance;
 pub mod live;
 mod method;
 mod operations;
+pub mod shape;
 mod types;
 
 // Re-export core types and traits

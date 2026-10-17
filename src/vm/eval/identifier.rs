@@ -6,8 +6,27 @@ use crate::object::Object;
 use crate::object::{OptionView, View};
 use std::rc::Rc;
 
+use crate::bytecode::constant_cache::{ConstantCache, ConstantScope, Kept, Local, WeakClass};
 use crate::vm::core::VirtualMachine;
 use crate::vm::errors::undefined_variable_error;
+use std::cell::Cell;
+
+/// How a constant lookup that ran no code found its value.
+#[derive(Debug, Clone, Copy)]
+enum ConstantAnswer {
+    /// In a scope it reads ahead of the locals.
+    BeforeLocals,
+    /// In a scope it reads once no local of the name answered.
+    AfterLocals,
+    /// In a local holding a value, which is read again each time.
+    Local,
+}
+
+thread_local! {
+    /// How the innermost constant lookup running found its value, set where
+    /// it returns.
+    static CONSTANT_ANSWER: Cell<Option<ConstantAnswer>> = const { Cell::new(None) };
+}
 
 impl VirtualMachine {
     /// The object a NameError for `name` was raised on. A constant belongs to
@@ -97,6 +116,121 @@ impl VirtualMachine {
         name: &str,
         position: Position,
     ) -> Result<Object, MetorexError> {
+        self.eval_identifier_answered(name, position)
+            .map(|(value, _)| value)
+    }
+
+    /// The value of the identifier `name` and, when it is a constant the
+    /// lookup read without running any code, how it was found.
+    fn eval_identifier_answered(
+        &mut self,
+        name: &str,
+        position: Position,
+    ) -> Result<(Object, Option<ConstantAnswer>), MetorexError> {
+        if !crate::class::names_a_constant(name) {
+            return self
+                .identifier_value(name, position)
+                .map(|value| (value, None));
+        }
+        let outer = CONSTANT_ANSWER.take();
+        let value = self.identifier_value(name, position);
+        let answer = CONSTANT_ANSWER.replace(outer);
+        value.map(|value| (value, answer))
+    }
+
+    /// A constant `name` read through `cache`, which answers while the
+    /// lexical scope is the one it was read in and nothing it depends on has
+    /// changed.
+    pub(crate) fn read_constant_through(
+        &mut self,
+        name: &str,
+        cache: &ConstantCache,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
+        // TOPLEVEL_BINDING is refreshed on each read.
+        if self.in_a_non_main_ractor() || name == "TOPLEVEL_BINDING" {
+            return self.read_identifier(name, position);
+        }
+        if let Some(value) = cache.find(
+            |scope| self.in_constant_scope(scope),
+            || match self.environment().get(name) {
+                None => Local::Absent,
+                Some(held) if matches!(held.view(), View::NativeFunction(_) | View::Method(_)) => {
+                    Local::Callable
+                }
+                Some(held) => Local::Plain(held),
+            },
+        ) {
+            return Ok(value);
+        }
+        let states = (crate::class::constant_state(), crate::class::method_state());
+        let (value, answer) = self.eval_identifier_answered(name, position)?;
+        // A lookup that loaded a file or ran a hook may have changed what
+        // it read, so its answer is kept only when nothing changed.
+        let unchanged = states == (crate::class::constant_state(), crate::class::method_state());
+        if let Some(answer) = answer
+            && unchanged
+        {
+            let kept = match answer {
+                ConstantAnswer::BeforeLocals => Kept::AheadOfLocals(value.clone()),
+                ConstantAnswer::AfterLocals => Kept::PastLocals(value.clone()),
+                ConstantAnswer::Local => Kept::InLocals,
+            };
+            cache.store(kept, self.constant_scope());
+        }
+        Ok(value)
+    }
+
+    /// The lexical scope a constant read here reads in.
+    fn constant_scope(&self) -> ConstantScope {
+        let weak = |class: &Rc<crate::class::Class>| WeakClass(Rc::downgrade(class));
+        ConstantScope {
+            home: self.applying_constant_home().map(|home| home.map(weak)),
+            bodies: self.def_scope_stack.iter().map(weak).collect(),
+            nesting: self
+                .method_nesting_stack
+                .last()
+                .map(|nesting| nesting.iter().map(weak).collect()),
+            written_at_top_level: self.code_written_at_top_level(),
+        }
+    }
+
+    /// Whether a constant read here reads in `scope`.
+    fn in_constant_scope(&self, scope: &ConstantScope) -> bool {
+        let same = |kept: &[WeakClass], open: &[Rc<crate::class::Class>]| {
+            kept.len() == open.len()
+                && kept
+                    .iter()
+                    .zip(open)
+                    .all(|(kept, open)| std::ptr::eq(kept.0.as_ptr(), Rc::as_ptr(open)))
+        };
+        let home_matches = match (&scope.home, self.applying_constant_home()) {
+            (None, None) => true,
+            (Some(None), Some(None)) => true,
+            (Some(Some(kept)), Some(Some(open))) => std::ptr::eq(kept.0.as_ptr(), Rc::as_ptr(open)),
+            _ => false,
+        };
+        let nesting_matches = match (&scope.nesting, self.method_nesting_stack.last()) {
+            (None, None) => true,
+            (Some(kept), Some(open)) => same(kept, open),
+            _ => false,
+        };
+        home_matches
+            && nesting_matches
+            && same(&scope.bodies, &self.def_scope_stack)
+            && scope.written_at_top_level == self.code_written_at_top_level()
+    }
+
+    /// The class a block run as a class body reads constants where it was
+    /// written in, when it applies at the current depth.
+    fn applying_constant_home(&self) -> Option<Option<&Rc<crate::class::Class>>> {
+        self.constant_homes
+            .last()
+            .filter(|(depth, _)| *depth == self.def_scope_stack.len())
+            .map(|(_, home)| home.as_ref())
+    }
+
+    fn identifier_value(&mut self, name: &str, position: Position) -> Result<Object, MetorexError> {
         // A class that does not descend from Object never reaches top-level
         // constants: Ruby finds them among Object's own, which such a class
         // does not inherit. Only the lexical chain answers there.
@@ -105,6 +239,7 @@ impl VirtualMachine {
         {
             for enclosing in self.def_scope_stack.clone().iter().rev() {
                 if let Some(val) = enclosing.get_class_var(name) {
+                    CONSTANT_ANSWER.set(Some(ConstantAnswer::BeforeLocals));
                     return Ok(val);
                 }
                 // A name this scope registered an autoload for is loaded
@@ -115,6 +250,7 @@ impl VirtualMachine {
                     return Ok(val);
                 }
                 if enclosing.name() == name {
+                    CONSTANT_ANSWER.set(Some(ConstantAnswer::BeforeLocals));
                     return Ok(Object::Class(Rc::clone(enclosing)));
                 }
             }
@@ -139,6 +275,7 @@ impl VirtualMachine {
             && !self.autoload_pending_in_lexical_scope(name)
             && let Some(val) = self.constant_before_object(name)
         {
+            CONSTANT_ANSWER.set(Some(ConstantAnswer::BeforeLocals));
             return Ok(val);
         }
         // A scope open where the code was written that autoloads the name
@@ -208,6 +345,9 @@ impl VirtualMachine {
                 let method = Rc::clone(method);
                 return self.invoke_method(class, method, receiver, vec![], position);
             }
+            if !matches!(val.view(), View::NativeFunction(_) | View::Method(_)) {
+                CONSTANT_ANSWER.set(Some(ConstantAnswer::Local));
+            }
             return Ok(val);
         }
 
@@ -217,6 +357,7 @@ impl VirtualMachine {
         if name.chars().next().is_some_and(|c| c.is_ascii_uppercase())
             && let Some(val) = self.globals().constant(name)
         {
+            CONSTANT_ANSWER.set(Some(ConstantAnswer::AfterLocals));
             return Ok(self.constant_before_object(name).unwrap_or(val));
         }
         // Constant + def-scope chain has no class_var hit yet — try the
@@ -313,9 +454,11 @@ impl VirtualMachine {
             // reference itself by name before it has been bound in globals.
             for enclosing in self.def_scope_stack.iter().rev() {
                 if let Some(val) = enclosing.get_class_var(name) {
+                    CONSTANT_ANSWER.set(Some(ConstantAnswer::AfterLocals));
                     return Ok(val);
                 }
                 if enclosing.name() == name {
+                    CONSTANT_ANSWER.set(Some(ConstantAnswer::AfterLocals));
                     return Ok(crate::vm::class_execution::constants::scope_object(
                         enclosing,
                     ));
@@ -328,6 +471,7 @@ impl VirtualMachine {
             if let Some(nesting) = self.method_nesting_stack.last().cloned() {
                 for enclosing in nesting {
                     if enclosing.name() == name {
+                        CONSTANT_ANSWER.set(Some(ConstantAnswer::AfterLocals));
                         return Ok(if enclosing.is_module() {
                             Object::Module(enclosing)
                         } else {
@@ -335,6 +479,7 @@ impl VirtualMachine {
                         });
                     }
                     if let Some(val) = enclosing.get_class_var(name) {
+                        CONSTANT_ANSWER.set(Some(ConstantAnswer::AfterLocals));
                         return Ok(val);
                     }
                     if enclosing.lookup_autoload(name).is_some()
@@ -348,11 +493,15 @@ impl VirtualMachine {
             // ancestors of the innermost scope the code was written in. Code
             // written in no scope at all reads through whatever it is
             // running against.
-            let class_opt = self
+            let written_in = self
                 .method_nesting_stack
                 .last()
                 .and_then(|nesting| nesting.first().cloned())
-                .or_else(|| self.def_scope_stack.last().cloned())
+                .or_else(|| self.def_scope_stack.last().cloned());
+            // Whether the classes walked are decided by where the code was
+            // written alone, rather than by what it runs against.
+            let mut decided_where_written = written_in.is_some();
+            let class_opt = written_in
                 .or_else(|| match receiver.view() {
                     View::Class(c) | View::Module(c) => Some(Rc::clone(c)),
                     View::Instance(inst) => Some(Rc::clone(&inst.borrow().class)),
@@ -367,7 +516,10 @@ impl VirtualMachine {
                         attached.clone()
                     }
                     _ => match (held.is_singleton_class(), receiver.view()) {
-                        (true, View::Instance(inst)) => Rc::clone(&inst.borrow().class),
+                        (true, View::Instance(inst)) => {
+                            decided_where_written = false;
+                            Rc::clone(&inst.borrow().class)
+                        }
                         _ => held,
                     },
                 });
@@ -376,21 +528,24 @@ impl VirtualMachine {
                 while let Some(cls) = current {
                     // A prepended module sits ahead of the class, so its
                     // constants shadow the class's own.
-                    for prepended in cls.transitive_prepends() {
-                        if let Some(val) = prepended.get_class_var(name) {
-                            return Ok(val);
+                    let found = cls
+                        .transitive_prepends()
+                        .iter()
+                        .find_map(|prepended| prepended.get_class_var(name))
+                        .or_else(|| cls.get_class_var(name))
+                        // Constants defined in included modules are visible
+                        // at the including class, so the mixin chain is
+                        // walked at each ancestor level too.
+                        .or_else(|| {
+                            cls.transitive_mixins()
+                                .iter()
+                                .find_map(|mixin| mixin.get_class_var(name))
+                        });
+                    if let Some(val) = found {
+                        if decided_where_written {
+                            CONSTANT_ANSWER.set(Some(ConstantAnswer::AfterLocals));
                         }
-                    }
-                    if let Some(val) = cls.get_class_var(name) {
                         return Ok(val);
-                    }
-                    // Constants defined in included modules are visible at
-                    // the including class — walk the mixin chain at each
-                    // ancestor level too.
-                    for mixin in cls.transitive_mixins() {
-                        if let Some(val) = mixin.get_class_var(name) {
-                            return Ok(val);
-                        }
                     }
                     // Fire any autoload registered for this name on this
                     // ancestor (or its mixins/superclasses) so a method

@@ -19,11 +19,11 @@ impl VirtualMachine {
     pub(crate) fn evaluate_block_literal(
         &mut self,
         expression: &Expression,
+        shared: &crate::bytecode::unit::SharedBody,
     ) -> Result<Object, MetorexError> {
         let Expression::Lambda {
             parameters,
             parameter_defaults,
-            body,
             captured_vars,
             outer_locals,
             is_lambda,
@@ -33,6 +33,9 @@ impl VirtualMachine {
         else {
             unreachable!("only a Lambda expression is handed here")
         };
+        if let Some(block) = self.reusable_block(&shared.kept) {
+            return Ok(Object::Block(block));
+        }
         let mut captured = indexmap::IndexMap::new();
         if let Some(names) = captured_vars {
             if names.is_empty() {
@@ -57,13 +60,18 @@ impl VirtualMachine {
         let mut block = BlockStatement::with_def_scope(
             parameters.clone(),
             parameter_defaults.clone(),
-            body.clone(),
+            Rc::clone(&shared.body),
             captured,
             self.def_scope_stack.clone(),
-            self.enclosing_method_names(),
+            self.enclosing_method_names()
+                .map(|(callee, defined)| (callee.into(), defined.into())),
             *is_lambda,
         );
-        block.defining_owner = self.enclosing_method_owner().and_then(|(owner, _)| owner);
+        block.unit = shared.unit.clone();
+        block.defining_owner = self
+            .enclosing_method_owner()
+            .and_then(|(owner, _)| owner)
+            .map(Into::into);
         if block.defining_method.is_some() {
             block.defining_class = self.method_owner_stack.last().cloned().flatten();
         }
@@ -101,9 +109,12 @@ impl VirtualMachine {
             None => self.snapshot_lexical_nesting(),
         };
         block.home_frame = self.lexical_home_frame.unwrap_or(self.current_method_frame);
-        block.written_in = Some(self.enclosing_scope_label());
+        block.written_in = Some(self.enclosing_scope_label().into());
         block.written_depth = Some(self.block_nesting_depth());
-        Ok(Object::Block(Rc::new(block)))
+        let block = Rc::new(block);
+        crate::vm::counters::count_block_built();
+        self.keep_block(&shared.kept, &block);
+        Ok(Object::Block(block))
     }
 
     /// Apply a binary operator to operands already evaluated, which is how a

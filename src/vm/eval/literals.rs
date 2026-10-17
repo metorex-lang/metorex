@@ -309,6 +309,25 @@ impl VirtualMachine {
         if let View::NativeFunction(name) = collection.view() {
             return self.call_native_function(&name.clone(), vec![key], position);
         }
+        // A `[]` the program wrote on Array or Hash answers in place of the
+        // direct read, except in the core library's own code, which reads
+        // the way MRI's C code does.
+        let read_directly = position.prelude
+            || match collection.view() {
+                View::Array(_) => self.array_read_in_force(&collection),
+                View::Dict(_) => self.hash_read_in_force(&collection),
+                _ => true,
+            };
+        if !read_directly {
+            return self.call_with_block(
+                collection,
+                "[]",
+                vec![key],
+                None,
+                crate::vm::method_lookup::WrittenReceiver::Other,
+                position,
+            );
+        }
         // Check for user-defined [] method on instances
         if let View::Instance(instance_rc) = collection.view() {
             let class = Rc::clone(&instance_rc.borrow().class);

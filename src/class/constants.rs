@@ -2,6 +2,28 @@
 
 use super::*;
 
+thread_local! {
+    /// A number every change to a constant or an autoload registration
+    /// moves on, so a constant read under an earlier one is not trusted.
+    static CONSTANT_STATE: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Mark every cached constant read out of date.
+pub(crate) fn constant_state_changed() {
+    CONSTANT_STATE.with(|state| state.set(state.get() + 1));
+}
+
+/// The number `constant_state_changed` moves on, which is also how many
+/// times it has.
+pub fn constant_state() -> u64 {
+    CONSTANT_STATE.with(|state| state.get())
+}
+
+/// Whether `name` is written as a constant.
+pub(crate) fn names_a_constant(name: &str) -> bool {
+    name.starts_with(|first: char| first.is_ascii_uppercase())
+}
+
 impl Class {
     /// Make a class with an optional superclass, recorded among the objects
     /// still alive.
@@ -135,12 +157,14 @@ impl Class {
 
     /// Drop the unrealized-autoload bookkeeping for `name`.
     pub fn clear_unrealized_autoload(&self, name: &str) {
+        constant_state_changed();
         self.unrealized_autoloads.borrow_mut().remove(name);
     }
 
     /// Register an autoload mapping. `path` is stored verbatim (Ruby's
     /// `autoload?` returns whatever was passed in).
     pub fn set_autoload(&self, name: impl Into<String>, path: impl Into<String>) {
+        constant_state_changed();
         self.autoloads.borrow_mut().insert(name.into(), path.into());
     }
 
@@ -168,6 +192,7 @@ impl Class {
 
     /// Remove the autoload entry for `name`, returning the previous path.
     pub fn remove_autoload(&self, name: &str) -> Option<String> {
+        constant_state_changed();
         self.autoloads.borrow_mut().remove(name)
     }
 

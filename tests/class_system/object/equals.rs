@@ -142,7 +142,7 @@ fn test_equals_instance() {
 
     let inst1 = Rc::new(RefCell::new(Instance {
         class: Rc::clone(&class),
-        instance_vars: IndexMap::new(),
+        instance_vars: Default::default(),
         singleton_methods: Rc::new(RefCell::new(HashMap::new())),
         singleton_class: Rc::new(RefCell::new(None)),
         frozen: false,
@@ -151,7 +151,7 @@ fn test_equals_instance() {
     let inst2 = Rc::clone(&inst1);
     let inst3 = Rc::new(RefCell::new(Instance {
         class: Rc::clone(&class),
-        instance_vars: IndexMap::new(),
+        instance_vars: Default::default(),
         singleton_methods: Rc::new(RefCell::new(HashMap::new())),
         singleton_class: Rc::new(RefCell::new(None)),
         frozen: false,
@@ -212,6 +212,7 @@ fn test_equals_method() {
         captured_refinements: Vec::new(),
         alias_origin: None,
         frame_names: Default::default(),
+        body_facts: Default::default(),
         captured_nesting: Vec::new(),
         reads_as_proc: false,
         ruby2_keywords: std::rc::Rc::new(std::cell::Cell::new(false)),
@@ -250,6 +251,7 @@ fn test_equals_method() {
         captured_refinements: Vec::new(),
         alias_origin: None,
         frame_names: Default::default(),
+        body_facts: Default::default(),
         captured_nesting: Vec::new(),
         reads_as_proc: false,
         ruby2_keywords: std::rc::Rc::new(std::cell::Cell::new(false)),
@@ -274,7 +276,7 @@ fn test_equals_block() {
         outer_locals: Rc::default(),
         parameters: vec![],
         parameter_defaults: Vec::new(),
-        body: vec![],
+        body: vec![].into(),
         captured_vars: Rc::default(),
         reserved_names: Rc::default(),
         captured_def_scope: vec![],
@@ -303,7 +305,7 @@ fn test_equals_block() {
         outer_locals: Rc::default(),
         parameters: vec!["held".to_string()],
         parameter_defaults: Vec::new(),
-        body: vec![],
+        body: vec![].into(),
         captured_vars: Rc::default(),
         reserved_names: Rc::default(),
         captured_def_scope: vec![],

@@ -80,12 +80,12 @@ Each item compiles a group of node types. Its acceptance is the same in every ca
 
 These start once the tree walker is removed.
 
-- [ ] Inline caches for method lookup at each call site, monomorphic and then polymorphic, invalidated when a method is defined or removed, a module is included or prepended, or a refinement is activated
-- [ ] Constant caches at each constant reference, invalidated when a constant is set or autoloaded
-- [ ] Instance variable shapes, so an instance variable read or write is an index into the object's slots
-- [ ] Specialized instructions for Integer and Float arithmetic and comparison, Array and Hash indexing, and `send` of a literal name, each falling back to a method call when the method is redefined
-- [ ] Block calls: `yield` and the common Enumerable and Integer iterators run a block without building a Proc
-- [ ] Allocation: removing the allocations the profiler shows on hot paths
+- [x] Inline caches for method lookup at each call site, monomorphic and then polymorphic, invalidated when a method is defined or removed, a module is included or prepended, or a refinement is activated
+- [x] Constant caches at each constant reference, invalidated when a constant is set or autoloaded
+- [x] Instance variable shapes, so an instance variable read or write is an index into the object's slots
+- [x] Specialized instructions for Integer and Float arithmetic and comparison, Array and Hash indexing, and `send` of a literal name, each falling back to a method call when the method is redefined
+- [x] Block calls: `yield` and the common Enumerable and Integer iterators run a block without building a Proc
+- [x] Allocation: removing the allocations the profiler shows on hot paths
 - [ ] Startup: the prelude and the libraries loaded at startup are compiled once at build time and loaded from the binary rather than parsed on each start
 
 ## Speed with a JIT

@@ -388,7 +388,7 @@ fn format_object_block() {
         outer_locals: Rc::default(),
         parameters: vec![],
         parameter_defaults: Vec::new(),
-        body: vec![],
+        body: vec![].into(),
         captured_vars: Rc::default(),
         reserved_names: Rc::default(),
         captured_def_scope: vec![],

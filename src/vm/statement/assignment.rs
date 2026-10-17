@@ -627,6 +627,19 @@ impl VirtualMachine {
                 self.send_to_object(obj.clone(), "[]=", vec![idx, value], *position)?;
                 Ok(())
             }
+            // A `[]=` the program wrote on Hash answers in place of the
+            // direct write, except in the core library's own code.
+            View::Dict(_) if !position.prelude && !self.hash_write_in_force(&obj) => {
+                self.call_with_block(
+                    obj.clone(),
+                    "[]=",
+                    vec![idx, value],
+                    None,
+                    crate::vm::method_lookup::WrittenReceiver::Other,
+                    *position,
+                )?;
+                Ok(())
+            }
             View::Dict(dict_rc) => {
                 // The environment names and values its variables in
                 // text, so a write to it is read that way first.

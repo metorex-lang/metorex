@@ -15,7 +15,14 @@ pub struct Environment {
 
     /// Current depth in the scope stack (0 = global scope)
     depth: usize,
+
+    /// Scopes popped while nothing else held them, which a push takes
+    /// rather than allocating one.
+    spare: Vec<Rc<RefCell<Scope>>>,
 }
+
+/// How many popped scopes an environment keeps for the next pushes.
+const SPARE_SCOPES: usize = 64;
 
 impl Environment {
     /// Creates a new environment with a global scope
@@ -24,6 +31,7 @@ impl Environment {
         Environment {
             scopes: vec![global_scope],
             depth: 0,
+            spare: Vec::new(),
         }
     }
 
@@ -39,6 +47,7 @@ impl Environment {
         Environment {
             depth: scopes.len() - 1,
             scopes,
+            spare: Vec::new(),
         }
     }
 
@@ -46,9 +55,20 @@ impl Environment {
     /// The new scope's parent will be the current top scope
     pub fn push_scope(&mut self) {
         let parent = self.scopes.last().unwrap().clone();
-        let new_scope = Rc::new(RefCell::new(Scope::with_parent(parent)));
+        let new_scope = self.scope_under(parent);
         self.scopes.push(new_scope);
         self.depth += 1;
+    }
+
+    /// A fresh scope under `parent`, a spare one when there is one.
+    fn scope_under(&mut self, parent: Rc<RefCell<Scope>>) -> Rc<RefCell<Scope>> {
+        match self.spare.pop() {
+            Some(scope) => {
+                scope.borrow_mut().renew(parent);
+                scope
+            }
+            None => Rc::new(RefCell::new(Scope::with_parent(parent))),
+        }
     }
 
     /// Pushes an isolated scope (method boundary). The parent is the global
@@ -56,23 +76,35 @@ impl Environment {
     /// method body cannot accidentally modify the caller's variables.
     pub fn push_isolated_scope(&mut self) {
         let global = self.scopes[0].clone();
-        let new_scope = Rc::new(RefCell::new(Scope::with_parent(global)));
+        let new_scope = self.scope_under(global);
         new_scope.borrow_mut().mark_method_boundary();
         self.scopes.push(new_scope);
         self.depth += 1;
     }
 
     /// Pops the current scope from the stack
-    /// Returns the popped scope, or None if we're at the global scope
+    /// Returns whether a scope was popped, which it is not at the global scope
     /// Note: The global scope can never be popped
-    pub fn pop_scope(&mut self) -> Option<Rc<RefCell<Scope>>> {
+    pub fn pop_scope(&mut self) -> bool {
         if self.scopes.len() <= 1 {
             // Cannot pop the global scope
-            return None;
+            return false;
         }
 
         self.depth -= 1;
-        self.scopes.pop()
+        let Some(popped) = self.scopes.pop() else {
+            return false;
+        };
+        // A scope something still holds, a block's binding or a kept block
+        // among them, is left to it.
+        if Rc::strong_count(&popped) == 1
+            && Rc::weak_count(&popped) == 0
+            && self.spare.len() < SPARE_SCOPES
+        {
+            popped.borrow_mut().empty();
+            self.spare.push(popped);
+        }
+        true
     }
 
     /// Returns a reference to the current (top) scope

@@ -46,17 +46,14 @@ class RubyVM
     fiber_machine_stack_size: 524288
   }.freeze
 
-  # The counters MRI keeps about its caches and object shapes. Metorex keeps
-  # neither, so each one is zero.
-  CACHE_STAT_KEYS = %i[
+  # MRI's keys, then Metorex's own: the units of code compiled and the
+  # instructions they hold, and the calls a call site's method cache
+  # answered and those that looked the method up.
+  STAT_KEYS = %i[
     constant_cache_invalidations constant_cache_misses global_cvar_state
     next_shape_id shape_cache_size
+    units_compiled instructions_compiled method_cache_hits method_cache_misses
   ].freeze
-
-  # The units of code Metorex has compiled and the instructions they hold.
-  COMPILED_STAT_KEYS = %i[units_compiled instructions_compiled].freeze
-
-  STAT_KEYS = (CACHE_STAT_KEYS + COMPILED_STAT_KEYS).freeze
 
   __undefine_allocator__ self
 
@@ -64,7 +61,11 @@ class RubyVM
     undef_method :new
 
     def stat(wanted = nil)
-      counts = CACHE_STAT_KEYS.to_h { |key| [key, 0] }.merge(COMPILED_STAT_KEYS.zip(__compiled_so_far__).to_h)
+      # Metorex keeps no class variable state or shape cache, so those
+      # two are zero.
+      values = [*__constant_cache_counts__, 0, __shapes_made__, 0,
+        *__compiled_so_far__, *__method_cache_counts__]
+      counts = STAT_KEYS.zip(values).to_h
       if wanted.is_a?(Symbol)
         raise ArgumentError, "unknown key: #{wanted}" unless STAT_KEYS.include?(wanted)
         return counts[wanted]

@@ -3228,6 +3228,9 @@ impl Compiler {
         });
         let mut site = self.call_arguments(method, arguments, trailing_block)?;
         site.receiver = receiver_written(receiver);
+        site.sends_literal_name = matches!(method, "send" | "__send__" | "public_send")
+            && !site.arguments_in_list
+            && matches!(arguments.first(), Some(Expression::Symbol { .. }));
         let site = wide(Some(self.unit.call_site(site)))?;
         self.emit(
             Instruction::Call {

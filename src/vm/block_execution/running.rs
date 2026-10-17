@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::object::{OptionView, View};
+use std::rc::Rc;
 
 impl VirtualMachine {
     /// The values a lone argument spreads into when the block takes it apart
@@ -71,52 +72,37 @@ impl VirtualMachine {
             strict_arity_check(block, found, position)?;
         }
 
-        let frame_name = block.name().to_string();
-        let frame_location = position_to_location(position);
-        let frame_location_string = Some(format!("{}", frame_location));
-
         let depth = block
             .written_depth
             .unwrap_or_else(|| self.block_nesting_depth());
-        let frame = match block.defining_method.clone() {
-            Some((callee, defined)) => CallFrame::method(
-                frame_name.clone(),
-                frame_location_string.clone(),
-                callee,
-                defined,
-            ),
+        let frame_name = BLOCK_FRAME_NAME.with(Rc::clone);
+        let frame = match &block.defining_method {
+            Some((callee, defined)) => {
+                CallFrame::method(frame_name, None, Rc::clone(callee), Rc::clone(defined))
+            }
             // A block written outside any method is still entered from
             // somewhere, and that is the call site the frame records.
-            None => CallFrame::boundary(frame_name.clone()).with_location(frame_location_string),
+            None => CallFrame::boundary(frame_name),
         }
+        .entered_at(position.line, position.column)
         .nested_in_a_block(depth)
         .written_in_scope(block.written_in.clone())
         .owned_by(block.defining_owner.clone())
         .owned_by_class(block.defining_class.clone())
-        .with_source_file(self.file_for_frames());
+        .with_source_file(self.frames_file());
         // The body runs in the file the block was written in, which is what a
         // backtrace entry for a call made from here has to name.
-        let body_source_file = block
-            .source_file
-            .clone()
-            .or_else(|| self.current_source_file.clone());
-        let saved_source_file = std::mem::replace(&mut self.current_source_file, body_source_file);
-        // A literal in the body is written in the encoding the block's own
-        // file names, not the one the file calling it names.
-        let saved_source_encoding = std::mem::replace(
-            &mut self.current_source_encoding,
-            self.current_source_file
-                .as_ref()
-                .and_then(|named| self.file_encodings.get(named).cloned()),
-        );
+        let saved_file = self.enter_block_file(block);
         let execution_result =
             self.with_call_frame(frame, move |vm| vm.execute_block_body(block, arguments));
-        self.current_source_file = saved_source_file;
-        self.current_source_encoding = saved_source_encoding;
+        self.leave_block_file(saved_file);
 
         match execution_result {
             Ok(value) => Ok(value),
-            Err(error) => Err(error.with_stack_frame(StackFrame::new(frame_name, frame_location))),
+            Err(error) => Err(error.with_stack_frame(StackFrame::new(
+                block.name().to_string(),
+                position_to_location(position),
+            ))),
         }
     }
 
@@ -153,19 +139,8 @@ impl VirtualMachine {
         // method holding them both.
         let saved_lexical_home = self.lexical_home_frame.replace(block.home_frame);
         // The body belongs to the file the block was written in, whatever
-        // file called it, and a literal in it is written in that file's
-        // encoding.
-        let body_source_file = block
-            .source_file
-            .clone()
-            .or_else(|| self.current_source_file.clone());
-        let saved_source_file = std::mem::replace(&mut self.current_source_file, body_source_file);
-        let saved_source_encoding = std::mem::replace(
-            &mut self.current_source_encoding,
-            self.current_source_file
-                .as_ref()
-                .and_then(|named| self.file_encodings.get(named).cloned()),
-        );
+        // file called it.
+        let saved_file = self.enter_block_file(block);
         // A class variable written in the body belongs to the class or module
         // the block was written in, which is none at the top level.
         self.class_var_cref_stack.push(
@@ -218,17 +193,6 @@ impl VirtualMachine {
             // of the block, which starts as nil however the outer scope reads.
             for name in block.block_locals() {
                 self.environment_mut().define(name, Object::Nil);
-            }
-
-            // Pre-define every local syntactically assigned-to in this block
-            // body as `nil`, so a read that runs before its assignment line
-            // (e.g. inside an `ensure` clause that fires after an early raise)
-            // returns nil rather than raising NameError. Mirrors Ruby's
-            // parser-level local-variable hoisting.
-            for name in collect_assigned_locals(block.body()) {
-                if self.environment().assignment_introduces_a_local(&name) {
-                    self.environment_mut().hoist(name);
-                }
             }
 
             let last_value;
@@ -320,8 +284,7 @@ impl VirtualMachine {
         {
             self.note_exception_location(exception, location);
         }
-        self.current_source_file = saved_source_file;
-        self.current_source_encoding = saved_source_encoding;
+        self.leave_block_file(saved_file);
         // A `break` leaving this body belongs to the invocation that was
         // handed the block, which is the call made from the frame the block
         // was written in.
@@ -399,40 +362,28 @@ impl VirtualMachine {
         strict_arity_check(block, arguments.len(), Position::new(0, 0, 0))?;
         // A block body is a place of its own in a backtrace, named for the
         // scope it was written in and for how many blocks deep it sits.
-        let frame_name = block.name().to_string();
         let depth = block
             .written_depth
             .unwrap_or_else(|| self.block_nesting_depth());
         // A block reached from a method is entered where that method was
         // called, which is the call site the frame records.
-        let called_at = Some(format!("{}", position_to_location(position)));
-        let frame = match block.defining_method.clone() {
+        let frame_name = BLOCK_FRAME_NAME.with(Rc::clone);
+        let frame = match &block.defining_method {
             Some((callee, defined)) => {
-                CallFrame::method(frame_name.clone(), called_at, callee, defined)
+                CallFrame::method(frame_name, None, Rc::clone(callee), Rc::clone(defined))
             }
-            None => CallFrame::boundary(frame_name.clone()).with_location(called_at),
+            None => CallFrame::boundary(frame_name),
         }
+        .entered_at(position.line, position.column)
         .nested_in_a_block(depth)
         .written_in_scope(block.written_in.clone())
         .owned_by(block.defining_owner.clone())
         .owned_by_class(block.defining_class.clone())
-        .with_source_file(self.file_for_frames());
+        .with_source_file(self.frames_file());
         self.call_stack_push(frame);
         self.environment_mut().push_isolated_scope();
         // The body belongs to the file the block was written in.
-        let body_source_file = block
-            .source_file
-            .clone()
-            .or_else(|| self.current_source_file.clone());
-        let saved_source_file = std::mem::replace(&mut self.current_source_file, body_source_file);
-        // A literal in the body is written in the encoding the block's own
-        // file names, not the one the file calling it names.
-        let saved_source_encoding = std::mem::replace(
-            &mut self.current_source_encoding,
-            self.current_source_file
-                .as_ref()
-                .and_then(|named| self.file_encodings.get(named).cloned()),
-        );
+        let saved_file = self.enter_block_file(block);
 
         // The body reads constants and class variables in the scopes it was
         // written in, not those of the method that runs it, which a block
@@ -470,14 +421,6 @@ impl VirtualMachine {
                     // which starts as nil however the outer scope reads.
                     for name in block.block_locals() {
                         self.environment_mut().define(name, Object::Nil);
-                    }
-
-                    // Pre-bind syntactically assigned locals to nil — see
-                    // execute_block_body for the rationale.
-                    for name in collect_assigned_locals(block.body()) {
-                        if self.environment().assignment_introduces_a_local(&name) {
-                            self.environment_mut().hoist(name);
-                        }
                     }
 
                     // `redo` runs the block's body again over the same arguments,
@@ -531,11 +474,33 @@ impl VirtualMachine {
         self.leave_block_nesting();
         self.class_var_cref_stack.pop();
 
-        self.current_source_file = saved_source_file;
-        self.current_source_encoding = saved_source_encoding;
+        self.leave_block_file(saved_file);
         self.environment_mut().pop_scope();
         self.call_stack_pop();
         result
+    }
+
+    /// Make the file `block` was written in the one running, and a literal
+    /// in it read in that file's encoding. Answers the file and encoding it
+    /// replaced, or None when the block was written in the running file.
+    fn enter_block_file(&mut self, block: &BlockStatement) -> Option<SavedFile> {
+        let written_in = block.source_file.as_ref()?;
+        if self.current_source_file.as_ref() == Some(written_in) {
+            return None;
+        }
+        let encoding = self.file_encodings.get(written_in).cloned();
+        Some((
+            self.current_source_file.replace(written_in.clone()),
+            std::mem::replace(&mut self.current_source_encoding, encoding),
+        ))
+    }
+
+    /// Put back the file and encoding `enter_block_file` replaced.
+    fn leave_block_file(&mut self, saved: Option<SavedFile>) {
+        if let Some((file, encoding)) = saved {
+            self.current_source_file = file;
+            self.current_source_encoding = encoding;
+        }
     }
 
     /// Start a block body the way a trace sees it: the body is running, and
@@ -545,7 +510,7 @@ impl VirtualMachine {
     fn enter_block_body(
         &mut self,
         block: &BlockStatement,
-    ) -> Result<(Position, Object), MetorexError> {
+    ) -> Result<(Position, Option<Object>), MetorexError> {
         let block_position = match block.opened_at {
             Some(line) => Position::new(line, 0, 0),
             None => block
@@ -554,18 +519,21 @@ impl VirtualMachine {
                 .map(|held| held.position())
                 .unwrap_or_else(|| Position::new(0, 0, 0)),
         };
-        let declared = crate::vm::native_methods::block_parameter_list(block);
         self.enter_running_code(
             std::rc::Rc::clone(&block.written_within),
             block_position.line,
         );
+        if !self.events_wanted() {
+            return Ok((block_position, None));
+        }
+        let declared = crate::vm::native_methods::block_parameter_list(block);
         let mut extra = vec![("parameters", declared.clone())];
         extra.extend(block_method_names(block));
         if let Err(error) = self.fire_event("b_call", block_position, extra) {
             self.leave_running_code();
             return Err(error);
         }
-        Ok((block_position, declared))
+        Ok((block_position, Some(declared)))
     }
 
     /// Finish a block body that answered `value`, firing `b_return` at the
@@ -574,13 +542,20 @@ impl VirtualMachine {
         &mut self,
         block: &BlockStatement,
         block_position: Position,
-        declared: Object,
+        declared: Option<Object>,
         value: &Object,
     ) -> Result<(), MetorexError> {
+        if !self.events_wanted() {
+            self.leave_running_code();
+            return Ok(());
+        }
         let line = self
             .running_code
             .last()
             .map_or(block_position.line, |running| running.line);
+        // A trace turned on while the body ran sees the parameters too.
+        let declared =
+            declared.unwrap_or_else(|| crate::vm::native_methods::block_parameter_list(block));
         let mut extra = vec![("parameters", declared), ("return_value", value.clone())];
         extra.extend(block_method_names(block));
         let fired = self.fire_event("b_return", Position::new(line, 0, 0), extra);
@@ -616,13 +591,21 @@ impl VirtualMachine {
     }
 }
 
+thread_local! {
+    /// The name every block's frame carries.
+    static BLOCK_FRAME_NAME: Rc<str> = Rc::from("<block>");
+}
+
+/// The running file and encoding a block body replaced.
+type SavedFile = (Option<String>, Option<String>);
+
 /// The method a block was written in, as the names a block event reports
 /// for `method_id` and `callee_id`.
 fn block_method_names(block: &BlockStatement) -> Vec<(&'static str, Object)> {
     match &block.defining_method {
         Some((callee, defined)) => vec![
-            ("method_id", Object::symbol(defined.clone())),
-            ("callee_id", Object::symbol(callee.clone())),
+            ("method_id", Object::symbol(defined.to_string())),
+            ("callee_id", Object::symbol(callee.to_string())),
         ],
         None => Vec::new(),
     }

@@ -316,6 +316,9 @@ pub struct VirtualMachine {
     /// Whether `pending_block` arrived as `&expr` rather than as a literal
     /// block. `Kernel#lambda` rejects a non-lambda proc passed that way.
     pub(crate) pending_block_from_ampersand: bool,
+    /// The cache of the call being dispatched, which keeps the method the
+    /// dispatch reaches when nothing but the receiver's class decided it.
+    pub(crate) recording_call_cache: Option<Rc<crate::bytecode::call_cache::CallCache>>,
     /// The running flags of the blocks attached to the calls now in
     /// progress, innermost last. Each is cleared when its call returns.
     pub(crate) attached_block_flags: Vec<Rc<std::cell::Cell<bool>>>,
@@ -492,6 +495,15 @@ pub struct VirtualMachine {
     /// refinement modules (from `using`) with the snapshot of refined classes
     /// at activation time. Pushed on file load / eval; popped on exit.
     pub(crate) refinement_scopes: Vec<Vec<RefinementEntry>>,
+    /// An emptied list of refinement scopes a method call takes for its
+    /// body, so the call allocates none of its own.
+    pub(crate) spare_refinement_scopes: Vec<Vec<RefinementEntry>>,
+    /// Emptied register lists, which a unit run takes rather than
+    /// allocating one.
+    pub(crate) spare_registers: Vec<Vec<Object>>,
+    /// The file frames name as their source, with the text it was made
+    /// from, so frames entered from the same file share one.
+    pub(crate) frames_file_held: Option<(String, Rc<str>)>,
     /// Stack of lexically enclosing class/module definitions. Used to route
     /// nested `class`/`module` declarations to the enclosing scope (so
     /// `module Foo; class Bar; end; end` defines `Foo::Bar`, not `::Bar`).
@@ -683,6 +695,7 @@ impl VirtualMachine {
             autoload_loading: Vec::new(),
             pending_block: None,
             pending_block_from_ampersand: false,
+            recording_call_cache: None,
             attached_block_flags: Vec::new(),
             toplevel_public: false,
             toplevel_frame: Some(TOP_LEVEL_FRAME),
@@ -741,6 +754,9 @@ impl VirtualMachine {
             load_wrap_module: None,
             user_def_nesting: 0,
             refinement_scopes: vec![Vec::new()],
+            spare_refinement_scopes: Vec::new(),
+            spare_registers: Vec::new(),
+            frames_file_held: None,
             def_scope_stack: Vec::new(),
             patterns_built_once: std::collections::HashMap::new(),
             flip_flops: std::collections::HashMap::new(),

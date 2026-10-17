@@ -157,7 +157,7 @@ impl VirtualMachine {
             }
         }
 
-        let mut method = Method::new(method_name.to_string(), regular_params, block.body.clone());
+        let mut method = Method::new(method_name.to_string(), regular_params, block.body.to_vec());
         method.variadic_param = variadic_param;
         method.block_parameter = block_parameter;
         method.keyword_rest_parameter = keyword_rest_parameter;

@@ -21,7 +21,7 @@ fn a_reference_reaches_each_kind_of_object_while_it_is_held() {
 #[test]
 fn a_reference_to_each_kind_of_object_dies_with_its_last_holder() {
     let code = "require 'weakref'\ndef build(kind)\n  case kind\n  when 0 then WeakRef.new(Object.new)\n  when 1 then WeakRef.new([1])\n  when 2 then WeakRef.new({a: 1})\n  else WeakRef.new(+'text')\n  end\nend\n(0..3).map { |kind| build(kind).weakref_alive? }.uniq";
-    assert_eq!(run(code), Some(Object::array(vec![Object::Bool(false)])));
+    assert_eq!(run(code), Some(Object::array(vec![Object::Nil])));
 }
 
 #[test]

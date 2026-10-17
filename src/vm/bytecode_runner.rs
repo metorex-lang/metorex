@@ -13,6 +13,7 @@ use crate::bytecode::unit::{
 };
 use crate::error::MetorexError;
 use crate::lexer::Position;
+use crate::object::shape::SlotCache;
 use crate::object::{Object, View};
 use crate::vm::errors::loop_control_error;
 use crate::vm::eval::{CallRoute, SuperArguments};
@@ -49,6 +50,10 @@ enum Next {
 }
 
 /// What one run of a unit keeps besides its registers.
+/// How many emptied register lists the machine keeps for the next units it
+/// runs.
+const SPARE_REGISTER_LISTS: usize = 64;
+
 struct RunState {
     /// The cells the unit's locals are held in, shared with the scope the
     /// unit runs in, so `binding`, `local_variables`, and `eval` read and
@@ -118,7 +123,23 @@ impl VirtualMachine {
         state: &mut RunState,
         start: usize,
     ) -> Result<ControlFlow, MetorexError> {
-        let mut registers = vec![Object::Nil; unit.register_count];
+        let mut registers = self.spare_registers.pop().unwrap_or_default();
+        registers.resize(unit.register_count, Object::Nil);
+        let ran = self.run_unit_in(unit, state, start, &mut registers);
+        registers.clear();
+        if self.spare_registers.len() < SPARE_REGISTER_LISTS {
+            self.spare_registers.push(registers);
+        }
+        ran
+    }
+
+    fn run_unit_in(
+        &mut self,
+        unit: &Unit,
+        state: &mut RunState,
+        start: usize,
+        registers: &mut [Object],
+    ) -> Result<ControlFlow, MetorexError> {
         let mut at = start;
         let mut extension = Extension::default();
         // What the run had open as it began, which a handler goes back to
@@ -156,7 +177,7 @@ impl VirtualMachine {
                     self.start_statement(statement).and_then(|()| {
                         self.execute_instruction(
                             unit,
-                            &mut registers,
+                            registers,
                             state,
                             instruction,
                             extension,
@@ -166,7 +187,7 @@ impl VirtualMachine {
                 }
                 None => self.execute_instruction(
                     unit,
-                    &mut registers,
+                    registers,
                     state,
                     instruction,
                     extension,
@@ -182,7 +203,7 @@ impl VirtualMachine {
                     if let Some(spot) = &unit.error_spots[at] {
                         self.note_compiled_error_spot(&error, spot);
                     }
-                    match self.handle_error(unit, at, error, &mut registers, state, base)? {
+                    match self.handle_error(unit, at, error, registers, state, base)? {
                         Some(target) => at = target,
                         None => unreachable!("an error no handler took is answered above"),
                     }
@@ -250,9 +271,14 @@ impl VirtualMachine {
             | Instruction::GreaterEqual { to, left, right } => {
                 let left = read(registers, left);
                 let right = read(registers, right);
-                let operator = binary_operator(instruction);
                 registers[register(to)] =
-                    self.operate_on_values(&operator, left, right, &position)?;
+                    match self.specialized_operation(&instruction, &left, &right) {
+                        Some(value) => value,
+                        None => {
+                            let operator = binary_operator(instruction);
+                            self.operate_on_values(&operator, left, right, &position)?
+                        }
+                    };
             }
             Instruction::BinaryOperator { to, first, op } => {
                 let first = register(first);
@@ -362,7 +388,14 @@ impl VirtualMachine {
                 let (arguments, block) = call_inputs(site, base, registers, state);
                 crate::vm::program::enter_nesting(position)?;
                 let attached = self.attached_block_flags.len();
-                let result = self.run_call_route(route, &site.name, arguments, block, position);
+                let result = self.run_call_route(
+                    route,
+                    &site.name,
+                    arguments,
+                    block,
+                    position,
+                    Some(&site.cache),
+                );
                 self.release_attached_blocks(attached);
                 crate::vm::program::leave_nesting();
                 if bare {
@@ -406,8 +439,10 @@ impl VirtualMachine {
                 }
             }
             Instruction::MakeBlock { to, literal } => {
-                registers[register(to)] =
-                    self.evaluate_block_literal(&unit.blocks[index(literal)])?;
+                registers[register(to)] = self.evaluate_block_literal(
+                    &unit.blocks[index(literal)],
+                    &unit.block_bodies[index(literal)],
+                )?;
             }
             Instruction::SplatInto { array, from } => {
                 let spread = self.splat_elements(registers[register(from)].clone(), position)?;
@@ -480,17 +515,31 @@ impl VirtualMachine {
                 registers[register(to)] = self.read_identifier(name, position)?;
             }
             Instruction::GetInstanceVariable { to, name } => {
-                let name = &unit.names[index(name)].text;
-                registers[register(to)] = self.eval_instance_var_read(name, position)?;
+                let at = index(name);
+                let name = &unit.names[at].text;
+                registers[register(to)] = match self.read_slot(name, &unit.slot_caches[at]) {
+                    Some(value) => value,
+                    None => self.eval_instance_var_read(name, position)?,
+                };
             }
             Instruction::SetInstanceVariable { from, name } => {
-                let name = unit.names[index(name)].text.clone();
-                let target = Expression::InstanceVariable { name, position };
-                self.assign_value(&target, registers[register(from)].clone())?;
+                let at = index(name);
+                let value = registers[register(from)].clone();
+                if let Some(value) =
+                    self.write_slot(&unit.names[at].text, &unit.slot_caches[at], value)
+                {
+                    let name = unit.names[at].text.clone();
+                    let target = Expression::InstanceVariable { name, position };
+                    self.assign_value(&target, value)?;
+                }
             }
             Instruction::GetConstant { to, name } => {
-                let name = &unit.names[index(name)].text;
-                registers[register(to)] = self.read_identifier(name, position)?;
+                let at = index(name);
+                registers[register(to)] = self.read_constant_through(
+                    &unit.names[at].text,
+                    &unit.constant_caches[at],
+                    position,
+                )?;
             }
             Instruction::SetConstant { from, name } => {
                 let name = unit.names[index(name)].text.clone();
@@ -1270,6 +1319,46 @@ impl VirtualMachine {
 
     /// Call the method a call site names, with what is done around any
     /// method call.
+    /// The instance variable `name` of `self` when `self` is an instance,
+    /// read from its slot.
+    fn read_slot(&self, name: &str, cache: &SlotCache) -> Option<Object> {
+        let held = self.environment().get("self")?;
+        let View::Instance(instance) = held.view() else {
+            return None;
+        };
+        let instance = instance.borrow();
+        let variables = &instance.instance_vars;
+        Some(match cache.slot_in(variables, name) {
+            Some(slot) => variables.slot(slot).clone(),
+            None => Object::Nil,
+        })
+    }
+
+    /// Write `value` into the slot of the instance variable `name` of
+    /// `self`, when `self` is an instance that holds it already and may be
+    /// changed. Hands the value back otherwise.
+    fn write_slot(&self, name: &str, cache: &SlotCache, value: Object) -> Option<Object> {
+        let Some(held) = self.environment().get("self") else {
+            return Some(value);
+        };
+        let View::Instance(instance) = held.view() else {
+            return Some(value);
+        };
+        let mut instance = instance.borrow_mut();
+        // A program's own variable named like the interpreter's slots is
+        // recorded as the program's when it is written.
+        if instance.frozen || name.starts_with("__") {
+            return Some(value);
+        }
+        match cache.slot_in(&instance.instance_vars, name) {
+            Some(slot) => {
+                instance.instance_vars.set_slot(slot, value);
+                None
+            }
+            None => Some(value),
+        }
+    }
+
     fn call_from_unit(
         &mut self,
         receiver: Object,
@@ -1281,8 +1370,19 @@ impl VirtualMachine {
         crate::vm::program::enter_nesting(position)?;
         let attached = self.attached_block_flags.len();
         let written = written_receiver(site.receiver);
-        let result =
-            self.call_with_block(receiver, &site.name, arguments, block, written, position);
+        let result = if site.sends_literal_name && self.send_in_force(&receiver, &site.name) {
+            self.send_literal_name(receiver, &site.name, arguments, block, position)
+        } else {
+            self.call_with_block_through(
+                receiver,
+                &site.name,
+                arguments,
+                block,
+                written,
+                position,
+                Some(&site.cache),
+            )
+        };
         self.release_attached_blocks(attached);
         crate::vm::program::leave_nesting();
         self.note_failed_call(&result, &site.name, written.names_self(), position);

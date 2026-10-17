@@ -157,7 +157,7 @@ impl VirtualMachine {
             }
         };
         let params: Vec<String> = block.parameters.clone();
-        let body: Vec<crate::ast::Statement> = block.body.clone();
+        let body: Vec<crate::ast::Statement> = block.body.to_vec();
         let mut method = Method::new(method_name.clone(), params, body);
         method.captured_vars = Some(block.captured_vars().clone());
         // Optional block params (`|a, b = 1|`) become the method's

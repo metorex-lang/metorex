@@ -33,6 +33,7 @@ impl VirtualMachine {
     /// dead out of the list of objects, and run the finalizers of the
     /// objects freed since the last time.
     pub(crate) fn collect_garbage(&mut self, position: Position) -> Result<(), MetorexError> {
+        crate::vm::block_reuse::release_kept_blocks();
         if crate::object::live::collecting() {
             let started = std::time::Instant::now();
             self.collect_unreached_data(position)?;

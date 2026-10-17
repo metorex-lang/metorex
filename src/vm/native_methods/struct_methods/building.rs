@@ -304,11 +304,11 @@ impl VirtualMachine {
         }
 
         for member in members {
-            instance
-                .borrow_mut()
-                .instance_vars
-                .entry(member_slot(member))
-                .or_insert(Object::Nil);
+            let slot = member_slot(member);
+            let mut held = instance.borrow_mut();
+            if !held.instance_vars.contains_key(&slot) {
+                held.instance_vars.insert(slot, Object::Nil);
+            }
         }
 
         Ok(Object::Instance(instance))

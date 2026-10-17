@@ -5,6 +5,7 @@
 pub(crate) mod allocation_sites;
 mod begin_rescue;
 mod block_execution;
+pub(crate) mod block_reuse;
 mod bytecode_runner;
 mod call_frame;
 pub(crate) mod capi;
@@ -34,7 +35,7 @@ pub(crate) type RlimitResource = libc::__rlimit_resource_t;
 pub(crate) type RlimitResource = libc::c_int;
 
 mod loading;
-mod method_execution;
+pub(crate) mod method_execution;
 pub(crate) mod method_invocation;
 mod method_lookup;
 mod native_functions;
@@ -47,6 +48,7 @@ mod program;
 mod ractors;
 mod sequence_outline;
 pub mod signals;
+mod specialized;
 pub(crate) mod stdlib;
 mod warn;
 pub(crate) use native_methods::{REFINEMENT_KEY_PREFIX, REFINEMENT_LABEL_KEY};

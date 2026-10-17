@@ -28,6 +28,9 @@ With `METOREX_COUNTERS` set to anything but `0` or nothing, Metorex prints to
 standard error at exit:
 
 - the heap allocations the run made, and their bytes
+- the blocks a block literal built. A literal run again in the scope where it
+  ran last, while nothing holds the block it made there, hands out that block
+  again, so a block written in a loop is built once
 - each kind of instruction executed, with its count
 - the 100 most frequent call paths, each written `caller -> callee`, with the
   number of calls and the heap allocations made while those calls ran. A
@@ -125,3 +128,27 @@ hashing in the table above comes from.
 - `walk_expression` is `run_body_statements` calling `collect_assigned_locals`,
   which walks a method's body on each call to find the locals it assigns.
   Numbering locals into slots when a unit compiles does that once.
+
+## Calls on bytecode
+
+Recorded on 2026-10-17 with the counters, which count the same on any build.
+Each figure is the difference between two runs of one program at two sizes,
+divided by the extra calls, so startup is left out.
+
+| Program | Heap allocations per call |
+| :-- | --: |
+| `tests/_examples/cli_flags/fib_calls.rb`, `fib` calling itself | 18 |
+| `tests/_examples/cli_flags/calls_in_a_loop.rb`, `identity(value)` | 9 |
+| `tests/_examples/cli_flags/calls_in_a_loop.rb`, `bump(by)` writing an instance variable | 13 |
+
+The fib benchmark's 43 per call above came from the tree walker. On
+bytecode, what a call still allocates is mostly its scope: a `String` and a
+shared cell for each name it binds, `self` and `block_given?` among them,
+and a copy of the arguments for a bare `super`. A popped scope nothing holds
+is kept for the next call, so its table is not allocated again, and a block
+written in a loop is built once rather than on each pass.
+
+```sh
+PASSES=1000 METOREX_COUNTERS=1 target/debug/metorex tests/_examples/cli_flags/calls_in_a_loop.rb
+PASSES=2000 METOREX_COUNTERS=1 target/debug/metorex tests/_examples/cli_flags/calls_in_a_loop.rb
+```

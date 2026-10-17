@@ -11,7 +11,7 @@ const RUBY_VM_OUTPUT: &str = concat!(
     "[\"nop\", \"getlocal\", \"setlocal\", \"getblockparam\", \"setblockparam\"]\n",
     "true\n",
     "{thread_vm_stack_size: 1048576, thread_machine_stack_size: 1048576, fiber_vm_stack_size: 131072, fiber_machine_stack_size: 524288}\n",
-    "[:constant_cache_invalidations, :constant_cache_misses, :global_cvar_state, :next_shape_id, :shape_cache_size, :units_compiled, :instructions_compiled]\n",
+    "[:constant_cache_invalidations, :constant_cache_misses, :global_cvar_state, :next_shape_id, :shape_cache_size, :units_compiled, :instructions_compiled, :method_cache_hits, :method_cache_misses]\n",
     "true\n",
     "true\n",
     "false\n",

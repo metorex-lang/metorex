@@ -18,6 +18,55 @@ pub struct FrameNames(pub RefCell<[Option<CachedFrameName>; 2]>);
 /// and the name it was defined as.
 pub type CachedFrameName = (Rc<str>, Rc<str>, Rc<str>);
 
+/// What a method's body says about the method, worked out on its first
+/// call. A copy starts empty, as `FrameNames` does.
+#[derive(Debug, Default)]
+pub struct BodyFacts {
+    places: std::cell::OnceCell<crate::object::CodePlaces>,
+    owner_path: std::cell::OnceCell<Rc<str>>,
+}
+
+impl Clone for BodyFacts {
+    fn clone(&self) -> Self {
+        Self::default()
+    }
+}
+
+impl BodyFacts {
+    /// The class path of `owner`, the class the method was defined in, or
+    /// None for an anonymous one. A permanent name is kept after the first
+    /// call, since it cannot change.
+    pub fn owner_path(&self, owner: &crate::class::Class) -> Option<Rc<str>> {
+        if let Some(path) = self.owner_path.get() {
+            return Some(Rc::clone(path));
+        }
+        let path = owner.ruby_name();
+        if path.is_empty() {
+            return None;
+        }
+        let path: Rc<str> = path.into();
+        if owner.has_permanent_name() {
+            let _ = self.owner_path.set(Rc::clone(&path));
+        }
+        Some(path)
+    }
+
+    /// The places the method's body was written within: its file and line,
+    /// when it has a file.
+    pub fn places(&self, method: &Method) -> crate::object::CodePlaces {
+        Rc::clone(self.places.get_or_init(|| {
+            Rc::new(
+                method
+                    .source_location
+                    .as_ref()
+                    .and_then(|written| Some((written.filename.clone()?, written.line)))
+                    .into_iter()
+                    .collect(),
+            )
+        }))
+    }
+}
+
 impl Clone for FrameNames {
     fn clone(&self) -> Self {
         Self::default()
@@ -93,6 +142,7 @@ pub struct Method {
     pub alias_origin: Option<Rc<crate::class::Class>>,
     /// The frame name and defined name a call of this method runs under.
     pub frame_names: FrameNames,
+    pub body_facts: BodyFacts,
     /// The lexically enclosing modules at the point of definition, innermost
     /// first. `Module.nesting` inside the method reports these rather than
     /// the scopes open at the call site.
@@ -142,6 +192,7 @@ impl Method {
             captured_refinements: Vec::new(),
             alias_origin: None,
             frame_names: FrameNames::default(),
+            body_facts: BodyFacts::default(),
             captured_nesting: Vec::new(),
             reads_as_proc: false,
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
@@ -183,6 +234,7 @@ impl Method {
             captured_refinements: Vec::new(),
             alias_origin: None,
             frame_names: FrameNames::default(),
+            body_facts: BodyFacts::default(),
             captured_nesting: Vec::new(),
             reads_as_proc: false,
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
@@ -224,6 +276,7 @@ impl Method {
             captured_refinements: Vec::new(),
             alias_origin: None,
             frame_names: FrameNames::default(),
+            body_facts: BodyFacts::default(),
             captured_nesting: Vec::new(),
             reads_as_proc: false,
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
@@ -266,6 +319,7 @@ impl Method {
             captured_refinements: Vec::new(),
             alias_origin: None,
             frame_names: FrameNames::default(),
+            body_facts: BodyFacts::default(),
             captured_nesting: Vec::new(),
             reads_as_proc: false,
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
@@ -302,6 +356,7 @@ impl Method {
             captured_refinements: Vec::new(),
             alias_origin: None,
             frame_names: FrameNames::default(),
+            body_facts: BodyFacts::default(),
             captured_nesting: Vec::new(),
             reads_as_proc: false,
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
@@ -338,6 +393,7 @@ impl Method {
             captured_refinements: self.captured_refinements.clone(),
             alias_origin: self.alias_origin.clone(),
             frame_names: FrameNames::default(),
+            body_facts: BodyFacts::default(),
             captured_nesting: self.captured_nesting.clone(),
             reads_as_proc: self.reads_as_proc,
             ruby2_keywords: Rc::clone(&self.ruby2_keywords),

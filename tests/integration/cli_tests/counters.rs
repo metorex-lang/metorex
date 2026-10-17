@@ -83,3 +83,73 @@ fn counters_report_the_instructions_executed() {
     assert!(counted(&reported, "Return")[0] >= 1);
     assert!(counted(&reported, "Define")[0] >= 1);
 }
+
+/// What `cli_flags/blocks_in_a_loop.rb` reports for blocks built when it
+/// makes `passes` passes.
+fn blocks_built(passes: &str) -> u64 {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let output = metorex_cmd()
+        .current_dir(manifest_dir)
+        .env("METOREX_COUNTERS", "1")
+        .env("PASSES", passes)
+        .arg(format!(
+            "{manifest_dir}/tests/_examples/cli_flags/blocks_in_a_loop.rb"
+        ))
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+    let reported = String::from_utf8(output.stderr).unwrap();
+    reported
+        .lines()
+        .find_map(|line| line.strip_prefix("blocks built: "))
+        .and_then(|count| count.trim().parse().ok())
+        .expect("a blocks built line")
+}
+
+#[test]
+fn a_block_written_in_a_loop_is_built_once_however_many_passes_run_it() {
+    assert_eq!(blocks_built("100"), blocks_built("200"));
+}
+
+/// The calls and the heap allocations `cli_flags/calls_in_a_loop.rb` reports
+/// for the call path ending with `label`.
+fn calls_in_a_loop(label: &str) -> (u64, u64) {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let output = metorex_cmd()
+        .current_dir(manifest_dir)
+        .env("METOREX_COUNTERS", "1")
+        .env("PASSES", "1000")
+        .arg(format!(
+            "{manifest_dir}/tests/_examples/cli_flags/calls_in_a_loop.rb"
+        ))
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8(output.stdout).unwrap(), "1000\n");
+    let reported = String::from_utf8(output.stderr).unwrap();
+    let counts = counted(&reported, label);
+    (counts[0], counts[1])
+}
+
+#[test]
+fn a_call_of_a_method_returning_its_argument_makes_at_most_ten_heap_allocations() {
+    let (calls, allocations) = calls_in_a_loop("Object#run -> Object#identity");
+    assert_eq!(calls, 1000);
+    assert!(
+        allocations <= 10 * calls,
+        "{allocations} allocations for {calls} calls"
+    );
+}
+
+#[test]
+fn fib_calls_prints_the_twentieth_fibonacci_number() {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let output = metorex_cmd()
+        .current_dir(manifest_dir)
+        .arg(format!(
+            "{manifest_dir}/tests/_examples/cli_flags/fib_calls.rb"
+        ))
+        .output()
+        .expect("failed to execute");
+    assert_eq!(String::from_utf8(output.stdout).unwrap(), "6765\n");
+}

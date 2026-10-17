@@ -140,13 +140,19 @@ impl VirtualMachine {
     }
 
     /// Hand one event to every tracepoint that asked for it.
+    /// Whether `fire_event` would hand an event to a trace, so the caller
+    /// builds what the event carries only then.
+    pub(crate) fn events_wanted(&self) -> bool {
+        !self.tracepoints.is_empty() && !self.tracing
+    }
+
     pub(crate) fn fire_event(
         &mut self,
         event: &str,
         position: Position,
         extra: Vec<(&str, Object)>,
     ) -> Result<(), MetorexError> {
-        if self.tracepoints.is_empty() || self.tracing {
+        if !self.events_wanted() {
             return Ok(());
         }
         // Everything from here on runs the trace's own code, which never

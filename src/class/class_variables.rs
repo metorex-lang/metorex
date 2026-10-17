@@ -16,8 +16,9 @@ impl Class {
     /// handled by an explicit `remove_autoload` call where appropriate.
     pub fn set_class_var(&self, name: impl Into<String>, value: Object) {
         let key: String = name.into();
-        if key.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
+        if super::names_a_constant(&key) {
             self.unrealized_autoloads.borrow_mut().remove(&key);
+            super::constant_state_changed();
         }
         // A singleton class answers for the class it is attached to, which
         // is part of what a method lookup through it finds. One made for an
@@ -119,6 +120,9 @@ impl Class {
     /// Remove a class variable/constant by name, returning the previous value
     /// if there was one. Used by `Module#remove_const`.
     pub fn remove_class_var(&self, name: &str) -> Option<crate::object::Object> {
+        if super::names_a_constant(name) {
+            super::constant_state_changed();
+        }
         self.class_variables.borrow_mut().shift_remove(name)
     }
 

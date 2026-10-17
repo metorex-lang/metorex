@@ -1,6 +1,7 @@
 //! What a run with `METOREX_COUNTERS=1` counts, and the report it prints to
 //! standard error at exit: each kind of instruction executed, each call by the method it was made from and the method it reached with
-//! the heap allocations made while it ran, and every heap allocation.
+//! the heap allocations made while it ran, every heap allocation, and each
+//! block a literal built.
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -11,6 +12,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 static ENABLED: AtomicBool = AtomicBool::new(false);
 static ALLOCATIONS: AtomicU64 = AtomicU64::new(0);
 static ALLOCATED_BYTES: AtomicU64 = AtomicU64::new(0);
+static BLOCKS_BUILT: AtomicU64 = AtomicU64::new(0);
 static COUNTS: Mutex<Option<Counts>> = Mutex::new(None);
 
 /// How many call paths the report lists, the most frequent first.
@@ -105,6 +107,13 @@ pub fn count_instruction(kind: &'static str) {
     with_counts(|counts| *counts.instructions.entry(kind).or_default() += 1);
 }
 
+/// Count a block a literal built rather than handing out again.
+pub fn count_block_built() {
+    if enabled() {
+        BLOCKS_BUILT.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
 /// How many heap allocations this run has made so far.
 pub fn allocations_so_far() -> u64 {
     ALLOCATIONS.load(Ordering::Relaxed)
@@ -142,6 +151,10 @@ pub fn report(out: &mut dyn Write) {
         "heap allocations: {} ({} bytes)\n",
         ALLOCATIONS.load(Ordering::Relaxed),
         ALLOCATED_BYTES.load(Ordering::Relaxed)
+    ));
+    text.push_str(&format!(
+        "blocks built: {}\n",
+        BLOCKS_BUILT.load(Ordering::Relaxed)
     ));
     let total: u64 = counts.instructions.values().sum();
     text.push_str(&format!("\ninstructions executed: {total}\n"));
