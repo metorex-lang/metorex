@@ -73,6 +73,36 @@ impl Clone for FrameNames {
     }
 }
 
+/// The class of the last receiver whose native methods were found to have
+/// none by a method's name, with the method state that held then. While the
+/// state holds, the native methods of that class are not looked through
+/// again before the method's body runs. A copy starts empty, as
+/// `FrameNames` does.
+#[derive(Debug, Default)]
+pub struct NativeMiss(RefCell<Option<(std::rc::Weak<crate::class::Class>, u64)>>);
+
+impl NativeMiss {
+    /// Whether no native method answered this name for `class` under the
+    /// method state `state`.
+    pub fn recorded(&self, class: &Rc<crate::class::Class>, state: u64) -> bool {
+        self.0.borrow().as_ref().is_some_and(|(missed, under)| {
+            *under == state && std::ptr::eq(missed.as_ptr(), Rc::as_ptr(class))
+        })
+    }
+
+    /// Record that no native method answered this name for `class` under
+    /// the method state `state`.
+    pub fn record(&self, class: &Rc<crate::class::Class>, state: u64) {
+        *self.0.borrow_mut() = Some((Rc::downgrade(class), state));
+    }
+}
+
+impl Clone for NativeMiss {
+    fn clone(&self) -> Self {
+        Self::default()
+    }
+}
+
 /// Method definition (function bound to a class)
 #[derive(Debug, Clone)]
 pub struct Method {
@@ -142,11 +172,12 @@ pub struct Method {
     pub alias_origin: Option<Rc<crate::class::Class>>,
     /// The frame name and defined name a call of this method runs under.
     pub frame_names: FrameNames,
+    pub native_miss: NativeMiss,
     pub body_facts: BodyFacts,
     /// The lexically enclosing modules at the point of definition, innermost
     /// first. `Module.nesting` inside the method reports these rather than
     /// the scopes open at the call site.
-    pub captured_nesting: Vec<Rc<crate::class::Class>>,
+    pub captured_nesting: crate::object::Nesting,
     /// True when `Method#to_proc` made this, which Ruby reports as a Proc
     /// rather than as the Method it came from.
     pub reads_as_proc: bool,
@@ -193,8 +224,9 @@ impl Method {
             captured_refinements: Vec::new(),
             alias_origin: None,
             frame_names: FrameNames::default(),
+            native_miss: NativeMiss::default(),
             body_facts: BodyFacts::default(),
-            captured_nesting: Vec::new(),
+            captured_nesting: crate::object::no_nesting(),
             reads_as_proc: false,
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
             definee: None,
@@ -235,8 +267,9 @@ impl Method {
             captured_refinements: Vec::new(),
             alias_origin: None,
             frame_names: FrameNames::default(),
+            native_miss: NativeMiss::default(),
             body_facts: BodyFacts::default(),
-            captured_nesting: Vec::new(),
+            captured_nesting: crate::object::no_nesting(),
             reads_as_proc: false,
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
             definee: None,
@@ -277,8 +310,9 @@ impl Method {
             captured_refinements: Vec::new(),
             alias_origin: None,
             frame_names: FrameNames::default(),
+            native_miss: NativeMiss::default(),
             body_facts: BodyFacts::default(),
-            captured_nesting: Vec::new(),
+            captured_nesting: crate::object::no_nesting(),
             reads_as_proc: false,
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
             definee: None,
@@ -320,8 +354,9 @@ impl Method {
             captured_refinements: Vec::new(),
             alias_origin: None,
             frame_names: FrameNames::default(),
+            native_miss: NativeMiss::default(),
             body_facts: BodyFacts::default(),
-            captured_nesting: Vec::new(),
+            captured_nesting: crate::object::no_nesting(),
             reads_as_proc: false,
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
             definee: None,
@@ -357,8 +392,9 @@ impl Method {
             captured_refinements: Vec::new(),
             alias_origin: None,
             frame_names: FrameNames::default(),
+            native_miss: NativeMiss::default(),
             body_facts: BodyFacts::default(),
-            captured_nesting: Vec::new(),
+            captured_nesting: crate::object::no_nesting(),
             reads_as_proc: false,
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
             definee: None,
@@ -394,6 +430,7 @@ impl Method {
             captured_refinements: self.captured_refinements.clone(),
             alias_origin: self.alias_origin.clone(),
             frame_names: FrameNames::default(),
+            native_miss: NativeMiss::default(),
             body_facts: BodyFacts::default(),
             captured_nesting: self.captured_nesting.clone(),
             reads_as_proc: self.reads_as_proc,

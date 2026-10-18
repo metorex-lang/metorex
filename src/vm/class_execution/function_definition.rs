@@ -78,7 +78,7 @@ impl VirtualMachine {
         function.block_parameter = block_parameter;
         function.variadic_param = variadic_param;
         function.captured_refinements = self.snapshot_active_refinements();
-        function.captured_nesting = self.snapshot_lexical_nesting();
+        function.captured_nesting = self.snapshot_lexical_nesting().into();
         // A method defined outside every class is Object's, and a `def` run
         // while it runs installs on Object too.
         function.definee = self

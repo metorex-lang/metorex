@@ -22,6 +22,17 @@ impl Class {
         self.name.clone()
     }
 
+    /// Whether `ruby_name` answers `wanted`, without copying the name.
+    pub fn ruby_name_is(&self, wanted: &str) -> bool {
+        if let Some(temporary) = self.temporary_name.borrow().as_ref() {
+            return temporary == wanted;
+        }
+        if let Some(assigned) = self.assigned_name.borrow().as_ref() {
+            return assigned == wanted;
+        }
+        self.name == wanted
+    }
+
     /// Inspect-style label used when an anonymous class needs a printable
     /// identifier — e.g. when it acts as the namespace in `parent::C`, we
     /// synthesize `#<Class:0x<ptr>>::C` for the subclass's name.

@@ -38,7 +38,10 @@ impl VirtualMachine {
         // that method was called.
         if let Some(innermost) = natives.last() {
             let at = crate::lexer::Position::new(innermost.line, innermost.column, 0);
-            let standing = innermost.file.clone().unwrap_or_else(|| written_in.clone());
+            let standing = innermost
+                .file
+                .as_deref()
+                .map_or_else(|| written_in.clone(), str::to_string);
             let flagged = self.frames_with_native_flags_of(&call_stack, &natives);
             let native_flags: Vec<bool> = flagged.iter().rev().map(|(_, native)| *native).collect();
             let merged = flagged.into_iter().map(|(frame, _)| frame).collect();

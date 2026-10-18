@@ -106,7 +106,7 @@ impl VirtualMachine {
         // lexical nesting as, whatever scope it is later called from.
         block.captured_nesting = match self.method_nesting_stack.last() {
             Some(captured) => captured.clone(),
-            None => self.snapshot_lexical_nesting(),
+            None => self.snapshot_lexical_nesting().into(),
         };
         block.home_frame = self.lexical_home_frame.unwrap_or(self.current_method_frame);
         block.written_in = Some(self.enclosing_scope_label().into());

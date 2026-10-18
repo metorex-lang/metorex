@@ -83,7 +83,7 @@ impl VirtualMachine {
                 m.block_parameter = block_parameter;
                 m.variadic_param = variadic_param;
                 m.captured_refinements = self.snapshot_active_refinements();
-                m.captured_nesting = self.snapshot_lexical_nesting();
+                m.captured_nesting = self.snapshot_lexical_nesting().into();
                 m.owner = Some(module.name().to_string());
                 m.owner_class = Some(Rc::clone(module));
                 m.definee = Some(Rc::clone(module));

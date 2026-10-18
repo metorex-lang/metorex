@@ -46,10 +46,10 @@ pub(crate) enum Definee {
 #[derive(Clone)]
 pub(crate) struct NativeFrame {
     pub(crate) receiver: Option<Object>,
-    pub(crate) name: String,
+    pub(crate) name: Rc<str>,
     pub(crate) line: usize,
     pub(crate) column: usize,
-    pub(crate) file: Option<String>,
+    pub(crate) file: Option<Rc<str>>,
     pub(crate) depth: usize,
 }
 
@@ -58,6 +58,9 @@ pub struct VirtualMachine {
     pub(crate) call_stack: Vec<CallFrame>,
     /// The native methods and functions running, innermost last.
     pub(crate) native_frames: Vec<NativeFrame>,
+    /// The names native frames have been recorded under, shared so that
+    /// recording one copies no name.
+    pub(crate) native_frame_names: std::collections::HashSet<Rc<str>>,
     /// The statement lists running, innermost last, each with the statement
     /// it is on, which a continuation called after its `callcc` returned
     /// runs again from.
@@ -495,9 +498,9 @@ pub struct VirtualMachine {
     /// refinement modules (from `using`) with the snapshot of refined classes
     /// at activation time. Pushed on file load / eval; popped on exit.
     pub(crate) refinement_scopes: Vec<Vec<RefinementEntry>>,
-    /// An emptied list of refinement scopes a method call takes for its
-    /// body, so the call allocates none of its own.
-    pub(crate) spare_refinement_scopes: Vec<Vec<RefinementEntry>>,
+    /// Emptied lists of refinement scopes, one of which a method call takes
+    /// for its body, so a call at any depth allocates none of its own.
+    pub(crate) spare_refinement_scopes: Vec<Vec<Vec<RefinementEntry>>>,
     /// Emptied register lists, which a unit run takes rather than
     /// allocating one.
     pub(crate) spare_registers: Vec<Vec<Object>>,
@@ -553,7 +556,7 @@ pub struct VirtualMachine {
     pub(crate) method_owner_stack: Vec<Option<Rc<crate::class::Class>>>,
     /// The lexical nesting captured by each method currently on the call
     /// stack, so `Module.nesting` inside a body reports the definition site.
-    pub(crate) method_nesting_stack: Vec<Vec<Rc<crate::class::Class>>>,
+    pub(crate) method_nesting_stack: Vec<crate::object::Nesting>,
     /// The depths of `method_nesting_stack` whose entry belongs to a block
     /// written at the top level, where an empty nesting means no module is
     /// open rather than that none was recorded.
@@ -621,6 +624,7 @@ impl VirtualMachine {
             environment,
             call_stack: Vec::new(),
             native_frames: Vec::new(),
+            native_frame_names: std::collections::HashSet::new(),
             statement_marks: Vec::new(),
             next_statement_serial: 0,
             continuation_resumes: std::collections::HashMap::new(),
@@ -1198,16 +1202,25 @@ impl VirtualMachine {
             && top.depth == depth
             && top.line == position.line
             && top.column == position.column
-            && top.name == name
+            && &*top.name == name
         {
             return false;
         }
+        let name = match self.native_frame_names.get(name) {
+            Some(held) => Rc::clone(held),
+            None => {
+                let held: Rc<str> = Rc::from(name);
+                self.native_frame_names.insert(Rc::clone(&held));
+                held
+            }
+        };
+        let file = self.frames_file();
         self.native_frames.push(NativeFrame {
             receiver: receiver.cloned(),
-            name: name.to_string(),
+            name,
             line: position.line,
             column: position.column,
-            file: self.file_for_frames(),
+            file,
             depth,
         });
         true

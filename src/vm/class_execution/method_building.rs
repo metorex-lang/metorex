@@ -49,6 +49,6 @@ pub(crate) fn build_method_from_params(
     m.block_parameter = block_parameter;
     m.variadic_param = variadic_param;
     m.captured_refinements = refinements;
-    m.captured_nesting = nesting;
+    m.captured_nesting = nesting.into();
     m
 }

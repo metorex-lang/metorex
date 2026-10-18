@@ -555,7 +555,7 @@ impl VirtualMachine {
                     }
                 });
                 // `-n` and `-p` give Kernel these as private methods.
-                if self.reads_lines && class_rc.ruby_name() == "Kernel" {
+                if self.reads_lines && class_rc.ruby_name_is("Kernel") {
                     method_list.retain(|held| !LINE_LOOP_METHODS.contains(&held.as_str()));
                     for name in LINE_LOOP_METHODS {
                         method_list.push(name.to_string());
@@ -601,7 +601,7 @@ pub(crate) fn native_singleton_method_definer(
 ) -> Option<Rc<Class>> {
     let mut cursor = Some(Rc::clone(attached));
     while let Some(current) = cursor {
-        let kernel_function = current.ruby_name() == "Kernel"
+        let kernel_function = current.ruby_name_is("Kernel")
             && (KERNEL_PRIVATE_FUNCTIONS.contains(&name) || is_native_kernel_method(name));
         if kernel_function
             || crate::vm::method_lookup::core_singleton_method(&current.ruby_name(), name)

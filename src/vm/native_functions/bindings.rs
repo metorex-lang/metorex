@@ -77,7 +77,7 @@ impl VirtualMachine {
             .is_some_and(|(depth, _)| self.def_scope_stack.len() > depth);
         *held.nesting.borrow_mut() = match self.method_nesting_stack.last() {
             _ if opened_in_method => self.def_scope_stack.iter().rev().cloned().collect(),
-            Some(captured) => captured.clone(),
+            Some(captured) => captured.to_vec(),
             None => self.snapshot_lexical_nesting(),
         };
         *held.frame.borrow_mut() = self.call_stack().last().cloned();

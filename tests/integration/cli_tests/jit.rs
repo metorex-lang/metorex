@@ -104,6 +104,13 @@ fn machine_code_applies_integer_operations_and_leaves_other_operands_to_the_inte
 }
 
 #[test]
+fn machine_code_calls_the_method_each_side_of_a_branch_names_as_the_interpreter_does() {
+    let (interpreted, compiled) = interpreted_and_compiled("branching_calls");
+    assert_eq!(interpreted, "100\n");
+    assert_eq!(compiled, interpreted);
+}
+
+#[test]
 fn an_integer_operand_that_turns_out_otherwise_returns_the_run_to_the_interpreter() {
     let (_, report) = run_example("jit/integer_operands.rb", &EVERY_UNIT);
     assert!(returns_to_the_interpreter(&report) > 0);

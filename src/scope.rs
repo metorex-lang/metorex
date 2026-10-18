@@ -121,10 +121,20 @@ impl Scope {
 
     /// Defines a new variable in the current scope
     /// If the variable already exists in this scope, it will be overwritten
+    /// Drop `name` from the names hidden or hoisted here, without hashing it
+    /// when there are none.
+    fn forget_hidden_and_hoisted(&mut self, name: &str) {
+        if !self.hidden_names.is_empty() {
+            self.hidden_names.remove(name);
+        }
+        if !self.hoisted_names.is_empty() {
+            self.hoisted_names.remove(name);
+        }
+    }
+
     pub fn define(&mut self, name: String, value: Object) {
         self.version += 1;
-        self.hidden_names.remove(&name);
-        self.hoisted_names.remove(&name);
+        self.forget_hidden_and_hoisted(&name);
         self.variables.insert(name, Rc::new(RefCell::new(value)));
     }
 
@@ -132,8 +142,7 @@ impl Scope {
     /// Used when a closure defines a captured variable
     pub fn define_shared(&mut self, name: String, value: Rc<RefCell<Object>>) {
         self.version += 1;
-        self.hidden_names.remove(&name);
-        self.hoisted_names.remove(&name);
+        self.forget_hidden_and_hoisted(&name);
         self.variables.insert(name, value);
     }
 
@@ -141,8 +150,7 @@ impl Scope {
     /// local, and `local_variables` reports it after the scope's own.
     pub fn define_inherited(&mut self, name: String, value: Rc<RefCell<Object>>) {
         self.version += 1;
-        self.hidden_names.remove(&name);
-        self.hoisted_names.remove(&name);
+        self.forget_hidden_and_hoisted(&name);
         if !self.inherited_names.contains(&name) {
             self.inherited_names.push(name.clone());
         }

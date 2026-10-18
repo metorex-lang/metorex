@@ -146,7 +146,7 @@ impl VirtualMachine {
     pub(crate) fn constant_owner_name(&self, name: &str) -> (String, bool) {
         let nesting: Vec<std::rc::Rc<crate::class::Class>> = match self.method_nesting_stack.last()
         {
-            Some(nesting) if !nesting.is_empty() => nesting.clone(),
+            Some(nesting) if !nesting.is_empty() => nesting.to_vec(),
             _ => self.def_scope_stack.iter().rev().cloned().collect(),
         };
         if let Some(scope) = nesting

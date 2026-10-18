@@ -114,7 +114,7 @@ impl VirtualMachine {
         if let Some(held) = self.method_nesting_stack.last() {
             nesting.extend(held.iter().map(std::rc::Rc::clone));
         }
-        self.method_nesting_stack.push(nesting);
+        self.method_nesting_stack.push(nesting.into());
         let mut last = Object::Nil;
         let result = self
             .run_compiled_unit(

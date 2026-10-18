@@ -392,7 +392,7 @@ fn format_object_block() {
         captured_vars: Rc::default(),
         reserved_names: Rc::default(),
         captured_def_scope: vec![],
-        captured_nesting: vec![],
+        captured_nesting: metorex::object::no_nesting(),
         defining_method: None,
         defining_owner: None,
         defining_class: None,

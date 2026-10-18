@@ -47,9 +47,7 @@ fn native_methods_running() -> Vec<(crate::vm::NativeFrame, String, usize)> {
         .rev()
         // The C method running now is listed as the innermost frame, and
         // a frame of its own call would list it twice.
-        .filter(|native| {
-            !(native.depth >= depth && running_c.as_deref() == Some(native.name.as_str()))
-        })
+        .filter(|native| !(native.depth >= depth && running_c.as_deref() == Some(&*native.name)))
         .filter_map(|native| {
             let label = machine.native_frame_label(&native)?;
             let running = depth.saturating_sub(native.depth);

@@ -499,7 +499,7 @@ impl VirtualMachine {
                 .map(|owner| owner.to_string())
                 .collect();
                 // MRI runs `Class#new` without a frame of its own.
-                if matches!(receiver, View::Class(_)) && native.name == "new" {
+                if matches!(receiver, View::Class(_)) && &*native.name == "new" {
                     return None;
                 }
                 match nearest_core_owner(&owners, &native.name) {
@@ -515,7 +515,7 @@ impl VirtualMachine {
                     .or_else(|| owners.first().cloned())?;
                 // MRI writes `yield_self` in Ruby as an alias of `then`, and
                 // a frame of an alias written that way reads as the original.
-                let name = match native.name.as_str() {
+                let name = match &*native.name {
                     "yield_self" => "then",
                     other => other,
                 };

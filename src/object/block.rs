@@ -51,7 +51,7 @@ pub struct BlockStatement {
     /// The scopes open where the block was written, innermost first, which is
     /// what `Module.nesting` in the body reports and where an `eval` written
     /// there opens what it defines.
-    pub captured_nesting: Vec<Rc<Class>>,
+    pub captured_nesting: crate::object::Nesting,
     /// The method that lexically encloses this block, as the (callee, defined)
     /// pair `__callee__` and `__method__` report. None for a block created
     /// outside any method.
@@ -131,7 +131,7 @@ impl BlockStatement {
             captured_vars: Rc::new(captured_vars),
             reserved_names: Rc::new(Vec::new()),
             captured_def_scope: Vec::new(),
-            captured_nesting: Vec::new(),
+            captured_nesting: crate::object::no_nesting(),
             defining_method: None,
             defining_owner: None,
             defining_class: None,
@@ -170,7 +170,7 @@ impl BlockStatement {
             captured_vars: Rc::new(captured_vars),
             reserved_names: Rc::new(Vec::new()),
             captured_def_scope,
-            captured_nesting: Vec::new(),
+            captured_nesting: crate::object::no_nesting(),
             defining_method,
             defining_owner: None,
             defining_class: None,

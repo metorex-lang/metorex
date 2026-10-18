@@ -136,98 +136,26 @@ impl VirtualMachine {
             );
         }
 
-        // An instance of a String, Array, Set, or Hash subclass answers the
-        // native table through the collection it is backed by, so a method the
-        // subclass writes itself has to run its own body rather than be
-        // shadowed by that table. Everything else reaches the native table
-        // first, which is what puts `Integer#div` ahead of the `Numeric#div`
-        // written for the subclasses a program defines.
-        // A method written on a class object's own singleton runs its own
-        // body rather than the native table's, which is what lets a program
-        // stand one in for `Dir.tmpdir`. The library's own `def self.name`
-        // methods live in the class's method table instead, and stay behind
-        // the native table the way they were written to.
-        let stands_for_a_class_method = match receiver.view() {
-            View::Class(held) | View::Module(held) => {
-                held.singleton_class_slot()
-                    .as_ref()
-                    .is_some_and(|singleton| singleton.find_own_method(method_name).is_some())
-                    || held
-                        .find_own_method(&format!("__class__{}", method_name))
-                        .is_some_and(|written| written_by_the_program(&written))
+        // What the native methods answer an instance of a class the program
+        // wrote is decided by its class and the method state, so a name
+        // they had no answer for is not looked up again until either
+        // changes. A debug build looks again and checks the answer.
+        let follows_class = native_answer_follows_class(&class, &receiver);
+        let state = crate::class::method_state();
+        let known_miss = follows_class && method.native_miss.recorded(&class, state);
+        if !known_miss || cfg!(debug_assertions) {
+            let answered =
+                self.answered_natively_first(&class, &method, &receiver, &arguments, position)?;
+            if let Some(result) = answered {
+                debug_assert!(
+                    !known_miss,
+                    "a native method answered {method_name} after none did"
+                );
+                return Ok(result);
             }
-            _ => false,
-        };
-        // A method written on the object's own singleton class runs its own
-        // body rather than the native table's, which is what lets a program
-        // stand one in for `Regexp#match` on a single pattern.
-        let stands_on_its_own_singleton = class.is_singleton_class()
-            && !matches!(receiver.view(), View::Class(_) | View::Module(_))
-            && class.find_own_method(method_name).is_some();
-        // A method a refinement puts in place of one the interpreter answers
-        // natively runs its own body, which is the whole point of writing it.
-        let stands_in_a_refinement = method.owner_class.as_ref().is_some_and(|owner| {
-            owner
-                .get_class_var(crate::vm::REFINEMENT_LABEL_KEY)
-                .is_some()
-        });
-        // A method the program writes in `class Object` runs for an object
-        // made by `Object.new` the way it does for an instance of a class of
-        // the program's own.
-        let stands_on_a_plain_object = matches!(receiver.view(), View::Instance(held)
-                if held.borrow().class.ruby_name() == "Object")
-            && written_by_the_program(&method);
-        // A module made by `new` on a subclass of Module runs the methods
-        // that subclass writes, `initialize` among them.
-        let stands_on_a_module_instance = matches!(receiver.view(), View::Module(held)
-                if held.instance_of().is_some())
-            && written_by_the_program(&method);
-        // A method a class or module answers because it extended a module
-        // the program wrote runs its own body, as `extend Typed` puts a
-        // module's `attr_accessor` ahead of Module's own.
-        let stands_in_an_extended_module = match receiver.view() {
-            View::Class(held) | View::Module(held) => {
-                written_by_the_program(&method)
-                    && (class.is_module()
-                        || crate::vm::method_lookup::module_extended_method(held, method_name)
-                            .is_some_and(|extended| Rc::ptr_eq(&extended, &method)))
+            if follows_class && crate::class::method_state() == state {
+                method.native_miss.record(&class, state);
             }
-            _ => false,
-        };
-        // A method the program writes on a core value's own class, or on a
-        // module prepended to it, runs in place of the native one, the way a
-        // reopened class's method does.
-        let stands_on_a_core_class = !matches!(
-            receiver.view(),
-            View::Instance(_) | View::Class(_) | View::Module(_) | View::Exception(_)
-        ) && written_by_the_program(&method)
-            && method.owner_class.as_ref().is_some_and(|owner| {
-                let core = self.builtins().class_of(&receiver);
-                Rc::ptr_eq(owner, &core)
-                    || core
-                        .transitive_prepends()
-                        .iter()
-                        .any(|prepended| Rc::ptr_eq(prepended, owner))
-            });
-        let overrides_builtin = !method.body.is_empty()
-            && (stands_on_a_core_class
-                || (backs_a_core_value(&receiver) && written_by_the_program(&method))
-                || stands_in_an_extended_module
-                || stands_for_a_class_method
-                || stands_on_its_own_singleton
-                || stands_in_a_refinement
-                || stands_on_a_plain_object
-                || stands_on_a_module_instance);
-        if !overrides_builtin
-            && let Some(result) = self.call_native_method(
-                class.as_ref(),
-                &receiver,
-                method_name,
-                &arguments,
-                position,
-            )?
-        {
-            return Ok(result);
         }
 
         // A stub standing in for a native method dispatches under the name it
@@ -438,7 +366,7 @@ impl VirtualMachine {
                 })
                 .collect()
         };
-        let mut method_scopes = std::mem::take(&mut self.spare_refinement_scopes);
+        let mut method_scopes = self.spare_refinement_scopes.pop().unwrap_or_default();
         method_scopes.push(captured_scope);
         let caller_scopes = std::mem::replace(&mut self.refinement_scopes, method_scopes);
         // Snapshot the positional args so `super` (bare form, inside the
@@ -513,7 +441,7 @@ impl VirtualMachine {
         self.method_running_stack.pop();
         let mut method_scopes = std::mem::replace(&mut self.refinement_scopes, caller_scopes);
         method_scopes.clear();
-        self.spare_refinement_scopes = method_scopes;
+        self.spare_refinement_scopes.push(method_scopes);
         self.user_def_nesting = self.user_def_nesting.saturating_sub(1);
 
         let finished = match execution_result {
@@ -534,6 +462,106 @@ impl VirtualMachine {
         };
         self.leave_running_code();
         finished
+    }
+
+    /// What the native methods answer for `method`'s name on `receiver`
+    /// ahead of the method's own body, which they do unless the method
+    /// stands in for them.
+    fn answered_natively_first(
+        &mut self,
+        class: &Rc<crate::class::Class>,
+        method: &Rc<crate::object::Method>,
+        receiver: &Object,
+        arguments: &[Object],
+        position: Position,
+    ) -> Result<Option<Object>, MetorexError> {
+        let method_name: &str = &method.name;
+        // An instance of a String, Array, Set, or Hash subclass answers the
+        // native table through the collection it is backed by, so a method the
+        // subclass writes itself has to run its own body rather than be
+        // shadowed by that table. Everything else reaches the native table
+        // first, which is what puts `Integer#div` ahead of the `Numeric#div`
+        // written for the subclasses a program defines.
+        // A method written on a class object's own singleton runs its own
+        // body rather than the native table's, which is what lets a program
+        // stand one in for `Dir.tmpdir`. The library's own `def self.name`
+        // methods live in the class's method table instead, and stay behind
+        // the native table the way they were written to.
+        let stands_for_a_class_method = match receiver.view() {
+            View::Class(held) | View::Module(held) => {
+                held.singleton_class_slot()
+                    .as_ref()
+                    .is_some_and(|singleton| singleton.find_own_method(method_name).is_some())
+                    || held
+                        .find_own_method(&format!("__class__{}", method_name))
+                        .is_some_and(|written| written_by_the_program(&written))
+            }
+            _ => false,
+        };
+        // A method written on the object's own singleton class runs its own
+        // body rather than the native table's, which is what lets a program
+        // stand one in for `Regexp#match` on a single pattern.
+        let stands_on_its_own_singleton = class.is_singleton_class()
+            && !matches!(receiver.view(), View::Class(_) | View::Module(_))
+            && class.find_own_method(method_name).is_some();
+        // A method a refinement puts in place of one the interpreter answers
+        // natively runs its own body, which is the whole point of writing it.
+        let stands_in_a_refinement = method.owner_class.as_ref().is_some_and(|owner| {
+            owner
+                .get_class_var(crate::vm::REFINEMENT_LABEL_KEY)
+                .is_some()
+        });
+        // A method the program writes in `class Object` runs for an object
+        // made by `Object.new` the way it does for an instance of a class of
+        // the program's own.
+        let stands_on_a_plain_object = matches!(receiver.view(), View::Instance(held)
+                if held.borrow().class.ruby_name_is("Object"))
+            && written_by_the_program(method);
+        // A module made by `new` on a subclass of Module runs the methods
+        // that subclass writes, `initialize` among them.
+        let stands_on_a_module_instance = matches!(receiver.view(), View::Module(held)
+                if held.instance_of().is_some())
+            && written_by_the_program(method);
+        // A method a class or module answers because it extended a module
+        // the program wrote runs its own body, as `extend Typed` puts a
+        // module's `attr_accessor` ahead of Module's own.
+        let stands_in_an_extended_module = match receiver.view() {
+            View::Class(held) | View::Module(held) => {
+                written_by_the_program(method)
+                    && (class.is_module()
+                        || crate::vm::method_lookup::module_extended_method(held, method_name)
+                            .is_some_and(|extended| Rc::ptr_eq(&extended, method)))
+            }
+            _ => false,
+        };
+        // A method the program writes on a core value's own class, or on a
+        // module prepended to it, runs in place of the native one, the way a
+        // reopened class's method does.
+        let stands_on_a_core_class = !matches!(
+            receiver.view(),
+            View::Instance(_) | View::Class(_) | View::Module(_) | View::Exception(_)
+        ) && written_by_the_program(method)
+            && method.owner_class.as_ref().is_some_and(|owner| {
+                let core = self.builtins().class_of(receiver);
+                Rc::ptr_eq(owner, &core)
+                    || core
+                        .transitive_prepends()
+                        .iter()
+                        .any(|prepended| Rc::ptr_eq(prepended, owner))
+            });
+        let overrides_builtin = !method.body.is_empty()
+            && (stands_on_a_core_class
+                || (backs_a_core_value(receiver) && written_by_the_program(method))
+                || stands_in_an_extended_module
+                || stands_for_a_class_method
+                || stands_on_its_own_singleton
+                || stands_in_a_refinement
+                || stands_on_a_plain_object
+                || stands_on_a_module_instance);
+        if overrides_builtin {
+            return Ok(None);
+        }
+        self.call_native_method(class.as_ref(), receiver, method_name, arguments, position)
     }
 
     /// Execute the body of a method within a fresh scope.
@@ -995,6 +1023,31 @@ impl VirtualMachine {
 
 /// Whether an object is an instance of a String, Array, Set, Hash, or Regexp
 /// subclass, which holds the value it stands for in an instance variable.
+/// Whether what the native methods answer `receiver` by a name follows from
+/// `class` and the method state alone: `receiver` is an instance of `class`
+/// with no methods of its own, and `class` is one the program wrote directly
+/// under Object, so nothing about the instance stands for a core value.
+fn native_answer_follows_class(
+    class: &std::rc::Rc<crate::class::Class>,
+    receiver: &crate::object::Object,
+) -> bool {
+    let crate::object::View::Instance(instance) = receiver.view() else {
+        return false;
+    };
+    let instance = instance.borrow();
+    std::rc::Rc::ptr_eq(&instance.class, class)
+        && instance.singleton_methods.borrow().is_empty()
+        && instance.singleton_class.borrow().is_none()
+        && !class.is_singleton_class()
+        && class.superclass.as_ref().is_some_and(|parent| {
+            parent.name() == "Object"
+                && parent
+                    .superclass
+                    .as_ref()
+                    .is_none_or(|root| root.name() == "BasicObject")
+        })
+}
+
 fn backs_a_core_value(receiver: &crate::object::Object) -> bool {
     matches!(receiver.view(), crate::object::View::Instance(_))
         && crate::vm::native_methods::subclasses::subclass_backing(receiver).is_some()

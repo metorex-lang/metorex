@@ -31,6 +31,19 @@ pub use exception::{Exception, SourceLocation};
 pub use hash::ObjectHash;
 pub use instance::Instance;
 pub use method::Method;
+
+/// The classes and modules lexically open where a method or block was
+/// written, innermost first, shared by every frame that runs it.
+pub type Nesting = std::rc::Rc<[std::rc::Rc<Class>]>;
+
+/// The nesting of code written outside any class or module, shared so that
+/// making one allocates nothing.
+pub fn no_nesting() -> Nesting {
+    thread_local! {
+        static EMPTY: Nesting = std::rc::Rc::from(Vec::new());
+    }
+    EMPTY.with(std::rc::Rc::clone)
+}
 pub use types::{Object, OptionView, View};
 
 // Re-export from callable and class modules

@@ -469,7 +469,7 @@ impl VirtualMachine {
             // method on a nested class reaches its own name and its enclosing
             // module's constants through it.
             if let Some(nesting) = self.method_nesting_stack.last().cloned() {
-                for enclosing in nesting {
+                for enclosing in nesting.iter().cloned() {
                     if enclosing.name() == name {
                         CONSTANT_ANSWER.set(Some(ConstantAnswer::AfterLocals));
                         return Ok(if enclosing.is_module() {
@@ -724,7 +724,7 @@ impl VirtualMachine {
 
     /// Note that the block whose nesting was just pushed was written at the
     /// top level, when its nesting is empty.
-    pub(crate) fn enter_block_nesting(&mut self, nesting: Vec<Rc<crate::class::Class>>) {
+    pub(crate) fn enter_block_nesting(&mut self, nesting: crate::object::Nesting) {
         let top_level = nesting.is_empty();
         self.method_nesting_stack.push(nesting);
         if top_level {
@@ -749,7 +749,7 @@ impl VirtualMachine {
                 .into_iter()
                 .filter(|held| !Rc::ptr_eq(held, scope)),
         );
-        self.method_nesting_stack.push(nesting);
+        self.method_nesting_stack.push(nesting.into());
         let result = body(self);
         self.method_nesting_stack.pop();
         result
@@ -765,7 +765,7 @@ impl VirtualMachine {
     pub(crate) fn lexical_nesting(&self) -> Vec<Rc<crate::class::Class>> {
         match self.method_nesting_stack.last() {
             Some(nesting) if !nesting.is_empty() || self.def_scope_stack.is_empty() => {
-                nesting.clone()
+                nesting.to_vec()
             }
             Some(_) if self.code_written_at_top_level() => Vec::new(),
             _ => self.def_scope_stack.iter().rev().cloned().collect(),

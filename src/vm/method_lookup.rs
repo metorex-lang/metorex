@@ -499,7 +499,7 @@ impl VirtualMachine {
         // private instance methods, so `Kernel.rand` reaches the same
         // implementation a bare `rand` does.
         if let View::Module(module_rc) = receiver.view()
-            && module_rc.ruby_name() == "Kernel"
+            && module_rc.ruby_name_is("Kernel")
             && crate::vm::native_methods::is_kernel_private_function(method_name)
         {
             let held = self
@@ -704,12 +704,12 @@ impl VirtualMachine {
         }
         // Kernel carries its functions as module functions as well as private
         // instance methods, so it answers to the names a bare call reaches.
-        if class_rc.ruby_name() == "Kernel"
+        if class_rc.ruby_name_is("Kernel")
             && crate::vm::native_methods::is_kernel_private_function(name)
         {
             return true;
         }
-        if class_rc.ruby_name() == "Process"
+        if class_rc.ruby_name_is("Process")
             && crate::vm::native_methods::PROCESS_NATIVE_METHODS.contains(&name)
         {
             return true;
@@ -1166,7 +1166,7 @@ impl VirtualMachine {
         };
         class
             .find_method_with_owner(method_name)
-            .is_some_and(|(owner, _)| owner.ruby_name() == "Enumerable")
+            .is_some_and(|(owner, _)| owner.ruby_name_is("Enumerable"))
     }
 
     /// An operator method written on a built-in value's own class, on one of

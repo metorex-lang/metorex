@@ -170,7 +170,7 @@ impl VirtualMachine {
                     && class_rc.is_singleton_class()
                     && matches!(
                         class_rc.get_class_var("__attached__").view(),
-                        Some(View::Module(held) | View::Class(held)) if held.ruby_name() == "Kernel"
+                        Some(View::Module(held) | View::Class(held)) if held.ruby_name_is("Kernel")
                     )
                     && (KERNEL_PRIVATE_FUNCTIONS.contains(&name.as_str())
                         || crate::vm::native_methods::is_native_kernel_method(&name))

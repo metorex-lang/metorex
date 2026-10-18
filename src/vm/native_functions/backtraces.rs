@@ -14,7 +14,7 @@ impl VirtualMachine {
     ) -> Vec<((String, usize, String), Option<usize>)> {
         let asking = self.native_frames.last().is_some_and(|native| {
             native.receiver.is_none()
-                && matches!(native.name.as_str(), "caller" | "caller_locations")
+                && matches!(&*native.name, "caller" | "caller_locations")
                 && native.depth == self.call_stack.len()
         });
         let held = if asking {

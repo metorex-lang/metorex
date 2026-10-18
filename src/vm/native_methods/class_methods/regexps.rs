@@ -326,10 +326,11 @@ impl VirtualMachine {
             // the method was defined; elsewhere it is the scopes open here.
             let scopes = match self.method_nesting_stack.last() {
                 Some(captured) => captured.clone(),
-                None => self.snapshot_lexical_nesting(),
+                None => self.snapshot_lexical_nesting().into(),
             };
             let nesting: Vec<Object> = scopes
-                .into_iter()
+                .iter()
+                .cloned()
                 .map(|scope| {
                     if scope.is_module() {
                         Object::Module(scope)
