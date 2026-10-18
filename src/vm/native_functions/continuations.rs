@@ -5,12 +5,26 @@ use super::*;
 use crate::object::{OptionView, View};
 
 /// A statement list running, the statement it is on, and how many frames
-/// deep it runs.
+/// deep it runs. While machine code runs the list, it writes the statement
+/// to `held` rather than `index`.
 #[derive(Clone, Debug)]
 pub(crate) struct StatementMark {
     serial: u64,
     depth: usize,
     index: usize,
+    held: *mut u64,
+}
+
+impl StatementMark {
+    fn index(&self) -> usize {
+        if self.held.is_null() {
+            self.index
+        } else {
+            // SAFETY: `held` is set only while the machine code whose
+            // context holds it runs.
+            unsafe { *self.held as usize }
+        }
+    }
 }
 
 /// The tag a jump back to the statement list `serial` is thrown with.
@@ -33,6 +47,7 @@ impl VirtualMachine {
             serial,
             depth: self.call_stack.len(),
             index: 0,
+            held: std::ptr::null_mut(),
         });
         let mut start = 0;
         let answer = loop {
@@ -59,7 +74,31 @@ impl VirtualMachine {
     /// Record that the innermost statement list is on statement `index`.
     pub(crate) fn mark_statement(&mut self, index: usize) {
         if let Some(mark) = self.statement_marks.last_mut() {
-            mark.index = index;
+            if mark.held.is_null() {
+                mark.index = index;
+            } else {
+                // SAFETY: as in `StatementMark::index`.
+                unsafe { *mark.held = index as u64 };
+            }
+        }
+    }
+
+    /// Hand the innermost statement list's statement to `held`, which
+    /// machine code writes from now until `take_statement_back`.
+    pub(crate) fn hand_statement_to(&mut self, held: *mut u64) {
+        if let Some(mark) = self.statement_marks.last_mut() {
+            // SAFETY: the caller gives a place it keeps until it takes the
+            // statement back.
+            unsafe { *held = mark.index as u64 };
+            mark.held = held;
+        }
+    }
+
+    /// Take back the statement `hand_statement_to` handed over.
+    pub(crate) fn take_statement_back(&mut self) {
+        if let Some(mark) = self.statement_marks.last_mut() {
+            mark.index = mark.index();
+            mark.held = std::ptr::null_mut();
         }
     }
 
@@ -75,7 +114,7 @@ impl VirtualMachine {
         {
             Some(mark) => Object::array(vec![
                 Object::Int(mark.serial as i64),
-                Object::Int(mark.index as i64),
+                Object::Int(mark.index() as i64),
             ]),
             None => Object::Nil,
         }

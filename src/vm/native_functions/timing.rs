@@ -155,6 +155,8 @@ impl VirtualMachine {
         let seconds = self.float_value_of(&arguments[0], position)?;
         let deadline =
             std::time::Instant::now() + std::time::Duration::from_secs_f64(seconds.max(0.0));
+        // Machine code compiled with no limit open skips checking them.
+        crate::vm::jit::assumptions_changed();
         self.timeout_limits
             .push((deadline, arguments[1].clone(), arguments[2].clone()));
         Ok(Object::Nil)

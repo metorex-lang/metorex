@@ -43,6 +43,21 @@ makes the same objects with an Integer in place of the lambda. From
 | cycles | 19 MB | 551 MB |
 | no_cycles | 19 MB | 49 MB |
 
+## Cycles with the collector
+
+From the same command on 2026-10-17:
+
+| Script | CRuby peak memory | Metorex peak memory |
+| :-- | --: | --: |
+| cycles | 19 MB | 35 MB |
+| no_cycles | 19 MB | 33 MB |
+
+Each `cycles` object and its lambda take about 1.6 KB, since a lambda keeps
+its own copy of the file name, the scopes open where it was written, and the
+locals it closes over. About 1,500 objects are alive after startup, so the
+first collection waits for 2,048 listed objects, which keeps the garbage
+between collections under 2 MB. With 4,096 the peak was 40 MB.
+
 ## The prototype
 
 `prototypes/values` runs its interpreter over the 8-byte tagged value with
@@ -153,7 +168,8 @@ zero. The specs under `core/gc` check what these methods answer and that
   read only keeps its target alive. It does not read a class's constants,
   methods, or class variables, an instance's singleton methods, or a
   binding's frame, so a cycle through one of those stays.
-- When the list has doubled, the next statement to start runs a collection.
+- When the list has doubled, and holds at least 2,048 objects, the next
+  statement to start runs a collection.
   `GC.start` runs one at once.
 - An object handed to C is pinned in `src/vm/capi/values.rs`. Metorex
   does not scan the native stack: while a call into C has not returned on

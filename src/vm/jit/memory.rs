@@ -1,16 +1,18 @@
-//! Memory machine code runs from. Code is written into chunks mapped for
-//! it, and a region freed goes on a list the next code of its size or
-//! smaller is written into.
+//! Memory machine code runs from. Each thread reserves one space for its
+//! code, so a unit's code and the code every unit shares are close enough
+//! for a direct branch from one to the other. A region freed goes on a list
+//! the next code of its size or smaller is written into.
 //!
-//! On macOS the chunks are mapped with `MAP_JIT`, and a thread makes them
-//! writable while it writes and executable again after. Elsewhere a chunk
-//! is made writable and then executable again with `mprotect`. Only the
-//! thread that runs the program writes or runs machine code.
+//! On macOS the space is mapped with `MAP_JIT`, and a thread makes it
+//! writable while it writes and executable again after. Elsewhere the pages
+//! written are made writable and then executable again with `mprotect`.
+//! Only the thread that runs the program writes or runs machine code.
 
 use std::cell::RefCell;
 
-/// The least a chunk maps.
-const CHUNK_BYTES: usize = 4 * 1024 * 1024;
+/// The space each thread reserves for its code. A direct branch on arm64
+/// reaches 128 MB either way.
+const SPACE_BYTES: usize = 128 * 1024 * 1024;
 
 /// The alignment of each region.
 const REGION_ALIGNMENT: usize = 16;
@@ -21,29 +23,39 @@ thread_local! {
 
 #[derive(Default)]
 struct CodeHeap {
-    /// The chunk being filled: where its unused part starts and how long
-    /// that part is.
-    unused: Option<(*mut u8, usize)>,
+    /// Where the space starts, once it is mapped, or None when mapping it
+    /// failed.
+    space: Option<Option<*mut u8>>,
+    /// How much of the space has been handed out.
+    used: usize,
     /// Regions freed, each where it starts and how long it is.
     freed: Vec<(*mut u8, usize)>,
 }
 
-/// Machine code written into executable memory.
+/// Memory in the space that machine code is written into.
 pub(super) struct Region {
     start: *mut u8,
     length: usize,
 }
 
 impl Region {
-    /// A region holding `bytes`, made executable, or None when no memory
-    /// could be mapped for it.
-    pub(super) fn holding(bytes: &[u8]) -> Option<Region> {
-        let length = bytes.len().next_multiple_of(REGION_ALIGNMENT);
+    /// A region of at least `length` bytes, or None when the space is full
+    /// or could not be mapped.
+    pub(super) fn reserve(length: usize) -> Option<Region> {
+        let length = length.max(1).next_multiple_of(REGION_ALIGNMENT);
         let start = HEAP.with(|heap| heap.borrow_mut().take(length))?;
-        // SAFETY: `take` handed out `length` bytes of a chunk nothing else
-        // holds, and `bytes` is no longer than that.
-        unsafe { write_code(start, bytes) };
         Some(Region { start, length })
+    }
+
+    /// Copy `bytes` to the start of the region and make them ready to run.
+    pub(super) fn write(&self, bytes: &[u8]) {
+        assert!(
+            bytes.len() <= self.length,
+            "code is no longer than its region"
+        );
+        // SAFETY: the region is `length` bytes of the space that nothing
+        // else holds, and no machine code runs from it yet.
+        unsafe { write_code(self.start, bytes) };
     }
 
     pub(super) fn start(&self) -> *const u8 {
@@ -70,19 +82,18 @@ impl CodeHeap {
             }
             return Some(start);
         }
-        let fits = self.unused.is_some_and(|(_, left)| left >= length);
-        if !fits {
-            let size = length.max(CHUNK_BYTES).next_multiple_of(page_size());
-            self.unused = Some((map_chunk(size)?, size));
+        let space = (*self.space.get_or_insert_with(|| map_space(SPACE_BYTES)))?;
+        if SPACE_BYTES - self.used < length {
+            return None;
         }
-        let (start, left) = self.unused.expect("a chunk was mapped above");
-        // SAFETY: the chunk has `left` bytes from `start`, and `length` of
-        // them are taken.
-        self.unused = Some((unsafe { start.add(length) }, left - length));
+        // SAFETY: `used` plus `length` is within the space.
+        let start = unsafe { space.add(self.used) };
+        self.used += length;
         Some(start)
     }
 }
 
+#[cfg(not(target_os = "macos"))]
 fn page_size() -> usize {
     // SAFETY: sysconf reads a setting of the system.
     let size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
@@ -90,7 +101,7 @@ fn page_size() -> usize {
 }
 
 #[cfg(target_os = "macos")]
-fn map_chunk(size: usize) -> Option<*mut u8> {
+fn map_space(size: usize) -> Option<*mut u8> {
     // SAFETY: an anonymous mapping touches no memory already in use.
     let mapped = unsafe {
         libc::mmap(
@@ -106,7 +117,7 @@ fn map_chunk(size: usize) -> Option<*mut u8> {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn map_chunk(size: usize) -> Option<*mut u8> {
+fn map_space(size: usize) -> Option<*mut u8> {
     // SAFETY: an anonymous mapping touches no memory already in use.
     let mapped = unsafe {
         libc::mmap(
@@ -130,8 +141,8 @@ unsafe extern "C" {
 ///
 /// # Safety
 ///
-/// `start` is the start of at least `bytes.len()` bytes of a chunk, which
-/// no machine code is running from.
+/// `start` is the start of at least `bytes.len()` bytes of the space,
+/// which no machine code is running from.
 #[cfg(target_os = "macos")]
 unsafe fn write_code(start: *mut u8, bytes: &[u8]) {
     unsafe {
@@ -151,8 +162,8 @@ unsafe extern "C" {
 ///
 /// # Safety
 ///
-/// `start` is the start of at least `bytes.len()` bytes of a chunk, which
-/// no machine code is running from.
+/// `start` is the start of at least `bytes.len()` bytes of the space,
+/// which no machine code is running from.
 #[cfg(not(target_os = "macos"))]
 unsafe fn write_code(start: *mut u8, bytes: &[u8]) {
     let page = page_size();

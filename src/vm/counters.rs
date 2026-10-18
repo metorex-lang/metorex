@@ -16,6 +16,7 @@ static ALLOCATIONS: AtomicU64 = AtomicU64::new(0);
 static ALLOCATED_BYTES: AtomicU64 = AtomicU64::new(0);
 static BLOCKS_BUILT: AtomicU64 = AtomicU64::new(0);
 static UNITS_COMPILED_TO_MACHINE_CODE: AtomicU64 = AtomicU64::new(0);
+static MACHINE_CODE_BYTES: AtomicU64 = AtomicU64::new(0);
 static DEOPTIMIZATIONS: AtomicU64 = AtomicU64::new(0);
 static COUNTS: Mutex<Option<Counts>> = Mutex::new(None);
 
@@ -119,10 +120,11 @@ pub fn count_block_built() {
     }
 }
 
-/// Count a unit compiled to machine code.
-pub fn count_unit_compiled_to_machine_code() {
+/// Count a unit compiled to `bytes` of machine code.
+pub fn count_unit_compiled_to_machine_code(bytes: usize) {
     if enabled() {
         UNITS_COMPILED_TO_MACHINE_CODE.fetch_add(1, Ordering::Relaxed);
+        MACHINE_CODE_BYTES.fetch_add(bytes as u64, Ordering::Relaxed);
     }
 }
 
@@ -184,6 +186,10 @@ pub fn report(out: &mut dyn Write) {
     text.push_str(&format!(
         "units compiled to machine code: {}\n",
         UNITS_COMPILED_TO_MACHINE_CODE.load(Ordering::Relaxed)
+    ));
+    text.push_str(&format!(
+        "bytes of machine code they compiled to: {}\n",
+        MACHINE_CODE_BYTES.load(Ordering::Relaxed)
     ));
     text.push_str(&format!(
         "returns from machine code to the interpreter: {}\n",

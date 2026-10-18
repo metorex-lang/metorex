@@ -15,7 +15,7 @@ use super::{
 
 /// How many entries the list holds before the first collection. Each
 /// collection doubles what it leaves for the next one to wait for.
-const FIRST_COLLECTION_AT: usize = 4096;
+const FIRST_COLLECTION_AT: usize = 2048;
 
 /// Weak references to what was made, in the order it was made. A reference
 /// keeps only its allocation, not the object, so the dead ones are cleared
@@ -144,6 +144,12 @@ pub fn live_instances() -> Vec<Rc<RefCell<Instance>>> {
 /// Every class and module still alive, oldest first.
 pub fn live_classes() -> Vec<Rc<Class>> {
     with_lists(|lists| lists.classes.alive())
+}
+
+/// Where this thread's flag for a due collection is, which machine code
+/// reads at each statement start.
+pub(crate) fn due_flag() -> *const u8 {
+    DUE.with(|due| due.as_ptr().cast_const().cast())
 }
 
 /// Whether the list has doubled since the last collection left it.

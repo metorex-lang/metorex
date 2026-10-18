@@ -65,7 +65,8 @@ p port.string == Marshal.dump([1, 2])
 p calls.load data
 
 finalizer = proc { puts "finalizer ran" }
-p calls.define_finalizer(Object.new, finalizer).equal? finalizer
+finalized = Object.new
+p calls.define_finalizer(finalized, finalizer).equal? finalizer
 report { calls.define_finalizer Object.new, 1 }
 removed = Object.new
 ObjectSpace.define_finalizer removed, proc { puts "removed finalizer ran" }

@@ -51,6 +51,9 @@ struct MethodSpan {
 impl VirtualMachine {
     /// Start measuring, forgetting whatever an earlier run counted.
     pub(crate) fn coverage_start(&mut self, by_mode: bool, modes: Vec<String>, eval_too: bool) {
+        // Machine code compiled while nothing was measured skips the
+        // branch counts.
+        crate::vm::jit::assumptions_changed();
         self.coverage = Some(CoverageRun {
             by_mode,
             modes,
@@ -59,6 +62,11 @@ impl VirtualMachine {
             methods: Vec::new(),
             branches: Vec::new(),
         });
+    }
+
+    /// Whether coverage is being measured.
+    pub(crate) fn coverage_running(&self) -> bool {
+        self.coverage.is_some()
     }
 
     pub(crate) fn coverage_stop(&mut self) {

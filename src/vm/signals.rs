@@ -110,6 +110,12 @@ static PENDING: [std::sync::atomic::AtomicBool; SIGNAL_SLOTS] =
 /// reads one flag.
 static ANY_PENDING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+/// Where the flag set while any signal waits to be delivered is, which
+/// machine code reads at each statement start.
+pub(crate) fn pending_flag() -> *const u8 {
+    ANY_PENDING.as_ptr().cast_const().cast()
+}
+
 /// Which signals a Ruby handler has asked to catch.
 static CAUGHT: [std::sync::atomic::AtomicBool; SIGNAL_SLOTS] =
     [const { std::sync::atomic::AtomicBool::new(false) }; SIGNAL_SLOTS];

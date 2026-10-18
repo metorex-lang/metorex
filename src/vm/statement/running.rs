@@ -7,7 +7,7 @@ use crate::object::{OptionView, View};
 /// how often MRI's timer marks a turn as spent.
 const TIME_SLICE: std::time::Duration = std::time::Duration::from_millis(100);
 /// How many statements run between two reads of the clock for the time slice.
-const STATEMENTS_BETWEEN_CLOCK_READS: u64 = 64;
+pub(crate) const STATEMENTS_BETWEEN_CLOCK_READS: u64 = 64;
 
 impl VirtualMachine {
     /// Counts a statement, and hands the turn over once the thread has held

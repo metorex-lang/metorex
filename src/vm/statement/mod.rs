@@ -11,7 +11,7 @@ pub(in crate::vm) use crate::vm::utils::*;
 pub(crate) use std::rc::Rc;
 
 mod assignment;
-mod running;
+pub(crate) mod running;
 
 pub(crate) use assignment::{
     PreparedTarget, ReceiverTarget, constant_target_matches, logical_assignment,

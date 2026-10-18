@@ -70,6 +70,10 @@ impl UnitRun<'_> {
         self.unit
     }
 
+    pub(crate) fn register(&self, register: usize) -> Object {
+        self.registers[register].clone()
+    }
+
     pub(crate) fn set_register(&mut self, register: usize, value: Object) {
         self.registers[register] = value;
     }
@@ -181,26 +185,42 @@ impl VirtualMachine {
             base,
             extension: Extension::default(),
         };
+        let observing = crate::vm::jit::enabled();
         let mut at = start;
-        if let Some(code) = crate::vm::jit::code_for(self, unit) {
-            match crate::vm::jit::run(self, &code, &mut run, start) {
-                crate::vm::jit::Ran::Finished(ended) => return ended,
-                crate::vm::jit::Ran::Deoptimized(resume) => at = resume,
-            }
-        }
+        let mut code = crate::vm::jit::code_for(self, unit);
         loop {
-            match self.step(&mut run, at)? {
+            if let Some(compiled) = code.take() {
+                match crate::vm::jit::run(self, &compiled, &mut run, at) {
+                    crate::vm::jit::Ran::Finished(ended) => return ended,
+                    crate::vm::jit::Ran::Deoptimized(resume) => at = resume,
+                }
+            }
+            match self.step(&mut run, at, observing)? {
                 Next::Step => at += 1,
-                Next::JumpTo(target) => at = target,
+                Next::JumpTo(target) => {
+                    // A loop going back counts as a run of its unit, so a
+                    // loop in a unit run once is compiled too, and goes on
+                    // in machine code from where it goes back to.
+                    if observing && target <= at {
+                        code = crate::vm::jit::code_for(self, unit);
+                    }
+                    at = target;
+                }
                 Next::Finish(flow) => return Ok(flow),
             }
         }
     }
 
     /// Run the instruction at `at`, with the statement it starts, if any,
-    /// and the handler that takes an error it raises.
+    /// and the handler that takes an error it raises. When `observing`, an
+    /// arithmetic instruction's operands are recorded for the JIT.
     #[inline(always)]
-    pub(crate) fn step(&mut self, run: &mut UnitRun, at: usize) -> Result<Next, MetorexError> {
+    pub(crate) fn step(
+        &mut self,
+        run: &mut UnitRun,
+        at: usize,
+        observing: bool,
+    ) -> Result<Next, MetorexError> {
         let unit = run.unit;
         let instruction = unit.instructions[at];
         let position = unit.positions[at];
@@ -215,20 +235,13 @@ impl VirtualMachine {
             return Ok(Next::Step);
         }
         let extension = std::mem::take(&mut run.extension);
-        if crate::vm::jit::enabled() {
+        if observing {
             crate::vm::jit::observe(unit, at, instruction, run.registers, extension.high);
         }
         let ran = match unit.statement_starts[at] {
-            Some(statement) => {
-                // No temporary lives from one statement to the next, and
-                // one left holding a value would keep it from being freed.
-                for register in run.registers.iter_mut().skip(statement.live) {
-                    *register = Object::Nil;
-                }
-                if let Some(index) = statement.index {
-                    self.mark_statement(index);
-                }
-                self.start_statement(statement).and_then(|()| {
+            Some(statement) => self
+                .begin_unit_statement(run.registers, statement)
+                .and_then(|()| {
                     self.execute_instruction(
                         unit,
                         run.registers,
@@ -237,8 +250,7 @@ impl VirtualMachine {
                         extension,
                         position,
                     )
-                })
-            }
+                }),
             None => self.execute_instruction(
                 unit,
                 run.registers,
@@ -248,8 +260,40 @@ impl VirtualMachine {
                 position,
             ),
         };
+        self.settle_instruction(run, at, ran)
+    }
+
+    /// What starting the statement whose first instruction is about to run
+    /// does before that instruction.
+    #[inline(always)]
+    fn begin_unit_statement(
+        &mut self,
+        registers: &mut [Object],
+        statement: StatementStart,
+    ) -> Result<(), MetorexError> {
+        // No temporary lives from one statement to the next, and one left
+        // holding a value would keep it from being freed.
+        for register in registers.iter_mut().skip(statement.live) {
+            *register = Object::Nil;
+        }
+        if let Some(index) = statement.index {
+            self.mark_statement(index);
+        }
+        self.start_statement(statement)
+    }
+
+    /// Where the run goes after the instruction at `at` ran, handing an
+    /// error it raised to the handler that takes it.
+    #[inline(always)]
+    fn settle_instruction(
+        &mut self,
+        run: &mut UnitRun,
+        at: usize,
+        ran: Result<Next, MetorexError>,
+    ) -> Result<Next, MetorexError> {
         match ran {
             Err(error) => {
+                let unit = run.unit;
                 if let Some(spot) = &unit.error_spots[at] {
                     self.note_compiled_error_spot(&error, spot);
                 }
@@ -260,6 +304,116 @@ impl VirtualMachine {
             }
             other => other,
         }
+    }
+
+    /// Start the statement that the instruction at `at` starts, for
+    /// machine code that runs the instruction itself afterwards.
+    pub(crate) fn step_statement(
+        &mut self,
+        run: &mut UnitRun,
+        at: usize,
+    ) -> Result<Next, MetorexError> {
+        let statement = run.unit.statement_starts[at]
+            .expect("machine code starts a statement only where one starts");
+        let ran = self
+            .begin_unit_statement(run.registers, statement)
+            .map(|()| Next::Step);
+        self.settle_instruction(run, at, ran)
+    }
+
+    /// Run the instruction at `at` without the statement it starts, which
+    /// machine code has started already. It never follows an `Extend`.
+    pub(crate) fn step_instruction(
+        &mut self,
+        run: &mut UnitRun,
+        at: usize,
+    ) -> Result<Next, MetorexError> {
+        let unit = run.unit;
+        let ran = self.execute_instruction(
+            unit,
+            run.registers,
+            run.state,
+            unit.instructions[at],
+            Extension::default(),
+            unit.positions[at],
+        );
+        self.settle_instruction(run, at, ran)
+    }
+
+    /// Run the `GetLocal` at `at`, reading its cell when the run holds one.
+    pub(crate) fn step_get_local(
+        &mut self,
+        run: &mut UnitRun,
+        at: usize,
+    ) -> Result<Next, MetorexError> {
+        if let Instruction::GetLocal { to, slot } = run.unit.instructions[at]
+            && let Some(cell) = &run.state.cells[usize::from(slot)]
+        {
+            run.registers[usize::from(to)] = cell.borrow().clone();
+            return Ok(Next::Step);
+        }
+        self.step_instruction(run, at)
+    }
+
+    /// Run the `SetLocal` at `at`, writing its cell when the run holds one.
+    pub(crate) fn step_set_local(
+        &mut self,
+        run: &mut UnitRun,
+        at: usize,
+    ) -> Result<Next, MetorexError> {
+        if let Instruction::SetLocal { from, slot } = run.unit.instructions[at]
+            && let Some(cell) = &run.state.cells[usize::from(slot)]
+        {
+            let value = run.registers[usize::from(from)].clone();
+            *cell.borrow_mut() = value;
+            return Ok(Next::Step);
+        }
+        self.step_instruction(run, at)
+    }
+
+    /// Run the `Unhoist` at `at`.
+    pub(crate) fn step_unhoist(
+        &mut self,
+        run: &mut UnitRun,
+        at: usize,
+    ) -> Result<Next, MetorexError> {
+        if let Instruction::Unhoist { slot } = run.unit.instructions[at] {
+            let name = &run.unit.locals[usize::from(slot)].text;
+            self.environment_mut().unhoist(name);
+            return Ok(Next::Step);
+        }
+        self.step_instruction(run, at)
+    }
+
+    /// Run the `GetIdentifier` at `at`.
+    pub(crate) fn step_get_identifier(
+        &mut self,
+        run: &mut UnitRun,
+        at: usize,
+    ) -> Result<Next, MetorexError> {
+        if let Instruction::GetIdentifier { to, name } = run.unit.instructions[at] {
+            let name = &run.unit.names[usize::from(name)].text;
+            let ran = self
+                .read_identifier(name, run.unit.positions[at])
+                .map(|value| {
+                    run.registers[usize::from(to)] = value;
+                    Next::Step
+                });
+            return self.settle_instruction(run, at, ran);
+        }
+        self.step_instruction(run, at)
+    }
+
+    /// Run the `Checkpoint` at `at`.
+    pub(crate) fn step_checkpoint(
+        &mut self,
+        run: &mut UnitRun,
+        at: usize,
+    ) -> Result<Next, MetorexError> {
+        let ran = self
+            .pass_checkpoint(run.unit.positions[at])
+            .map(|()| Next::Step);
+        self.settle_instruction(run, at, ran)
     }
 
     fn execute_instruction(
