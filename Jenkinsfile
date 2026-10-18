@@ -122,114 +122,161 @@ pipeline {
       }
     }
 
-    stage('checks') {
-      parallel {
-        stage('test') {
-          agent {
-            kubernetes {
-              defaultContainer 'ci'
-              yaml buildPod('risa', '3', '6')
-            }
-          }
-          environment {
-            CARGO_TARGET_DIR = '/cache/target-test'
-          }
-          // Each metorex process writes its engine report into
-          // engine-report/, and the total is kept with the build.
-          steps {
-            sh 'cargo fmt -- --check'
-            sh 'cargo clippy --all-targets -- -D warnings'
-            sh 'scripts/misplaced_tests.sh'
-            sh 'mkdir -p engine-report'
-            sh 'cargo build'
-            sh 'METOREX_ENGINE_REPORT="$PWD/engine-report" cargo test'
-          }
-          post {
-            always {
-              sh 'scripts/engine_report_summary.sh engine-report > engine-report-tests.txt || true'
-              archiveArtifacts artifacts: 'engine-report-tests.txt', allowEmptyArchive: true
-            }
-          }
+    // The stages run one after another, so each one's output stands alone
+    // in the console. A failing stage marks the build failed and the stages
+    // after it still run, so one run reports every failure. Each stage's
+    // test reports appear under Tests, with the output of each failure.
+    stage('lint') {
+      agent {
+        kubernetes {
+          defaultContainer 'ci'
+          yaml buildPod('risa', '3', '6')
         }
-
-        stage('ruby-spec') {
-          agent {
-            kubernetes {
-              defaultContainer 'ci'
-              yaml buildPod('risa', '4', '8')
-            }
-          }
-          environment {
-            CARGO_TARGET_DIR = '/cache/target-spec'
-            JOBS = '10'
-          }
-          steps {
-            // run_ruby_spec.sh builds only when no binary exists, and the
-            // cached one may be from older sources or another checkout path.
-            sh 'mkdir -p engine-report'
-            sh 'cargo build'
-            sh 'METOREX_ENGINE_REPORT="$PWD/engine-report" scripts/run_ruby_spec.sh'
-          }
-          post {
-            always {
-              sh 'scripts/engine_report_summary.sh engine-report > engine-report-ruby-spec.txt || true'
-              archiveArtifacts artifacts: 'engine-report-ruby-spec.txt', allowEmptyArchive: true
-            }
-          }
+      }
+      environment {
+        CARGO_TARGET_DIR = '/cache/target-test'
+      }
+      steps {
+        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+          sh 'cargo fmt -- --check'
+          sh 'cargo clippy --all-targets -- -D warnings'
+          sh 'scripts/misplaced_tests.sh'
         }
+      }
+    }
 
-        // The same suites with the JIT compiling every unit on its first
-        // run, so each instruction runs from machine code.
-        stage('jit') {
-          agent {
-            kubernetes {
-              defaultContainer 'ci'
-              yaml buildPod('risa', '4', '8')
-            }
-          }
-          environment {
-            CARGO_TARGET_DIR = '/cache/target-jit'
-            JOBS = '10'
-            METOREX_JIT = '1'
-            METOREX_JIT_CALL_THRESHOLD = '1'
-          }
-          steps {
-            sh 'cargo build'
-            sh 'cargo test'
-            sh 'scripts/run_ruby_spec.sh'
-          }
+    stage('test') {
+      agent {
+        kubernetes {
+          defaultContainer 'ci'
+          yaml buildPod('risa', '3', '6')
         }
-
-        stage('rspec-suites') {
-          agent {
-            kubernetes {
-              defaultContainer 'ci'
-              yaml buildPod('risa', '4', '8')
-            }
-          }
-          environment {
-            CARGO_TARGET_DIR = '/cache/target-rspec'
-            JOBS = '10'
-          }
-          steps {
-            sh 'cargo build'
-            sh 'scripts/compare_fast_paths.sh'
-          }
+      }
+      environment {
+        CARGO_TARGET_DIR = '/cache/target-test'
+        RUST_BACKTRACE = '1'
+      }
+      // Each metorex process writes its engine report into
+      // engine-report/, and the total is kept with the build.
+      steps {
+        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+          sh 'mkdir -p engine-report test-results'
+          sh 'cargo build'
+          sh 'METOREX_ENGINE_REPORT="$PWD/engine-report" cargo nextest run --profile ci'
+          sh 'cargo test --doc'
         }
+      }
+      post {
+        always {
+          sh 'cp "$CARGO_TARGET_DIR/nextest/ci/junit.xml" test-results/cargo-test.xml || true'
+          junit testResults: 'test-results/*.xml', allowEmptyResults: true
+          sh 'scripts/engine_report_summary.sh engine-report > engine-report-tests.txt || true'
+          archiveArtifacts artifacts: 'engine-report-tests.txt', allowEmptyArchive: true
+        }
+      }
+    }
 
-        stage('coverage') {
-          agent {
-            kubernetes {
-              defaultContainer 'ci'
-              yaml buildPod('jaros', '8', '8')
-            }
-          }
-          environment {
-            CARGO_TARGET_DIR = '/cache/target-cov'
-          }
-          steps {
-            sh "cargo llvm-cov --all-features --ignore-filename-regex 'ruby/' --cobertura --output-path cobertura.xml"
-          }
+    stage('ruby-spec') {
+      agent {
+        kubernetes {
+          defaultContainer 'ci'
+          yaml buildPod('risa', '4', '8')
+        }
+      }
+      environment {
+        CARGO_TARGET_DIR = '/cache/target-spec'
+        JOBS = '10'
+      }
+      steps {
+        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+          // run_ruby_spec.sh builds only when no binary exists, and the
+          // cached one may be from older sources or another checkout path.
+          sh 'mkdir -p engine-report test-results'
+          sh 'cargo build'
+          sh 'METOREX_ENGINE_REPORT="$PWD/engine-report" SPEC_JUNIT="$PWD/test-results/ruby-spec.xml" scripts/run_ruby_spec.sh'
+        }
+      }
+      post {
+        always {
+          junit testResults: 'test-results/*.xml', allowEmptyResults: true
+          sh 'scripts/engine_report_summary.sh engine-report > engine-report-ruby-spec.txt || true'
+          archiveArtifacts artifacts: 'engine-report-ruby-spec.txt', allowEmptyArchive: true
+        }
+      }
+    }
+
+    // The same suites with the JIT compiling every unit on its first
+    // run, so each instruction runs from machine code.
+    stage('jit') {
+      agent {
+        kubernetes {
+          defaultContainer 'ci'
+          yaml buildPod('risa', '4', '8')
+        }
+      }
+      environment {
+        CARGO_TARGET_DIR = '/cache/target-jit'
+        JOBS = '10'
+        METOREX_JIT = '1'
+        METOREX_JIT_CALL_THRESHOLD = '1'
+        RUST_BACKTRACE = '1'
+      }
+      steps {
+        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+          sh 'mkdir -p test-results'
+          sh 'cargo build'
+          sh 'cargo nextest run --profile ci'
+          sh 'SPEC_JUNIT="$PWD/test-results/jit-ruby-spec.xml" scripts/run_ruby_spec.sh'
+        }
+      }
+      post {
+        always {
+          sh 'cp "$CARGO_TARGET_DIR/nextest/ci/junit.xml" test-results/jit-cargo-test.xml || true'
+          junit testResults: 'test-results/*.xml', allowEmptyResults: true
+        }
+      }
+    }
+
+    stage('rspec-suites') {
+      agent {
+        kubernetes {
+          defaultContainer 'ci'
+          yaml buildPod('risa', '4', '8')
+        }
+      }
+      environment {
+        CARGO_TARGET_DIR = '/cache/target-rspec'
+        JOBS = '10'
+      }
+      steps {
+        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+          sh 'cargo build'
+          sh 'scripts/compare_fast_paths.sh'
+        }
+      }
+    }
+
+    stage('coverage') {
+      agent {
+        kubernetes {
+          defaultContainer 'ci'
+          yaml buildPod('jaros', '8', '8')
+        }
+      }
+      environment {
+        CARGO_TARGET_DIR = '/cache/target-cov'
+        RUST_BACKTRACE = '1'
+      }
+      steps {
+        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+          sh 'mkdir -p test-results'
+          sh "cargo llvm-cov nextest --profile ci --all-features --ignore-filename-regex 'ruby/' --cobertura --output-path cobertura.xml"
+        }
+      }
+      post {
+        always {
+          sh 'cp "$CARGO_TARGET_DIR/nextest/ci/junit.xml" test-results/coverage-cargo-test.xml || true'
+          junit testResults: 'test-results/*.xml', allowEmptyResults: true
         }
       }
     }

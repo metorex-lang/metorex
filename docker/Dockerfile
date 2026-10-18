@@ -84,6 +84,11 @@ RUN if existing=$(getent passwd "$UID"); then userdel --remove "${existing%%:*}"
 # cargo-llvm-cov drives the llvm-tools component added above.
 RUN cargo install cargo-llvm-cov --locked
 
+# CI runs the Rust tests with cargo-nextest, which prints a failing test's
+# output after the run rather than among the others and writes a JUnit
+# report for Jenkins.
+RUN cargo install cargo-nextest --locked
+
 # The toolchain is left writable so that account can build with it, and the
 # registry belongs to it in the image, so the volume mounted over that path
 # when the container runs takes the same ownership.

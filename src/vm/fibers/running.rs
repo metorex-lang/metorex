@@ -23,6 +23,10 @@ impl VirtualMachine {
         // is given room to work rather than the small default a coroutine
         // would otherwise take.
         let stack = DefaultStack::new(FIBER_STACK_BYTES).expect("fiber stack");
+        {
+            use corosensei::stack::Stack;
+            crate::vm::program::note_fiber_stack(stack.limit().get(), stack.base().get());
+        }
         let running = Coroutine::with_stack(stack, move |yielder, first: ResumeInput| {
             // The interpreter is where it was when `resume` handed over, and
             // it stays there until this body suspends or runs out.

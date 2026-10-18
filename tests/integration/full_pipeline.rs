@@ -10,7 +10,12 @@ use std::process::Command;
 /// Create a unique temp file path for this thread.
 fn temp_rb_file(prefix: &str) -> std::path::PathBuf {
     let id = std::thread::current().id();
-    std::env::temp_dir().join(format!("metorex_pipeline_{}{:?}.rb", prefix, id))
+    std::env::temp_dir().join(format!(
+        "metorex_pipeline_{}{}_{:?}.rb",
+        prefix,
+        std::process::id(),
+        id
+    ))
 }
 
 /// Write source to a temp file, run metorex on it, return stdout.

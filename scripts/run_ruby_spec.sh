@@ -3366,16 +3366,12 @@ if [ "$SPEC_COUNT" -eq 0 ]; then
   exit 0
 fi
 
-# Worker script. xargs invokes it as `worker <idx> <spec>`. mspec output is
-# tee'd to "$WORK_DIR/<idx>.out" (consulted later for the summary line) AND
-# streamed through `grep --line-buffered` to stdout, stripping the per-spec
-# framing noise — empty lines, the `$ /path/...` command echo, the
-# `metorex (ruby-compatible)` banner, the `Finished in …` timing, and the
-# `N files, …` summary. What's left is the dot/E/F progress lines and any
-# failure detail — in real time as each spec finishes. (Mspec emits all dots
-# on a single line, so they appear together when that spec completes; one
-# spec's dot line per spec arrival, not per individual test.)
-export MSPEC METOREX WORK_DIR SPEC_TEMP_ROOT
+# Worker script. xargs invokes it as `worker <idx> <spec>`. mspec's output
+# goes to "$WORK_DIR/<idx>.out", and the worker prints one line when the run
+# ends, `ok` or `FAIL` with the spec's path and its counts, so the lines of
+# runs that end at once never mix. What a failing run printed is shown in
+# full after the pass, one run at a time.
+export MSPEC METOREX WORK_DIR SPEC_TEMP_ROOT SPEC_DIR
 WORKER="$WORK_DIR/worker.sh"
 cat > "$WORKER" <<'WORKER_EOF'
 #!/usr/bin/env bash
@@ -3387,11 +3383,16 @@ export SPEC_TEMP_DIR="$SPEC_TEMP_ROOT/$idx"
 mkdir -p "$SPEC_TEMP_DIR"
 # An entry from run_specs_together holds several paths, a line each.
 readarray -t specs <<< "$spec"
-"$MSPEC" -t "$METOREX" "${specs[@]}" 2>&1 \
-  | tee "$WORK_DIR/$idx.out" \
-  | grep --line-buffered -v -E '^$|^\$ |^metorex( [0-9][0-9.]*)? \(ruby-compatible\)( \[.*\])?$|^Finished in [0-9.]+ seconds$|^[0-9]+ files?, [0-9]+ examples?, [0-9]+ expectations?, [0-9]+ failures?, [0-9]+ errors?, [0-9]+ tagged$' \
-  || true
-echo "${PIPESTATUS[0]}" > "$WORK_DIR/$idx.code"
+"$MSPEC" -t "$METOREX" "${specs[@]}" > "$WORK_DIR/$idx.out" 2>&1
+code=$?
+echo "$code" > "$WORK_DIR/$idx.code"
+label=$(printf '%s\n' "${specs[@]}" | sed "s|^$SPEC_DIR/||" | paste -sd ' ' -)
+summary=$(grep -E '^[0-9]+ files?, [0-9]+ examples?, [0-9]+ expectations?, [0-9]+ failures?, [0-9]+ errors?, [0-9]+ tagged$' "$WORK_DIR/$idx.out" | tail -1)
+if [ "$code" = "0" ]; then
+  printf 'ok    %s (%s)\n' "$label" "$summary"
+else
+  printf 'FAIL  %s (%s)\n' "$label" "${summary:-mspec exited $code}"
+fi
 WORKER_EOF
 chmod +x "$WORKER"
 
@@ -3399,18 +3400,20 @@ chmod +x "$WORKER"
 # was handed. Feeds null-delimited (idx, path) pairs to xargs so workers don't
 # have to split arguments themselves and paths with spaces stay intact.
 run_one_pass() {
+  : > "$WORK_DIR/manifest"
   {
     i=0
     while [ "$i" -lt "$SPEC_COUNT" ]; do
       if [ "$((i % SHARD_TOTAL))" -eq "$SHARD_INDEX" ]; then
         printf '%s\0%s\0' "$i" "${SPEC_PATHS[$i]}"
+        printf '%s\t%s\n' "$i" "${SPEC_PATHS[$i]//$'\n'/$'\t'}" >> "$WORK_DIR/manifest"
       fi
       i=$((i + 1))
     done
   } | xargs -0 -n 2 -P "$JOBS" "$WORKER"
 
-  # Workers already streamed their output. Walk the .out files silently to
-  # fold summary lines into the running totals and detect failures.
+  # Walk the .out files in queue order to fold summary lines into the
+  # running totals, and print in full what each failing run printed.
   i=0
   while [ "$i" -lt "$SPEC_COUNT" ]; do
     out_file="$WORK_DIR/$i.out"
@@ -3419,7 +3422,8 @@ run_one_pass() {
       code=$(cat "$code_file")
       if [ "$code" != "0" ]; then
         ANY_FAILED=1
-        printf 'mspec exited %s: %s\n' "$code" "${SPEC_PATHS[$i]//$'\n'/ }" >&2
+        printf '\n──── FAIL %s (mspec exited %s) ────\n' "${SPEC_PATHS[$i]//$'\n'/ }" "$code"
+        grep -v -E '^$|^\$ |^Finished in [0-9.]+ seconds$' "$out_file" || true
       fi
     fi
     if [ -f "$out_file" ]; then
@@ -3436,6 +3440,17 @@ run_one_pass() {
     fi
     i=$((i + 1))
   done
+
+  # SPEC_JUNIT names a JUnit report to write, a test case for each run, with
+  # the release reported added to its name when RUBY_VERSIONS gives several.
+  if [ -n "${SPEC_JUNIT:-}" ]; then
+    report="$SPEC_JUNIT"
+    if [ -n "${METOREX_RUBY_VERSION:-}" ] && [ -n "$RUBY_VERSIONS" ]; then
+      report="${SPEC_JUNIT%.xml}-ruby-$METOREX_RUBY_VERSION.xml"
+    fi
+    ruby "$REPO_ROOT/scripts/spec_junit.rb" "$report" "ruby/spec${METOREX_RUBY_VERSION:+ $METOREX_RUBY_VERSION}" \
+      "$WORK_DIR" "$SPEC_DIR"
+  fi
 }
 
 if [ -z "$RUBY_VERSIONS" ]; then

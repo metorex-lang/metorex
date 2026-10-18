@@ -141,6 +141,13 @@ fn a_method_defined_with_no_operator_name_keeps_the_machine_code() {
 }
 
 #[test]
+fn recursion_past_the_depth_allowed_raises_as_the_interpreter_does() {
+    let (interpreted, compiled) = interpreted_and_compiled("deep_recursion");
+    assert_eq!(interpreted, "stack level too deep\n".repeat(5));
+    assert_eq!(compiled, interpreted);
+}
+
+#[test]
 fn a_method_redefined_while_machine_code_runs_is_called_from_then_on() {
     let (interpreted, compiled) = interpreted_and_compiled("method_redefined");
     assert_eq!(interpreted, "2028\n");

@@ -136,8 +136,11 @@ fn cli_c_flag_reports_a_program_the_grammar_refuses() {
 
 #[test]
 fn a_program_the_grammar_refuses_never_runs() {
+    // syntax_suggest gives its search one second by default, which a slow
+    // build such as the coverage one can run past.
     let output = metorex_cmd()
         .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .env("SYNTAX_SUGGEST_TIMEOUT", "60")
         .arg("tests/_examples/cli_flags/refused_program_no_parens.rb")
         .output()
         .expect("failed to execute");

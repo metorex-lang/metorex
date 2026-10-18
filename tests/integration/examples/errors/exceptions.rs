@@ -265,6 +265,15 @@ fn test_errors_recursing_too_deep_no_parens_execution() {
     assert_eq!(output, RECURSING_TOO_DEEP_OUTPUT);
 }
 
+#[test]
+fn test_errors_recursing_too_deep_in_a_fiber_execution() {
+    let output = run_example("errors/recursing_too_deep_in_a_fiber.rb");
+    assert_eq!(
+        output,
+        "[SystemStackError, \"stack level too deep\"]\n:carried_on\n"
+    );
+}
+
 const DID_YOU_MEAN_SUGGESTIONS: &str = concat!(
     "[NameError, [:first_name]]\n",
     "\"undefined local variable or method 'firts_name' for main (NameError)\\nDid you mean?  first_name\"\n",

@@ -9,6 +9,7 @@ mod integration {
     mod lexer_parser;
     mod multi_feature;
     mod parser_vm;
+    mod spec_report;
     mod test_runner;
     mod version_test;
 }

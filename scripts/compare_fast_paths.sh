@@ -16,9 +16,21 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 COMPARE_DIR=$(mktemp -d -t metorex_fast_paths.XXXXXX)
 
-LOG_DIR="$COMPARE_DIR/on" "$REPO_ROOT/scripts/run_rspec_suite.sh" "$@" > "$COMPARE_DIR/on.txt" 2>&1
-LOG_DIR="$COMPARE_DIR/off" SPEC_ARGS=--no-fast-paths \
-  "$REPO_ROOT/scripts/run_rspec_suite.sh" "$@" > "$COMPARE_DIR/off.txt" 2>&1
+# A run that fails prints what it wrote, which is otherwise kept only in
+# the temporary directory.
+run_suites() {
+  local log="$COMPARE_DIR/$1.txt"
+  shift
+  if ! "$@" > "$log" 2>&1; then
+    printf 'scripts/run_rspec_suite.sh failed, having printed:\n' >&2
+    cat "$log" >&2
+    exit 1
+  fi
+}
+
+run_suites on env LOG_DIR="$COMPARE_DIR/on" "$REPO_ROOT/scripts/run_rspec_suite.sh" "$@"
+run_suites off env LOG_DIR="$COMPARE_DIR/off" SPEC_ARGS=--no-fast-paths \
+  "$REPO_ROOT/scripts/run_rspec_suite.sh" "$@"
 
 normalized() {
   # A backtrace line in Rex's own code is left out: a fast path runs Rex's

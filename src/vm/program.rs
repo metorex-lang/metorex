@@ -401,10 +401,11 @@ thread_local! {
 }
 
 /// Go one level deeper, or raise SystemStackError when the program is as deep
-/// as it may go. A level entered is left with `leave_nesting`.
+/// as it may go, or as near the end of the stack it runs on. A level entered
+/// is left with `leave_nesting`.
 pub(crate) fn enter_nesting(position: crate::lexer::Position) -> Result<(), MetorexError> {
     let reached = NESTING.with(|depth| depth.get());
-    if reached >= MOST_NESTED {
+    if reached >= MOST_NESTED || near_the_end_of_the_stack() {
         return Err(crate::vm::errors::simple_exception(
             "SystemStackError",
             "stack level too deep",
@@ -413,6 +414,114 @@ pub(crate) fn enter_nesting(position: crate::lexer::Position) -> Result<(), Meto
     }
     NESTING.with(|depth| depth.set(reached + 1));
     Ok(())
+}
+
+/// The room a level may take on the native stack after its nesting is
+/// counted, which differs with the build and with what the level runs.
+const STACK_KEPT_FREE: usize = 2 * 1024 * 1024;
+
+/// A stack this thread runs on, from its lowest address to its highest.
+#[derive(Clone, Copy)]
+struct StackRange {
+    low: usize,
+    high: usize,
+}
+
+thread_local! {
+    /// The stacks this thread's program runs on: the thread's own, and the
+    /// stack of each fiber made on it, the newest last. The one found last
+    /// is kept, since the next check is most often on the same one.
+    static STACKS: std::cell::RefCell<Vec<StackRange>> = const { std::cell::RefCell::new(Vec::new()) };
+    static LAST_STACK: std::cell::Cell<Option<StackRange>> = const { std::cell::Cell::new(None) };
+}
+
+/// Note a fiber's stack, from `low` to `high`, which the fiber's body runs
+/// on. A stack it takes the place of, in memory a fiber freed, is dropped.
+pub(crate) fn note_fiber_stack(low: usize, high: usize) {
+    with_stacks(|stacks| {
+        stacks.retain(|held| held.high <= low || held.low >= high);
+        stacks.push(StackRange { low, high });
+    });
+    LAST_STACK.with(|last| last.set(None));
+}
+
+/// Run `body` over this thread's stacks, with the thread's own noted first.
+fn with_stacks<T>(body: impl FnOnce(&mut Vec<StackRange>) -> T) -> T {
+    STACKS.with(|stacks| {
+        let mut stacks = stacks.borrow_mut();
+        if stacks.is_empty()
+            && let Some(own) = thread_stack()
+        {
+            stacks.push(own);
+        }
+        body(&mut stacks)
+    })
+}
+
+/// Whether what is left of the stack this runs on, below here, is less
+/// than `STACK_KEPT_FREE`, or than a sixteenth of the stack when that is
+/// less.
+fn near_the_end_of_the_stack() -> bool {
+    let marker = 0u8;
+    let here = std::ptr::addr_of!(marker) as usize;
+    let holds_here = |range: &StackRange| (range.low..range.high).contains(&here);
+    let range = LAST_STACK
+        .with(|last| last.get())
+        .filter(holds_here)
+        .or_else(|| {
+            let found =
+                with_stacks(|stacks| stacks.iter().rev().find(|range| holds_here(range)).copied());
+            LAST_STACK.with(|last| last.set(found));
+            found
+        });
+    let Some(range) = range else {
+        return false;
+    };
+    let kept = STACK_KEPT_FREE.min((range.high - range.low) / 16);
+    here - range.low < kept
+}
+
+/// This thread's own stack, as the operating system reports it.
+#[cfg(target_os = "macos")]
+fn thread_stack() -> Option<StackRange> {
+    // SAFETY: both calls read the calling thread's attributes.
+    let (high, size) = unsafe {
+        let thread = libc::pthread_self();
+        (
+            libc::pthread_get_stackaddr_np(thread) as usize,
+            libc::pthread_get_stacksize_np(thread),
+        )
+    };
+    Some(StackRange {
+        low: high.checked_sub(size)?,
+        high,
+    })
+}
+
+/// This thread's own stack, as the operating system reports it.
+#[cfg(target_os = "linux")]
+fn thread_stack() -> Option<StackRange> {
+    // SAFETY: the attributes are initialized by `pthread_getattr_np` before
+    // they are read, and destroyed after.
+    unsafe {
+        let mut attributes: libc::pthread_attr_t = std::mem::zeroed();
+        if libc::pthread_getattr_np(libc::pthread_self(), &mut attributes) != 0 {
+            return None;
+        }
+        let mut low: *mut libc::c_void = std::ptr::null_mut();
+        let mut size: libc::size_t = 0;
+        let read = libc::pthread_attr_getstack(&attributes, &mut low, &mut size);
+        libc::pthread_attr_destroy(&mut attributes);
+        (read == 0).then(|| StackRange {
+            low: low as usize,
+            high: low as usize + size,
+        })
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn thread_stack() -> Option<StackRange> {
+    None
 }
 
 /// Come back up the level `enter_nesting` went down.

@@ -1,0 +1,16 @@
+# The profile CI runs the Rust tests under: `cargo nextest run --profile ci`.
+[profile.ci]
+# Every test runs, so one run reports every failure.
+fail-fast = false
+# A failing test's output is printed once, after the others have finished,
+# and a passing one's not at all.
+failure-output = "final"
+success-output = "never"
+status-level = "fail"
+final-status-level = "fail"
+
+[profile.ci.junit]
+# Written under the target directory, at nextest/ci/junit.xml.
+path = "junit.xml"
+store-success-output = false
+store-failure-output = true
