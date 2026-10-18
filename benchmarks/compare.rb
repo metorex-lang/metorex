@@ -1,5 +1,5 @@
-# Times Metorex beside CRuby with and without YJIT and prints the results as a
-# Markdown table. Run it from the repository root with a release build:
+# Times Metorex, with its JIT and with METOREX_JIT=0, beside CRuby with and
+# without YJIT and prints the results as a Markdown table. Run it from the repository root with a release build:
 #
 #   cargo build --release
 #   ruby benchmarks/compare.rb
@@ -23,6 +23,7 @@
 #
 #   --metorex=PATH   another metorex binary
 #   --only=a,b       only the rows with these names
+#   --without-no-jit no METOREX_JIT=0 column, for a binary without a JIT
 
 require "json"
 require "open3"
@@ -45,18 +46,25 @@ abort "benchmarks/ruby-bench is missing, run: git submodule update --init" unles
 ENGINES = {
   "CRuby" => [RbConfig.ruby],
   "CRuby --yjit" => [RbConfig.ruby, "--yjit"],
-  "Metorex" => [METOREX]
-}.freeze
+  "Metorex" => [METOREX],
+  "Metorex, no JIT" => [METOREX]
+}.reject { |engine, _| engine == "Metorex, no JIT" && options.key?("without-no-jit") }.freeze
+NO_JIT = ENGINES.key?("Metorex, no JIT")
+
+# What each engine runs with besides its command.
+ENVIRONMENTS = Hash.new({}).merge("Metorex, no JIT" => { "METOREX_JIT" => "0" }).freeze
 
 # Iterations under ruby-bench's harness. CRuby runs the harness's defaults,
 # as ruby-bench's own runner does: 15 warmup iterations, then at least 10 more
 # and at least 10 seconds of them, which is long enough for YJIT to compile
-# the benchmark. Metorex compiles nothing, so it runs one warmup iteration,
-# for the caches its strings and patterns build on first use, and two more.
+# the benchmark. Metorex runs one warmup iteration, for the caches its
+# strings and patterns build on first use and the units its JIT compiles
+# once they have run 30 times, and two more.
 HARNESS_SETTINGS = {
   "CRuby" => {},
   "CRuby --yjit" => {},
-  "Metorex" => { "WARMUP_ITRS" => "1", "MIN_BENCH_ITRS" => "2", "MIN_BENCH_TIME" => "0" }
+  "Metorex" => { "WARMUP_ITRS" => "1", "MIN_BENCH_ITRS" => "2", "MIN_BENCH_TIME" => "0" },
+  "Metorex, no JIT" => { "WARMUP_ITRS" => "1", "MIN_BENCH_ITRS" => "2", "MIN_BENCH_TIME" => "0" }
 }.freeze
 
 # The flag that makes /usr/bin/time report the peak resident set size, and the
@@ -93,7 +101,9 @@ end
 
 def script_row(script)
   name = File.basename(script, ".rb")
-  results = ENGINES.transform_values { |command| fastest(command + [script]) }
+  results = ENGINES.to_h do |engine, command|
+    [engine, fastest(command + [script], environment: ENVIRONMENTS[engine])]
+  end
   outputs = results.values.map(&:last).uniq
   abort "#{name} printed different things under different engines" unless outputs.size == 1
   Row.new(name, results.transform_values(&:first), results.transform_values { |result| result[1] })
@@ -129,7 +139,7 @@ def ruby_bench_row(name, benchmark)
   ENGINES.each do |engine, command|
     Dir.mktmpdir("metorex-compare") do |scratch|
       results = File.join(scratch, "results.json")
-      environment = HARNESS_SETTINGS[engine].merge("RESULT_JSON_PATH" => results)
+      environment = HARNESS_SETTINGS[engine].merge(ENVIRONMENTS[engine], "RESULT_JSON_PATH" => results)
       harness = File.join(RUBY_BENCH, "harness")
       timed(command + ["-I", harness, benchmark], directory: RUBY_BENCH, environment: environment)
       recorded = JSON.parse(File.read(results))
@@ -145,13 +155,15 @@ def rex_suite_row
   commands = {
     "CRuby" => [RbConfig.ruby, "-S", "rspec", "--no-color"],
     "CRuby --yjit" => [RbConfig.ruby, "--yjit", "-S", "rspec", "--no-color"],
-    "Metorex" => [METOREX, "spec", "--no-color"]
-  }
-  results = commands.transform_values do |command|
+    "Metorex" => [METOREX, "spec", "--no-color"],
+    "Metorex, no JIT" => [METOREX, "spec", "--no-color"]
+  }.slice(*ENGINES.keys)
+  results = commands.to_h do |engine, command|
     # The suite's report includes how long it took, so runs differ.
-    seconds, peak, printed = fastest(command, directory: suite, same_output: false)
+    seconds, peak, printed = fastest(command, directory: suite, same_output: false,
+                                              environment: ENVIRONMENTS[engine])
     abort "the Rex suite failed under #{command.first}:\n#{printed}" unless printed.match?(/ 0 failures/)
-    [seconds, peak]
+    [engine, [seconds, peak]]
   end
   Row.new("rex_suite", results.transform_values(&:first), results.transform_values(&:last))
 end
@@ -162,28 +174,35 @@ def seconds_text(seconds) = seconds < 1 ? format("%.1f ms", seconds * 1000) : fo
 
 def megabytes(bytes) = format("%.0f MB", bytes / 1_048_576.0)
 
+# A row's name and times, printed as it is timed so a run that stops later
+# keeps them.
+def timed_text(row) = "#{row.name}: #{row.seconds.map { |engine, seconds| "#{engine} #{seconds_text(seconds)}" }.join(", ")}"
+
 rows = []
 scripts = [File.join(__dir__, "startup", "empty.rb")] + Dir[File.join(__dir__, "workloads", "*.rb")].sort +
           Dir[File.join(__dir__, "memory", "*.rb")].sort
 scripts.each do |script|
   next unless wanted?(File.basename(script, ".rb"))
   rows << script_row(script)
-  warn "timed #{rows.last.name}"
+  warn "timed #{timed_text(rows.last)}"
 end
 ruby_bench_benchmarks.each do |name, benchmark, needs_gems|
   next if needs_gems || !wanted?(name)
   rows << ruby_bench_row(name, benchmark)
-  warn "timed #{name}"
+  warn "timed #{timed_text(rows.last)}"
 end
 rows << rex_suite_row if wanted?("rex_suite")
 
 puts "Metorex #{`#{METOREX} -V`.split.last}, #{RUBY_DESCRIPTION}"
 puts
-puts "| Benchmark | CRuby | CRuby --yjit | Metorex | Metorex ÷ CRuby | Metorex ÷ YJIT | CRuby peak | YJIT peak | Metorex peak |"
-puts "| :-- | --: | --: | --: | --: | --: | --: | --: | --: |"
+ratio_headings = ["Metorex ÷ CRuby", "Metorex ÷ YJIT"] + (NO_JIT ? ["Metorex ÷ no JIT"] : [])
+headings = ENGINES.keys + ratio_headings + ENGINES.keys.map { |engine| "#{engine.sub("CRuby --yjit", "YJIT")} peak" }
+puts "| Benchmark | #{headings.join(" | ")} |"
+puts "| :-- | #{(["--:"] * headings.size).join(" | ")} |"
 rows.each do |row|
   times = ENGINES.keys.map { |engine| seconds_text(row.seconds[engine]) }
   ratios = ["CRuby", "CRuby --yjit"].map { |engine| format("%.1f×", row.seconds["Metorex"] / row.seconds[engine]) }
+  ratios << format("%.2f", row.seconds["Metorex"] / row.seconds["Metorex, no JIT"]) if NO_JIT
   peaks = ENGINES.keys.map { |engine| megabytes(row.peaks[engine]) }
   puts "| #{row.name} | #{(times + ratios + peaks).join(" | ")} |"
 end

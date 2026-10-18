@@ -185,7 +185,7 @@ impl VirtualMachine {
             base,
             extension: Extension::default(),
         };
-        let observing = crate::vm::jit::enabled();
+        let observing = crate::vm::jit::observing(unit);
         let mut at = start;
         let mut code = crate::vm::jit::code_for(self, unit);
         loop {
@@ -308,6 +308,7 @@ impl VirtualMachine {
 
     /// Start the statement that the instruction at `at` starts, for
     /// machine code that runs the instruction itself afterwards.
+    #[inline(always)]
     pub(crate) fn step_statement(
         &mut self,
         run: &mut UnitRun,
@@ -323,6 +324,7 @@ impl VirtualMachine {
 
     /// Run the instruction at `at` without the statement it starts, which
     /// machine code has started already. It never follows an `Extend`.
+    #[inline(always)]
     pub(crate) fn step_instruction(
         &mut self,
         run: &mut UnitRun,
@@ -341,6 +343,7 @@ impl VirtualMachine {
     }
 
     /// Run the `GetLocal` at `at`, reading its cell when the run holds one.
+    #[inline(always)]
     pub(crate) fn step_get_local(
         &mut self,
         run: &mut UnitRun,
@@ -356,6 +359,7 @@ impl VirtualMachine {
     }
 
     /// Run the `SetLocal` at `at`, writing its cell when the run holds one.
+    #[inline(always)]
     pub(crate) fn step_set_local(
         &mut self,
         run: &mut UnitRun,
@@ -372,6 +376,7 @@ impl VirtualMachine {
     }
 
     /// Run the `Unhoist` at `at`.
+    #[inline(always)]
     pub(crate) fn step_unhoist(
         &mut self,
         run: &mut UnitRun,
@@ -386,6 +391,7 @@ impl VirtualMachine {
     }
 
     /// Run the `GetIdentifier` at `at`.
+    #[inline(always)]
     pub(crate) fn step_get_identifier(
         &mut self,
         run: &mut UnitRun,
@@ -404,7 +410,65 @@ impl VirtualMachine {
         self.step_instruction(run, at)
     }
 
+    /// Run the `CallResolved` at `at`.
+    #[inline(always)]
+    pub(crate) fn step_call_resolved(
+        &mut self,
+        run: &mut UnitRun,
+        at: usize,
+    ) -> Result<Next, MetorexError> {
+        if let Instruction::CallResolved { base, site } = run.unit.instructions[at] {
+            let ran = self
+                .call_resolved(
+                    run.unit,
+                    run.registers,
+                    run.state,
+                    usize::from(base),
+                    usize::from(site),
+                    run.unit.positions[at],
+                )
+                .map(|()| Next::Step);
+            return self.settle_instruction(run, at, ran);
+        }
+        self.step_instruction(run, at)
+    }
+
+    /// Make the call the route last decided stands for, with the arguments
+    /// from register `base` on, and write its answer to `base`.
+    #[inline(always)]
+    fn call_resolved(
+        &mut self,
+        unit: &Unit,
+        registers: &mut [Object],
+        state: &mut RunState,
+        base: usize,
+        site: usize,
+        position: Position,
+    ) -> Result<(), MetorexError> {
+        let site = &unit.call_sites[site];
+        let (route, bare) = state.routes.pop().expect("a call route was decided");
+        let (arguments, block) = call_inputs(site, base, registers, state);
+        crate::vm::program::enter_nesting(position)?;
+        let attached = self.attached_block_flags.len();
+        let result = self.run_call_route(
+            route,
+            &site.name,
+            arguments,
+            block,
+            position,
+            Some(&site.cache),
+        );
+        self.release_attached_blocks(attached);
+        crate::vm::program::leave_nesting();
+        if bare {
+            self.note_failed_call(&result, &site.name, true, position);
+        }
+        registers[base] = result?;
+        Ok(())
+    }
+
     /// Run the `Checkpoint` at `at`.
+    #[inline(always)]
     pub(crate) fn step_checkpoint(
         &mut self,
         run: &mut UnitRun,
@@ -586,26 +650,14 @@ impl VirtualMachine {
                 state.routes.push((route, false));
             }
             Instruction::CallResolved { base, site } => {
-                let site = &unit.call_sites[index(site)];
-                let base = register(base);
-                let (route, bare) = state.routes.pop().expect("a call route was decided");
-                let (arguments, block) = call_inputs(site, base, registers, state);
-                crate::vm::program::enter_nesting(position)?;
-                let attached = self.attached_block_flags.len();
-                let result = self.run_call_route(
-                    route,
-                    &site.name,
-                    arguments,
-                    block,
+                self.call_resolved(
+                    unit,
+                    registers,
+                    state,
+                    register(base),
+                    index(site),
                     position,
-                    Some(&site.cache),
-                );
-                self.release_attached_blocks(attached);
-                crate::vm::program::leave_nesting();
-                if bare {
-                    self.note_failed_call(&result, &site.name, true, position);
-                }
-                registers[base] = result?;
+                )?;
             }
             Instruction::IsNativeName { to, name } => {
                 let name = &unit.names[index(name)].text;

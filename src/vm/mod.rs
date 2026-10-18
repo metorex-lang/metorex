@@ -50,7 +50,7 @@ mod program;
 mod ractors;
 mod sequence_outline;
 pub mod signals;
-mod specialized;
+pub(crate) mod specialized;
 pub(crate) mod stdlib;
 mod warn;
 pub(crate) use native_methods::{REFINEMENT_KEY_PREFIX, REFINEMENT_LABEL_KEY};

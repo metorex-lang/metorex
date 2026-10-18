@@ -10,7 +10,8 @@ use crate::vm::VirtualMachine;
 use crate::vm::method_execution::written_by_the_program;
 
 /// The operators the arithmetic and comparison instructions apply.
-const OPERATOR_NAMES: [&str; 11] = ["+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">="];
+pub(crate) const OPERATOR_NAMES: [&str; 11] =
+    ["+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">="];
 
 thread_local! {
     static INTEGER_OPERATORS: MethodGuard = const { MethodGuard::new() };

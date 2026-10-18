@@ -11,7 +11,6 @@ thread_local! {
 /// Mark every cached constant read out of date.
 pub(crate) fn constant_state_changed() {
     CONSTANT_STATE.with(|state| state.set(state.get() + 1));
-    crate::vm::jit::assumptions_changed();
 }
 
 /// The number `constant_state_changed` moves on, which is also how many

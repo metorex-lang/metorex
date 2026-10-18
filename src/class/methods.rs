@@ -13,7 +13,28 @@ thread_local! {
 /// Mark every cached method lookup out of date.
 pub(crate) fn method_state_changed() {
     METHOD_STATE.with(|state| state.set(state.get() + 1));
-    crate::vm::jit::assumptions_changed();
+}
+
+/// `method_state_changed`, for a change to the methods named `name`. One of
+/// the operators machine code applies to Integers itself moves the JIT's
+/// epoch too.
+pub(crate) fn method_named_changed(name: &str) {
+    method_state_changed();
+    if crate::vm::specialized::OPERATOR_NAMES.contains(&name) {
+        crate::vm::jit::assumptions_changed();
+    }
+}
+
+/// `method_state_changed`, for `module` joining a mixin or prepend chain.
+/// A module answering one of the operators moves the JIT's epoch too.
+fn module_joined(module: &Class) {
+    method_state_changed();
+    if crate::vm::specialized::OPERATOR_NAMES
+        .iter()
+        .any(|name| module.find_method(name).is_some())
+    {
+        crate::vm::jit::assumptions_changed();
+    }
 }
 
 /// The number `method_state_changed` moves on: the class lookup caches and
@@ -58,8 +79,8 @@ impl MethodGuard {
 impl Class {
     /// Define or replace a method on this class.
     pub fn define_method(&self, name: impl Into<String>, method: Rc<Method>) {
-        method_state_changed();
         let name = name.into();
+        method_named_changed(&name);
         if name.starts_with("__class__") {
             self.holds_class_methods.set(true);
         }
@@ -92,7 +113,7 @@ impl Class {
     /// The module is prepended to the list so the most-recently-included module
     /// is searched first (Ruby's MRO).
     pub fn add_mixin(&self, module: Rc<Class>) {
-        method_state_changed();
+        module_joined(&module);
         self.mixins.borrow_mut().insert(0, module);
     }
 
@@ -103,7 +124,7 @@ impl Class {
 
     /// Add a prepended module, ahead of the class's own method table.
     pub fn add_prepend(&self, module: Rc<Class>) {
-        method_state_changed();
+        module_joined(&module);
         self.prepends.borrow_mut().insert(0, module);
     }
 
@@ -318,7 +339,7 @@ impl Class {
     /// Remove a method defined directly on this class.
     /// Returns true if the method was found and removed, false otherwise.
     pub fn remove_method(&self, name: &str) -> bool {
-        method_state_changed();
+        method_named_changed(name);
         self.methods.borrow_mut().remove(name).is_some()
     }
 
@@ -345,7 +366,7 @@ impl Class {
             // method it copies came from a prepended or included module.
             aliased.owner_class = Some(Rc::clone(self));
             aliased.owner = Some(self.ruby_name());
-            method_state_changed();
+            method_named_changed(new_name);
             self.methods
                 .borrow_mut()
                 .insert(new_name.to_string(), std::rc::Rc::new(aliased));

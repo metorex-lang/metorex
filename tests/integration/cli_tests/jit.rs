@@ -66,6 +66,22 @@ fn the_jit_leaves_a_unit_run_fewer_times_than_the_threshold_to_the_interpreter()
 }
 
 #[test]
+fn a_unit_whose_instructions_all_call_into_rust_is_left_to_the_interpreter() {
+    let (printed, report) = run_example("jit/calls_only.rb", &[("METOREX_JIT", "1")]);
+    assert_eq!(printed, "[:done]\n");
+    // The loop alone, and none of the three methods it calls.
+    assert_eq!(units_compiled(&report), 1);
+}
+
+#[test]
+fn a_unit_whose_instructions_mostly_call_into_rust_waits_longer_to_be_compiled() {
+    let (printed, report) = run_example("jit/own_thresholds.rb", &[("METOREX_JIT", "1")]);
+    assert_eq!(printed, "4950\n100\n");
+    // The loop of Integer operations, and not the loop of calls.
+    assert_eq!(units_compiled(&report), 1);
+}
+
+#[test]
 fn machine_code_raises_rescues_breaks_and_jumps_as_the_interpreter_does() {
     let (interpreted, _) = run_example("jit/control_flow.rb", &[("METOREX_JIT", "0")]);
     let (compiled, _) = run_example("jit/control_flow.rb", &EVERY_UNIT);
@@ -90,13 +106,38 @@ fn machine_code_applies_integer_operations_and_leaves_other_operands_to_the_inte
 #[test]
 fn an_integer_operand_that_turns_out_otherwise_returns_the_run_to_the_interpreter() {
     let (_, report) = run_example("jit/integer_operands.rb", &EVERY_UNIT);
-    let returned: u64 = report
+    assert!(returns_to_the_interpreter(&report) > 0);
+}
+
+/// The count on the report's "returns from machine code" line.
+fn returns_to_the_interpreter(report: &str) -> u64 {
+    report
         .lines()
         .find_map(|line| line.strip_prefix("returns from machine code to the interpreter: "))
         .expect("a returns line")
         .parse()
-        .unwrap();
-    assert!(returned > 0);
+        .unwrap()
+}
+
+#[test]
+fn a_unit_that_returned_to_the_interpreter_waits_twice_as_long_to_be_compiled_again() {
+    let (printed, waiting) = run_example("jit/backoff.rb", &[("METOREX_JIT", "1")]);
+    assert_eq!(printed, "1600\n");
+    // The add_ones method's own threshold, kept after each return.
+    let (_, fixed) = run_example(
+        "jit/backoff.rb",
+        &[("METOREX_JIT", "1"), ("METOREX_JIT_CALL_THRESHOLD", "53")],
+    );
+    assert_eq!(returns_to_the_interpreter(&fixed), 4);
+    assert_eq!(returns_to_the_interpreter(&waiting), 2);
+}
+
+#[test]
+fn a_method_defined_with_no_operator_name_keeps_the_machine_code() {
+    let (printed, report) = run_example("jit/unrelated_method_defined.rb", &[("METOREX_JIT", "1")]);
+    assert_eq!(printed, "79800\n");
+    assert_eq!(units_compiled(&report), 1);
+    assert_eq!(returns_to_the_interpreter(&report), 0);
 }
 
 #[test]

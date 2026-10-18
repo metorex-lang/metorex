@@ -37,9 +37,9 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-/// How many runs of a unit come before it is compiled, unless
-/// `METOREX_JIT_CALL_THRESHOLD` says otherwise.
-const DEFAULT_CALL_THRESHOLD: u32 = 30;
+/// How many runs come before a unit is compiled whose instructions all run
+/// in machine code. A unit with fewer of them waits longer, in proportion.
+const RUNS_BEFORE_COMPILING: u32 = 30;
 
 /// What `step` and the machine code's checks hand back: go on to the next
 /// instruction, return, jump to the instruction in `Context::at`, or go
@@ -84,24 +84,27 @@ fn epoch() -> u64 {
 
 struct Settings {
     enabled: bool,
-    call_threshold: u32,
+    /// The runs before every unit is compiled, when
+    /// `METOREX_JIT_CALL_THRESHOLD` gives them, in place of each unit's
+    /// own.
+    fixed_threshold: Option<u32>,
 }
 
 fn settings() -> &'static Settings {
     static SETTINGS: std::sync::OnceLock<Settings> = std::sync::OnceLock::new();
     SETTINGS.get_or_init(|| Settings {
         enabled: std::env::var("METOREX_JIT").map_or(true, |value| value != "0"),
-        call_threshold: std::env::var("METOREX_JIT_CALL_THRESHOLD")
+        fixed_threshold: std::env::var("METOREX_JIT_CALL_THRESHOLD")
             .ok()
-            .and_then(|value| value.parse().ok())
-            .unwrap_or(DEFAULT_CALL_THRESHOLD)
-            .max(1),
+            .and_then(|value| value.parse::<u32>().ok())
+            .map(|runs| runs.max(1)),
     })
 }
 
-/// Whether the JIT is on, so the interpreter records what it compiles from.
-pub(crate) fn enabled() -> bool {
-    settings().enabled
+/// Whether the interpreter records what the JIT compiles `unit` from: the
+/// JIT is on and has not left the unit to the interpreter.
+pub(crate) fn observing(unit: &Unit) -> bool {
+    settings().enabled && !unit.jit.refused.get()
 }
 
 /// Where a unit keeps how often it has run, what its arithmetic
@@ -110,10 +113,14 @@ pub(crate) fn enabled() -> bool {
 #[derive(Default)]
 pub struct JitSlot {
     runs: Cell<u32>,
+    /// The runs before the unit is compiled, once it has run
+    /// `RUNS_BEFORE_COMPILING` times, or 0 before then.
+    threshold: Cell<u32>,
     seen: RefCell<Vec<u8>>,
     code: RefCell<Option<Rc<MachineCode>>>,
-    /// Set when there is no emitter for this processor or no memory for
-    /// the code.
+    /// Set when the unit is left to the interpreter: its machine code
+    /// would run none of its instructions itself, or there is no emitter
+    /// for this processor or no memory for the code.
     refused: Cell<bool>,
 }
 
@@ -173,10 +180,19 @@ pub(crate) struct MachineCode {
     /// For each instance variable read run from its shape, the shape and
     /// slot, by instruction.
     slot_reads: Vec<Option<SlotRead>>,
+    /// For each instruction in a run of calls `Helper::RunThrough` makes,
+    /// what it calls for that instruction and where the run ends.
+    fused: Vec<Option<Fused>>,
     /// The flag for a due collection of the thread the code was compiled
     /// on, which is the thread it runs on, since the memory it is in
     /// belongs to that thread.
     collection_due: *const u8,
+}
+
+#[derive(Clone, Copy)]
+struct Fused {
+    callee: Callee,
+    end: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -198,6 +214,12 @@ pub(crate) fn code_for(vm: &VirtualMachine, unit: &Unit) -> Option<Rc<MachineCod
         if !code.broken.get() && code.epoch == epoch() {
             return Some(code);
         }
+        // Code that went back to the interpreter waits twice as long to be
+        // compiled again.
+        if code.broken.get() {
+            let threshold = &unit.jit.threshold;
+            threshold.set(threshold.get().saturating_mul(2));
+        }
         *unit.jit.code.borrow_mut() = None;
         unit.jit.runs.set(0);
     }
@@ -206,7 +228,22 @@ pub(crate) fn code_for(vm: &VirtualMachine, unit: &Unit) -> Option<Rc<MachineCod
     }
     let runs = unit.jit.runs.get() + 1;
     unit.jit.runs.set(runs);
-    if runs < settings.call_threshold {
+    let threshold = match settings.fixed_threshold {
+        Some(threshold) => threshold,
+        None if unit.jit.threshold.get() == 0 => {
+            if runs < RUNS_BEFORE_COMPILING {
+                return None;
+            }
+            let Some(threshold) = own_threshold(unit) else {
+                unit.jit.refused.set(true);
+                return None;
+            };
+            unit.jit.threshold.set(threshold);
+            threshold
+        }
+        None => unit.jit.threshold.get(),
+    };
+    if runs < threshold {
         return None;
     }
     let compiled = compile(vm, unit);
@@ -215,6 +252,43 @@ pub(crate) fn code_for(vm: &VirtualMachine, unit: &Unit) -> Option<Rc<MachineCod
         None => unit.jit.refused.set(true),
     }
     compiled
+}
+
+/// The runs before `unit` is compiled: `RUNS_BEFORE_COMPILING` times its
+/// instructions over those of them machine code runs itself, or None when
+/// it runs none of them.
+fn own_threshold(unit: &Unit) -> Option<u32> {
+    let all = unit.instructions.len() as u64;
+    let native = unit
+        .instructions
+        .iter()
+        .filter(|instruction| runs_in_machine_code(**instruction))
+        .count() as u64;
+    if native == 0 {
+        return None;
+    }
+    let threshold = (u64::from(RUNS_BEFORE_COMPILING) * all).div_ceil(native);
+    Some(u32::try_from(threshold).unwrap_or(u32::MAX))
+}
+
+/// Whether machine code runs an instruction of this kind itself, as the
+/// plan does when its operands are what the interpreter saw.
+fn runs_in_machine_code(instruction: Instruction) -> bool {
+    matches!(
+        instruction,
+        Instruction::Jump { .. }
+            | Instruction::JumpIfTrue { .. }
+            | Instruction::JumpIfFalse { .. }
+            | Instruction::JumpIfNil { .. }
+            | Instruction::LoadInteger { .. }
+            | Instruction::LoadNil { .. }
+            | Instruction::LoadTrue { .. }
+            | Instruction::LoadFalse { .. }
+            | Instruction::LoadConstant { .. }
+            | Instruction::Move { .. }
+            | Instruction::CoverBranch { .. }
+            | Instruction::GetInstanceVariable { .. }
+    ) || integer_operation(instruction).is_some()
 }
 
 /// Machine code laid out by an emitter: its bytes and where its table
@@ -270,19 +344,25 @@ enum Helper {
     SetLocal,
     Unhoist,
     GetIdentifier,
+    CallResolved,
     Checkpoint,
     ReadSlot,
+    /// Run the instructions from the one given to the end of the run of
+    /// calls it is in, as `MachineCode::fused` records them.
+    RunThrough,
 }
 
 impl Helper {
-    const ALL: [Helper; 7] = [
+    const ALL: [Helper; 9] = [
         Helper::StartStatement,
         Helper::GetLocal,
         Helper::SetLocal,
         Helper::Unhoist,
         Helper::GetIdentifier,
+        Helper::CallResolved,
         Helper::Checkpoint,
         Helper::ReadSlot,
+        Helper::RunThrough,
     ];
 
     fn function(self) -> Function {
@@ -292,8 +372,10 @@ impl Helper {
             Helper::SetLocal => set_local,
             Helper::Unhoist => unhoist,
             Helper::GetIdentifier => get_identifier,
+            Helper::CallResolved => call_resolved,
             Helper::Checkpoint => checkpoint,
             Helper::ReadSlot => read_slot,
+            Helper::RunThrough => run_through,
         }
     }
 }
@@ -363,6 +445,25 @@ struct Planned {
     action: Action,
 }
 
+impl Planned {
+    /// Whether the machine code runs the instruction itself rather than
+    /// calling into Rust for it or finishing the unit. Entering machine
+    /// code costs more than the interpreter takes to dispatch the
+    /// instructions of a unit with none of these.
+    fn runs_itself(&self) -> bool {
+        match self.action {
+            Action::Call(callee) => callee == Callee::Helper(Helper::ReadSlot),
+            Action::Step | Action::Return { .. } | Action::Inside { .. } => false,
+            Action::Branch(_)
+            | Action::Integer { .. }
+            | Action::Store { .. }
+            | Action::Move { .. }
+            | Action::BranchIf { .. }
+            | Action::Nothing => true,
+        }
+    }
+}
+
 /// How the statement an instruction starts is started, after the epoch is
 /// checked.
 #[derive(Clone, Copy)]
@@ -429,6 +530,10 @@ enum Action {
     /// Check the epoch and go on, for a branch count while coverage is
     /// off.
     Nothing,
+    /// An instruction after the first of a run of calls, which the call
+    /// for the first runs through to `end`. A jump to it calls
+    /// `Helper::RunThrough` from it.
+    Inside { end: usize },
 }
 
 /// What a conditional branch tests its register for.
@@ -525,7 +630,11 @@ fn integer_operation(instruction: Instruction) -> Option<(IntegerOperation, u8)>
 
 fn compile(vm: &VirtualMachine, unit: &Unit) -> Option<Rc<MachineCode>> {
     let compiled_in = epoch();
-    let (steps, slot_reads) = plan(vm, unit);
+    let (mut steps, slot_reads) = plan(vm, unit);
+    if !steps.iter().any(Planned::runs_itself) {
+        return None;
+    }
+    let fused = fuse(&mut steps);
     let mut emitted = emit(&steps)?;
     let region = memory::Region::reserve(emitted.bytes.len())?;
     let entry = SHARED.with(|shared| {
@@ -545,6 +654,7 @@ fn compile(vm: &VirtualMachine, unit: &Unit) -> Option<Rc<MachineCode>> {
         epoch: compiled_in,
         broken: Cell::new(false),
         slot_reads,
+        fused,
         collection_due: crate::object::live::due_flag(),
     }))
 }
@@ -645,6 +755,9 @@ fn plan(vm: &VirtualMachine, unit: &Unit) -> (Vec<Planned>, Vec<Option<SlotRead>
                 Instruction::GetIdentifier { .. } => {
                     Action::Call(Callee::Helper(Helper::GetIdentifier))
                 }
+                Instruction::CallResolved { .. } => {
+                    Action::Call(Callee::Helper(Helper::CallResolved))
+                }
                 Instruction::Checkpoint => Action::Call(Callee::Helper(Helper::Checkpoint)),
                 Instruction::GetInstanceVariable { to, name }
                     if !seen_others
@@ -680,6 +793,57 @@ fn plan(vm: &VirtualMachine, unit: &Unit) -> (Vec<Planned>, Vec<Option<SlotRead>
         })
         .collect();
     (steps, slot_reads)
+}
+
+/// What a run of calls may call for an instruction after its first.
+fn fusable(callee: Callee) -> bool {
+    !matches!(
+        callee,
+        Callee::Helper(Helper::StartStatement | Helper::ReadSlot | Helper::RunThrough)
+    )
+}
+
+/// Turn each run of two or more instructions that machine code would call
+/// into Rust for, one after another, into one call of `Helper::RunThrough`.
+/// An instruction after the first in a run starts no statement, unless
+/// `step` starts it.
+fn fuse(steps: &mut [Planned]) -> Vec<Option<Fused>> {
+    let callee = |planned: &Planned| match planned.action {
+        Action::Step => Some(Callee::Step),
+        Action::Call(callee) if fusable(callee) => Some(callee),
+        _ => None,
+    };
+    let mut fused = vec![None; steps.len()];
+    let mut first = 0;
+    while first < steps.len() {
+        if callee(&steps[first]).is_none() {
+            first += 1;
+            continue;
+        }
+        let mut end = first + 1;
+        while end < steps.len()
+            && let Some(next) = callee(&steps[end])
+            && (next == Callee::Step || !steps[end].start.starts())
+        {
+            end += 1;
+        }
+        if end - first >= 2 {
+            for at in first..end {
+                let callee = callee(&steps[at]).expect("a run holds calls");
+                fused[at] = Some(Fused { callee, end });
+                steps[at].action = if at == first {
+                    Action::Call(Callee::Helper(Helper::RunThrough))
+                } else {
+                    Action::Inside { end }
+                };
+                if callee == Callee::Step {
+                    steps[at].start = Start::None;
+                }
+            }
+        }
+        first = end;
+    }
+    fused
 }
 
 /// Where an operand comes from, when it is a register or an Integer
@@ -779,6 +943,7 @@ pub(crate) enum Ran {
 }
 
 /// Run `run` through `code` from the instruction at `start`.
+#[inline(always)]
 pub(crate) fn run(
     vm: &mut VirtualMachine,
     code: &MachineCode,
@@ -929,8 +1094,37 @@ extern "C" fn get_identifier(context: *mut Context, at: u32) -> u64 {
     })
 }
 
+extern "C" fn call_resolved(context: *mut Context, at: u32) -> u64 {
+    hand_back(context, at, |vm, run, _, at| vm.step_call_resolved(run, at))
+}
+
 extern "C" fn checkpoint(context: *mut Context, at: u32) -> u64 {
     hand_back(context, at, |vm, run, _, at| vm.step_checkpoint(run, at))
+}
+
+extern "C" fn run_through(context: *mut Context, at: u32) -> u64 {
+    hand_back(context, at, |vm, run, code, mut at| {
+        loop {
+            let fused = code.fused[at].expect("a run of calls is planned with what it calls");
+            let next = match fused.callee {
+                Callee::Step => vm.step(run, at, false),
+                Callee::RunInstruction => vm.step_instruction(run, at),
+                Callee::Helper(Helper::GetLocal) => vm.step_get_local(run, at),
+                Callee::Helper(Helper::SetLocal) => vm.step_set_local(run, at),
+                Callee::Helper(Helper::Unhoist) => vm.step_unhoist(run, at),
+                Callee::Helper(Helper::GetIdentifier) => vm.step_get_identifier(run, at),
+                Callee::Helper(Helper::CallResolved) => vm.step_call_resolved(run, at),
+                Callee::Helper(Helper::Checkpoint) => vm.step_checkpoint(run, at),
+                Callee::Helper(Helper::StartStatement | Helper::ReadSlot | Helper::RunThrough) => {
+                    unreachable!("a run of calls holds none of these")
+                }
+            }?;
+            match next {
+                Next::Step if at + 1 < fused.end => at += 1,
+                next => return Ok(next),
+            }
+        }
+    })
 }
 
 /// Read an instance variable from the slot its site saw, when `self` still

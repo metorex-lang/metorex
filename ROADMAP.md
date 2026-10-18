@@ -102,7 +102,7 @@ These start once the tree walker is removed.
 Each is run with `ruby benchmarks/compare.rb` on one machine, and the README's speed section records the table.
 
 - [x] Cycle collection: `cycles` with a peak memory within 10% of `no_cycles`
-- [ ] Bytecode baseline: the table on bytecode beside CRuby 4.0.6 with and without `--yjit`
-- [ ] Speed in the interpreter: the table after each of its items, against the bytecode baseline, by time and peak memory
+- [x] Bytecode baseline: the table on bytecode beside CRuby 4.0.6 with and without `--yjit`
+- [x] Speed in the interpreter: the table after each of its items, against the bytecode baseline, by time and peak memory
 - [x] Startup: `empty` starts no slower than CRuby's
 - [ ] JIT: faster than the interpreter on every benchmark, with the table showing Metorex beside CRuby with `--yjit` on each

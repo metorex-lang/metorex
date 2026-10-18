@@ -478,7 +478,16 @@ pub(super) fn emit(steps: &[Planned]) -> Option<Emitted> {
 
     let mut starts = Vec::with_capacity(steps.len() + 1);
     for (at, planned) in steps.iter().enumerate() {
-        starts.push(code.hot.len());
+        if let Action::Inside { end } = planned.action {
+            // Reached only by a jump, which runs the rest of the run.
+            let was = std::mem::replace(&mut code.writing_cold, true);
+            starts.push(code.here());
+            code.call(at, Callee::Helper(Helper::RunThrough));
+            code.jump(Label::Instruction(end));
+            code.writing_cold = was;
+            continue;
+        }
+        starts.push(code.here());
         let starts_statement = planned.start.starts();
         let inline_start = matches!(planned.start, Start::Inline { .. })
             && !matches!(planned.action, Action::Step);
@@ -526,10 +535,11 @@ pub(super) fn emit(steps: &[Planned]) -> Option<Emitted> {
                     code.check_epoch(at);
                 }
             }
+            Action::Inside { .. } => unreachable!("laid out before the usual path"),
         }
     }
     // Past the last instruction, which always finishes the unit: ud2.
-    starts.push(code.hot.len());
+    starts.push(code.here());
     code.bytes(&[0x0F, 0x0B]);
     code.place_starts();
 
@@ -547,7 +557,7 @@ pub(super) fn emit(steps: &[Planned]) -> Option<Emitted> {
     for (at, label) in &code.fixups {
         let at = absolute(*at);
         let target = match *label {
-            Label::Instruction(index) => starts[index],
+            Label::Instruction(index) => absolute(starts[index]),
             Label::Local(number) => absolute(code.locals[number].expect("a label is placed")),
             Label::Shared(to) => {
                 links.push(Link {
@@ -565,7 +575,7 @@ pub(super) fn emit(steps: &[Planned]) -> Option<Emitted> {
     let table_offset = bytes.len().next_multiple_of(4);
     bytes.resize(table_offset, 0xCC);
     for start in &starts[..steps.len()] {
-        let offset = *start as i64 - table_offset as i64;
+        let offset = absolute(*start) as i64 - table_offset as i64;
         bytes.extend_from_slice(&(offset as i32).to_le_bytes());
     }
     Some(Emitted {

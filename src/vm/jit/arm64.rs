@@ -616,7 +616,16 @@ pub(super) fn emit(steps: &[Planned]) -> Option<Emitted> {
     );
     let mut starts = Vec::with_capacity(steps.len() + 1);
     for (at, planned) in steps.iter().enumerate() {
-        starts.push(code.hot.len());
+        if let Action::Inside { end } = planned.action {
+            // Reached only by a jump, which runs the rest of the run.
+            let was = std::mem::replace(&mut code.writing_cold, true);
+            starts.push(code.here());
+            code.call(at, Callee::Helper(Helper::RunThrough));
+            code.jump(Label::Instruction(end));
+            code.writing_cold = was;
+            continue;
+        }
+        starts.push(code.here());
         let starts_statement = planned.start.starts();
         let inline_start = matches!(planned.start, Start::Inline { .. })
             && !matches!(planned.action, Action::Step);
@@ -662,10 +671,11 @@ pub(super) fn emit(steps: &[Planned]) -> Option<Emitted> {
                     code.check_epoch(at);
                 }
             }
+            Action::Inside { .. } => unreachable!("laid out before the usual path"),
         }
     }
     // Past the last instruction, which always finishes the unit: brk #0.
-    starts.push(code.hot.len());
+    starts.push(code.here());
     code.word(0xD420_0000);
     code.place_starts();
     code.place_veneers();
@@ -684,7 +694,7 @@ pub(super) fn emit(steps: &[Planned]) -> Option<Emitted> {
     for (at, label, kind) in &code.fixups {
         let at = absolute(*at);
         let target = match *label {
-            Label::Instruction(index) => starts[index],
+            Label::Instruction(index) => absolute(starts[index]),
             Label::Local(number) => absolute(code.locals[number].expect("a label is placed")),
             Label::Shared(to) => {
                 links.push(Link {
@@ -701,7 +711,7 @@ pub(super) fn emit(steps: &[Planned]) -> Option<Emitted> {
     let table_offset = words.len() * 4;
     let mut bytes: Vec<u8> = words.iter().flat_map(|word| word.to_le_bytes()).collect();
     for start in &starts[..steps.len()] {
-        let offset = (start * 4) as i64 - table_offset as i64;
+        let offset = (absolute(*start) * 4) as i64 - table_offset as i64;
         bytes.extend_from_slice(&(offset as i32).to_le_bytes());
     }
     Some(Emitted {

@@ -56,8 +56,8 @@ impl Class {
     /// Mark a method name as private on this class, clearing any earlier
     /// `public :name` override so the newer declaration wins.
     pub fn set_method_private(&self, name: impl Into<String>) {
-        super::methods::method_state_changed();
         let name = name.into();
+        super::methods::method_named_changed(&name);
         self.public_overrides.borrow_mut().remove(&name);
         self.protected_method_names.borrow_mut().remove(&name);
         self.private_method_names.borrow_mut().insert(name);
@@ -66,8 +66,8 @@ impl Class {
     /// Mark a method name as protected on this class, clearing any earlier
     /// `public :name` override so the newer declaration wins.
     pub fn set_method_protected(&self, name: impl Into<String>) {
-        super::methods::method_state_changed();
         let name = name.into();
+        super::methods::method_named_changed(&name);
         self.public_overrides.borrow_mut().remove(&name);
         self.private_method_names.borrow_mut().remove(&name);
         self.protected_method_names.borrow_mut().insert(name);
@@ -117,7 +117,7 @@ impl Class {
     /// Drop any visibility marking for `name`, which is what redefining a
     /// method does when the enclosing body's default visibility is public.
     pub fn clear_method_visibility(&self, name: &str) {
-        super::methods::method_state_changed();
+        super::methods::method_named_changed(name);
         self.private_method_names.borrow_mut().remove(name);
         self.protected_method_names.borrow_mut().remove(name);
     }
@@ -132,7 +132,7 @@ impl Class {
     /// records an explicit public override so an inherited private status is
     /// shadowed).
     pub fn set_method_public(&self, name: &str) {
-        super::methods::method_state_changed();
+        super::methods::method_named_changed(name);
         self.private_method_names.borrow_mut().remove(name);
         self.protected_method_names.borrow_mut().remove(name);
         self.public_overrides.borrow_mut().insert(name.to_string());
