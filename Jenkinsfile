@@ -244,9 +244,13 @@ pipeline {
           yaml buildPod('risa', '4', '8')
         }
       }
+      // One spec file per CPU the pod may use. change_spec.rb takes about
+      // 40 seconds on a debug build with a CPU to itself, so a file is
+      // stopped only well past that.
       environment {
         CARGO_TARGET_DIR = '/cache/target-rspec'
-        JOBS = '10'
+        JOBS = '8'
+        FILE_TIMEOUT = '900'
       }
       steps {
         catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
