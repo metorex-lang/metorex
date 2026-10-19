@@ -43,7 +43,7 @@ normalized() {
     -e 's/:[0-9]{9,}>/:ID>/g' \
     -e 's/[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)? [-+][0-9]{4}/TIME/g' \
     -e 's/XXXXXX\.[A-Za-z0-9]{1,10}/XXXXXX.WORK/g' \
-    -e 's/metorex_rspec_suites\.[A-Za-z0-9]{6}\//metorex_rspec_suites.XXXXXX.WORK\//g' \
+    -e 's/metorex_rspec_suites\.[A-Za-z0-9]{6}(\\?\/)/metorex_rspec_suites.XXXXXX.WORK\1/g' \
     -e 's/, fast_paths: false//g' \
     -e 's#/([a-z]+)[0-9]+-[0-9]+/#/\1TMP/#g' \
     -e 's#/stderr[0-9]+-[0-9]+#/stderrTMP#g' \
