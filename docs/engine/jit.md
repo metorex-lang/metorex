@@ -18,8 +18,8 @@
   - Integer `+`, `-`, `*`, `%`, and the six comparisons, when the operands
     the interpreter saw there were all Integers
 - `GetLocal`, `SetLocal`, `Unhoist`, `GetIdentifier`, `CallResolved`,
-  `Checkpoint`, and an instance variable read from the shape its site saw
-  each call a Rust function for that instruction alone. Every other
+  `Checkpoint`, an instance variable read from the shape its site saw, and
+  an instance variable write each call a Rust function for that instruction alone. Every other
   instruction calls `run_instruction`, which runs it as the interpreter
   does. A heap value in the way of an inline one, such as a register to
   overwrite that holds one, leaves the instruction to `run_instruction`
@@ -32,9 +32,14 @@
   state are as they were, and `self` is an instance with no singleton
   class or methods of its own while no refinement is active, the next read
   calls that method without the interpreter's scope and method lookups.
-  Any other read is the interpreter's, and a site whose reads turn out
-  otherwise four times, as one that reads a local does, leaves every later
-  read to it.
+  The scope may be a block's too, with `self` read from the root scope
+  when the block binds none. A name bound to the method a `def` made, as a
+  `def` at the top level binds its name and a block captures it, is called
+  on `self` while the binding holds that method and the method state is as
+  it was when the class the `def` defined it in, or Object, held it under
+  that name. Any other read is the interpreter's, and a site whose reads
+  turn out otherwise four times, as one that reads a local does, leaves
+  every later read to it.
 - A `Call` written with a receiver, rather than sent with `send`, calls a
   Rust function that keeps, for the class of the values it was made on,
   whether the interpreter's lookup would end at the value's native method:
@@ -44,6 +49,15 @@
   with no singleton class, no refinement is active, and the method state
   is as it was, the call goes straight to the native method. One that has
   no answer, and every other call, goes through the interpreter's lookup.
+  A site made on four values that are none of these is compiled as the
+  interpreter's call from the next run of its unit on, so a unit with
+  nothing else machine code runs itself is left to the interpreter.
+- A `SetInstanceVariable` keeps the shape it found `self` with, the shape
+  the write left it with, and the slot it wrote. While `self` is an
+  instance that is not frozen and has that first shape, and the name does
+  not start with `__`, the value goes into the slot, or into a new last
+  slot as the object moves to the second shape. Every other write is the
+  interpreter's.
 - Two or more instructions in a row that would each call into Rust are
   one call, which runs them in turn. A jump to one after the first enters
   that call from there.
@@ -60,11 +74,12 @@
   shares, written once, so a unit's code is its instructions.
 - Each unit has its own threshold of runs before it is compiled: 30 times
   its instructions over those of them machine code runs itself, counting a
-  `GetIdentifier` of a name that may call a method and a `Call` written with
-  a receiver, so a unit of Integer operations and branches is compiled after
+  `GetIdentifier` of a name that may call a method, a `Call` written with
+  a receiver, and an instance variable write, so a unit of Integer operations and branches is compiled after
   30 runs and one of mostly calls into Rust waits longer. A unit whose
   machine code would run none of its instructions itself, reads no name that
-  may call a method, and makes no call written with a receiver, only calls
+  may call a method, makes no call written with a receiver, and writes no
+  instance variable, only calls
   into Rust and its `Return`, is left to the interpreter, since entering
   machine code and leaving it again takes longer than the interpreter takes
   to dispatch them.

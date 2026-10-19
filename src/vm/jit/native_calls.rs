@@ -9,15 +9,29 @@ use crate::class::{Class, method_state};
 use crate::object::{Object, View};
 use crate::vm::VirtualMachine;
 use crate::vm::bytecode_runner::UnitRun;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
 /// The class of the values one `Call` was found to call natively, and the
-/// one it was found not to, each with the method state it was found under.
+/// one it was found not to, each with the method state it was found under,
+/// and how many times the call was made on a value that is no built-in one.
 #[derive(Default)]
 pub(super) struct NativeCallSite {
     answered: RefCell<Option<(Weak<Class>, u64)>>,
     refused: RefCell<Option<(Weak<Class>, u64)>>,
+    made_otherwise: Cell<u8>,
+}
+
+/// How many calls a site makes on values that are no built-in ones before
+/// the unit is compiled again with the site left to the interpreter.
+const CALLS_OTHERWISE_BEFORE_GIVING_UP: u8 = 4;
+
+impl NativeCallSite {
+    /// Whether the site has made enough calls on other values to be left to
+    /// the interpreter.
+    pub(super) fn gave_up(&self) -> bool {
+        self.made_otherwise.get() >= CALLS_OTHERWISE_BEFORE_GIVING_UP
+    }
 }
 
 fn holds(kept: &RefCell<Option<(Weak<Class>, u64)>>, class: &Rc<Class>, state: u64) -> bool {
@@ -71,6 +85,8 @@ impl VirtualMachine {
             || self.any_refinement_active()
             || self.existing_singleton_class(&receiver).is_some()
         {
+            site.made_otherwise
+                .set(site.made_otherwise.get().saturating_add(1));
             return None;
         }
         let class = self.builtins().class_of(&receiver);

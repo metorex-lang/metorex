@@ -141,6 +141,31 @@ fn machine_code_calls_what_a_built_in_value_answers_after_a_method_of_its_name_i
 }
 
 #[test]
+fn machine_code_calls_what_a_top_level_definition_names_after_it_is_redefined() {
+    let (interpreted, compiled) = interpreted_and_compiled("top_level_bare_calls");
+    assert_eq!(interpreted, "60\n60\n[2]\n");
+    assert_eq!(compiled, interpreted);
+}
+
+#[test]
+fn machine_code_writes_instance_variables_as_the_interpreter_does_whatever_the_shape() {
+    let (interpreted, compiled) = interpreted_and_compiled("slot_writes");
+    assert_eq!(
+        interpreted,
+        "[[38, -38, nil], [39, -39, :odd]]\n[[-38, 38, nil], [-39, 39, :odd]]\n\
+         [:@left, :@right]\n[:@left, :@right, :@__seen]\nFrozenError\n[1, 2, nil]\n"
+    );
+    assert_eq!(compiled, interpreted);
+}
+
+#[test]
+fn machine_code_leaves_calls_on_other_values_to_the_interpreter_once_a_site_gives_up() {
+    let (interpreted, compiled) = interpreted_and_compiled("given_up_calls");
+    assert_eq!(interpreted, "[\"box\"]\n\"39\"\n[Object]\n70\n");
+    assert_eq!(compiled, interpreted);
+}
+
+#[test]
 fn an_integer_operand_that_turns_out_otherwise_returns_the_run_to_the_interpreter() {
     let (_, report) = run_example("jit/integer_operands.rb", &EVERY_UNIT);
     assert!(returns_to_the_interpreter(&report) > 0);

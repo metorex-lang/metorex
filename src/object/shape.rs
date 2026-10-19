@@ -140,6 +140,18 @@ impl InstanceVariables {
         &self.slots[slot]
     }
 
+    /// Add `value` in a new last slot, where `shape`, the shape this one
+    /// leads to by the name the slot holds, names it.
+    pub fn push_into_shape(&mut self, shape: Rc<Shape>, value: Object) {
+        debug_assert!(
+            shape.names.len() == self.slots.len() + 1
+                && shape.names[..self.slots.len()] == self.shape.names[..],
+            "a shape one name past the object's own"
+        );
+        self.shape = shape;
+        self.slots.push(value);
+    }
+
     /// Replace the value in `slot`, which the shape names.
     pub fn set_slot(&mut self, slot: usize, value: Object) {
         self.slots[slot] = value;

@@ -21,6 +21,7 @@
 mod bare_calls;
 mod memory;
 mod native_calls;
+mod slot_writes;
 
 #[cfg(target_arch = "aarch64")]
 mod arm64;
@@ -179,18 +180,23 @@ pub(crate) struct MachineCode {
     /// Set once a check found an assumption broken, so the unit is
     /// compiled again rather than run through this code.
     broken: Cell<bool>,
-    /// For each instance variable read run from its shape, the shape and
-    /// slot, by instruction.
-    slot_reads: Vec<Option<SlotRead>>,
     /// For each instruction in a run of calls `Helper::RunThrough` makes,
     /// what it calls for that instruction and where the run ends.
-    fused: Vec<Option<Fused>>,
-    /// For each instruction, what it called last when it is a
-    /// `GetIdentifier` that called a method on `self`.
+    fused: Box<[Option<Fused>]>,
+    /// For each instruction that keeps what it found in one of the tables
+    /// below, where in that table it keeps it.
+    site_of: Box<[u32]>,
+    /// The shape and slot of each instance variable read run from its
+    /// shape.
+    slot_reads: Box<[SlotRead]>,
+    /// What each `GetIdentifier` that may call a method on `self` called
+    /// last.
     bare_calls: Box<[bare_calls::BareCallSite]>,
-    /// For each instruction, the class it calls natively for when it is a
-    /// `Call` on a built-in value.
+    /// The class each `Call` that may reach a native method calls natively
+    /// for.
     native_calls: Box<[native_calls::NativeCallSite]>,
+    /// The shapes and slot each `SetInstanceVariable` wrote last.
+    slot_writes: Box<[slot_writes::SlotWriteSite]>,
     /// The source encoding the Symbols the code loads itself were made
     /// under, when it loads any. The code runs only while that encoding is
     /// the current one.
@@ -204,7 +210,7 @@ pub(crate) struct MachineCode {
 #[derive(Clone, Copy)]
 struct Fused {
     callee: Callee,
-    end: usize,
+    end: u32,
 }
 
 #[derive(Clone, Copy)]
@@ -312,6 +318,7 @@ fn runs_in_machine_code(unit: &Unit, instruction: Instruction) -> bool {
             | Instruction::Move { .. }
             | Instruction::CoverBranch { .. }
             | Instruction::GetInstanceVariable { .. }
+            | Instruction::SetInstanceVariable { .. }
     ) || integer_operation(instruction).is_some()
 }
 
@@ -390,13 +397,15 @@ enum Helper {
     CallResolved,
     Checkpoint,
     ReadSlot,
+    /// A `SetInstanceVariable`, written into its slot of `self`.
+    WriteSlot,
     /// Run the instructions from the one given to the end of the run of
     /// calls it is in, as `MachineCode::fused` records them.
     RunThrough,
 }
 
 impl Helper {
-    const ALL: [Helper; 11] = [
+    const ALL: [Helper; 12] = [
         Helper::StartStatement,
         Helper::GetLocal,
         Helper::SetLocal,
@@ -407,6 +416,7 @@ impl Helper {
         Helper::CallResolved,
         Helper::Checkpoint,
         Helper::ReadSlot,
+        Helper::WriteSlot,
         Helper::RunThrough,
     ];
 
@@ -422,6 +432,7 @@ impl Helper {
             Helper::CallResolved => call_resolved,
             Helper::Checkpoint => checkpoint,
             Helper::ReadSlot => read_slot,
+            Helper::WriteSlot => write_slot,
             Helper::RunThrough => run_through,
         }
     }
@@ -502,7 +513,9 @@ impl Planned {
             Action::Call(callee) => {
                 matches!(
                     callee,
-                    Callee::Helper(Helper::ReadSlot | Helper::BareName | Helper::Call)
+                    Callee::Helper(
+                        Helper::ReadSlot | Helper::WriteSlot | Helper::BareName | Helper::Call
+                    )
                 )
             }
             Action::Step | Action::Return { .. } | Action::Inside { .. } => false,
@@ -686,6 +699,7 @@ fn compile(vm: &VirtualMachine, unit: &Unit) -> Option<Rc<MachineCode>> {
     if !steps.iter().any(Planned::runs_itself) {
         return None;
     }
+    let sites = Sites::of(&steps, slot_reads);
     let fused = fuse(&mut steps);
     let mut emitted = emit(&steps)?;
     let region = memory::Region::reserve(emitted.bytes.len())?;
@@ -705,17 +719,61 @@ fn compile(vm: &VirtualMachine, unit: &Unit) -> Option<Rc<MachineCode>> {
         table_offset: emitted.table_offset,
         epoch: compiled_in,
         broken: Cell::new(false),
-        slot_reads,
         fused,
-        bare_calls: (0..unit.instructions.len())
+        site_of: sites.site_of,
+        slot_reads: sites.slot_reads,
+        bare_calls: (0..sites.bare_calls).map(|_| Default::default()).collect(),
+        native_calls: (0..sites.native_calls)
             .map(|_| Default::default())
             .collect(),
-        native_calls: (0..unit.instructions.len())
-            .map(|_| Default::default())
-            .collect(),
+        slot_writes: (0..sites.slot_writes).map(|_| Default::default()).collect(),
         symbols_made_under: loads_symbols.then(|| vm.current_source_encoding.clone()),
         collection_due: crate::object::live::due_flag(),
     }))
+}
+
+/// Where each instruction that keeps what it found keeps it, and how many
+/// of each kind there are.
+struct Sites {
+    site_of: Box<[u32]>,
+    slot_reads: Box<[SlotRead]>,
+    bare_calls: usize,
+    native_calls: usize,
+    slot_writes: usize,
+}
+
+impl Sites {
+    fn of(steps: &[Planned], reads: Vec<Option<SlotRead>>) -> Sites {
+        let mut sites = Sites {
+            site_of: vec![u32::MAX; steps.len()].into_boxed_slice(),
+            slot_reads: reads.iter().flatten().copied().collect(),
+            bare_calls: 0,
+            native_calls: 0,
+            slot_writes: 0,
+        };
+        let mut slot_reads = 0;
+        for (at, step) in steps.iter().enumerate() {
+            let Action::Call(Callee::Helper(helper)) = step.action else {
+                continue;
+            };
+            let count = match helper {
+                Helper::ReadSlot => &mut slot_reads,
+                Helper::BareName => &mut sites.bare_calls,
+                Helper::Call => &mut sites.native_calls,
+                Helper::WriteSlot => &mut sites.slot_writes,
+                _ => continue,
+            };
+            sites.site_of[at] = *count as u32;
+            *count += 1;
+        }
+        sites
+    }
+}
+
+impl MachineCode {
+    fn site(&self, at: usize) -> usize {
+        self.site_of[at] as usize
+    }
 }
 
 /// How each instruction of `unit` runs in machine code, and which
@@ -826,13 +884,16 @@ fn plan(vm: &VirtualMachine, unit: &Unit) -> (Vec<Planned>, Vec<Option<SlotRead>
                 Instruction::GetIdentifier { .. } => {
                     Action::Call(Callee::Helper(Helper::GetIdentifier))
                 }
-                Instruction::Call { site, .. } if may_call_natively(unit, site) => {
+                Instruction::Call { site, .. } if !seen_others && may_call_natively(unit, site) => {
                     Action::Call(Callee::Helper(Helper::Call))
                 }
                 Instruction::CallResolved { .. } => {
                     Action::Call(Callee::Helper(Helper::CallResolved))
                 }
                 Instruction::Checkpoint => Action::Call(Callee::Helper(Helper::Checkpoint)),
+                Instruction::SetInstanceVariable { .. } => {
+                    Action::Call(Callee::Helper(Helper::WriteSlot))
+                }
                 Instruction::GetInstanceVariable { to, name }
                     if !seen_others
                         && let Some((shape, slot)) = unit.slot_caches[usize::from(name)].seen() =>
@@ -889,7 +950,7 @@ fn fusable(callee: Callee) -> bool {
 /// into Rust for, one after another, into one call of `Helper::RunThrough`.
 /// An instruction after the first in a run starts no statement, unless
 /// `step` starts it.
-fn fuse(steps: &mut [Planned]) -> Vec<Option<Fused>> {
+fn fuse(steps: &mut [Planned]) -> Box<[Option<Fused>]> {
     let callee = |planned: &Planned| match planned.action {
         Action::Step => Some(Callee::Step),
         Action::Call(callee) if fusable(callee) => Some(callee),
@@ -912,7 +973,10 @@ fn fuse(steps: &mut [Planned]) -> Vec<Option<Fused>> {
         if end - first >= 2 {
             for at in first..end {
                 let callee = callee(&steps[at]).expect("a run holds calls");
-                fused[at] = Some(Fused { callee, end });
+                fused[at] = Some(Fused {
+                    callee,
+                    end: end as u32,
+                });
                 steps[at].action = if at == first {
                     Action::Call(Callee::Helper(Helper::RunThrough))
                 } else {
@@ -925,7 +989,7 @@ fn fuse(steps: &mut [Planned]) -> Vec<Option<Fused>> {
         }
         first = end;
     }
-    fused
+    fused.into_boxed_slice()
 }
 
 /// Where an operand comes from, when it is a register or an Integer
@@ -1188,10 +1252,23 @@ fn make_call(
     code: &MachineCode,
     at: usize,
 ) -> Result<Next, MetorexError> {
-    match vm.native_call_class(&code.native_calls[at], run, at) {
+    let site = &code.native_calls[code.site(at)];
+    match vm.native_call_class(site, run, at) {
         Some(class) => vm.step_native_call(run, at, &class),
-        None => vm.step_instruction(run, at),
+        None => {
+            if site.gave_up() {
+                leave_to_interpreter(code, run, at);
+            }
+            vm.step_instruction(run, at)
+        }
     }
+}
+
+/// Plan the instruction at `at` as the interpreter runs it from the next
+/// compilation of the unit on, and compile it again at its next run.
+fn leave_to_interpreter(code: &MachineCode, run: &UnitRun, at: usize) {
+    mark_seen(run.unit(), at, SEEN_OTHERS);
+    code.broken.set(true);
 }
 
 extern "C" fn bare_name(context: *mut Context, at: u32) -> u64 {
@@ -1206,7 +1283,7 @@ fn read_bare_name(
     code: &MachineCode,
     at: usize,
 ) -> Result<Next, MetorexError> {
-    match vm.step_bare_call(&code.bare_calls[at], run, at) {
+    match vm.step_bare_call(&code.bare_calls[code.site(at)], run, at) {
         Some(ran) => ran,
         None => vm.step_get_identifier(run, at),
     }
@@ -1235,16 +1312,35 @@ extern "C" fn run_through(context: *mut Context, at: u32) -> u64 {
                 Callee::Helper(Helper::Call) => make_call(vm, run, code, at),
                 Callee::Helper(Helper::CallResolved) => vm.step_call_resolved(run, at),
                 Callee::Helper(Helper::Checkpoint) => vm.step_checkpoint(run, at),
+                Callee::Helper(Helper::WriteSlot) => write_slot_or_step(vm, run, code, at),
                 Callee::Helper(Helper::StartStatement | Helper::ReadSlot | Helper::RunThrough) => {
                     unreachable!("a run of calls holds none of these")
                 }
             }?;
             match next {
-                Next::Step if at + 1 < fused.end => at += 1,
+                Next::Step if at + 1 < fused.end as usize => at += 1,
                 next => return Ok(next),
             }
         }
     })
+}
+
+extern "C" fn write_slot(context: *mut Context, at: u32) -> u64 {
+    hand_back(context, at, write_slot_or_step)
+}
+
+/// Run the `SetInstanceVariable` at `at` as a write into the slot of
+/// `self` its site found last, or as the interpreter does.
+fn write_slot_or_step(
+    vm: &mut VirtualMachine,
+    run: &mut UnitRun,
+    code: &MachineCode,
+    at: usize,
+) -> Result<Next, MetorexError> {
+    if vm.write_slot_through(&code.slot_writes[code.site(at)], run, at) {
+        return Ok(Next::Step);
+    }
+    vm.step_instruction(run, at)
 }
 
 /// Read an instance variable from the slot its site saw, when `self` still
@@ -1253,7 +1349,7 @@ extern "C" fn run_through(context: *mut Context, at: u32) -> u64 {
 extern "C" fn read_slot(context: *mut Context, at: u32) -> u64 {
     let deoptimize = std::cell::Cell::new(false);
     let answer = hand_back(context, at, |vm, run, code, at| {
-        let read = code.slot_reads[at].expect("a slot read is planned with its shape");
+        let read = code.slot_reads[code.site(at)];
         match vm.read_slot_of_shape(read.shape, read.slot) {
             Some(value) => run.set_register(read.to, value),
             None => {

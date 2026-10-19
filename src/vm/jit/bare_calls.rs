@@ -1,25 +1,28 @@
 //! A bare name machine code reads with `GetIdentifier` that called a method
 //! of the program's own on `self` the last time is called the same way
 //! again, without the scope and method lookups the interpreter makes, while
-//! nothing those lookups read has changed.
+//! nothing those lookups read has changed. A name bound to the method a
+//! `def` made, as a `def` at the top level binds its name, is called on
+//! `self` while the binding holds that method and the class it was defined
+//! in still holds it too.
 
 use crate::bytecode::instruction::Instruction;
 use crate::class::{Class, method_state};
 use crate::error::MetorexError;
-use crate::object::{Method, Object};
+use crate::object::{Method, Object, OptionView, View};
 use crate::scope::Scope;
 use crate::vm::VirtualMachine;
 use crate::vm::bytecode_runner::{Next, UnitRun};
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
-/// What one `GetIdentifier` called last, the state a lookup there last
-/// found no such call under, and how many times it found the name read
-/// somewhere other than a method's own scope or `self` not an object its
-/// class alone decides the calls of.
+/// What one `GetIdentifier` called last, the definition it found its name
+/// bound to, the state a lookup there last found no such call under, and
+/// how many times it found the name read some other way.
 #[derive(Default)]
 pub(super) struct BareCallSite {
     found: RefCell<Option<BareCall>>,
+    defined: RefCell<Option<(Weak<Method>, u64)>>,
     refused_under: Cell<Option<(u64, u64)>>,
     read_otherwise: Cell<u8>,
 }
@@ -42,6 +45,12 @@ struct BareCall {
 }
 
 impl BareCallSite {
+    /// Whether the site has found the name read otherwise often enough to
+    /// be left to the interpreter.
+    fn gave_up(&self) -> bool {
+        self.read_otherwise.get() >= READS_OTHERWISE_BEFORE_GIVING_UP
+    }
+
     fn kept(
         &self,
         class: &Rc<Class>,
@@ -60,15 +69,19 @@ impl BareCallSite {
         }
         Some((call.called_on.upgrade()?, call.method.upgrade()?))
     }
+
+    fn note_read_otherwise(&self) {
+        self.read_otherwise.set(self.read_otherwise.get() + 1);
+    }
 }
 
 impl VirtualMachine {
-    /// Run the `GetIdentifier` at `at` as a call of the method `site` holds,
-    /// or of the one a lookup finds and `site` then holds, when the name is
-    /// read in a method's own scope, which neither binds it nor reads
-    /// through anything but the root scope, which does not bind it either,
-    /// and `self` is an object its class alone decides the calls of. Any
-    /// other read is left to the interpreter's, which None stands for.
+    /// Run the `GetIdentifier` at `at` as a call of the method its name is
+    /// bound to by a `def`, or of the method `site` holds or a lookup finds
+    /// and `site` then holds, when the name is bound nowhere and is read in
+    /// a scope that reads through the root scope alone, and `self` is an
+    /// object its class alone decides the calls of. Any other read is left
+    /// to the interpreter's, which None stands for.
     pub(super) fn step_bare_call(
         &mut self,
         site: &BareCallSite,
@@ -80,18 +93,90 @@ impl VirtualMachine {
             return None;
         };
         let name = &unit.names[usize::from(name)].text;
-        if site.read_otherwise.get() >= READS_OTHERWISE_BEFORE_GIVING_UP {
+        if site.gave_up() {
             return None;
         }
-        let read_otherwise = || {
-            site.read_otherwise.set(site.read_otherwise.get() + 1);
-            None
+        let position = unit.positions[at];
+        let (called_on, method, receiver) = match self.environment().get(name) {
+            Some(held) => {
+                let Some(method) = self.definition_bound(site, name, &held) else {
+                    site.note_read_otherwise();
+                    return None;
+                };
+                let receiver = self.eval_self(position).unwrap_or(Object::Nil);
+                (self.builtins().class_of(&receiver), method, receiver)
+            }
+            None => {
+                let (called_on, method, receiver) = self.method_on_self(site, name)?;
+                (called_on, method, receiver)
+            }
         };
-        let Some((receiver, root)) = self.method_scope_without(name) else {
-            return read_otherwise();
+        let ran = self
+            .invoke_method(called_on, method, receiver, Vec::new(), position)
+            .map(|value| {
+                run.set_register(usize::from(to), value);
+                Next::Step
+            });
+        Some(self.settle_instruction(run, at, ran))
+    }
+
+    /// The method `held`, the value `name` is bound to, when a `def` bound
+    /// it there, as `name_is_a_definition` decides: the class it was
+    /// defined in, or Object, still holds it under that name, which the
+    /// method state alone decides, so `site` keeps the answer under it.
+    fn definition_bound(
+        &self,
+        site: &BareCallSite,
+        name: &str,
+        held: &Object,
+    ) -> Option<Rc<Method>> {
+        let View::Method(method) = held.view() else {
+            return None;
+        };
+        let state = method_state();
+        let kept = site.defined.borrow().as_ref().is_some_and(|(kept, under)| {
+            *under == state && std::ptr::eq(kept.as_ptr(), Rc::as_ptr(method))
+        });
+        if !kept {
+            if method.name != name || method.receiver.is_some() {
+                return None;
+            }
+            let installed = |owner: &Rc<Class>| {
+                owner
+                    .find_own_method(name)
+                    .is_some_and(|found| Rc::ptr_eq(&found, method))
+            };
+            let object_holds = || match self.globals().get("Object").view() {
+                Some(View::Class(object)) => installed(object),
+                _ => false,
+            };
+            if !method.definee.as_ref().is_some_and(installed) && !object_holds() {
+                return None;
+            }
+            *site.defined.borrow_mut() = Some((Rc::downgrade(method), state));
+        }
+        debug_assert!(
+            self.name_is_a_definition(name, held),
+            "a name bound to the method a def made is called"
+        );
+        Some(Rc::clone(method))
+    }
+
+    /// The method a call of `name` on `self` reaches, the class it was
+    /// found on, and `self`, when no scope binds `name` and the current
+    /// scope reads through the root scope alone.
+    fn method_on_self(
+        &mut self,
+        site: &BareCallSite,
+        name: &str,
+    ) -> Option<(Rc<Class>, Rc<Method>, Object)> {
+        let Some((receiver, root)) = self.scope_reading_root() else {
+            site.note_read_otherwise();
+            return None;
         };
         let Some(class) = self.class_deciding_dispatch(&receiver) else {
-            return read_otherwise();
+            site.note_read_otherwise();
+            return None;
         };
         let state = method_state();
         let root_version = root.borrow().version();
@@ -103,8 +188,7 @@ impl VirtualMachine {
                 }
                 let found = self
                     .lookup_method(&receiver, name)
-                    .filter(|(_, method)| !method.is_undefined)
-                    .filter(|_| !root.borrow().holds_own(name));
+                    .filter(|(_, method)| !method.is_undefined);
                 let Some((called_on, method)) = found else {
                     site.refused_under.set(Some((state, root_version)));
                     return None;
@@ -121,35 +205,31 @@ impl VirtualMachine {
             }
         };
         debug_assert!(
-            !root.borrow().holds_own(name)
-                && self
-                    .lookup_method(&receiver, name)
-                    .is_some_and(|(_, found)| Rc::ptr_eq(&found, &method)),
+            self.lookup_method(&receiver, name)
+                .is_some_and(|(_, found)| Rc::ptr_eq(&found, &method)),
             "the method a bare name called last is what a lookup finds"
         );
-        let position = unit.positions[at];
-        let ran = self
-            .invoke_method(called_on, method, receiver, Vec::new(), position)
-            .map(|value| {
-                run.set_register(usize::from(to), value);
-                Next::Step
-            });
-        Some(self.settle_instruction(run, at, ran))
+        Some((called_on, method, receiver))
     }
 
-    /// `self` and the root scope, when the current scope is a method's own,
-    /// read through the root scope alone, and does not bind or capture
-    /// `name`.
-    fn method_scope_without(&self, name: &str) -> Option<(Object, Rc<RefCell<Scope>>)> {
+    /// `self` and the root scope, when the current scope reads through the
+    /// root scope alone. `self` is the current scope's, or the root scope's
+    /// when the current scope binds none.
+    fn scope_reading_root(&self) -> Option<(Object, Rc<RefCell<Scope>>)> {
         let environment = self.environment();
         let root = environment.root_scope();
         let scope = environment.current_scope_ref().borrow();
         let reads_root_alone = scope
             .parent()
             .is_some_and(|parent| Rc::ptr_eq(parent, root));
-        if !reads_root_alone || scope.holds_own(name) {
+        if !reads_root_alone {
             return None;
         }
-        Some((scope.own_value("self")?, Rc::clone(root)))
+        let receiver = match scope.own_value("self") {
+            Some(receiver) => receiver,
+            None if !scope.holds_own("self") => root.borrow().own_value("self")?,
+            None => return None,
+        };
+        Some((receiver, Rc::clone(root)))
     }
 }
