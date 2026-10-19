@@ -42,6 +42,9 @@ struct BareCall {
     method_state: u64,
     root: Weak<RefCell<Scope>>,
     root_version: u64,
+    /// Whether the method answers an instance variable of `self` as a
+    /// reader does, and no native method answers in place of it.
+    reads: bool,
 }
 
 impl BareCallSite {
@@ -57,7 +60,7 @@ impl BareCallSite {
         state: u64,
         root: &Rc<RefCell<Scope>>,
         root_version: u64,
-    ) -> Option<(Rc<Class>, Rc<Method>)> {
+    ) -> Option<(Rc<Class>, Rc<Method>, bool)> {
         let found = self.found.borrow();
         let call = found.as_ref()?;
         let same = call.method_state == state
@@ -67,7 +70,11 @@ impl BareCallSite {
         if !same {
             return None;
         }
-        Some((call.called_on.upgrade()?, call.method.upgrade()?))
+        Some((
+            call.called_on.upgrade()?,
+            call.method.upgrade()?,
+            call.reads,
+        ))
     }
 
     fn note_read_otherwise(&self) {
@@ -107,7 +114,21 @@ impl VirtualMachine {
                 (self.builtins().class_of(&receiver), method, receiver)
             }
             None => {
-                let (called_on, method, receiver) = self.method_on_self(site, name)?;
+                let (called_on, method, receiver, reads) = self.method_on_self(site, name)?;
+                if reads
+                    && self.tracepoints.is_empty()
+                    && let Some(variable) = super::attributes::plain_reader(&method)
+                    && let View::Instance(instance) = receiver.view()
+                {
+                    let value = instance
+                        .borrow()
+                        .instance_vars
+                        .get(variable)
+                        .cloned()
+                        .unwrap_or(Object::Nil);
+                    run.set_register(usize::from(to), value);
+                    return Some(Ok(Next::Step));
+                }
                 (called_on, method, receiver)
             }
         };
@@ -169,7 +190,7 @@ impl VirtualMachine {
         &mut self,
         site: &BareCallSite,
         name: &str,
-    ) -> Option<(Rc<Class>, Rc<Method>, Object)> {
+    ) -> Option<(Rc<Class>, Rc<Method>, Object, bool)> {
         let Some((receiver, root)) = self.scope_reading_root() else {
             site.note_read_otherwise();
             return None;
@@ -180,7 +201,7 @@ impl VirtualMachine {
         };
         let state = method_state();
         let root_version = root.borrow().version();
-        let (called_on, method) = match site.kept(&class, state, &root, root_version) {
+        let (called_on, method, reads) = match site.kept(&class, state, &root, root_version) {
             Some(kept) => kept,
             None => {
                 if site.refused_under.get() == Some((state, root_version)) {
@@ -193,6 +214,8 @@ impl VirtualMachine {
                     site.refused_under.set(Some((state, root_version)));
                     return None;
                 };
+                let reads = super::attributes::plain_reader(&method).is_some()
+                    && !crate::vm::native_methods::class_answers_natively(&class, name, true);
                 *site.found.borrow_mut() = Some(BareCall {
                     class: Rc::downgrade(&class),
                     called_on: Rc::downgrade(&called_on),
@@ -200,8 +223,9 @@ impl VirtualMachine {
                     method_state: state,
                     root: Rc::downgrade(&root),
                     root_version,
+                    reads,
                 });
-                (called_on, method)
+                (called_on, method, reads)
             }
         };
         debug_assert!(
@@ -209,7 +233,7 @@ impl VirtualMachine {
                 .is_some_and(|(_, found)| Rc::ptr_eq(&found, &method)),
             "the method a bare name called last is what a lookup finds"
         );
-        Some((called_on, method, receiver))
+        Some((called_on, method, receiver, reads))
     }
 
     /// `self` and the root scope, when the current scope reads through the

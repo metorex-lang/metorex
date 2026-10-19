@@ -20,6 +20,9 @@ pub(super) struct NativeCallSite {
     answered: RefCell<Option<(Weak<Class>, u64)>>,
     refused: RefCell<Option<(Weak<Class>, u64)>>,
     made_otherwise: Cell<u8>,
+    /// Set by `native_call_class` when the call it was asked about was made
+    /// on a value that is no built-in one.
+    made_on_other_value: Cell<bool>,
 }
 
 /// How many calls a site makes on values that are no built-in ones before
@@ -31,6 +34,19 @@ impl NativeCallSite {
     /// the interpreter.
     pub(super) fn gave_up(&self) -> bool {
         self.made_otherwise.get() >= CALLS_OTHERWISE_BEFORE_GIVING_UP
+    }
+
+    /// Whether the call `native_call_class` was last asked about was made
+    /// on a value that is no built-in one, clearing the answer.
+    pub(super) fn took_other_value(&self) -> bool {
+        self.made_on_other_value.replace(false)
+    }
+
+    /// Count a call made on a value that is no built-in one, which nothing
+    /// else machine code does answered either.
+    pub(super) fn note_made_otherwise(&self) {
+        self.made_otherwise
+            .set(self.made_otherwise.get().saturating_add(1));
     }
 }
 
@@ -85,8 +101,7 @@ impl VirtualMachine {
             || self.any_refinement_active()
             || self.existing_singleton_class(&receiver).is_some()
         {
-            site.made_otherwise
-                .set(site.made_otherwise.get().saturating_add(1));
+            site.made_on_other_value.set(true);
             return None;
         }
         let class = self.builtins().class_of(&receiver);

@@ -58,6 +58,21 @@
   not start with `__`, the value goes into the slot, or into a new last
   slot as the object moves to the second shape. Every other write is the
   interpreter's.
+- A `StoreTarget` of `receiver.name = value` keeps, for the receiver's
+  class and shape under the method state, the slot that `name=` writes
+  when it is a method writing one instance variable from its one
+  parameter, as `attr_writer` and `Struct` define them, an explicit
+  receiver may call it, and no native method answers `name=` for the
+  class. While the receiver is an instance of that class and shape that
+  is not frozen, nothing traces calls, and a variable named with `__` is
+  one the instance already lists, the value goes into the slot without a
+  call.
+- A `Call` with no arguments or block on an instance, whose call site's
+  cache holds a method answering one instance variable, as `attr_reader`
+  and `Struct` define them, for which no native method answers, reads the
+  variable without a call while nothing traces calls, and counts the
+  cache's hit as the call would. A bare name whose method is such a reader
+  reads the variable the same way.
 - Two or more instructions in a row that would each call into Rust are
   one call, which runs them in turn. A jump to one after the first enters
   that call from there.
@@ -75,11 +90,12 @@
 - Each unit has its own threshold of runs before it is compiled: 30 times
   its instructions over those of them machine code runs itself, counting a
   `GetIdentifier` of a name that may call a method, a `Call` written with
-  a receiver, and an instance variable write, so a unit of Integer operations and branches is compiled after
+  a receiver, an instance variable write, and a store through a writer,
+  so a unit of Integer operations and branches is compiled after
   30 runs and one of mostly calls into Rust waits longer. A unit whose
   machine code would run none of its instructions itself, reads no name that
-  may call a method, makes no call written with a receiver, and writes no
-  instance variable, only calls
+  may call a method, makes no call written with a receiver, writes no
+  instance variable, and stores through no writer, only calls
   into Rust and its `Return`, is left to the interpreter, since entering
   machine code and leaving it again takes longer than the interpreter takes
   to dispatch them.

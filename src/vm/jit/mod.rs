@@ -18,6 +18,7 @@
 //! It is on unless `METOREX_JIT=0`, and `METOREX_JIT_CALL_THRESHOLD` sets
 //! how many runs of a unit come before it is compiled.
 
+mod attributes;
 mod bare_calls;
 mod memory;
 mod native_calls;
@@ -197,6 +198,11 @@ pub(crate) struct MachineCode {
     native_calls: Box<[native_calls::NativeCallSite]>,
     /// The shapes and slot each `SetInstanceVariable` wrote last.
     slot_writes: Box<[slot_writes::SlotWriteSite]>,
+    /// The writer each `StoreTarget` through one found last.
+    attribute_writes: Box<[attributes::AttributeWriteSite]>,
+    /// The reader each `Call` that may reach a native method found last,
+    /// by the same place as `native_calls`.
+    attribute_reads: Box<[attributes::AttributeReadSite]>,
     /// The source encoding the Symbols the code loads itself were made
     /// under, when it loads any. The code runs only while that encoding is
     /// the current one.
@@ -303,6 +309,9 @@ fn runs_in_machine_code(unit: &Unit, instruction: Instruction) -> bool {
     if let Instruction::Call { site, .. } = instruction {
         return may_call_natively(unit, site);
     }
+    if let Instruction::StoreTarget { target, .. } = instruction {
+        return stores_through_writer(unit, target);
+    }
     matches!(
         instruction,
         Instruction::Jump { .. }
@@ -328,6 +337,15 @@ fn runs_in_machine_code(unit: &Unit, instruction: Instruction) -> bool {
 fn may_call_natively(unit: &Unit, site: u16) -> bool {
     let site = &unit.call_sites[usize::from(site)];
     site.receiver != crate::bytecode::unit::Receiver::Sent && !site.sends_literal_name
+}
+
+/// Whether the target `target` of `unit` is `receiver.name`, which a
+/// writer method stores through.
+fn stores_through_writer(unit: &Unit, target: u16) -> bool {
+    matches!(
+        unit.targets[usize::from(target)],
+        crate::bytecode::unit::Target::Setter { .. }
+    )
 }
 
 /// Whether the name `name` of `unit` reads, written bare, may call a
@@ -399,13 +417,15 @@ enum Helper {
     ReadSlot,
     /// A `SetInstanceVariable`, written into its slot of `self`.
     WriteSlot,
+    /// A `StoreTarget` through a writer, written into the slot it writes.
+    WriteAttribute,
     /// Run the instructions from the one given to the end of the run of
     /// calls it is in, as `MachineCode::fused` records them.
     RunThrough,
 }
 
 impl Helper {
-    const ALL: [Helper; 12] = [
+    const ALL: [Helper; 13] = [
         Helper::StartStatement,
         Helper::GetLocal,
         Helper::SetLocal,
@@ -417,6 +437,7 @@ impl Helper {
         Helper::Checkpoint,
         Helper::ReadSlot,
         Helper::WriteSlot,
+        Helper::WriteAttribute,
         Helper::RunThrough,
     ];
 
@@ -433,6 +454,7 @@ impl Helper {
             Helper::Checkpoint => checkpoint,
             Helper::ReadSlot => read_slot,
             Helper::WriteSlot => write_slot,
+            Helper::WriteAttribute => write_attribute,
             Helper::RunThrough => run_through,
         }
     }
@@ -514,7 +536,11 @@ impl Planned {
                 matches!(
                     callee,
                     Callee::Helper(
-                        Helper::ReadSlot | Helper::WriteSlot | Helper::BareName | Helper::Call
+                        Helper::ReadSlot
+                            | Helper::WriteSlot
+                            | Helper::WriteAttribute
+                            | Helper::BareName
+                            | Helper::Call
                     )
                 )
             }
@@ -727,6 +753,12 @@ fn compile(vm: &VirtualMachine, unit: &Unit) -> Option<Rc<MachineCode>> {
             .map(|_| Default::default())
             .collect(),
         slot_writes: (0..sites.slot_writes).map(|_| Default::default()).collect(),
+        attribute_writes: (0..sites.attribute_writes)
+            .map(|_| Default::default())
+            .collect(),
+        attribute_reads: (0..sites.native_calls)
+            .map(|_| Default::default())
+            .collect(),
         symbols_made_under: loads_symbols.then(|| vm.current_source_encoding.clone()),
         collection_due: crate::object::live::due_flag(),
     }))
@@ -740,6 +772,7 @@ struct Sites {
     bare_calls: usize,
     native_calls: usize,
     slot_writes: usize,
+    attribute_writes: usize,
 }
 
 impl Sites {
@@ -750,6 +783,7 @@ impl Sites {
             bare_calls: 0,
             native_calls: 0,
             slot_writes: 0,
+            attribute_writes: 0,
         };
         let mut slot_reads = 0;
         for (at, step) in steps.iter().enumerate() {
@@ -761,6 +795,7 @@ impl Sites {
                 Helper::BareName => &mut sites.bare_calls,
                 Helper::Call => &mut sites.native_calls,
                 Helper::WriteSlot => &mut sites.slot_writes,
+                Helper::WriteAttribute => &mut sites.attribute_writes,
                 _ => continue,
             };
             sites.site_of[at] = *count as u32;
@@ -893,6 +928,9 @@ fn plan(vm: &VirtualMachine, unit: &Unit) -> (Vec<Planned>, Vec<Option<SlotRead>
                 Instruction::Checkpoint => Action::Call(Callee::Helper(Helper::Checkpoint)),
                 Instruction::SetInstanceVariable { .. } => {
                     Action::Call(Callee::Helper(Helper::WriteSlot))
+                }
+                Instruction::StoreTarget { target, .. } if stores_through_writer(unit, target) => {
+                    Action::Call(Callee::Helper(Helper::WriteAttribute))
                 }
                 Instruction::GetInstanceVariable { to, name }
                     if !seen_others
@@ -1253,15 +1291,19 @@ fn make_call(
     at: usize,
 ) -> Result<Next, MetorexError> {
     let site = &code.native_calls[code.site(at)];
-    match vm.native_call_class(site, run, at) {
-        Some(class) => vm.step_native_call(run, at, &class),
-        None => {
-            if site.gave_up() {
-                leave_to_interpreter(code, run, at);
-            }
-            vm.step_instruction(run, at)
+    if let Some(class) = vm.native_call_class(site, run, at) {
+        return vm.step_native_call(run, at, &class);
+    }
+    if site.took_other_value() {
+        if vm.read_attribute_through(&code.attribute_reads[code.site(at)], run, at) {
+            return Ok(Next::Step);
+        }
+        site.note_made_otherwise();
+        if site.gave_up() {
+            leave_to_interpreter(code, run, at);
         }
     }
+    vm.step_instruction(run, at)
 }
 
 /// Plan the instruction at `at` as the interpreter runs it from the next
@@ -1313,6 +1355,9 @@ extern "C" fn run_through(context: *mut Context, at: u32) -> u64 {
                 Callee::Helper(Helper::CallResolved) => vm.step_call_resolved(run, at),
                 Callee::Helper(Helper::Checkpoint) => vm.step_checkpoint(run, at),
                 Callee::Helper(Helper::WriteSlot) => write_slot_or_step(vm, run, code, at),
+                Callee::Helper(Helper::WriteAttribute) => {
+                    write_attribute_or_step(vm, run, code, at)
+                }
                 Callee::Helper(Helper::StartStatement | Helper::ReadSlot | Helper::RunThrough) => {
                     unreachable!("a run of calls holds none of these")
                 }
@@ -1338,6 +1383,24 @@ fn write_slot_or_step(
     at: usize,
 ) -> Result<Next, MetorexError> {
     if vm.write_slot_through(&code.slot_writes[code.site(at)], run, at) {
+        return Ok(Next::Step);
+    }
+    vm.step_instruction(run, at)
+}
+
+extern "C" fn write_attribute(context: *mut Context, at: u32) -> u64 {
+    hand_back(context, at, write_attribute_or_step)
+}
+
+/// Run the `StoreTarget` at `at` as a write into the slot its writer
+/// writes, or as the interpreter does.
+fn write_attribute_or_step(
+    vm: &mut VirtualMachine,
+    run: &mut UnitRun,
+    code: &MachineCode,
+    at: usize,
+) -> Result<Next, MetorexError> {
+    if vm.write_attribute_through(&code.attribute_writes[code.site(at)], run, at) {
         return Ok(Next::Step);
     }
     vm.step_instruction(run, at)

@@ -40,20 +40,29 @@ struct Entry {
 impl CallCache {
     /// The method kept for `class` under the current method state.
     pub fn find(&self, class: &Rc<Class>) -> Option<Rc<Method>> {
-        let state = method_state();
-        let found = self
-            .entries
-            .borrow()
-            .iter()
-            .find(|entry| {
-                entry.state == state && std::ptr::eq(entry.class.as_ptr(), Rc::as_ptr(class))
-            })
-            .and_then(|entry| entry.method.upgrade());
+        let found = self.peek(class);
         match found {
             Some(_) => HITS.fetch_add(1, Ordering::Relaxed),
             None => MISSES.fetch_add(1, Ordering::Relaxed),
         };
         found
+    }
+
+    /// `find`, without counting the lookup among the hits and misses.
+    pub fn peek(&self, class: &Rc<Class>) -> Option<Rc<Method>> {
+        let state = method_state();
+        self.entries
+            .borrow()
+            .iter()
+            .find(|entry| {
+                entry.state == state && std::ptr::eq(entry.class.as_ptr(), Rc::as_ptr(class))
+            })
+            .and_then(|entry| entry.method.upgrade())
+    }
+
+    /// Count a call answered from the method `peek` found.
+    pub fn count_hit(&self) {
+        HITS.fetch_add(1, Ordering::Relaxed);
     }
 
     /// Keep `method` as what a call on an instance of `class` reaches.

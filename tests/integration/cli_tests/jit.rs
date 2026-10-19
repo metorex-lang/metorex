@@ -166,6 +166,26 @@ fn machine_code_leaves_calls_on_other_values_to_the_interpreter_once_a_site_give
 }
 
 #[test]
+fn machine_code_writes_through_writers_as_the_interpreter_calls_them() {
+    let (interpreted, compiled) = interpreted_and_compiled("attribute_writes");
+    assert_eq!(
+        interpreted,
+        "[49, -49, 49, 2]\n[49, 2]\n[]\n:kept\nNoMethodError\nFrozenError\n-490\n1049\n3\n"
+    );
+    assert_eq!(compiled, interpreted);
+}
+
+#[test]
+fn machine_code_reads_through_readers_as_the_interpreter_calls_them() {
+    let (interpreted, compiled) = interpreted_and_compiled("attribute_reads");
+    assert_eq!(
+        interpreted,
+        "[700, :first]\n60\n[5550, :first]\n[350, :first]\n80\n1\n"
+    );
+    assert_eq!(compiled, interpreted);
+}
+
+#[test]
 fn an_integer_operand_that_turns_out_otherwise_returns_the_run_to_the_interpreter() {
     let (_, report) = run_example("jit/integer_operands.rb", &EVERY_UNIT);
     assert!(returns_to_the_interpreter(&report) > 0);
