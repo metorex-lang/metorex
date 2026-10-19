@@ -20,7 +20,7 @@ impl VirtualMachine {
     ) -> Result<Option<Object>, MetorexError> {
         let counted = crate::vm::counters::enabled().then(|| {
             (
-                self.enclosing_scope_label(),
+                self.enclosing_scope_label().to_string(),
                 crate::vm::counters::allocations_so_far(),
             )
         });

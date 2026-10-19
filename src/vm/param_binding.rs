@@ -44,12 +44,12 @@ pub(crate) fn positional_arg_count_for(arguments: &[Object], takes_keywords: boo
 /// The local a positional parameter is bound to. A name written twice, as
 /// `def m(_, _)` does, is read back as its first, so each later one is kept
 /// under a name no program can spell, where a bare `super` finds it.
-pub(crate) fn parameter_local(params: &[String], index: usize) -> String {
+pub(crate) fn parameter_local(params: &[String], index: usize) -> std::borrow::Cow<'_, str> {
     let name = &params[index];
     if params[..index].contains(name) {
-        format!("{name}#{index}")
+        std::borrow::Cow::Owned(format!("{name}#{index}"))
     } else {
-        name.clone()
+        std::borrow::Cow::Borrowed(name)
     }
 }
 
@@ -61,7 +61,7 @@ fn define_positional_param(
     match param.strip_prefix(crate::object::DESTRUCTURED_GROUP_PREFIX) {
         Some(names) => crate::vm::block_execution::bind_group_names(vm, names, value),
         None => {
-            vm.environment_mut().define(param.to_string(), value);
+            vm.environment_mut().define_named(param, value);
             Ok(())
         }
     }

@@ -24,6 +24,25 @@ pub const UNNAMED_PARAMETER: &str = "__mx_unnamed";
 /// Places in the source, each the file and the line some code opened on.
 pub type CodePlaces = Rc<Vec<(String, usize)>>;
 
+thread_local! {
+    static NO_NAMES: Rc<Vec<String>> = Rc::new(Vec::new());
+    static NO_OUTER_LOCALS: Rc<Vec<(String, bool)>> = Rc::new(Vec::new());
+    static NO_PLACES: CodePlaces = Rc::new(Vec::new());
+}
+
+/// An empty list of names, shared rather than allocated for each block.
+fn no_names() -> Rc<Vec<String>> {
+    NO_NAMES.with(Rc::clone)
+}
+
+fn no_outer_locals() -> Rc<Vec<(String, bool)>> {
+    NO_OUTER_LOCALS.with(Rc::clone)
+}
+
+fn no_places() -> CodePlaces {
+    NO_PLACES.with(Rc::clone)
+}
+
 /// Block/lambda/closure with captured variables
 #[derive(Debug, Clone)]
 pub struct BlockStatement {
@@ -129,7 +148,7 @@ impl BlockStatement {
             parameter_defaults: Vec::new(),
             body: body.into(),
             captured_vars: Rc::new(captured_vars),
-            reserved_names: Rc::new(Vec::new()),
+            reserved_names: no_names(),
             captured_def_scope: Vec::new(),
             captured_nesting: crate::object::no_nesting(),
             defining_method: None,
@@ -140,11 +159,11 @@ impl BlockStatement {
             home_frame: None,
             opened_at: None,
             opened_column: None,
-            outer_locals: Rc::default(),
+            outer_locals: no_outer_locals(),
             from_symbol: None,
             written_in: None,
             written_depth: None,
-            written_within: Rc::default(),
+            written_within: no_places(),
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
             attached_call_running: Rc::new(std::cell::Cell::new(true)),
             unit: Default::default(),
@@ -168,7 +187,7 @@ impl BlockStatement {
             parameter_defaults,
             body,
             captured_vars: Rc::new(captured_vars),
-            reserved_names: Rc::new(Vec::new()),
+            reserved_names: no_names(),
             captured_def_scope,
             captured_nesting: crate::object::no_nesting(),
             defining_method,
@@ -179,11 +198,11 @@ impl BlockStatement {
             home_frame: None,
             opened_at: None,
             opened_column: None,
-            outer_locals: Rc::default(),
+            outer_locals: no_outer_locals(),
             from_symbol: None,
             written_in: None,
             written_depth: None,
-            written_within: Rc::default(),
+            written_within: no_places(),
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
             attached_call_running: Rc::new(std::cell::Cell::new(true)),
             unit: Default::default(),

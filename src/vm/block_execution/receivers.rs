@@ -87,7 +87,7 @@ impl VirtualMachine {
             self.environment_mut().define_inherited(name, cell);
         }
         self.environment_mut()
-            .define("self".to_string(), receiver.clone());
+            .define_named("self", receiver.clone());
         // A line counted from below one is still counted from there, which a
         // backtrace reports rather than the line the lexer could start at.
         let previous_shift = std::mem::replace(&mut self.source_line_shift, lineno.min(1) - 1);
@@ -307,7 +307,7 @@ impl VirtualMachine {
                 vm.environment_mut()
                     .attach_reserved(std::rc::Rc::clone(&block.reserved_names));
                 // Override `self` with the instance_exec receiver
-                vm.environment_mut().define("self".to_string(), receiver);
+                vm.environment_mut().define_named("self", receiver);
 
                 bind_block_params(
                     vm,

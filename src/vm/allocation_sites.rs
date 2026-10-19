@@ -50,7 +50,10 @@ impl VirtualMachine {
                 .map(|path| path.display().to_string()),
         };
         let (class_path, method_id) = match self.enclosing_method_owner() {
-            Some((owner, defined)) => (owner, Some(defined)),
+            Some((owner, defined)) => (
+                owner.map(|held| held.to_string()),
+                Some(defined.to_string()),
+            ),
             None => (None, None),
         };
         let site = AllocationSite {

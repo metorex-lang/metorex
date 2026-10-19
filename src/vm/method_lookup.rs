@@ -223,7 +223,7 @@ impl VirtualMachine {
 
     /// The class of an object whose calls its class alone decides: an
     /// instance with no methods of its own, while no refinement is active.
-    fn class_deciding_dispatch(&self, receiver: &Object) -> Option<Rc<Class>> {
+    pub(crate) fn class_deciding_dispatch(&self, receiver: &Object) -> Option<Rc<Class>> {
         let View::Instance(instance) = receiver.view() else {
             return None;
         };
@@ -1181,22 +1181,25 @@ impl VirtualMachine {
         receiver: &Object,
         method_name: &str,
     ) -> Option<(Rc<Class>, Rc<Method>)> {
-        let mut candidates = Vec::new();
-        if let Some(singleton) = self.existing_singleton_class(receiver) {
-            candidates.push(singleton);
+        let answers = |owner: &Rc<Class>| {
+            owner
+                .find_own_method(method_name)
+                .filter(|method| !method.is_undefined && !method.body.is_empty())
+                .map(|method| (Rc::clone(owner), method))
+        };
+        if let Some(found) = self
+            .existing_singleton_class(receiver)
+            .and_then(|singleton| answers(&singleton))
+        {
+            return Some(found);
         }
         let class = self.builtins().class_of(receiver);
-        candidates.extend(class.prepend_chain());
-        candidates.push(class);
-        for owner in candidates {
-            if let Some(method) = owner.find_own_method(method_name)
-                && !method.is_undefined
-                && !method.body.is_empty()
-            {
-                return Some((owner, method));
-            }
+        if class.has_prepends()
+            && let Some(found) = class.prepend_chain().iter().find_map(answers)
+        {
+            return Some(found);
         }
-        None
+        answers(&class)
     }
 
     pub(crate) fn lookup_method(

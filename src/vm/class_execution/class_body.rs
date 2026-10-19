@@ -69,7 +69,7 @@ impl VirtualMachine {
         let held_self = self.environment().get("self");
         self.environment_mut().push_isolated_scope();
         if let Some(receiver) = held_self {
-            self.environment_mut().define("self".to_string(), receiver);
+            self.environment_mut().define_named("self", receiver);
         }
         // Ruby reserves every local the body assigns before any of it runs,
         // so one assigned in a branch not taken answers nil.

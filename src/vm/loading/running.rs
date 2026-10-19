@@ -257,7 +257,7 @@ impl VirtualMachine {
             self.environment_mut().push_isolated_scope();
         }
         if let Some(held) = stand_in {
-            self.environment_mut().define("self".to_string(), held);
+            self.environment_mut().define_named("self", held);
         }
         // A file's top level is outside any method, whichever method loaded
         // it, so `using` there is allowed.
@@ -279,7 +279,7 @@ impl VirtualMachine {
         self.constant_homes = caller_constant_homes;
         if let Some(saved) = previous_self {
             match saved {
-                Some(receiver) => self.environment_mut().define("self".to_string(), receiver),
+                Some(receiver) => self.environment_mut().define_named("self", receiver),
                 // The scope had no `self` of its own, so it reads `main`
                 // again rather than a nil left behind.
                 None => self.environment_mut().undefine("self"),

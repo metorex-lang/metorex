@@ -382,9 +382,22 @@ const NATIVE_METHODS_BY_OWNER: &[(&str, &[&str])] = &[
 
 /// Whether the class or module named `owner` answers `name` natively.
 fn owner_answers(owner: &str, name: &str) -> bool {
-    NATIVE_METHODS_BY_OWNER
-        .iter()
-        .any(|(held, names)| *held == owner && names.contains(&name))
+    type ByOwner = std::collections::HashMap<
+        &'static str,
+        std::collections::HashSet<&'static str, crate::fast_hash::NameHashing>,
+        crate::fast_hash::NameHashing,
+    >;
+    static BY_OWNER: std::sync::OnceLock<ByOwner> = std::sync::OnceLock::new();
+    BY_OWNER
+        .get_or_init(|| {
+            let mut by_owner = ByOwner::default();
+            for (owner, names) in NATIVE_METHODS_BY_OWNER {
+                by_owner.entry(owner).or_default().extend(names.iter());
+            }
+            by_owner
+        })
+        .get(owner)
+        .is_some_and(|names| names.contains(name))
 }
 
 /// Whether nil, true or false answers `name` with a native method of its own
@@ -400,14 +413,17 @@ pub(crate) fn value_answers_natively(receiver: &Object, name: &str) -> bool {
 pub(crate) fn class_answers_natively(class: &Rc<Class>, name: &str, inherited: bool) -> bool {
     let mut cursor = Some(Rc::clone(class));
     while let Some(current) = cursor {
-        let named = current.ruby_name();
-        if owner_answers(&named, name)
-            || (named == "Object"
-                && (owner_answers("Kernel", name) || owner_answers("BasicObject", name)))
-            || current
-                .transitive_mixins()
-                .iter()
-                .any(|mixin| owner_answers(&mixin.ruby_name(), name))
+        let answers_itself = current.with_ruby_name(|named| {
+            owner_answers(named, name)
+                || (named == "Object"
+                    && (owner_answers("Kernel", name) || owner_answers("BasicObject", name)))
+        });
+        if answers_itself
+            || (current.has_mixins()
+                && current
+                    .transitive_mixins()
+                    .iter()
+                    .any(|mixin| mixin.with_ruby_name(|named| owner_answers(named, name))))
         {
             return true;
         }

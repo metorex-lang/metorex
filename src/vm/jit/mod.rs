@@ -18,7 +18,9 @@
 //! It is on unless `METOREX_JIT=0`, and `METOREX_JIT_CALL_THRESHOLD` sets
 //! how many runs of a unit come before it is compiled.
 
+mod bare_calls;
 mod memory;
+mod native_calls;
 
 #[cfg(target_arch = "aarch64")]
 mod arm64;
@@ -183,6 +185,16 @@ pub(crate) struct MachineCode {
     /// For each instruction in a run of calls `Helper::RunThrough` makes,
     /// what it calls for that instruction and where the run ends.
     fused: Vec<Option<Fused>>,
+    /// For each instruction, what it called last when it is a
+    /// `GetIdentifier` that called a method on `self`.
+    bare_calls: Box<[bare_calls::BareCallSite]>,
+    /// For each instruction, the class it calls natively for when it is a
+    /// `Call` on a built-in value.
+    native_calls: Box<[native_calls::NativeCallSite]>,
+    /// The source encoding the Symbols the code loads itself were made
+    /// under, when it loads any. The code runs only while that encoding is
+    /// the current one.
+    symbols_made_under: Option<Option<String>>,
     /// The flag for a due collection of the thread the code was compiled
     /// on, which is the thread it runs on, since the memory it is in
     /// belongs to that thread.
@@ -212,7 +224,11 @@ pub(crate) fn code_for(vm: &VirtualMachine, unit: &Unit) -> Option<Rc<MachineCod
     let held = unit.jit.code.borrow().clone();
     if let Some(code) = held {
         if !code.broken.get() && code.epoch == epoch() {
-            return Some(code);
+            let symbols_hold = code
+                .symbols_made_under
+                .as_ref()
+                .is_none_or(|encoding| *encoding == vm.current_source_encoding);
+            return symbols_hold.then_some(code);
         }
         // Code that went back to the interpreter waits twice as long to be
         // compiled again.
@@ -262,7 +278,7 @@ fn own_threshold(unit: &Unit) -> Option<u32> {
     let native = unit
         .instructions
         .iter()
-        .filter(|instruction| runs_in_machine_code(**instruction))
+        .filter(|instruction| runs_in_machine_code(unit, **instruction))
         .count() as u64;
     if native == 0 {
         return None;
@@ -272,8 +288,15 @@ fn own_threshold(unit: &Unit) -> Option<u32> {
 }
 
 /// Whether machine code runs an instruction of this kind itself, as the
-/// plan does when its operands are what the interpreter saw.
-fn runs_in_machine_code(instruction: Instruction) -> bool {
+/// plan does when its operands are what the interpreter saw, or reads a
+/// name that may call a method in a way the interpreter does not.
+fn runs_in_machine_code(unit: &Unit, instruction: Instruction) -> bool {
+    if let Instruction::GetIdentifier { name, .. } = instruction {
+        return may_call_bare(unit, name);
+    }
+    if let Instruction::Call { site, .. } = instruction {
+        return may_call_natively(unit, site);
+    }
     matches!(
         instruction,
         Instruction::Jump { .. }
@@ -285,10 +308,26 @@ fn runs_in_machine_code(instruction: Instruction) -> bool {
             | Instruction::LoadTrue { .. }
             | Instruction::LoadFalse { .. }
             | Instruction::LoadConstant { .. }
+            | Instruction::LoadSymbol { .. }
             | Instruction::Move { .. }
             | Instruction::CoverBranch { .. }
             | Instruction::GetInstanceVariable { .. }
     ) || integer_operation(instruction).is_some()
+}
+
+/// Whether the call site `site` of `unit` may reach a native method
+/// without the interpreter's lookup: one written with a receiver, rather
+/// than sent with `send`.
+fn may_call_natively(unit: &Unit, site: u16) -> bool {
+    let site = &unit.call_sites[usize::from(site)];
+    site.receiver != crate::bytecode::unit::Receiver::Sent && !site.sends_literal_name
+}
+
+/// Whether the name `name` of `unit` reads, written bare, may call a
+/// method on `self`.
+fn may_call_bare(unit: &Unit, name: u16) -> bool {
+    let text = &unit.names[usize::from(name)].text;
+    text != "self" && text.starts_with(|first: char| first.is_ascii_lowercase() || first == '_')
 }
 
 /// Machine code laid out by an emitter: its bytes and where its table
@@ -344,6 +383,10 @@ enum Helper {
     SetLocal,
     Unhoist,
     GetIdentifier,
+    /// A `GetIdentifier` of a name that may call a method on `self`.
+    BareName,
+    /// A `Call` that may reach a native method without the lookup.
+    Call,
     CallResolved,
     Checkpoint,
     ReadSlot,
@@ -353,12 +396,14 @@ enum Helper {
 }
 
 impl Helper {
-    const ALL: [Helper; 9] = [
+    const ALL: [Helper; 11] = [
         Helper::StartStatement,
         Helper::GetLocal,
         Helper::SetLocal,
         Helper::Unhoist,
         Helper::GetIdentifier,
+        Helper::BareName,
+        Helper::Call,
         Helper::CallResolved,
         Helper::Checkpoint,
         Helper::ReadSlot,
@@ -372,6 +417,8 @@ impl Helper {
             Helper::SetLocal => set_local,
             Helper::Unhoist => unhoist,
             Helper::GetIdentifier => get_identifier,
+            Helper::BareName => bare_name,
+            Helper::Call => call,
             Helper::CallResolved => call_resolved,
             Helper::Checkpoint => checkpoint,
             Helper::ReadSlot => read_slot,
@@ -452,7 +499,12 @@ impl Planned {
     /// instructions of a unit with none of these.
     fn runs_itself(&self) -> bool {
         match self.action {
-            Action::Call(callee) => callee == Callee::Helper(Helper::ReadSlot),
+            Action::Call(callee) => {
+                matches!(
+                    callee,
+                    Callee::Helper(Helper::ReadSlot | Helper::BareName | Helper::Call)
+                )
+            }
             Action::Step | Action::Return { .. } | Action::Inside { .. } => false,
             Action::Branch(_)
             | Action::Integer { .. }
@@ -630,7 +682,7 @@ fn integer_operation(instruction: Instruction) -> Option<(IntegerOperation, u8)>
 
 fn compile(vm: &VirtualMachine, unit: &Unit) -> Option<Rc<MachineCode>> {
     let compiled_in = epoch();
-    let (mut steps, slot_reads) = plan(vm, unit);
+    let (mut steps, slot_reads, loads_symbols) = plan(vm, unit);
     if !steps.iter().any(Planned::runs_itself) {
         return None;
     }
@@ -655,14 +707,23 @@ fn compile(vm: &VirtualMachine, unit: &Unit) -> Option<Rc<MachineCode>> {
         broken: Cell::new(false),
         slot_reads,
         fused,
+        bare_calls: (0..unit.instructions.len())
+            .map(|_| Default::default())
+            .collect(),
+        native_calls: (0..unit.instructions.len())
+            .map(|_| Default::default())
+            .collect(),
+        symbols_made_under: loads_symbols.then(|| vm.current_source_encoding.clone()),
         collection_due: crate::object::live::due_flag(),
     }))
 }
 
 /// How each instruction of `unit` runs in machine code, and which
 /// instance variable reads are answered from the shape their site saw.
-/// An `Extend`, and the instruction after it, are left to `step`.
-fn plan(vm: &VirtualMachine, unit: &Unit) -> (Vec<Planned>, Vec<Option<SlotRead>>) {
+/// An `Extend`, and the instruction after it, are left to `step`. A
+/// `LoadSymbol` loads the Symbol its cache holds when that was made under
+/// the current source encoding, and the plan answers whether any does.
+fn plan(vm: &VirtualMachine, unit: &Unit) -> (Vec<Planned>, Vec<Option<SlotRead>>, bool) {
     let integers = !REFINED.load(Ordering::Relaxed) && vm.integer_operators_in_force();
     let counting_branches = vm.coverage_running();
     let inline_starts =
@@ -670,6 +731,7 @@ fn plan(vm: &VirtualMachine, unit: &Unit) -> (Vec<Planned>, Vec<Option<SlotRead>
     let seen = unit.jit.seen.borrow();
     let mut extended = false;
     let mut slot_reads = vec![None; unit.instructions.len()];
+    let mut loads_symbols = false;
     let steps = unit
         .instructions
         .iter()
@@ -747,13 +809,25 @@ fn plan(vm: &VirtualMachine, unit: &Unit) -> (Vec<Planned>, Vec<Option<SlotRead>
                         bits: unit.constants[usize::from(constant)].bits(),
                     }
                 }
+                Instruction::LoadSymbol { to, name }
+                    if let Some(bits) = cached_symbol(vm, unit, name) =>
+                {
+                    loads_symbols = true;
+                    Action::Store { to, bits }
+                }
                 Instruction::Move { to, from } => Action::Move { to, from },
                 Instruction::CoverBranch { .. } if !counting_branches => Action::Nothing,
                 Instruction::GetLocal { .. } => Action::Call(Callee::Helper(Helper::GetLocal)),
                 Instruction::SetLocal { .. } => Action::Call(Callee::Helper(Helper::SetLocal)),
                 Instruction::Unhoist { .. } => Action::Call(Callee::Helper(Helper::Unhoist)),
+                Instruction::GetIdentifier { name, .. } if may_call_bare(unit, name) => {
+                    Action::Call(Callee::Helper(Helper::BareName))
+                }
                 Instruction::GetIdentifier { .. } => {
                     Action::Call(Callee::Helper(Helper::GetIdentifier))
+                }
+                Instruction::Call { site, .. } if may_call_natively(unit, site) => {
+                    Action::Call(Callee::Helper(Helper::Call))
                 }
                 Instruction::CallResolved { .. } => {
                     Action::Call(Callee::Helper(Helper::CallResolved))
@@ -792,7 +866,15 @@ fn plan(vm: &VirtualMachine, unit: &Unit) -> (Vec<Planned>, Vec<Option<SlotRead>
             Planned { start, action }
         })
         .collect();
-    (steps, slot_reads)
+    (steps, slot_reads, loads_symbols)
+}
+
+/// The bits of the Symbol the cache of name `name` holds, when it was made
+/// under the current source encoding.
+fn cached_symbol(vm: &VirtualMachine, unit: &Unit, name: u16) -> Option<u64> {
+    let cache = unit.symbol_caches[usize::from(name)].borrow();
+    let (encoding, symbol) = cache.as_ref()?;
+    (*encoding == vm.current_source_encoding && inline(symbol.bits())).then(|| symbol.bits())
 }
 
 /// What a run of calls may call for an instruction after its first.
@@ -1094,6 +1176,42 @@ extern "C" fn get_identifier(context: *mut Context, at: u32) -> u64 {
     })
 }
 
+extern "C" fn call(context: *mut Context, at: u32) -> u64 {
+    hand_back(context, at, make_call)
+}
+
+/// Run the `Call` at `at`, straight to the native method its receiver's
+/// class answers when the interpreter's lookup would end there.
+fn make_call(
+    vm: &mut VirtualMachine,
+    run: &mut UnitRun,
+    code: &MachineCode,
+    at: usize,
+) -> Result<Next, MetorexError> {
+    match vm.native_call_class(&code.native_calls[at], run, at) {
+        Some(class) => vm.step_native_call(run, at, &class),
+        None => vm.step_instruction(run, at),
+    }
+}
+
+extern "C" fn bare_name(context: *mut Context, at: u32) -> u64 {
+    hand_back(context, at, read_bare_name)
+}
+
+/// Run the `GetIdentifier` at `at`, as a call of the method it called last
+/// when nothing that decided that has changed.
+fn read_bare_name(
+    vm: &mut VirtualMachine,
+    run: &mut UnitRun,
+    code: &MachineCode,
+    at: usize,
+) -> Result<Next, MetorexError> {
+    match vm.step_bare_call(&code.bare_calls[at], run, at) {
+        Some(ran) => ran,
+        None => vm.step_get_identifier(run, at),
+    }
+}
+
 extern "C" fn call_resolved(context: *mut Context, at: u32) -> u64 {
     hand_back(context, at, |vm, run, _, at| vm.step_call_resolved(run, at))
 }
@@ -1113,6 +1231,8 @@ extern "C" fn run_through(context: *mut Context, at: u32) -> u64 {
                 Callee::Helper(Helper::SetLocal) => vm.step_set_local(run, at),
                 Callee::Helper(Helper::Unhoist) => vm.step_unhoist(run, at),
                 Callee::Helper(Helper::GetIdentifier) => vm.step_get_identifier(run, at),
+                Callee::Helper(Helper::BareName) => read_bare_name(vm, run, code, at),
+                Callee::Helper(Helper::Call) => make_call(vm, run, code, at),
                 Callee::Helper(Helper::CallResolved) => vm.step_call_resolved(run, at),
                 Callee::Helper(Helper::Checkpoint) => vm.step_checkpoint(run, at),
                 Callee::Helper(Helper::StartStatement | Helper::ReadSlot | Helper::RunThrough) => {

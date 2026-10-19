@@ -25,7 +25,7 @@ impl VirtualMachine {
             parameters,
             parameter_defaults,
             captured_vars,
-            outer_locals,
+            outer_locals: _,
             is_lambda,
             position,
             ..
@@ -63,19 +63,15 @@ impl VirtualMachine {
             Rc::clone(&shared.body),
             captured,
             self.def_scope_stack.clone(),
-            self.enclosing_method_names()
-                .map(|(callee, defined)| (callee.into(), defined.into())),
+            self.enclosing_method_names(),
             *is_lambda,
         );
         block.unit = shared.unit.clone();
-        block.defining_owner = self
-            .enclosing_method_owner()
-            .and_then(|(owner, _)| owner)
-            .map(Into::into);
+        block.defining_owner = self.enclosing_method_owner().and_then(|(owner, _)| owner);
         if block.defining_method.is_some() {
             block.defining_class = self.method_owner_stack.last().cloned().flatten();
         }
-        block.outer_locals = Rc::new(outer_locals.clone());
+        block.outer_locals = Rc::clone(&shared.outer_locals);
         block.reserved_names = Rc::new(self.visible_local_names());
         // The block's body belongs to the file it was written in,
         // wherever it is later called from.
@@ -92,14 +88,8 @@ impl VirtualMachine {
             // `source_location` names however far down the body starts.
             block.opened_at = Some(position.line);
             block.opened_column = Some(position.column.saturating_sub(1));
-            if let Some(file) = block.source_file.clone() {
-                let mut within = self
-                    .running_code
-                    .last()
-                    .map(|running| running.within.as_ref().clone())
-                    .unwrap_or_default();
-                within.push((file, position.line));
-                block.written_within = Rc::new(within);
+            if let Some(file) = &block.source_file {
+                block.written_within = self.places_within(shared, file, position.line);
             }
         }
         // The scopes open here are what the body reads its own
@@ -109,12 +99,46 @@ impl VirtualMachine {
             None => self.snapshot_lexical_nesting().into(),
         };
         block.home_frame = self.lexical_home_frame.unwrap_or(self.current_method_frame);
-        block.written_in = Some(self.enclosing_scope_label().into());
+        block.written_in = Some(self.enclosing_scope_label());
         block.written_depth = Some(self.block_nesting_depth());
         let block = Rc::new(block);
         crate::vm::counters::count_block_built();
         self.keep_block(&shared.kept, &block);
         Ok(Object::Block(block))
+    }
+
+    /// The places a block written at `line` of `file`, in the code running
+    /// now, was written within: those of the code with its own added. The
+    /// list the literal's last block was given is shared while the code and
+    /// the file are the same.
+    fn places_within(
+        &self,
+        shared: &crate::bytecode::unit::SharedBody,
+        file: &str,
+        line: usize,
+    ) -> crate::object::CodePlaces {
+        let enclosing = self.running_code.last().map(|running| &running.within);
+        if let Some(kept) = shared.places.borrow().as_ref()
+            && kept.file == file
+            && match (&kept.enclosing, enclosing) {
+                (None, None) => true,
+                (Some(kept), Some(open)) => Rc::ptr_eq(kept, open),
+                _ => false,
+            }
+        {
+            return Rc::clone(&kept.made);
+        }
+        let mut within = enclosing
+            .map(|running| running.as_ref().clone())
+            .unwrap_or_default();
+        within.push((file.to_string(), line));
+        let made = Rc::new(within);
+        *shared.places.borrow_mut() = Some(crate::bytecode::unit::KeptPlaces {
+            enclosing: enclosing.cloned(),
+            file: file.to_string(),
+            made: Rc::clone(&made),
+        });
+        made
     }
 
     /// Apply a binary operator to operands already evaluated, which is how a

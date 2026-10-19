@@ -507,6 +507,9 @@ pub struct VirtualMachine {
     /// The file frames name as their source, with the text it was made
     /// from, so frames entered from the same file share one.
     pub(crate) frames_file_held: Option<(String, Rc<str>)>,
+    /// `frames_file` for code that names no source file, with the path it
+    /// was spelled from.
+    pub(crate) frames_path_held: Option<(PathBuf, Rc<str>)>,
     /// Stack of lexically enclosing class/module definitions. Used to route
     /// nested `class`/`module` declarations to the enclosing scope (so
     /// `module Foo; class Bar; end; end` defines `Foo::Bar`, not `::Bar`).
@@ -529,10 +532,12 @@ pub struct VirtualMachine {
     pub(crate) traced_binding: Option<Object>,
     /// Lazily-populated singleton classes for value-kind receivers that
     /// have no per-object storage (Nil / true / false / Int / Float /
-    /// Symbol / String). Keyed by a stable string tag so every lookup for
-    /// the same receiver returns the same Class instance.
-    pub(crate) primitive_singleton_classes:
-        crate::fast_hash::NameMap<String, Rc<crate::class::Class>>,
+    /// Symbol / String). Keyed by the receiver's kind and address so every
+    /// lookup for the same receiver returns the same Class instance.
+    pub(crate) primitive_singleton_classes: std::collections::HashMap<
+        crate::vm::eval::singleton_class_expr::SingletonKey,
+        Rc<crate::class::Class>,
+    >,
     /// Stack of positional arguments captured for each active method
     /// invocation. `super` (bare form) reads the top entry to forward args
     /// to the parent method; pushed by invoke_method, popped on return.
@@ -761,12 +766,13 @@ impl VirtualMachine {
             spare_refinement_scopes: Vec::new(),
             spare_registers: Vec::new(),
             frames_file_held: None,
+            frames_path_held: None,
             def_scope_stack: Vec::new(),
             patterns_built_once: std::collections::HashMap::new(),
             flip_flops: std::collections::HashMap::new(),
             pattern_timeouts: std::collections::HashMap::new(),
             traced_binding: None,
-            primitive_singleton_classes: crate::fast_hash::NameMap::default(),
+            primitive_singleton_classes: std::collections::HashMap::new(),
             method_arg_stack: Vec::new(),
             method_running_stack: Vec::new(),
             weak_references: Vec::new(),
@@ -1310,14 +1316,14 @@ impl VirtualMachine {
     /// another belongs to the same scope that one does, whatever the block
     /// is later called from, so the scope travels along the frames rather
     /// than being looked up on the stack.
-    pub(crate) fn enclosing_scope_label(&self) -> String {
+    pub(crate) fn enclosing_scope_label(&self) -> Rc<str> {
         match self.call_stack.last() {
             Some(frame) if frame.block_depth() > 0 => frame
-                .written_in()
-                .map(|held| held.to_string())
-                .unwrap_or_else(|| "<main>".to_string()),
-            Some(frame) => frame.name().to_string(),
-            None => "<main>".to_string(),
+                .written_in_shared()
+                .cloned()
+                .unwrap_or_else(main_label),
+            Some(frame) => frame.shared_name(),
+            None => main_label(),
         }
     }
 
@@ -1332,28 +1338,28 @@ impl VirtualMachine {
     /// The class path and the name of the method enclosing what is running,
     /// as `ObjectSpace.allocation_class_path` and `allocation_method_id`
     /// report them. A singleton method has no class path.
-    pub(crate) fn enclosing_method_owner(&self) -> Option<(Option<String>, String)> {
+    pub(crate) fn enclosing_method_owner(&self) -> Option<(Option<Rc<str>>, Rc<str>)> {
         use crate::vm::FrameKind;
         for frame in self.call_stack.iter().rev() {
             match frame.kind() {
                 FrameKind::Block => continue,
                 FrameKind::Boundary => return None,
                 FrameKind::Method { defined, .. } => {
-                    return Some((frame.owner_path().map(str::to_string), defined.to_string()));
+                    return Some((frame.shared_owner_path().cloned(), Rc::clone(defined)));
                 }
             }
         }
         None
     }
 
-    pub(crate) fn enclosing_method_names(&self) -> Option<(String, String)> {
+    pub(crate) fn enclosing_method_names(&self) -> Option<(Rc<str>, Rc<str>)> {
         use crate::vm::FrameKind;
         for frame in self.call_stack.iter().rev() {
             match frame.kind() {
                 FrameKind::Block => continue,
                 FrameKind::Boundary => return None,
                 FrameKind::Method { callee, defined } => {
-                    return Some((callee.to_string(), defined.to_string()));
+                    return Some((Rc::clone(callee), Rc::clone(defined)));
                 }
             }
         }
@@ -1497,4 +1503,12 @@ impl WeakTarget {
             WeakTarget::Held(object) => Some(object.clone()),
         }
     }
+}
+
+/// What a scope outside every method, block, and class body is named.
+fn main_label() -> Rc<str> {
+    thread_local! {
+        static MAIN: Rc<str> = Rc::from("<main>");
+    }
+    MAIN.with(Rc::clone)
 }

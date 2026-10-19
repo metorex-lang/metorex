@@ -15,30 +15,51 @@ use crate::lexer::Position;
 use crate::object::Object;
 use crate::vm::core::VirtualMachine;
 
-/// Key used to intern the singleton class of a value-kind receiver that
-/// has no per-object storage slot of its own (Nil / Bool / Int / Float /
-/// Symbol / String). Returns None for receivers that *do* own a slot —
-/// those cases are handled directly from the object.
-fn primitive_singleton_key(receiver: &Object) -> Option<String> {
+/// What the singleton class of a receiver that has no slot of its own for
+/// one is kept under: its kind, and for one held by reference, its address.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum SingletonKey {
+    Nil,
+    True,
+    False,
+    Array(usize),
+    Dict(usize),
+    Set(usize),
+    String(usize),
+    Regex(usize),
+    Block(usize),
+    Method(usize),
+    Binding(usize),
+    Exception(usize),
+    /// Every other value of the kind named, which share one.
+    Other(&'static str),
+}
+
+/// The key the singleton class of a value-kind receiver that has no
+/// per-object storage slot of its own is kept under. None for receivers
+/// that *do* own a slot, which are handled directly from the object, and
+/// for an Integer or a Float.
+fn primitive_singleton_key(receiver: &Object) -> Option<SingletonKey> {
+    let address = |pointer: *const ()| pointer as usize;
     match receiver.view() {
-        View::Nil => Some("__nil__".to_string()),
-        View::Bool(true) => Some("__true__".to_string()),
-        View::Bool(false) => Some("__false__".to_string()),
+        View::Nil => Some(SingletonKey::Nil),
+        View::Bool(true) => Some(SingletonKey::True),
+        View::Bool(false) => Some(SingletonKey::False),
         View::Int(_) | View::Float(_) => None,
         // A collection and a string are each held by reference, so every one
         // of them can carry methods of its own rather than sharing a table
         // with every other collection of its kind.
-        View::Array(held) => Some(format!("__array_{:p}", Rc::as_ptr(held))),
-        View::Dict(held) => Some(format!("__dict_{:p}", Rc::as_ptr(held))),
-        View::Set(held) => Some(format!("__set_{:p}", Rc::as_ptr(held))),
-        View::String(held) => Some(format!("__string_{:p}", Rc::as_ptr(held))),
+        View::Array(held) => Some(SingletonKey::Array(address(Rc::as_ptr(held).cast()))),
+        View::Dict(held) => Some(SingletonKey::Dict(address(Rc::as_ptr(held).cast()))),
+        View::Set(held) => Some(SingletonKey::Set(address(Rc::as_ptr(held).cast()))),
+        View::String(held) => Some(SingletonKey::String(address(Rc::as_ptr(held).cast()))),
         // A Regexp is held by reference too, so each one carries its own
         // methods rather than sharing a table with every other pattern.
-        View::Regex(pattern, _) => Some(format!("__regex_{:p}", Rc::as_ptr(pattern))),
+        View::Regex(pattern, _) => Some(SingletonKey::Regex(address(Rc::as_ptr(pattern).cast()))),
         // A Proc, a Method and a Binding are each an object of their own.
-        View::Block(held) => Some(format!("__block_{:p}", Rc::as_ptr(held))),
-        View::Method(held) => Some(format!("__method_{:p}", Rc::as_ptr(held))),
-        View::Binding(held) => Some(format!("__binding_{:p}", Rc::as_ptr(held))),
+        View::Block(held) => Some(SingletonKey::Block(address(Rc::as_ptr(held).cast()))),
+        View::Method(held) => Some(SingletonKey::Method(address(Rc::as_ptr(held).cast()))),
+        View::Binding(held) => Some(SingletonKey::Binding(address(Rc::as_ptr(held).cast()))),
         _ => None,
     }
 }
@@ -118,9 +139,9 @@ impl VirtualMachine {
                         // An exception is a reference type, so each one gets its
                         // own singleton class rather than sharing one per kind.
                         View::Exception(details) => {
-                            format!("__exception_{:p}", Rc::as_ptr(details))
+                            SingletonKey::Exception(Rc::as_ptr(details).cast::<()>() as usize)
                         }
-                        _ => format!("__other_{}", other.type_name()),
+                        _ => SingletonKey::Other(other.type_name()),
                     }
                 });
                 if let Some(existing) = self.primitive_singleton_classes.get(&key) {
@@ -145,9 +166,11 @@ impl VirtualMachine {
             return None;
         }
         let key = primitive_singleton_key(receiver).or_else(|| match receiver.view() {
-            View::Exception(details) => Some(format!("__exception_{:p}", Rc::as_ptr(details))),
+            View::Exception(details) => Some(SingletonKey::Exception(
+                Rc::as_ptr(details).cast::<()>() as usize,
+            )),
             View::Instance(_) | View::Class(_) | View::Module(_) => None,
-            other => Some(format!("__other_{}", other.type_name())),
+            other => Some(SingletonKey::Other(other.type_name())),
         })?;
         self.primitive_singleton_classes.get(&key).map(Rc::clone)
     }
@@ -254,7 +277,7 @@ impl VirtualMachine {
     ) -> Result<Object, MetorexError> {
         let prev_self = self.environment().get("self");
         self.environment_mut()
-            .define("self".to_string(), Object::Class(Rc::clone(singleton_cls)));
+            .define_named("self", Object::Class(Rc::clone(singleton_cls)));
         self.def_scope_stack.push(Rc::clone(singleton_cls));
 
         let apply_result = self.apply_written_class_body(singleton_cls, body, position);
@@ -265,7 +288,7 @@ impl VirtualMachine {
 
         self.def_scope_stack.pop();
         if let Some(prev) = prev_self {
-            self.environment_mut().define("self".to_string(), prev);
+            self.environment_mut().define_named("self", prev);
         } else {
             self.environment_mut().undefine("self");
         }

@@ -8,7 +8,9 @@
   targets are placed.
 - A unit's machine code runs these instructions itself:
   - loading an inline value: `LoadInteger`, `LoadNil`, `LoadTrue`,
-    `LoadFalse`, and `LoadConstant` of an inline constant
+    `LoadFalse`, `LoadConstant` of an inline constant, and `LoadSymbol` of
+    the Symbol the literal made when it last ran, while the source encoding
+    is the one it was made under
   - `Move` between registers that hold inline values
   - `Jump`, `JumpIfTrue`, `JumpIfFalse`, and `JumpIfNil`
   - `Return`
@@ -22,6 +24,26 @@
   does. A heap value in the way of an inline one, such as a register to
   overwrite that holds one, leaves the instruction to `run_instruction`
   too.
+- A `GetIdentifier` of a name that may call a method on `self`, one
+  starting with a lowercase letter or `_` other than `self`, calls a Rust
+  function that keeps the method the name called last. While the name is
+  read in a method's own scope, which reads through nothing but the root
+  scope, neither scope binds it, the root scope's names and the method
+  state are as they were, and `self` is an instance with no singleton
+  class or methods of its own while no refinement is active, the next read
+  calls that method without the interpreter's scope and method lookups.
+  Any other read is the interpreter's, and a site whose reads turn out
+  otherwise four times, as one that reads a local does, leaves every later
+  read to it.
+- A `Call` written with a receiver, rather than sent with `send`, calls a
+  Rust function that keeps, for the class of the values it was made on,
+  whether the interpreter's lookup would end at the value's native method:
+  the name is no private method of every object, Enumerable does not stand
+  in for it, and no method of the program's answers it. While the receiver
+  is a nil, true, false, Integer, Float, Symbol, String, Array, or Hash
+  with no singleton class, no refinement is active, and the method state
+  is as it was, the call goes straight to the native method. One that has
+  no answer, and every other call, goes through the interpreter's lookup.
 - Two or more instructions in a row that would each call into Rust are
   one call, which runs them in turn. A jump to one after the first enters
   that call from there.
@@ -37,12 +59,15 @@
   the trampolines that call into Rust are code every unit on a thread
   shares, written once, so a unit's code is its instructions.
 - Each unit has its own threshold of runs before it is compiled: 30 times
-  its instructions over those of them machine code runs itself, so a unit
-  of Integer operations and branches is compiled after 30 runs and one of
-  mostly calls into Rust waits longer. A unit whose machine code would run
-  none of its instructions itself, only calls into Rust and its `Return`,
-  is left to the interpreter, since entering machine code and leaving it
-  again takes longer than the interpreter takes to dispatch them.
+  its instructions over those of them machine code runs itself, counting a
+  `GetIdentifier` of a name that may call a method and a `Call` written with
+  a receiver, so a unit of Integer operations and branches is compiled after
+  30 runs and one of mostly calls into Rust waits longer. A unit whose
+  machine code would run none of its instructions itself, reads no name that
+  may call a method, and makes no call written with a receiver, only calls
+  into Rust and its `Return`, is left to the interpreter, since entering
+  machine code and leaving it again takes longer than the interpreter takes
+  to dispatch them.
 - A unit whose machine code returned to the interpreter waits twice as
   many runs as before to be compiled again.
 - A loop going back counts as a run, so a loop in a unit run once is

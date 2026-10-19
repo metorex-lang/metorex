@@ -27,6 +27,9 @@ pub struct Unit {
     /// A cache for each name, which an instance variable read or write
     /// naming it reads through.
     pub slot_caches: Vec<crate::object::shape::SlotCache>,
+    /// For each name, the Symbol a `LoadSymbol` naming it made last, with
+    /// the source encoding it was made under.
+    pub symbol_caches: Vec<SymbolCache>,
     /// The unit's locals, numbered by their place here. `GetLocal` and
     /// `SetLocal` name one by that number.
     pub locals: Vec<Name>,
@@ -113,6 +116,10 @@ pub struct ErrorSpot {
     pub name: Option<String>,
 }
 
+/// The Symbol a `LoadSymbol` made last, with the source encoding it was made
+/// under.
+pub type SymbolCache = std::cell::RefCell<Option<(Option<String>, Object)>>;
+
 /// A local, instance variable, constant, global, or literal text an
 /// instruction names.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -149,6 +156,22 @@ pub struct SharedBody {
     pub body: std::rc::Rc<[crate::ast::Statement]>,
     pub unit: crate::vm::units::UnitSlot,
     pub kept: std::rc::Rc<crate::vm::block_reuse::KeptBlock>,
+    /// The locals of the scope the literal was written in that its body
+    /// names, which every block it makes shares.
+    pub outer_locals: std::rc::Rc<Vec<(String, bool)>>,
+    /// The places the last block the literal made was written within, with
+    /// the places of the code it was made in and its file, which the next
+    /// block made in the same code shares.
+    pub places: std::cell::RefCell<Option<KeptPlaces>>,
+}
+
+/// The places a block was written within, kept with what they were made
+/// from.
+#[derive(Debug, Clone)]
+pub struct KeptPlaces {
+    pub enclosing: Option<crate::object::CodePlaces>,
+    pub file: String,
+    pub made: crate::object::CodePlaces,
 }
 
 /// What a `Call` instruction calls.
@@ -515,6 +538,7 @@ impl Unit {
         self.names.push(name);
         self.constant_caches.push(Default::default());
         self.slot_caches.push(Default::default());
+        self.symbol_caches.push(Default::default());
         self.names.len() - 1
     }
 
@@ -565,14 +589,18 @@ impl Unit {
     }
 
     pub fn block(&mut self, literal: crate::ast::Expression) -> usize {
-        let body = match &literal {
-            crate::ast::Expression::Lambda { body, .. } => std::rc::Rc::clone(body),
-            _ => std::rc::Rc::from([]),
+        let (body, outer_locals) = match &literal {
+            crate::ast::Expression::Lambda {
+                body, outer_locals, ..
+            } => (std::rc::Rc::clone(body), outer_locals.clone()),
+            _ => (std::rc::Rc::from([]), Vec::new()),
         };
         self.block_bodies.push(SharedBody {
             body,
             unit: Default::default(),
             kept: Default::default(),
+            outer_locals: std::rc::Rc::new(outer_locals),
+            places: Default::default(),
         });
         self.blocks.push(literal);
         self.blocks.len() - 1

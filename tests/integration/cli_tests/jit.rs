@@ -68,7 +68,10 @@ fn the_jit_leaves_a_unit_run_fewer_times_than_the_threshold_to_the_interpreter()
 #[test]
 fn a_unit_whose_instructions_all_call_into_rust_is_left_to_the_interpreter() {
     let (printed, report) = run_example("jit/calls_only.rb", &[("METOREX_JIT", "1")]);
-    assert_eq!(printed, "[:done]\n");
+    assert_eq!(
+        printed,
+        "[\"<done>\", [\"done\", \"done\"], {\"done\" => \"done\"}]\n"
+    );
     // The loop alone, and none of the three methods it calls.
     assert_eq!(units_compiled(&report), 1);
 }
@@ -76,8 +79,8 @@ fn a_unit_whose_instructions_all_call_into_rust_is_left_to_the_interpreter() {
 #[test]
 fn a_unit_whose_instructions_mostly_call_into_rust_waits_longer_to_be_compiled() {
     let (printed, report) = run_example("jit/own_thresholds.rb", &[("METOREX_JIT", "1")]);
-    assert_eq!(printed, "4950\n100\n");
-    // The loop of Integer operations, and not the loop of calls.
+    assert_eq!(printed, "4950\n24\n");
+    // The loop of Integer operations, and not the loop that builds a string.
     assert_eq!(units_compiled(&report), 1);
 }
 
@@ -107,6 +110,33 @@ fn machine_code_applies_integer_operations_and_leaves_other_operands_to_the_inte
 fn machine_code_calls_the_method_each_side_of_a_branch_names_as_the_interpreter_does() {
     let (interpreted, compiled) = interpreted_and_compiled("branching_calls");
     assert_eq!(interpreted, "100\n");
+    assert_eq!(compiled, interpreted);
+}
+
+#[test]
+fn machine_code_loads_symbol_literals_as_the_interpreter_makes_them() {
+    let (interpreted, compiled) = interpreted_and_compiled("symbol_literals");
+    assert_eq!(
+        interpreted,
+        "[:plain, :\"two words\", :café]\ntrue\n#<Encoding:UTF-8>\n1\n#<Encoding:BINARY (ASCII-8BIT)>\n"
+    );
+    assert_eq!(compiled, interpreted);
+}
+
+#[test]
+fn machine_code_calls_what_a_bare_name_names_after_the_method_or_a_local_of_its_name_changes() {
+    let (interpreted, compiled) = interpreted_and_compiled("bare_calls");
+    assert_eq!(
+        interpreted,
+        "[\"hello\"]\n[\"hi\"]\n[\"hi\", \"hi\"]\n[\"hi\", \"hi\"]\n[\"own\"]\n[\"hi\"]\n"
+    );
+    assert_eq!(compiled, interpreted);
+}
+
+#[test]
+fn machine_code_calls_what_a_built_in_value_answers_after_a_method_of_its_name_is_written() {
+    let (interpreted, compiled) = interpreted_and_compiled("native_calls");
+    assert_eq!(interpreted, "[3]\n[99]\n[3]\n[-1]\n[4]\n");
     assert_eq!(compiled, interpreted);
 }
 

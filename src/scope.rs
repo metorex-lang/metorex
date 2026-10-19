@@ -7,6 +7,22 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
+thread_local! {
+    static LAST_VERSION: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// A version no scope on this thread has had, which is what lets a scope
+/// be told by its address and version from one that took its place.
+fn next_version() -> u64 {
+    LAST_VERSION.with(|last| {
+        last.set(last.get() + 1);
+        last.get()
+    })
+}
+
+/// How many bindings an emptied scope keeps for `define_named`.
+const SPARE_BINDINGS: usize = 8;
+
 /// Represents a single scope in the scope chain
 /// Each scope can have a parent scope, forming a chain for variable lookup
 #[derive(Debug)]
@@ -47,8 +63,13 @@ pub struct Scope {
     /// there, which `local_variables` lists in the block though the ones
     /// assigned after it cannot be read in it.
     reserved: Rc<Vec<String>>,
-    /// How many times the names this scope binds, reserves, or captures
-    /// have changed, which a kept block compares.
+    /// The names and cells of bindings an earlier use of this scope let go
+    /// of, which nothing else held, kept for `define_named` to bind again
+    /// rather than allocate.
+    spare_bindings: Vec<(String, Rc<RefCell<Object>>)>,
+    /// A number that changes, to one no scope has had, each time the names
+    /// this scope binds, reserves, or captures change, which a kept block
+    /// compares.
     version: u64,
 }
 
@@ -57,7 +78,7 @@ pub struct Scope {
 pub type CapturedNames = Rc<indexmap::IndexMap<String, Rc<RefCell<Object>>>>;
 
 impl Scope {
-    /// How many times the names this scope binds have changed.
+    /// The number the names this scope binds were last changed to.
     pub fn version(&self) -> u64 {
         self.version
     }
@@ -78,7 +99,8 @@ impl Scope {
             hoisted_names: Default::default(),
             captured: None,
             reserved: no_reserved_names(),
-            version: 0,
+            spare_bindings: Vec::new(),
+            version: next_version(),
         }
     }
 
@@ -93,16 +115,25 @@ impl Scope {
             hoisted_names: Default::default(),
             captured: None,
             reserved: no_reserved_names(),
-            version: 0,
+            spare_bindings: Vec::new(),
+            version: next_version(),
         }
     }
 
     /// Let go of everything this scope, which nothing holds any more,
     /// binds or reads through, so what its locals held can be freed while
-    /// it waits to be used again. Its version keeps counting, so nothing
+    /// it waits to be used again. It takes a new version, so nothing
     /// compared against an earlier version takes it for the scope it was.
     pub fn empty(&mut self) {
-        self.variables.clear();
+        for (name, cell) in self.variables.drain(..) {
+            if self.spare_bindings.len() < SPARE_BINDINGS
+                && Rc::strong_count(&cell) == 1
+                && Rc::weak_count(&cell) == 0
+            {
+                *cell.borrow_mut() = Object::Nil;
+                self.spare_bindings.push((name, cell));
+            }
+        }
         self.parent = None;
         self.is_method_boundary = false;
         self.inherited_names.clear();
@@ -110,13 +141,13 @@ impl Scope {
         self.hoisted_names.clear();
         self.captured = None;
         self.reserved = no_reserved_names();
-        self.version += 1;
+        self.version = next_version();
     }
 
     /// Put this emptied scope under `parent`.
     pub fn renew(&mut self, parent: Rc<RefCell<Scope>>) {
         self.parent = Some(parent);
-        self.version += 1;
+        self.version = next_version();
     }
 
     /// Defines a new variable in the current scope
@@ -132,8 +163,25 @@ impl Scope {
         }
     }
 
+    /// `define`, taking a binding this scope let go of earlier, when it
+    /// has one, rather than allocating the name and the cell.
+    pub fn define_named(&mut self, name: &str, value: Object) {
+        self.version = next_version();
+        self.forget_hidden_and_hoisted(name);
+        let (key, cell) = match self.spare_bindings.pop() {
+            Some((mut key, cell)) => {
+                key.clear();
+                key.push_str(name);
+                *cell.borrow_mut() = value;
+                (key, cell)
+            }
+            None => (name.to_string(), Rc::new(RefCell::new(value))),
+        };
+        self.variables.insert(key, cell);
+    }
+
     pub fn define(&mut self, name: String, value: Object) {
-        self.version += 1;
+        self.version = next_version();
         self.forget_hidden_and_hoisted(&name);
         self.variables.insert(name, Rc::new(RefCell::new(value)));
     }
@@ -141,7 +189,7 @@ impl Scope {
     /// Defines a new variable in the current scope with a shared reference
     /// Used when a closure defines a captured variable
     pub fn define_shared(&mut self, name: String, value: Rc<RefCell<Object>>) {
-        self.version += 1;
+        self.version = next_version();
         self.forget_hidden_and_hoisted(&name);
         self.variables.insert(name, value);
     }
@@ -149,7 +197,7 @@ impl Scope {
     /// Binds a name carried in from a Binding. It behaves like any other
     /// local, and `local_variables` reports it after the scope's own.
     pub fn define_inherited(&mut self, name: String, value: Rc<RefCell<Object>>) {
-        self.version += 1;
+        self.version = next_version();
         self.forget_hidden_and_hoisted(&name);
         if !self.inherited_names.contains(&name) {
             self.inherited_names.push(name.clone());
@@ -160,12 +208,12 @@ impl Scope {
     /// Read and write through the names a block closed over, without
     /// copying them into this scope.
     pub fn attach_reserved(&mut self, reserved: Rc<Vec<String>>) {
-        self.version += 1;
+        self.version = next_version();
         self.reserved = reserved;
     }
 
     pub fn attach_captured(&mut self, captured: CapturedNames) {
-        self.version += 1;
+        self.version = next_version();
         self.captured = Some(captured);
     }
 
@@ -177,7 +225,7 @@ impl Scope {
     /// Binds a name the program did not declare, so `local_variables` and a
     /// Binding leave it out. The implicit `it` parameter is bound this way.
     pub fn define_hidden(&mut self, name: String, value: Object) {
-        self.version += 1;
+        self.version = next_version();
         self.hoisted_names.remove(&name);
         self.hidden_names.insert(name.clone());
         self.variables.insert(name, Rc::new(RefCell::new(value)));
@@ -201,7 +249,7 @@ impl Scope {
     /// does at the assignment that introduces a local. Reading it answers
     /// nil, and a block written before the assignment does not close over it.
     pub fn hoist(&mut self, name: String) {
-        self.version += 1;
+        self.version = next_version();
         self.hoisted_names.insert(name.clone());
         self.variables
             .insert(name, Rc::new(RefCell::new(Object::Nil)));
@@ -211,7 +259,7 @@ impl Scope {
     /// written in its value closes over the name.
     pub fn unhoist(&mut self, name: &str) {
         if self.hoisted_names.remove(name) {
-            self.version += 1;
+            self.version = next_version();
             return;
         }
         if let Some(parent) = &self.parent
@@ -239,7 +287,7 @@ impl Scope {
 
     /// Remove a variable from the current scope only (does not walk parents).
     pub fn undefine(&mut self, name: &str) {
-        self.version += 1;
+        self.version = next_version();
         self.variables.shift_remove(name);
     }
 
@@ -299,7 +347,7 @@ impl Scope {
             // The assignment the parser reserved the name for has now run,
             // so a block written from here on closes over it.
             if self.hoisted_names.remove(name) {
-                self.version += 1;
+                self.version = next_version();
             }
             return true;
         }
@@ -497,7 +545,7 @@ impl Scope {
 
     /// Mark this scope as a method boundary.
     pub fn mark_method_boundary(&mut self) {
-        self.version += 1;
+        self.version = next_version();
         self.is_method_boundary = true;
     }
 
@@ -507,6 +555,17 @@ impl Scope {
             .get(name)
             .or_else(|| self.captured_ref(name))
             .cloned()
+    }
+
+    /// Whether this scope binds or captured `name` itself.
+    pub fn holds_own(&self, name: &str) -> bool {
+        self.variables.contains_key(name) || self.captured_ref(name).is_some()
+    }
+
+    /// The value this scope binds `name` to itself, without reading through
+    /// what it captured or its parent.
+    pub fn own_value(&self, name: &str) -> Option<Object> {
+        self.variables.get(name).map(|held| held.borrow().clone())
     }
 
     /// Whether this scope is the root of the chain.

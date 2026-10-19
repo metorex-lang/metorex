@@ -22,6 +22,17 @@ impl Class {
         self.name.clone()
     }
 
+    /// Run `read` over what `ruby_name` answers, without copying the name.
+    pub fn with_ruby_name<R>(&self, read: impl FnOnce(&str) -> R) -> R {
+        if let Some(temporary) = self.temporary_name.borrow().as_ref() {
+            return read(temporary);
+        }
+        if let Some(assigned) = self.assigned_name.borrow().as_ref() {
+            return read(assigned);
+        }
+        read(&self.name)
+    }
+
     /// Whether `ruby_name` answers `wanted`, without copying the name.
     pub fn ruby_name_is(&self, wanted: &str) -> bool {
         if let Some(temporary) = self.temporary_name.borrow().as_ref() {

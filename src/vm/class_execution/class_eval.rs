@@ -68,7 +68,7 @@ impl VirtualMachine {
     ) -> Result<Object, MetorexError> {
         let prev_self = self.environment().get("self");
         self.environment_mut()
-            .define("self".to_string(), self_obj.clone());
+            .define_named("self", self_obj.clone());
         // Share the outer RefCells so an assignment like `x = self` inside the
         // block mutates the caller's local, matching Ruby's closure semantics
         // for blocks (including `Class.new do ... end`).
@@ -135,7 +135,7 @@ impl VirtualMachine {
         self.def_scope_stack.pop();
         self.class_var_cref_stack.pop();
         if let Some(prev) = prev_self {
-            self.environment_mut().define("self".to_string(), prev);
+            self.environment_mut().define_named("self", prev);
         } else {
             self.environment_mut().undefine("self");
         }
@@ -188,7 +188,7 @@ impl VirtualMachine {
             .attach_captured(Rc::clone(&block.captured_vars));
         self.environment_mut()
             .attach_reserved(Rc::clone(&block.reserved_names));
-        self.environment_mut().define("self".to_string(), self_obj);
+        self.environment_mut().define_named("self", self_obj);
         if let Err(error) = crate::vm::block_execution::bind_block_params(
             self,
             &block.parameters,
@@ -340,7 +340,7 @@ impl VirtualMachine {
         // `class_eval` can see `using` from the eval scope.
         let prev_self = self.environment().get("self");
         self.environment_mut()
-            .define("self".to_string(), self_obj.clone());
+            .define_named("self", self_obj.clone());
         // Ruby resolves constants in a string eval using the caller's lexical
         // scope, which for a named receiver includes the namespaces it is
         // nested in. Push those enclosing modules (outermost first) so e.g.
@@ -408,7 +408,7 @@ impl VirtualMachine {
             self.def_scope_stack.pop();
         }
         if let Some(prev) = prev_self {
-            self.environment_mut().define("self".to_string(), prev);
+            self.environment_mut().define_named("self", prev);
         } else {
             self.environment_mut().undefine("self");
         }

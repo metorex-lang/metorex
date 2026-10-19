@@ -34,7 +34,7 @@ fn define_block_param(
         return Ok(());
     }
     let Some(names) = param.strip_prefix(crate::object::DESTRUCTURED_GROUP_PREFIX) else {
-        vm.environment_mut().define(param.to_string(), value);
+        vm.environment_mut().define_named(param, value);
         return Ok(());
     };
     bind_group_names(vm, names, value)
@@ -133,7 +133,7 @@ pub(crate) fn bind_group_names(
                 if name.is_empty() {
                     continue;
                 }
-                vm.environment_mut().define(name.to_string(), taken);
+                vm.environment_mut().define_named(name, taken);
             }
         }
     }
@@ -243,14 +243,15 @@ pub(crate) fn bind_block_params(
     }
     // A `**kwargs` parameter takes no positional value, so it is left out of
     // the positional binding entirely.
-    let params: Vec<String> = params
-        .iter()
-        .filter(|param| {
-            !param.starts_with("**") && !param.starts_with(crate::object::KEYWORD_PARAM_PREFIX)
-        })
-        .cloned()
-        .collect();
-    let params = params.as_slice();
+    let positional = |param: &&String| {
+        !param.starts_with("**") && !param.starts_with(crate::object::KEYWORD_PARAM_PREFIX)
+    };
+    let kept: std::borrow::Cow<'_, [String]> = if params.iter().all(|param| positional(&param)) {
+        std::borrow::Cow::Borrowed(params)
+    } else {
+        std::borrow::Cow::Owned(params.iter().filter(positional).cloned().collect())
+    };
+    let params: &[String] = &kept;
     let block_idx = params.iter().position(|p| p.starts_with('&'));
     bind_positional_params(vm, params, defaults, arguments)?;
 
@@ -326,7 +327,7 @@ fn bind_positional_params(
     if !defaults.is_empty() {
         for (_, param) in &positional {
             if is_plain_name(param) {
-                vm.environment_mut().define(param.to_string(), Object::Nil);
+                vm.environment_mut().define_named(param, Object::Nil);
             }
         }
     }
@@ -365,7 +366,7 @@ fn bind_positional_params(
             continue;
         }
         if Some(slot) == splat_at {
-            vm.environment_mut().define(name.to_string(), value);
+            vm.environment_mut().define_named(name, value);
         } else {
             define_block_param(vm, param, value)?;
         }

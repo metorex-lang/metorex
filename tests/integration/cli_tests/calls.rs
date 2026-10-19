@@ -33,20 +33,20 @@ fn calls_and_allocations(report: &str, path: &str) -> (u64, u64) {
 }
 
 #[test]
-fn a_bare_call_on_a_plain_instance_makes_at_most_six_heap_allocations() {
+fn a_bare_call_on_a_plain_instance_makes_at_most_two_heap_allocations() {
     let (printed, report) = run_counted("plain_instance_calls");
     assert_eq!(printed, "1000\n");
     let (calls, allocations) = calls_and_allocations(&report, "Counter#bare_call -> Counter#blank");
     assert_eq!(calls, 1000);
-    assert!(allocations <= 6 * calls, "{allocations} allocations");
+    assert!(allocations <= 2 * calls, "{allocations} allocations");
 }
 
 #[test]
-fn a_call_with_self_on_a_plain_instance_makes_at_most_six_heap_allocations() {
+fn a_call_with_self_on_a_plain_instance_makes_at_most_two_heap_allocations() {
     let (_, report) = run_counted("plain_instance_calls");
     let (calls, allocations) = calls_and_allocations(&report, "Counter#self_call -> Counter#blank");
     assert_eq!(calls, 1000);
-    assert!(allocations <= 6 * calls, "{allocations} allocations");
+    assert!(allocations <= 2 * calls, "{allocations} allocations");
 }
 
 #[test]

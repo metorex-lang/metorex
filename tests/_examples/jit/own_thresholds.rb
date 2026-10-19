@@ -1,5 +1,5 @@
 # Two loops of 100 turns: one of Integer operations, which machine code runs
-# itself, and one of calls, which it would leave to Rust.
+# itself, and one that builds a string, which it would leave to Rust.
 def add_up
   total = 0
   count = 0
@@ -10,15 +10,15 @@ def add_up
   total
 end
 
-def call_around
-  words = []
+def build_up
+  text = ""
   count = 0
   while count < 100
-    words.push(count.to_s.upcase.strip.freeze)
+    text = "#{count}#{count}#{count}#{count}#{count}#{count}#{count}#{count}#{count}#{count}#{count}#{count}"
     count += 1
   end
-  words.size
+  text.size
 end
 
 p add_up
-p call_around
+p build_up

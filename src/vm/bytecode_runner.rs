@@ -59,14 +59,14 @@ pub(crate) struct UnitRun<'a> {
     extension: Extension,
 }
 
-impl UnitRun<'_> {
+impl<'a> UnitRun<'a> {
     /// Where the registers start, which machine code reads and writes
     /// through.
     pub(crate) fn registers_pointer(&mut self) -> *mut Object {
         self.registers.as_mut_ptr()
     }
 
-    pub(crate) fn unit(&self) -> &Unit {
+    pub(crate) fn unit(&self) -> &'a Unit {
         self.unit
     }
 
@@ -285,7 +285,7 @@ impl VirtualMachine {
     /// Where the run goes after the instruction at `at` ran, handing an
     /// error it raised to the handler that takes it.
     #[inline(always)]
-    fn settle_instruction(
+    pub(crate) fn settle_instruction(
         &mut self,
         run: &mut UnitRun,
         at: usize,
@@ -512,8 +512,21 @@ impl VirtualMachine {
             Instruction::LoadFalse { to } => registers[register(to)] = Object::Bool(false),
             Instruction::LoadSelf { to } => registers[register(to)] = self.eval_self(position)?,
             Instruction::LoadSymbol { to, name } => {
-                let name = &unit.names[index(name)].text;
-                registers[register(to)] = self.evaluate_symbol_literal(name);
+                let cache = &unit.symbol_caches[index(name)];
+                let kept = cache
+                    .borrow()
+                    .as_ref()
+                    .filter(|(encoding, _)| *encoding == self.current_source_encoding)
+                    .map(|(_, symbol)| symbol.clone());
+                registers[register(to)] = match kept {
+                    Some(symbol) => symbol,
+                    None => {
+                        let made = self.evaluate_symbol_literal(&unit.names[index(name)].text);
+                        *cache.borrow_mut() =
+                            Some((self.current_source_encoding.clone(), made.clone()));
+                        made
+                    }
+                };
             }
             Instruction::NewString { to, text } => {
                 let text = &unit.names[index(text)].text;
@@ -1628,6 +1641,75 @@ impl VirtualMachine {
                 None
             }
             None => Some(value),
+        }
+    }
+
+    /// Run the `Call` at `at`, a call written on a receiver whose class
+    /// alone decides it, as a call of the native method `class` answers
+    /// for its name, which is where the interpreter's lookup would end. A
+    /// native method with no answer leaves the call to that lookup.
+    pub(crate) fn step_native_call(
+        &mut self,
+        run: &mut UnitRun,
+        at: usize,
+        class: &Rc<crate::class::Class>,
+    ) -> Result<Next, MetorexError> {
+        let unit = run.unit;
+        let Instruction::Call { base, site } = unit.instructions[at] else {
+            unreachable!("a native call is made for a Call instruction")
+        };
+        let site = &unit.call_sites[usize::from(site)];
+        let base = usize::from(base);
+        let position = unit.positions[at];
+        let receiver = run.registers[base].clone();
+        let (arguments, block) = call_inputs(site, base, run.registers, run.state);
+        let ran = crate::vm::program::enter_nesting(position).and_then(|()| {
+            let attached = self.attached_block_flags.len();
+            let written = written_receiver(site.receiver);
+            let result =
+                self.call_natively(receiver, site, arguments, block, written, position, class);
+            self.release_attached_blocks(attached);
+            crate::vm::program::leave_nesting();
+            self.note_failed_call(&result, &site.name, written.names_self(), position);
+            result
+        });
+        let ran = ran.map(|value| {
+            run.registers[base] = value;
+            Next::Step
+        });
+        self.settle_instruction(run, at, ran)
+    }
+
+    /// `call_with_block_through`, starting from the native method `class`
+    /// answers for the site's name.
+    #[allow(clippy::too_many_arguments)]
+    fn call_natively(
+        &mut self,
+        receiver: Object,
+        site: &CallSite,
+        arguments: Vec<Object>,
+        block: Option<Object>,
+        written: WrittenReceiver,
+        position: Position,
+        class: &Rc<crate::class::Class>,
+    ) -> Result<Object, MetorexError> {
+        let has_block = block.is_some();
+        let calling_frame = self.current_method_frame;
+        self.refuse_moved_receiver(&receiver, position)?;
+        self.attach_block(block);
+        let answered = self.call_native_method(class, &receiver, &site.name, &arguments, position);
+        let reached = match answered {
+            Ok(Some(value)) => Ok(value),
+            Ok(None) => {
+                self.call_evaluated_method(receiver, &site.name, arguments, written, position)
+            }
+            Err(error) => Err(error),
+        };
+        match reached {
+            Err(MetorexError::BlockBreak {
+                value, home_frame, ..
+            }) if has_block && home_frame == calling_frame => Ok(value),
+            other => other,
         }
     }
 

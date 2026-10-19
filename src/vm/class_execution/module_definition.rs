@@ -163,7 +163,7 @@ impl VirtualMachine {
         // Set 'self' to the module for instance variable access in module body
         let prev_self = self.environment().get("self");
         self.environment_mut()
-            .define("self".to_string(), Object::Module(Rc::clone(&module)));
+            .define_named("self", Object::Module(Rc::clone(&module)));
         self.def_scope_stack.push(Rc::clone(&module));
         self.class_var_cref_stack.push(Some(Rc::clone(&module)));
 
@@ -217,7 +217,7 @@ impl VirtualMachine {
         // scope gate in Ruby, so enclosing locals are not visible inside.
         self.environment_mut().push_isolated_scope();
         self.environment_mut()
-            .define("self".to_string(), Object::Module(Rc::clone(&module)));
+            .define_named("self", Object::Module(Rc::clone(&module)));
         // Ruby reserves every local the body assigns before any of it runs,
         // so one assigned in a branch not taken answers nil.
         for name in crate::ast::collect_assigned_locals(body) {
@@ -239,7 +239,7 @@ impl VirtualMachine {
 
         // Restore previous self
         if let Some(prev) = prev_self {
-            self.environment_mut().define("self".to_string(), prev);
+            self.environment_mut().define_named("self", prev);
         } else {
             self.environment_mut().undefine("self");
         }

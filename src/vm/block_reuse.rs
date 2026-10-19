@@ -46,14 +46,16 @@ pub struct KeptBlock {
     kept: RefCell<Option<(Rc<BlockStatement>, Built)>>,
 }
 
-/// What building a block read. The classes and the scope are held weakly,
-/// which keeps their addresses from being taken by another while they are
-/// compared by address.
+/// What building a block read. The classes are held weakly, which keeps
+/// their addresses from being taken by another while they are compared by
+/// address. A scope is told by its address and its version, which no other
+/// scope has had, so one that takes the address of another, as a scope
+/// used again does, is not taken for it.
 #[derive(Debug)]
 struct Built {
     /// The scope the block was built in and each it reads names through,
     /// with the version each had.
-    scopes: Vec<(Weak<RefCell<Scope>>, u64)>,
+    scopes: Vec<(*const RefCell<Scope>, u64)>,
     scope_state: u64,
     method_frame: Option<u64>,
     lexical_home_frame: Option<Option<u64>>,
@@ -84,7 +86,7 @@ impl VirtualMachine {
         let mut cursor = Some(self.environment().current_scope());
         while let Some(scope) = cursor {
             let held = scope.borrow();
-            scopes.push((Rc::downgrade(&scope), held.version()));
+            scopes.push((Rc::as_ptr(&scope), held.version()));
             cursor = held.parent().cloned();
         }
         Built {
@@ -109,6 +111,43 @@ impl VirtualMachine {
                 .last()
                 .map(|running| Rc::clone(&running.within)),
         }
+    }
+
+    /// Make `built` what `block_built_here` answers, keeping the lists it
+    /// already holds.
+    fn rebuild_here(&self, built: &mut Built) {
+        built.scopes.clear();
+        let mut cursor = Some(self.environment().current_scope());
+        while let Some(scope) = cursor {
+            let held = scope.borrow();
+            built.scopes.push((Rc::as_ptr(&scope), held.version()));
+            cursor = held.parent().cloned();
+        }
+        built.scope_state = scope_state();
+        built.method_frame = self.current_method_frame;
+        built.lexical_home_frame = self.lexical_home_frame;
+        built.frames = self.call_stack.len();
+        built.bodies.clear();
+        built
+            .bodies
+            .extend(self.def_scope_stack.iter().map(Rc::downgrade));
+        match (self.method_nesting_stack.last(), &mut built.nesting) {
+            (Some(open), Some(kept)) => {
+                kept.clear();
+                kept.extend(open.iter().map(Rc::downgrade));
+            }
+            (open, kept) => *kept = open.map(|nesting| weak_list(nesting)),
+        }
+        built.method_owner = self
+            .method_owner_stack
+            .last()
+            .map(|owner| owner.as_ref().map(Rc::downgrade));
+        built.source_file.clone_from(&self.current_source_file);
+        built.current_file.clone_from(&self.current_file);
+        built.within = self
+            .running_code
+            .last()
+            .map(|running| Rc::clone(&running.within));
     }
 
     fn built_here(&self, built: &Built) -> bool {
@@ -142,14 +181,14 @@ impl VirtualMachine {
 
     /// Whether the scope running now and those it reads through are the ones
     /// `scopes` lists, each at the version listed.
-    fn same_scopes(&self, scopes: &[(Weak<RefCell<Scope>>, u64)]) -> bool {
+    fn same_scopes(&self, scopes: &[(*const RefCell<Scope>, u64)]) -> bool {
         let mut cursor = Some(self.environment().current_scope());
         for (kept, version) in scopes {
             let Some(scope) = cursor else {
                 return false;
             };
             let held = scope.borrow();
-            if !std::ptr::eq(kept.as_ptr(), Rc::as_ptr(&scope)) || held.version() != *version {
+            if !std::ptr::eq(*kept, Rc::as_ptr(&scope)) || held.version() != *version {
                 return false;
             }
             cursor = held.parent().cloned();
@@ -178,11 +217,23 @@ impl VirtualMachine {
 
     /// Keep `block` as the one its literal made here.
     pub(crate) fn keep_block(&self, kept: &Rc<KeptBlock>, block: &Rc<BlockStatement>) {
-        let first = kept
-            .kept
-            .borrow_mut()
-            .replace((Rc::clone(block), self.block_built_here()))
-            .is_none();
+        let mut held = kept.kept.borrow_mut();
+        let mut replaced = None;
+        let first = match held.as_mut() {
+            Some((kept_block, built)) => {
+                replaced = Some(std::mem::replace(kept_block, Rc::clone(block)));
+                self.rebuild_here(built);
+                false
+            }
+            None => {
+                *held = Some((Rc::clone(block), self.block_built_here()));
+                true
+            }
+        };
+        // The block let go of may hold the last reference to what it
+        // captured, which is freed once nothing here is borrowed.
+        drop(held);
+        drop(replaced);
         if first {
             KEPT.with(|registry| registry.borrow_mut().push(Rc::downgrade(kept)));
         }

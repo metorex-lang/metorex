@@ -123,7 +123,7 @@ impl VirtualMachine {
     fn warning_category_slot(&self, category: &str) -> Option<Object> {
         match self.globals().get("Warning").view() {
             Some(View::Module(warning)) | Some(View::Class(warning)) => {
-                warning.get_class_var(&category_key(category))
+                warning.get_class_var(&held_category_key(category))
             }
             _ => None,
         }
@@ -219,7 +219,19 @@ const WARNING_CATEGORIES: &[&str] = &[
 
 /// Class-variable slot backing one `Warning[]` category.
 fn category_key(category: &str) -> String {
-    format!("__category_{}", category)
+    held_category_key(category).to_string()
+}
+
+/// `category_key`, without formatting it for the categories Ruby has.
+fn held_category_key(category: &str) -> std::borrow::Cow<'static, str> {
+    use std::borrow::Cow;
+    match category {
+        "deprecated" => Cow::Borrowed("__category_deprecated"),
+        "experimental" => Cow::Borrowed("__category_experimental"),
+        "performance" => Cow::Borrowed("__category_performance"),
+        "strict_unused_block" => Cow::Borrowed("__category_strict_unused_block"),
+        _ => Cow::Owned(format!("__category_{}", category)),
+    }
 }
 
 /// Name to print on the left of `::` in constant messages. Anonymous modules

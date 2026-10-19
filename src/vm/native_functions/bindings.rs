@@ -58,7 +58,9 @@ impl VirtualMachine {
         *held.implicit_parameters.borrow_mut() = self.environment().implicit_parameters();
         // The method the call sits in, which code run through the
         // binding names as its own.
-        *held.method.borrow_mut() = self.enclosing_method_names();
+        *held.method.borrow_mut() = self
+            .enclosing_method_names()
+            .map(|(callee, defined)| (callee.to_string(), defined.to_string()));
         // The refinements in force here, which code run through the
         // binding sees.
         *held.refinements.borrow_mut() = self.snapshot_active_refinements();

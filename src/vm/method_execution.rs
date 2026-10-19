@@ -45,7 +45,7 @@ impl VirtualMachine {
                 _ => format!("{}#{}", owner.name(), method.name),
             };
             (
-                self.enclosing_scope_label(),
+                self.enclosing_scope_label().to_string(),
                 callee,
                 crate::vm::counters::allocations_so_far(),
             )
@@ -654,7 +654,7 @@ impl VirtualMachine {
 
         let result = (|| -> Result<Object, MetorexError> {
             self.environment_mut()
-                .define("self".to_string(), self_value.clone());
+                .define_named("self", self_value.clone());
 
             // Inject captured closure variables (from define_method blocks).
             // Skip `self` — the method receiver should always be the method's
@@ -681,14 +681,14 @@ impl VirtualMachine {
                 .as_ref()
                 .is_some_and(|captured| captured.contains_key("block_given?"));
             if !inherits_block_given {
-                self.environment_mut().define(
-                    "block_given?".to_string(),
+                self.environment_mut().define_named(
+                    "block_given?",
                     Object::Bool(block.is_some() && !from_a_block),
                 );
             }
             if let Some(block_value) = block.as_ref().filter(|_| !from_a_block) {
                 self.environment_mut()
-                    .define("__block__".to_string(), block_value.clone());
+                    .define_named("__block__", block_value.clone());
             }
 
             // The named &block parameter is bound after the others, since a
@@ -790,7 +790,7 @@ impl VirtualMachine {
         let caller_self = self.eval_self(Position::default()).ok();
         self.environment_mut().push_isolated_scope();
         if let Some(receiver) = caller_self {
-            self.environment_mut().define("self".to_string(), receiver);
+            self.environment_mut().define_named("self", receiver);
         }
 
         // Take the pending block now so nested calls don't see it.
@@ -809,10 +809,10 @@ impl VirtualMachine {
             // value as well as from the body, so the block is bound before
             // the parameters, and the named &block parameter after them.
             self.environment_mut()
-                .define("block_given?".to_string(), Object::Bool(block.is_some()));
+                .define_named("block_given?", Object::Bool(block.is_some()));
             if let Some(block_value) = &block {
                 self.environment_mut()
-                    .define("__block__".to_string(), block_value.clone());
+                    .define_named("__block__", block_value.clone());
             }
 
             // Bind parameters to arguments (no self for standalone functions)

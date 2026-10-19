@@ -107,6 +107,16 @@ impl Environment {
         true
     }
 
+    /// The scope every other one reads through last.
+    pub fn root_scope(&self) -> &Rc<RefCell<Scope>> {
+        &self.scopes[0]
+    }
+
+    /// The current scope, borrowed rather than shared.
+    pub fn current_scope_ref(&self) -> &Rc<RefCell<Scope>> {
+        self.scopes.last().unwrap()
+    }
+
     /// Returns a reference to the current (top) scope
     pub fn current_scope(&self) -> Rc<RefCell<Scope>> {
         self.scopes.last().unwrap().clone()
@@ -126,6 +136,14 @@ impl Environment {
     /// Defines a variable in the current scope
     pub fn define(&mut self, name: String, value: Object) {
         self.current_scope().borrow_mut().define(name, value);
+    }
+
+    /// `define`, from a borrowed name, which the scope copies into a binding
+    /// it let go of earlier when it has one.
+    pub fn define_named(&mut self, name: &str, value: Object) {
+        self.current_scope_ref()
+            .borrow_mut()
+            .define_named(name, value);
     }
 
     /// Reserves a name for the rest of the current scope ahead of the

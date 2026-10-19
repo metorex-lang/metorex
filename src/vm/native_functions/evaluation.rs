@@ -353,7 +353,7 @@ impl VirtualMachine {
             }
             if let Some(receiver) = &b.receiver {
                 self.environment_mut()
-                    .define("self".to_string(), receiver.clone());
+                    .define_named("self", receiver.clone());
             }
         } else {
             // Code eval'd without a binding runs in a scope of its
@@ -377,7 +377,7 @@ impl VirtualMachine {
                 self.environment_mut().define_inherited(name, cell);
             }
             if let Some(receiver) = here {
-                self.environment_mut().define("self".to_string(), receiver);
+                self.environment_mut().define_named("self", receiver);
             }
         }
         // A name the code assigns to is a local of the scope the eval

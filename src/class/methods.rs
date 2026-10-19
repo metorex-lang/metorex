@@ -117,6 +117,11 @@ impl Class {
         self.mixins.borrow_mut().insert(0, module);
     }
 
+    /// Whether any module is mixed into this class or module.
+    pub fn has_mixins(&self) -> bool {
+        !self.mixins.borrow().is_empty()
+    }
+
     /// Snapshot of the mixin chain (most-recently-included first).
     pub fn mixin_chain(&self) -> Vec<Rc<Class>> {
         self.mixins.borrow().clone()
@@ -126,6 +131,11 @@ impl Class {
     pub fn add_prepend(&self, module: Rc<Class>) {
         module_joined(&module);
         self.prepends.borrow_mut().insert(0, module);
+    }
+
+    /// Whether any module is prepended to this class or module.
+    pub fn has_prepends(&self) -> bool {
+        !self.prepends.borrow().is_empty()
     }
 
     /// Snapshot of the prepend chain (most-recently-prepended first).

@@ -178,6 +178,16 @@ impl CallFrame {
         self.written_in.as_deref()
     }
 
+    /// `written_in`, shared rather than borrowed.
+    pub fn written_in_shared(&self) -> Option<&Rc<str>> {
+        self.written_in.as_ref()
+    }
+
+    /// `name`, shared rather than borrowed.
+    pub fn shared_name(&self) -> Rc<str> {
+        Rc::clone(&self.name)
+    }
+
     /// Say which module the running method was defined in, by class path.
     pub fn owned_by(mut self, owner_path: Option<impl Into<Rc<str>>>) -> Self {
         self.owner_path = owner_path.map(Into::into);
@@ -198,6 +208,11 @@ impl CallFrame {
     /// The class path of the module the running method was defined in.
     pub fn owner_path(&self) -> Option<&str> {
         self.owner_path.as_deref()
+    }
+
+    /// `owner_path`, shared rather than borrowed.
+    pub fn shared_owner_path(&self) -> Option<&Rc<str>> {
+        self.owner_path.as_ref()
     }
 
     /// Record the scope that was current when the frame was pushed.

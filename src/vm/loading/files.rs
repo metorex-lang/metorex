@@ -18,6 +18,17 @@ impl VirtualMachine {
     /// `file_for_frames` as a shared string, made once while the file
     /// stays the same.
     pub(crate) fn frames_file(&mut self) -> Option<Rc<str>> {
+        if self.current_source_file.is_none() {
+            let reported = self.reported_spelling_of(self.current_file.as_ref()?);
+            if let Some((path, shared)) = &self.frames_path_held
+                && path == reported
+            {
+                return Some(Rc::clone(shared));
+            }
+            let shared: Rc<str> = Rc::from(reported.display().to_string().as_str());
+            self.frames_path_held = Some((reported.clone(), Rc::clone(&shared)));
+            return Some(shared);
+        }
         if let Some(current) = &self.current_source_file
             && let Some((text, shared)) = &self.frames_file_held
             && text == current
@@ -39,13 +50,14 @@ impl VirtualMachine {
 
     /// The path `__FILE__` reports for `current`.
     pub(crate) fn reported_spelling(&self, current: &PathBuf) -> PathBuf {
+        self.reported_spelling_of(current).clone()
+    }
+
+    /// `reported_spelling`, borrowed.
+    fn reported_spelling_of<'a>(&'a self, current: &'a PathBuf) -> &'a PathBuf {
         match &self.script_path {
-            Some((canonical, as_given)) if canonical == current => as_given.clone(),
-            _ => self
-                .reported_files
-                .get(current)
-                .cloned()
-                .unwrap_or_else(|| current.clone()),
+            Some((canonical, as_given)) if canonical == current => as_given,
+            _ => self.reported_files.get(current).unwrap_or(current),
         }
     }
 

@@ -24,25 +24,20 @@ impl VirtualMachine {
         // `index` and `rindex` count in characters, `byteindex` and
         // `byterindex` in bytes.
         let in_bytes = method_name.starts_with("byte");
-        let text = string_value.as_str().to_string();
-        let bytes = if in_bytes {
-            binary_bytes(string_value)
-        } else {
-            text.as_bytes().to_vec()
+        let places = {
+            let text = string_value.as_str();
+            if in_bytes {
+                Places::Bytes(string_value.bytes().len())
+            } else if text.is_ascii() {
+                Places::Bytes(text.len())
+            } else {
+                Places::Characters(text.chars().count())
+            }
         };
-        // Where each position starts, in the bytes searched, with one more
-        // for the end of the string.
-        let places: Vec<usize> = if in_bytes {
-            (0..=bytes.len()).collect()
-        } else {
-            text.char_indices()
-                .map(|(at, _)| at)
-                .chain(std::iter::once(text.len()))
-                .collect()
-        };
-        let total = places.len() as i64 - 1;
+        let total = places.last() as i64;
         let from_end = method_name.ends_with("rindex");
-        let searching_pattern = pattern_of(&arguments[0]).is_some();
+        let pattern = pattern_of(&arguments[0]);
+        let searching_pattern = pattern.is_some();
         let refuse_offset = |vm: &mut Self| {
             if searching_pattern {
                 vm.globals_mut().set(
@@ -78,18 +73,21 @@ impl VirtualMachine {
         };
         if in_bytes {
             crate::vm::native_methods::string_mutation::check_character_boundary(
-                &bytes,
+                &binary_bytes(string_value),
                 offset as usize,
                 position,
             )?;
         }
-        let opening = places[offset as usize];
-        if let Some((pattern, flags)) = pattern_of(&arguments[0]) {
+        if let Some((pattern, flags)) = pattern {
             self.refuse_mixed_pattern_encoding(string_value, &arguments[0], position)?;
+            // The text is read for the search alone, which runs no code of
+            // the program's that could change it.
+            let text = string_value.as_str();
+            let opening = places.byte_at(offset as usize, &text);
             let found =
                 self.byte_index_by_pattern(&pattern, &flags, &text, opening, from_end, position)?;
             return Ok(match found.view() {
-                View::Int(at) => Object::Int(position_of(&places, at as usize, in_bytes, &text)),
+                View::Int(at) => Object::Int(places.position_of(at as usize, &text)),
                 _ => found.clone(),
             });
         }
@@ -109,15 +107,26 @@ impl VirtualMachine {
                 position,
             ));
         }
-        let wanted = if in_bytes {
-            binary_bytes(&needle)
+        let found = if in_bytes {
+            byte_run_index(
+                &binary_bytes(string_value),
+                &binary_bytes(&needle),
+                offset as usize,
+                from_end,
+            )
+            .map(|at| at as i64)
         } else {
-            needle.as_str().as_bytes().to_vec()
+            let text = string_value.as_str();
+            let opening = places.byte_at(offset as usize, &text);
+            byte_run_index(
+                text.as_bytes(),
+                needle.as_str().as_bytes(),
+                opening,
+                from_end,
+            )
+            .map(|at| places.position_of(at, &text))
         };
-        Ok(match byte_run_index(&bytes, &wanted, opening, from_end) {
-            Some(at) => Object::Int(position_of(&places, at, in_bytes, &text)),
-            None => Object::Nil,
-        })
+        Ok(found.map_or(Object::Nil, Object::Int))
     }
 
     /// The needle a byte search was given: a String, or what `to_str` makes
@@ -333,12 +342,40 @@ fn value_name(vm: &VirtualMachine, held: &Object) -> String {
 
 /// The position a byte offset stands at: the offset itself when positions are
 /// counted in bytes, and the number of characters before it otherwise.
-fn position_of(places: &[usize], at: usize, in_bytes: bool, text: &str) -> i64 {
-    if in_bytes {
-        return at as i64;
+/// What the positions a search counts in are, each numbered from 0 with
+/// one more for the end of the string.
+enum Places {
+    /// The bytes of a string this many bytes long, which is what a search
+    /// counting in bytes, or in characters of ASCII text, counts.
+    Bytes(usize),
+    /// The characters of a string this many characters long.
+    Characters(usize),
+}
+
+impl Places {
+    /// The number of the last position, the end of the string.
+    fn last(&self) -> usize {
+        match self {
+            Places::Bytes(count) | Places::Characters(count) => *count,
+        }
     }
-    match places.binary_search(&at) {
-        Ok(found) => found as i64,
-        Err(_) => text[..at].chars().count() as i64,
+
+    /// Where position `index` of `text` starts, in bytes.
+    fn byte_at(&self, index: usize, text: &str) -> usize {
+        match self {
+            Places::Bytes(_) => index,
+            Places::Characters(_) => text
+                .char_indices()
+                .nth(index)
+                .map_or(text.len(), |(at, _)| at),
+        }
+    }
+
+    /// The position the byte `at` of `text` stands at.
+    fn position_of(&self, at: usize, text: &str) -> i64 {
+        match self {
+            Places::Bytes(_) => at as i64,
+            Places::Characters(_) => text[..at].chars().count() as i64,
+        }
     }
 }

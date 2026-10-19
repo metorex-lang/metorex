@@ -348,9 +348,12 @@ impl VirtualMachine {
             ReceiverTarget::Subscript {
                 receiver,
                 subscripts,
+                sends,
                 position,
-                ..
-            } => self.send_to_object(receiver.clone(), "[]", subscripts.clone(), *position),
+            } => match subscripts.as_slice() {
+                [single] if !sends => self.index_value(receiver.clone(), single.clone(), *position),
+                _ => self.send_to_object(receiver.clone(), "[]", subscripts.clone(), *position),
+            },
             ReceiverTarget::ScopedConstant {
                 namespace, name, ..
             } if or_assigning

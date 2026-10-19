@@ -265,8 +265,8 @@ impl VirtualMachine {
             && !entries.contains_key("method_id")
             && let Some((callee, defined)) = self.enclosing_method_names()
         {
-            entries.insert("method_id".to_string(), Object::symbol(defined));
-            entries.insert("callee_id".to_string(), Object::symbol(callee));
+            entries.insert("method_id".to_string(), Object::symbol(&*defined));
+            entries.insert("callee_id".to_string(), Object::symbol(&*callee));
             if let Some((Some(owner), _)) = self.enclosing_method_owner()
                 && let Some(class) = self.resolve_qualified_constant(&owner)
             {

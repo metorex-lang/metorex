@@ -37,7 +37,7 @@ impl VirtualMachine {
                 } else {
                     defined
                 };
-                Object::symbol(chosen)
+                Object::symbol(&*chosen)
             }
             None => Object::Nil,
         })

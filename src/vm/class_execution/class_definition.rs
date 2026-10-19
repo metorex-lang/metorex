@@ -250,7 +250,7 @@ impl VirtualMachine {
 
         let prev_self = self.environment().get("self");
         self.environment_mut()
-            .define("self".to_string(), Object::Class(Rc::clone(&class)));
+            .define_named("self", Object::Class(Rc::clone(&class)));
         self.def_scope_stack.push(Rc::clone(&class));
         self.class_var_cref_stack.push(Some(Rc::clone(&class)));
         // Record the class definition's source location for
@@ -305,7 +305,7 @@ impl VirtualMachine {
         // gate in Ruby, so enclosing locals are not visible inside the body.
         self.environment_mut().push_isolated_scope();
         self.environment_mut()
-            .define("self".to_string(), Object::Class(Rc::clone(&class)));
+            .define_named("self", Object::Class(Rc::clone(&class)));
         // Ruby reserves every local the body assigns before any of it runs,
         // so one assigned in a branch not taken answers nil.
         for name in crate::ast::collect_assigned_locals(body) {
@@ -321,7 +321,7 @@ impl VirtualMachine {
         self.def_scope_stack.pop();
         self.class_var_cref_stack.pop();
         if let Some(prev) = prev_self {
-            self.environment_mut().define("self".to_string(), prev);
+            self.environment_mut().define_named("self", prev);
         } else {
             self.environment_mut().undefine("self");
         }
