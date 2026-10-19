@@ -168,7 +168,7 @@ pipeline {
       }
       post {
         always {
-          sh 'cp "$CARGO_TARGET_DIR/nextest/ci/junit.xml" test-results/cargo-test.xml || true'
+          sh 'cp target/nextest/ci/junit.xml test-results/cargo-test.xml || true'
           junit testResults: 'test-results/*.xml', allowEmptyResults: true
           sh 'scripts/engine_report_summary.sh engine-report > engine-report-tests.txt || true'
           archiveArtifacts artifacts: 'engine-report-tests.txt', allowEmptyArchive: true
@@ -231,7 +231,7 @@ pipeline {
       }
       post {
         always {
-          sh 'cp "$CARGO_TARGET_DIR/nextest/ci/junit.xml" test-results/jit-cargo-test.xml || true'
+          sh 'cp target/nextest/ci/junit.xml test-results/jit-cargo-test.xml || true'
           junit testResults: 'test-results/*.xml', allowEmptyResults: true
         }
       }
@@ -275,7 +275,7 @@ pipeline {
       }
       post {
         always {
-          sh 'cp "$CARGO_TARGET_DIR/nextest/ci/junit.xml" test-results/coverage-cargo-test.xml || true'
+          sh 'cp target/nextest/ci/junit.xml test-results/coverage-cargo-test.xml || true'
           junit testResults: 'test-results/*.xml', allowEmptyResults: true
         }
       }

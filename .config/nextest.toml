@@ -10,7 +10,8 @@ status-level = "fail"
 final-status-level = "fail"
 
 [profile.ci.junit]
-# Written under the target directory, at nextest/ci/junit.xml.
+# Written to target/nextest/ci/junit.xml in the workspace, wherever
+# CARGO_TARGET_DIR puts the build.
 path = "junit.xml"
 store-success-output = false
 store-failure-output = true
