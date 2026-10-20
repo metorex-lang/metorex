@@ -52,6 +52,13 @@
   A site made on four values that are none of these is compiled as the
   interpreter's call from the next run of its unit on, so a unit with
   nothing else machine code runs itself is left to the interpreter.
+- A `CallResolved` whose route is a call on `self` keeps the method a
+  lookup on `self` reached, by the class the lookup went through, when
+  `self` is an instance with a singleton class or singleton methods, as
+  `main` has both, which the call site's own cache refuses. While none of
+  the singleton methods has the call's name, no refinement is active, and
+  the method state is as it was, the call goes to that method without the
+  lookup. Every other call is the interpreter's.
 - A `SetInstanceVariable` keeps the shape it found `self` with, the shape
   the write left it with, and the slot it wrote. While `self` is an
   instance that is not frozen and has that first shape, and the name does
@@ -90,12 +97,13 @@
 - Each unit has its own threshold of runs before it is compiled: 30 times
   its instructions over those of them machine code runs itself, counting a
   `GetIdentifier` of a name that may call a method, a `Call` written with
-  a receiver, an instance variable write, and a store through a writer,
+  a receiver, a `CallResolved`, an instance variable write, and a store
+  through a writer,
   so a unit of Integer operations and branches is compiled after
   30 runs and one of mostly calls into Rust waits longer. A unit whose
   machine code would run none of its instructions itself, reads no name that
-  may call a method, makes no call written with a receiver, writes no
-  instance variable, and stores through no writer, only calls
+  may call a method, makes no call written with a receiver or resolved,
+  writes no instance variable, and stores through no writer, only calls
   into Rust and its `Return`, is left to the interpreter, since entering
   machine code and leaving it again takes longer than the interpreter takes
   to dispatch them.

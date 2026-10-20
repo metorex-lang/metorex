@@ -186,6 +186,16 @@ fn machine_code_reads_through_readers_as_the_interpreter_calls_them() {
 }
 
 #[test]
+fn machine_code_calls_methods_on_main_as_the_interpreter_looks_them_up() {
+    let (interpreted, compiled) = interpreted_and_compiled("resolved_calls");
+    assert_eq!(
+        interpreted,
+        "100\n9900\n[:broke]\n117\n-39\n:singleton\n[:not_written, 39]\n780\n0\n"
+    );
+    assert_eq!(compiled, interpreted);
+}
+
+#[test]
 fn an_integer_operand_that_turns_out_otherwise_returns_the_run_to_the_interpreter() {
     let (_, report) = run_example("jit/integer_operands.rb", &EVERY_UNIT);
     assert!(returns_to_the_interpreter(&report) > 0);

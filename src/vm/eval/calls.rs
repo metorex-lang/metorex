@@ -401,17 +401,29 @@ impl VirtualMachine {
         position: Position,
         cache: Option<&std::rc::Rc<crate::bytecode::call_cache::CallCache>>,
     ) -> Result<Object, MetorexError> {
+        self.call_with_block_reaching(receiver, block, position, |vm, receiver| match cache {
+            Some(cache) => {
+                vm.call_through_cache(receiver, name, arguments, written, position, cache)
+            }
+            None => vm.call_evaluated_method(receiver, name, arguments, written, position),
+        })
+    }
+
+    /// `call_with_block`, with `reach` making the call on the receiver once
+    /// the block is attached.
+    #[inline(always)]
+    pub(crate) fn call_with_block_reaching(
+        &mut self,
+        receiver: Object,
+        block: Option<Object>,
+        position: Position,
+        reach: impl FnOnce(&mut Self, Object) -> Result<Object, MetorexError>,
+    ) -> Result<Object, MetorexError> {
         let has_block = block.is_some();
         let calling_frame = self.current_method_frame;
         self.refuse_moved_receiver(&receiver, position)?;
         self.attach_block(block);
-        let reached = match cache {
-            Some(cache) => {
-                self.call_through_cache(receiver, name, arguments, written, position, cache)
-            }
-            None => self.call_evaluated_method(receiver, name, arguments, written, position),
-        };
-        match reached {
+        match reach(self, receiver) {
             Err(MetorexError::BlockBreak {
                 value, home_frame, ..
             }) if has_block && home_frame == calling_frame => Ok(value),

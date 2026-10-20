@@ -25,6 +25,13 @@ use crate::vm::{ControlFlow, VirtualMachine};
 use std::cell::RefCell;
 use std::rc::Rc;
 
+/// A call on `self` whose method a lookup was found to reach.
+pub(crate) struct KnownCall {
+    pub(crate) receiver: Object,
+    pub(crate) class: Rc<crate::class::Class>,
+    pub(crate) method: Rc<crate::object::Method>,
+}
+
 /// The operands an `Extend` supplies the high bits of.
 #[derive(Default, Clone, Copy)]
 struct Extension {
@@ -426,6 +433,7 @@ impl VirtualMachine {
                     usize::from(base),
                     usize::from(site),
                     run.unit.positions[at],
+                    None,
                 )
                 .map(|()| Next::Step);
             return self.settle_instruction(run, at, ran);
@@ -433,9 +441,47 @@ impl VirtualMachine {
         self.step_instruction(run, at)
     }
 
+    /// Run the `CallResolved` at `at`, calling the method `reached` answers
+    /// for the call's name when the route decided is a call on `self`: the
+    /// receiver, its class, and the method a lookup there reaches.
+    pub(crate) fn step_call_resolved_reaching(
+        &mut self,
+        run: &mut UnitRun,
+        at: usize,
+        reached: impl FnOnce(&Self, &str, Position) -> Option<KnownCall>,
+    ) -> Result<Next, MetorexError> {
+        let Instruction::CallResolved { base, site } = run.unit.instructions[at] else {
+            return self.step_instruction(run, at);
+        };
+        let position = run.unit.positions[at];
+        let known = match run.state.routes.last() {
+            Some((CallRoute::OnSelf, _)) => {
+                reached(self, &run.unit.call_sites[usize::from(site)].name, position)
+            }
+            _ => None,
+        };
+        if known.is_none() {
+            return self.step_call_resolved(run, at);
+        }
+        let ran = self
+            .call_resolved(
+                run.unit,
+                run.registers,
+                run.state,
+                usize::from(base),
+                usize::from(site),
+                position,
+                known,
+            )
+            .map(|()| Next::Step);
+        self.settle_instruction(run, at, ran)
+    }
+
     /// Make the call the route last decided stands for, with the arguments
-    /// from register `base` on, and write its answer to `base`.
+    /// from register `base` on, and write its answer to `base`. A `known`
+    /// call is made in place of the route, which decided a call on `self`.
     #[inline(always)]
+    #[allow(clippy::too_many_arguments)]
     fn call_resolved(
         &mut self,
         unit: &Unit,
@@ -444,20 +490,30 @@ impl VirtualMachine {
         base: usize,
         site: usize,
         position: Position,
+        known: Option<KnownCall>,
     ) -> Result<(), MetorexError> {
         let site = &unit.call_sites[site];
         let (route, bare) = state.routes.pop().expect("a call route was decided");
         let (arguments, block) = call_inputs(site, base, registers, state);
         crate::vm::program::enter_nesting(position)?;
         let attached = self.attached_block_flags.len();
-        let result = self.run_call_route(
-            route,
-            &site.name,
-            arguments,
-            block,
-            position,
-            Some(&site.cache),
-        );
+        let result = match known {
+            Some(KnownCall {
+                receiver,
+                class,
+                method,
+            }) => self.call_with_block_reaching(receiver, block, position, |vm, receiver| {
+                vm.invoke_method(class, method, receiver, arguments, position)
+            }),
+            None => self.run_call_route(
+                route,
+                &site.name,
+                arguments,
+                block,
+                position,
+                Some(&site.cache),
+            ),
+        };
         self.release_attached_blocks(attached);
         crate::vm::program::leave_nesting();
         if bare {
@@ -670,6 +726,7 @@ impl VirtualMachine {
                     register(base),
                     index(site),
                     position,
+                    None,
                 )?;
             }
             Instruction::IsNativeName { to, name } => {

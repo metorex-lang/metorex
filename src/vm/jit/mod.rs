@@ -22,6 +22,7 @@ mod attributes;
 mod bare_calls;
 mod memory;
 mod native_calls;
+mod resolved_calls;
 mod slot_writes;
 
 #[cfg(target_arch = "aarch64")]
@@ -200,6 +201,8 @@ pub(crate) struct MachineCode {
     slot_writes: Box<[slot_writes::SlotWriteSite]>,
     /// The writer each `StoreTarget` through one found last.
     attribute_writes: Box<[attributes::AttributeWriteSite]>,
+    /// The method each `CallResolved` reached last on `self`.
+    resolved_calls: Box<[resolved_calls::ResolvedCallSite]>,
     /// The reader each `Call` that may reach a native method found last,
     /// by the same place as `native_calls`.
     attribute_reads: Box<[attributes::AttributeReadSite]>,
@@ -328,6 +331,7 @@ fn runs_in_machine_code(unit: &Unit, instruction: Instruction) -> bool {
             | Instruction::CoverBranch { .. }
             | Instruction::GetInstanceVariable { .. }
             | Instruction::SetInstanceVariable { .. }
+            | Instruction::CallResolved { .. }
     ) || integer_operation(instruction).is_some()
 }
 
@@ -541,6 +545,7 @@ impl Planned {
                             | Helper::WriteAttribute
                             | Helper::BareName
                             | Helper::Call
+                            | Helper::CallResolved
                     )
                 )
             }
@@ -756,6 +761,9 @@ fn compile(vm: &VirtualMachine, unit: &Unit) -> Option<Rc<MachineCode>> {
         attribute_writes: (0..sites.attribute_writes)
             .map(|_| Default::default())
             .collect(),
+        resolved_calls: (0..sites.resolved_calls)
+            .map(|_| Default::default())
+            .collect(),
         attribute_reads: (0..sites.native_calls)
             .map(|_| Default::default())
             .collect(),
@@ -773,6 +781,7 @@ struct Sites {
     native_calls: usize,
     slot_writes: usize,
     attribute_writes: usize,
+    resolved_calls: usize,
 }
 
 impl Sites {
@@ -784,6 +793,7 @@ impl Sites {
             native_calls: 0,
             slot_writes: 0,
             attribute_writes: 0,
+            resolved_calls: 0,
         };
         let mut slot_reads = 0;
         for (at, step) in steps.iter().enumerate() {
@@ -796,6 +806,7 @@ impl Sites {
                 Helper::Call => &mut sites.native_calls,
                 Helper::WriteSlot => &mut sites.slot_writes,
                 Helper::WriteAttribute => &mut sites.attribute_writes,
+                Helper::CallResolved => &mut sites.resolved_calls,
                 _ => continue,
             };
             sites.site_of[at] = *count as u32;
@@ -1332,7 +1343,21 @@ fn read_bare_name(
 }
 
 extern "C" fn call_resolved(context: *mut Context, at: u32) -> u64 {
-    hand_back(context, at, |vm, run, _, at| vm.step_call_resolved(run, at))
+    hand_back(context, at, make_resolved_call)
+}
+
+/// Run the `CallResolved` at `at` as a call of the method its site reached
+/// last on `self`, or as the interpreter does.
+fn make_resolved_call(
+    vm: &mut VirtualMachine,
+    run: &mut UnitRun,
+    code: &MachineCode,
+    at: usize,
+) -> Result<Next, MetorexError> {
+    let site = &code.resolved_calls[code.site(at)];
+    vm.step_call_resolved_reaching(run, at, |vm, name, position| {
+        vm.self_call_reaching(site, name, position)
+    })
 }
 
 extern "C" fn checkpoint(context: *mut Context, at: u32) -> u64 {
@@ -1352,7 +1377,7 @@ extern "C" fn run_through(context: *mut Context, at: u32) -> u64 {
                 Callee::Helper(Helper::GetIdentifier) => vm.step_get_identifier(run, at),
                 Callee::Helper(Helper::BareName) => read_bare_name(vm, run, code, at),
                 Callee::Helper(Helper::Call) => make_call(vm, run, code, at),
-                Callee::Helper(Helper::CallResolved) => vm.step_call_resolved(run, at),
+                Callee::Helper(Helper::CallResolved) => make_resolved_call(vm, run, code, at),
                 Callee::Helper(Helper::Checkpoint) => vm.step_checkpoint(run, at),
                 Callee::Helper(Helper::WriteSlot) => write_slot_or_step(vm, run, code, at),
                 Callee::Helper(Helper::WriteAttribute) => {
