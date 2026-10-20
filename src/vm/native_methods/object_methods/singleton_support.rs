@@ -39,17 +39,39 @@ impl VirtualMachine {
     /// Give the notice a string carries that it will be frozen in a later
     /// release, for the operations that count as changing it. The notice is
     /// given once, the way Ruby gives it.
-    pub(crate) fn warn_chilled_string(&mut self, receiver: &Object, position: Position) {
+    pub(crate) fn warn_chilled_string(
+        &mut self,
+        receiver: &Object,
+        position: Position,
+    ) -> Result<(), MetorexError> {
         let View::String(text) = receiver.view() else {
-            return;
+            return Ok(());
         };
+        self.give_chill_notice(text, position)
+    }
+
+    /// Give the notice `text` carries, if it carries one, through
+    /// `Warning.warn` in the deprecated category, prefixed with the place the
+    /// change was made.
+    pub(crate) fn give_chill_notice(
+        &mut self,
+        text: &crate::object::StringValue,
+        position: Position,
+    ) -> Result<(), MetorexError> {
         let Some(notice) = text.take_chill() else {
-            return;
+            return Ok(());
         };
-        if self.warning_category_enabled("deprecated") {
-            self.emit_warning_to_stderr(&notice, position);
-            self.report_string_birthplace(text, position);
+        if !self.warning_category_enabled("deprecated") {
+            return Ok(());
         }
+        let message = format!(
+            "{}{}\n",
+            self.warning_prefix(0, position),
+            notice.strip_prefix("warning: ").unwrap_or(&notice)
+        );
+        self.warn_in_category(message, "deprecated", position)?;
+        self.report_string_birthplace(text, position);
+        Ok(())
     }
 
     /// Name where a literal was written, after the notice that a change to it

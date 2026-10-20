@@ -48,14 +48,22 @@ fn test_should_receive_syntax_when_a_suite_turns_it_on() {
     );
 }
 
-// RSpec reports this failure with its own internals as the backtrace. Rex
-// points at the `expect_any_instance_of` line, so the expectation is Rex's.
+// RSpec reports this failure with its own internals as the backtrace, which
+// names Rex's files where MRI names the gems' files, so the report is read
+// for the message and the counts.
 #[test]
-fn test_an_unmet_any_instance_expectation_points_at_its_line() {
-    assert_matches(
-        "mocks/any_instance",
-        "documentation",
-        &["--format", "documentation"],
+fn test_an_unmet_any_instance_expectation_names_the_message_not_received() {
+    let output = run_spec("mocks/any_instance", &["--format", "documentation"]).output;
+    let reported: Vec<&str> = output
+        .lines()
+        .filter(|line| line.starts_with("       Exactly one") || line.contains(" examples, "))
+        .collect();
+    assert_eq!(
+        reported,
+        [
+            "       Exactly one instance should have received the following message(s) but didn't: print_page",
+            "2 examples, 1 failure"
+        ]
     );
 }
 

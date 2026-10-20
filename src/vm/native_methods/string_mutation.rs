@@ -91,12 +91,7 @@ impl VirtualMachine {
         }
         // A string handed back with notice that it will be frozen in a later
         // release says so the first time it is changed.
-        if let Some(notice) = target.take_chill()
-            && self.warning_category_enabled("deprecated")
-        {
-            self.emit_warning_to_stderr(&notice, position);
-            self.report_string_birthplace(target, position);
-        }
+        self.give_chill_notice(target, position)?;
         if target.is_borrowed() {
             let message = "can't modify string; temporarily locked".to_string();
             return Err(crate::vm::errors::simple_exception(

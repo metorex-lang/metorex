@@ -1729,3 +1729,21 @@ fn syntax_suggest_shows_the_lines_around_a_syntax_error() {
     let output = run_example("stdlib/syntax_suggest_search.rb");
     assert_eq!(output, expected);
 }
+
+#[test]
+fn marshal_dump_leaves_literal_strings_unchanged_and_prints_no_warning() {
+    let output = run_example("stdlib/marshal_dump_warns_nothing.rb");
+    assert_eq!(
+        output,
+        "#<struct Pair left=7, right=\"something\">\ntrue\nfalse\ntrue\n"
+    );
+}
+
+#[test]
+fn yaml_dump_of_a_struct_prints_no_warning() {
+    let output = run_example("stdlib/yaml_dump_of_a_struct_warns_nothing.rb");
+    assert_eq!(
+        output,
+        "--- !ruby/struct:Pair\nleft: 7\nright: something\n--- !ruby/struct:Pair\nleft: 7\nright: something\n"
+    );
+}

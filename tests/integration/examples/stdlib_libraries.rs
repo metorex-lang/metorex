@@ -2440,3 +2440,27 @@ fn test_stdlib_libraries_string_scanner_groups_execution() {
         )
     );
 }
+
+#[test]
+fn rspec_mocks_stubs_an_inherited_method_on_any_instance_of_a_subclass() {
+    let output = run_example("rspec_mocks/any_instance_stub_on_a_subclass.rb");
+    assert_eq!(output, ":result\n\"bar\"\n");
+}
+
+#[test]
+fn rspec_mocks_marshal_patch_dumps_a_partial_double_as_it_was() {
+    let output = run_example("rspec_mocks/marshal_dump_of_a_partial_double.rb");
+    assert_eq!(output, "true\n");
+}
+
+#[test]
+fn rspec_mocks_standalone_extends_main_when_required_inside_a_block() {
+    let output = run_example("rspec_mocks/standalone_required_inside_a_block_extends_main.rb");
+    assert_eq!(output, "true\nfalse\n12\n");
+}
+
+#[test]
+fn rspec_mocks_stubs_a_struct_member_on_any_instance_and_takes_the_stub_down() {
+    let output = run_example("rspec_mocks/any_instance_stub_of_a_struct_member.rb");
+    assert_eq!(output, ":baz\n:bar\n");
+}

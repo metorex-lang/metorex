@@ -57,3 +57,9 @@ fn test_struct_named_shapes_parens_execution() {
     let output = run_example("struct/named_shapes_parens.rb");
     assert_eq!(output, NAMED_SHAPES_OUTPUT);
 }
+
+#[test]
+fn a_struct_member_reader_redefined_on_the_class_answers_in_place_of_the_member() {
+    let output = run_example("struct/member_reader_redefined_with_define_method.rb");
+    assert_eq!(output, ":baz\n:bar\n[:bar]\n");
+}

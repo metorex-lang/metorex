@@ -357,7 +357,11 @@ impl VirtualMachine {
             .replace(crate::vm::stdlib::embedded_library_file(name));
         let caller_method_nesting = std::mem::take(&mut self.user_def_nesting);
         self.embedded_libraries_loading.push(feature);
+        // Its top level has locals of its own, and `main` as `self`, whatever
+        // object the `require` was called on.
+        self.environment_mut().push_isolated_scope();
         let result = self.execute_program(&statements);
+        self.environment_mut().pop_scope();
         self.embedded_libraries_loading.pop();
         self.user_def_nesting = caller_method_nesting;
         self.current_source_file = caller_source;

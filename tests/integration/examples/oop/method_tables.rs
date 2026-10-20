@@ -187,3 +187,15 @@ fn test_oop_send_dispatch_parens_execution() {
     let output = run_example("oop/send/dispatch_parens.rb");
     assert_eq!(output, expected);
 }
+
+#[test]
+fn method_added_hears_of_methods_defined_in_class_exec() {
+    let output = run_example("oop/method_added_for_class_exec_definitions.rb");
+    assert_eq!(output, "added receive\nadded allow\nadded stub\n");
+}
+
+#[test]
+fn a_subclass_reaches_a_class_method_its_parents_singleton_class_redefines() {
+    let output = run_example("oop/subclass_reaches_parents_redefined_singleton_method.rb");
+    assert_eq!(output, "\"Hello\"\n\"Howdy\"\n\"Hello\"\nnil\n");
+}

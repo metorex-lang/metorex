@@ -544,6 +544,9 @@ module Marshal
     # The modules an object was extended with, most recently first. One with
     # no name cannot be found again when the object is read back.
     def write_extended(object)
+      # Looking at a singleton class the object was never given would make
+      # one, which counts as a change to a literal string.
+      return unless __singleton_given__(object)
       singleton = begin
         Kernel.instance_method(:singleton_class).bind_call(object)
       rescue TypeError
@@ -775,8 +778,8 @@ module Marshal
     # put back together, since only its class is written.
     def write_object(object, held_class, limit)
       singleton_methods = Kernel.instance_method(:singleton_methods).bind_call(object, false)
-      singleton = Kernel.instance_method(:singleton_class).bind_call(object)
-      unless singleton_methods.empty? && Marshal.__variables_of__(singleton).empty?
+      singleton = __singleton_given__(object) && Kernel.instance_method(:singleton_class).bind_call(object)
+      unless singleton_methods.empty? && (!singleton || Marshal.__variables_of__(singleton).empty?)
         raise TypeError, "singleton can't be dumped"
       end
       remember object

@@ -818,3 +818,138 @@ fn respond_to_missing_reaches_kernels_through_super_for_every_kind_of_object() {
     let output = run_example("methods/respond_to_missing_super_reaches_kernel.rb");
     assert_eq!(output, "true\nfalse\nfalse\nfalse\ntrue\n");
 }
+
+#[test]
+fn super_in_an_initialize_a_module_subclass_mixes_in_reaches_the_next_one() {
+    let output = run_example("methods/super_in_initialize_of_a_module_subclass.rb");
+    assert_eq!(output, "double ledger\nComparable\ntrue\n");
+}
+
+#[test]
+fn a_module_subclass_instance_is_a_kind_of_the_modules_its_class_includes() {
+    let output = run_example("methods/module_subclass_instance_is_a_its_modules.rb");
+    assert_eq!(output, "true\ntrue\ntrue\ntrue\n\"doubling\"\n");
+}
+
+#[test]
+fn a_module_subclass_instance_calls_its_own_methods_by_bare_name() {
+    let output = run_example("methods/module_subclass_instance_calls_its_own_methods.rb");
+    assert_eq!(
+        output,
+        "module double, null false\nmodule double, null false\n"
+    );
+}
+
+#[test]
+fn super_from_a_module_subclass_method_reaches_kernels() {
+    let output = run_example("methods/super_from_module_subclass_reaches_kernel.rb");
+    assert_eq!(output, "true\ntrue\nfalse\n");
+}
+
+#[test]
+fn def_on_a_method_name_defines_on_the_object_the_method_answers() {
+    let output = run_example("methods/def_on_a_method_call_result.rb");
+    assert_eq!(output, "crate\ntrue\nfalse\n");
+}
+
+#[test]
+fn def_on_a_parenthesized_constant_path_defines_on_that_module() {
+    let output = run_example("methods/def_on_a_parenthesized_constant_path.rb");
+    assert_eq!(output, "\"host\"\n[:label]\nfalse\n");
+}
+
+#[test]
+fn a_basic_object_subclass_forwards_with_send_to_methods_a_module_defined() {
+    let output = run_example("methods/send_from_basic_object_method_missing.rb");
+    assert_eq!(output, "[\"and_return [:result]\"]\n");
+}
+
+#[test]
+fn super_from_method_missing_in_a_module_subclass_instance_reaches_the_module_before_it() {
+    let output = run_example("methods/method_missing_super_in_a_module_subclass_instance.rb");
+    assert_eq!(
+        output,
+        "12\nundefined method 'crate_count' for module #<ModuleDouble:0x>\n"
+    );
+}
+
+#[test]
+fn a_module_subclass_instance_with_a_singleton_method_still_finds_its_modules_first() {
+    let output =
+        run_example("methods/module_subclass_instance_with_singleton_method_keeps_its_modules.rb");
+    assert_eq!(
+        output,
+        ":tracking\n12\n:tracking\nTracking\nModuleDouble\n[ModuleDouble, Tracking]\n"
+    );
+}
+
+#[test]
+fn an_anonymous_module_from_a_module_subclass_is_inspected_with_that_subclass() {
+    let output = run_example("methods/module_subclass_instance_inspect.rb");
+    assert_eq!(
+        output,
+        "#<ModuleDouble:0x>\nundefined method 'crate_count' for module #<ModuleDouble:0x>\n"
+    );
+}
+
+#[test]
+fn super_from_a_module_prepended_to_an_objects_singleton_class_reaches_its_singleton_method() {
+    let output =
+        run_example("methods/super_from_module_prepended_to_an_objects_singleton_class.rb");
+    assert_eq!(
+        output,
+        ":original_prepended\n[\"Suffixing\", \"#<Class:#<Object:0x>>\"]\n"
+    );
+}
+
+#[test]
+fn a_module_subclass_instance_compares_with_the_equality_its_module_writes() {
+    let output = run_example("methods/module_subclass_instance_equality_from_a_module.rb");
+    assert_eq!(output, "true\ntrue\nfalse\ntrue\n");
+}
+
+#[test]
+fn public_on_a_singleton_class_names_a_method_the_core_class_writes() {
+    let output = run_example("methods/public_on_a_singleton_class_for_a_native_method.rb");
+    assert_eq!(output, "3\ntrue\n\"CRATE\"\n");
+}
+
+#[test]
+fn inspect_asks_a_respond_to_the_program_wrote_about_instance_variables_to_inspect() {
+    let output = run_example("methods/inspect_asks_a_program_respond_to.rb");
+    assert_eq!(
+        output,
+        "asked :instance_variables_to_inspect, true\n#<Crate:0x @label=\"fragile\", @weight=12>\n"
+    );
+}
+
+#[test]
+fn undef_on_the_singleton_class_of_a_module_copy_removes_the_method_from_the_copy() {
+    let output = run_example("methods/undef_on_the_singleton_class_of_a_module_copy.rb");
+    assert_eq!(
+        output,
+        concat!(
+            ":configured\nfalse\n:configured\n\"#<Class:#<Module:0x>>\"\n",
+            "\"#<Module:0x>\"\nfalse\n:ledger\n",
+            "\"#<Class:#<Module:0x>>\"\nfalse\n:journal\n"
+        )
+    );
+}
+
+#[test]
+fn a_singleton_class_hands_back_kernels_methods_from_instance_method() {
+    let output = run_example("methods/instance_method_of_kernel_on_a_singleton_class.rb");
+    assert_eq!(output, "Kernel\nKernel\nKernel\nKernel\n");
+}
+
+#[test]
+fn visibility_given_to_a_method_kernel_answers_natively_holds_for_calls_and_respond_to() {
+    let output = run_example("methods/private_on_a_singleton_class_for_a_kernel_method.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "false\nprivate method 'frozen?' called for #<Object:0x>\nfalse\n",
+            "true\nprotected method 'hash' called for an instance of Ledger\nfalse\n"
+        )
+    );
+}

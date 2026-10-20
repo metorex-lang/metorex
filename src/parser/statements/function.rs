@@ -257,6 +257,8 @@ impl Parser {
                     // `def (held).name` names the object a local holds, the
                     // same as `def held.name`.
                     crate::ast::Expression::Identifier { name, .. } => Some(name.clone()),
+                    // `def (Outer::Host).name` names the module the path does.
+                    path @ crate::ast::Expression::ScopeResolution { .. } => constant_path(path),
                     crate::ast::Expression::BinaryOp {
                         op: crate::ast::BinaryOp::Assign,
                         left,
@@ -826,4 +828,20 @@ fn declares_anonymous_block(parameters: &[Parameter]) -> bool {
     parameters
         .iter()
         .any(|parameter| parameter.name == ANONYMOUS_BLOCK)
+}
+
+/// The constant path an expression such as `Outer::Host` writes, when it is
+/// made of constant names alone.
+fn constant_path(expression: &crate::ast::Expression) -> Option<String> {
+    match expression {
+        crate::ast::Expression::Identifier { name, .. }
+            if name.starts_with(|first: char| first.is_ascii_uppercase()) =>
+        {
+            Some(name.clone())
+        }
+        crate::ast::Expression::ScopeResolution {
+            namespace, name, ..
+        } => Some(format!("{}::{}", constant_path(namespace)?, name)),
+        _ => None,
+    }
 }

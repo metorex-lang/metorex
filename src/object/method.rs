@@ -159,6 +159,10 @@ pub struct Method {
     /// built from. Restored while the body runs so a nested `def` lands in the
     /// Proc's default definee rather than the receiving class.
     pub captured_def_scope: Vec<Rc<crate::class::Class>>,
+    /// Where a constant written in the body lands, kept from the Proc this
+    /// method was built from when that Proc was written in a block run as a
+    /// class body.
+    pub captured_constant_home: Option<Option<Rc<crate::class::Class>>>,
     /// True when the body came from a block or Proc handed to `define_method`.
     /// Those bodies follow lambda control flow: `break` and `next` return a
     /// value, and `redo` re-runs the body.
@@ -221,6 +225,7 @@ impl Method {
             is_undefined: false,
             lambda_body: false,
             captured_def_scope: Vec::new(),
+            captured_constant_home: None,
             captured_refinements: Vec::new(),
             alias_origin: None,
             frame_names: FrameNames::default(),
@@ -264,6 +269,7 @@ impl Method {
             is_undefined: false,
             lambda_body: false,
             captured_def_scope: Vec::new(),
+            captured_constant_home: None,
             captured_refinements: Vec::new(),
             alias_origin: None,
             frame_names: FrameNames::default(),
@@ -307,6 +313,7 @@ impl Method {
             is_undefined: false,
             lambda_body: false,
             captured_def_scope: Vec::new(),
+            captured_constant_home: None,
             captured_refinements: Vec::new(),
             alias_origin: None,
             frame_names: FrameNames::default(),
@@ -351,6 +358,7 @@ impl Method {
             is_undefined: false,
             lambda_body: false,
             captured_def_scope: Vec::new(),
+            captured_constant_home: None,
             captured_refinements: Vec::new(),
             alias_origin: None,
             frame_names: FrameNames::default(),
@@ -389,6 +397,7 @@ impl Method {
             is_undefined: true,
             lambda_body: false,
             captured_def_scope: Vec::new(),
+            captured_constant_home: None,
             captured_refinements: Vec::new(),
             alias_origin: None,
             frame_names: FrameNames::default(),
@@ -427,6 +436,7 @@ impl Method {
             is_undefined: self.is_undefined,
             lambda_body: self.lambda_body,
             captured_def_scope: self.captured_def_scope.clone(),
+            captured_constant_home: self.captured_constant_home.clone(),
             captured_refinements: self.captured_refinements.clone(),
             alias_origin: self.alias_origin.clone(),
             frame_names: FrameNames::default(),

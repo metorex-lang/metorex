@@ -48,10 +48,14 @@ impl VirtualMachine {
                     ))));
                 }
                 // A module made by `new` on a subclass of Module is a kind of
-                // that subclass and each class it inherits from.
+                // that subclass, each class it inherits from, and each module
+                // they include.
                 if let View::Module(module) = receiver.view()
                     && let Some(made_from) = module.instance_of()
-                    && crate::vm::method_invocation::descends_from_class(&made_from, target_class)
+                    && (crate::vm::method_invocation::descends_from_class(&made_from, target_class)
+                        || crate::vm::eval::super_expr::walk_ancestors(&made_from)
+                            .iter()
+                            .any(|ancestor| std::rc::Rc::ptr_eq(ancestor, target_class)))
                 {
                     return Ok(Some(Object::Bool(true)));
                 }

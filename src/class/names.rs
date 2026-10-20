@@ -56,11 +56,13 @@ impl Class {
         }
         let rn = self.ruby_name();
         if rn.is_empty() {
-            format!(
-                "#<{}:0x{:016x}>",
-                self.kind_name(),
-                self as *const Class as usize
-            )
+            // A module made by `new` on a subclass of Module is labeled with
+            // that subclass.
+            let kind = match self.instance_of() {
+                Some(made_from) => made_from.inspect_name(),
+                None => self.kind_name().to_string(),
+            };
+            format!("#<{}:0x{:016x}>", kind, self as *const Class as usize)
         } else {
             rn
         }

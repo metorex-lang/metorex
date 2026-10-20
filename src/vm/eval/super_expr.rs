@@ -112,6 +112,41 @@ impl VirtualMachine {
             // receiver's own module-level method in the singleton chain. The
             // copy's own `super` goes on past it, below.
             let running_owner = self.method_owner_stack.last().cloned().flatten();
+            // A module made by a subclass of Module runs the instance methods
+            // that subclass and its modules define, and `super` from one goes
+            // on through those ancestors, as it does for any other object.
+            if let Some(made_from) = self_class.instance_of()
+                && let Some(owner) = &running_owner
+            {
+                let chain = walk_ancestors(&made_from);
+                if let Some(at) = chain.iter().position(|held| Rc::ptr_eq(held, owner)) {
+                    if let Some((next, method)) = chain.iter().skip(at + 1).find_map(|held| {
+                        held.find_own_method(&method_name)
+                            .filter(|method| !method.is_undefined)
+                            .map(|method| (Rc::clone(held), method))
+                    }) {
+                        return self.invoke_method(
+                            next,
+                            method,
+                            self_object,
+                            evaluated_args,
+                            position,
+                        );
+                    }
+                    // Module#initialize given no block does nothing more.
+                    if method_name == "initialize" {
+                        return Ok(Object::Nil);
+                    }
+                    // BasicObject#method_missing raises NoMethodError.
+                    if method_name == "method_missing" {
+                        return self.super_past_every_ancestor(
+                            &method_name,
+                            evaluated_args,
+                            position,
+                        );
+                    }
+                }
+            }
             // Only the receiver's own `def self.name` reaches the copy this
             // way. A method of an extended module goes on through the
             // singleton ancestors below, past the modules extended before it.
@@ -295,7 +330,11 @@ impl VirtualMachine {
             // Past Module and Object a class object's ancestors end in
             // Kernel, whose methods metorex writes natively, among the
             // methods every object has or as functions.
-            if method_name == "respond_to_missing?"
+            let is_function = matches!(
+                self.globals().get(&method_name).view(),
+                Some(View::NativeFunction(_))
+            );
+            if !is_function
                 && let Some(result) =
                     self.call_object_method(&self_object, &method_name, &evaluated_args, position)?
             {
@@ -364,11 +403,12 @@ impl VirtualMachine {
         // receiver's singleton class comes ahead of its class in the chain.
         let mut chain = Vec::new();
         let class_ancestors = walk_ancestors(instance_class);
-        if let Some(singleton) = instance_borrowed.singleton_class.borrow().clone() {
-            chain.push(Rc::clone(&singleton));
-            // The modules the object was extended with, or that its singleton
-            // class includes, stand between the singleton class and the class.
-            for ancestor in walk_ancestors(&singleton) {
+        let singleton = instance_borrowed.singleton_class.borrow().clone();
+        if let Some(singleton) = &singleton {
+            // The modules prepended to the singleton class stand ahead of it,
+            // and the ones the object was extended with, or that its
+            // singleton class includes, between it and the class.
+            for ancestor in walk_ancestors(singleton) {
                 if !chain.iter().any(|c| Rc::ptr_eq(c, &ancestor))
                     && !class_ancestors.iter().any(|c| Rc::ptr_eq(c, &ancestor))
                 {
@@ -442,8 +482,16 @@ impl VirtualMachine {
                 // The chain is already linearized, so each ancestor is asked
                 // only for its own method. Walking its mixins and prepends
                 // again would hand back the method `super` was called from.
+                // A method written `def object.name` is kept on the object,
+                // and answers for its singleton class.
                 for anc in chain.iter().skip(idx) {
-                    if let Some(method) = anc.find_own_method(&method_name) {
+                    let own = anc.find_own_method(&method_name).or_else(|| {
+                        singleton
+                            .as_ref()
+                            .filter(|singleton| Rc::ptr_eq(singleton, anc))
+                            .and_then(|_| instance_borrowed.find_singleton_method(&method_name))
+                    });
+                    if let Some(method) = own {
                         found = Some((Rc::clone(anc), method));
                         break;
                     }
@@ -999,7 +1047,7 @@ impl VirtualMachine {
 
 /// The ancestors of `class` in lookup order: its prepended modules, the class
 /// itself, its included modules, then the same for each superclass.
-fn walk_ancestors(class: &Rc<Class>) -> Vec<Rc<Class>> {
+pub(crate) fn walk_ancestors(class: &Rc<Class>) -> Vec<Rc<Class>> {
     let mut out = Vec::new();
     // A prepended module sits ahead of the class, so `super` from it
     // reaches the class's own copy of the method.

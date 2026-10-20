@@ -612,3 +612,18 @@ fn test_strings_bytes_kept_no_parens_execution() {
     let output = run_example("strings/bytes_kept_no_parens.rb");
     assert_eq!(output, BYTES_KEPT_OUTPUT);
 }
+
+#[test]
+fn changing_a_chilled_literal_warns_through_warning_warn_as_deprecated() {
+    let output = run_example("strings/chilled_literal_warning_goes_through_warning_warn.rb");
+    assert_eq!(
+        output,
+        ":deprecated: warning: literal string will be frozen in the future (run with --debug-frozen-string-literal for more information)\n\"crates\"\n"
+    );
+}
+
+#[test]
+fn an_integer_format_directive_takes_an_object_answering_to_int_through_method_missing() {
+    let output = run_example("strings/format_integer_from_an_object_with_to_int.rb");
+    assert_eq!(output, "3\n3\n0\n00000\n7\n");
+}

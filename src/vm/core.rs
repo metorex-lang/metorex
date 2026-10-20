@@ -1055,6 +1055,25 @@ impl VirtualMachine {
         self.def_scope_stack.iter().rev().map(Rc::clone).collect()
     }
 
+    /// The modules a `def` written here reads constants through. In a block
+    /// run as a class body, as `class_exec` runs one, those are the ones the
+    /// block was written in, without the class it runs on.
+    pub(crate) fn def_nesting(&self) -> Vec<Rc<crate::class::Class>> {
+        if self.applying_constant_home().is_none() {
+            return self.snapshot_lexical_nesting();
+        }
+        match self.method_nesting_stack.last() {
+            Some(written_in) => written_in.to_vec(),
+            None => self
+                .def_scope_stack
+                .iter()
+                .rev()
+                .skip(1)
+                .map(Rc::clone)
+                .collect(),
+        }
+    }
+
     pub(crate) fn snapshot_active_refinements(
         &self,
     ) -> Vec<(Rc<crate::class::Class>, Vec<String>)> {

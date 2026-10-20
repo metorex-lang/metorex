@@ -78,7 +78,7 @@ impl VirtualMachine {
         function.block_parameter = block_parameter;
         function.variadic_param = variadic_param;
         function.captured_refinements = self.snapshot_active_refinements();
-        function.captured_nesting = self.snapshot_lexical_nesting().into();
+        function.captured_nesting = self.def_nesting().into();
         // A method defined outside every class is Object's, and a `def` run
         // while it runs installs on Object too.
         function.definee = self
@@ -122,6 +122,17 @@ impl VirtualMachine {
                     .get(receiver_name)
                     .or_else(|| self.resolve_constant_in_scope(receiver_name))
                     .or_else(|| self.globals().get(receiver_name))
+            };
+            // A lowercase name no local holds is a method of `self`, and the
+            // method is defined on the object it answers.
+            let resolved = match resolved {
+                None if receiver_name
+                    .starts_with(|first: char| first.is_ascii_lowercase() || first == '_') =>
+                {
+                    let receiver = self.eval_self(position)?;
+                    Some(self.send_to_object(receiver, receiver_name, Vec::new(), position)?)
+                }
+                found => found,
             };
             if sole_instance_receiver.is_some() {
                 match resolved.view() {

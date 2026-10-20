@@ -178,7 +178,7 @@ impl VirtualMachine {
             _ => {}
         }
         for asked in ["to_int", "to_i"] {
-            if !self.responds_to(value, asked) {
+            if !self.answers_conversion(value, asked, position)? {
                 continue;
             }
             return match self

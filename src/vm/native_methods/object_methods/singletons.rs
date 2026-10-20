@@ -14,7 +14,7 @@ impl VirtualMachine {
     ) -> Result<Option<Object>, MetorexError> {
         match method_name {
             "singleton_class" => {
-                self.warn_chilled_string(receiver, position);
+                self.warn_chilled_string(receiver, position)?;
                 if let Some(sole) = match receiver.view() {
                     View::Nil => Some("NilClass"),
                     View::Bool(true) => Some("TrueClass"),

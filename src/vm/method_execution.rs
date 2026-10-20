@@ -600,8 +600,6 @@ impl VirtualMachine {
 
         // Restore the lexical nesting the Proc was written in, so a nested
         // `def` in the body lands where Ruby's default definee points.
-        // Restore the lexical nesting the Proc was written in, so a nested
-        // `def` in the body lands where Ruby's default definee points.
         let saved_def_scope = if method.captured_def_scope.is_empty() {
             None
         } else {
@@ -609,6 +607,14 @@ impl VirtualMachine {
                 &mut self.def_scope_stack,
                 method.captured_def_scope.clone(),
             ))
+        };
+        let carries_constant_home = match &method.captured_constant_home {
+            Some(home) => {
+                self.constant_homes
+                    .push((self.def_scope_stack.len(), home.clone()));
+                true
+            }
+            None => false,
         };
         // A `def` the body runs installs where the method itself was defined.
         let definee = method
@@ -753,6 +759,9 @@ impl VirtualMachine {
         // while the body's own file is current, which its frame names.
         if let Err(error) = &result {
             self.trace_error_leaving_frame(error);
+        }
+        if carries_constant_home {
+            self.constant_homes.pop();
         }
         if let Some(previous) = saved_def_scope {
             self.def_scope_stack = previous;

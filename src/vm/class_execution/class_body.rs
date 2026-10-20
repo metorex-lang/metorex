@@ -172,7 +172,7 @@ impl VirtualMachine {
                     parameters,
                     method_body.clone(),
                     self.snapshot_active_refinements(),
-                    self.snapshot_lexical_nesting(),
+                    self.def_nesting(),
                 );
                 m.owner = Some(class.name().to_string());
                 m.owner_class = Some(Rc::clone(class));
@@ -208,7 +208,7 @@ impl VirtualMachine {
                     parameters,
                     method_body.clone(),
                     self.snapshot_active_refinements(),
-                    self.snapshot_lexical_nesting(),
+                    self.def_nesting(),
                 );
                 m.source_location = Some(self.source_location_for(*def_position));
                 m.end_line = Some(def_end.line);
@@ -273,7 +273,7 @@ impl VirtualMachine {
                 m.block_parameter = block_parameter;
                 m.variadic_param = variadic_param;
                 m.captured_refinements = self.snapshot_active_refinements();
-                m.captured_nesting = self.snapshot_lexical_nesting().into();
+                m.captured_nesting = self.def_nesting().into();
                 m.owner = Some(class.name().to_string());
                 m.owner_class = Some(Rc::clone(class));
                 m.definee = Some(Rc::clone(class));

@@ -20,7 +20,7 @@ pub(crate) use dispatch::{binary_op_method_name, literal_range_end};
 mod identifier;
 mod literals;
 pub(crate) mod singleton_class_expr;
-mod super_expr;
+pub(crate) mod super_expr;
 pub(crate) use super_expr::SuperArguments;
 mod vars;
 mod yield_expr;

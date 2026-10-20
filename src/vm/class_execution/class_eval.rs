@@ -118,10 +118,13 @@ impl VirtualMachine {
         self.def_scope_stack.push(Rc::clone(class));
         self.class_var_cref_stack.push(Some(Rc::clone(class)));
         if constants_stay_lexical {
-            self.constant_homes.push((
-                self.def_scope_stack.len(),
-                block.captured_def_scope.last().cloned(),
-            ));
+            // A block written in another block run as a class body keeps
+            // that one's home rather than the class it ran on.
+            let home = block
+                .captured_constant_home
+                .clone()
+                .unwrap_or_else(|| block.captured_def_scope.last().cloned());
+            self.constant_homes.push((self.def_scope_stack.len(), home));
         }
         // A class/module body is not a method context, so `using` is permitted
         // even when this block runs deep inside method calls (e.g. mspec's
@@ -222,10 +225,11 @@ impl VirtualMachine {
         self.enter_block_nesting(block.captured_nesting.clone());
         self.def_scope_stack.push(Rc::clone(class));
         self.class_var_cref_stack.push(Some(Rc::clone(class)));
-        self.constant_homes.push((
-            self.def_scope_stack.len(),
-            block.captured_def_scope.last().cloned(),
-        ));
+        let home = block
+            .captured_constant_home
+            .clone()
+            .unwrap_or_else(|| block.captured_def_scope.last().cloned());
+        self.constant_homes.push((self.def_scope_stack.len(), home));
         let saved_nesting = self.user_def_nesting;
         self.user_def_nesting = 0;
         // The method running this block did not write it.

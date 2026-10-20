@@ -1,4 +1,4 @@
-require "rex/rspec/expectations"
+require 'rspec/expectations'
 
 Minitest::Test.class_eval do
   include ::Rex::Matchers

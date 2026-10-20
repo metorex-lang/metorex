@@ -189,9 +189,21 @@ impl Class {
             holds_class_methods: std::cell::Cell::new(false),
             holds_extended_copies: std::cell::Cell::new(false),
         };
+        copy.note_held_names();
+        copy
+    }
+
+    /// Give a copy made by `duplicate` a copy of `source`'s singleton class,
+    /// attached to the copy, which is `attached` as a value. The copy has to
+    /// be in place first, since its singleton class is named after it.
+    pub fn copy_singleton_class_from(
+        self: &Rc<Class>,
+        source: &Class,
+        attached: crate::object::Object,
+    ) {
         if let Some(src_sc) = source.singleton_class.borrow().as_ref() {
             let sc_copy = Rc::new(Class {
-                name: format!("#<Class:{}>", copy.name),
+                name: format!("#<Class:{}>", self.inspect_name()),
                 assigned_name: RefCell::new(None),
                 temporary_name: RefCell::new(None),
                 instance_of: RefCell::new(None),
@@ -231,10 +243,9 @@ impl Class {
                 holds_extended_copies: std::cell::Cell::new(false),
             });
             sc_copy.note_held_names();
-            *copy.singleton_class.borrow_mut() = Some(sc_copy);
+            sc_copy.set_class_var("__attached__", attached);
+            *self.singleton_class.borrow_mut() = Some(sc_copy);
         }
-        copy.note_held_names();
-        copy
     }
 }
 

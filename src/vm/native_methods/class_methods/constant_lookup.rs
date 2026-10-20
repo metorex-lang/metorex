@@ -24,10 +24,18 @@ impl VirtualMachine {
         if !running_a_method {
             return None;
         }
-        self.method_nesting_stack
+        // The class the method was defined in, which a method written in a
+        // `Class.new` block has where its nesting names only the scopes the
+        // block was written in.
+        self.method_running_stack
             .last()
-            .and_then(|nesting| nesting.first())
-            .map(Rc::clone)
+            .and_then(|running| running.definee.clone())
+            .or_else(|| {
+                self.method_nesting_stack
+                    .last()
+                    .and_then(|nesting| nesting.first())
+                    .map(Rc::clone)
+            })
     }
 
     /// Whether `Kernel.autoload` or `Kernel.autoload?` sent to `module`

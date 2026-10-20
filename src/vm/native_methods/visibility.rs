@@ -80,14 +80,19 @@ impl VirtualMachine {
                     // Object's own methods are native rather than table
                     // entries, so `private :hash` names one that exists.
                     || crate::vm::native_methods::is_native_kernel_method(&n);
-                // A singleton class of a class carries the class-level
-                // methods, which are native rather than table entries. `new`
-                // is the one specs redeclare, to make a class uninstantiable.
-                let on_metaclass = n == "new"
-                    && matches!(
-                        class_rc.get_class_var("__attached__").view(),
-                        Some(View::Class(_))
-                    );
+                // A singleton class of a class or module carries the methods
+                // the class or module has, which are native rather than table
+                // entries: `new`, which specs redeclare to make a class
+                // uninstantiable, the hooks such as `method_added`, and the
+                // class methods such as `File.exist?`.
+                // The singleton class of any other object carries what the
+                // object's class answers, Array#size among them.
+                let on_metaclass = class_rc
+                    .get_class_var("__attached__")
+                    .is_some_and(|attached| {
+                        (n == "new" && matches!(attached.view(), View::Class(_)))
+                            || self.responds_to(&attached, &n)
+                    });
                 if !on_object && !on_kernel && !on_metaclass {
                     let msg = format!("undefined method '{}' for class '{}'", n, class_rc.name());
                     let exc = Object::exception("NameError", msg.clone());

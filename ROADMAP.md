@@ -127,9 +127,9 @@ Rex runs RSpec 3.13.6's own specs with `scripts/run_rspec_suite.sh`. Parity is t
   - Acceptance: the script runs with no network access
 - [x] Results by file: the script writes each file's example, failure, and pending counts under Metorex and under MRI to a checked-in file, and prints the files whose counts differ
   - Acceptance: the file lists every spec file the script runs, and the README's table is built from it
-- [ ] rspec-expectations: every file's counts match MRI's (2436 pass under Metorex and 2438 under MRI, of 2455)
-- [ ] rspec-mocks: every file's counts match MRI's (1388 pass under Metorex and 1794 under MRI, of 1806)
-- [ ] rspec-core: every file's counts match MRI's (2089 pass under Metorex and 2239 under MRI, of 2258)
+- [ ] rspec-expectations: every file's counts match MRI's (2437 pass under Metorex and 2438 under MRI, of 2455)
+- [x] rspec-mocks: every file's counts match MRI's (1794 pass under Metorex and under MRI, of 1806)
+- [ ] rspec-core: every file's counts match MRI's (2139 pass under Metorex and 2239 under MRI, of 2258)
 - [ ] CI fails when any file's counts differ from MRI's
 
 ## Standard library
@@ -164,10 +164,12 @@ The 100 most downloaded gems on rubygems.org (`rubygems.org/stats`, read on 2026
 - [ ] The ruby-bench benchmarks that need gems run under `benchmarks/compare.rb`
   - Acceptance: the table has a row for each, with output matching CRuby's
 
-## metorex.org core reference
+## Core methods
 
-- [ ] The core reference marks a method not implemented only when ruby/spec runs its spec under 4.0.7. A method whose spec is guarded for a later Ruby, such as `String#bit_count` and `Method#source_range` under `ruby_version_is "4.1"`, and one removed from Ruby, such as `File.exists?` and `Kernel#taint`, are listed apart or left out, and the Time page no longer lists `Encoding.default_internal`
-  - Acceptance: every method the reference marks not implemented has a spec that runs under 4.0.7 and fails under Metorex
+Of the 2,337 methods ruby/spec's `core/` describes, these are the ones MRI 4.0.7 finds with `instance_method` or `method` and Metorex does not. Every other described method Metorex finds, or MRI 4.0.7 lacks too, as with `Kernel#taint`, `File.exists?`, and the methods specs guard for Ruby 4.1.
+
+- [ ] `UnboundMethod.instance_method(:bind)`, `UnboundMethod.instance_method(:bind_call)`, and `GC.instance_method(:garbage_collect)` return the method, as MRI's do. Calling all three already works, from `src/vm/native_methods/method_object_methods.rs` and the `GC` native methods
+  - Acceptance: a `tests/_examples` file prints the `parameters` of each, and its output matches MRI 4.0.7's
 
 ## Beyond Ruby
 

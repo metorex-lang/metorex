@@ -175,6 +175,7 @@ impl VirtualMachine {
         }
         method.lambda_body = true;
         method.captured_def_scope = block.captured_def_scope.clone();
+        method.captured_constant_home = block.captured_constant_home.clone();
         // A constant in the body is looked up through the modules the block
         // was written in, as it is while the block runs as a block.
         method.captured_nesting = block.captured_nesting.clone();
@@ -211,6 +212,7 @@ impl VirtualMachine {
             } else if owner.superclass().is_some()
                 && !class_rc.has_ancestor(owner)
                 && !singleton_of_descendant(class_rc, owner)
+                && !singleton_class_ends_in(class_rc, owner)
             {
                 // Only class-owned methods are restricted; a module's methods
                 // may be installed anywhere.
@@ -337,4 +339,16 @@ pub(crate) fn ruby_class_name(object: &Object) -> &'static str {
         View::Regex(_, _) => "Regexp",
         _ => "Object",
     }
+}
+
+/// Whether `class_rc` is the singleton class of a class or module, whose
+/// ancestors end in Class, Module, Object, and BasicObject, and `owner` is
+/// one of those.
+fn singleton_class_ends_in(class_rc: &Rc<Class>, owner: &Rc<Class>) -> bool {
+    class_rc.is_singleton_class()
+        && matches!(
+            class_rc.get_class_var("__attached__").view(),
+            Some(View::Class(_) | View::Module(_))
+        )
+        && matches!(owner.name(), "Class" | "Module" | "Object" | "BasicObject")
 }

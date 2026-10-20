@@ -470,7 +470,8 @@ fn cli_debug_frozen_string_literal_names_where_a_chilled_string_was_written() {
             "frozen_literal_birthplace.rb"
         ),
         concat!(
-            "warning: literal string will be frozen in the future\n",
+            "tests/_examples/cli_flags/frozen_literal_birthplace.rb:5: \
+warning: literal string will be frozen in the future\n",
             "tests/_examples/cli_flags/frozen_literal_birthplace.rb:3: \
 info: the string was created here\n",
         )

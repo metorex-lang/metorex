@@ -238,3 +238,24 @@ fn test_def_on_a_constant_in_a_class_body_opened_in_a_block_reaches_the_constant
         "[:class_singleton, []]\n[:class_own, []]\n[:receiver_singleton, []]\n[:other_method]\n"
     );
 }
+
+#[test]
+fn a_constant_of_an_inner_module_comes_ahead_of_an_autoload_registered_further_out() {
+    let output = run_example("constants/inner_constant_shadows_outer_one_in_a_method.rb");
+    assert_eq!(output, "inner\nfalse\n");
+}
+
+#[test]
+fn a_def_in_a_class_exec_block_reads_constants_where_the_block_was_written() {
+    let output = run_example("constants/def_in_class_exec_reads_constants_where_written.rb");
+    assert_eq!(
+        output,
+        "the Freight matcher\nthe Freight matcher\nthe Freight matcher\nfreight size\nfreight weight\n"
+    );
+}
+
+#[test]
+fn a_constant_in_nested_module_exec_blocks_lands_where_the_outer_block_was_written() {
+    let output = run_example("constants/constant_in_nested_module_exec_blocks.rb");
+    assert_eq!(output, "true\n3\n");
+}

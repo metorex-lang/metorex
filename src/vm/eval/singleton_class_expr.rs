@@ -109,7 +109,8 @@ impl VirtualMachine {
                 // `Class` itself, which gives the chain Class → Module → Object
                 // → Kernel → BasicObject when walking a class's singleton
                 // ancestors. A standalone module's singleton inherits from
-                // `Module`, matching MRI. Other module-kind classes with no
+                // `Module`, or from the Module subclass that made it, matching
+                // MRI. Other module-kind classes with no
                 // superclass stay ungrounded to avoid unbounded lookup loops.
                 let parent_singleton = match class_rc.superclass() {
                     Some(sup) => Some(self.singleton_class_of(&Object::Class(sup))),
@@ -120,6 +121,10 @@ impl VirtualMachine {
                         })
                         .cloned()
                     }
+                    // A module made by `new` on a subclass of Module is an
+                    // instance of that subclass, which its singleton class
+                    // inherits from.
+                    None if is_module && class_rc.instance_of().is_some() => class_rc.instance_of(),
                     None if is_module => (match self.globals().get("Module").view() {
                         Some(View::Class(c)) => Some(c),
                         _ => None,

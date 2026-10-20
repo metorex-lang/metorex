@@ -22,6 +22,25 @@ impl VirtualMachine {
         let View::Instance(instance) = receiver.view() else {
             return Ok(Object::string(receiver.to_string()));
         };
+        // Ruby asks whether the object answers `instance_variables_to_inspect`
+        // the way it asks before any optional call, through a `respond_to?`
+        // the program wrote when there is one, and before it looks for the
+        // object among those being inspected.
+        let asks_for_chosen_variables = match self.lookup_method(receiver, "respond_to?") {
+            Some((class, method)) if !method.is_undefined && !method.body.is_empty() => self
+                .invoke_method(
+                    class,
+                    method,
+                    receiver.clone(),
+                    vec![
+                        Object::symbol("instance_variables_to_inspect".to_string()),
+                        Object::Bool(true),
+                    ],
+                    position,
+                )?
+                .is_truthy(),
+            _ => true,
+        };
         let header = receiver.to_string();
         // An object inside its own instance variables shows as its header
         // with `...` in place of them.
@@ -33,7 +52,13 @@ impl VirtualMachine {
             )));
         }
         INSPECTING_INSTANCES.with(|held| held.borrow_mut().push(address));
-        let shown = self.instance_inspect_with_variables(receiver, instance, header, position);
+        let shown = self.instance_inspect_with_variables(
+            receiver,
+            instance,
+            header,
+            asks_for_chosen_variables,
+            position,
+        );
         INSPECTING_INSTANCES.with(|held| held.borrow_mut().retain(|seen| *seen != address));
         shown
     }
@@ -43,9 +68,15 @@ impl VirtualMachine {
         receiver: &Object,
         instance: &std::rc::Rc<std::cell::RefCell<crate::object::Instance>>,
         header: String,
+        asks_for_chosen_variables: bool,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let chosen = match self.lookup_method(receiver, "instance_variables_to_inspect") {
+        let found = if asks_for_chosen_variables {
+            self.lookup_method(receiver, "instance_variables_to_inspect")
+        } else {
+            None
+        };
+        let chosen = match found {
             Some((class, method)) if !method.is_undefined => {
                 let answer =
                     self.invoke_method(class, method, receiver.clone(), Vec::new(), position)?;

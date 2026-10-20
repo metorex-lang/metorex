@@ -115,3 +115,16 @@ fn include_in_instance_eval_of_main_includes_into_object() {
     let output = run_example("instance_exec/include_in_instance_eval_of_main.rb");
     assert_eq!(output, "true\nLabels\ncrate\n");
 }
+
+#[test]
+fn a_module_written_in_a_class_new_block_in_a_define_method_body_lands_where_the_block_was_written()
+{
+    let output = run_example("instance_exec/module_defined_in_class_new_block.rb");
+    assert_eq!(output, "true\nlabeled\nlabeled\nfalse\nfalse\n");
+}
+
+#[test]
+fn a_module_written_in_nested_class_new_blocks_lands_where_the_outer_block_was_written() {
+    let output = run_example("instance_exec/module_defined_in_nested_class_new_blocks.rb");
+    assert_eq!(output, "true\ntrue\nstamped\n");
+}

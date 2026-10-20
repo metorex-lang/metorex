@@ -573,3 +573,9 @@ fn test_a_carried_library_is_listed_in_loaded_features() {
     let output = run_example("loading/carried_library_features.rb");
     assert_eq!(output, "true\nfalse\n[\"nkf\", \"nkf\", \"json\"]\ntrue\n");
 }
+
+#[test]
+fn extend_at_the_top_of_a_required_file_extends_main_wherever_the_require_was_written() {
+    let output = run_example("require/extend_in_a_required_file.rb");
+    assert_eq!(output, "hello from main\nfalse\nagain\n");
+}

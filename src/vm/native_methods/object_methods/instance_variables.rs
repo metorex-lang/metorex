@@ -250,7 +250,7 @@ impl VirtualMachine {
                 // raises NameError rather than FrozenError.
                 let var_name =
                     self.coerce_instance_variable_name(&arguments[0], receiver, position)?;
-                self.warn_chilled_string(receiver, position);
+                self.warn_chilled_string(receiver, position)?;
                 let value = arguments[1].clone();
                 match receiver.view() {
                     View::Instance(instance_rc) => {

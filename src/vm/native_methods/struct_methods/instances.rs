@@ -17,9 +17,11 @@ impl VirtualMachine {
         // A method the struct class or one of its mixins defines wins over
         // Struct's own, which is how `include`ing a module that defines
         // `hash` replaces it.
+        // A member's own reader or writer is the one Struct.new wrote, and
+        // one the program wrote over it answers in its place.
         if let Some((_, method)) = self.lookup_method(receiver, method_name)
             && !method.body.is_empty()
-            && !members.iter().any(|member| member == method_name)
+            && !is_generated_member_accessor(&method, method_name, members)
             && !self.enumerable_stands_in(receiver, method_name)
         {
             return Ok(None);
@@ -522,4 +524,34 @@ pub(crate) fn member_values_equal(
         return false;
     }
     left.equals(right)
+}
+
+/// Whether `method` is the reader or writer Struct.new wrote for one of
+/// `members`, or a copy of one, rather than a method the program wrote.
+fn is_generated_member_accessor(
+    method: &crate::object::Method,
+    method_name: &str,
+    members: &[String],
+) -> bool {
+    use crate::ast::{Expression, Statement};
+    let member = method_name.strip_suffix('=').unwrap_or(method_name);
+    if !members.iter().any(|held| held == member) {
+        return false;
+    }
+    let slot = member_slot(member);
+    match &method.body[..] {
+        [
+            Statement::Return {
+                value: Some(Expression::InstanceVariable { name, .. }),
+                ..
+            },
+        ] => *name == slot,
+        [
+            Statement::Assignment {
+                target: Expression::InstanceVariable { name, .. },
+                ..
+            },
+        ] => *name == slot,
+        _ => false,
+    }
 }

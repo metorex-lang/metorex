@@ -7,7 +7,7 @@
 //   - duplicate / inspect_name / set_assigned_name_if_anonymous
 
 use metorex::class::Class;
-use metorex::object::{Method, Object};
+use metorex::object::{Method, Object, OptionView, View};
 use std::rc::Rc;
 
 // ── freeze / is_frozen ────────────────────────────────────────────────────
@@ -250,7 +250,8 @@ fn duplicate_copies_singleton_class_methods() {
     sc.define_method("sm", Rc::new(Method::new("sm".to_string(), vec![], vec![])));
     src.set_singleton_class(Rc::clone(&sc));
 
-    let dup = Class::duplicate(&src);
+    let dup = Rc::new(Class::duplicate(&src));
+    dup.copy_singleton_class_from(&src, Object::Class(Rc::clone(&dup)));
     let dup_sc_slot = dup.singleton_class_slot();
     let dup_sc = dup_sc_slot.as_ref().expect("singleton class should copy");
     assert!(
@@ -262,21 +263,25 @@ fn duplicate_copies_singleton_class_methods() {
 }
 
 #[test]
-fn duplicate_filters_attached_class_var_from_singleton() {
+fn a_copied_singleton_class_is_attached_to_the_copy() {
     let src = Class::new("SrcA", None);
     let sc = Class::new("#<Class:SrcA>", None);
     sc.set_class_var("__attached__", Object::Int(42));
     sc.set_class_var("Regular", Object::Int(7));
     src.set_singleton_class(Rc::clone(&sc));
 
-    let dup = Class::duplicate(&src);
+    let dup = Rc::new(Class::duplicate(&src));
+    dup.copy_singleton_class_from(&src, Object::Class(Rc::clone(&dup)));
     let dup_sc_slot = dup.singleton_class_slot();
     let dup_sc = dup_sc_slot.as_ref().expect("singleton class should copy");
-    assert!(
-        dup_sc.get_class_var("__attached__").is_none(),
-        "__attached__ must be filtered"
+    let attached = dup_sc.get_class_var("__attached__");
+    assert_eq!(
+        (
+            matches!(attached.view(), Some(View::Class(held)) if Rc::ptr_eq(held, &dup)),
+            dup_sc.get_class_var("Regular")
+        ),
+        (true, Some(Object::Int(7)))
     );
-    assert_eq!(dup_sc.get_class_var("Regular"), Some(Object::Int(7)));
 }
 
 // ── is_method_private_in_chain via alias_method (lines 292-296 in class.rs) ─

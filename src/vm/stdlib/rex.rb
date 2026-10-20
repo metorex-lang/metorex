@@ -145,7 +145,7 @@ end
 
 require "rex/rspec/expectations"
 require "rex/expectation_additions"
-require "rex/mocks"
+require "rex/rspec/mocks"
 require "rex/core/parallel"
 require "rex/core/coverage"
 require "rex/core/fast_paths"

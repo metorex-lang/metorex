@@ -246,6 +246,18 @@ impl VirtualMachine {
         Ok(())
     }
 
+    /// Emit an interpreter warning of `category` through the `Warning.warn`
+    /// in force.
+    pub(crate) fn warn_in_category(
+        &mut self,
+        text: String,
+        category: &str,
+        position: Position,
+    ) -> Result<(), MetorexError> {
+        self.dispatch_to_warning_module(text, Object::symbol(category.to_string()), position)?;
+        Ok(())
+    }
+
     /// Report that a program replaced a method the interpreter otherwise
     /// answers without a dispatch. `Warning[:performance]` asks for these,
     /// and they are silent by default.

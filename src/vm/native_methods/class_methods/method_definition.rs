@@ -131,11 +131,15 @@ impl VirtualMachine {
                     // `class << Klass` body has to reach it there.
                     // `new` and `allocate` are answered natively for every
                     // class, so a singleton class holds them too.
+                    // So are the class methods the core library answers
+                    // natively, such as `File.exist?`, on the class and the
+                    // classes it descends from.
                     let class_method_owner = self.attached_class_of(class_rc).filter(|attached| {
                         matches!(name.as_str(), "new" | "allocate")
                             || attached
                                 .find_method(&format!("__class__{}", name))
                                 .is_some_and(|method| !method.is_undefined)
+                            || answers_natively_as_class_method(attached, &name)
                     });
                     // Kernel methods live in the native dispatch tables rather
                     // than in a class's method map, so they count as present.
@@ -281,4 +285,17 @@ impl VirtualMachine {
         let owners = self.ancestor_names(class_object, position)?;
         Ok(crate::vm::native_methods::object_methods::nearest_core_owner(&owners, name).is_some())
     }
+}
+
+/// Whether `class_rc` or a class it descends from answers `name` as one of
+/// the class methods the core library writes natively.
+fn answers_natively_as_class_method(class_rc: &Rc<Class>, name: &str) -> bool {
+    let mut cursor = Some(Rc::clone(class_rc));
+    while let Some(current) = cursor {
+        if crate::vm::method_lookup::core_singleton_method(&current.ruby_name(), name) {
+            return true;
+        }
+        cursor = current.superclass();
+    }
+    false
 }

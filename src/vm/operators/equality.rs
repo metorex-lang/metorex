@@ -60,6 +60,16 @@ impl VirtualMachine {
         {
             return self.evaluate_equality(left, held, position);
         }
+        // A module made by `new` on a subclass of Module compares with the
+        // `==` that subclass or one of its modules writes.
+        if let View::Module(made) = left.view()
+            && made.instance_of().is_some()
+            && let Some((owner, method)) = self.lookup_method(&left, "==")
+            && !method.is_undefined
+            && !method.body.is_empty()
+        {
+            return self.invoke_method(owner, method, left.clone(), vec![right], position);
+        }
         if let View::Instance(inst_rc) = left.view() {
             // A class that undefined `==` answers it through its
             // `method_missing`, an object compared with itself included.
@@ -415,6 +425,16 @@ impl VirtualMachine {
                     ));
                 }
                 return Ok(Object::Bool(false));
+            }
+            // A module made by a subclass of Module is an object of that
+            // subclass, of what it inherits from, and of what they include.
+            if let View::Module(made) = right.view()
+                && let Some(made_from) = made.instance_of()
+                && crate::vm::eval::super_expr::walk_ancestors(&made_from)
+                    .iter()
+                    .any(|ancestor| Rc::ptr_eq(ancestor, class_rc))
+            {
+                return Ok(Object::Bool(true));
             }
             // A class or a module is an object of Class or of
             // Module, which is what makes `Module === String` true.

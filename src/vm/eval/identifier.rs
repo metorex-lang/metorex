@@ -803,12 +803,18 @@ impl VirtualMachine {
     }
 
     /// Whether a scope open where the code was written has an autoload
-    /// registered for `name` and no constant of that name yet.
+    /// registered for `name` and no constant of that name yet, with no scope
+    /// inside it holding the constant.
     fn autoload_pending_in_lexical_scope(&self, name: &str) -> bool {
-        let nesting = self.lexical_nesting();
-        nesting.iter().any(|scope| {
-            scope.get_class_var(name).is_none() && scope.lookup_autoload(name).is_some()
-        })
+        for scope in self.lexical_nesting() {
+            if scope.get_class_var(name).is_some() {
+                return false;
+            }
+            if scope.lookup_autoload(name).is_some() {
+                return true;
+            }
+        }
+        false
     }
 
     /// The constant `name` names on Object, or in a module included there.

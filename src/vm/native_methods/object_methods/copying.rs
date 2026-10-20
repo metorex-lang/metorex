@@ -180,11 +180,13 @@ impl VirtualMachine {
                     });
                 }
                 let copy = std::rc::Rc::new(crate::class::Class::duplicate(class_rc));
+                copy.copy_singleton_class_from(class_rc, Object::Class(std::rc::Rc::clone(&copy)));
                 copy.take_ownership_of_methods_from(class_rc);
                 Ok(Some(Object::Class(copy)))
             }
             View::Module(mod_rc) => {
                 let copy = std::rc::Rc::new(crate::class::Class::duplicate(mod_rc));
+                copy.copy_singleton_class_from(mod_rc, Object::Module(std::rc::Rc::clone(&copy)));
                 copy.take_ownership_of_methods_from(mod_rc);
                 Ok(Some(Object::Module(copy)))
             }

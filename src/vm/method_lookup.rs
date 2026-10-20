@@ -278,7 +278,7 @@ impl VirtualMachine {
                         .as_ref()
                         .and_then(|singleton| singleton.find_own_method(method_name))
                 })
-                .or_else(|| module_level_method(&class_rc, method_name));
+                .or_else(|| class_level_method(&class_rc, method_name).map(|(_, method)| method));
             if let Some(method) = own {
                 let is_explicit_receiver = !written.names_self();
                 if is_explicit_receiver && self.method_is_restricted(&receiver, method_name) {
@@ -466,6 +466,15 @@ impl VirtualMachine {
                 self.refuse_private_object_method(&receiver, method_name, &arguments, position)
         {
             return answer;
+        }
+        // A method the object answers natively, which its class or singleton
+        // class made private or protected, refuses a call written with a
+        // receiver.
+        if !written.names_self()
+            && let Some(refused) =
+                self.refuse_marked_native_method(&receiver, method_name, &arguments, position)
+        {
+            return refused;
         }
         // Try native method as fallback
         let class = self.builtins().class_of(&receiver);
@@ -704,7 +713,14 @@ impl VirtualMachine {
                 }
             };
         };
-        if let Some(method) = module_level_method(class_rc, name) {
+        // A method put on the class's own singleton class stands ahead of one
+        // written as `def self.name`, as it does when the method is called.
+        if let Some(method) = class_rc
+            .singleton_class_slot()
+            .as_ref()
+            .and_then(|singleton| singleton.find_own_method(name))
+            .or_else(|| class_level_method(class_rc, name).map(|(_, method)| method))
+        {
             return !method.is_undefined;
         }
         // Kernel carries its functions as module functions as well as private
@@ -1009,10 +1025,30 @@ impl VirtualMachine {
         let singleton = instance_ref.singleton_class.borrow().clone();
         let class = Rc::clone(&instance_ref.class);
         drop(instance_ref);
+        // A name the object answers natively has no table entry, so the
+        // nearest class marking its visibility owns it.
+        let marks =
+            |held: &Rc<Class>| held.has_public_override(name) || held.is_method_restricted(name);
+        if let Some(sc) = &singleton
+            && sc.find_own_method(name).is_none()
+            && marks(sc)
+        {
+            return Some(Rc::clone(sc));
+        }
         singleton
             .and_then(|sc| sc.find_method_with_owner(name))
             .or_else(|| class.find_method_with_owner(name))
             .map(|(owner, _)| owner)
+            .or_else(|| {
+                let mut cursor = Some(class);
+                while let Some(current) = cursor {
+                    if marks(&current) {
+                        return Some(current);
+                    }
+                    cursor = current.superclass();
+                }
+                None
+            })
     }
 
     /// The answer to a call with a receiver to a private method every object
@@ -1093,6 +1129,59 @@ impl VirtualMachine {
             cursor = current.superclass();
         }
         false
+    }
+
+    /// The answer to a call with a receiver to a method an instance answers
+    /// natively, when a class or the singleton class marked the name private
+    /// or protected: the receiver's own `method_missing`, or the
+    /// NoMethodError. None when no marking refuses the call.
+    #[inline(never)]
+    fn refuse_marked_native_method(
+        &mut self,
+        receiver: &Object,
+        method_name: &str,
+        arguments: &[Object],
+        position: Position,
+    ) -> Option<Result<Object, MetorexError>> {
+        let View::Instance(instance) = receiver.view() else {
+            return None;
+        };
+        let marks = |held: &Rc<Class>| {
+            held.has_public_override(method_name) || held.is_method_restricted(method_name)
+        };
+        let singleton = instance.borrow().singleton_class.borrow().clone();
+        let mut owner = singleton.filter(|held| marks(held));
+        let mut cursor = Some(Rc::clone(&instance.borrow().class));
+        while owner.is_none()
+            && let Some(current) = cursor
+        {
+            if marks(&current) {
+                owner = Some(Rc::clone(&current));
+            }
+            cursor = current.superclass();
+        }
+        let owner = owner?;
+        if !self.refuses_explicit_receiver(&owner, method_name) {
+            return None;
+        }
+        if let Some(handled) =
+            self.restricted_call_via_method_missing(receiver, method_name, arguments, position)
+        {
+            return Some(handled);
+        }
+        let wording = self.receiver_wording_for(receiver, position);
+        let word =
+            if owner.is_method_protected(method_name) && !owner.is_method_private(method_name) {
+                "protected"
+            } else {
+                "private"
+            };
+        let msg = format!("{word} method '{method_name}' called for {wording}");
+        Some(Err(MetorexError::UncaughtException {
+            exception: crate::vm::errors::no_method_error(&msg, method_name, receiver, arguments),
+            location: crate::vm::utils::position_to_location(position),
+            message: msg,
+        }))
     }
 
     /// The NoMethodError for a private method of Object called with a
@@ -1255,8 +1344,8 @@ impl VirtualMachine {
                 {
                     return Some((sc, method));
                 }
-                if let Some(method) = module_level_method(class_rc, method_name) {
-                    return Some((Rc::clone(class_rc), method));
+                if let Some(found) = class_level_method(class_rc, method_name) {
+                    return Some(found);
                 }
                 // Walk the receiver's superclass chain, checking each
                 // ancestor's singleton class. Mirrors Ruby's metaclass
@@ -1453,6 +1542,32 @@ pub(crate) fn singleton_prepended_method(
             .find_method(method_name)
             .map(|method| (prepended, method))
     })
+}
+
+/// A class method `class_rc` answers from its own `def self.name`, a module
+/// it extended, or a superclass. A method put on a superclass's singleton
+/// class stands ahead of the `def self.name` that superclass wrote, as one
+/// `define_method` there replaces it.
+fn class_level_method(class_rc: &Rc<Class>, method_name: &str) -> Option<(Rc<Class>, Rc<Method>)> {
+    if let Some(method) = class_rc
+        .find_own_method(&format!("__class__{}", method_name))
+        .or_else(|| module_extended_method(class_rc, method_name))
+    {
+        return Some((Rc::clone(class_rc), method));
+    }
+    let mut cursor = class_rc.superclass();
+    while let Some(current) = cursor {
+        if let Some(singleton) = current.singleton_class_slot().clone()
+            && let Some(method) = singleton.find_own_method(method_name)
+        {
+            return Some((singleton, method));
+        }
+        if let Some(method) = current.find_own_method(&format!("__class__{}", method_name)) {
+            return Some((Rc::clone(class_rc), method));
+        }
+        cursor = current.superclass();
+    }
+    None
 }
 
 pub(crate) fn module_level_method(class_rc: &Rc<Class>, method_name: &str) -> Option<Rc<Method>> {

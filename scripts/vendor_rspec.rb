@@ -1,5 +1,5 @@
-# Copies RSpec's own rspec-support and rspec-expectations libraries from the
-# gems/rspec submodule, and diff-lcs, which rspec-support diffs with, into
+# Copies RSpec's own rspec-support, rspec-expectations, and rspec-mocks
+# libraries from the gems/rspec submodule, and diff-lcs, which rspec-support diffs with, into
 # src/vm/stdlib/rspec_vendor, and writes src/vm/stdlib/rspec_libraries.rs,
 # which carries them in the binary by the feature name each is required as.
 # Their code names Rex where RSpec's names RSpec, so they define their
@@ -34,12 +34,14 @@ LIBRARIES = {
                       %w[rspec/support/spec.rb rspec/support/spec/**/*.rb rspec/support/caller_filter.rb]],
   "rspec-expectations" => [File.join(rspec, "rspec-expectations", "lib"),
                            %w[rspec/expectations.rb rspec/expectations/**/*.rb rspec/matchers.rb rspec/matchers/**/*.rb], []],
+  "rspec-mocks" => [File.join(rspec, "rspec-mocks", "lib"), %w[rspec/mocks.rb rspec/mocks/**/*.rb], []],
   "diff-lcs" => [File.join(diff_lcs, "lib"), %w[diff/lcs.rb diff/lcs/**/*.rb], []]
 }.freeze
 
 LICENSES = {
   "rspec-support" => File.join(rspec, "rspec-support", "LICENSE.md"),
   "rspec-expectations" => File.join(rspec, "rspec-expectations", "LICENSE.md"),
+  "rspec-mocks" => File.join(rspec, "rspec-mocks", "LICENSE.md"),
   "diff-lcs" => File.join(diff_lcs, "LICENCE.md")
 }.freeze
 
@@ -56,9 +58,19 @@ BY_FEATURE_NAME = "      elsif false # Metorex carries these files by feature na
 ENTRY_FILES = {
   "rspec/support" => "rex/rspec/support",
   "rspec/expectations" => "rex/rspec/expectations",
-  "rspec/matchers" => "rex/rspec/matchers"
+  "rspec/matchers" => "rex/rspec/matchers",
+  "rspec/mocks" => "rex/rspec/mocks"
 }.freeze
 ENTRY_REQUIRE = /require ['"](#{ENTRY_FILES.keys.map { |name| Regexp.escape(name) }.join("|")})['"]/
+
+# The files a program requires on its own, after Rex, which keep requiring
+# RSpec by the names that load Rex.
+PROGRAM_REQUIRED_FILES = %w[
+  rspec/expectations/minitest_integration.rb
+  rspec/matchers/fail_matchers.rb
+  rspec/mocks/minitest_integration.rb
+  rspec/mocks/standalone.rb
+].freeze
 
 # The code names its own module as `RSpec`, which is Rex's other name. A
 # suite may define an `RSpec` of its own, so the code names Rex. Strings and
@@ -83,7 +95,7 @@ LIBRARIES.each do |library, (lib, patterns, skipped)|
       abort "rspec/support.rb no longer has the require_relative branch it is patched at" unless text.include?(REQUIRE_RELATIVE_BRANCH)
       text = text.sub(REQUIRE_RELATIVE_BRANCH, BY_FEATURE_NAME)
     end
-    text = text.gsub(ENTRY_REQUIRE) { %(require "#{ENTRY_FILES.fetch($1)}") }
+    text = text.gsub(ENTRY_REQUIRE) { %(require "#{ENTRY_FILES.fetch($1)}") } unless PROGRAM_REQUIRED_FILES.include?(path)
     text = name_rex(text, path) if library.start_with?("rspec-")
     destination = File.join(vendor, library, path)
     FileUtils.mkdir_p(File.dirname(destination))
@@ -97,6 +109,7 @@ end
 versions = {
   "rspec-support" => File.read(File.join(rspec, "rspec-support", "lib", "rspec", "support", "version.rb"))[/STRING = '([^']+)'/, 1],
   "rspec-expectations" => File.read(File.join(rspec, "rspec-expectations", "lib", "rspec", "expectations", "version.rb"))[/STRING = '([^']+)'/, 1],
+  "rspec-mocks" => File.read(File.join(rspec, "rspec-mocks", "lib", "rspec", "mocks", "version.rb"))[/STRING = '([^']+)'/, 1],
   "diff-lcs" => diff_lcs_version
 }
 

@@ -1,4 +1,4 @@
-require "rex/rspec/expectations"
+require 'rspec/expectations'
 
 module Rex
   module Matchers

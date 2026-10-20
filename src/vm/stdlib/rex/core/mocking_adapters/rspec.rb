@@ -18,12 +18,22 @@ module Rex
           ::Rex::Mocks.setup
         end
 
+        # An example that made no doubles has a mock space with nothing to
+        # verify or take down, which `__mock_space_idle__` answers without
+        # walking it.
         def verify_mocks_for_rspec
-          ::Rex::Mocks.verify
+          space = ::Rex::Mocks.space
+          ::Rex::Mocks.verify unless __mock_space_idle__(space, space.class)
         end
 
         def teardown_mocks_for_rspec
-          ::Rex::Mocks.teardown
+          space = ::Rex::Mocks.space
+          return ::Rex::Mocks.teardown unless __mock_space_idle__(space, space.class)
+
+          ::Rex::Mocks.instance_exec do
+            @space_stack.pop
+            @space = @space_stack.last || @root_space
+          end
         end
       end
     end
