@@ -217,6 +217,17 @@ impl Scope {
         self.captured = Some(captured);
     }
 
+    /// The names the block this scope runs closed over, when it runs one.
+    pub fn captured_names(&self) -> Option<&CapturedNames> {
+        self.captured.as_ref()
+    }
+
+    /// Whether this scope binds `name` itself, leaving out what it closed
+    /// over.
+    pub fn binds(&self, name: &str) -> bool {
+        self.variables.contains_key(name)
+    }
+
     /// The cell a block closed over for `name`, when this scope runs one.
     fn captured_ref(&self, name: &str) -> Option<&Rc<RefCell<Object>>> {
         self.captured.as_ref().and_then(|held| held.get(name))

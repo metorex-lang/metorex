@@ -239,3 +239,88 @@ impl VirtualMachine {
         }
     }
 }
+
+/// The cells and the local names blocks written in one scope close over,
+/// kept for the next block written there while what they were read from
+/// is unchanged, and how many times they were kept and taken.
+#[derive(Default)]
+pub(crate) struct ClosureCache {
+    kept: RefCell<Option<KeptClosure>>,
+    keeps: Cell<u32>,
+    taken: Cell<bool>,
+}
+
+/// How many times a cache keeps a closure no block takes before it keeps
+/// none, as for code that makes one block in each scope it runs in.
+const KEEPS_UNTAKEN_BEFORE_GIVING_UP: u32 = 16;
+
+impl ClosureCache {
+    /// Whether the cache has kept closures often enough without a block
+    /// taking one to stop keeping them.
+    pub(crate) fn gave_up(&self) -> bool {
+        !self.taken.get() && self.keeps.get() >= KEEPS_UNTAKEN_BEFORE_GIVING_UP
+    }
+}
+
+/// What a block written in the scope chain `scopes` closed over. The
+/// cells are held weakly, so the cache keeps nothing alive.
+struct KeptClosure {
+    scopes: Vec<(*const RefCell<Scope>, u64)>,
+    scope_state: u64,
+    method_state: u64,
+    captured: Weak<CapturedCells>,
+    reserved: Rc<Vec<String>>,
+}
+
+type CapturedCells = indexmap::IndexMap<String, Rc<RefCell<crate::object::Object>>>;
+
+impl VirtualMachine {
+    /// The cells and local names `cache` keeps, when the scopes open here
+    /// and everything else they were read under are as they were.
+    pub(crate) fn kept_closure(
+        &self,
+        cache: &ClosureCache,
+    ) -> Option<(Rc<CapturedCells>, Rc<Vec<String>>)> {
+        let kept = cache.kept.borrow();
+        let kept = kept.as_ref()?;
+        if kept.scope_state != scope_state()
+            || kept.method_state != crate::class::method_state()
+            || !self.same_scopes(&kept.scopes)
+        {
+            return None;
+        }
+        let captured = kept.captured.upgrade()?;
+        cache.taken.set(true);
+        Some((captured, Rc::clone(&kept.reserved)))
+    }
+
+    /// Keep `captured` and `reserved` in `cache` as what a block written
+    /// here closes over.
+    pub(crate) fn keep_closure(
+        &self,
+        cache: &ClosureCache,
+        captured: &Rc<CapturedCells>,
+        reserved: &Rc<Vec<String>>,
+    ) {
+        cache.keeps.set(cache.keeps.get().saturating_add(1));
+        let mut kept = cache.kept.borrow_mut();
+        let mut scopes = kept
+            .take()
+            .map(|earlier| earlier.scopes)
+            .unwrap_or_default();
+        scopes.clear();
+        let mut cursor = Some(self.environment().current_scope());
+        while let Some(scope) = cursor {
+            let held = scope.borrow();
+            scopes.push((Rc::as_ptr(&scope), held.version()));
+            cursor = held.parent().cloned();
+        }
+        *kept = Some(KeptClosure {
+            scopes,
+            scope_state: scope_state(),
+            method_state: crate::class::method_state(),
+            captured: Rc::downgrade(captured),
+            reserved: Rc::clone(reserved),
+        });
+    }
+}

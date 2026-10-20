@@ -203,6 +203,8 @@ pub(crate) struct MachineCode {
     attribute_writes: Box<[attributes::AttributeWriteSite]>,
     /// The method each `CallResolved` reached last on `self`.
     resolved_calls: Box<[resolved_calls::ResolvedCallSite]>,
+    /// What the last block the code made closed over.
+    closure: crate::vm::block_reuse::ClosureCache,
     /// The reader each `Call` that may reach a native method found last,
     /// by the same place as `native_calls`.
     attribute_reads: Box<[attributes::AttributeReadSite]>,
@@ -332,6 +334,7 @@ fn runs_in_machine_code(unit: &Unit, instruction: Instruction) -> bool {
             | Instruction::GetInstanceVariable { .. }
             | Instruction::SetInstanceVariable { .. }
             | Instruction::CallResolved { .. }
+            | Instruction::MakeBlock { .. }
     ) || integer_operation(instruction).is_some()
 }
 
@@ -417,6 +420,8 @@ enum Helper {
     /// A `Call` that may reach a native method without the lookup.
     Call,
     CallResolved,
+    /// A `MakeBlock`, taking what the code keeps of what blocks close over.
+    MakeBlock,
     Checkpoint,
     ReadSlot,
     /// A `SetInstanceVariable`, written into its slot of `self`.
@@ -429,7 +434,7 @@ enum Helper {
 }
 
 impl Helper {
-    const ALL: [Helper; 13] = [
+    const ALL: [Helper; 14] = [
         Helper::StartStatement,
         Helper::GetLocal,
         Helper::SetLocal,
@@ -438,6 +443,7 @@ impl Helper {
         Helper::BareName,
         Helper::Call,
         Helper::CallResolved,
+        Helper::MakeBlock,
         Helper::Checkpoint,
         Helper::ReadSlot,
         Helper::WriteSlot,
@@ -455,6 +461,7 @@ impl Helper {
             Helper::BareName => bare_name,
             Helper::Call => call,
             Helper::CallResolved => call_resolved,
+            Helper::MakeBlock => make_block,
             Helper::Checkpoint => checkpoint,
             Helper::ReadSlot => read_slot,
             Helper::WriteSlot => write_slot,
@@ -546,6 +553,7 @@ impl Planned {
                             | Helper::BareName
                             | Helper::Call
                             | Helper::CallResolved
+                            | Helper::MakeBlock
                     )
                 )
             }
@@ -764,6 +772,7 @@ fn compile(vm: &VirtualMachine, unit: &Unit) -> Option<Rc<MachineCode>> {
         resolved_calls: (0..sites.resolved_calls)
             .map(|_| Default::default())
             .collect(),
+        closure: Default::default(),
         attribute_reads: (0..sites.native_calls)
             .map(|_| Default::default())
             .collect(),
@@ -936,6 +945,7 @@ fn plan(vm: &VirtualMachine, unit: &Unit) -> (Vec<Planned>, Vec<Option<SlotRead>
                 Instruction::CallResolved { .. } => {
                     Action::Call(Callee::Helper(Helper::CallResolved))
                 }
+                Instruction::MakeBlock { .. } => Action::Call(Callee::Helper(Helper::MakeBlock)),
                 Instruction::Checkpoint => Action::Call(Callee::Helper(Helper::Checkpoint)),
                 Instruction::SetInstanceVariable { .. } => {
                     Action::Call(Callee::Helper(Helper::WriteSlot))
@@ -1336,8 +1346,10 @@ fn read_bare_name(
     code: &MachineCode,
     at: usize,
 ) -> Result<Next, MetorexError> {
-    match vm.step_bare_call(&code.bare_calls[code.site(at)], run, at) {
+    let site = &code.bare_calls[code.site(at)];
+    match vm.step_bare_call(site, run, at) {
         Some(ran) => ran,
+        None if vm.read_closed_over(site, run, at) => Ok(Next::Step),
         None => vm.step_get_identifier(run, at),
     }
 }
@@ -1360,6 +1372,12 @@ fn make_resolved_call(
     })
 }
 
+extern "C" fn make_block(context: *mut Context, at: u32) -> u64 {
+    hand_back(context, at, |vm, run, code, at| {
+        vm.step_make_block(run, at, &code.closure)
+    })
+}
+
 extern "C" fn checkpoint(context: *mut Context, at: u32) -> u64 {
     hand_back(context, at, |vm, run, _, at| vm.step_checkpoint(run, at))
 }
@@ -1378,6 +1396,7 @@ extern "C" fn run_through(context: *mut Context, at: u32) -> u64 {
                 Callee::Helper(Helper::BareName) => read_bare_name(vm, run, code, at),
                 Callee::Helper(Helper::Call) => make_call(vm, run, code, at),
                 Callee::Helper(Helper::CallResolved) => make_resolved_call(vm, run, code, at),
+                Callee::Helper(Helper::MakeBlock) => vm.step_make_block(run, at, &code.closure),
                 Callee::Helper(Helper::Checkpoint) => vm.step_checkpoint(run, at),
                 Callee::Helper(Helper::WriteSlot) => write_slot_or_step(vm, run, code, at),
                 Callee::Helper(Helper::WriteAttribute) => {

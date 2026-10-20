@@ -4,13 +4,16 @@
 //! nothing those lookups read has changed. A name bound to the method a
 //! `def` made, as a `def` at the top level binds its name, is called on
 //! `self` while the binding holds that method and the class it was defined
-//! in still holds it too.
+//! in still holds it too. A name the block running closed over as a local
+//! is read from where the site found it among the names the block closed
+//! over, while the block's scope holds those same names and binds no such
+//! name of its own.
 
 use crate::bytecode::instruction::Instruction;
 use crate::class::{Class, method_state};
 use crate::error::MetorexError;
 use crate::object::{Method, Object, OptionView, View};
-use crate::scope::Scope;
+use crate::scope::{CapturedNames, Scope};
 use crate::vm::VirtualMachine;
 use crate::vm::bytecode_runner::{Next, UnitRun};
 use std::cell::{Cell, RefCell};
@@ -18,14 +21,18 @@ use std::rc::{Rc, Weak};
 
 /// What one `GetIdentifier` called last, the definition it found its name
 /// bound to, the state a lookup there last found no such call under, and
-/// how many times it found the name read some other way.
+/// how many times it found the name read some other way, and where among
+/// the names a block closed over it found the name last.
 #[derive(Default)]
 pub(super) struct BareCallSite {
     found: RefCell<Option<BareCall>>,
+    closed_over: RefCell<Option<(Weak<ClosedOver>, usize)>>,
     defined: RefCell<Option<(Weak<Method>, u64)>>,
     refused_under: Cell<Option<(u64, u64)>>,
     read_otherwise: Cell<u8>,
 }
+
+type ClosedOver = <CapturedNames as std::ops::Deref>::Target;
 
 /// How many times a site finds a name read otherwise before it leaves every
 /// later read to the interpreter's, as a site reading a local always does.
@@ -139,6 +146,57 @@ impl VirtualMachine {
                 Next::Step
             });
         Some(self.settle_instruction(run, at, ran))
+    }
+
+    /// Read the `GetIdentifier` at `at` from the cell the block running
+    /// closed over for its name, when the block's scope binds no such name
+    /// itself and the value is neither a method nor a native function,
+    /// which a read calls. Whether it was read so.
+    pub(super) fn read_closed_over(
+        &self,
+        site: &BareCallSite,
+        run: &mut UnitRun,
+        at: usize,
+    ) -> bool {
+        let unit = run.unit();
+        let Instruction::GetIdentifier { to, name } = unit.instructions[at] else {
+            return false;
+        };
+        let name = unit.names[usize::from(name)].text.as_str();
+        let scope = self.environment().current_scope_ref().borrow();
+        if scope.binds(name) {
+            return false;
+        }
+        let Some(captured) = scope.captured_names() else {
+            return false;
+        };
+        let kept = site
+            .closed_over
+            .borrow()
+            .as_ref()
+            .filter(|(names, _)| std::ptr::eq(names.as_ptr(), Rc::as_ptr(captured)))
+            .map(|(_, index)| *index);
+        let index = match kept {
+            Some(index) => index,
+            None => {
+                let Some(index) = captured.get_index_of(name) else {
+                    return false;
+                };
+                *site.closed_over.borrow_mut() = Some((Rc::downgrade(captured), index));
+                index
+            }
+        };
+        let Some((held_name, cell)) = captured.get_index(index) else {
+            return false;
+        };
+        debug_assert_eq!(held_name, name, "a closed-over name keeps its place");
+        let value = cell.borrow().clone();
+        if matches!(value.view(), View::Method(_) | View::NativeFunction(_)) {
+            return false;
+        }
+        drop(scope);
+        run.set_register(usize::from(to), value);
+        true
     }
 
     /// The method `held`, the value `name` is bound to, when a `def` bound

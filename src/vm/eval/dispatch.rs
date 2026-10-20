@@ -14,12 +14,15 @@ impl VirtualMachine {
     /// The Block a block or lambda literal makes, closing over the variables
     /// in scope where it was written. Kept out of `evaluate_expression_inner`,
     /// whose frame is on the stack once for every expression a nested call is
-    /// in the middle of.
+    /// in the middle of. A block that closes over every variable in scope
+    /// takes what `closure` keeps for the scopes open here, when it keeps
+    /// it, and leaves what it read there otherwise.
     #[inline(never)]
     pub(crate) fn evaluate_block_literal(
         &mut self,
         expression: &Expression,
         shared: &crate::bytecode::unit::SharedBody,
+        closure: Option<&crate::vm::block_reuse::ClosureCache>,
     ) -> Result<Object, MetorexError> {
         let Expression::Lambda {
             parameters,
@@ -36,8 +39,12 @@ impl VirtualMachine {
         if let Some(block) = self.reusable_block(&shared.kept) {
             return Ok(Object::Block(block));
         }
+        let captures_everything = captured_vars.as_ref().is_none_or(|names| names.is_empty());
+        let closure = closure.filter(|closure| captures_everything && !closure.gave_up());
+        let kept = closure.and_then(|closure| self.kept_closure(closure));
         let mut captured = indexmap::IndexMap::new();
-        if let Some(names) = captured_vars {
+        if kept.is_some() {
+        } else if let Some(names) = captured_vars {
             if names.is_empty() {
                 // Empty vec signals automatic capture of all current scope variables.
                 // This is used for true lambdas (lambda do ... end, arrow syntax).
@@ -54,7 +61,7 @@ impl VirtualMachine {
         // If captured_vars is None, capture all current scope variables
         // so blocks work correctly across method boundaries (which use
         // isolated scopes).
-        if captured.is_empty() && captured_vars.is_none() {
+        if kept.is_none() && captured.is_empty() && captured_vars.is_none() {
             captured = self.environment().current_scope_var_refs();
         }
         let mut block = BlockStatement::with_def_scope(
@@ -72,7 +79,30 @@ impl VirtualMachine {
             block.defining_class = self.method_owner_stack.last().cloned().flatten();
         }
         block.outer_locals = Rc::clone(&shared.outer_locals);
-        block.reserved_names = Rc::new(self.visible_local_names());
+        match kept {
+            Some((captured, reserved)) => {
+                debug_assert!(
+                    {
+                        let fresh = self.environment().current_scope_var_refs();
+                        fresh.len() == captured.len()
+                            && fresh
+                                .iter()
+                                .zip(captured.iter())
+                                .all(|(made, held)| made.0 == held.0 && Rc::ptr_eq(made.1, held.1))
+                            && *reserved == self.visible_local_names()
+                    },
+                    "a kept closure is what the scopes open here close over"
+                );
+                block.captured_vars = captured;
+                block.reserved_names = reserved;
+            }
+            None => {
+                block.reserved_names = Rc::new(self.visible_local_names());
+                if let Some(closure) = closure {
+                    self.keep_closure(closure, &block.captured_vars, &block.reserved_names);
+                }
+            }
+        }
         // The block's body belongs to the file it was written in,
         // wherever it is later called from.
         // A block the core library opens stands in for Ruby's C code,

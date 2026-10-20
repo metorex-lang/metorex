@@ -207,6 +207,26 @@ fn machine_code_calls_the_native_methods_core_stubs_stand_for_as_the_interpreter
 }
 
 #[test]
+fn machine_code_reads_closed_over_locals_as_the_interpreter_does_however_they_change() {
+    let (interpreted, compiled) = interpreted_and_compiled("closed_over_locals");
+    assert_eq!(
+        interpreted,
+        "80\n[20, 20, 20]\n[2, 20]\n[20, -1]\n[:p]\n78\n[-1, 5]\n"
+    );
+    assert_eq!(compiled, interpreted);
+}
+
+#[test]
+fn machine_code_closes_blocks_over_what_the_interpreter_does_when_one_scope_makes_several() {
+    let (interpreted, compiled) = interpreted_and_compiled("kept_closures");
+    assert_eq!(
+        interpreted,
+        "[39, [39, 78], [39, 79]]\n120\n[19, :held, 21]\n451\n"
+    );
+    assert_eq!(compiled, interpreted);
+}
+
+#[test]
 fn an_integer_operand_that_turns_out_otherwise_returns_the_run_to_the_interpreter() {
     let (_, report) = run_example("jit/integer_operands.rb", &EVERY_UNIT);
     assert!(returns_to_the_interpreter(&report) > 0);

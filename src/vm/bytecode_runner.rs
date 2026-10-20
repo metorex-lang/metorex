@@ -441,6 +441,31 @@ impl VirtualMachine {
         self.step_instruction(run, at)
     }
 
+    /// Run the `MakeBlock` at `at`, taking what `closure` keeps for the
+    /// scopes open here.
+    pub(crate) fn step_make_block(
+        &mut self,
+        run: &mut UnitRun,
+        at: usize,
+        closure: &crate::vm::block_reuse::ClosureCache,
+    ) -> Result<Next, MetorexError> {
+        let Instruction::MakeBlock { to, literal } = run.unit.instructions[at] else {
+            return self.step_instruction(run, at);
+        };
+        let literal = usize::from(literal);
+        let made = self
+            .evaluate_block_literal(
+                &run.unit.blocks[literal],
+                &run.unit.block_bodies[literal],
+                Some(closure),
+            )
+            .map(|block| {
+                run.registers[usize::from(to)] = block;
+                Next::Step
+            });
+        self.settle_instruction(run, at, made)
+    }
+
     /// Run the `CallResolved` at `at`, calling the method `reached` answers
     /// for the call's name when the route decided is a call on `self`: the
     /// receiver, its class, and the method a lookup there reaches.
@@ -768,6 +793,7 @@ impl VirtualMachine {
                 registers[register(to)] = self.evaluate_block_literal(
                     &unit.blocks[index(literal)],
                     &unit.block_bodies[index(literal)],
+                    None,
                 )?;
             }
             Instruction::SplatInto { array, from } => {

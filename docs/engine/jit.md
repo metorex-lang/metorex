@@ -39,7 +39,11 @@
   it was when the class the `def` defined it in, or Object, held it under
   that name. Any other read is the interpreter's, and a site whose reads
   turn out otherwise four times, as one that reads a local does, leaves
-  every later read to it.
+  every later read to it. A read of a local the running block closed
+  over keeps where the name sits among the names the block closed over,
+  and while the block's scope holds those same names and binds no such
+  name of its own, the next read takes the value from there without the
+  interpreter's scope lookup, unless it is a method or a native function.
 - A `Call` written with a receiver, rather than sent with `send`, calls a
   Rust function that keeps, for the class of the values it was made on,
   whether the interpreter's lookup would end at the value's native method:
@@ -62,6 +66,13 @@
   the singleton methods has the call's name, no refinement is active, and
   the method state is as it was, the call goes to that method without the
   lookup. Every other call is the interpreter's.
+- A `MakeBlock` of a block that closes over every variable in scope keeps
+  the cells and the local names it closed over, with the scopes open and
+  their versions. While those scopes are as they were and no local
+  holding a method or a function has changed, the next block the unit's
+  code makes there takes them without reading the scopes again. A unit
+  whose code keeps them 16 times with no block taking them keeps them no
+  more.
 - A `SetInstanceVariable` keeps the shape it found `self` with, the shape
   the write left it with, and the slot it wrote. While `self` is an
   instance that is not frozen and has that first shape, and the name does
@@ -100,13 +111,13 @@
 - Each unit has its own threshold of runs before it is compiled: 30 times
   its instructions over those of them machine code runs itself, counting a
   `GetIdentifier` of a name that may call a method, a `Call` written with
-  a receiver, a `CallResolved`, an instance variable write, and a store
-  through a writer,
+  a receiver, a `CallResolved`, a `MakeBlock`, an instance variable
+  write, and a store through a writer,
   so a unit of Integer operations and branches is compiled after
   30 runs and one of mostly calls into Rust waits longer. A unit whose
   machine code would run none of its instructions itself, reads no name that
   may call a method, makes no call written with a receiver or resolved,
-  writes no instance variable, and stores through no writer, only calls
+  makes no block, writes no instance variable, and stores through no writer, only calls
   into Rust and its `Return`, is left to the interpreter, since entering
   machine code and leaving it again takes longer than the interpreter takes
   to dispatch them.
