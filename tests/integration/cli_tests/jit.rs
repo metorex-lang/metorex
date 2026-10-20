@@ -196,6 +196,17 @@ fn machine_code_calls_methods_on_main_as_the_interpreter_looks_them_up() {
 }
 
 #[test]
+fn machine_code_calls_the_native_methods_core_stubs_stand_for_as_the_interpreter_does() {
+    let (interpreted, compiled) = interpreted_and_compiled("native_stubs");
+    assert_eq!(
+        interpreted,
+        "70\n[:<<, :<<, :<<]\n\"private method '<<' called for an instance of String\"\n\
+         70\n\"0!1!2!\"\n80\n"
+    );
+    assert_eq!(compiled, interpreted);
+}
+
+#[test]
 fn an_integer_operand_that_turns_out_otherwise_returns_the_run_to_the_interpreter() {
     let (_, report) = run_example("jit/integer_operands.rb", &EVERY_UNIT);
     assert!(returns_to_the_interpreter(&report) > 0);

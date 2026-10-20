@@ -44,7 +44,10 @@
   Rust function that keeps, for the class of the values it was made on,
   whether the interpreter's lookup would end at the value's native method:
   the name is no private method of every object, Enumerable does not stand
-  in for it, and no method of the program's answers it. While the receiver
+  in for it, and no method of the program's answers it. A public stub
+  without a body on the value's own class, as the core classes list
+  `String#<<` and `Integer#to_s`, counts as the native method it stands
+  for while nothing traces calls. While the receiver
   is a nil, true, false, Integer, Float, Symbol, String, Array, or Hash
   with no singleton class, no refinement is active, and the method state
   is as it was, the call goes straight to the native method. One that has

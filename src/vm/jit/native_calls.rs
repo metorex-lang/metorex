@@ -1,7 +1,10 @@
 //! A call machine code makes with `Call` on a built-in value, such as an
 //! Array or a String, that the interpreter's lookup would answer with the
 //! value's native method goes straight to that method, while nothing the
-//! lookup read has changed.
+//! lookup read has changed. A lookup that finds a stub standing for the
+//! native method, as the core classes list theirs, counts as answering
+//! with that method while nothing traces calls, since the stub's call is
+//! answered natively first.
 
 use crate::bytecode::instruction::Instruction;
 use crate::bytecode::unit::Receiver;
@@ -18,6 +21,8 @@ use std::rc::{Rc, Weak};
 #[derive(Default)]
 pub(super) struct NativeCallSite {
     answered: RefCell<Option<(Weak<Class>, u64)>>,
+    /// Whether the lookup `answered` was found under reached a stub.
+    answered_through_stub: Cell<bool>,
     refused: RefCell<Option<(Weak<Class>, u64)>>,
     made_otherwise: Cell<u8>,
     /// Set by `native_call_class` when the call it was asked about was made
@@ -107,19 +112,28 @@ impl VirtualMachine {
         let class = self.builtins().class_of(&receiver);
         let state = method_state();
         if holds(&site.answered, &class, state) {
+            if site.answered_through_stub.get() && !self.tracepoints.is_empty() {
+                return None;
+            }
             return Some(class);
         }
         if holds(&site.refused, &class, state) {
             return None;
         }
         let name = called.name.as_str();
+        let found = self.lookup_method(&receiver, name);
+        let through_stub = found.as_ref().is_some_and(|(owner, method)| {
+            self.stands_for_native(&receiver, &class, owner, method, name)
+        });
         let passes_over = !crate::vm::native_methods::is_kernel_private_function(name)
             && !crate::vm::native_methods::class_methods::BASIC_OBJECT_PRIVATE_METHODS
                 .contains(&name)
             && !self.enumerable_stands_in(&receiver, name)
-            && self
-                .lookup_method(&receiver, name)
-                .is_none_or(|(_, method)| method.is_undefined);
+            && (through_stub || found.is_none_or(|(_, method)| method.is_undefined));
+        site.answered_through_stub.set(through_stub);
+        if through_stub && !self.tracepoints.is_empty() {
+            return None;
+        }
         let kept = if passes_over {
             &site.answered
         } else {
@@ -127,5 +141,39 @@ impl VirtualMachine {
         };
         *kept.borrow_mut() = Some((Rc::downgrade(&class), state));
         passes_over.then_some(class)
+    }
+
+    /// Whether `method`, which a lookup of `name` on `receiver` found on
+    /// `owner`, is a public stub on the value's own class standing for the
+    /// native method of the same name, which `invoke_method` asks before
+    /// anything else.
+    fn stands_for_native(
+        &self,
+        receiver: &Object,
+        class: &Rc<Class>,
+        owner: &Rc<Class>,
+        method: &crate::object::Method,
+        name: &str,
+    ) -> bool {
+        Rc::ptr_eq(owner, class)
+            && method.body.is_empty()
+            && !method.is_undefined
+            && method.c_function.is_none()
+            && method.captured_vars.is_none()
+            && method.bound_self.is_none()
+            && method
+                .source_location
+                .as_ref()
+                .is_none_or(|written| written.filename.is_none())
+            && method
+                .native_alias
+                .as_deref()
+                .is_none_or(|target| target == name)
+            && method
+                .original_name
+                .as_deref()
+                .is_none_or(|original| original == name)
+            && !self.method_is_restricted(receiver, name)
+            && !self.refuses_explicit_receiver(owner, name)
     }
 }
