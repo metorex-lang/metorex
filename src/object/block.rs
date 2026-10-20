@@ -67,6 +67,10 @@ pub struct BlockStatement {
     /// on the same enclosing module that an unbroken straight-line statement
     /// would have hit.
     pub captured_def_scope: Vec<Rc<Class>>,
+    /// Where a constant written in the body lands, when the block was written
+    /// in the body of a block run as a class body, as `class_exec` runs one:
+    /// the scope that block was written in, however the block is later run.
+    pub captured_constant_home: Option<Option<Rc<Class>>>,
     /// The scopes open where the block was written, innermost first, which is
     /// what `Module.nesting` in the body reports and where an `eval` written
     /// there opens what it defines.
@@ -150,6 +154,7 @@ impl BlockStatement {
             captured_vars: Rc::new(captured_vars),
             reserved_names: no_names(),
             captured_def_scope: Vec::new(),
+            captured_constant_home: None,
             captured_nesting: crate::object::no_nesting(),
             defining_method: None,
             defining_owner: None,
@@ -189,6 +194,7 @@ impl BlockStatement {
             captured_vars: Rc::new(captured_vars),
             reserved_names: no_names(),
             captured_def_scope,
+            captured_constant_home: None,
             captured_nesting: crate::object::no_nesting(),
             defining_method,
             defining_owner: None,

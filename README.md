@@ -605,7 +605,7 @@ See [examples/serialization.rb](examples/advanced/serialization.rb)
 
 ## Built-in Spec Runner
 
-`metorex spec` runs a suite written for RSpec 3.13 with Rex, the spec framework metorex carries. `require "rspec"` loads Rex as well, and `RSpec` names it, so a suite runs with no gems installed. A script run with `metorex` that names `RSpec` loads Rex the first time it does, and runs its examples as it ends, as `require "rspec/autorun"` does. It reads `.rspec`, `.rspec-local`, and `SPEC_OPTS`, loads `spec_helper`, and prints what RSpec prints: the expected output of each fixture under `tests/_examples/rex` is RSpec's own output for the same suite.
+`metorex spec` runs a suite written for RSpec 3.13 with Rex, the spec framework metorex carries. The module is named `RSpec`, as RSpec's own is, and `Rex` is its other name, so what a suite prints names its classes as RSpec does. Its matchers and expectations are RSpec's own rspec-expectations and rspec-support, with diff-lcs, which `scripts/vendor_rspec.rb` copies in from the `gems/rspec` submodule, and its runner and doubles are Rex's own. `require "rspec"` loads Rex as well, and `RSpec` names it, so a suite runs with no gems installed. A script run with `metorex` that names `RSpec` loads Rex the first time it does, and runs its examples as it ends, as `require "rspec/autorun"` does. It reads `.rspec`, `.rspec-local`, and `SPEC_OPTS`, loads `spec_helper`, and prints what RSpec prints: the expected output of each fixture under `tests/_examples/rex` is RSpec's own output for the same suite.
 
 It takes the options `metorex spec --help` lists, which are RSpec's, and these of its own:
 
@@ -621,9 +621,9 @@ It takes the options `metorex spec --help` lists, which are RSpec's, and these o
 
 | Suite | Passing under MRI | Passing under Metorex | Examples | Pending |
 | :-- | --: | --: | --: | --: |
-| rspec-core | 2239 | 2064 | 2258 | 19 |
-| rspec-expectations | 2438 | 2234 | 2455 | 17 |
-| rspec-mocks | 1794 | 1382 | 1806 | 11 |
+| rspec-core | 2239 | 2089 | 2258 | 19 |
+| rspec-expectations | 2438 | 2436 | 2455 | 17 |
+| rspec-mocks | 1794 | 1388 | 1806 | 11 |
 
 Under MRI 4.0.7 one example fails, in rspec-mocks' `receive_spec.rb`, which stubs `respond_to?` and recurses through the `Kernel#inspect` of Ruby 4.0. diff-lcs's suite passes all 322 of its examples, with documentation output identical to RSpec's byte for byte.
 

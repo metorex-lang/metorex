@@ -65,14 +65,14 @@ fn test_oop_method_defined_visibility_parens_execution() {
 
 #[test]
 fn test_oop_method_removed_hook_execution() {
-    let expected = "[[:removed, :doomed], [:undefined, :shadowed]]\n[]\nnil\ntrue\ncan\'t modify frozen Module: \n";
+    let expected = "[[:removed, :doomed], [:undefined, :shadowed]]\n[]\nnil\ntrue\ncan\'t modify frozen Module: the frozen module\n";
     let output = run_example("oop/method_removed_hook.rb");
     assert_eq!(output, expected);
 }
 
 #[test]
 fn test_oop_method_removed_hook_parens_execution() {
-    let expected = "[[:removed, :doomed], [:undefined, :shadowed]]\n[]\nnil\ntrue\ncan\'t modify frozen Module: \n";
+    let expected = "[[:removed, :doomed], [:undefined, :shadowed]]\n[]\nnil\ntrue\ncan\'t modify frozen Module: the frozen module\n";
     let output = run_example("oop/method_removed_hook_parens.rb");
     assert_eq!(output, expected);
 }

@@ -99,14 +99,27 @@ impl VirtualMachine {
         // default behavior — add `mod` as a mixin on `target`, with the
         // standard cyclic/frozen checks. Defer to a user-defined override
         // (singleton method on the receiver) when one is present.
+        // A copy `alias_method` made of the default stands for the default
+        // rather than for an override.
+        let overridden = |name: &str| {
+            let written = |method: &crate::object::Method| method.native_alias.is_none();
+            class_rc
+                .find_method(&format!("__class__{}", name))
+                .is_some_and(|method| written(&method))
+                || class_rc
+                    .singleton_class_slot()
+                    .clone()
+                    .and_then(|sc| sc.find_method(name))
+                    .is_some_and(|method| written(&method))
+        };
+        // `mod.extend_object(object)` by default extends the object with
+        // the module, as `object.extend(mod)` does before `extended` runs.
+        if method_name == "extend_object" && arguments.len() == 1 && !overridden(method_name) {
+            self.default_extend_object(&arguments[0], class_rc, position)?;
+            return Ok(Answered(arguments[0].clone()));
+        }
         if matches!(method_name, "append_features" | "prepend_features") && !arguments.is_empty() {
-            let class_method_key = format!("__class__{}", method_name);
-            if class_rc.find_method(&class_method_key).is_some() {
-                return Ok(Deferred);
-            }
-            if let Some(sc) = class_rc.singleton_class_slot().clone()
-                && sc.find_method(method_name).is_some()
-            {
+            if overridden(method_name) {
                 return Ok(Deferred);
             }
             for arg in arguments {

@@ -137,6 +137,19 @@ impl VirtualMachine {
                     position,
                 );
             }
+            // `extend` called as a method records no copy, and the module it
+            // named sits among the singleton class's ancestors, past the
+            // singleton class that holds the running method.
+            if running_its_own_class_method
+                && let Some(singleton) = self_class.singleton_class_slot().clone()
+                && let Some((next, method)) =
+                    walk_ancestors(&singleton).iter().skip(1).find_map(|held| {
+                        held.find_own_method(&method_name)
+                            .map(|method| (Rc::clone(held), method))
+                    })
+            {
+                return self.invoke_method(next, method, self_object, evaluated_args, position);
+            }
             // A method written in a module a class extended sits among the
             // class's singleton ancestors, and `super` there reaches the next
             // one of them that defines the method.
@@ -149,9 +162,18 @@ impl VirtualMachine {
                 if let Some(singleton) = class.singleton_class_slot().clone() {
                     let chain = walk_ancestors(&singleton);
                     if let Some(at) = chain.iter().position(|held| Rc::ptr_eq(held, owner)) {
+                        // The singleton class holds the class's own
+                        // `def self.` methods, which are kept on the class.
+                        let own_key = format!("__class__{}", method_name);
                         if let Some((next, method)) = chain.iter().skip(at + 1).find_map(|held| {
                             held.find_own_method(&method_name)
                                 .map(|method| (Rc::clone(held), method))
+                                .or_else(|| {
+                                    Rc::ptr_eq(held, &singleton)
+                                        .then(|| class.find_own_method(&own_key))
+                                        .flatten()
+                                        .map(|method| (Rc::clone(&class), method))
+                                })
                         }) {
                             return self.invoke_method(
                                 next,
@@ -271,7 +293,14 @@ impl VirtualMachine {
                 return Ok(result);
             }
             // Past Module and Object a class object's ancestors end in
-            // Kernel, whose methods metorex writes natively.
+            // Kernel, whose methods metorex writes natively, among the
+            // methods every object has or as functions.
+            if method_name == "respond_to_missing?"
+                && let Some(result) =
+                    self.call_object_method(&self_object, &method_name, &evaluated_args, position)?
+            {
+                return Ok(result);
+            }
             if crate::vm::native_methods::is_native_kernel_method(&method_name) {
                 if method_name == "warn" {
                     return self.kernel_warn_for(
@@ -681,9 +710,23 @@ impl VirtualMachine {
         &mut self,
         position: Position,
     ) -> Result<Vec<Object>, MetorexError> {
-        let Some(method) = self.method_running_stack.last().cloned() else {
+        // Inside a block the arguments are those of the method the block was
+        // written in, whichever method is running the block.
+        let at = match (self.call_stack.last(), self.lexical_home_frame.flatten()) {
+            (Some(top), Some(home)) if top.block_depth() > 0 => self
+                .method_running_frames
+                .iter()
+                .rposition(|frame| *frame == Some(home)),
+            _ => None,
+        }
+        .or_else(|| self.method_running_stack.len().checked_sub(1));
+        let Some(method) = at.and_then(|at| self.method_running_stack.get(at)).cloned() else {
             return Ok(self.method_arg_stack.last().cloned().unwrap_or_default());
         };
+        let given = at
+            .and_then(|at| self.method_arg_stack.get(at))
+            .cloned()
+            .unwrap_or_default();
         // A method built from a block has a block's parameters, which Ruby
         // does not hand on for it.
         if method.lambda_body {
@@ -700,7 +743,7 @@ impl VirtualMachine {
             .iter()
             .any(|name| name.starts_with(crate::object::DESTRUCTURED_GROUP_PREFIX))
         {
-            return Ok(self.method_arg_stack.last().cloned().unwrap_or_default());
+            return Ok(given);
         }
         let mut handed = Vec::new();
         let mut tail_from_splat = false;
@@ -848,6 +891,12 @@ impl VirtualMachine {
 
         if method_name == "initialize" {
             return self.super_initialize(&evaluated_args, position);
+        }
+        // Past the class's own natives are those every object has.
+        if let Some(result) =
+            self.call_object_method(&receiver, method_name, &evaluated_args, position)?
+        {
+            return Ok(result);
         }
 
         let message = format!(

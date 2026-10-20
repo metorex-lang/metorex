@@ -22,6 +22,22 @@ impl VirtualMachine {
 
     /// The class or module a constant written here lands in, None being the
     /// top level.
+    /// Put back where a constant written in `block` lands, when the block
+    /// was written in a block run as a class body, at the depth of the scopes
+    /// it was written in. Answers whether it did, so the caller takes it off
+    /// again when the block is done.
+    pub(crate) fn enter_captured_constant_home(
+        &mut self,
+        block: &crate::object::BlockStatement,
+    ) -> bool {
+        let Some(home) = &block.captured_constant_home else {
+            return false;
+        };
+        self.constant_homes
+            .push((self.def_scope_stack.len(), home.clone()));
+        true
+    }
+
     pub(crate) fn constant_home(&self) -> Option<Rc<Class>> {
         match self.constant_homes.last() {
             Some((depth, home)) if *depth == self.def_scope_stack.len() => home.clone(),

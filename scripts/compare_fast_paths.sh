@@ -3,9 +3,12 @@
 # once as they run by default and once with `--no-fast-paths`, and compares
 # what each spec file printed byte for byte. The lines that change from run to
 # run are written alike first: the timing line, durations, object addresses,
-# a seed a new configuration picks, and the names of temporary directories.
+# a seed a new configuration picks, and the names of temporary directories,
+# with what is left of an address that a long inspected value was cut short
+# in the middle of.
 # So is the `fast_paths: false` an inspected configuration shows in the second
-# run, and the backtrace lines in Rex's own files are left out. Exits 1 when any file printed something different.
+# run, and the backtrace lines in Rex's own files and the RSpec files Rex
+# carries are left out. Exits 1 when any file printed something different.
 #
 #   scripts/compare_fast_paths.sh [SUITE...]
 #
@@ -36,10 +39,11 @@ normalized() {
   # A backtrace line in Rex's own code is left out: a fast path runs Rex's
   # work through other methods, and RSpec's default backtrace filter hides
   # those frames, which the suites' helpers show in full.
-  grep -v -E '^ *# <metorex>/rex/' "$1" | sed -E \
+  grep -v -E '^ *# <metorex>/(rex|rspec)/' "$1" | sed -E \
     -e 's/^Finished in .* seconds? \(files took .* seconds? to load\)$/Finished in N seconds (files took N seconds to load)/' \
     -e 's/[0-9]+(\.[0-9]+)? seconds?/N seconds/g' \
     -e 's/0x[0-9a-f]{8,16}/0x/g' \
+    -e 's/\.\.\.[0-9a-f]+>/...>/g' \
     -e 's/:[0-9]{9,}>/:ID>/g' \
     -e 's/[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)? [-+][0-9]{4}/TIME/g' \
     -e 's/XXXXXX\.[A-Za-z0-9]{1,10}/XXXXXX.WORK/g' \

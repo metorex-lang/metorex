@@ -1,4 +1,4 @@
-require "rex/support/reentrant_mutex"
+require "rspec/support/reentrant_mutex"
 
 module Rex
   module Core

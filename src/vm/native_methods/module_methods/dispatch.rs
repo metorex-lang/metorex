@@ -246,15 +246,8 @@ impl VirtualMachine {
             }
         }
 
-        // Rex's differ pairs lines through the primitive written in Rust.
-        if module_rc.name() == "Rex::Diff" && method_name == "__matches__" {
-            return self
-                .longest_common_subsequence_matches(arguments, position)
-                .map(Some);
-        }
-
         // Rex reads the source a failure quotes through the lexer.
-        if module_rc.name() == "Rex::Source"
+        if matches!(module_rc.name(), "RSpec::Source" | "Rex::Source")
             && let Some(answered) = self.call_rex_source(method_name, arguments)?
         {
             return Ok(Some(answered));

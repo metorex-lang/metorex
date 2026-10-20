@@ -1171,3 +1171,9 @@ fn test_count_objects_answers_mri_s_keys_and_true_has_mri_s_id() {
         "[:TOTAL, :FREE, :T_OBJECT, :T_CLASS, :T_MODULE]\ntrue\ntrue\ntrue\ntrue\ntrue\n[0, 20, 4]\n"
     );
 }
+
+#[test]
+fn a_module_responds_to_the_private_hooks_module_and_class_define() {
+    let output = run_example("introspection/respond_to_module_hooks.rb");
+    assert_eq!(output, "true\nfalse\nfalse\ntrue\nfalse\ntrue\n");
+}

@@ -16,14 +16,6 @@ fn run_primitive(name: &str) -> String {
 }
 
 #[test]
-fn rex_diff_pairs_each_line_with_the_one_diff_lcs_pairs_it_with() {
-    assert_eq!(
-        run_primitive("diff_pairing"),
-        "[0, 1, 2]\n[0, 1]\n[0, nil, 2, nil, 4]\n[nil, 0, 2]\n[]\n"
-    );
-}
-
-#[test]
 fn rex_source_reads_the_statement_a_line_falls_in_and_the_value_handed_to_expect() {
     assert_eq!(
         run_primitive("source_lines"),

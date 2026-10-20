@@ -1,4 +1,4 @@
-require "rex/support/with_keywords_when_needed"
+require "rspec/support/with_keywords_when_needed"
 
 module Rex
   module Core

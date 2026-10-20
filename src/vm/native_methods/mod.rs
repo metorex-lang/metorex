@@ -32,7 +32,6 @@ pub(crate) mod hash_methods;
 mod int_methods;
 mod io_methods;
 pub(crate) mod kernel_conversion;
-mod longest_common_subsequence;
 pub(crate) mod method_object_methods;
 mod module_methods;
 pub(crate) mod object_methods;

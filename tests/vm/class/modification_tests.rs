@@ -222,7 +222,7 @@ module Helper
     x * 2
   end
 end
-Helper.module_function("double")
+Helper.send(:module_function, "double")
 Helper.double(5)
 "#);
     assert_eq!(result, Some(Object::Int(10)));
@@ -234,7 +234,7 @@ fn module_function_error_nonexistent() {
         r#"
 module Helper
 end
-Helper.module_function("nonexistent")
+Helper.send(:module_function, "nonexistent")
 "#,
     );
     assert!(err.contains("undefined method 'nonexistent'"));
@@ -248,7 +248,7 @@ module Helper
     x * 2
   end
 end
-Helper.module_function("double")
+Helper.send(:module_function, "double")
 
 class Foo
   include Helper
@@ -297,7 +297,7 @@ fn module_function_no_arguments_is_the_toggle() {
     let result = run(r#"
 module Foo
 end
-Foo.module_function()
+Foo.send(:module_function)
 "#);
     assert_eq!(result, Some(Object::Nil));
 }
@@ -437,7 +437,7 @@ module Helper
     x * 2
   end
 end
-Helper.module_function(:double)
+Helper.send(:module_function, :double)
 Helper.double(5)
 "#);
     assert_eq!(result, Some(Object::Int(10)));
@@ -449,7 +449,7 @@ fn module_function_type_error() {
         r#"
 module Foo
 end
-Foo.module_function(123)
+Foo.send(:module_function, 123)
 "#,
     );
     assert!(
@@ -690,7 +690,7 @@ fn module_module_function_not_found() {
         r#"
 module Mod
 end
-Mod.module_function("nonexistent")
+Mod.send(:module_function, "nonexistent")
 "#,
     );
     assert!(err.contains("undefined method"));
@@ -704,7 +704,7 @@ module Mod
     x * 2
   end
 end
-Mod.module_function(:double)
+Mod.send(:module_function, :double)
 Mod.double(5)
 "#);
     assert_eq!(result, Some(Object::Int(10)));
@@ -716,7 +716,7 @@ fn module_module_function_type_error() {
         r#"
 module Mod
 end
-Mod.module_function(123)
+Mod.send(:module_function, 123)
 "#,
     );
     assert!(
@@ -730,7 +730,7 @@ fn module_module_function_no_arguments_is_the_toggle() {
     let result = run(r#"
 module Mod
 end
-Mod.module_function()
+Mod.send(:module_function)
 "#);
     assert_eq!(result, Some(Object::Nil));
 }

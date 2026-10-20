@@ -74,6 +74,7 @@ impl VirtualMachine {
             *is_lambda,
         );
         block.unit = shared.unit.clone();
+        block.captured_constant_home = self.applying_constant_home().map(|home| home.cloned());
         block.defining_owner = self.enclosing_method_owner().and_then(|(owner, _)| owner);
         if block.defining_method.is_some() {
             block.defining_class = self.method_owner_stack.last().cloned().flatten();
@@ -264,16 +265,35 @@ impl VirtualMachine {
         // (used by mspec mocks, among other things) win over the
         // underlying class definition.
         if let (Some(op_name), View::Instance(_)) = (binary_op_method_name(op), left_value.view()) {
-            if let Some((class, method)) = self.lookup_method(&left_value, op_name)
-                && !method.is_undefined
-            {
-                return self.invoke_method(
-                    class,
-                    method,
-                    left_value.clone(),
-                    vec![right_value],
+            if let Some((class, method)) = self.lookup_method(&left_value, op_name) {
+                if !method.is_undefined {
+                    return self.invoke_method(
+                        class,
+                        method,
+                        left_value.clone(),
+                        vec![right_value],
+                        *position,
+                    );
+                }
+                // An operator the class undefined is answered by its
+                // `method_missing`, and raises without one.
+                if let Some(answer) = self.undefined_hook_via_method_missing(
+                    &left_value,
+                    op_name,
+                    &right_value,
                     *position,
-                );
+                ) {
+                    return answer;
+                }
+                let arguments = [right_value];
+                let wording = self.receiver_wording_for(&left_value, *position);
+                return Err(crate::vm::errors::undefined_method_error_worded(
+                    op_name,
+                    &left_value,
+                    &arguments,
+                    wording,
+                    *position,
+                ));
             }
             // A generated struct class answers `==` from Struct's
             // native table, which the method map above does not hold.

@@ -270,6 +270,27 @@ fn cli_i_flag_prepends_load_path() {
 }
 
 #[test]
+fn cli_i_flag_takes_several_directories_joined_by_colons() {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let lib_path = format!(
+        "{}/tests/_examples/cli_flags/missing:{}/tests/_examples/cli_flags/lib",
+        manifest_dir, manifest_dir
+    );
+    let output = metorex_cmd()
+        .current_dir(manifest_dir)
+        .args(["-I", &lib_path, "-e", "require \"greet\"\ngreet(\"world\")"])
+        .output()
+        .expect("failed to execute");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.trim(), "hello world");
+}
+
+#[test]
 fn cli_i_flag_with_file_execution() {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let lib_path = format!("{}/tests/_examples/cli_flags/lib", manifest_dir);

@@ -15,9 +15,7 @@
 # and in a JSON document each duration and run time as N and the version
 # as V, each `--profile` time and percentage as N, each HTML duration as
 # N, and the checkout's directory, which a deprecation's call site names,
-# as ROOT. An exception class a JSON document names `RSpec::...` is written
-# `Rex::...`, since RSpec is Rex's other name and a class reports Rex's, and
-# RSpec's `ExpectationNotMetError` is written as Rex's `ExpectationNotMet`.
+# as ROOT.
 #
 # SPEC_OPTS set in this environment is passed on. SHELL is set to /bin/zsh,
 # since RSpec quotes an example id for zsh and not for bash.
@@ -56,7 +54,6 @@ printf '%s\n' "$output" \
   | sed -E 's/0x[0-9a-f]{8,16}/0x/g' \
   | sed -E 's/"(duration|run_time|slowest|total|average|total_time)":[-0-9.e]+/"\1":N/g' \
   | sed -E 's/"version":"[^"]*"/"version":"V"/' \
-  | sed -E 's/"class":"RSpec::Expectations::ExpectationNotMetError"/"class":"Rex::ExpectationNotMet"/g; s/"class":"RSpec::/"class":"Rex::/g' \
   | sed -E "s/<span class='duration'>[0-9.]+s<\/span>/<span class='duration'>Ns<\/span>/; s/<span class=\"duration\">[0-9.]+s<\/span>/<span class=\"duration\">Ns<\/span>/; s/<strong>[0-9.]+ seconds<\/strong>/<strong>N seconds<\/strong>/" \
   | sed -E 's/^(Top [0-9]+ slowest examples) \([0-9.]+ seconds, [0-9.]+% of total time\):$/\1 (N seconds, N% of total time):/' \
   | sed -E 's/^    [0-9.]+ seconds (\.\/.*)$/    N seconds \1/' \

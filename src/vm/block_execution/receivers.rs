@@ -259,6 +259,7 @@ impl VirtualMachine {
         // was written in, not those of the method running it.
         let saved_def_scope =
             std::mem::replace(&mut self.def_scope_stack, block.captured_def_scope.clone());
+        let carries_constant_home = self.enter_captured_constant_home(block);
         // A `def` or an `alias` written at the top of the body belongs to the
         // receiver alone. Anything the body calls out to keeps its own
         // definee, so this reaches only the statements written here.
@@ -407,6 +408,9 @@ impl VirtualMachine {
             result
         });
         self.leave_running_code();
+        if carries_constant_home {
+            self.constant_homes.pop();
+        }
         self.def_scope_stack = saved_def_scope;
         self.leave_block_nesting();
         self.class_var_cref_stack.pop();

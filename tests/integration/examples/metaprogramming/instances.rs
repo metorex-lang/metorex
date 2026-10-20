@@ -103,3 +103,15 @@ fn test_metaprogramming_instance_exec_reading_a_string_no_parens_execution() {
     let output = run_example("metaprogramming/instance_exec/reading_a_string_no_parens.rb");
     assert_eq!(output, READING_A_STRING);
 }
+
+#[test]
+fn a_block_written_in_module_exec_defines_constants_where_it_was_written() {
+    let output = run_example("instance_exec/constant_in_block_written_in_class_exec.rb");
+    assert_eq!(output, "Pallet\n12\n\"constant\"\nfalse\n");
+}
+
+#[test]
+fn include_in_instance_eval_of_main_includes_into_object() {
+    let output = run_example("instance_exec/include_in_instance_eval_of_main.rb");
+    assert_eq!(output, "true\nLabels\ncrate\n");
+}

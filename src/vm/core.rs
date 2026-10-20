@@ -545,6 +545,10 @@ pub struct VirtualMachine {
     /// The methods whose bodies are running, innermost last. A bare `super`
     /// reads the parameters of the one on top as they stand.
     pub(crate) method_running_stack: Vec<Rc<crate::object::Method>>,
+    /// The frame each entry of `method_running_stack` runs its body under,
+    /// once the body has started, which tells a block's own method apart
+    /// from the methods running it.
+    pub(crate) method_running_frames: Vec<Option<u64>>,
     /// What each WeakRef handle points at, indexed by the handle.
     pub(crate) weak_references: Vec<WeakTarget>,
     /// The WeakRef handles let go of, which the next ones made reuse.
@@ -775,6 +779,7 @@ impl VirtualMachine {
             primitive_singleton_classes: std::collections::HashMap::new(),
             method_arg_stack: Vec::new(),
             method_running_stack: Vec::new(),
+            method_running_frames: Vec::new(),
             weak_references: Vec::new(),
             weak_references_released: Vec::new(),
             finalized_objects: Vec::new(),

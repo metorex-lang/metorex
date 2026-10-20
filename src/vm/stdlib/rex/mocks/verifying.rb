@@ -235,7 +235,7 @@ module Rex
       def with_signature
         return unless (original = original_method)
 
-        yield Rex::Core::MethodSignature.new(original)
+        yield Rex::Support::MethodSignature.new(original)
       end
 
       def visibility
@@ -330,7 +330,7 @@ module Rex
 
       def with_signature
         @object_reference.when_loaded do |klass|
-          yield Rex::Core::MethodSignature.new(klass.instance_method(:initialize))
+          yield Rex::Support::MethodSignature.new(klass.instance_method(:initialize))
         end
       end
     end
@@ -471,7 +471,7 @@ module Rex
       def initialize(object, method_name, proxy, method_reference)
         super
         @original_signature = begin
-          Rex::Core::MethodSignature.new(::Kernel.instance_method(:method).bind(object).call(method_name))
+          Rex::Support::MethodSignature.new(::Kernel.instance_method(:method).bind(object).call(method_name))
         rescue NameError
           nil
         end
@@ -490,34 +490,4 @@ module Rex
     end
   end
 
-  module Core
-    class MethodSignature
-      def non_kw_args_arity_description
-        if @max_non_kw_args == Float::INFINITY
-          "#{@min_non_kw_args} or more"
-        elsif @min_non_kw_args == @max_non_kw_args
-          @min_non_kw_args.to_s
-        else
-          "#{@min_non_kw_args} to #{@max_non_kw_args}"
-        end
-      end
-
-      def valid_non_kw_args?(count)
-        count >= @min_non_kw_args && count <= @max_non_kw_args
-      end
-
-      def has_kw_args_in?(args)
-        return false unless Hash === args.last
-        return false unless accepts_keywords?
-
-        args.last.keys.all? { |key| Symbol === key }
-      end
-
-      def invalid_kw_args_from(given_kw_args)
-        return [] if @any_keywords
-
-        given_kw_args - @required_kw_args - @optional_kw_args
-      end
-    end
-  end
 end

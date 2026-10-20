@@ -1,4 +1,4 @@
-require "rex/support/directory_maker"
+require "rspec/support/directory_maker"
 
 module Rex
   module Core

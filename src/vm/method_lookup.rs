@@ -268,11 +268,16 @@ impl VirtualMachine {
             let class_rc = Rc::clone(class_rc);
             // A method put on the class's own singleton class stands ahead of
             // one written as `def self.name`, which is how a later
-            // `define_singleton_method` replaces it.
-            let own = class_rc
-                .singleton_class_slot()
-                .as_ref()
-                .and_then(|singleton| singleton.find_own_method(method_name))
+            // `define_singleton_method` replaces it, and a module prepended
+            // to the singleton class stands ahead of both.
+            let own = singleton_prepended_method(&class_rc, method_name)
+                .map(|(_, method)| method)
+                .or_else(|| {
+                    class_rc
+                        .singleton_class_slot()
+                        .as_ref()
+                        .and_then(|singleton| singleton.find_own_method(method_name))
+                })
                 .or_else(|| module_level_method(&class_rc, method_name));
             if let Some(method) = own {
                 let is_explicit_receiver = !written.names_self();
@@ -289,7 +294,7 @@ impl VirtualMachine {
                         "private method '{}' called for {} {}",
                         method_name,
                         class_rc.kind_name().to_lowercase(),
-                        class_rc.ruby_name()
+                        class_rc.inspect_name()
                     );
                     return Err(MetorexError::UncaughtException {
                         exception: crate::vm::errors::no_method_error(
@@ -440,7 +445,7 @@ impl VirtualMachine {
                 "private method '{}' called for {} {}",
                 method_name,
                 class_rc.kind_name().to_lowercase(),
-                class_rc.ruby_name()
+                class_rc.inspect_name()
             );
             return Err(MetorexError::UncaughtException {
                 exception: crate::vm::errors::no_method_error(
@@ -786,6 +791,12 @@ impl VirtualMachine {
                 return !method.is_undefined;
             }
         }
+        // The hooks Module and Class define privately, such as
+        // `method_added` and `inherited`, are methods a class or module has,
+        // private as they are.
+        if core_private_module_method(receiver, name) {
+            return true;
+        }
         crate::vm::native_methods::native_module_method_stub(name).is_some()
     }
 
@@ -880,7 +891,12 @@ impl VirtualMachine {
         }
         match owner {
             Some(owner) => self.refuses_explicit_receiver(&owner, name),
-            None => false,
+            // A hook Module or Class defines privately, which nothing in the
+            // program defined over again.
+            None => {
+                core_private_module_method(receiver, name)
+                    && self.lookup_method(receiver, name).is_none()
+            }
         }
     }
 
@@ -1231,6 +1247,9 @@ impl VirtualMachine {
                 // A method put on the class's own singleton class stands
                 // ahead of one written as `def self.name`, which is how a
                 // later `define_singleton_method` replaces it.
+                if let Some(found) = singleton_prepended_method(class_rc, method_name) {
+                    return Some(found);
+                }
                 if let Some(sc) = class_rc.singleton_class_slot().clone()
                     && let Some(method) = sc.find_own_method(method_name)
                 {
@@ -1422,6 +1441,20 @@ pub(crate) fn reopened_class_name(receiver: &Object) -> Option<&'static str> {
 /// A module-level method on a class or module object: one stored under the
 /// `__class__` convention by `def self.name` or `module_function`, or copied
 /// in by `extend` under the `__ext__` convention.
+/// The method a module prepended to `class_rc`'s singleton class gives it,
+/// which stands in front of the class's own class methods, with the module.
+pub(crate) fn singleton_prepended_method(
+    class_rc: &Rc<Class>,
+    method_name: &str,
+) -> Option<(Rc<Class>, Rc<Method>)> {
+    let singleton = class_rc.singleton_class_slot().clone()?;
+    singleton.prepend_chain().into_iter().find_map(|prepended| {
+        prepended
+            .find_method(method_name)
+            .map(|method| (prepended, method))
+    })
+}
+
 pub(crate) fn module_level_method(class_rc: &Rc<Class>, method_name: &str) -> Option<Rc<Method>> {
     module_own_method(class_rc, method_name)
         .or_else(|| module_extended_method(class_rc, method_name))
@@ -1515,6 +1548,39 @@ pub(crate) fn core_public_method(owner: &str, name: &str) -> bool {
         .iter()
         .find(|row| row.owner == owner)
         .is_some_and(|row| row.public.contains(&name))
+}
+
+/// Whether `name` is one of the private instance methods the core class or
+/// module named `owner` defines.
+pub(crate) fn core_private_method(owner: &str, name: &str) -> bool {
+    crate::vm::native_methods::core_method_names::CORE_METHODS
+        .iter()
+        .find(|row| row.owner == owner)
+        .is_some_and(|row| row.private.contains(&name))
+}
+
+/// The private methods of Module that Class undefines, which a class does
+/// not have.
+const MODULE_PRIVATE_METHODS_CLASS_UNDEFINES: &[&str] = &[
+    "append_features",
+    "extend_object",
+    "module_function",
+    "prepend_features",
+    "refine",
+];
+
+/// Whether `name` is a private method `receiver`, a class or a module, has
+/// from Module or Class.
+fn core_private_module_method(receiver: &Object, name: &str) -> bool {
+    match receiver.view() {
+        View::Module(_) => core_private_method("Module", name),
+        View::Class(_) => {
+            core_private_method("Class", name)
+                || (core_private_method("Module", name)
+                    && !MODULE_PRIVATE_METHODS_CLASS_UNDEFINES.contains(&name))
+        }
+        _ => false,
+    }
 }
 
 /// Whether `name` is one of the public instance methods Class defines.

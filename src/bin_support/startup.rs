@@ -236,7 +236,14 @@ pub(crate) fn apply_cli_flags(vm: &mut VirtualMachine, cli: &Cli) {
         vm.set_line_separator(written);
     }
     apply_encoding_flags(vm, cli);
-    let mut opened: Vec<String> = cli.include_paths.clone();
+    // A `-I` may name several directories joined by `:`, as RUBYLIB does.
+    let mut opened: Vec<String> = cli
+        .include_paths
+        .iter()
+        .flat_map(|written| written.split(':'))
+        .filter(|part| !part.is_empty())
+        .map(|part| part.to_string())
+        .collect();
     // RUBYLIB names directories of its own, which stand after everything a
     // `-I` asked for and before the rest of the path.
     if let Ok(written) = std::env::var("RUBYLIB") {

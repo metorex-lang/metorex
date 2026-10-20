@@ -1,4 +1,4 @@
-require "rex/support/directory_maker"
+require "rspec/support/directory_maker"
 
 module Rex::Core::Formatters
   autoload :DocumentationFormatter,   'rspec/core/formatters/documentation_formatter'

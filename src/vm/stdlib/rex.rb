@@ -1,7 +1,15 @@
 # Rex, the spec framework Metorex carries. It follows RSpec 3.13, and RSpec
-# names the same module, so a suite written for RSpec runs unchanged.
+# names the same module, so a suite written for RSpec runs unchanged. The
+# module is named RSpec, so what a suite prints names its classes as RSpec
+# does. A program that defined an RSpec of its own before loading Rex keeps
+# it, and Rex goes by its own name alone.
 
 $_rspec_core_load_started_at = Time.now
+
+if Object.autoload?(:RSpec) || !defined?(RSpec)
+  Object.const_set(:RSpec, Module.new)
+  Rex = RSpec
+end
 
 module Rex
   module Core
@@ -17,9 +25,22 @@ module Rex
   end
 end
 
-RSpec = Rex if Object.autoload?(:RSpec) || !defined?(RSpec)
-
-require "rex/support"
+require "rex/rspec/support"
+%w[
+  warnings
+  recursive_const_methods
+  reentrant_mutex
+  encoded_string
+  directory_maker
+  object_formatter
+  fuzzy_matcher
+  differ
+  with_keywords_when_needed
+  source
+].each { |name| Rex::Support.require_rspec_support(name) }
+# `require_rspec_core` and `require_rspec_mocks`, which rspec-core's and
+# rspec-mocks' own entry files define in RSpec, and which reach Rex's files.
+%i[core mocks].each { |library| Rex::Support.define_optimized_require_for_rspec(library) {} }
 require "rex/core/framework"
 require "rex/source"
 
@@ -122,8 +143,8 @@ module Rex
   Core::SharedExampleGroup::TopLevelDSL.expose_globally!
 end
 
-require "rex/expectations"
-require "rex/matchers"
+require "rex/rspec/expectations"
+require "rex/expectation_additions"
 require "rex/mocks"
 require "rex/core/parallel"
 require "rex/core/coverage"

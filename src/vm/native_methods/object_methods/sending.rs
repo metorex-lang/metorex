@@ -126,35 +126,43 @@ impl VirtualMachine {
                 // Prefer full lookup (walks singleton class + mixins) so mocked
                 // or per-instance overrides take precedence over the class's
                 // own method table.
-                if let Some((resolved_class, m)) = self.lookup_method(receiver, &method)
+                let found = self.lookup_method(receiver, &method);
+                if let Some((resolved_class, m)) = &found
                     && !m.is_undefined
                 {
                     return Ok(Some(self.invoke_method(
-                        resolved_class,
-                        m,
+                        std::rc::Rc::clone(resolved_class),
+                        std::rc::Rc::clone(m),
                         receiver.clone(),
                         rest_args,
                         position,
                     )?));
                 }
+                // A name the class undefined has no native method behind it
+                // either, and goes to `method_missing`.
+                let undefined = found.is_some();
                 let class = self.builtins().class_of(receiver);
-                if let Some(result) = self.call_native_method(
-                    class.as_ref(),
-                    receiver,
-                    &method,
-                    &rest_args,
-                    position,
-                )? {
+                if !undefined
+                    && let Some(result) = self.call_native_method(
+                        class.as_ref(),
+                        receiver,
+                        &method,
+                        &rest_args,
+                        position,
+                    )?
+                {
                     return Ok(Some(result));
                 }
-                if let Some(result) =
-                    self.call_object_method(receiver, &method, &rest_args, position)?
+                if !undefined
+                    && let Some(result) =
+                        self.call_object_method(receiver, &method, &rest_args, position)?
                 {
                     return Ok(Some(result));
                 }
                 // A method written on Object, as a top-level `def` is, which
                 // `public_send` reaches only when it is public.
-                if let Some((object_class, found)) = self.object_table_method(&method)
+                if !undefined
+                    && let Some((object_class, found)) = self.object_table_method(&method)
                     && (method_name != "public_send" || !object_class.is_method_private(&method))
                 {
                     return Ok(Some(self.invoke_method(
@@ -168,7 +176,8 @@ impl VirtualMachine {
                 // Every Kernel function is a private method of every object,
                 // and `send` reaches a private method the way a bare call
                 // does.
-                if method_name != "public_send"
+                if !undefined
+                    && method_name != "public_send"
                     && crate::vm::native_methods::is_kernel_private_function(&method)
                 {
                     return self

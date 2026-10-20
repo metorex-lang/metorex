@@ -433,16 +433,19 @@ impl VirtualMachine {
         {
             return Ok(());
         }
-        let wanted = match self.warning_category_setting("strict_unused_block").view() {
-            Some(View::Bool(set)) => set,
-            _ => matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true))),
+        let strict = match self.warning_category_setting("strict_unused_block").view() {
+            Some(View::Bool(set)) => Some(set),
+            _ => None,
         };
-        if !wanted
-            || method.name == "initialize"
-            || method.block_parameter.is_some()
-            || method.captured_vars.is_some()
-            || body_takes_a_block(&method.body)
-        {
+        let wanted = strict.unwrap_or_else(|| {
+            matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true)))
+        });
+        if !wanted || method.name == "initialize" || uses_its_block(method) {
+            return Ok(());
+        }
+        // Outside strict mode a name some other method uses a block under
+        // does not warn, since a call of that name may mean that method.
+        if strict != Some(true) && another_method_of_the_name_uses_a_block(method) {
             return Ok(());
         }
         let called_in = self
@@ -518,6 +521,27 @@ impl VirtualMachine {
 /// Whether a method body reaches the block it was given, through `yield` or
 /// through `super`, which hands the block on. `block_given?` alone asks about
 /// the block without using it.
+/// Whether a method takes the block it is called with: by a block parameter,
+/// `yield`, or `super`, or as a block `define_method` made it from.
+fn uses_its_block(method: &crate::object::Method) -> bool {
+    method.block_parameter.is_some()
+        || method.captured_vars.is_some()
+        || body_takes_a_block(&method.body)
+}
+
+/// Whether a method other than `method`, of any class or module, goes by its
+/// name and uses its block.
+fn another_method_of_the_name_uses_a_block(method: &crate::object::Method) -> bool {
+    let class_level = format!("__class__{}", method.name);
+    crate::object::live::live_classes().iter().any(|class| {
+        [&method.name, &class_level].into_iter().any(|name| {
+            class
+                .find_own_method(name)
+                .is_some_and(|other| !std::ptr::eq(&*other, method) && uses_its_block(&other))
+        })
+    })
+}
+
 fn body_takes_a_block(body: &[crate::ast::Statement]) -> bool {
     let written = format!("{:?}", body);
     written.contains("Yield { arguments") || written.contains("Super { arguments")

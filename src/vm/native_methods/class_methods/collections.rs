@@ -78,20 +78,7 @@ impl VirtualMachine {
             match arguments {
                 [] => {}
                 [source] if let View::Dict(source) = source.view() => {
-                    for (key, value) in source.borrow().iter() {
-                        if key.starts_with("__MX_") {
-                            continue;
-                        }
-                        entries.push((Object::string(key.clone()), value.clone()));
-                    }
-                    let mut built = indexmap::IndexMap::new();
-                    for (key, value) in entries {
-                        let View::String(rendered) = key.view() else {
-                            continue;
-                        };
-                        built.insert(rendered.as_str().to_string(), value);
-                    }
-                    return Ok(Answered(hash_of_class(class_rc, built)));
+                    entries = self.hash_pairs(source);
                 }
                 [rows] if let View::Array(rows) = rows.view() => {
                     let held = rows.borrow().clone();
@@ -170,11 +157,13 @@ impl VirtualMachine {
                     ));
                 }
             }
-            let mut built = indexmap::IndexMap::new();
+            // Each key is stored as `[]=` stores one, beside the object it
+            // stands for.
+            let built = Rc::new(std::cell::RefCell::new(indexmap::IndexMap::new()));
             for (key, value) in entries {
-                let rendered = crate::vm::utils::object_to_dict_key(&key).unwrap_or_default();
-                built.insert(rendered, value);
+                self.hash_store(&built, &key, value, position)?;
             }
+            let built = built.borrow().clone();
             return Ok(Answered(hash_of_class(class_rc, built)));
         }
         // `Array[1, 2, 3]` and the same form on a subclass build a value from

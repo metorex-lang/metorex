@@ -267,7 +267,7 @@ module Rex
       end
 
       def arg_list(args)
-        args.map { |arg| Rex::Matchers::ObjectFormatter.format(arg) }.join(", ")
+        args.map { |arg| Rex::Support::ObjectFormatter.format(arg) }.join(", ")
       end
 
       def notify(*args)
@@ -282,7 +282,7 @@ module Rex
         actual_args = args_for_multiple_calls.map { |args| format_args(args) }.join(", ")
         message = default_error_message(expectation, expected_args, actual_args)
         if args_for_multiple_calls.one?
-          diff = Rex::Matchers::Differ.diff(args_for_multiple_calls.first, expectation.expected_args)
+          diff = Rex::Support::Differ.new(color: Rex::Mocks.configuration.color?).diff(args_for_multiple_calls.first, expectation.expected_args)
           message += "\nDiff:#{diff}" unless diff.strip.empty?
         end
         message
@@ -580,7 +580,7 @@ module Rex
 
         def ===(predicate, actual)
           @expected.__send__(predicate) do |key, value|
-            actual.key?(key) && Rex::Matchers::FuzzyMatcher.values_match?(value, actual[key])
+            actual.key?(key) && Rex::Support::FuzzyMatcher.values_match?(value, actual[key])
           end
         rescue NoMethodError
           false
@@ -597,7 +597,7 @@ module Rex
         private
 
         def formatted_expected_hash
-          Hash[@expected.map { |key, value| [Rex::Matchers::ObjectFormatter.prepare(key), Rex::Matchers::ObjectFormatter.prepare(value)] }]
+          Hash[@expected.map { |key, value| [Rex::Support::ObjectFormatter.prepare(key), Rex::Support::ObjectFormatter.prepare(value)] }]
         end
       end
 
@@ -629,14 +629,14 @@ module Rex
         def ===(actual)
           actual = actual.uniq
           @expected.uniq.all? do |expected_element|
-            actual.any? { |actual_element| Rex::Matchers::FuzzyMatcher.values_match?(expected_element, actual_element) }
+            actual.any? { |actual_element| Rex::Support::FuzzyMatcher.values_match?(expected_element, actual_element) }
           end
         rescue NoMethodError
           false
         end
 
         def description
-          "array_including(#{@expected.map { |item| Rex::Matchers::ObjectFormatter.format(item) }.join(', ')})"
+          "array_including(#{@expected.map { |item| Rex::Support::ObjectFormatter.format(item) }.join(', ')})"
         end
 
         def inspect
@@ -654,14 +654,14 @@ module Rex
           return true unless (actual & @unexpected).any?
 
           actual.none? do |actual_element|
-            @unexpected.any? { |unexpected_element| Rex::Matchers::FuzzyMatcher.values_match?(unexpected_element, actual_element) }
+            @unexpected.any? { |unexpected_element| Rex::Support::FuzzyMatcher.values_match?(unexpected_element, actual_element) }
           end
         rescue NoMethodError
           false
         end
 
         def description
-          "array_excluding(#{@unexpected.map { |item| Rex::Matchers::ObjectFormatter.format(item) }.join(', ')})"
+          "array_excluding(#{@unexpected.map { |item| Rex::Support::ObjectFormatter.format(item) }.join(', ')})"
         end
 
         def inspect
@@ -738,7 +738,7 @@ module Rex
         expected_args = resolve_expected_args_based_on(actual_args)
         return false if expected_args.size != actual_args.size
 
-        Rex::Matchers::FuzzyMatcher.values_match?(expected_args, actual_args)
+        Rex::Support::FuzzyMatcher.values_match?(expected_args, actual_args)
       end
       ruby2_keywords(:args_match?)
 
@@ -1234,9 +1234,9 @@ module Rex
         return @error_generator.raise_missing_block_error(@args_to_yield) unless block
 
         value = nil
-        block_signature = Rex::Core::MethodSignature.new(block)
+        block_signature = Rex::Support::BlockSignature.new(block)
         @args_to_yield.each do |args|
-          unless block_signature.accepts?(args.size)
+          unless Rex::Support::StrictSignatureVerifier.new(block_signature, args).valid?
             @error_generator.raise_wrong_arity_error(args, block_signature)
           end
           value = @eval_context ? @eval_context.instance_exec(*args, &block) : yield(*args)

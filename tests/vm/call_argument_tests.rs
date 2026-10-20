@@ -103,3 +103,15 @@ fn a_keyword_label_at_the_end_of_a_line_takes_its_value_from_the_next_line() {
         Some(Object::array(vec![Object::Int(1), Object::Nil]))
     );
 }
+
+#[test]
+fn a_verbose_run_does_not_warn_for_a_name_another_method_uses_a_block_under() {
+    let code = "$VERBOSE = true\nclass Order\n  def with(x) = yield(x)\nend\nclass Label\n  def with(x) = x\nend\nLabel.new.with(1) { 2 }";
+    assert_eq!(warnings_from(code), "");
+}
+
+#[test]
+fn the_strict_category_warns_for_a_name_another_method_uses_a_block_under() {
+    let code = "Warning[:strict_unused_block] = true\nclass Order\n  def with(x) = yield(x)\nend\nclass Label\n  def with(x) = x\nend\nLabel.new.with(1) { 2 }";
+    assert!(warnings_from(code).contains("the block passed to 'Label#with'"));
+}

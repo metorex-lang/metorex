@@ -207,9 +207,16 @@ fn thread_respond_to_unknown_method() {
 }
 
 #[test]
-fn thread_respond_to_non_string_arg_returns_false() {
-    let result = run(r#"Thread.respond_to?(42)"#);
-    assert_eq!(result, Some(Object::Bool(false)));
+fn thread_respond_to_a_name_that_is_not_a_symbol_or_string_raises() {
+    let result = run(r#"begin
+  Thread.respond_to?(42)
+rescue TypeError => error
+  error.message
+end"#);
+    assert_eq!(
+        result,
+        Some(Object::string("42 is not a symbol nor a string"))
+    );
 }
 
 #[test]

@@ -770,3 +770,51 @@ fn an_equality_method_reaching_basic_object_through_super_compares_identity() {
     let output = run_example("methods/equality_super_to_basic_object.rb");
     assert_eq!(output, expected);
 }
+
+#[test]
+fn a_class_method_reaches_a_module_extended_by_a_call_through_super() {
+    let output = run_example("methods/super_from_singleton_to_extended_module.rb");
+    assert_eq!(output, "SHIPPING PALLET\nSHIPPING CRATE\n");
+}
+
+#[test]
+fn ruby2_keywords_pass_through_new_and_send_with_a_block() {
+    let output = run_example("methods/ruby2_keywords_through_new.rb");
+    assert_eq!(output, "true\nfalse\nfalse\n");
+}
+
+#[test]
+fn an_implicit_super_in_a_yielded_block_passes_its_own_methods_arguments() {
+    let output = run_example("methods/zsuper_in_block_yielded_by_another_method.rb");
+    assert_eq!(output, "fragile: crate\nrush: 3 fragile: crate\n");
+}
+
+#[test]
+fn an_undefined_equality_operator_reaches_method_missing() {
+    let output = run_example("methods/undef_equality_reaches_method_missing.rb");
+    assert_eq!(output, "true\ntrue\nfalse\nfalse\ntrue\n");
+}
+
+#[test]
+fn a_method_missing_mixed_into_object_leaves_kernel_methods_to_kernel() {
+    let output = run_example("methods/native_methods_before_method_missing_on_object.rb");
+    assert_eq!(
+        output,
+        "true\ntrue\ntrue\n\"fallback be_shipped\"\nundefined method 'unknown_label' for an instance of Object\n"
+    );
+}
+
+#[test]
+fn a_module_prepended_to_a_singleton_class_wraps_the_class_method() {
+    let output = run_example("methods/prepend_to_singleton_class_wraps_class_method.rb");
+    assert_eq!(
+        output,
+        "labeled shipment of 12\n[Labeled, #<Class:Shipment>]\n"
+    );
+}
+
+#[test]
+fn respond_to_missing_reaches_kernels_through_super_for_every_kind_of_object() {
+    let output = run_example("methods/respond_to_missing_super_reaches_kernel.rb");
+    assert_eq!(output, "true\nfalse\nfalse\nfalse\ntrue\n");
+}

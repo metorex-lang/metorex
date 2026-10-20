@@ -53,7 +53,7 @@ impl VirtualMachine {
                     let msg = format!(
                         "can't modify frozen {}: {}",
                         class_rc.kind_name(),
-                        class_rc.ruby_name()
+                        class_rc.inspect_name()
                     );
                     let exc = Object::exception("FrozenError", msg.clone());
                     return Err(MetorexError::UncaughtException {
@@ -116,7 +116,7 @@ impl VirtualMachine {
                     let msg = format!(
                         "can't modify frozen {}: {}",
                         class_rc.kind_name(),
-                        class_rc.ruby_name()
+                        class_rc.inspect_name()
                     );
                     let exc = Object::exception("FrozenError", msg.clone());
                     return Err(MetorexError::UncaughtException {
@@ -207,7 +207,7 @@ impl VirtualMachine {
                     let msg = format!(
                         "can't modify frozen {}: {}",
                         class_rc.kind_name(),
-                        class_rc.name()
+                        class_rc.inspect_name()
                     );
                     let exc = Object::exception("FrozenError", msg.clone());
                     return Err(MetorexError::UncaughtException {

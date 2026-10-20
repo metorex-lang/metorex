@@ -60,6 +60,12 @@ impl VirtualMachine {
             // answers to only because it extended a module sits behind those,
             // which is what lets `def Mod.name` override an extended one and
             // reach it again through `super`.
+            if let Some((owner, method)) =
+                crate::vm::method_lookup::singleton_prepended_method(class, name)
+                && !method.is_undefined
+            {
+                return self.invoke_method(owner, method, receiver, arguments, position);
+            }
             let module_method = class
                 .singleton_class_slot()
                 .as_ref()

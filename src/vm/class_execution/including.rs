@@ -49,13 +49,17 @@ impl VirtualMachine {
                 ));
             }
         };
-        // Prefer the innermost lexical class/module if there is one; this
-        // makes `include X` inside a lambda invoked from a module body
-        // mix into that module rather than into Object.
-        if let Some(target) = self.def_scope_stack.last().cloned() {
+        // `include` is a call of `self`'s own: a class or module includes
+        // into itself, wherever the code runs, and `main` into Object.
+        let target = match self.environment().get("self").view() {
+            Some(View::Class(held) | View::Module(held)) => Some(Rc::clone(held)),
+            _ => None,
+        };
+        if let Some(target) = target {
             self.apply_module_include(&target, module_rc, position)?;
         } else if let Some(View::Class(object_class)) = self.globals().get("Object").view() {
-            object_class.add_mixin(module_rc.clone());
+            let object_class = Rc::clone(object_class);
+            self.apply_module_include(&object_class, module_rc, position)?;
         }
         Ok(ControlFlow::Next)
     }
@@ -241,7 +245,7 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<(), MetorexError> {
         if target.is_frozen() {
-            let msg = format!("can't modify frozen Module: {}", target.name());
+            let msg = format!("can't modify frozen Module: {}", target.inspect_name());
             let exc = Object::exception("FrozenError", msg.clone());
             return Err(MetorexError::UncaughtException {
                 exception: exc,
@@ -278,7 +282,7 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<(), MetorexError> {
         if target.is_frozen() {
-            let msg = format!("can't modify frozen Module: {}", target.name());
+            let msg = format!("can't modify frozen Module: {}", target.inspect_name());
             let exc = Object::exception("FrozenError", msg.clone());
             return Err(MetorexError::UncaughtException {
                 exception: exc,

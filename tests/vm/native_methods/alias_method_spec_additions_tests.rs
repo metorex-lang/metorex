@@ -815,7 +815,7 @@ fn module_extend_object_mixes_module_into_target_singleton() {
     let result = run(r#"
 module M; def foo; :m; end; end
 class K; end
-M.extend_object(K)
+M.send(:extend_object, K)
 K.foo
 "#);
     assert_eq!(result, Some(Object::symbol("m".to_string())));

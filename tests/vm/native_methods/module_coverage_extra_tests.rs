@@ -60,10 +60,10 @@ fn refine_non_class_errors() {
         r#"
 module R2
 end
-R2.refine(42) { }
+R2.send(:refine, 42) { }
 "#,
     );
-    assert!(err.contains("Class") || err.contains("argument"));
+    assert!(err.contains("wrong argument type Integer (expected Class or Module)"));
 }
 
 #[test]

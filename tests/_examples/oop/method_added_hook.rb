@@ -31,5 +31,5 @@ end
 puts $events.inspect
 puts Tracked.method_defined?(:retired).inspect
 puts Tracked.instance_methods(false).sort.inspect
-puts Module.new.method_added(:anything).inspect
+puts Module.new.send(:method_added, :anything).inspect
 puts Module.private_instance_methods.include?(:method_added).inspect

@@ -539,11 +539,11 @@ impl VirtualMachine {
     }
 
     /// `__expect_to__(actual, matcher, message, block, matchers_module,
-    /// target_class)`:
+    /// target_class, handler)`:
     /// `expect(actual).to(matcher)` for the matchers Rex matches natively.
     /// Answers what the match answers when it passes, and false when it
     /// fails, having set `@actual`, `last_matcher`, and
-    /// `last_expectation_verb` as the Ruby steps do. Answers nil, having
+    /// `last_expectation_handler` as the Ruby steps do. Answers nil, having
     /// done nothing, when the Ruby steps have to run: the fast paths are
     /// off, a message or block was given, the matcher is not one of those,
     /// or a method they read past was redefined.
@@ -559,6 +559,7 @@ impl VirtualMachine {
             Some(View::Nil),
             Some(View::Module(matchers_module)),
             Some(View::Class(target_class)),
+            Some(handler),
         ) = (
             arguments.first(),
             arguments.get(1).view(),
@@ -566,6 +567,7 @@ impl VirtualMachine {
             arguments.get(3).view(),
             arguments.get(4).view(),
             arguments.get(5).view(),
+            arguments.get(6),
         )
         else {
             return Ok(Object::Nil);
@@ -610,7 +612,13 @@ impl VirtualMachine {
             ("match", Some(expected @ View::Regex(_, _)))
                 if matches!(actual.view(), View::String(_)) =>
             {
-                if matcher.borrow().get_var("expected_captures").is_some() {
+                // RSpec's Match holds `@expected_captures` as nil until
+                // `with_captures` names some.
+                if matcher
+                    .borrow()
+                    .get_var("expected_captures")
+                    .is_some_and(|captures| !matches!(captures.view(), View::Nil))
+                {
                     return Ok(Object::Nil);
                 }
                 let matched = self.send_to_object(
@@ -632,7 +640,7 @@ impl VirtualMachine {
                 .borrow_mut()
                 .set_var("actual".to_string(), actual.clone());
         }
-        matchers_module.set_class_var("@last_expectation_verb", Object::string("is expected to"));
+        matchers_module.set_class_var("@last_expectation_handler", handler.clone());
         matchers_module.set_class_var("@last_matcher", Object::Instance(Rc::clone(matcher)));
         Ok(if matched.is_truthy() {
             matched

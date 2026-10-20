@@ -1,7 +1,7 @@
 require "rex/core/formatters/console_codes"
 require "rex/core/formatters/snippet_extractor"
 require "rex/core/formatters/syntax_highlighter"
-require "rex/support/encoded_string"
+require "rspec/support/encoded_string"
 
 module Rex
   module Core

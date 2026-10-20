@@ -100,7 +100,7 @@ module Rex
 
       def source_from_file(path)
         unless defined?(@sources_by_path)
-          require "rex/support/source"
+          require "rspec/support/source"
           @sources_by_path = {}
         end
 

@@ -90,8 +90,8 @@ module MathHelper
   end
 end
 
-MathHelper.module_function("double")
-MathHelper.module_function("triple")
+MathHelper.send :module_function, "double"
+MathHelper.send :module_function, "triple"
 
 puts ""
 puts "=== module_function ==="

@@ -105,6 +105,12 @@ impl VirtualMachine {
             };
         }
 
+        // Kernel's `respond_to_missing?`, which `super` from a program's own
+        // reaches, answers that nothing else is responded to.
+        if method_name == "respond_to_missing?" && matches!(arguments.len(), 1 | 2) {
+            return Ok(Some(Object::Bool(false)));
+        }
+
         // A Proc is already one, so `to_proc` answers the same object.
         if method_name == "to_proc" && matches!(receiver.view(), View::Block(_)) {
             return Ok(Some(receiver.clone()));

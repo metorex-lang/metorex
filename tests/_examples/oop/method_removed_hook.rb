@@ -21,7 +21,7 @@ end
 
 puts $events.inspect
 puts Tracked.instance_methods(false).inspect
-puts Module.new.method_removed(:anything).inspect
+puts Module.new.send(:method_removed, :anything).inspect
 puts Module.private_instance_methods.include?(:method_removed).inspect
 
 frozen = Module.new
@@ -29,5 +29,5 @@ frozen.freeze
 begin
   frozen.alias_method :a, :b
 rescue FrozenError => error
-  puts error.message
+  puts error.message.sub(frozen.inspect, "the frozen module")
 end

@@ -61,6 +61,23 @@ impl VirtualMachine {
             return self.evaluate_equality(left, held, position);
         }
         if let View::Instance(inst_rc) = left.view() {
+            // A class that undefined `==` answers it through its
+            // `method_missing`, an object compared with itself included.
+            if self
+                .lookup_method(&left, "==")
+                .is_some_and(|(_, method)| method.is_undefined)
+            {
+                if let Some(answer) =
+                    self.undefined_hook_via_method_missing(&left, "==", &right, position)
+                {
+                    return answer;
+                }
+                let arguments = [right.clone()];
+                let wording = self.receiver_wording_for(&left, position);
+                return Err(crate::vm::errors::undefined_method_error_worded(
+                    "==", &left, &arguments, wording, position,
+                ));
+            }
             // Identity shortcut: same object is always ==
             if let View::Instance(rhs) = right.view()
                 && Rc::ptr_eq(inst_rc, rhs)
@@ -440,15 +457,17 @@ impl VirtualMachine {
         // Object#=== is the same object, or whatever #== says. It
         // consults neither #equal? nor #object_id, so a class that
         // overrides those does not change the answer. A class that
-        // defines its own `===`, or reaches one through
-        // `method_missing`, wins over that default.
+        // defines its own `===` wins over that default, and an object
+        // rooted at BasicObject, which has no `===`, reaches one only
+        // through `method_missing`.
         if let View::Instance(inst_rc) = left.view() {
             if let Some((owner, method)) = self.lookup_method(&left, "===")
                 && !method.is_undefined
             {
                 return self.invoke_method(owner, method, left, vec![right], position);
             }
-            if let Some((owner, handler)) = self.lookup_method(&left, "method_missing")
+            if self.rooted_at_basic_object(&left)
+                && let Some((owner, handler)) = self.lookup_method(&left, "method_missing")
                 && !handler.is_undefined
             {
                 let arguments = vec![Object::symbol("===".to_string()), right];

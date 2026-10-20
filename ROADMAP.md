@@ -127,9 +127,9 @@ Rex runs RSpec 3.13.6's own specs with `scripts/run_rspec_suite.sh`. Parity is t
   - Acceptance: the script runs with no network access
 - [x] Results by file: the script writes each file's example, failure, and pending counts under Metorex and under MRI to a checked-in file, and prints the files whose counts differ
   - Acceptance: the file lists every spec file the script runs, and the README's table is built from it
-- [ ] rspec-expectations: every file's counts match MRI's (2234 pass under Metorex and 2438 under MRI, of 2455)
-- [ ] rspec-mocks: every file's counts match MRI's (1382 pass under Metorex and 1794 under MRI, of 1806)
-- [ ] rspec-core: every file's counts match MRI's (2064 pass under Metorex and 2239 under MRI, of 2258)
+- [ ] rspec-expectations: every file's counts match MRI's (2436 pass under Metorex and 2438 under MRI, of 2455)
+- [ ] rspec-mocks: every file's counts match MRI's (1388 pass under Metorex and 1794 under MRI, of 1806)
+- [ ] rspec-core: every file's counts match MRI's (2089 pass under Metorex and 2239 under MRI, of 2258)
 - [ ] CI fails when any file's counts differ from MRI's
 
 ## Standard library

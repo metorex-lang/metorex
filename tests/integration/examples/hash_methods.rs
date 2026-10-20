@@ -167,3 +167,12 @@ fn test_hash_methods_subclass_brackets_no_parens_execution() {
     let output = run_example("hash_methods/subclass_brackets_no_parens.rb");
     assert_eq!(output, SUBCLASS_BRACKETS_OUTPUT);
 }
+
+#[test]
+fn hash_brackets_keep_each_key_as_the_object_given() {
+    let output = run_example("hash_methods/brackets_with_object_keys.rb");
+    assert_eq!(
+        output,
+        "{(crate north) => 1, (crate south) => 2}\n[Crate, Crate]\ntrue\n2\ntrue\n"
+    );
+}

@@ -408,20 +408,6 @@ impl VirtualMachine {
                         .set(REPORT_ON_EXCEPTION_GLOBAL, Object::Bool(wanted.is_truthy()));
                     return Ok(Answered(wanted));
                 }
-                "respond_to?" => {
-                    if let Some(arg) = arguments.first() {
-                        let n = match arg.view() {
-                            View::String(s) => s.as_str().to_string(),
-                            View::Symbol(s) => s.as_str().to_string(),
-                            _ => return Ok(Answered(Object::Bool(false))),
-                        };
-                        let known = matches!(
-                            n.as_str(),
-                            "report_on_exception=" | "pass" | "current" | "new"
-                        );
-                        return Ok(Answered(Object::Bool(known)));
-                    }
-                }
                 _ => {}
             }
         }

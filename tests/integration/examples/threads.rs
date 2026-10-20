@@ -366,3 +366,9 @@ fn test_threads_break_in_a_thread_execution() {
     let output = run_example("threads/break_in_a_thread.rb");
     assert_eq!(output, "LocalJumpError\n");
 }
+
+#[test]
+fn thread_responds_to_each_of_its_class_methods() {
+    let output = run_example("threads/thread_responds_to_its_class_methods.rb");
+    assert_eq!(output, "true\ntrue\ntrue\ntrue\nfalse\n");
+}

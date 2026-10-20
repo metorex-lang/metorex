@@ -373,6 +373,7 @@ impl VirtualMachine {
         // body) can forward them to the parent method.
         self.method_arg_stack.push(arguments_for_body.clone());
         self.method_running_stack.push(Rc::clone(&method));
+        self.method_running_frames.push(None);
         // Where this method was defined, so a `super` in its body starts from
         // the right link even when the module has no name.
         self.method_owner_stack.push(
@@ -439,6 +440,7 @@ impl VirtualMachine {
         self.method_owner_stack.pop();
         self.method_arg_stack.pop();
         self.method_running_stack.pop();
+        self.method_running_frames.pop();
         let mut method_scopes = std::mem::replace(&mut self.refinement_scopes, caller_scopes);
         method_scopes.clear();
         self.spare_refinement_scopes.push(method_scopes);
@@ -565,6 +567,19 @@ impl VirtualMachine {
     }
 
     /// Execute the body of a method within a fresh scope.
+    /// Note the frame `method`'s body runs under, when it is the method on
+    /// top of the running stack.
+    fn record_running_frame(&mut self, method: &Method, frame: u64) {
+        if self
+            .method_running_stack
+            .last()
+            .is_some_and(|running| std::ptr::eq(&**running, method))
+            && let Some(slot) = self.method_running_frames.last_mut()
+        {
+            *slot = Some(frame);
+        }
+    }
+
     pub(crate) fn execute_method_body(
         &mut self,
         method: &Method,
@@ -638,6 +653,7 @@ impl VirtualMachine {
         let frame = self.next_method_frame;
         self.next_method_frame += 1;
         let saved_frame = self.current_method_frame.replace(frame);
+        self.record_running_frame(method, frame);
         // A block opened in this body belongs to this method, whatever block
         // the call was made from.
         let saved_lexical_home = self.lexical_home_frame.take();

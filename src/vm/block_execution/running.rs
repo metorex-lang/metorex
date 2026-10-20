@@ -134,6 +134,7 @@ impl VirtualMachine {
         // inside a class body).
         let saved_def_scope =
             std::mem::replace(&mut self.def_scope_stack, block.captured_def_scope.clone());
+        let carries_constant_home = self.enter_captured_constant_home(block);
         // A block opened inside this body belongs to the method this one was
         // written in, so a `return` written two blocks deep unwinds to the
         // method holding them both.
@@ -272,6 +273,9 @@ impl VirtualMachine {
         self.environment_mut().pop_scope();
         self.class_var_cref_stack.pop();
         self.leave_block_nesting();
+        if carries_constant_home {
+            self.constant_homes.pop();
+        }
         self.def_scope_stack = saved_def_scope;
         self.lexical_home_frame = saved_lexical_home;
         // The exception says where it came from while the block's own file is

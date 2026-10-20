@@ -223,7 +223,7 @@ impl VirtualMachine {
 
     /// The class a block run as a class body reads constants where it was
     /// written in, when it applies at the current depth.
-    fn applying_constant_home(&self) -> Option<Option<&Rc<crate::class::Class>>> {
+    pub(crate) fn applying_constant_home(&self) -> Option<Option<&Rc<crate::class::Class>>> {
         self.constant_homes
             .last()
             .filter(|(depth, _)| *depth == self.def_scope_stack.len())

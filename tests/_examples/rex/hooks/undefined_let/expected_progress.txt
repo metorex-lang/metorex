@@ -6,7 +6,7 @@ Failures:
      Failure/Error: expect(acount[:balance]).to eq(100)
 
      NameError:
-       undefined local variable or method 'acount' for #<Rex::ExampleGroups::AnAccount::WhenNested:0x>
+       undefined local variable or method 'acount' for #<RSpec::ExampleGroups::AnAccount::WhenNested:0x>
        Helpers declared nearby: statement, account, owner
      # ./spec/undefined_let_spec.rb:9:in 'block (3 levels) in <top (required)>'
 

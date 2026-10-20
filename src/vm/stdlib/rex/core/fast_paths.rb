@@ -8,8 +8,8 @@ module Rex
     module FastPaths
       # Per example group, the hooks of the group and the groups around it,
       # flattened in the order they run, which `Hooks::HookCollections`
-      # builds.
-      FLATTENED_HOOKS = {}.compare_by_identity
+      # builds. Held weakly, so a group the program lets go of is collected.
+      FLATTENED_HOOKS = ObjectSpace::WeakKeyMap.new
 
       # A guard over the methods named `names` of `owner`.
       class Guard
@@ -17,8 +17,8 @@ module Rex
           @originals = names.to_h { |name| [name, owner.instance_method(name)] }
           # Per object checked: the method state the check ran under and
           # what it answered. Held aside, so the objects carry nothing a
-          # fast path added.
-          @checked = {}.compare_by_identity
+          # fast path added, and weakly, so an object let go of is collected.
+          @checked = ObjectSpace::WeakKeyMap.new
         end
 
         # Whether each of `receivers` still answers the guarded methods with
@@ -90,13 +90,13 @@ module Rex
       __guard_fast_matcher__(:include, built_in::Include, :matches?, :check_actual?, :check_expected_count?,
                              :perform_match, :excluded_from_actual, :actual_collection_includes?,
                              :supports_value_expectations?)
-      __guard_fast_path__(Rex::Expectations::ExpectationTarget, :enforce_value_expectation)
-      __guard_fast_path__(Rex::Expectations::ExpectationTarget, :with_source_location)
+      __guard_fast_path__(Rex::Expectations::ValueExpectationTarget, :enforce_value_expectation)
+      __guard_fast_path__(Rex::Expectations::ValueExpectationTarget, :with_source_location)
       __guard_fast_path_class_method__(Rex::Expectations::PositiveExpectationHandler, :handle_matcher)
       __guard_fast_path_class_method__(Rex::Expectations::PositiveExpectationHandler, :verb)
       __guard_fast_path_class_method__(Rex::Expectations::ExpectationHelper, :check_message)
       __guard_fast_path_class_method__(Rex::Matchers, :last_matcher=)
-      __guard_fast_path_class_method__(Rex::Matchers, :last_expectation_verb=)
+      __guard_fast_path_class_method__(Rex::Matchers, :last_expectation_handler=)
 
       # What verifying and taking down an example's mock space walks, which
       # `__mock_space_idle__` lets an example with no doubles skip.

@@ -629,7 +629,6 @@ impl ArgumentList {
         value: Object,
         other_position: Position,
     ) -> Result<(), MetorexError> {
-        self.tail_from_splat = false;
         // A refinement in force may say how an object becomes a
         // block, which stands ahead of whatever its own kind does.
         let refined_to_proc = vm.any_refinement_active()
@@ -726,6 +725,7 @@ impl ArgumentList {
                 // the existing trailing-block-extraction in
                 // `invoke_method` can pick it up if it happens to
                 // be a Method/Proc that the user wants to coerce.
+                self.tail_from_splat = false;
                 self.args.push(value.clone());
             }
         }
