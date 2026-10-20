@@ -84,8 +84,8 @@ fn test_site_language_exceptions_execution() {
 fn test_site_differences_description_names_metorex_and_the_followed_release() {
     let output = run_example("site/differences_description.rb");
     assert!(
-        output.starts_with("metorex 4.0.6 (ruby-compatible) [")
-            && output.ends_with("]\n[\"ruby\", \"4.0.6\", \"4.0.6\"]\n"),
+        output.starts_with("metorex 4.0.7 (ruby-compatible) [")
+            && output.ends_with("]\n[\"ruby\", \"4.0.7\", \"4.0.7\"]\n"),
         "{output}"
     );
 }

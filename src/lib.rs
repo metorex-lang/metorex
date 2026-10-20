@@ -29,13 +29,13 @@ pub fn version() -> &'static str {
 
 /// The Ruby release metorex reports as its own, the MRI release it follows,
 /// which decides which of the spec suite's version guards open.
-pub const DEFAULT_RUBY_VERSION: &str = "4.0.6";
+pub const DEFAULT_RUBY_VERSION: &str = "4.0.7";
 
 /// The patch level MRI reports for the release metorex follows.
 pub const RUBY_PATCHLEVEL: i64 = 0;
 
 /// The day the release metorex follows was made.
-pub const RUBY_RELEASE_DATE: &str = "2026-07-14";
+pub const RUBY_RELEASE_DATE: &str = "2026-09-15";
 
 /// The platform Ruby would name this machine, which is an architecture and
 /// an operating system joined by a dash. The spec suite's platform guards

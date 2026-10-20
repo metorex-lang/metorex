@@ -11,3 +11,9 @@ fn test_sockets_accept_handles_execution() {
     let output = run_example("sockets/accept_handles.rb");
     assert_eq!(output, "[\"hello\", false]\n");
 }
+
+#[test]
+fn a_connection_with_a_time_limit_to_a_closed_port_is_refused() {
+    let output = run_example("sockets/connect_timeout_refused.rb");
+    assert_eq!(output, "Errno::ECONNREFUSED\nErrno::ECONNREFUSED\n");
+}

@@ -77,6 +77,20 @@ impl VirtualMachine {
         // or a method body built from `:+.to_proc`. Route them back through
         // the binary-operator evaluator. A pair it has no rule for is left to
         // the receiver's own methods, which answer or refuse it as Ruby does.
+        // An instance's `==` reached here past one the program wrote, as
+        // `super` reaches it, is BasicObject's identity. The operator would
+        // call the program's `==` again.
+        if method_name == "=="
+            && arguments.len() == 1
+            && matches!(receiver.view(), View::Instance(_))
+            && !self.is_comparable(receiver)
+            && self
+                .lookup_method(receiver, "==")
+                .is_some_and(|(_, method)| !method.is_undefined && !method.body.is_empty())
+        {
+            return self.call_object_equality_method(receiver, "equal?", arguments, position);
+        }
+
         if arguments.len() == 1
             && let Some(op) = binary_op_for_method_name(method_name)
         {

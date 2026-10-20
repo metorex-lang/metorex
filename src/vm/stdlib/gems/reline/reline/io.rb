@@ -10,21 +10,15 @@ module Reline
         require 'reline/io/ansi'
 
         case RbConfig::CONFIG['host_os']
-        when /mswin|mingw|bccwin|wince|emc/
+        when /mswin|msys|mingw|cygwin|bccwin|wince|emc/
           require 'reline/io/windows'
           io = Reline::Windows.new
-          if io.msys_tty? || !STDIN.tty?
-            # In either case stdin is not a console (a Cygwin/MSYS pty pipe such
-            # as mintty, or a redirect), so the Win32 console input API cannot
-            # read it.
+          if io.msys_tty?
             Reline::ANSI.new
           else
             io
           end
         else
-          # Ruby built with the msys/cygwin runtime also reaches here. Its tty layer
-          # speaks ANSI in any terminal (mintty pty or Windows console), so the
-          # Win32 console API must not be used. https://github.com/ruby/reline/issues/903
           Reline::ANSI.new
         end
       end

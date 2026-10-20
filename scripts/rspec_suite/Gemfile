@@ -1,0 +1,3 @@
+# The gems RSpec's own suites load, as the rspec submodule's Gemfile names
+# them. The lockfile beside this one keeps their versions fixed.
+eval_gemfile File.expand_path("../../gems/rspec/Gemfile", __dir__)

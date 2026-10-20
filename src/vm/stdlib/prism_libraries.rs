@@ -1,4 +1,4 @@
-// Written by scripts/vendor_prism.rb from prism 1.9.0.
+// Written by scripts/vendor_prism.rb from prism 1.8.1 as Ruby 4.0.7 ships it.
 
 /// The files of prism's Ruby library, by the feature name each is required as.
 pub(crate) const PRISM_LIBRARIES: &[(&str, &str)] = &[
@@ -24,6 +24,10 @@ pub(crate) const PRISM_LIBRARIES: &[(&str, &str)] = &[
     (
         "prism/lex_compat",
         include_str!("prism/prism/lex_compat.rb"),
+    ),
+    (
+        "prism/lex_ripper",
+        include_str!("prism/prism/lex_ripper.rb"),
     ),
     (
         "prism/mutation_compiler",
@@ -113,10 +117,6 @@ pub(crate) const PRISM_LIBRARIES: &[(&str, &str)] = &[
     (
         "prism/translation/ripper",
         include_str!("prism/prism/translation/ripper.rb"),
-    ),
-    (
-        "prism/translation/ripper/filter",
-        include_str!("prism/prism/translation/ripper/filter.rb"),
     ),
     (
         "prism/translation/ripper/lexer",

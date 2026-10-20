@@ -1826,20 +1826,20 @@ typedef struct pm_block_node {
     /**
      * BlockNode#opening_loc
      *
-     * Represents the location of the opening `{` or `do`.
+     * Represents the location of the opening `|`.
      *
      *     [1, 2, 3].each { |i| puts x }
-     *                    ^
+     *                      ^
      */
     pm_location_t opening_loc;
 
     /**
      * BlockNode#closing_loc
      *
-     * Represents the location of the closing `}` or `end`.
+     * Represents the location of the closing `|`.
      *
      *     [1, 2, 3].each { |i| puts x }
-     *                                 ^
+     *                        ^
      */
     pm_location_t closing_loc;
 } pm_block_node_t;

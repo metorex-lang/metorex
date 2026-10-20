@@ -255,6 +255,7 @@ pipeline {
       steps {
         catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
           sh 'cargo build'
+          sh 'scripts/install_rspec_suite_gems.sh'
           sh 'scripts/compare_fast_paths.sh'
         }
       }

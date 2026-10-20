@@ -114,15 +114,13 @@ class Reline::ANSI < Reline::IO
   end
 
   def inner_getc(timeout_second)
-    while true
-      # @buf may change while handling signal, so we need to check it in each loop iteration.
-      return @buf.shift unless @buf.empty?
-      break if @input.wait_readable(0.01)
-
+    unless @buf.empty?
+      return @buf.shift
+    end
+    until @input.wait_readable(0.01)
       timeout_second -= 0.01
       return nil if timeout_second <= 0
 
-      # handle_signal may call cursor_pos which modifies @buf
       Reline.core.line_editor.handle_signal
     end
     c = @input.getbyte

@@ -92,7 +92,7 @@ jobs:
           # itself as, and this Ruby runs the mspec driver over it. The
           # version is pinned rather than left to pick the newest 4.0, so it
           # is the one docker/Dockerfile unpacks.
-          ruby-version: "4.0.1"
+          ruby-version: "4.0.7"
 
       - name: Cache cargo registry
         uses: actions/cache@v5
@@ -125,7 +125,7 @@ jobs:
         run: scripts/run_ruby_spec.sh
 
       - name: Install the gems the RSpec suites load
-        run: gem install --no-document diff-lcs rake aruba thread_order
+        run: scripts/install_rspec_suite_gems.sh
 
       - name: Compare the RSpec suites with fast paths on and off
         run: scripts/compare_fast_paths.sh

@@ -54,8 +54,6 @@ module IRB
       def clipboard_program
         @clipboard_program ||= if IRB.conf[:COPY_COMMAND]
                                  IRB.conf[:COPY_COMMAND]
-                               elsif executable?("clip.exe")
-                                 "clip.exe"
                                elsif executable?("pbcopy")
                                  "pbcopy"
                                elsif executable?("xclip")
@@ -64,19 +62,11 @@ module IRB
       end
 
       def executable?(command)
-        if windows?
-          system("where #{command} > NUL 2>&1")
-        else
-          system("which #{command} > /dev/null 2>&1")
-        end
+        system("which #{command} > /dev/null 2>&1")
       end
 
       def clipboard_available?
         !!clipboard_program
-      end
-
-      def windows?
-        /mingw|mswin/.match?(RUBY_PLATFORM)
       end
     end
   end

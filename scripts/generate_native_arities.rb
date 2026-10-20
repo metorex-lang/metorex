@@ -4,9 +4,11 @@
 # `Method#arity` and `Method#parameters` for one read this table, so a matcher
 # or a verifying double sees the signature MRI reports.
 #
-#   ruby scripts/generate_native_arities.rb
+#   ruby --disable=gems scripts/generate_native_arities.rb
 #
-# Run it with the Ruby release metorex reports itself as.
+# Run it with the Ruby release metorex reports itself as. RubyGems is left
+# out because it redefines Kernel#require in Ruby and loads monitor, which
+# would add methods MRI's core alone does not define.
 
 root = File.expand_path("..", __dir__)
 

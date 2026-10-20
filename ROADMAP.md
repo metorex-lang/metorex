@@ -110,11 +110,11 @@ Each is run with `ruby benchmarks/compare.rb` on one machine, and the README's s
 
 ## Ruby 4.0.7
 
-- [ ] Vendored libraries come from the release itself: `scripts/vendor_gems.rb` and `scripts/vendor_prism.rb` take each gem at the version the release lists in its default gem specifications and `gems/bundled_gems`, not the newest one installed. Today the copies are prism 1.9.0, pp 0.6.4, irb 1.18.0, and reline 0.7.0, while 4.0.6 ships prism 1.8.1 and pp 0.6.3
-  - Acceptance: running the vendor scripts under 4.0.6 writes the versions 4.0.6 ships, and each header names them
-- [ ] A script copies uri, net-http, net-protocol, optparse, erb, and fileutils from the release, which are copied by hand today
-  - Acceptance: running it under 4.0.6 leaves those files unchanged
-- [ ] Metorex is Ruby 4.0.7: the version constants in `src/lib.rs`, the encoding, core method name, native arity, and parser tables, RubyGems, the vendored gems and prism, and `ruby/spec` and `ruby/mspec` at commits from 4.0.7's release, with the tests and docs that name 4.0.6 updated
+- [x] Vendored libraries come from the release itself: the vendor scripts read the source tree a Ruby release's tarball unpacks to and take each gem at the version that release ships, where they took the newest one installed (prism 1.9.0, pp 0.6.4, irb 1.18.0, and reline 0.7.0, where 4.0.6 ships prism 1.8.1, pp 0.6.3, irb 1.16.0, and reline 0.6.3)
+  - Acceptance: running the vendor scripts on the 4.0.6 tree writes the versions 4.0.6 ships, and each header names them
+- [x] `scripts/vendor_libraries.rb` copies erb, net-http, net-protocol, optparse, and uri from the release, which were copied by hand. fileutils is metorex's own
+  - Acceptance: running it on the 4.0.6 tree a second time leaves those files unchanged
+- [x] Metorex is Ruby 4.0.7: the version constants in `src/lib.rs`, the encoding, core method name, native arity, and parser tables, RubyGems, the vendored gems and prism, with the tests and docs that name 4.0.6 updated. The `ruby/spec` submodule already carries the spec 4.0.7 added, the EncodingError for an interpolated Symbol with invalid bytes
   - Acceptance: `metorex -v` reports 4.0.7, every generated file names 4.0.7 in its header, and `cargo test` and `scripts/run_ruby_spec.sh` pass
 - [ ] CI and the container run MRI 4.0.7, where `.github/workflows/ci.yml` and `docker/Dockerfile` pin 4.0.1 today
   - Acceptance: both name 4.0.7 and the CI run that installs it passes
@@ -123,13 +123,13 @@ Each is run with `ruby benchmarks/compare.rb` on one machine, and the README's s
 
 Rex runs RSpec 3.13.6's own specs with `scripts/run_rspec_suite.sh`. Parity is the same examples passing and pending under Metorex as under MRI 4.0.7, file by file.
 
-- [ ] RSpec vendored: the rspec repository at `rspec-core-v3.13.6` is a submodule, as `ruby/spec` is, and `scripts/run_rspec_suite.sh` reads it instead of downloading a tarball
+- [x] RSpec vendored: the rspec repository at `rspec-core-v3.13.6` is the `gems/rspec` submodule, as `ruby/spec` is, and `scripts/run_rspec_suite.sh` reads it instead of downloading a tarball
   - Acceptance: the script runs with no network access
-- [ ] Results by file: the script writes each file's example, failure, and pending counts under Metorex and under MRI to a checked-in file, and prints the files whose counts differ
+- [x] Results by file: the script writes each file's example, failure, and pending counts under Metorex and under MRI to a checked-in file, and prints the files whose counts differ
   - Acceptance: the file lists every spec file the script runs, and the README's table is built from it
-- [ ] rspec-expectations: every file's counts match MRI's (2231 of 2455 examples pass today)
-- [ ] rspec-mocks: every file's counts match MRI's (1376 of 1806 pass today)
-- [ ] rspec-core: every file's counts match MRI's (2038 of 2258 pass today)
+- [ ] rspec-expectations: every file's counts match MRI's (2234 pass under Metorex and 2438 under MRI, of 2455)
+- [ ] rspec-mocks: every file's counts match MRI's (1382 pass under Metorex and 1794 under MRI, of 1806)
+- [ ] rspec-core: every file's counts match MRI's (2064 pass under Metorex and 2239 under MRI, of 2258)
 - [ ] CI fails when any file's counts differ from MRI's
 
 ## Standard library

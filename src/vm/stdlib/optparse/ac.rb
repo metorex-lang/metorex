@@ -1,5 +1,5 @@
 # frozen_string_literal: false
-require 'optparse'
+require "optparse"
 
 #
 # autoconf-like options.

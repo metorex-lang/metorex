@@ -9,7 +9,7 @@
 require "rbconfig"
 
 module Gem
-  VERSION = "4.0.16"
+  VERSION = "4.0.20"
 end
 
 require "rubygems/defaults"
@@ -1447,4 +1447,9 @@ require "rubygems/core_ext/kernel_gem"
 
 # Metorex's require activates gems through Gem.try_activate.
 
+# bundler/setup has to run before error_highlight, did_you_mean and
+# syntax_suggest are loaded, so that the Gemfile controls their versions
+# ([Bug #19089]). Ruby 4.1 autoloads them ([Feature #21951]) and deletes this
+# variable while loading RubyGems, so this can go once 4.1 is the oldest
+# supported version.
 require ENV["BUNDLER_SETUP"] if ENV["BUNDLER_SETUP"] && !defined?(Bundler)

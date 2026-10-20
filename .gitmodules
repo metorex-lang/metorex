@@ -7,3 +7,6 @@
 [submodule "benchmarks/ruby-bench"]
 	path = benchmarks/ruby-bench
 	url = https://github.com/ruby/ruby-bench
+[submodule "gems/rspec"]
+	path = gems/rspec
+	url = https://github.com/rspec/rspec

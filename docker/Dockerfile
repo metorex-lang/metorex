@@ -36,7 +36,7 @@ RUN apt-get update \
 # release metorex reports itself as. Ubuntu carries no package for it, so the
 # build the CI runner installs is unpacked here, which is the same Ruby by the
 # same route rather than one built from source.
-ARG RUBY_VERSION=4.0.1
+ARG RUBY_VERSION=4.0.7
 ARG TARGETARCH
 RUN case "$TARGETARCH" in \
       amd64) built_for=x64 ;; \
@@ -52,10 +52,6 @@ RUN case "$TARGETARCH" in \
 # The build is made for the place the runner keeps it, which is where it is
 # unpacked, so what it holds is found without being told where to look.
 ENV PATH=/usr/local/ruby/bin:$PATH
-
-# The gems the RSpec libraries' own suites load, which
-# scripts/run_rspec_suite.sh puts on the load path.
-RUN gem install --no-document diff-lcs rake aruba thread_order
 
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \

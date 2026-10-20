@@ -1,4 +1,4 @@
-// Written by scripts/generate_core_method_names.rb from Ruby 4.0.6.
+// Written by scripts/generate_core_method_names.rb from Ruby 4.0.7.
 
 /// The instance methods a core class or module defines in Ruby, by
 /// visibility, which the method listings of a built-in value draw from.

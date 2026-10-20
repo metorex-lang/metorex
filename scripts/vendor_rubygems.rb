@@ -4,15 +4,17 @@
 # Ruby is in src/vm/stdlib/rubygems/defaults/operating_system.rb, which MRI
 # ships no file of that name over.
 #
-#   ruby scripts/vendor_rubygems.rb
+#   ruby scripts/vendor_rubygems.rb path/to/ruby-X.Y.Z
 #
-# The library is the one the running Ruby loads.
+# The library is the one the source tree of that Ruby release carries.
 
-require "fileutils"
+require_relative "ruby_release"
 
+release = RubyRelease.from_arguments("vendor_rubygems.rb")
 root = File.expand_path("..", __dir__)
 stdlib = File.join(root, "src", "vm", "stdlib")
-source = RbConfig::CONFIG["rubylibdir"]
+source = release.path("lib")
+rubygems_version = File.read(File.join(source, "rubygems.rb"))[/VERSION = "([^"]+)"/, 1]
 files = ["rubygems.rb"] + Dir.glob("rubygems/**/*.rb", base: source).sort
 
 # MRI evaluates its own Kernel#require from the file on disk. Metorex's
@@ -38,11 +40,8 @@ entries = files.map do |path|
     raise "rubygems.rb no longer evaluates kernel_require.rb as expected" unless text.include?(KERNEL_REQUIRE)
     text = text.sub(KERNEL_REQUIRE, "# Metorex's require activates gems through Gem.try_activate.\n")
   end
-  # An embedded library is required by feature name, so a relative require
-  # or an autoload of a path beside the file names the feature it resolves to.
-  text = text.gsub(/require_relative[ (]["']([^"']+)["']\)?/) do
-    %(require "#{File.expand_path($1, directory).delete_prefix("/")}")
-  end
+  text = require_by_feature(text, File.dirname(path))
+  # An autoload of a path beside the file names the feature it resolves to.
   text = text.gsub(/autoload(\s+):(\w+),(\s+)File\.expand_path\("([^"]+)", __dir__\)/) do
     %(autoload#{$1}:#{$2},#{$3}"#{File.expand_path($4, directory).delete_prefix("/")}")
   end
@@ -53,7 +52,7 @@ entries = files.map do |path|
 end
 
 File.write(File.join(stdlib, "rubygems_libraries.rs"), <<~RUST)
-  // Written by scripts/vendor_rubygems.rb from RubyGems #{Gem::VERSION} as Ruby #{RUBY_VERSION} ships it.
+  // Written by scripts/vendor_rubygems.rb from RubyGems #{rubygems_version} as Ruby #{release.version} ships it.
 
   /// The files of RubyGems, by the feature name each is required as.
   pub(crate) const RUBYGEMS_LIBRARIES: &[(&str, &str)] = &[
@@ -61,4 +60,4 @@ File.write(File.join(stdlib, "rubygems_libraries.rs"), <<~RUST)
   ];
 RUST
 
-puts "RubyGems #{Gem::VERSION}: #{entries.size} Ruby files"
+puts "RubyGems #{rubygems_version}: #{entries.size} Ruby files"

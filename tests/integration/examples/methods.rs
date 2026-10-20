@@ -763,3 +763,10 @@ fn test_kernel_methods_answer_bare_at_the_top_level() {
         "main\nfalse\ntrue\ntrue\n[]\ntrue\nmain1[1, :a]nil\n\"text\"\n"
     );
 }
+
+#[test]
+fn an_equality_method_reaching_basic_object_through_super_compares_identity() {
+    let expected = "true\ntrue\nfalse\ntrue\ntrue\n";
+    let output = run_example("methods/equality_super_to_basic_object.rb");
+    assert_eq!(output, expected);
+}

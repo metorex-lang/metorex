@@ -1119,7 +1119,7 @@ XXX
     Switch::OptionalArgument.new do |pkg|
       if pkg
         begin
-          require 'optparse/version'
+          require "optparse/version"
         rescue LoadError
         else
           show_version(*pkg.split(/,/)) or

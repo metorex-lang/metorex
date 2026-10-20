@@ -1,4 +1,4 @@
-// Written by scripts/vendor_gems.rb from irb 1.18.0, mutex_m 0.3.0, nkf 0.2.0, racc 1.8.1, reline 0.7.0, resolv-replace 0.1.1, rinda 0.2.0.
+// Written by scripts/vendor_gems.rb from irb 1.16.0, mutex_m 0.3.0, nkf 0.2.0, racc 1.8.1, reline 0.6.3, resolv-replace 0.1.1, rinda 0.2.0 as Ruby 4.0.7 ships them.
 
 /// The files of the bundled gems metorex carries, by the feature name each
 /// is required as.
@@ -201,10 +201,6 @@ pub(crate) const GEM_LIBRARIES: &[(&str, &str)] = &[
     (
         "irb/source_finder",
         include_str!("gems/irb/irb/source_finder.rb"),
-    ),
-    (
-        "irb/startup_message",
-        include_str!("gems/irb/irb/startup_message.rb"),
     ),
     ("irb/statement", include_str!("gems/irb/irb/statement.rb")),
     ("irb/version", include_str!("gems/irb/irb/version.rb")),

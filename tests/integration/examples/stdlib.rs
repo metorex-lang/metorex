@@ -1658,7 +1658,7 @@ fn test_an_invalid_rubyopt_switch_is_reported_under_the_name_the_interpreter_was
 }
 
 /// The expected output of both `runtime/release_named` variants.
-const RELEASE_NAMED: &str = concat!("\"4.0.6\"\n", "0\n", "\"2026-07-14\"\n", "true\n");
+const RELEASE_NAMED: &str = concat!("\"4.0.7\"\n", "0\n", "\"2026-09-15\"\n", "true\n");
 
 #[test]
 fn test_runtime_release_named_execution() {
@@ -1720,5 +1720,12 @@ fn test_line_coverage_counts_each_kind_of_conditional_as_mri_does() {
 fn test_branch_coverage_counts_each_arm_of_each_conditional() {
     let expected = "if at 2: then@3=1 elsif@5=1 else@7=0\nif at 12: then@12=1 else@12=0\ncase at 16: when@18=0 when@20=1 else@22=0\nunless at 27: then@28=1 else@27=0\nwhile at 34: body@35=2\n&. at 42: then@42=0 else@42=1\n";
     let output = run_example("coverage/branch_arms.rb");
+    assert_eq!(output, expected);
+}
+
+#[test]
+fn syntax_suggest_shows_the_lines_around_a_syntax_error() {
+    let expected = "--> refused.rb\n\nunexpected integer, expecting end-of-input\n\n> 2  puts \"started\"\n> 3  puts 1 2\n";
+    let output = run_example("stdlib/syntax_suggest_search.rb");
     assert_eq!(output, expected);
 }

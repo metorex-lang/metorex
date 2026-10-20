@@ -191,7 +191,20 @@ impl VirtualMachine {
                 Some(code) if code == libc::EINPROGRESS || code == libc::EALREADY => {
                     return Ok(Object::Int(1));
                 }
-                Some(code) if code == libc::EISCONN => 2,
+                // Darwin 27 answers a second connect(2) with EISCONN even
+                // when the connection failed, leaving the failure in
+                // SO_ERROR (Ruby Bug #22223).
+                Some(code) if code == libc::EISCONN => match pending_error(descriptor) {
+                    0 => 2,
+                    failed => {
+                        let problem = std::io::Error::from_raw_os_error(failed);
+                        return Err(crate::vm::errors::simple_exception(
+                            errno_class(&problem),
+                            &format!("{} - connect(2) for {text}:{port}", os_reason(&problem)),
+                            position,
+                        ));
+                    }
+                },
                 _ => {
                     return Err(crate::vm::errors::simple_exception(
                         errno_class(&problem),
@@ -217,6 +230,25 @@ impl VirtualMachine {
             self.open_sockets.streams.insert(handle, stream);
         }
     }
+}
+
+/// The error a socket's connection ended in, read and cleared from SO_ERROR,
+/// or 0 when there was none. A getsockopt that fails writes nothing, which
+/// leaves the 0.
+fn pending_error(descriptor: libc::c_int) -> libc::c_int {
+    let mut error: libc::c_int = 0;
+    let mut length = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
+    // SAFETY: the descriptor is open and `error` has room for the int asked.
+    unsafe {
+        libc::getsockopt(
+            descriptor,
+            libc::SOL_SOCKET,
+            libc::SO_ERROR,
+            (&mut error as *mut libc::c_int).cast(),
+            &mut length,
+        );
+    }
+    error
 }
 
 /// Whether a descriptor has room to write right now.

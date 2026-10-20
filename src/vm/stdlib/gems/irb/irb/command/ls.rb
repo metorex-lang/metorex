@@ -55,13 +55,11 @@ module IRB
 
         o = Output.new(grep: grep)
 
-        klass = Kernel.instance_method(:class).bind(obj).call
-        obj_is_class_or_module = Module === obj
-        klass = obj_is_class_or_module ? obj : klass
+        klass  = (obj.class == Class || obj.class == Module ? obj : obj.class)
 
-        o.dump("constants", obj.constants) if obj_is_class_or_module
+        o.dump("constants", obj.constants) if obj.respond_to?(:constants)
         dump_methods(o, klass, obj)
-        o.dump("instance variables", Kernel.instance_method(:instance_variables).bind(obj).call)
+        o.dump("instance variables", obj.instance_variables)
         o.dump("class variables", klass.class_variables)
         o.dump("locals", locals) if locals
         o.print_result
@@ -69,7 +67,7 @@ module IRB
       end
 
       def dump_methods(o, klass, obj)
-        singleton_class = begin Kernel.instance_method(:singleton_class).bind(obj).call; rescue TypeError; nil end
+        singleton_class = begin obj.singleton_class; rescue TypeError; nil end
         dumped_mods = Array.new
         ancestors = klass.ancestors
         ancestors = ancestors.reject { |c| c >= Object } if klass < Object

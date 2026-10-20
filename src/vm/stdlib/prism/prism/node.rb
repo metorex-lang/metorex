@@ -194,13 +194,25 @@ module Prism
     def tunnel(line, column)
       queue = [self] #: Array[Prism::node]
       result = [] #: Array[Prism::node]
-      offset = source.byte_offset(line, column)
 
       while (node = queue.shift)
         result << node
 
         node.each_child_node do |child_node|
-          if child_node.start_offset <= offset && offset < child_node.end_offset
+          child_location = child_node.location
+
+          start_line = child_location.start_line
+          end_line = child_location.end_line
+
+          if start_line == end_line
+            if line == start_line && column >= child_location.start_column && column < child_location.end_column
+              queue << child_node
+              break
+            end
+          elsif (line == start_line && column >= child_location.start_column) || (line == end_line && column < child_location.end_column)
+            queue << child_node
+            break
+          elsif line > start_line && line < end_line
             queue << child_node
             break
           end
@@ -211,7 +223,7 @@ module Prism
     end
 
     # Returns the first node that matches the given block when visited in a
-    # breadth-first search. This is useful for finding a node that matches a
+    # depth-first search. This is useful for finding a node that matches a
     # particular condition.
     #
     #     node.breadth_first_search { |node| node.node_id == node_id }
@@ -226,26 +238,6 @@ module Prism
 
       nil
     end
-    alias find breadth_first_search
-
-    # Returns all of the nodes that match the given block when visited in a
-    # breadth-first search. This is useful for finding all nodes that match a
-    # particular condition.
-    #
-    #     node.breadth_first_search_all { |node| node.is_a?(Prism::CallNode) }
-    #
-    def breadth_first_search_all(&block)
-      queue = [self] #: Array[Prism::node]
-      results = [] #: Array[Prism::node]
-
-      while (node = queue.shift)
-        results << node if yield node
-        queue.concat(node.compact_child_nodes)
-      end
-
-      results
-    end
-    alias find_all breadth_first_search_all
 
     # Returns a list of the fields that exist for this node class. Fields
     # describe the structure of the node. This kind of reflection is useful for
@@ -2033,10 +2025,10 @@ module Prism
     #                          ^^^^^^
     attr_reader :body
 
-    # Represents the location of the opening `{` or `do`.
+    # Represents the location of the opening `|`.
     #
     #     [1, 2, 3].each { |i| puts x }
-    #                    ^
+    #                      ^
     def opening_loc
       location = @opening_loc
       return location if location.is_a?(Location)
@@ -2049,10 +2041,10 @@ module Prism
       repository.enter(node_id, :opening_loc)
     end
 
-    # Represents the location of the closing `}` or `end`.
+    # Represents the location of the closing `|`.
     #
     #     [1, 2, 3].each { |i| puts x }
-    #                                 ^
+    #                        ^
     def closing_loc
       location = @closing_loc
       return location if location.is_a?(Location)

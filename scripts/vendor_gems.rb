@@ -5,11 +5,14 @@
 # ring build on, and its pp.rb and prettyprint.rb, which irb prints with,
 # replace metorex's own.
 #
-#   ruby scripts/vendor_gems.rb
+#   ruby scripts/vendor_gems.rb path/to/ruby-X.Y.Z
 #
-# The gems are the ones the running Ruby would load.
+# Everything is copied from the source tree of a Ruby release, at the
+# versions that release ships.
 
-require "fileutils"
+require_relative "ruby_release"
+
+release = RubyRelease.from_arguments("vendor_gems.rb")
 
 GEMS = %w[irb mutex_m nkf racc reline resolv-replace rinda].freeze
 
@@ -20,9 +23,8 @@ FileUtils.rm_rf(library)
 entries = []
 versions = []
 GEMS.each do |name|
-  gem_dir = Gem::Specification.find_by_name(name).gem_dir
-  version = File.basename(gem_dir).delete_prefix("#{name}-")
-  versions << "#{name} #{version}"
+  gem_dir = release.bundled_gem(name)
+  versions << "#{name} #{release.bundled_gem_version(name)}"
   lib = File.join(gem_dir, "lib")
   license = %w[LICENSE.txt BSDL COPYING].map { |file| File.join(gem_dir, file) }.select { |path| File.exist?(path) }
   license.each do |path|
@@ -30,13 +32,7 @@ GEMS.each do |name|
     FileUtils.cp(path, File.join(library, name, File.basename(path)))
   end
   Dir.glob("**/*.rb", base: lib).sort.each do |path|
-    text = File.read(File.join(lib, path))
-    # An embedded library is required by feature name, so a relative require
-    # names the feature it resolves to.
-    text = text.gsub(/require_relative ["']([^"']+)["']/) do
-      feature = File.expand_path($1, File.join("/", File.dirname(path))).delete_prefix("/")
-      %(require "#{feature}")
-    end
+    text = require_by_feature(File.read(File.join(lib, path)), File.dirname(path))
     destination = File.join(library, name, path)
     FileUtils.mkdir_p(File.dirname(destination))
     File.write(destination, text)
@@ -75,7 +71,7 @@ File.open(File.join(library, "irb", "irb", "locale.rb"), "a") do |locale|
 end
 
 File.write(File.join(root, "src", "vm", "stdlib", "gem_libraries.rs"), <<~RUST)
-  // Written by scripts/vendor_gems.rb from #{versions.join(", ")}.
+  // Written by scripts/vendor_gems.rb from #{versions.join(", ")} as Ruby #{release.version} ships them.
 
   /// The files of the bundled gems metorex carries, by the feature name each
   /// is required as.
@@ -85,32 +81,26 @@ File.write(File.join(root, "src", "vm", "stdlib", "gem_libraries.rs"), <<~RUST)
 RUST
 
 # Libraries MRI writes in Ruby that metorex carries as MRI has them: its own
-# resolv.rb, io/console/size.rb and pathname.rb, and pp.rb and prettyprint.rb
-# from the gems `pp` loads.
+# resolv.rb, io/console/size.rb, pp.rb, prettyprint.rb, and pathname.rb, and
+# pathname_builtin.rb, which MRI compiles in rather than installing.
 {
-  File.join(RbConfig::CONFIG["rubylibdir"], "resolv.rb") => "resolv.rb",
-  File.join(Gem::Specification.find_by_name("pp").gem_dir, "lib", "pp.rb") => "pp.rb",
-  File.join(Gem::Specification.find_by_name("prettyprint").gem_dir, "lib", "prettyprint.rb") => "prettyprint.rb",
-  File.join(RbConfig::CONFIG["rubylibdir"], "io", "console", "size.rb") => "io_console_size.rb",
-  File.join(RbConfig::CONFIG["rubylibdir"], "pathname.rb") => "pathname.rb",
+  release.path("lib", "resolv.rb") => "resolv.rb",
+  release.path("lib", "pp.rb") => "pp.rb",
+  release.path("lib", "prettyprint.rb") => "prettyprint.rb",
+  release.path("ext", "io", "console", "lib", "console", "size.rb") => "io_console_size.rb",
+  release.path("lib", "pathname.rb") => "pathname.rb",
+  release.path("pathname_builtin.rb") => "pathname_builtin.rb",
 }.each do |source, name|
   FileUtils.cp(source, File.join(root, "src", "vm", "stdlib", name))
 end
 
-# Pathname's methods, which MRI compiles in from pathname_builtin.rb rather
-# than installing, so they are read from MRI's source at the running Ruby's
-# revision.
-require "open-uri"
-builtin = "https://raw.githubusercontent.com/ruby/ruby/#{RUBY_REVISION}/pathname_builtin.rb"
-File.write(File.join(root, "src", "vm", "stdlib", "pathname_builtin.rb"), URI.open(builtin, &:read))
-
 # nkf's extension: its Ruby binding and the nkf library it includes.
-nkf_ext = File.join(Gem::Specification.find_by_name("nkf").gem_dir, "ext", "nkf")
+nkf_ext = File.join(release.bundled_gem("nkf"), "ext", "nkf")
 vendor = File.join(root, "vendor", "nkf")
 FileUtils.rm_rf(vendor)
 FileUtils.mkdir_p(File.join(vendor, "nkf-utf8"))
 FileUtils.cp(File.join(nkf_ext, "nkf.c"), vendor)
 Dir.glob(File.join(nkf_ext, "nkf-utf8", "*.{c,h}")).each { |path| FileUtils.cp(path, File.join(vendor, "nkf-utf8")) }
-FileUtils.cp(File.join(Gem::Specification.find_by_name("nkf").gem_dir, "LICENSE.txt"), vendor)
+FileUtils.cp(File.join(release.bundled_gem("nkf"), "LICENSE.txt"), vendor)
 
 puts "#{versions.join(", ")}: #{entries.size} Ruby files"

@@ -2,6 +2,6 @@
 # -*- ruby -*-
 
 require 'shellwords'
-require 'optparse'
+require "optparse"
 
 OptionParser.accept(Shellwords) {|s,| Shellwords.shellwords(s)}

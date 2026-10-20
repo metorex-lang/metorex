@@ -19,5 +19,5 @@
 
 =end
 
-require 'net/http'
+require "net/http"
 require 'openssl'

@@ -2594,15 +2594,15 @@ module Net   #:nodoc:
   deprecate_constant :HTTPSession
 end
 
-require 'net/http/exceptions'
+require "net/http/exceptions"
 
-require 'net/http/header'
+require "net/http/header"
 
-require 'net/http/generic_request'
-require 'net/http/request'
-require 'net/http/requests'
+require "net/http/generic_request"
+require "net/http/request"
+require "net/http/requests"
 
-require 'net/http/response'
-require 'net/http/responses'
+require "net/http/response"
+require "net/http/responses"
 
-require 'net/http/proxy_delta'
+require "net/http/proxy_delta"
