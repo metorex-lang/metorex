@@ -686,10 +686,6 @@ On an Apple M5 Max (18 CPUs, macOS 27.0.1), Metorex 0.1.0 built with rustc 1.96.
 | throw | 9.0 ms | 6.7 ms | 417.9 ms | 407.7 ms | 46.4× | 61.9× | 1.02 | 20 MB | 21 MB | 39 MB | 39 MB |
 | rex_suite | 293.6 ms | 364.3 ms | 4.82 s | 4.81 s | 16.4× | 13.2× | 1.00 | 55 MB | 61 MB | 304 MB | 303 MB |
 
-Not run, since they need gems installed with `bundle install`: activerecord, addressable-equality, addressable-getters, addressable-join, addressable-merge, addressable-new, addressable-normalize, addressable-parse, addressable-setters, addressable-to-s, chunky-png, erubi, erubi-rails, fluentd, grape, graphql, graphql-native, hexapdf, lee, liquid-c, liquid-compile, liquid-il, liquid-render, lobsters, mail, optcarrot, psych-load, rack, railsbench, rubocop, ruby-lsp, rubyboy, rubykon, sequel, shipit, tinygql.
-
-The ruby-bench benchmarks that need gems installed with `bundle install` are not run.
-
 #### The bytecode baseline
 
 The same table for commit `afdab34a`, where every body first ran as compiled instructions and the tree walker was removed, before the inline caches, shapes, specialized instructions, and the rest of the interpreter's speed work. Recorded on 2026-10-18 on the machine above, with `ruby benchmarks/compare.rb --metorex=PATH --without-no-jit` and that commit's release build:

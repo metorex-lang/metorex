@@ -206,6 +206,3 @@ rows.each do |row|
   peaks = ENGINES.keys.map { |engine| megabytes(row.peaks[engine]) }
   puts "| #{row.name} | #{(times + ratios + peaks).join(" | ")} |"
 end
-needing_gems = ruby_bench_benchmarks.select(&:last).map(&:first)
-puts
-puts "Not run, since they need gems installed with `bundle install`: #{needing_gems.join(", ")}."
