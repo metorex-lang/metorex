@@ -155,7 +155,7 @@ module GC
 
   # An object that extends GC answers `garbage_collect` the way the module
   # itself does, and Ruby documents the answer as always nil.
-  def garbage_collect(full_mark: true, immediate_sweep: true)
+  def garbage_collect(full_mark: true, immediate_mark: true, immediate_sweep: true)
     GC.start
     nil
   end

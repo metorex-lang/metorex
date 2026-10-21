@@ -83,6 +83,8 @@ fn count_compiled(unit: &Unit) {
 
 /// Compile `body`, recording the result for the engine report.
 pub fn compile(body: &[Statement], kind: UnitKind) -> Compiled {
+    let _counted =
+        crate::vm::memory_report::attribute(crate::vm::memory_report::Category::CompiledUnits);
     let compiled = match crate::bytecode::compiler::compile_as(body, kind) {
         Ok(unit) => {
             count_compiled(&unit);

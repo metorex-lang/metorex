@@ -104,6 +104,12 @@ impl VirtualMachine {
         let require_name = self.coerce_load_path(&arguments[0], position)?;
         // A leading `~` names the home directory, as the shell has it.
         let require_name = self.expand_home_path(&require_name);
+        // A library metorex carries names its files under `<metorex>/`, as
+        // `__dir__` reads in it, and a require of one of those names that
+        // library by its feature name.
+        let require_name = crate::vm::stdlib::carried_feature(&require_name)
+            .map(str::to_string)
+            .unwrap_or(require_name);
 
         // Search $LOAD_PATH for the file
         let search_dirs = self.load_path_directories();

@@ -42,8 +42,10 @@ pub struct BuiltinClasses {
     pub dir_class: Rc<Class>,
     /// Proc class (blocks, procs, and lambdas)
     pub proc_class: Rc<Class>,
-    /// Method class (bound and unbound method objects)
+    /// Method class (method objects bound to a receiver)
     pub method_class: Rc<Class>,
+    /// UnboundMethod class (method objects with no receiver)
+    pub unbound_method_class: Rc<Class>,
     /// Binding class (captured execution contexts)
     pub binding_class: Rc<Class>,
     /// Regexp: literals are primitives, and this is the class they report.
@@ -80,6 +82,7 @@ impl BuiltinClasses {
         let dir_class = Class::new("Dir", Some(Rc::clone(&object_class)));
         let proc_class = Class::new("Proc", Some(Rc::clone(&object_class)));
         let method_class = Class::new("Method", Some(Rc::clone(&object_class)));
+        let unbound_method_class = Class::new("UnboundMethod", Some(Rc::clone(&object_class)));
         let binding_class = Class::new("Binding", Some(Rc::clone(&object_class)));
         let regexp_class = Class::new("Regexp", Some(Rc::clone(&object_class)));
 
@@ -110,6 +113,7 @@ impl BuiltinClasses {
             dir_class,
             proc_class,
             method_class,
+            unbound_method_class,
             binding_class,
             regexp_class,
         }
@@ -132,6 +136,9 @@ impl BuiltinClasses {
             // `Method#to_proc` answers a callable attached to the object the
             // method was taken from, which Ruby reports as a Proc.
             View::Method(method) if method.reads_as_proc => Rc::clone(&self.proc_class),
+            View::Method(method) if method.receiver.is_none() => {
+                Rc::clone(&self.unbound_method_class)
+            }
             View::Method(_) => Rc::clone(&self.method_class),
             View::Block(_) => Rc::clone(&self.proc_class),
             View::Binding(_) => Rc::clone(&self.binding_class),
@@ -273,7 +280,10 @@ impl BuiltinClasses {
         classes.insert("Numeric".to_string(), Rc::clone(&self.numeric_class));
         classes.insert("Proc".to_string(), Rc::clone(&self.proc_class));
         classes.insert("Method".to_string(), Rc::clone(&self.method_class));
-        classes.insert("UnboundMethod".to_string(), Rc::clone(&self.method_class));
+        classes.insert(
+            "UnboundMethod".to_string(),
+            Rc::clone(&self.unbound_method_class),
+        );
         classes.insert("Binding".to_string(), Rc::clone(&self.binding_class));
         classes.insert("Regexp".to_string(), Rc::clone(&self.regexp_class));
         classes.insert("NilClass".to_string(), Rc::clone(&self.object_class));

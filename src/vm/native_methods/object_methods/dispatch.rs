@@ -39,9 +39,11 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
+        let traced = self.begin_native_trace(receiver, method_name, position)?;
         let entered = self.enter_native_frame(Some(receiver), method_name, position);
         let answered = self.call_object_method_body(receiver, method_name, arguments, position);
         self.leave_native_call(entered, position, &answered);
+        self.end_native_trace(traced, receiver, method_name, &answered, position)?;
         answered
     }
 

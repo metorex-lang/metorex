@@ -109,6 +109,121 @@ fn count_entry() {
             DUE.with(|due| due.set(true));
         }
     });
+    if crate::vm::memory_report::walk_wanted() {
+        walk_for_memory_report();
+    }
+}
+
+/// The counts an `Rc` keeps before what it holds.
+const RC_COUNTS_BYTES: usize = 2 * std::mem::size_of::<usize>();
+
+/// The bytes an `Rc` of `T` takes with its counts, plus the cell of the
+/// value that points at it.
+fn listed_bytes<T>() -> usize {
+    RC_COUNTS_BYTES + std::mem::size_of::<T>() + super::types::BODY_CELL_BYTES
+}
+
+/// Add up what each listed object holds by its class, from the sizes of its
+/// parts and the capacities of what it keeps on the heap, for the memory
+/// report.
+fn walk_for_memory_report() {
+    use crate::vm::memory_report::ClassRow;
+
+    crate::vm::memory_report::walk_starting();
+    let mut by_class: std::collections::HashMap<String, (u64, u64)> =
+        std::collections::HashMap::new();
+    let mut count = |class: &str, bytes: usize| {
+        let row = by_class.entry(class.to_string()).or_default();
+        row.0 += 1;
+        row.1 += bytes as u64;
+    };
+    let Ok(lists) = LISTS.try_with(|lists| {
+        let Ok(lists) = lists.try_borrow() else {
+            return;
+        };
+        for held in lists.instances.alive() {
+            let Ok(instance) = held.try_borrow() else {
+                continue;
+            };
+            let bytes = listed_bytes::<RefCell<Instance>>()
+                + RC_COUNTS_BYTES * 2
+                + std::mem::size_of::<RefCell<std::collections::HashMap<String, Rc<Method>>>>()
+                + std::mem::size_of::<RefCell<Option<Rc<Class>>>>()
+                + instance.instance_vars.held_bytes();
+            let class = instance.class.name();
+            count(
+                if class.is_empty() {
+                    "(anonymous class)"
+                } else {
+                    class
+                },
+                bytes,
+            );
+        }
+        for held in lists.strings.alive() {
+            count("String", listed_bytes::<StringValue>() + held.held_bytes());
+        }
+        for held in lists.arrays.alive() {
+            let capacity = held.try_borrow().map_or(0, |items| items.capacity());
+            count(
+                "Array",
+                listed_bytes::<RefCell<Vec<Object>>>() + capacity * std::mem::size_of::<Object>(),
+            );
+        }
+        for held in lists.hashes.alive() {
+            let held_bytes = held.try_borrow().map_or(0, |entries| {
+                entries.capacity()
+                    * (std::mem::size_of::<(u64, String, Object)>() + std::mem::size_of::<usize>())
+                    + entries.keys().map(String::capacity).sum::<usize>()
+            });
+            count(
+                "Hash",
+                listed_bytes::<RefCell<IndexMap<String, Object>>>() + held_bytes,
+            );
+        }
+        for held in lists.sets.alive() {
+            let held_bytes = held.try_borrow().map_or(0, |entries| {
+                entries.capacity()
+                    * (std::mem::size_of::<(u64, ObjectHash)>() + std::mem::size_of::<usize>())
+            });
+            count(
+                "Set",
+                listed_bytes::<RefCell<IndexSet<ObjectHash>>>() + held_bytes,
+            );
+        }
+        for held in lists.exceptions.alive() {
+            let class = held.try_borrow().map_or_else(
+                |_| "Exception".to_string(),
+                |exception| exception.exception_type.clone(),
+            );
+            count(&class, listed_bytes::<RefCell<Exception>>());
+        }
+        for _ in lists.blocks.alive() {
+            count("Proc", listed_bytes::<BlockStatement>());
+        }
+        for _ in lists.methods.alive() {
+            count("(method definitions)", listed_bytes::<Method>());
+        }
+        for _ in lists.bindings.alive() {
+            count("Binding", listed_bytes::<Binding>());
+        }
+        for _ in lists.classes.alive() {
+            count("(classes and modules)", listed_bytes::<Class>());
+        }
+    }) else {
+        return;
+    };
+    let () = lists;
+    crate::vm::memory_report::record_walk(
+        by_class
+            .into_iter()
+            .map(|(class, (count, bytes))| ClassRow {
+                class,
+                count,
+                bytes,
+            })
+            .collect(),
+    );
 }
 
 macro_rules! recorder {

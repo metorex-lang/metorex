@@ -1177,3 +1177,27 @@ fn a_module_responds_to_the_private_hooks_module_and_class_define() {
     let output = run_example("introspection/respond_to_module_hooks.rb");
     assert_eq!(output, "true\nfalse\nfalse\ntrue\nfalse\ntrue\n");
 }
+
+#[test]
+fn unbound_method_and_gc_hand_out_their_own_instance_methods() {
+    let output = run_example("introspection/method_object_instance_methods.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[[:req]]\n",
+            "[[:rest]]\n",
+            "[[:key, :full_mark], [:key, :immediate_mark], [:key, :immediate_sweep]]\n",
+            "UnboundMethod\n",
+            "GC\n",
+        )
+    );
+}
+
+#[test]
+fn a_tracepoint_sees_c_return_of_a_method_ruby_writes_in_c() {
+    let output = run_example("introspection/tracepoint_return_of_object_id.rb");
+    assert_eq!(
+        output,
+        "[[:c_return, :__id__, true]]\n[:__id__, :__id__, :__id__, :upcase]\n"
+    );
+}

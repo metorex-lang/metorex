@@ -70,4 +70,5 @@ mod engines;
 mod errors;
 mod flags;
 mod jit;
+mod memory_report;
 mod running;

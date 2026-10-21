@@ -89,6 +89,7 @@ impl CodeHeap {
         // SAFETY: `used` plus `length` is within the space.
         let start = unsafe { space.add(self.used) };
         self.used += length;
+        crate::vm::memory_report::machine_code_space_used(self.used);
         Some(start)
     }
 }

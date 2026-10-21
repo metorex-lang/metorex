@@ -26,6 +26,7 @@ mod global_registry;
 mod heap;
 pub(crate) mod init;
 pub(crate) mod jit;
+pub mod memory_report;
 pub mod units;
 
 /// The type the operating system names a resource limit with, which is a

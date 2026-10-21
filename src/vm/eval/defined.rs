@@ -230,7 +230,13 @@ impl VirtualMachine {
 
     /// Whether an instance variable of `self` has been assigned.
     fn instance_variable_is_set(&self, name: &str) -> bool {
-        match self.environment().get("self").view() {
+        // The top level binds no `self`, and its instance variables are
+        // main's.
+        let held = self
+            .environment()
+            .get("self")
+            .or_else(|| self.globals().get("__main__"));
+        match held.view() {
             Some(View::Instance(instance)) => instance.borrow().get_var(name).is_some(),
             Some(View::Class(class) | View::Module(class)) => {
                 class.get_class_var(&format!("@{}", name)).is_some()

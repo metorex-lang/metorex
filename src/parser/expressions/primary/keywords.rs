@@ -146,7 +146,13 @@ impl Parser {
             self.expect(TokenKind::RParen, "Expected ')' after defined? argument")?;
             expr
         } else {
-            self.defined_argument()?
+            // Written without parentheses it takes one operand, and leaves
+            // an `and` or `or` after it to join `defined?` to what follows,
+            // as a paren-less argument list does.
+            self.paren_less_arg_depth += 1;
+            let read = self.defined_argument();
+            self.paren_less_arg_depth -= 1;
+            read?
         };
         Ok(Expression::Defined {
             expression: Box::new(expression),

@@ -61,11 +61,17 @@ impl VirtualMachine {
 
 unsafe extern "C-unwind" {
     fn Init_nkf();
+    fn Init_rbs_extension();
+    fn Init_debug();
 }
 
 /// The C extensions build.rs compiles into the binary, by the feature name
 /// `require` finds each under, with its `Init` function.
-const STATIC_EXTENSIONS: &[(&str, unsafe extern "C-unwind" fn())] = &[("nkf", Init_nkf)];
+const STATIC_EXTENSIONS: &[(&str, unsafe extern "C-unwind" fn())] = &[
+    ("nkf", Init_nkf),
+    ("rbs_extension", Init_rbs_extension),
+    ("debug/debug", Init_debug),
+];
 
 /// The `Init` function of a C extension compiled into the binary, for a
 /// name such as `nkf` or `nkf.so`.

@@ -1774,3 +1774,45 @@ fn a_drb_object_reaches_its_server_after_another_service_starts() {
     let output = run_example("stdlib/drb_call_after_a_second_service.rb");
     assert_eq!(output, "75\n");
 }
+
+#[test]
+fn the_bundled_gems_load_with_no_gem_directory_holding_them() {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let empty = std::env::temp_dir().join(format!("metorex_no_gems_{}", std::process::id()));
+    std::fs::create_dir_all(&empty).expect("the temporary directory is writable");
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_metorex"))
+        .current_dir(manifest_dir)
+        .arg(format!(
+            "{}/stdlib/carried_bundled_gems.rb",
+            crate::common::EXAMPLES_DIR
+        ))
+        .env("GEM_HOME", &empty)
+        .env("GEM_PATH", &empty)
+        .output()
+        .expect("failed to execute example");
+    assert!(
+        output.status.success(),
+        "stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        concat!(
+            "true\n",
+            "Test::Unit::Assertions\n",
+            "true\n",
+            "\"entries\"\n",
+            "\"120\"\n",
+            "\"ContentEncoded\"\n",
+            "\"Entw&APw-rfe\"\n",
+            "110\n",
+            "25\n",
+            "\"\\n<p>Due <strong>2026-11-01</strong></p>\\n\"\n",
+            "\"Array[Integer]\"\n",
+            "\"(3,4)\"\n",
+            "true\n",
+            "true\n",
+            "true\n",
+        )
+    );
+}

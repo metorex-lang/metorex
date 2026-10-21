@@ -87,6 +87,13 @@ pub struct InstanceVariables {
     slots: Vec<Object>,
 }
 
+impl InstanceVariables {
+    /// The heap bytes the slots hold, for the memory report.
+    pub(crate) fn held_bytes(&self) -> usize {
+        self.slots.capacity() * std::mem::size_of::<Object>()
+    }
+}
+
 impl Default for InstanceVariables {
     fn default() -> Self {
         InstanceVariables {

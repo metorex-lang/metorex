@@ -100,12 +100,12 @@ fn class_of_exception() {
 }
 
 #[test]
-fn class_of_method() {
+fn class_of_method_with_no_receiver() {
     let builtins = BuiltinClasses::new();
     use metorex::object::Method;
     let method = Object::Method(Rc::new(Method::new("foo".to_string(), vec![], vec![])));
     let class = builtins.class_of(&method);
-    assert_eq!(class.name(), "Method");
+    assert_eq!(class.name(), "UnboundMethod");
 }
 
 #[test]

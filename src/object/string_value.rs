@@ -146,6 +146,15 @@ impl CharacterMarks {
 }
 
 impl StringValue {
+    /// The heap bytes the string's text and encoding name hold, for the
+    /// memory report.
+    pub(crate) fn held_bytes(&self) -> usize {
+        self.bytes.try_borrow().map_or(0, |bytes| bytes.capacity())
+            + self.encoding.try_borrow().map_or(0, |name| name.capacity())
+    }
+}
+
+impl StringValue {
     fn built(bytes: Vec<u8>, encoding: String, holds_bytes: bool) -> Self {
         Self {
             bytes: RefCell::new(bytes),

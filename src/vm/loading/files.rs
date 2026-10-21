@@ -142,7 +142,7 @@ impl VirtualMachine {
 
     pub fn require_library(&mut self, name: &str) -> Result<(), MetorexError> {
         let expanded = self.expand_home_path(name);
-        let name = expanded.as_str();
+        let name = crate::vm::stdlib::carried_feature(&expanded).unwrap_or(expanded.as_str());
         let search_dirs = self.load_path_directories();
 
         // An absolute path, or one written relative to the working directory,

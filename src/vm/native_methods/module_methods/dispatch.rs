@@ -467,11 +467,11 @@ impl VirtualMachine {
         // GC and ObjectSpace answer nil for the names metorex keeps no
         // account of. A name either module carries itself wins, which is how
         // the objspace library adds to them, and so does a name every object
-        // answers, since those say something true about the module itself.
-        // A method the program defined on Object or Kernel is one every
-        // object answers too.
+        // answers or every module answers, since those say something true
+        // about the module itself. A method the program defined on Object or
+        // Kernel is one every object answers too.
         if (module_rc.name() == "GC" || module_rc.name() == "ObjectSpace")
-            && method_name != "name"
+            && !crate::vm::native_methods::names::is_native_module_method(method_name)
             && !ANSWERED_BY_EVERY_OBJECT.contains(&method_name)
             && module_rc.find_method(method_name).is_none()
             && crate::vm::method_lookup::module_level_method(module_rc, method_name).is_none()

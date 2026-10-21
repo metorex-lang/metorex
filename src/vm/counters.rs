@@ -36,28 +36,42 @@ struct CallCount {
     allocations: u64,
 }
 
-/// The system allocator, counting each allocation while counters are on.
+/// The system allocator, counting each allocation while counters are on,
+/// and handing each block to the memory report when it was asked for.
 pub struct CountingAllocator;
 
-// SAFETY: every call is handed to the system allocator unchanged, and the
-// counting touches nothing but atomics, so it neither allocates nor blocks.
+// SAFETY: every call is handed to the system allocator, or to the memory
+// report, which hands it on with a header in front. The counting touches
+// nothing but atomics, so it neither allocates nor blocks.
 unsafe impl GlobalAlloc for CountingAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         count_allocation(layout.size());
+        if super::memory_report::enabled() {
+            return unsafe { super::memory_report::alloc(layout, false) };
+        }
         unsafe { System.alloc(layout) }
     }
 
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         count_allocation(layout.size());
+        if super::memory_report::enabled() {
+            return unsafe { super::memory_report::alloc(layout, true) };
+        }
         unsafe { System.alloc_zeroed(layout) }
     }
 
     unsafe fn realloc(&self, held: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         count_allocation(new_size);
+        if super::memory_report::enabled() {
+            return unsafe { super::memory_report::realloc(held, layout, new_size) };
+        }
         unsafe { System.realloc(held, layout, new_size) }
     }
 
     unsafe fn dealloc(&self, held: *mut u8, layout: Layout) {
+        if super::memory_report::enabled() {
+            return unsafe { super::memory_report::dealloc(held, layout) };
+        }
         unsafe { System.dealloc(held, layout) }
     }
 }

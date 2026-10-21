@@ -106,6 +106,11 @@ enum Body {
     Regex(Rc<String>, Rc<String>),
 }
 
+/// The bytes the cell a pointer value points at takes, its counts included,
+/// for the memory report.
+pub(crate) const BODY_CELL_BYTES: usize =
+    std::mem::size_of::<Rc<()>>() * 2 + std::mem::size_of::<Body>();
+
 /// A value's parts, borrowed from it, for matching on.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum View<'a> {

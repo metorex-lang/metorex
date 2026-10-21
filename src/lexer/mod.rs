@@ -196,6 +196,8 @@ impl<'a> Lexer<'a> {
 
     /// Collect all tokens from the lexer
     pub fn tokenize(mut self) -> Vec<Token> {
+        let _counted =
+            crate::memory_category::attribute(crate::memory_category::Category::SyntaxTree);
         let mut tokens = Vec::new();
         loop {
             let token = self.next_token();

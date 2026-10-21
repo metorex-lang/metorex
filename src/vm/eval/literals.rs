@@ -103,7 +103,12 @@ impl VirtualMachine {
         name: &str,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let value = self.eval_identifier(name, position)?;
+        // A name that is no local is a call the program made.
+        let pending =
+            std::mem::replace(&mut self.program_call_pending, !self.tracepoints.is_empty());
+        let value = self.eval_identifier(name, position);
+        self.program_call_pending = pending;
+        let value = value?;
         if name.starts_with(|first: char| first.is_ascii_uppercase()) && self.in_a_non_main_ractor()
         {
             let (owner, found_where_written) = self.constant_owner_name(name);

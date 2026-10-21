@@ -100,8 +100,11 @@ impl VirtualMachine {
                 &string_value.encoding_name(),
                 position,
             )?;
-            last = Some(whole.start());
-            self.regexp_match_data_in(&source, &flags, &subject, whole.start(), None, position)?;
+            // Searching again from where this search began finds this match,
+            // which searching from its start does not when `\K` left text
+            // the pattern read before it.
+            last = Some(cursor);
+            self.regexp_match_data_in(&source, &flags, &subject, cursor, None, position)?;
             let (piece, piece_encoding) = self.replacement_text(
                 receiver,
                 arguments.get(1),

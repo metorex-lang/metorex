@@ -112,7 +112,7 @@ Each is run with `ruby benchmarks/compare.rb` on one machine, and the README's s
 
 Metorex's peak memory is above 1.5× CRuby's on 46 of the 50 rows of the README's table: 33 MB against 19 MB for `empty`, 304 MB against 55 MB for `rex_suite`, 604 MB against 117 MB for `30k_ifelse`, and 335 MB against 21 MB for `ruby-json`.
 
-- [ ] Where the memory goes: `METOREX_MEMORY_REPORT=1` writes, at exit, the peak bytes held by objects by class, by compiled units and their tables, by the syntax tree, by the JIT's code, and by the libraries loaded at startup, and `docs/engine/memory-management.md` records the report for `empty`, `rex_suite`, `30k_ifelse`, and `ruby-json`
+- [x] Where the memory goes: `METOREX_MEMORY_REPORT=1` writes, at exit, the peak bytes held by objects by class, by compiled units and their tables, by the syntax tree, by the JIT's code, and by the libraries loaded at startup, and `docs/engine/memory-management.md` records the report for `empty`, `rex_suite`, `30k_ifelse`, and `ruby-json`
   - Acceptance: the four reports' categories add up to within 10% of each run's peak resident set size
 - [ ] Startup: `empty` peaks at no more than CRuby's
 - [ ] Every row of the table peaks at no more than 1.5× CRuby's, with no row's time made more than 5% slower
@@ -148,11 +148,11 @@ Rex runs RSpec 3.13.6's own specs with `scripts/run_rspec_suite.sh`. Parity is t
 
 Ruby 4.0.7's bundled gems that do not load under Metorex today without MRI's gem directory: minitest, test-unit, power_assert, rake, rexml, rss, net-imap, net-pop, net-smtp, rdoc, rbs, typeprof, repl_type_completor, and debug. Bundler and readline do not load at all.
 
-- [ ] Each of those bundled gems is carried in the binary, as csv and logger are, and loads with no gem directory set
+- [x] Each of those bundled gems is carried in the binary, as csv and logger are, and loads with no gem directory set
   - Acceptance: a `tests/_examples/stdlib` file requires each and uses one of its methods
 - [ ] The bundled gems' own test suites pass under Metorex: minitest, test-unit, power_assert, rake, rexml, rss, and the net-imap, net-pop, and net-smtp suites that need no network
   - Acceptance: a script like `scripts/run_rspec_suite.sh` runs each suite under Metorex and MRI and the counts match
-- [ ] readline loads and answers as reline, as it does in MRI 4.0.7
+- [x] readline loads and answers as reline, as it does in MRI 4.0.7
 - [ ] Bundler: `bundle install` and `bundle exec` run under Metorex and install and run a Gemfile's gems
   - Acceptance: a fixture Gemfile with a pure Ruby gem installs from a local gem server and `bundle exec` runs a script that requires it
 ## Popular gems
@@ -180,7 +180,7 @@ The 100 most downloaded gems on rubygems.org (`rubygems.org/stats`, read on 2026
 
 Of the 2,337 methods ruby/spec's `core/` describes, these are the ones MRI 4.0.7 finds with `instance_method` or `method` and Metorex does not. Every other described method Metorex finds, or MRI 4.0.7 lacks too, as with `Kernel#taint`, `File.exists?`, and the methods specs guard for Ruby 4.1.
 
-- [ ] `UnboundMethod.instance_method(:bind)`, `UnboundMethod.instance_method(:bind_call)`, and `GC.instance_method(:garbage_collect)` return the method, as MRI's do. Calling all three already works, from `src/vm/native_methods/method_object_methods.rs` and the `GC` native methods
+- [x] `UnboundMethod.instance_method(:bind)`, `UnboundMethod.instance_method(:bind_call)`, and `GC.instance_method(:garbage_collect)` return the method, as MRI's do. Calling all three already works, from `src/vm/native_methods/method_object_methods.rs` and the `GC` native methods
   - Acceptance: a `tests/_examples` file prints the `parameters` of each, and its output matches MRI 4.0.7's
 
 ## Beyond Ruby

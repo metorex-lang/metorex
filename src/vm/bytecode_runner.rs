@@ -522,6 +522,8 @@ impl VirtualMachine {
         let (arguments, block) = call_inputs(site, base, registers, state);
         crate::vm::program::enter_nesting(position)?;
         let attached = self.attached_block_flags.len();
+        let pending =
+            std::mem::replace(&mut self.program_call_pending, !self.tracepoints.is_empty());
         let result = match known {
             Some(KnownCall {
                 receiver,
@@ -539,6 +541,7 @@ impl VirtualMachine {
                 Some(&site.cache),
             ),
         };
+        self.program_call_pending = pending;
         self.release_attached_blocks(attached);
         crate::vm::program::leave_nesting();
         if bare {
@@ -779,8 +782,23 @@ impl VirtualMachine {
                         crate::vm::utils::position_to_location(position),
                     ));
                 };
-                registers[base] =
-                    self.call_native_function(&native, vec![Object::array(arguments)], position)?;
+                let receiver = (!self.tracepoints.is_empty())
+                    .then(|| self.environment().get("self").unwrap_or(Object::Nil));
+                let traced = match &receiver {
+                    Some(receiver) => {
+                        self.program_call_pending = true;
+                        self.begin_native_trace(receiver, &site.name, position)?
+                    }
+                    None => false,
+                };
+                let answered =
+                    self.call_native_function(&native, vec![Object::array(arguments)], position);
+                if let Some(receiver) = &receiver {
+                    let reported = answered.as_ref().map(|value| Some(value.clone()));
+                    let reported = reported.map_err(Clone::clone);
+                    self.end_native_trace(traced, receiver, &site.name, &reported, position)?;
+                }
+                registers[base] = answered?;
             }
             Instruction::SafeNavigation { test, target } => {
                 let missing = registers[register(test)].is_nil();
@@ -1807,6 +1825,8 @@ impl VirtualMachine {
         crate::vm::program::enter_nesting(position)?;
         let attached = self.attached_block_flags.len();
         let written = written_receiver(site.receiver);
+        let pending =
+            std::mem::replace(&mut self.program_call_pending, !self.tracepoints.is_empty());
         let result = if site.sends_literal_name && self.send_in_force(&receiver, &site.name) {
             self.send_literal_name(receiver, &site.name, arguments, block, position)
         } else {
@@ -1820,6 +1840,7 @@ impl VirtualMachine {
                 Some(&site.cache),
             )
         };
+        self.program_call_pending = pending;
         self.release_attached_blocks(attached);
         crate::vm::program::leave_nesting();
         self.note_failed_call(&result, &site.name, written.names_self(), position);

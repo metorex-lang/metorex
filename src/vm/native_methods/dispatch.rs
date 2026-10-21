@@ -24,10 +24,12 @@ impl VirtualMachine {
                 crate::vm::counters::allocations_so_far(),
             )
         });
+        let traced = self.begin_native_trace(receiver, method_name, position)?;
         let entered = self.enter_native_frame(Some(receiver), method_name, position);
         let answered =
             self.call_native_method_body(class, receiver, method_name, arguments, position);
         self.leave_native_call(entered, position, &answered);
+        self.end_native_trace(traced, receiver, method_name, &answered, position)?;
         // A native method answers None for a name it does not have, which
         // is a lookup rather than a call.
         if let (Some((caller, allocations_before)), Ok(Some(_))) = (counted, &answered) {
@@ -36,6 +38,67 @@ impl VirtualMachine {
             crate::vm::counters::count_call(&caller, &callee, made);
         }
         answered
+    }
+
+    /// Fire `c_call` for a call the program made of a method Ruby writes
+    /// in C, answering whether it fired, so `end_native_trace` fires the
+    /// `c_return`. The calls the method makes itself fire neither.
+    pub(crate) fn begin_native_trace(
+        &mut self,
+        receiver: &Object,
+        method_name: &str,
+        position: Position,
+    ) -> Result<bool, MetorexError> {
+        let traced = std::mem::take(&mut self.program_call_pending)
+            && !self.tracepoints.is_empty()
+            && self.written_in_c(receiver, method_name);
+        if traced {
+            self.fire_native_event("c_call", method_name, receiver, None, position)?;
+        }
+        Ok(traced)
+    }
+
+    /// Fire the `c_return` of a call `begin_native_trace` fired `c_call` for.
+    pub(crate) fn end_native_trace(
+        &mut self,
+        traced: bool,
+        receiver: &Object,
+        method_name: &str,
+        answered: &Result<Option<Object>, MetorexError>,
+        position: Position,
+    ) -> Result<(), MetorexError> {
+        if traced && let Ok(Some(value)) = answered {
+            self.fire_native_event("c_return", method_name, receiver, Some(value), position)?;
+        }
+        Ok(())
+    }
+
+    /// Whether Ruby's core defines `method_name` in C for `receiver`: in its
+    /// class, a module that class mixes in, or a class above it.
+    fn written_in_c(&self, receiver: &Object, method_name: &str) -> bool {
+        let mut owners: Vec<String> = Vec::new();
+        match receiver.view() {
+            View::Class(_) => owners.extend(["Class".to_string(), "Module".to_string()]),
+            View::Module(_) => owners.push("Module".to_string()),
+            _ => {}
+        }
+        if let Some(named) = crate::builtin_classes::value_class_name(receiver) {
+            owners.push(named.to_string());
+        }
+        let mut cursor = Some(self.builtins().class_of(receiver));
+        while let Some(current) = cursor {
+            owners.push(current.name().to_string());
+            owners.extend(
+                current
+                    .transitive_mixins()
+                    .iter()
+                    .map(|mixin| mixin.name().to_string()),
+            );
+            cursor = current.superclass();
+        }
+        owners.extend(["Kernel".to_string(), "BasicObject".to_string()]);
+        crate::vm::native_methods::object_methods::nearest_core_owner(&owners, method_name)
+            .is_some()
     }
 
     fn call_native_method_body(

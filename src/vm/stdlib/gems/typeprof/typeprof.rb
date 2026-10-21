@@ -1,0 +1,6 @@
+require "typeprof/version"
+require "typeprof/code_range"
+require "typeprof/diagnostic"
+require "typeprof/core"
+require "typeprof/lsp"
+require "typeprof/cli"

@@ -733,6 +733,8 @@ fn integer_operation(instruction: Instruction) -> Option<(IntegerOperation, u8)>
 }
 
 fn compile(vm: &VirtualMachine, unit: &Unit) -> Option<Rc<MachineCode>> {
+    let _counted =
+        crate::vm::memory_report::attribute(crate::vm::memory_report::Category::JitCompiling);
     let compiled_in = epoch();
     let (mut steps, slot_reads, loads_symbols) = plan(vm, unit);
     if !steps.iter().any(Planned::runs_itself) {

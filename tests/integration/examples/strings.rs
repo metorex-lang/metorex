@@ -639,3 +639,12 @@ fn succ_stops_a_carry_at_a_separator_between_a_letter_and_a_digit() {
         )
     );
 }
+
+#[test]
+fn a_gsub_bang_block_reads_the_match_through_the_last_match_global() {
+    let output = run_example("strings/gsub_bang_block_last_match.rb");
+    assert_eq!(
+        output,
+        "\"due TODAY and FRIDAY\"\n\"due <today>\"\n\"Due [2026-11-01]\"\n"
+    );
+}

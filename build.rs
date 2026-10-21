@@ -19,6 +19,9 @@ mod ast;
 mod error;
 #[path = "src/lexer/mod.rs"]
 mod lexer;
+#[path = "src/memory_category.rs"]
+#[allow(dead_code)]
+mod memory_category;
 #[path = "src/parser/mod.rs"]
 mod parser;
 #[path = "src/vm/prelude/chunks.rs"]
@@ -43,6 +46,8 @@ fn main() {
     write_abi_header();
     compile_prism();
     compile_nkf();
+    compile_rbs();
+    compile_debug();
     parse_carried_sources();
 }
 
@@ -142,28 +147,95 @@ fn parse_carried_sources() {
 /// against the headers in `include` from the copy scripts/vendor_gems.rb
 /// makes.
 fn compile_nkf() {
-    println!("cargo:rerun-if-changed=vendor/nkf");
+    compile_extension(
+        "nkf",
+        vec![PathBuf::from("vendor/nkf/nkf.c")],
+        &["vendor/nkf"],
+        &[],
+    );
+}
+
+/// rbs's C extension, which `require "rbs_extension"` starts with
+/// `Init_rbs_extension`, with the signature parser it wraps.
+fn compile_rbs() {
+    let mut sources = Vec::new();
+    c_sources_under(Path::new("vendor/rbs/src"), &mut sources);
+    c_sources_under(Path::new("vendor/rbs/ext/rbs_extension"), &mut sources);
+    sources.sort();
+    compile_extension(
+        "rbs",
+        sources,
+        &["vendor/rbs/include", "vendor/rbs/ext/rbs_extension"],
+        &["-std=gnu99", "-DNDEBUG"],
+    );
+}
+
+/// debug's C extension, which `require "debug/debug.so"` starts with
+/// `Init_debug`. Its extconf.rb names the iseq functions MRI has, which
+/// Metorex has too since it defines `RubyVM`.
+fn compile_debug() {
+    let mut sources = Vec::new();
+    c_sources_under(Path::new("vendor/debug"), &mut sources);
+    sources.sort();
+    compile_extension(
+        "debug",
+        sources,
+        &["vendor/debug"],
+        &[
+            "-DHAVE_RB_ISEQ",
+            "-DHAVE_RB_ISEQ_PARAMETERS",
+            "-DHAVE_RB_ISEQ_CODE_LOCATION",
+            "-DHAVE_RB_ISEQ_TYPE",
+        ],
+    );
+}
+
+/// Compile a C extension's `sources` against the headers in `include` and
+/// in `includes`, all at once, and link them in as `lib<name>.a`.
+fn compile_extension(name: &str, sources: Vec<PathBuf>, includes: &[&str], flags: &[&str]) {
+    let vendored = format!("vendor/{name}");
+    println!("cargo:rerun-if-changed={vendored}");
     let out = PathBuf::from(std::env::var("OUT_DIR").expect("cargo sets OUT_DIR"));
     let compiler = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
-    let object = out.join("nkf.o");
-    let status = std::process::Command::new(&compiler)
-        .args([
-            "-O2",
-            "-fPIC",
-            "-w",
-            "-I",
-            "include",
-            "-I",
-            "vendor/nkf",
-            "-c",
-        ])
-        .arg("vendor/nkf/nkf.c")
-        .arg("-o")
-        .arg(&object)
-        .status()
-        .unwrap_or_else(|error| panic!("{compiler} could not start: {error}"));
-    assert!(status.success(), "{compiler} failed on vendor/nkf/nkf.c");
-    archive(&out, "nkf", &[object]);
+    let compiling: Vec<(PathBuf, std::process::Child)> = sources
+        .iter()
+        .map(|source| {
+            let object = out.join(format!(
+                "{name}_{}",
+                source
+                    .strip_prefix(&vendored)
+                    .unwrap_or(source)
+                    .to_string_lossy()
+                    .replace(['/', '\\'], "_")
+                    .replace(".c", ".o")
+            ));
+            let mut command = std::process::Command::new(&compiler);
+            command.args(["-O2", "-fPIC", "-w", "-I", "include"]);
+            for directory in includes {
+                command.arg("-I").arg(directory);
+            }
+            let child = command
+                .args(flags)
+                .arg("-c")
+                .arg(source)
+                .arg("-o")
+                .arg(&object)
+                .spawn()
+                .unwrap_or_else(|error| panic!("{compiler} could not start: {error}"));
+            (object, child)
+        })
+        .collect();
+    let mut objects = Vec::new();
+    for (object, mut child) in compiling {
+        let status = child.wait().expect("the compiler ran");
+        assert!(
+            status.success(),
+            "{compiler} failed on {}",
+            object.display()
+        );
+        objects.push(object);
+    }
+    archive(&out, name, &objects);
 }
 
 /// Bundle object files into `lib<name>.a` in `out` and link it in.

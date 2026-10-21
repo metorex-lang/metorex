@@ -622,3 +622,12 @@ fn test_syntax_forms_aruba_and_its_dependencies_use() {
         "1\n3\n\"bad size\"\n12\n8\n2\n[2, 4]\n[3]\n{line: 1}\n{total: 3, \"key\" => 9}\n:callable\nObject\n"
     );
 }
+
+#[test]
+fn defined_without_parentheses_stops_at_and_and_or() {
+    let output = run_example("syntax/defined_before_and.rb");
+    assert_eq!(
+        output,
+        "nil\n\"instance-variable\"\nnil\n\"expression\"\n:reached\n"
+    );
+}

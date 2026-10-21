@@ -180,6 +180,63 @@ zero. The specs under `core/gc` check what these methods answer and that
   an object names. It runs again until nothing more is unpinned, then frees
   the Data objects nothing reaches.
 
+## Where the memory goes
+
+With `METOREX_MEMORY_REPORT` set to anything but `0` or nothing, Metorex
+writes a report to standard error at exit, from `src/vm/memory_report.rs`.
+
+- Each heap block carries a 16-byte header naming what allocated it: the
+  syntax tree (lexing, parsing, and reading a library's tree from the
+  binary), compiled units, the JIT compiling, or everything else. The header
+  also says whether startup allocated it, which is loading the core library
+  and the libraries a default start loads, or the program did.
+- Every 256 KB allocated, the allocator reads the resident set size. When
+  it is the largest yet, it keeps the bytes of the heap blocks in use on
+  each row, and measures what else is resident: malloc's resident pages that
+  hold no block in use, the JIT's machine code, the pages that map files,
+  and the stack. On macOS malloc's pages are the resident pages of the
+  regions it tagged, and on Linux they are glibc's arenas and the blocks it
+  mapped on their own.
+- When that resident set is a tenth more than at the last walk, the next
+  object listed starts a walk of the list. It adds up each object's size
+  and the capacities of what it holds, by class.
+
+The headers take memory of their own, so a run with the report peaks
+higher: `ruby-json` peaked at 323 MB without it and 375 MB with it.
+
+The reports of 2026-10-20 on macOS, with the ruby-bench rows run for one
+warmup iteration and two more, and `rex_suite` run with `metorex spec`, in
+MB. Where a row has two numbers, the first is startup's and the second the
+program's.
+
+| Row | Peak resident | Syntax tree | Compiled units | JIT compiling | Other heap blocks | Headers | malloc's other pages | Machine code | Files | Stack | Accounted for |
+| :-- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| empty | 36.1 | 9.6, 0.0 | 1.0, 0.0 | 0.0 | 5.2, 0.0 | 1.8 | 3.2 | 0.0 | 13.9 | 0.2 | 97% |
+| rex_suite | 301.3 | 9.6, 11.6 | 1.0, 14.8 | 0.7 | 8.2, 112.5 | 24.1 | 101.7 | 0.4 | 15.0 | 0.4 | 100% |
+| 30k_ifelse | 657.4 | 9.6, 300.5 | 1.0, 69.0 | 9.5 | 8.0, 138.0 | 38.4 | 61.2 | 5.8 | 14.5 | 0.3 | 100% |
+| ruby-json | 375.2 | 9.6, 2.1 | 1.0, 2.2 | 0.0 | 5.4, 197.4 | 41.9 | 99.6 | 0.0 | 14.5 | 0.2 | 100% |
+
+The objects the last walk found:
+
+| Row | Objects' bytes | Largest classes |
+| :-- | --: | :-- |
+| empty | 0.8 | 442 classes and modules, 0.5 MB, and 719 Strings, 0.2 MB |
+| rex_suite | 46.9 | 38,766 Strings, 12.6 MB, 13,981 Hashes, 10.1 MB, 13,045 Procs, 5.3 MB, and 4,622 classes and modules, 4.7 MB |
+| 30k_ifelse | 23.9 | 30,200 method definitions, 23.0 MB |
+| ruby-json | 1.6 | 1,861 Strings, 0.6 MB |
+
+- Startup holds 9.6 MB of syntax tree: the trees of the core library and
+  the default libraries stay after they run.
+- In `30k_ifelse` the program's syntax tree is 300.5 MB, and it stays after
+  its units are compiled.
+- In `ruby-json` 197.4 MB of the program's heap blocks are in neither the
+  syntax tree nor the compiled units, and the objects alive hold 1.6 MB of
+  them.
+- In the three rows that run a program, malloc keeps 61 to 102 MB resident
+  in pages that hold no block in use.
+- The binary's pages and the system libraries' take 14 to 15 MB in every
+  row.
+
 ## Threads
 
 Counts are not atomic, as `Rc`'s are not now. Metorex runs Ruby threads and

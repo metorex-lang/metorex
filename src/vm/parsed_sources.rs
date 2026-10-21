@@ -32,6 +32,8 @@ pub(crate) fn library(source: &str) -> Option<Vec<Statement>> {
 }
 
 fn decode(parsed: &[u8]) -> Vec<Statement> {
+    let _counted =
+        crate::vm::memory_report::attribute(crate::vm::memory_report::Category::SyntaxTree);
     let (statements, symbols): (Vec<Statement>, Vec<String>) =
         rmp_serde::from_slice(parsed).expect("the build script wrote this copy");
     for name in &symbols {

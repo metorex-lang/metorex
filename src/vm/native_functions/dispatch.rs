@@ -94,6 +94,27 @@ impl VirtualMachine {
             | "__prism_serialize_stream__"
             | "__prism_parse_success__"
             | "__prism_string_query__" => self.call_prism_function(name, &arguments, position),
+            // The files other than its library a bundled gem metorex carries
+            // reads, each as its path under the gem's directory and its text.
+            "__carried_gem_data__" => {
+                let gem = match arguments.first().view() {
+                    Some(View::String(named)) => named.as_str().to_string(),
+                    _ => String::new(),
+                };
+                let prefix = format!("{gem}/");
+                Ok(Object::array(
+                    crate::vm::stdlib::gem_data()
+                        .iter()
+                        .filter_map(|(path, text)| {
+                            let under = path.strip_prefix(&prefix)?;
+                            Some(Object::array(vec![
+                                Object::string(under.to_string()),
+                                Object::string(text.to_string()),
+                            ]))
+                        })
+                        .collect(),
+                ))
+            }
             "__embedded_library_names__" => Ok(Object::array(
                 crate::vm::stdlib::embedded_library_names()
                     .map(|name| Object::string(name.to_string()))

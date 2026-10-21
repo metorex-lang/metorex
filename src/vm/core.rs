@@ -117,6 +117,10 @@ pub struct VirtualMachine {
     /// How many native methods are running inside the innermost Ruby body,
     /// whose own calls are Ruby's C code and fire no `c_call` events.
     pub(crate) native_calls_running: usize,
+    /// Whether the call a program's instructions made, while a tracepoint
+    /// is on, has yet to reach the method it names, which fires `c_call`
+    /// when that method is one Ruby writes in C.
+    pub(crate) program_call_pending: bool,
     /// The file a library metorex carries is read from while it loads, which
     /// is where a method it defines says it was written.
     pub(crate) loading_embedded_library: Option<String>,
@@ -595,6 +599,7 @@ pub struct RefinementEntry {
 impl VirtualMachine {
     /// Construct a new virtual machine instance with all built-ins registered.
     pub fn new() -> Self {
+        let _starting = crate::vm::memory_report::starting();
         let mut environment = Environment::new();
         let builtins = BuiltinClasses::new();
 
@@ -652,6 +657,7 @@ impl VirtualMachine {
             tracepoints: Vec::new(),
             running_code: Vec::new(),
             native_calls_running: 0,
+            program_call_pending: false,
             loading_embedded_library: None,
             constant_homes: Vec::new(),
             traced_line: None,

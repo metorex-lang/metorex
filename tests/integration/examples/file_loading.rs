@@ -597,3 +597,9 @@ fn a_class_body_extend_loads_the_module_an_enclosing_module_autoloads() {
     let output = run_example("require/autoload_reached_from_a_file_a_method_requires.rb");
     assert_eq!(output, "terminal\n");
 }
+
+#[test]
+fn a_carried_library_that_raised_while_loading_runs_again_when_required_again() {
+    let output = run_example("loading/carried_library_raising_on_load.rb");
+    assert_eq!(output, "TypeError\ntrue\n3\n");
+}

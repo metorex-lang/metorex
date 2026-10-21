@@ -409,10 +409,21 @@ fn test_class_of_native_function() {
 // ── class_of for Method (builtin_classes.rs line 106) ─────────────────────────
 
 #[test]
-fn test_class_of_method_object() {
+fn test_class_of_method_object_with_no_receiver_is_unbound_method() {
     use metorex::object::Method;
     let builtins = BuiltinClasses::new();
     let method = Method::new("foo".to_string(), vec![], vec![]);
+    let obj = Object::Method(Rc::new(method));
+    let class = builtins.class_of(&obj);
+    assert_eq!(class.name(), "UnboundMethod");
+}
+
+#[test]
+fn test_class_of_method_object_bound_to_a_receiver_is_method() {
+    use metorex::object::Method;
+    let builtins = BuiltinClasses::new();
+    let mut method = Method::new("foo".to_string(), vec![], vec![]);
+    method.receiver = Some(Box::new(Object::Int(1)));
     let obj = Object::Method(Rc::new(method));
     let class = builtins.class_of(&obj);
     assert_eq!(class.name(), "Method");

@@ -84,10 +84,14 @@ impl VirtualMachine {
     ) -> Result<Object, MetorexError> {
         let name = method.name.clone();
         self.fire_native_event("c_call", &name, &receiver, None, position)?;
-        self.native_calls_running += 1;
+        // The count is put back as it was rather than counted down, which a
+        // trace handler running inside the call can leave below its value
+        // here.
+        let before = self.native_calls_running;
+        self.native_calls_running = before + 1;
         let answered =
             self.invoke_method_unguarded(class, method, receiver.clone(), arguments, position);
-        self.native_calls_running -= 1;
+        self.native_calls_running = before;
         let value = answered?;
         self.fire_native_event("c_return", &name, &receiver, Some(&value), position)?;
         Ok(value)
@@ -101,6 +105,7 @@ impl VirtualMachine {
         mut arguments: Vec<Object>,
         position: Position,
     ) -> Result<Object, MetorexError> {
+        self.program_call_pending = false;
         let named = Rc::clone(&method);
         let method_name: &str = &named.name;
         // A Proc cut from a bound Method carries the object it was bound to,

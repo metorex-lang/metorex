@@ -695,6 +695,8 @@ impl Parser {
     }
 
     pub fn parse(&mut self) -> Result<Vec<Statement>, Vec<MetorexError>> {
+        let _counted =
+            crate::memory_category::attribute(crate::memory_category::Category::SyntaxTree);
         let mut statements = Vec::new();
 
         // Skip leading whitespace

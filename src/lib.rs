@@ -11,6 +11,7 @@ pub mod error;
 pub mod fast_hash;
 pub mod file_loader;
 pub mod lexer;
+pub mod memory_category;
 pub mod object;
 pub mod parser;
 pub mod regexp;

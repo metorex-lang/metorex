@@ -274,13 +274,19 @@ pub(crate) fn apply_cli_flags(vm: &mut VirtualMachine, cli: &Cli) {
     // reported.
     let syntax_suggest =
         (features.gems && features.syntax_suggest).then_some("syntax_suggest/core_ext");
-    for lib in rubygems
+    let defaults: Vec<&str> = rubygems
         .into_iter()
         .chain(error_highlight)
         .chain(did_you_mean)
         .chain(syntax_suggest)
+        .collect();
+    let named = defaults.len();
+    for (index, lib) in defaults
+        .into_iter()
         .chain(cli.require_libs.iter().map(String::as_str))
+        .enumerate()
     {
+        let _starting = (index < named).then(metorex::vm::memory_report::starting);
         if let Err(err) = vm.require_startup_library(lib) {
             eprintln!("Runtime error: {}", err);
             process::exit(1);

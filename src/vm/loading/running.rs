@@ -329,7 +329,7 @@ impl VirtualMachine {
         if self.is_file_loaded(&marker) {
             return Ok(false);
         }
-        self.mark_file_loaded(marker);
+        self.mark_file_loaded(marker.clone());
         // One file can be required under more than one name, as
         // `bigdecimal/util` names `bigdecimal`, and it runs only once.
         if !self.embedded_sources_run.insert(source.as_ptr() as usize) {
@@ -369,7 +369,14 @@ impl VirtualMachine {
         self.method_nesting_stack = caller_nesting;
         self.def_scope_stack = caller_def_scope;
         self.constant_homes = caller_constant_homes;
-        result?;
+        if let Err(error) = result {
+            // A library that raised while loading is not loaded, so the next
+            // `require` of it runs it again, as Ruby's does.
+            self.unmark_file_loaded(&marker);
+            self.embedded_sources_run
+                .remove(&(source.as_ptr() as usize));
+            return Err(error);
+        }
         // `$LOADED_FEATURES` lists it once it has loaded, under the name a
         // backtrace gives its lines, so a program asking for a feature by
         // its file name finds it as it would under MRI.

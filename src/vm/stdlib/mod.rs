@@ -325,6 +325,19 @@ pub(crate) fn embedded_library(name: &str) -> Option<&'static str> {
         })
 }
 
+/// The files other than its library a bundled gem metorex carries reads.
+pub(crate) fn gem_data() -> &'static [(&'static str, &'static str)] {
+    gem_libraries::GEM_DATA
+}
+
+/// The feature name of a library metorex carries, for the path its files
+/// read under, `<metorex>/` and then the feature, as `__dir__` builds them.
+pub(crate) fn carried_feature(name: &str) -> Option<&str> {
+    let feature = name.strip_prefix("<metorex>/")?;
+    let feature = feature.strip_suffix(".rb").unwrap_or(feature);
+    embedded_library(feature).is_some().then_some(feature)
+}
+
 /// Every name `require` finds a library metorex carries under.
 pub(crate) fn embedded_library_names() -> impl Iterator<Item = &'static str> {
     EMBEDDED_LIBRARIES
