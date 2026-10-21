@@ -631,3 +631,18 @@ fn defined_without_parentheses_stops_at_and_and_or() {
         "nil\n\"instance-variable\"\nnil\n\"expression\"\n:reached\n"
     );
 }
+
+#[test]
+fn a_when_list_may_open_with_an_index_of_a_scoped_constant() {
+    let output = run_example("syntax/when_scoped_constant_index_list.rb");
+    assert_eq!(output, ":installed\n:elsewhere\n");
+}
+
+#[test]
+fn a_capitalized_scoped_name_followed_by_a_value_is_a_call() {
+    let output = run_example("syntax/scoped_capitalized_call_without_parentheses.rb");
+    assert_eq!(
+        output,
+        "\"made from 1042\"\n\"made from 1043\"\nLedger::Entry\n"
+    );
+}

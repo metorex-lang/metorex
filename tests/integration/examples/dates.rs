@@ -145,3 +145,9 @@ fn test_dates_time_zone_parsing_no_parens_execution() {
     let output = run_example("dates/time_zone_parsing_no_parens.rb");
     assert_eq!(output, TIME_ZONE_PARSING_OUTPUT);
 }
+
+#[test]
+fn a_frozen_time_answers_its_readers() {
+    let output = run_example("dates/frozen_time_readers.rb");
+    assert_eq!(output, "true\n[24, 10, 2026]\n2026-10-24 00:00:00 UTC\n");
+}

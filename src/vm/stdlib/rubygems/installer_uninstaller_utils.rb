@@ -14,7 +14,7 @@ module Gem::InstallerUninstallerUtils
       plugin_script_path = File.join plugins_dir, "#{spec.name}_plugin#{File.extname(plugin)}"
 
       File.open plugin_script_path, "wb" do |file|
-        file.puts "require "rubygems/#{Pathname.new(plugin).relative_path_from(Pathname.new(plugins_dir))}""
+        file.puts "require_relative '#{Pathname.new(plugin).relative_path_from(Pathname.new(plugins_dir))}'"
       end
 
       verbose plugin_script_path

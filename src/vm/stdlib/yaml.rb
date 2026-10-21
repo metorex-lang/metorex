@@ -215,6 +215,26 @@ module Psych
     taken
   end
 
+  # The items of a sequence written at a key's own indentation, which is the
+  # key's value, with the lines under each.
+  def self.take_level_sequence lines, at
+    taken = []
+    while !lines.empty? && indent_of(lines.first) == at &&
+          (lines.first.lstrip.start_with?("- ") || lines.first.strip == "-")
+      taken << lines.shift
+      taken.concat take_nested(lines, at)
+    end
+    taken
+  end
+
+  # What a `!ruby/object:` tag with lines under it builds, or nil for any
+  # other text.
+  def self.tagged_block rest, nested
+    tag = rest.strip
+    return nil unless tag.start_with?("!ruby/object:") && !tag.include?(" ") && !nested.empty?
+    build_object tag["!ruby/object:".length..-1], read_block(nested, indent_of(nested.first))
+  end
+
   def self.read_sequence lines
     remaining = lines.dup
     items = []
@@ -233,6 +253,8 @@ module Psych
         items << (nested.empty? ? nil : read_block(nested, indent_of(nested.first)))
       elsif nested.empty?
         items << read_scalar(rest.strip)
+      elsif (built = tagged_block(rest, nested))
+        items << built
       else
         items << read_block([" " * (at + 2) + rest] + nested, at + 2)
       end
@@ -271,11 +293,14 @@ module Psych
       raise Psych::SyntaxError, "did not find expected key while parsing a block mapping" if found.nil?
       name, rest = found
       nested = take_nested remaining, at
+      nested = take_level_sequence(remaining, at) if nested.empty? && (rest.empty? || rest.start_with?("!"))
       key = read_scalar name.strip
       if rest.empty?
         pairs[key] = nested.empty? ? nil : read_block(nested, indent_of(nested.first))
       elsif nested.empty?
         pairs[key] = read_scalar rest
+      elsif (built = tagged_block(rest, nested))
+        pairs[key] = built
       else
         pairs[key] = read_block([" " * (at + 2) + rest] + nested, at + 2)
       end
@@ -366,7 +391,12 @@ module Psych
     end
     held = Time.utc matched[1].to_i, matched[2].to_i, matched[3].to_i,
                     matched[4].to_i, matched[5].to_i, matched[6].to_i
-    Time.at held.to_i - offset, micro
+    moment = Time.at held.to_i - offset, micro
+    # `Z` names UTC, an offset is kept as written, and a moment with neither
+    # is UTC read in the zone the program runs in.
+    return moment.utc if zone == "Z"
+    return moment if zone.empty?
+    moment.getlocal offset
   end
 
   # `!ruby/class 'Name'` and the tags beside it name something the program

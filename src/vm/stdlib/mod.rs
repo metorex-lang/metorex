@@ -1,12 +1,14 @@
 // The libraries metorex ships with, held in the binary so `require` finds
 // them without a directory on the load path.
 
+mod bundler_libraries;
 mod gem_libraries;
 mod prism_libraries;
 mod rex_libraries;
 mod rspec_libraries;
 mod rubygems_libraries;
 pub(crate) mod source_digest;
+use bundler_libraries::BUNDLER_LIBRARIES;
 use gem_libraries::GEM_LIBRARIES;
 use prism_libraries::PRISM_LIBRARIES;
 use rex_libraries::REX_LIBRARIES;
@@ -320,6 +322,7 @@ pub(crate) fn embedded_library(name: &str) -> Option<&'static str> {
                 .chain(REX_LIBRARIES)
                 .chain(GEM_LIBRARIES)
                 .chain(RUBYGEMS_LIBRARIES)
+                .chain(BUNDLER_LIBRARIES)
                 .find(|(named, _)| *named == trimmed)
                 .map(|(_, source)| *source)
         })
@@ -350,6 +353,7 @@ pub(crate) fn embedded_library_names() -> impl Iterator<Item = &'static str> {
                 .chain(REX_LIBRARIES)
                 .chain(GEM_LIBRARIES)
                 .chain(RUBYGEMS_LIBRARIES)
+                .chain(BUNDLER_LIBRARIES)
                 .map(|(named, _)| *named),
         )
 }

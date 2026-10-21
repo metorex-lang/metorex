@@ -351,6 +351,13 @@ class Time
   end
   private :__read_calendar__
 
+  # A frozen time keeps no more than it holds, so its calendar fields are
+  # read before it freezes.
+  def freeze
+    calendar
+    super
+  end
+
   # The calendar fields this time stands for, read once and kept.
   def calendar
     return @calendar unless @calendar.nil?

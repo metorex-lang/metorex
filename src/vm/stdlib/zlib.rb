@@ -441,8 +441,8 @@ module Zlib
       @sync = false
     end
 
-    def self.wrap(io, *rest)
-      held = new io, *rest
+    def self.wrap(io, *rest, **options)
+      held = new io, *rest, **options
       return held unless block_given?
       begin
         yield held

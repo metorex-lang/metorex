@@ -258,6 +258,7 @@ impl Parser {
             }
             // Type pattern (capitalized identifiers like Integer, String, Hash, Array)
             TokenKind::Ident(name) if name.chars().next().is_some_and(|c| c.is_uppercase()) => {
+                let resume = self.stream.current_position();
                 let mut type_name = name.clone();
                 self.advance();
                 // A constant may be reached through the module holding it, as
@@ -271,6 +272,16 @@ impl Parser {
                     self.advance();
                     type_name.push_str("::");
                     type_name.push_str(&segment);
+                }
+                // A `when` value that goes on past the constant, as
+                // `RbConfig::CONFIG["sitelibdir"]` does, is an expression.
+                let goes_on = self.check(&[TokenKind::Dot, TokenKind::SafeDot])
+                    || (self.check(&[TokenKind::LBracket, TokenKind::LParen])
+                        && !self.peek().had_leading_space);
+                if self.in_when_clause && goes_on {
+                    self.stream.restore_position(resume);
+                    let held = self.parse_expression()?;
+                    return Ok(MatchPattern::Expression(Box::new(held)));
                 }
                 Ok(MatchPattern::Type(type_name))
             }

@@ -176,3 +176,12 @@ fn hash_brackets_keep_each_key_as_the_object_given() {
         "{(crate north) => 1, (crate south) => 2}\n[Crate, Crate]\ntrue\n2\ntrue\n"
     );
 }
+
+#[test]
+fn an_inverted_hash_keeps_array_values_as_keys() {
+    let output = run_example("hash_methods/invert_with_array_values.rb");
+    assert_eq!(
+        output,
+        "{[\"-v\", \"--version\"] => \"version\"}\n{\"-v\" => \"version\", \"--version\" => \"version\"}\n[{[\"-v\", \"--version\"] => \"version\"}, {}]\n[nil, {\"-v\" => \"version\"}]\n"
+    );
+}

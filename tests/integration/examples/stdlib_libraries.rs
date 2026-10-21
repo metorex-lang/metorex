@@ -2464,3 +2464,36 @@ fn rspec_mocks_stubs_a_struct_member_on_any_instance_and_takes_the_stub_down() {
     let output = run_example("rspec_mocks/any_instance_stub_of_a_struct_member.rb");
     assert_eq!(output, ":baz\n:bar\n");
 }
+
+#[test]
+fn openssl_cipher_runs_aes_in_cbc_mode() {
+    let output = run_example("stdlib_libraries/openssl_aes_cbc.rb");
+    assert_eq!(
+        output,
+        "\"69c4e0d86a7b0430d8cdb78070b4c55a\"\n\"8ea2b7ca516745bfeafc49904b496089\"\n\"becbd794e55c2d74ce84921926f120d5bf9fde6b20a7042cd3b403799ab23453da997743636e7a1579089442c2cc0674\"\n\"invoice 1042 is due on 2026-11-01\"\nOpenSSL::Cipher::CipherError\n24\n[[:VERIFY_CLIENT_ONCE, 4], [:VERIFY_FAIL_IF_NO_PEER_CERT, 2], [:VERIFY_NONE, 0], [:VERIFY_PEER, 1]]\n"
+    );
+}
+
+#[test]
+fn gzip_reader_wrap_hands_its_keywords_to_the_reader() {
+    let output = run_example("stdlib_libraries/gzip_reader_wrap_keywords.rb");
+    assert_eq!(output, "\"invoice 1042: 75.00\"\n#<Encoding:UTF-8>\n");
+}
+
+#[test]
+fn yaml_reads_what_a_gem_s_metadata_writes() {
+    let output = run_example("stdlib_libraries/yaml_gem_metadata.rb");
+    assert_eq!(
+        output,
+        "[[\">=\", \"0\"]]\n\"1.0.0\"\n1980-01-02 00:00:00 UTC\ntrue\n2026-10-21 08:30:00 +0500\n"
+    );
+}
+
+#[test]
+fn the_digest_function_names_the_class_for_an_algorithm() {
+    let output = run_example("stdlib_libraries/digest_function.rb");
+    assert_eq!(
+        output,
+        "Digest::MD5\n\"09eef89be5c56106\"\n\"library not found for class Digest::Ledger -- digest/ledger\"\ntrue\n"
+    );
+}

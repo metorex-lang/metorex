@@ -291,7 +291,8 @@ impl VirtualMachine {
                         return handled;
                     }
                     let msg = format!(
-                        "private method '{}' called for {} {}",
+                        "{} method '{}' called for {} {}",
+                        self.visibility_word(&receiver, method_name),
                         method_name,
                         class_rc.kind_name().to_lowercase(),
                         class_rc.inspect_name()
@@ -905,7 +906,10 @@ impl VirtualMachine {
         if let Some(owner) = &owner
             && owner.is_singleton_class()
         {
-            return !owner.has_public_override(name) && owner.is_method_restricted(name);
+            if owner.has_public_override(name) || !owner.is_method_restricted(name) {
+                return false;
+            }
+            return owner.is_method_private(name) || !self.calling_from_class_under(owner);
         }
         // Otherwise a module-level copy is public even when the instance
         // method it was copied from is private, as `module_function` leaves it.
@@ -947,6 +951,29 @@ impl VirtualMachine {
             return true;
         }
         owner.is_method_protected(name) && !self.calling_from_within(owner)
+    }
+
+    /// Whether the code making this call is running as the class whose
+    /// singleton class is `singleton`, or a class below it, which is what a
+    /// protected class method asks.
+    fn calling_from_class_under(&self, singleton: &Rc<Class>) -> bool {
+        CALLER_CONSULTED.set(true);
+        let caller = self.environment().get("self");
+        let Some(View::Class(class_rc) | View::Module(class_rc)) = caller.view() else {
+            return false;
+        };
+        let mut cursor = Some(Rc::clone(class_rc));
+        while let Some(current) = cursor {
+            if current
+                .singleton_class_slot()
+                .as_ref()
+                .is_some_and(|held| Rc::ptr_eq(held, singleton))
+            {
+                return true;
+            }
+            cursor = current.superclass();
+        }
+        false
     }
 
     /// Whether the code making this call is running as an object the given
@@ -1557,7 +1584,10 @@ pub(crate) fn singleton_prepended_method(
 /// it extended, or a superclass. A method put on a superclass's singleton
 /// class stands ahead of the `def self.name` that superclass wrote, as one
 /// `define_method` there replaces it.
-fn class_level_method(class_rc: &Rc<Class>, method_name: &str) -> Option<(Rc<Class>, Rc<Method>)> {
+pub(crate) fn class_level_method(
+    class_rc: &Rc<Class>,
+    method_name: &str,
+) -> Option<(Rc<Class>, Rc<Method>)> {
     if let Some(method) = class_rc
         .find_own_method(&format!("__class__{}", method_name))
         .or_else(|| module_extended_method(class_rc, method_name))

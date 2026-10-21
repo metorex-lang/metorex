@@ -88,6 +88,8 @@ pub(crate) fn register_builtin_modules(globals: &mut GlobalRegistry, builtins: &
         for (name, value) in FILE_OPEN_FLAGS {
             constants.set_class_var(name, Object::Int(value));
         }
+        // The file that reads as nothing and takes whatever is written to it.
+        constants.set_class_var("NULL", Object::string("/dev/null"));
         file_class.set_class_var("Constants", Object::Module(Rc::clone(&constants)));
         globals.set("File::Constants", Object::Module(Rc::clone(&constants)));
         file_class.add_mixin(constants);

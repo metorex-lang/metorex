@@ -277,7 +277,7 @@ module DEBUGGER__
     def load_extensions req
       if exts = req.dig('arguments', 'rdbgExtensions')
         exts.each{|ext|
-          require "debug/dap_custom/#{File.basename(ext)}"
+          require_relative "dap_custom/#{File.basename(ext)}"
         }
       end
 

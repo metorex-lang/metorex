@@ -20,6 +20,7 @@ mod binding_methods;
 mod socket_addresses;
 pub(crate) use socket_addresses::OpenSockets;
 pub(crate) use streams::OpenStreams;
+mod aes;
 mod complex_methods;
 mod constant_visibility;
 pub(crate) mod define_method;

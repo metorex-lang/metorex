@@ -962,3 +962,12 @@ fn a_class_has_kernels_functions_as_private_methods() {
         "at_exit false true true\ntrap false true true\nexit! false true true\n"
     );
 }
+
+#[test]
+fn a_protected_class_method_is_callable_from_a_class_method_of_a_subclass() {
+    let output = run_example("methods/protected_singleton_method_between_subclasses.rb");
+    assert_eq!(
+        output,
+        "\"Reports handles invoices\"\n\"protected method 'describe' called for class Reports\"\n"
+    );
+}

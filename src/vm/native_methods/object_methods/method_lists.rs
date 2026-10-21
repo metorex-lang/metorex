@@ -123,6 +123,17 @@ impl VirtualMachine {
                         names.extend(row.public.iter().map(|name| name.to_string()));
                     }
                 }
+                // A public method the program wrote over a private one, as a
+                // class's own `exec` stands over Kernel's, leaves the name
+                // public.
+                if method_name == "private_methods" {
+                    names.retain(|name| {
+                        !self
+                            .lookup_method(receiver, name)
+                            .is_some_and(|(_, method)| written_by_program(&method))
+                            || self.method_is_restricted(receiver, name)
+                    });
+                }
                 names.sort();
                 names.dedup();
                 let symbols: Vec<Object> = names.into_iter().map(Object::symbol).collect();

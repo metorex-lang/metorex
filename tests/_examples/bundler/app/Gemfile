@@ -1,0 +1,3 @@
+source ENV.fetch("GEM_SERVER")
+
+gem "ledger_totals"

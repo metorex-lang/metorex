@@ -247,6 +247,14 @@ impl VirtualMachine {
             && let Some(method) = sc.find_method(hook)
         {
             self.invoke_method(sc, method, receiver, vec![arg], position)?;
+            return Ok(());
+        }
+        // A superclass's singleton class, or a module extended into one,
+        // answers for a class that has no hook of its own.
+        if let Some((owner, method)) = crate::vm::method_lookup::class_level_method(class_rc, hook)
+            && !method.is_undefined
+        {
+            self.invoke_method(owner, method, receiver, vec![arg], position)?;
         }
         Ok(())
     }

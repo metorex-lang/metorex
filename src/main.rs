@@ -4,6 +4,7 @@
 use clap::Parser as ClapParser;
 
 mod bin_support;
+mod bundle;
 mod spec;
 
 use bin_support::*;
@@ -78,6 +79,11 @@ fn real_main() {
         let mut cli = Cli::parse_from([arguments[0].clone()]);
         cli.file = arguments.split_off(2);
         run_inline(&cli, spec::PROGRAM, spec::PROGRAM_NAME);
+    }
+    if bundle::wanted(&arguments) {
+        let mut cli = Cli::parse_from([arguments[0].clone()]);
+        cli.file = arguments.split_off(2);
+        run_inline(&cli, bundle::PROGRAM, bundle::PROGRAM_NAME);
     }
     if let Some(subcommand) = subcommands_wanted(&arguments) {
         run_subcommand(subcommand);

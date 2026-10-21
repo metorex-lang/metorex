@@ -61,9 +61,12 @@ end
 
 # A library carried in the binary is required by feature name, so a relative
 # require names the feature it resolves to. `directory` is the file's own
-# feature directory, such as "net" for net/http.rb.
-def require_by_feature(text, directory)
-  text.gsub(/require_relative[ (]["']([^"']+)["']\)?/) do
-    %(require "#{File.expand_path($1, File.join("/", directory)).delete_prefix("/")}")
+# feature directory, such as "net" for net/http.rb, and `requiring` is the
+# call written in its place.
+def require_by_feature(text, directory, requiring = "require")
+  # A path written with `#{}` inside a string is text the file writes, not a
+  # require of its own.
+  text.gsub(/require_relative[ (]["']([^"'#]+)["']\)?/) do
+    %(#{requiring} "#{File.expand_path($1, File.join("/", directory)).delete_prefix("/")}")
   end
 end

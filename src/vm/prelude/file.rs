@@ -116,8 +116,9 @@ class File
     tag = held.encoding
     # A library metorex carries names its files under a root of its own,
     # which `require` reads them from.
-    if held.start_with? "<metorex>/"
-      answered = "<metorex>" + File.__without_dots__(held.delete_prefix("<metorex>"))
+    if held == "<metorex>" || held.start_with?("<metorex>/")
+      rest = held.delete_prefix("<metorex>")
+      answered = rest.empty? ? +"<metorex>" : "<metorex>" + File.__without_dots__(rest)
       return answered.force_encoding(tag)
     end
     if held.start_with? "~"

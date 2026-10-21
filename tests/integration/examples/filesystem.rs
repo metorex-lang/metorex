@@ -603,3 +603,18 @@ fn test_filesystem_io_writing_edges_no_parens_execution() {
     let output = run_example("filesystem/io_writing_edges_no_parens.rb");
     assert_eq!(output, IO_WRITING_EDGES_OUTPUT);
 }
+
+#[test]
+fn expand_path_keeps_the_root_a_carried_library_names_its_files_under() {
+    let output = run_example("filesystem/expand_path_carried_root.rb");
+    assert_eq!(
+        output,
+        "\"<metorex>/bundler/cli\"\n\"<metorex>/net/imap/sasl\"\n\"<metorex>/net/pop\"\n"
+    );
+}
+
+#[test]
+fn file_constants_carry_binary_and_null() {
+    let output = run_example("filesystem/file_constants_binary_and_null.rb");
+    assert_eq!(output, "0\n0\n\"/dev/null\"\n\"/dev/null\"\n");
+}

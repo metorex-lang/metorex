@@ -83,7 +83,7 @@ pub(crate) const PROCESS_CONSTANTS: &[(&str, i64)] = &[
 
 /// The flags `File.open` accepts in `flags:`, and the ones a glob or fnmatch
 /// is narrowed with. File, IO, and File::Constants all carry them.
-pub(crate) const FILE_OPEN_FLAGS: [(&str, i64); 24] = [
+pub(crate) const FILE_OPEN_FLAGS: [(&str, i64); 25] = [
     ("RDONLY", libc::O_RDONLY as i64),
     ("WRONLY", libc::O_WRONLY as i64),
     ("RDWR", libc::O_RDWR as i64),
@@ -106,6 +106,9 @@ pub(crate) const FILE_OPEN_FLAGS: [(&str, i64); 24] = [
     // Nothing shares a file the way Windows does, so a file opened here is
     // already open the way `SHARE_DELETE` asks for.
     ("SHARE_DELETE", 0),
+    // A file reads as bytes on every system Metorex runs on, so opening one
+    // for binary reading asks for nothing more.
+    ("BINARY", 0),
     ("LOCK_SH", libc::LOCK_SH as i64),
     ("LOCK_EX", libc::LOCK_EX as i64),
     ("LOCK_UN", libc::LOCK_UN as i64),

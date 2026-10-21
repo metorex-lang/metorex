@@ -206,22 +206,131 @@ module OpenSSL
     end
   end
 
-  # A cipher named the way OpenSSL names one. Metorex carries no cipher
-  # implementations, so the class exists to be named and to refuse.
+  # A cipher named the way OpenSSL names one. AES in CBC mode is carried,
+  # with keys of 128, 192, and 256 bits, padded as PKCS#7 pads, and other
+  # names are refused.
   class Cipher
     class CipherError < OpenSSLError; end
 
-    def initialize name
-      @name = name.to_s
-      raise CipherError, "unsupported cipher algorithm (#{@name})"
-    end
+    BLOCK = 16
+    KEY_BYTES = { "128" => 16, "192" => 24, "256" => 32 }.freeze
 
     def self.ciphers
-      []
+      %w[aes-128-cbc aes-192-cbc aes-256-cbc]
+    end
+
+    attr_reader :name, :key_len
+
+    def initialize name
+      @name = name.to_s.upcase
+      bits = @name[/\AAES-(128|192|256)-CBC\z/, 1]
+      raise CipherError, "unsupported cipher algorithm (#{name})" if bits.nil?
+      @key_len = KEY_BYTES[bits]
+      @padding = 1
+      @encrypting = true
+      @iv = ("\0" * BLOCK).b
+      @chain = @iv
+      @pending = "".b
+    end
+
+    def iv_len = BLOCK
+
+    def block_size = BLOCK
+
+    def encrypt
+      @encrypting = true
+      reset
+    end
+
+    def decrypt
+      @encrypting = false
+      reset
+    end
+
+    def key=(key)
+      key = key.to_str
+      raise ArgumentError, "key must be #{@key_len} bytes" unless key.bytesize == @key_len
+      @key = key.b
+    end
+
+    def iv=(iv)
+      iv = iv.to_str
+      raise ArgumentError, "iv must be #{BLOCK} bytes" unless iv.bytesize == BLOCK
+      @iv = iv.b
+      @chain = @iv
+    end
+
+    def random_key
+      self.key = OpenSSL::Random.random_bytes(@key_len)
+    end
+
+    def random_iv
+      self.iv = OpenSSL::Random.random_bytes(BLOCK)
+    end
+
+    def padding=(padding)
+      @padding = padding
+    end
+
+    def update(data)
+      data = data.to_str
+      raise ArgumentError, "data must not be empty" if data.empty?
+      raise CipherError, "key not set" if @key.nil?
+      @pending << data.b
+      whole = @pending.bytesize / BLOCK * BLOCK
+      # Decrypting holds the last block back, since `final` takes its padding off.
+      whole -= BLOCK if !@encrypting && @padding != 0 && whole == @pending.bytesize && whole.positive?
+      run whole
+    end
+
+    def final
+      raise CipherError, "key not set" if @key.nil?
+      if @encrypting && @padding != 0
+        count = BLOCK - @pending.bytesize % BLOCK
+        @pending << (count.chr * count)
+      end
+      unless (@pending.bytesize % BLOCK).zero?
+        raise CipherError, @encrypting ? "data not multiple of block length" : "wrong final block length"
+      end
+      answer = run @pending.bytesize
+      answer = unpadded answer if !@encrypting && @padding != 0
+      @chain = @iv
+      answer
+    end
+
+    private
+
+    def reset
+      @chain = @iv
+      @pending = "".b
+      self
+    end
+
+    def run(length)
+      return "".b if length.zero?
+      taken = @pending.byteslice(0, length)
+      @pending = @pending.byteslice(length, @pending.bytesize - length)
+      answer, @chain = OpenSSL.__aes_cbc__(@key, @chain, taken, @encrypting)
+      answer.b
+    end
+
+    def unpadded(text)
+      count = text.getbyte(-1)
+      if count.nil? || count.zero? || count > BLOCK || text.byteslice(-count, count).bytes.uniq != [count]
+        raise CipherError, "bad decrypt"
+      end
+      text.byteslice(0, text.bytesize - count)
     end
   end
 
   module SSL
+    # How a connection checks the certificate the other side presents, with
+    # the values OpenSSL gives them.
+    VERIFY_NONE = 0
+    VERIFY_PEER = 1
+    VERIFY_FAIL_IF_NO_PEER_CERT = 2
+    VERIFY_CLIENT_ONCE = 4
+
     class SSLError < OpenSSL::OpenSSLError; end
 
     class SSLErrorWaitReadable < SSLError

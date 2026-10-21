@@ -396,3 +396,15 @@ module Digest
     spoken + "x"
   end
 end
+
+# `Digest(:SHA256)` names the class Digest holds for the algorithm, as
+# `Digest::SHA256` does.
+class Object
+  private
+
+  def Digest(name)
+    const = name.to_sym
+    return Digest.const_get(const) if Digest.const_defined?(const)
+    raise LoadError, "library not found for class Digest::#{const} -- digest/#{const.to_s.downcase}"
+  end
+end

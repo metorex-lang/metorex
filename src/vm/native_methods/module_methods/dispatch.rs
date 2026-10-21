@@ -267,6 +267,9 @@ impl VirtualMachine {
         if module_rc.name() == "Digest" && method_name == "__pbkdf2__" {
             return self.compute_pbkdf2(arguments, position).map(Some);
         }
+        if module_rc.name() == "OpenSSL" && method_name == "__aes_cbc__" {
+            return self.aes_cbc(arguments, position).map(Some);
+        }
         if module_rc.name() == "Digest" && method_name == "__scrypt__" {
             return self.compute_scrypt(arguments, position).map(Some);
         }

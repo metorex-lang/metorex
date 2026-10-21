@@ -460,7 +460,7 @@ const INSTALLED_GEMS_NEWEST: &str = concat!(
 /// The expected output of both `require/bundler_setup` variants.
 const BUNDLER_SETUP: &str = concat!(
     "\"1.0.0\"\n",
-    "[\"bundler-4.0.19\", \"shipping_rates-1.0.0\"]\n",
+    "[\"bundler-4.0.20\", \"shipping_rates-1.0.0\"]\n",
     "[\"shipping_rates-1.0.0/lib\"]\n",
     "can't activate shipping_rates (= 1.2.0), already activated shipping_rates-1.0.0. \
 Make sure all dependencies are added to Gemfile.\n",

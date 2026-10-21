@@ -375,12 +375,28 @@ impl Parser {
                 // `Kernel::Integer("12")` has.
                 let called_with_parentheses =
                     self.check(&[TokenKind::LParen]) && !self.peek().had_leading_space;
+                // So does one followed on its line by a name, a number, or a
+                // string, as RubyGems writes `Gem::URI uri`.
+                let called_without_parentheses = self.peek().had_leading_space
+                    && match &self.peek().kind {
+                        TokenKind::Ident(next) => {
+                            next.starts_with(|first: char| first.is_lowercase() || first == '_')
+                        }
+                        TokenKind::Int(_)
+                        | TokenKind::Float(_)
+                        | TokenKind::String(_)
+                        | TokenKind::InterpolatedString(_) => true,
+                        _ => false,
+                    };
                 if name.starts_with(|first: char| first.is_lowercase() || first == '_')
                     || called_with_parentheses
+                    || called_without_parentheses
                 {
                     let arguments = if self.match_token(&[TokenKind::LParen]) {
                         self.parse_arguments()?
-                    } else if self.can_start_argument_for_method_call(&name) {
+                    } else if called_without_parentheses
+                        || self.can_start_argument_for_method_call(&name)
+                    {
                         self.parse_arguments_without_parens()?
                     } else {
                         Vec::new()

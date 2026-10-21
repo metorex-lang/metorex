@@ -145,3 +145,9 @@ fn test_metaprogramming_advanced_method_chaining_dsl() {
     assert!(output.contains("host = localhost"));
     assert!(output.contains("port = 8080"));
 }
+
+#[test]
+fn method_added_from_a_module_extended_into_a_superclass_sees_a_subclass_s_methods() {
+    let output = run_example("metaprogramming/method_added_from_extended_module.rb");
+    assert_eq!(output, "[:build, :release]\n");
+}

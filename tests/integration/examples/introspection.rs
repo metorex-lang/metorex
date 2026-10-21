@@ -1201,3 +1201,9 @@ fn a_tracepoint_sees_c_return_of_a_method_ruby_writes_in_c() {
         "[[:c_return, :__id__, true]]\n[:__id__, :__id__, :__id__, :upcase]\n"
     );
 }
+
+#[test]
+fn private_methods_leave_out_a_name_a_public_method_overrides() {
+    let output = run_example("introspection/private_methods_leave_out_public_overrides.rb");
+    assert_eq!(output, "false\nfalse\ntrue\ntrue\n\"running totals.rb\"\n");
+}
