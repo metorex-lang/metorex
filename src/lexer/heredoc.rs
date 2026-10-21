@@ -26,11 +26,13 @@ impl<'a> Lexer<'a> {
             Some('~') => (true, true),
             // A bare `<<TERMINATOR` is a heredoc only where a value is
             // expected: after an operand `<<` is the shovel operator. The
-            // terminator has to follow immediately and start with an
-            // uppercase letter, an underscore, or a quote.
+            // terminator has to follow immediately and start with a letter,
+            // an underscore, or a quote, as Ruby's own `<<eom` does. After
+            // `class`, `<<self` opens the singleton class instead.
             Some(character)
                 if self.slash_is_regex()
-                    && (character.is_ascii_uppercase()
+                    && !matches!(self.prev_significant, Some(TokenKind::Class))
+                    && (character.is_ascii_alphabetic()
                         || character == '_'
                         || character == '"'
                         || character == '\'') =>

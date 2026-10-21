@@ -72,3 +72,12 @@ fn a_braceless_hash_after_positional_members_is_the_next_member() {
         "[\"a\", \"b\"]\n[]\n{\"b\" => [\"a\"]}\nunknown keywords: b\n1\n"
     );
 }
+
+#[test]
+fn a_subclass_of_an_anonymous_struct_inspects_as_a_struct() {
+    let output = run_example("struct/subclass_of_an_anonymous_struct_inspect.rb");
+    assert_eq!(
+        output,
+        "#<struct ResponseText code=nil, text=\"ready\">\n#<struct Response name=\"OK\", data=#<struct ResponseText code=nil, text=\"ready\">>\n#<struct ResponseText code=nil, text=\"\">\n#<struct Cell next_cell=#<struct Cell next_cell=#<struct Cell:...>>>\n"
+    );
+}

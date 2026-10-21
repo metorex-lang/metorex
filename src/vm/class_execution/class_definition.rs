@@ -287,9 +287,9 @@ impl VirtualMachine {
                 .define(name.to_string(), class_obj_pre.clone());
             self.globals_mut().set(name.to_string(), class_obj_pre);
         }
-        // `const_added` fires when the constant first becomes defined —
-        // before the body runs and before `inherited` (which fires after
-        // the body). Reopening does not retrigger it.
+        // `const_added` fires when the constant first becomes defined, then
+        // `Parent.inherited(Child)`, both before the body runs, so the body
+        // reads what the hook set up. Reopening retriggers neither.
         if is_new {
             // A top-level class or module is a constant on Object, which is
             // the hook's receiver there.
@@ -297,8 +297,23 @@ impl VirtualMachine {
                 Some(parent) => Some(Object::Class(Rc::clone(parent))),
                 None => self.globals().get("Object"),
             };
-            if let Some(owner) = owner {
-                self.trigger_const_added_hook(owner, name, position)?;
+            let mut hooked = match owner {
+                Some(owner) => self.trigger_const_added_hook(owner, name, position),
+                None => Ok(()),
+            };
+            if hooked.is_ok()
+                && let Some(sc) = class.superclass()
+            {
+                hooked = self.trigger_inherited_hook(&sc, Rc::clone(&class), position);
+            }
+            if let Err(error) = hooked {
+                self.def_scope_stack.pop();
+                self.class_var_cref_stack.pop();
+                match prev_self {
+                    Some(prev) => self.environment_mut().define_named("self", prev),
+                    None => self.environment_mut().undefine("self"),
+                }
+                return Err(error);
             }
         }
         // Keyword class bodies get a fresh local scope — `class` is a scope
@@ -336,13 +351,6 @@ impl VirtualMachine {
             self.environment_mut()
                 .define(name.to_string(), class_obj.clone());
             self.globals_mut().set(name.to_string(), class_obj);
-        }
-
-        // Fire `Parent.inherited(Child)` only for fresh subclass definitions
-        // (Ruby: reopening doesn't retrigger the hook). The hook runs AFTER
-        // the body is processed and the subclass is bound to its name.
-        if is_new && let Some(sc) = class.superclass() {
-            self.trigger_inherited_hook(&sc, Rc::clone(&class), position)?;
         }
 
         Ok(ControlFlow::Value(body_value))

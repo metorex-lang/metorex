@@ -206,3 +206,12 @@ fn test_enumerable_empty_cycles_no_parens_execution() {
     let output = run_example("enumerable/empty_cycles_no_parens.rb");
     assert_eq!(output, EMPTY_CYCLES_OUTPUT);
 }
+
+#[test]
+fn collect_without_a_block_hands_back_an_enumerator_with_index_maps() {
+    let output = run_example("enumerable/collect_with_index_through_an_enumerator.rb");
+    assert_eq!(
+        output,
+        "[[\"mailto:a@b.c\", 1], [\"first\", 2]]\n[\"1:mailto:a@b.c\", \"2:first\"]\n[0, 4]\n"
+    );
+}

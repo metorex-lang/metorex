@@ -10,3 +10,30 @@
 [submodule "gems/rspec"]
 	path = gems/rspec
 	url = https://github.com/rspec/rspec
+[submodule "gems/minitest"]
+	path = gems/minitest
+	url = https://github.com/minitest/minitest
+[submodule "gems/test-unit"]
+	path = gems/test-unit
+	url = https://github.com/test-unit/test-unit
+[submodule "gems/power_assert"]
+	path = gems/power_assert
+	url = https://github.com/ruby/power_assert
+[submodule "gems/rake"]
+	path = gems/rake
+	url = https://github.com/ruby/rake
+[submodule "gems/rexml"]
+	path = gems/rexml
+	url = https://github.com/ruby/rexml
+[submodule "gems/rss"]
+	path = gems/rss
+	url = https://github.com/ruby/rss
+[submodule "gems/net-imap"]
+	path = gems/net-imap
+	url = https://github.com/ruby/net-imap
+[submodule "gems/net-pop"]
+	path = gems/net-pop
+	url = https://github.com/ruby/net-pop
+[submodule "gems/net-smtp"]
+	path = gems/net-smtp
+	url = https://github.com/ruby/net-smtp

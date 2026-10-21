@@ -327,3 +327,9 @@ fn an_argument_error_starts_its_backtrace_at_the_method_definition() {
         "FILE:3:in 'record'\nFILE:12:in '<main>'\nFILE:7:in 'assign='\nFILE:18:in '<main>'\n"
     );
 }
+
+#[test]
+fn an_exception_s_instance_variables_are_defined_once_assigned() {
+    let output = run_example("errors/defined_instance_variable_of_an_exception.rb");
+    assert_eq!(output, "1\nnil\n\"instance-variable\"\n");
+}

@@ -886,6 +886,12 @@ impl Parser {
                         note(&name);
                     }
                 }
+                // So does `/#{_1}=/`, whose pattern holds its `#{}` as text.
+                TokenKind::Regex(pattern, _) => {
+                    for name in pattern_interpolated_names(pattern) {
+                        note(&name);
+                    }
+                }
                 _ => {}
             }
         }
@@ -1079,6 +1085,40 @@ fn interpolated_names(parts: &[crate::lexer::InterpolationPart]) -> Vec<String> 
                 _ => {}
             }
         }
+    }
+    names
+}
+
+/// The names written inside the `#{}` parts of a regexp's pattern.
+fn pattern_interpolated_names(pattern: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut rest = pattern;
+    while let Some(opened) = rest.find("#{") {
+        let after = &rest[opened + 2..];
+        let mut depth = 1;
+        let mut closed = None;
+        for (at, character) in after.char_indices() {
+            match character {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        closed = Some(at);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        let Some(closed) = closed else {
+            break;
+        };
+        for token in crate::lexer::Lexer::new(&after[..closed]).tokenize() {
+            if let TokenKind::Ident(name) = token.kind {
+                names.push(name);
+            }
+        }
+        rest = &after[closed + 1..];
     }
     names
 }

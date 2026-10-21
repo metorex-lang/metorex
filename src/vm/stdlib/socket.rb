@@ -1653,18 +1653,21 @@ class TCPSocket < IPSocket
   end
 
   # Read up to and including the separator, which is what a protocol written
-  # in lines asks for. Without one the next thing to arrive is the answer.
-  def gets(separator = "\n")
-    return nil if separator.nil? && (held = read).empty?
-    return held if separator.nil?
+  # in lines asks for, and no more than `limit` bytes when one is given.
+  # Without either the next thing to arrive is the answer.
+  def gets(separator = "\n", limit = nil)
+    separator, limit = "\n", separator if separator.is_a?(Integer)
+    return nil if separator.nil? && limit.nil? && (held = read).empty?
+    return held if separator.nil? && limit.nil?
     ending = separator.to_s
     collected = +""
-    while !ending.empty?
-      at = collected.index(ending)
-      unless at.nil?
-        ends = at + ending.length
-        @pending = collected[ends, collected.length - ends]
-        return collected[0, ends]
+    loop do
+      at = ending.empty? ? nil : collected.index(ending)
+      ends = at.nil? ? nil : collected[0, at + ending.length].bytesize
+      ends = limit if !limit.nil? && collected.bytesize >= limit && (ends.nil? || ends > limit)
+      unless ends.nil?
+        @pending = collected.byteslice(ends, collected.bytesize - ends)
+        return collected.byteslice(0, ends)
       end
       piece = begin
         read_into_string nil
@@ -2974,11 +2977,14 @@ class Socket
     buffer
   end
 
-  # A socket reads and writes lines the way a stream does.
-  def gets(separator = "\n")
+  # A socket reads and writes lines the way a stream does, no more than
+  # `limit` bytes of one when a limit is given.
+  def gets(separator = "\n", limit = nil)
+    separator, limit = "\n", separator if separator.is_a?(Integer)
     ending = separator.nil? ? nil : separator.to_s
     collected = +""
     loop do
+      break if !limit.nil? && collected.bytesize >= limit
       held = recv 1
       break if held.nil? || held.empty?
       collected << held

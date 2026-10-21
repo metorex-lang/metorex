@@ -195,6 +195,13 @@ impl Parser {
         self.parse_expression()
     }
 
+    /// Whether a `:` after a bare `yield` separates the branches of a
+    /// ternary, as in `block_given? ? yield : content`, rather than opening a
+    /// Symbol. A Symbol's name follows its colon with no space between.
+    fn ternary_separator_after_bare_yield(&mut self) -> bool {
+        self.check(&[TokenKind::Colon]) && self.peek_ahead(1).had_leading_space
+    }
+
     /// Whether a `+` or `-` after a bare `yield` is the infix operator rather
     /// than the sign on an argument. Ruby tells them apart by the spacing:
     /// `yield + x` adds to what the block answered, where `yield +x` passes a
@@ -259,6 +266,7 @@ impl Parser {
             TokenKind::Dot,
             TokenKind::Equal,
         ]) && !self.signed_operator_after_bare_yield()
+            && !self.ternary_separator_after_bare_yield()
             && !self.is_at_end()
         {
             // yield expr, expr — paren-less arguments

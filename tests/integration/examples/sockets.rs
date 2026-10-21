@@ -23,3 +23,12 @@ fn accept_waits_for_a_client_process_to_connect() {
     let output = run_example("sockets/accept_waits_for_a_client.rb");
     assert_eq!(output, "\"ping\"\n");
 }
+
+#[test]
+fn a_socket_s_gets_takes_a_separator_and_a_limit() {
+    let output = run_example("sockets/gets_with_a_limit.rb");
+    assert_eq!(
+        output,
+        "\"* OK ready\\r\\n\"\n\"* 2 \"\n\"EXISTS\\r\\n\"\n\"A001 OK done\\r\\n\"\nnil\n\"* OK\"\n\" ready\\r\\n\"\n"
+    );
+}

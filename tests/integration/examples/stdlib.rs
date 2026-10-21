@@ -1816,3 +1816,12 @@ fn the_bundled_gems_load_with_no_gem_directory_holding_them() {
         )
     );
 }
+
+#[test]
+fn a_file_requiring_test_unit_runs_its_tests_as_the_program_ends() {
+    let output = run_example("stdlib/test_unit_autorun.rb");
+    assert!(
+        output.contains("1 tests, 1 assertions, 0 failures, 0 errors"),
+        "{output}"
+    );
+}

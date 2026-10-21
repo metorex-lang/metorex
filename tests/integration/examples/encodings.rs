@@ -662,3 +662,9 @@ fn test_utf16_lines_join_and_append_in_utf16() {
         "[#<Encoding:UTF-16LE>, \"! carté\"]\n[#<Encoding:UTF-16LE>, \"! carté\\ncarté\"]\n\"--- 1 ----\\n! carté\"\n"
     );
 }
+
+#[test]
+fn an_encoding_matches_a_pattern_of_encoding_constants() {
+    let output = run_example("encodings/encoding_alternative_pattern.rb");
+    assert_eq!(output, "true\ntrue\nfalse\ntrue\n");
+}

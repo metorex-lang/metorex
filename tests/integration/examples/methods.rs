@@ -971,3 +971,9 @@ fn a_protected_class_method_is_callable_from_a_class_method_of_a_subclass() {
         "\"Reports handles invoices\"\n\"protected method 'describe' called for class Reports\"\n"
     );
 }
+
+#[test]
+fn public_send_reaches_a_module_function_on_its_module() {
+    let output = run_example("methods/public_send_module_function.rb");
+    assert_eq!(output, "true\nfalse\ntrue\n");
+}

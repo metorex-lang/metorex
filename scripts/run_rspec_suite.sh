@@ -393,11 +393,11 @@ if [ -n "${LOG_DIR:-}" ]; then
   cp "$WORK_DIR"/logs/*.txt "$LOG_DIR/"
 fi
 if [ -n "${RECORD:-}" ]; then
-  ruby "$REPO_ROOT/scripts/rspec_suite_results.rb" record "$ENGINE" "$RESULTS"
+  ruby "$REPO_ROOT/scripts/suite_results.rb" record "$ENGINE" "$RESULTS"
 fi
 if [ "$ENGINE" = "metorex" ]; then
   echo "Files whose counts differ from MRI's:"
-  ruby "$REPO_ROOT/scripts/rspec_suite_results.rb" differences "$RESULTS" || true
+  ruby "$REPO_ROOT/scripts/suite_results.rb" differences "$RESULTS" || true
 fi
 
 while IFS=$'\t' read -r path summary; do

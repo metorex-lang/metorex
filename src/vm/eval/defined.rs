@@ -236,12 +236,21 @@ impl VirtualMachine {
             .environment()
             .get("self")
             .or_else(|| self.globals().get("__main__"));
+        let Some(held) = held else {
+            return false;
+        };
         match held.view() {
-            Some(View::Instance(instance)) => instance.borrow().get_var(name).is_some(),
-            Some(View::Class(class) | View::Module(class)) => {
+            View::Instance(instance) => instance.borrow().get_var(name).is_some(),
+            View::Class(class) | View::Module(class) => {
                 class.get_class_var(&format!("@{}", name)).is_some()
             }
-            _ => false,
+            View::Exception(details) => details.borrow().instance_vars.contains_key(name),
+            // A collection's variables are recorded against it by the VM.
+            _ => Self::collection_address(&held).is_some_and(|address| {
+                self.collection_variables
+                    .get(&address)
+                    .is_some_and(|variables| variables.contains_key(name))
+            }),
         }
     }
 

@@ -19,6 +19,46 @@ class Time
     alias iso8601 xmlschema
   end
 
+  # The time `text` names read with `format`. A field the text leaves out
+  # ahead of the first one it gives comes from `now`, and the rest start at
+  # their lowest, as Ruby's own `Time.strptime` reads them.
+  def self.strptime(text, format, now = self.now)
+    parts = Date._strptime(text, format)
+    raise ArgumentError, "invalid date or strptime format - '#{text}' '#{format}'" if parts.nil?
+    if (seconds = parts[:seconds])
+      seconds += parts[:sec_fraction] if parts[:sec_fraction]
+      held = Time.at(seconds)
+      return parts[:offset] ? held.localtime(parts[:offset]) : held
+    end
+    year = parts[:year]
+    year = yield(year) if year && block_given?
+    mon = parts[:mon]
+    day = parts[:mday]
+    if parts[:yday] && year
+      ordinal = Date.ordinal(year, parts[:yday])
+      mon, day = ordinal.mon, ordinal.mday
+    end
+    hour, min, sec = parts[:hour], parts[:min], parts[:sec]
+    fraction = parts[:sec_fraction]
+    if [year, mon, day, hour, min, sec, fraction].all?(&:nil?)
+      raise ArgumentError, "no time information in #{text.inspect}"
+    end
+    offset = parts[:offset]
+    reference = offset ? now.getlocal(offset) : now.getlocal
+    fields = [year, mon, day, hour, min, sec]
+    known = [reference.year, reference.mon, reference.day, reference.hour, reference.min, reference.sec]
+    first_given = fields.index { |field| !field.nil? } || fields.size
+    year, mon, day, hour, min, sec = fields.each_with_index.map do |field, place|
+      next field unless field.nil?
+      place < first_given ? known[place] : [1970, 1, 1, 0, 0, 0][place]
+    end
+    sec += fraction if fraction
+    return Time.local(year, mon, day, hour, min, sec) if offset.nil?
+    made = Time.new(year, mon, day, hour, min, sec, offset)
+    zone = text[/(?:\A|\s)(UTC|GMT|UT|Z)\z/i, 1]
+    zone ? made.utc : made
+  end
+
   def self.httpdate(text)
     DateTime.httpdate(text).to_time.utc
   end

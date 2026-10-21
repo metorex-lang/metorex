@@ -77,9 +77,24 @@ pub(crate) fn find_refinement(
         View::Instance(inst) => Some(Rc::clone(&inst.borrow().class)),
         _ => Some(vm.builtins().class_of(receiver)),
     };
+    // The core classes reach Object through a record of their own, so a
+    // refinement of the Object the program names is looked for under that
+    // record as well.
+    let program_object = match vm.globals().get("Object").view() {
+        Some(View::Class(object)) => Some(Rc::clone(object)),
+        _ => None,
+    };
     while let Some(class) = cursor {
         let key = format!("__refine__{}@{:p}", class.name(), Rc::as_ptr(&class));
         if let Some(found) = vm.find_refined_method(&key, name) {
+            return Some(found);
+        }
+        if class.name() == "Object"
+            && let Some(object) = &program_object
+            && !Rc::ptr_eq(object, &class)
+            && let Some(found) =
+                vm.find_refined_method(&format!("__refine__Object@{:p}", Rc::as_ptr(object)), name)
+        {
             return Some(found);
         }
         for mixin in class.transitive_mixins() {

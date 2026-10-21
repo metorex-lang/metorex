@@ -646,3 +646,30 @@ fn a_capitalized_scoped_name_followed_by_a_value_is_a_call() {
         "\"made from 1042\"\n\"made from 1043\"\nLedger::Entry\n"
     );
 }
+
+#[test]
+fn a_heredoc_terminator_may_be_written_in_lowercase() {
+    let output = run_example("syntax/heredoc_lowercase_terminator.rb");
+    assert_eq!(output, "\"# line 11\\np :run\\n\"\n[1, 2]\n:singleton\n");
+}
+
+#[test]
+fn a_bare_yield_is_one_side_of_a_ternary() {
+    let output = run_example("syntax/yield_in_a_ternary.rb");
+    assert_eq!(
+        output,
+        "\"<rss>empty</rss>\"\n\"<rss>items</rss>\"\n:none\n:total\n"
+    );
+}
+
+#[test]
+fn an_index_call_takes_keywords_inside_its_brackets() {
+    let output = run_example("syntax/index_with_keywords.rb");
+    assert_eq!(output, "[[1, 2, 3], 1234]\n[[5, 8], 99]\n[[13], nil]\n");
+}
+
+#[test]
+fn defined_joins_a_modifier_condition_across_lines() {
+    let output = run_example("syntax/defined_in_a_modifier_condition_across_lines.rb");
+    assert_eq!(output, "1\n");
+}

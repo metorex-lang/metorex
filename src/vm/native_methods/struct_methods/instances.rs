@@ -268,19 +268,44 @@ impl VirtualMachine {
                 Ok(Some(Object::Int(digest)))
             }
             "inspect" | "to_s" => {
-                let body = members
-                    .iter()
-                    .map(|member| {
-                        format!(
-                            "{}={}",
-                            member,
-                            crate::vm::native_methods::array_methods::inspect_element(
-                                &member_value(receiver, member)
-                            )
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ");
+                // A struct reached again while it is being inspected shows
+                // as its class alone.
+                let address = match receiver.view() {
+                    View::Instance(instance) => std::rc::Rc::as_ptr(instance) as usize,
+                    _ => 0,
+                };
+                if STRUCTS_BEING_INSPECTED.with(|held| held.borrow().contains(&address)) {
+                    return Ok(Some(Object::string(format!(
+                        "#<struct {}:...>",
+                        class_rc.inspect_name()
+                    ))));
+                }
+                STRUCTS_BEING_INSPECTED.with(|held| held.borrow_mut().push(address));
+                // An object of the program's own, another struct among them,
+                // answers `inspect` itself.
+                let mut shown = Vec::with_capacity(members.len());
+                let mut failed = None;
+                for member in members {
+                    let value = member_value(receiver, member);
+                    let text = if matches!(value.view(), View::Instance(_)) {
+                        match self.inspect_value(&value, position) {
+                            Ok(text) => text,
+                            Err(error) => {
+                                failed = Some(error);
+                                break;
+                            }
+                        }
+                    } else {
+                        crate::vm::native_methods::array_methods::inspect_element(&value)
+                    };
+                    shown.push(format!("{member}={text}"));
+                }
+                STRUCTS_BEING_INSPECTED
+                    .with(|held| held.borrow_mut().retain(|seen| *seen != address));
+                if let Some(error) = failed {
+                    return Err(error);
+                }
+                let body = shown.join(", ");
                 // A struct nested in an anonymous class or module has no
                 // Ruby name, which the synthesized `#<Class:0x..>::Foo` label
                 // stands in for. Print it the way an anonymous struct prints.
@@ -554,4 +579,10 @@ fn is_generated_member_accessor(
         ] => *name == slot,
         _ => false,
     }
+}
+
+thread_local! {
+    /// The structs whose `inspect` is being rendered now.
+    static STRUCTS_BEING_INSPECTED: std::cell::RefCell<Vec<usize>> =
+        const { std::cell::RefCell::new(Vec::new()) };
 }

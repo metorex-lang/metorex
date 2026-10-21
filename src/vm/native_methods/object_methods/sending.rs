@@ -83,7 +83,14 @@ impl VirtualMachine {
                         Some((owner, _)) => owner,
                         None => self.builtins().class_of(receiver),
                     };
-                    let hidden = if holder.is_method_private(&method) {
+                    // A class or module answers through its own copy first,
+                    // which `module_function` leaves public.
+                    let module_copy_is_public =
+                        matches!(receiver.view(), View::Class(_) | View::Module(_))
+                            && !self.method_is_restricted(receiver, &method);
+                    let hidden = if module_copy_is_public {
+                        None
+                    } else if holder.is_method_private(&method) {
                         Some("private")
                     } else if holder.is_method_protected(&method) {
                         Some("protected")

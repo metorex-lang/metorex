@@ -78,8 +78,12 @@ impl<'a> Lexer<'a> {
 
         while let Some(ch) = self.peek() {
             if escaped {
-                pattern.push('\\');
-                pattern.push(ch);
+                // A backslash ending a line joins it to the next, and stands
+                // for nothing in the pattern.
+                if ch != '\n' {
+                    pattern.push('\\');
+                    pattern.push(ch);
+                }
                 self.advance();
                 escaped = false;
                 continue;

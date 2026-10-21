@@ -243,18 +243,27 @@ impl VirtualMachine {
             self.invoke_method(Rc::clone(class_rc), method, receiver, vec![arg], position)?;
             return Ok(());
         }
+        // The class's own singleton class answers first, then a module
+        // extended into it, a superclass's singleton class, or a module
+        // extended into that, all ahead of the default the singleton class
+        // reaches through Module.
         if let Some(sc) = class_rc.singleton_class_slot().clone()
-            && let Some(method) = sc.find_method(hook)
+            && let Some(method) = sc.find_own_method(hook)
+            && !method.is_undefined
         {
             self.invoke_method(sc, method, receiver, vec![arg], position)?;
             return Ok(());
         }
-        // A superclass's singleton class, or a module extended into one,
-        // answers for a class that has no hook of its own.
         if let Some((owner, method)) = crate::vm::method_lookup::class_level_method(class_rc, hook)
             && !method.is_undefined
         {
             self.invoke_method(owner, method, receiver, vec![arg], position)?;
+            return Ok(());
+        }
+        if let Some(sc) = class_rc.singleton_class_slot().clone()
+            && let Some(method) = sc.find_method(hook)
+        {
+            self.invoke_method(sc, method, receiver, vec![arg], position)?;
         }
         Ok(())
     }

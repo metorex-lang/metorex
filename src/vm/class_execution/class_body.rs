@@ -690,8 +690,8 @@ impl VirtualMachine {
 
 impl VirtualMachine {
     /// Whether `class` answers `name` with a method the program wrote: one on
-    /// its singleton class or a module it extended, however the extending
-    /// was done, or one written `def self.name`.
+    /// its singleton class, a superclass's, or a module it extended, however
+    /// the extending was done, or one written `def self.name`.
     fn class_answers_with_program_method(&self, class: &Rc<Class>, name: &str) -> bool {
         let written = |method: &Rc<crate::object::Method>| {
             crate::vm::method_execution::written_by_the_program(method)
@@ -710,6 +710,8 @@ impl VirtualMachine {
                 .is_some_and(|method| written(&method))
             || crate::vm::method_lookup::module_own_method(class, name)
                 .is_some_and(|method| written(&method))
+            || crate::vm::method_lookup::class_level_method(class, name)
+                .is_some_and(|(_, method)| written(&method))
             || self
                 .lookup_method(&receiver, name)
                 .is_some_and(|(_, method)| written(&method))

@@ -149,5 +149,20 @@ fn test_metaprogramming_advanced_method_chaining_dsl() {
 #[test]
 fn method_added_from_a_module_extended_into_a_superclass_sees_a_subclass_s_methods() {
     let output = run_example("metaprogramming/method_added_from_extended_module.rb");
-    assert_eq!(output, "[:build, :release]\n");
+    assert_eq!(output, "[:build, :release]\n[:test_totals]\n");
+}
+
+#[test]
+fn a_refinement_of_object_reaches_strings_arrays_and_instances() {
+    let output = run_example("metaprogramming/refinement_of_object_reaches_subclasses.rb");
+    assert_eq!(
+        output,
+        "\"copied String\"\n\"copied Invoice\"\n[\"copied Integer\", \"copied String\"]\n"
+    );
+}
+
+#[test]
+fn inherited_runs_before_the_class_body() {
+    let output = run_example("metaprogramming/inherited_runs_before_the_class_body.rb");
+    assert_eq!(output, "[]\n[\"title\"]\n[\"link\"]\n");
 }

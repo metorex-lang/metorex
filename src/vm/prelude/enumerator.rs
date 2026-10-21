@@ -321,7 +321,7 @@ class Enumerator
   end
 
   def map(&block)
-    return self if block.nil?
+    return Enumerator.over(self, :map, [], @size) if block.nil?
     # The walk runs as it goes rather than collecting first, so what the
     # method behind it sets, `$~` among them, is there for the block.
     collected = []
@@ -332,6 +332,7 @@ class Enumerator
   end
 
   def collect(&block)
+    return Enumerator.over(self, :collect, [], @size) if block.nil?
     map(&block)
   end
 

@@ -185,3 +185,12 @@ fn an_inverted_hash_keeps_array_values_as_keys() {
         "{[\"-v\", \"--version\"] => \"version\"}\n{\"-v\" => \"version\", \"--version\" => \"version\"}\n[{[\"-v\", \"--version\"] => \"version\"}, {}]\n[nil, {\"-v\" => \"version\"}]\n"
     );
 }
+
+#[test]
+fn find_all_on_a_hash_answers_an_array_of_pairs() {
+    let output = run_example("hash_methods/find_all_answers_pairs.rb");
+    assert_eq!(
+        output,
+        "[[\"xmlns\", \"a\"], [\"xmlns:x\", \"b\"]]\n[[nil, \"a\"], [\"x\", \"b\"]]\n{\"id\" => \"c\"}\n{\"id\" => \"c\"}\n[\"c\"]\n"
+    );
+}

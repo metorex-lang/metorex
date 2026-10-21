@@ -195,3 +195,13 @@ File.write(File.join(vendor, "debug_version.h"),
 FileUtils.cp(File.join(debug, "LICENSE.txt"), vendor)
 
 puts "#{versions.join(", ")}: #{entries.size} Ruby files"
+
+# The assertions Ruby's own repository keeps in tool/lib, which the bundled
+# gems' suites load as MRI's own runs of them do, for scripts/run_gem_suites.sh.
+helpers = File.join(root, "scripts", "gem_suite", "lib")
+FileUtils.rm_rf(helpers)
+FileUtils.mkdir_p(helpers)
+%w[core_assertions.rb envutil.rb find_executable.rb memory_status.rb].each do |name|
+  FileUtils.cp(release.path("tool", "lib", name), helpers)
+end
+%w[BSDL COPYING].each { |name| FileUtils.cp(release.path(name), File.dirname(helpers)) }

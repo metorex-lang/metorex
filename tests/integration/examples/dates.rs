@@ -151,3 +151,12 @@ fn a_frozen_time_answers_its_readers() {
     let output = run_example("dates/frozen_time_readers.rb");
     assert_eq!(output, "true\n[24, 10, 2026]\n2026-10-24 00:00:00 UTC\n");
 }
+
+#[test]
+fn time_strptime_reads_a_time_in_the_format_given() {
+    let output = run_example("dates/time_strptime.rb");
+    assert_eq!(
+        output,
+        "1996-07-17 02:44:25 -0700\n-25200\nfalse\n1792800000\ntrue\n\"invalid date or strptime format - 'bad' '%Y-%m-%d'\"\n{seconds: 1792800000}\n{year: 2026, mon: 10, mday: 21, zone: \"UTC\", offset: 0}\n\"2026-10-24\"\n\"2026-10-24T00:00:00+00:00\"\n"
+    );
+}

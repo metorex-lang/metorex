@@ -481,3 +481,12 @@ fn test_procs_primitive_singleton_methods_no_parens_execution() {
     let output = run_example("procs/primitive_singleton_methods_no_parens.rb");
     assert_eq!(output, PRIMITIVE_SINGLETON_METHODS_OUTPUT);
 }
+
+#[test]
+fn a_numbered_parameter_read_in_a_regexp_interpolation_is_the_block_s() {
+    let output = run_example("procs/numbered_parameter_in_regexp_interpolation.rb");
+    assert_eq!(
+        output,
+        "[\" debug=.+\", \" sasl_ir=.+\"]\n[\"debug!\", \"sasl_ir!\"]\n"
+    );
+}

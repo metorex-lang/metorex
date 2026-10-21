@@ -291,11 +291,25 @@ impl Parser {
                         let carries_keywords = opens_hash || !pairs.is_empty();
                         if !pairs.is_empty() {
                             let position = self.peek().position;
+                            // Written without braces they are keywords, as a
+                            // call's are, with the marker the runtime reads.
+                            pairs.push((
+                                Expression::StringLiteral {
+                                    value: "__MX_KWARGS__".to_string(),
+                                    position,
+                                },
+                                Expression::BoolLiteral {
+                                    value: true,
+                                    position,
+                                },
+                            ));
                             args.push(Expression::Dictionary {
                                 entries: pairs,
                                 position,
                             });
                         }
+                        // The closing bracket may stand on a line of its own.
+                        self.skip_whitespace();
                         self.expect(TokenKind::RBracket, "Expected ']'")?;
                         // Ruby refuses a block or keywords among the
                         // subscripts of an index assignment.

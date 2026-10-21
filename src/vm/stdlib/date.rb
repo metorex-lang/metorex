@@ -441,7 +441,7 @@ class Date
     case directive
     when "Y" then read_into(found, :year, text, at, 10, true)
     when "G" then read_into(found, :cwyear, text, at, 10, true)
-    when "s" then read_into(found, :epoch, text, at, 12, true)
+    when "s" then read_into(found, :seconds, text, at, 12, true)
     when "C" then read_into(found, :century, text, at, 2, false)
     when "y" then read_into(found, :year_short, text, at, 2, false)
     when "g" then read_into(found, :cwyear_short, text, at, 2, false)
@@ -506,6 +506,7 @@ class Date
     at += 1 while at < text.length && !whitespace?(text[at])
     written = text[start...at]
     return at if written.empty?
+    found[:zone] = written
     begin
       found[:offset] = (DateTime.read_offset(zone_text(written)) * 86400).to_i
     rescue Date::Error
@@ -532,6 +533,10 @@ class Date
   # The date a set of strptime fields names, filling what the template left
   # out from today where Ruby does.
   def self.assemble_strptime(fields, start)
+    # Seconds since the epoch name the day in UTC they fall on.
+    if fields.key?(:seconds)
+      return Date.jd(2_440_588 + fields[:seconds].div(86_400), start)
+    end
     year = fields[:year]
     if year.nil? && fields.key?(:year_short)
       year = if fields.key?(:century)
@@ -1440,6 +1445,9 @@ class DateTime < Date
                     start = ITALY)
     fields = _strptime(text, format)
     raise Date::Error, "invalid date" if fields.nil?
+    if fields.key?(:seconds)
+      return Time.at(fields[:seconds]).getlocal(fields[:offset] || 0).to_datetime
+    end
     assemble_strptime(fields, start).to_datetime.with_fields(fields)
   end
 

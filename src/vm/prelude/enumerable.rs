@@ -93,9 +93,13 @@ module Enumerable
     select(&block)
   end
 
-  def find_all(&block)
+  # Enumerable's own, so a Hash, whose `select` answers a Hash, answers an
+  # Array of pairs here.
+  def find_all
     return sized_enum(:find_all) unless block_given?
-    select(&block)
+    kept = []
+    each { |*values| kept.push(packed(values)) if yield(packed(values)) }
+    kept
   end
 
   def filter_map

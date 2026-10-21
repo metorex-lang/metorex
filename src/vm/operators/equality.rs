@@ -401,6 +401,15 @@ impl VirtualMachine {
             View::Class(c) | View::Module(c) => Some(c),
             _ => None,
         };
+        // An encoding is held as a class below Encoding, and answers
+        // Kernel's `===`, which is whether the two are the same encoding.
+        if let Some(class_rc) = class_rc_opt
+            && class_rc
+                .superclass()
+                .is_some_and(|parent| parent.name() == "Encoding" && parent.superclass().is_none())
+        {
+            return Ok(Object::Bool(left.equals(&right)));
+        }
         if let Some(class_rc) = class_rc_opt {
             if let View::Exception(exc_ref) = right.view() {
                 // Check if exception type matches or is a subclass

@@ -622,7 +622,7 @@ It takes the options `metorex spec --help` lists, which are RSpec's, and these o
 
 ### Compatibility
 
-`scripts/run_rspec_suite.sh` runs the RSpec libraries' own suites from the `gems/rspec` submodule, at the RSpec 3.13.6 release Rex follows, a spec file to a process. It runs them under Rex, and with `ENGINE=mri` under MRI's own `rspec`, with the gems RSpec's Gemfile names, which `scripts/install_rspec_suite_gems.sh` installs. `RECORD=1` stores each file's counts in `scripts/rspec_suite_results.tsv`, `ruby scripts/rspec_suite_results.rb differences` lists the files whose Metorex counts differ from MRI's, and `ruby scripts/rspec_suite_results.rb table` prints this table:
+`scripts/run_rspec_suite.sh` runs the RSpec libraries' own suites from the `gems/rspec` submodule, at the RSpec 3.13.6 release Rex follows, a spec file to a process. It runs them under Rex, and with `ENGINE=mri` under MRI's own `rspec`, with the gems RSpec's Gemfile names, which `scripts/install_rspec_suite_gems.sh` installs. `RECORD=1` stores each file's counts in `scripts/rspec_suite_results.tsv`, `ruby scripts/suite_results.rb differences` lists the files whose Metorex counts differ from MRI's, and `ruby scripts/suite_results.rb table` prints this table:
 
 | Suite | Passing under MRI | Passing under Metorex | Examples | Pending |
 | :-- | --: | --: | --: | --: |
@@ -631,6 +631,22 @@ It takes the options `metorex spec --help` lists, which are RSpec's, and these o
 | rspec-mocks | 1794 | 1794 | 1806 | 11 |
 
 Under MRI 4.0.7 one example fails, in rspec-mocks' `receive_spec.rb`, which stubs `respond_to?` and recurses through the `Kernel#inspect` of Ruby 4.0. Under Metorex one rspec-core example fails that passes under MRI: `bisect/shell_command_spec.rb` expects the path of the interpreter a bisect run starts to contain `ruby`, and Metorex's is `metorex`. diff-lcs's suite passes all 322 of its examples, with documentation output identical to RSpec's byte for byte.
+
+`scripts/run_gem_suites.sh` runs the suites of the bundled gems Ruby 4.0.7 ships, from submodules under `gems/` at the releases Ruby 4.0.7 ships, a test file to a process, with the arguments each gem's own Rakefile gives a file. It runs them under Metorex, and with `ENGINE=mri` under MRI, against each gem's own library, with the assertions Ruby's repository keeps in `tool/lib`, which `scripts/vendor_gems.rb` copies into `scripts/gem_suite/lib`. `RECORD=1` stores each file's counts in `scripts/gem_suite_results.tsv`, and `SUITE_RESULTS=scripts/gem_suite_results.tsv ruby scripts/suite_results.rb table` prints this table, where an example is a test and an omission counts as pending:
+
+| Suite | Passing under MRI | Passing under Metorex | Examples | Pending |
+| :-- | --: | --: | --: | --: |
+| minitest | 418 | 374 | 422 | 4 |
+| net-imap | 1691 | 1130 | 1691 | 0 |
+| net-pop | 7 | 7 | 7 | 0 |
+| net-smtp | 95 | 55 | 95 | 0 |
+| power_assert | 102 | 60 | 102 | 0 |
+| rake | 598 | 588 | 598 | 0 |
+| rexml | 730 | 578 | 730 | 0 |
+| rss | 362 | 304 | 362 | 0 |
+| test-unit | 443 | 431 | 452 | 6 |
+
+The net-smtp tests that fail start TLS, which Metorex's OpenSSL does not carry, and power_assert's build their messages from TracePoint events for every call an assertion makes, operators included.
 
 ### Speed
 

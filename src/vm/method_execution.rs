@@ -505,6 +505,11 @@ impl VirtualMachine {
                     || (written_by_the_program(method)
                         && crate::vm::method_lookup::extended_method(held, method_name)
                             .is_some_and(|(_, extended)| Rc::ptr_eq(&extended, method)))
+                    // One a superclass's singleton class holds stands for the
+                    // subclass too.
+                    || (written_by_the_program(method)
+                        && crate::vm::method_lookup::class_level_method(held, method_name)
+                            .is_some_and(|(_, found)| Rc::ptr_eq(&found, method)))
             }
             _ => false,
         };

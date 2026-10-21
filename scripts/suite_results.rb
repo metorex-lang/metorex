@@ -1,26 +1,35 @@
-# Keeps the counts each of RSpec's own spec files reaches under MRI and under
-# Metorex in scripts/rspec_suite_results.tsv, and compares the two.
+# Keeps the counts each file of a suite reaches under MRI and under Metorex,
+# and compares the two: RSpec's own spec files in
+# scripts/rspec_suite_results.tsv, or the file SUITE_RESULTS names, as
+# scripts/run_gem_suites.sh names scripts/gem_suite_results.tsv.
 #
-#   ruby scripts/rspec_suite_results.rb record ENGINE RESULTS
-#   ruby scripts/rspec_suite_results.rb differences [RESULTS]
-#   ruby scripts/rspec_suite_results.rb table
+#   ruby scripts/suite_results.rb record ENGINE RESULTS
+#   ruby scripts/suite_results.rb differences [RESULTS]
+#   ruby scripts/suite_results.rb table
 #
-# ENGINE is mri or metorex. RESULTS is the file scripts/run_rspec_suite.sh
-# writes, a spec file's path and the summary line its run printed, a tab
-# apart. `record` stores those counts as the engine's. `differences` lists
+# ENGINE is mri or metorex. RESULTS is the file scripts/run_rspec_suite.sh or
+# scripts/run_gem_suites.sh writes, a file's path and the summary line its run
+# printed, a tab apart: RSpec's, test-unit's, or minitest's. A failure counts
+# an error with it, and a pending test counts an omission or a skip. `record` stores those counts as the engine's. `differences` lists
 # the files whose Metorex counts differ from MRI's, from RESULTS when it is
 # given and from the stored counts otherwise, and exits 1 when there are any.
 # `table` prints the README's table of each suite's totals.
 
-STORE = File.expand_path("rspec_suite_results.tsv", __dir__)
+STORE = ENV.fetch("SUITE_RESULTS", File.expand_path("rspec_suite_results.tsv", __dir__))
 ENGINES = %w[mri metorex].freeze
 COLUMNS = %w[examples failures pending].freeze
 HEADER = ["file", *ENGINES.flat_map { |engine| COLUMNS.map { |column| "#{engine}_#{column}" } }].freeze
 
 # The counts a summary line names, or nil for a file that did not finish.
 def counts(summary)
-  return nil unless summary =~ /\A(\d+) examples?, (\d+) failures?/
-  [$1.to_i, $2.to_i, summary[/(\d+) pending/, 1].to_i]
+  case summary
+  when /\A(\d+) examples?, (\d+) failures?/
+    [$1.to_i, $2.to_i, summary[/(\d+) pending/, 1].to_i]
+  when /\A(\d+) tests, \d+ assertions, (\d+) failures, (\d+) errors, (\d+) pendings, (\d+) omissions/
+    [$1.to_i, $2.to_i + $3.to_i, $4.to_i + $5.to_i]
+  when /\A(\d+) runs, \d+ assertions, (\d+) failures, (\d+) errors, (\d+) skips/
+    [$1.to_i, $2.to_i + $3.to_i, $4.to_i]
+  end
 end
 
 def read_results(path)
@@ -59,7 +68,7 @@ command, *arguments = ARGV
 case command
 when "record"
   engine, results = arguments
-  abort "usage: ruby scripts/rspec_suite_results.rb record mri|metorex RESULTS" unless ENGINES.include?(engine) && results
+  abort "usage: ruby scripts/suite_results.rb record mri|metorex RESULTS" unless ENGINES.include?(engine) && results
   store = read_store
   read_results(results).each do |file, found|
     store[file] ||= {}
@@ -91,5 +100,5 @@ when "table"
     puts "| #{suite} | #{total["mri_passing"]} | #{total["metorex_passing"]} | #{total["mri_examples"]} | #{total["mri_pending"]} |"
   end
 else
-  abort "usage: ruby scripts/rspec_suite_results.rb record|differences|table"
+  abort "usage: ruby scripts/suite_results.rb record|differences|table"
 end
