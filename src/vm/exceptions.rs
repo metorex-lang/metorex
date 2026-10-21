@@ -378,11 +378,13 @@ impl VirtualMachine {
             // Generate stack trace from call stack
             // Ruby's entries read `file:line:in 'label'`, so a backtrace is
             // usable for locating the code that raised.
-            let entry = |path: &str, line: usize, label: &str| -> String {
-                if label.is_empty() {
-                    format!("{}:{}", path, line)
-                } else {
-                    format!("{}:{}:in '{}'", path, line, label)
+            let entry = |path: &str, line: i64, label: &str| -> String {
+                match (line, label.is_empty()) {
+                    (_, true) => format!("{}:{}", path, line),
+                    // Code counted from line 0, as `eval` and ERB allow,
+                    // names no line for that one.
+                    (0, false) => format!("{}:in '{}'", path, label),
+                    _ => format!("{}:{}:in '{}'", path, line, label),
                 }
             };
             // The place the exception says it came from names the file the
@@ -411,15 +413,12 @@ impl VirtualMachine {
                     .iter()
                     .enumerate()
                     .map(|(at, (path, line, label))| {
-                        if at == 0 && shift != 0 {
-                            let counted = *line as i64 + shift;
-                            return if label.is_empty() {
-                                format!("{}:{}", path, counted)
-                            } else {
-                                format!("{}:{}:in '{}'", path, counted, label)
-                            };
-                        }
-                        entry(path, *line, label)
+                        let counted = if at == 0 {
+                            *line as i64 + shift
+                        } else {
+                            *line as i64
+                        };
+                        entry(path, counted, label)
                     })
                     .collect(),
             );

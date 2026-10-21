@@ -89,8 +89,9 @@ impl ReplCore {
 
     /// Process one line of input. Returns what the caller should do.
     pub fn process_line(&mut self, line: &str) -> LineResult {
-        // Handle dot-commands only when buffer is empty
-        if self.buffer.is_empty() && line.trim().starts_with('.') {
+        // Commands are read only at the start of an expression, so a line of a
+        // multi-line expression is never taken for one.
+        if self.buffer.is_empty() && Self::is_command(line) {
             return match self.handle_command(line) {
                 CommandResult::Exit => LineResult::Exit,
                 CommandResult::Continue => LineResult::Continue,
@@ -122,16 +123,23 @@ impl ReplCore {
         self.buffer.clear();
     }
 
-    /// Handle special REPL commands (lines starting with `.`).
+    /// Whether a line is a REPL command: `help`, `exit`, or `quit` as the whole
+    /// line, or a word starting with `.`.
+    pub fn is_command(line: &str) -> bool {
+        let word = line.trim();
+        matches!(word, "help" | "exit" | "quit") || word.starts_with('.')
+    }
+
+    /// Handle a REPL command.
     pub fn handle_command(&mut self, line: &str) -> CommandResult {
         let cmd = line.trim();
 
         match cmd {
-            ".exit" | ".quit" => CommandResult::Exit,
-            ".help" => CommandResult::Help(Self::help_text()),
+            "exit" | "quit" => CommandResult::Exit,
+            "help" => CommandResult::Help(Self::help_text()),
             ".clear" => {
                 let text = format!(
-                    "{}\nMetorex REPL v{}\nType .help for more information, .exit to quit\n",
+                    "{}\nMetorex REPL v{}\nType help for more information, exit to quit\n",
                     BANNER,
                     env!("CARGO_PKG_VERSION")
                 );
@@ -142,7 +150,7 @@ impl ReplCore {
                 CommandResult::Reset
             }
             _ => CommandResult::Unknown(format!(
-                "Unknown command: {}\nType .help for available commands",
+                "Unknown command: {}\nType help for available commands",
                 cmd
             )),
         }
@@ -152,9 +160,9 @@ impl ReplCore {
     pub fn help_text() -> String {
         let mut s = String::new();
         s.push_str("Metorex REPL Commands:\n");
-        s.push_str("  .help       Show this help message\n");
-        s.push_str("  .exit       Exit the REPL (or Ctrl-D)\n");
-        s.push_str("  .quit       Alias for .exit\n");
+        s.push_str("  help        Show this help message\n");
+        s.push_str("  exit        Exit the REPL (or Ctrl-D)\n");
+        s.push_str("  quit        Alias for exit\n");
         s.push_str("  .clear      Clear the screen\n");
         s.push_str("  .reset      Reset the VM state\n");
         s.push('\n');
@@ -171,7 +179,7 @@ impl ReplCore {
     /// Banner text shown at startup.
     pub fn banner() -> String {
         format!(
-            "{}\nMetorex REPL v{}\nType .help for more information, .exit to quit\n",
+            "{}\nMetorex REPL v{}\nType help for more information, exit to quit\n",
             BANNER,
             env!("CARGO_PKG_VERSION")
         )

@@ -637,3 +637,32 @@ fn test_cause_nil_leaves_an_exception_never_raised_without_a_cause() {
     let output = run_example("rescue/raise_instance_without_cause.rb");
     assert_eq!(output, "\"original\"\nnil\n");
 }
+
+#[test]
+fn an_exception_keeps_a_message_object_whose_to_s_fails_until_it_is_read() {
+    let output = run_example("errors/exception_message_object.rb");
+    assert_eq!(
+        output,
+        "disk is full\ndisk is full\nString\ncannot print\n\"42\"\n"
+    );
+}
+
+#[test]
+fn an_exceptions_native_method_belongs_to_the_core_class_that_defines_it() {
+    let output = run_example("errors/system_exit_answers_status.rb");
+    assert_eq!(output, "true\n1\nSystemExit\n0\n[]\nSystemExit\nKeyError\n");
+}
+
+#[test]
+fn super_from_a_class_method_missing_reports_an_undefined_method() {
+    let output = run_example("errors/undefined_method_in_a_class_block.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "undefined method 'contex' for class ReportGroup\n",
+            "undefined local variable or method 'contex' for class ReportGroup\n",
+            "undefined method 'contex' for class Delegating\n",
+            "undefined method 'contex' for class Delegating\n"
+        )
+    );
+}

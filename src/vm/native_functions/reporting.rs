@@ -78,6 +78,8 @@ impl VirtualMachine {
                 };
                 Object::string(if label.is_empty() {
                     format!("{}:{}", path, line)
+                } else if line == 0 {
+                    format!("{}:in '{}'", path, label)
                 } else {
                     format!("{}:{}:in '{}'", path, line, label)
                 })

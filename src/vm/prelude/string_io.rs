@@ -525,7 +525,7 @@ class StringIO
     landing = cursor - listed.size
     landing = 0 if landing < 0
     tail = held[cursor..-1] || []
-    @string = (held[0, landing] + listed + tail).pack("C*").force_encoding(named)
+    __put_back__((held[0, landing] + listed + tail).pack("C*").force_encoding(named))
     self.pos = landing
     nil
   end
@@ -542,10 +542,20 @@ class StringIO
     landing = 0 if landing < 0
     tail = held[@position..-1] || []
     named = @string.encoding
-    @string = (held[0, landing] + listed + tail).pack("C*").force_encoding(named)
+    __put_back__((held[0, landing] + listed + tail).pack("C*").force_encoding(named))
     @position = landing
     nil
   end
+
+  # Bytes put back change the buffer itself, unless it is frozen.
+  def __put_back__(text)
+    if @string.frozen?
+      @string = text
+    else
+      @string.replace(text)
+    end
+  end
+  private :__put_back__
 
   def gets(separator = $/, limit = nil, chomp: false)
     separator, limit = StringIO.line_arguments separator, limit
@@ -718,9 +728,15 @@ class StringIO
       @position = @string.length if @appends
       landing = @position
       if landing > @string.length
-        @string = @string + "\0" * (landing - @string.length)
+        @string << "\0" * (landing - @string.length)
       end
-      @string = @string[0, landing] + text + (@string[landing + text.length..-1] || "")
+      # The buffer is written in place, so the String the stream was opened
+      # over holds what was written.
+      if landing == @string.length
+        @string << text
+      else
+        @string.replace(@string[0, landing] + text + (@string[landing + text.length..-1] || ""))
+      end
       @position = landing + text.length
       written = written + text.length
     end

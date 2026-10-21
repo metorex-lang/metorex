@@ -622,6 +622,11 @@ impl VirtualMachine {
                 // stack travelled with each fiber.
                 method_owner_stack: self.method_owner_stack.clone(),
                 body_contexts: Vec::new(),
+                // As with the owners, a block run on the fiber reads the
+                // methods running where it was resumed from.
+                method_running_stack: self.method_running_stack.clone(),
+                method_arg_stack: self.method_arg_stack.clone(),
+                method_running_frames: self.method_running_frames.clone(),
             }
         });
         FiberContext {
@@ -660,6 +665,15 @@ impl VirtualMachine {
                 taken.method_owner_stack,
             ),
             body_contexts: std::mem::replace(&mut self.body_contexts, taken.body_contexts),
+            method_running_stack: std::mem::replace(
+                &mut self.method_running_stack,
+                taken.method_running_stack,
+            ),
+            method_arg_stack: std::mem::replace(&mut self.method_arg_stack, taken.method_arg_stack),
+            method_running_frames: std::mem::replace(
+                &mut self.method_running_frames,
+                taken.method_running_frames,
+            ),
         }
     }
 

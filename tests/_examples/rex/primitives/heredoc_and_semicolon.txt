@@ -1,0 +1,19 @@
+describe "a report" do
+  it "prints" do
+    print_report(<<-END)
+      totals
+    END
+    another_expression(:bar
+    ); print_report(:foo
+    )
+    compare(<<~FIRST, <<~SECOND)
+      one
+    FIRST
+      two
+    SECOND
+  end
+end
+
+def receiver.assign=(first, second)
+  @assigned = first
+end

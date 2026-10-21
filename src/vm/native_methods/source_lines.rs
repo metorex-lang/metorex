@@ -201,11 +201,17 @@ fn placed_tokens(tokens: &[Token]) -> Vec<Placed<'_>> {
 /// has no `end`.
 fn is_endless_definition(rest: &[&Token]) -> bool {
     let mut depth = 0usize;
-    for token in rest {
+    for (at, token) in rest.iter().enumerate() {
+        // The `=` of a setter's name, as in `def name=(value)`, is written
+        // against the name and the parenthesis.
+        let names_a_setter = !token.had_leading_space
+            && rest
+                .get(at + 1)
+                .is_some_and(|next| next.kind == TokenKind::LParen && !next.had_leading_space);
         match token.kind {
             TokenKind::LParen => depth += 1,
             TokenKind::RParen => depth = depth.saturating_sub(1),
-            TokenKind::Equal if depth == 0 => return true,
+            TokenKind::Equal if depth == 0 && !names_a_setter => return true,
             TokenKind::Newline | TokenKind::Semicolon if depth == 0 => return false,
             TokenKind::EOF => return false,
             _ => {}
@@ -230,12 +236,84 @@ fn ends_statement(placed: &[Placed], at: usize) -> bool {
     !after.is_some_and(|item| matches!(item.token.kind, TokenKind::Dot | TokenKind::SafeDot))
 }
 
+/// Whether `kind` closes a bracket or a keyword.
+fn is_closer(kind: &TokenKind) -> bool {
+    matches!(
+        kind,
+        TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace | TokenKind::End
+    )
+}
+
+/// The line a heredoc's terminator is written on, for the heredoc opened by
+/// the token at `offset` on `line`, with the body starting on `body_line`.
+fn heredoc_terminator_line(source: &str, offset: usize, body_line: usize) -> Option<usize> {
+    let opener = source.get(offset..)?.strip_prefix("<<")?;
+    let indented = opener.starts_with(['-', '~']);
+    let opener = opener.trim_start_matches(['-', '~']);
+    let terminator: String = match opener.chars().next()? {
+        quote @ ('\'' | '"' | '`') => opener[1..].chars().take_while(|ch| *ch != quote).collect(),
+        _ => opener
+            .chars()
+            .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
+            .collect(),
+    };
+    if terminator.is_empty() {
+        return None;
+    }
+    source
+        .lines()
+        .enumerate()
+        .skip(body_line - 1)
+        .find(|(_, text)| {
+            let text = text.trim_end_matches('\r');
+            if indented {
+                text.trim_start() == terminator
+            } else {
+                text == terminator
+            }
+        })
+        .map(|(at, _)| at + 1)
+}
+
+/// The last line of the heredoc bodies the statement's lines through `last`
+/// open, or `last` when they open none.
+fn through_heredoc_bodies(source: &str, placed: &[Placed], first: usize, last: usize) -> usize {
+    let mut through = last;
+    let mut line = first;
+    while line <= through {
+        let mut body_line = through.max(line) + 1;
+        for item in placed
+            .iter()
+            .filter(|item| item.token.position.line == line)
+        {
+            if item.token.kind == TokenKind::Shovel
+                || !source
+                    .get(item.token.position.offset..)
+                    .is_some_and(|text| text.starts_with("<<"))
+            {
+                continue;
+            }
+            if let Some(end) =
+                heredoc_terminator_line(source, item.token.position.offset, body_line)
+            {
+                through = through.max(end);
+                body_line = end + 1;
+            }
+        }
+        line += 1;
+    }
+    through
+}
+
 /// The first and last line of the statement that `line` falls in, or `None`
-/// when no token is written on that line.
+/// when no token is written on that line or the source does not parse.
 pub(crate) fn statement_lines(source: &str, line: usize) -> Option<(usize, usize)> {
     let tokens = Lexer::new(source).tokenize();
+    if crate::parser::Parser::new(tokens.clone()).parse().is_err() {
+        return None;
+    }
     let placed = placed_tokens(&tokens);
-    let on_line: Vec<usize> = placed
+    let mut on_line: Vec<usize> = placed
         .iter()
         .enumerate()
         .filter(|(_, item)| {
@@ -244,6 +322,18 @@ pub(crate) fn statement_lines(source: &str, line: usize) -> Option<(usize, usize
         })
         .map(|(at, _)| at)
         .collect();
+    // A line that opens by closing what an earlier line left open, and then
+    // ends that statement with `;`, starts a statement of its own after it.
+    let leading_closers = on_line
+        .iter()
+        .take_while(|&&at| is_closer(&placed[at].token.kind))
+        .count();
+    if leading_closers > 0
+        && on_line.len() > leading_closers + 1
+        && placed[on_line[leading_closers]].token.kind == TokenKind::Semicolon
+    {
+        on_line.drain(..=leading_closers);
+    }
     let first = *on_line.first()?;
     let depth = on_line
         .iter()
@@ -291,7 +381,11 @@ pub(crate) fn statement_lines(source: &str, line: usize) -> Option<(usize, usize
         }
         end += 1;
     }
-    Some((placed[start].token.position.line, last_line))
+    let first_line = placed[start].token.position.line;
+    Some((
+        first_line,
+        through_heredoc_bodies(source, &placed, first_line, last_line),
+    ))
 }
 
 /// The text of the one value `expect(...)` is handed on `line`, or `None`

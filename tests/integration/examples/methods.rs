@@ -953,3 +953,12 @@ fn visibility_given_to_a_method_kernel_answers_natively_holds_for_calls_and_resp
         )
     );
 }
+
+#[test]
+fn a_class_has_kernels_functions_as_private_methods() {
+    let output = run_example("methods/kernel_private_methods_on_a_class.rb");
+    assert_eq!(
+        output,
+        "at_exit false true true\ntrap false true true\nexit! false true true\n"
+    );
+}

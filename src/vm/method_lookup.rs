@@ -646,19 +646,28 @@ impl VirtualMachine {
     /// Where a `def` written in the running method around the code here
     /// installs, with the def scope depth the method started at.
     pub(crate) fn written_in_method(&self) -> Option<(usize, crate::vm::core::Definee)> {
-        let frame = match self.lexical_home_frame {
-            Some(home) => home?,
-            None => self.current_method_frame?,
-        };
-        // A file loaded from inside a method runs its top level in that
-        // method's frame, and a block run by `class_exec` runs in the
-        // caller's. Neither is written in that method.
-        if self.borrowed_frames.contains(&Some(frame))
-            && self.exec_definee_borrows.get(&frame) != Some(&self.borrowed_frames.len())
-        {
+        let frame = self.home_method_frame()?;
+        if self.home_method_frame_is_borrowed() {
             return None;
         }
         self.method_definees.get(&frame).cloned()
+    }
+
+    fn home_method_frame(&self) -> Option<u64> {
+        match self.lexical_home_frame {
+            Some(home) => home,
+            None => self.current_method_frame,
+        }
+    }
+
+    /// A file loaded from inside a method runs its top level in that
+    /// method's frame, and a block run by `class_exec` runs in the
+    /// caller's. Neither is written in that method.
+    pub(crate) fn home_method_frame_is_borrowed(&self) -> bool {
+        self.home_method_frame().is_some_and(|frame| {
+            self.borrowed_frames.contains(&Some(frame))
+                && self.exec_definee_borrows.get(&frame) != Some(&self.borrowed_frames.len())
+        })
     }
 
     pub(crate) fn current_definee(&self) -> Option<Rc<Class>> {
@@ -1555,6 +1564,9 @@ fn class_level_method(class_rc: &Rc<Class>, method_name: &str) -> Option<(Rc<Cla
     {
         return Some((Rc::clone(class_rc), method));
     }
+    if let Some(found) = extended_method(class_rc, method_name) {
+        return Some(found);
+    }
     let mut cursor = class_rc.superclass();
     while let Some(current) = cursor {
         if let Some(singleton) = current.singleton_class_slot().clone()
@@ -1565,9 +1577,24 @@ fn class_level_method(class_rc: &Rc<Class>, method_name: &str) -> Option<(Rc<Cla
         if let Some(method) = current.find_own_method(&format!("__class__{}", method_name)) {
             return Some((Rc::clone(class_rc), method));
         }
+        if let Some(found) = extended_method(&current, method_name) {
+            return Some(found);
+        }
         cursor = current.superclass();
     }
     None
+}
+
+/// A method of a module `extend` put on the class's singleton class.
+pub(crate) fn extended_method(
+    class_rc: &Rc<Class>,
+    method_name: &str,
+) -> Option<(Rc<Class>, Rc<Method>)> {
+    let singleton = class_rc.singleton_class_slot().clone()?;
+    let mixins = singleton.mixins.borrow();
+    mixins
+        .iter()
+        .find_map(|module| module.find_method_with_owner(method_name))
 }
 
 pub(crate) fn module_level_method(class_rc: &Rc<Class>, method_name: &str) -> Option<Rc<Method>> {

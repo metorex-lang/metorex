@@ -17,7 +17,11 @@ impl<'a> Lexer<'a> {
             drained_prepend = self.prepend.is_empty();
             c
         } else {
-            self.chars.next()?
+            let c = self.chars.next()?;
+            if let Some(stream_offset) = self.restore_offset.as_mut() {
+                *stream_offset += c.len_utf8();
+            }
+            c
         };
         self.offset += ch.len_utf8();
         if ch == '\n' {
@@ -31,6 +35,9 @@ impl<'a> Lexer<'a> {
         if drained_prepend && let Some(line) = self.restore_line.take() {
             self.line = line;
             self.column = 1;
+            if let Some(offset) = self.restore_offset.take() {
+                self.offset = offset;
+            }
         }
         Some(ch)
     }

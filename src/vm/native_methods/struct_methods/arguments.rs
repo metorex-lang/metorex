@@ -175,7 +175,7 @@ pub(crate) fn take_keyword_arguments(
         if dict.contains_key("__MX_KWARGS__") {
             let keywords = dict
                 .iter()
-                .filter(|(key, _)| key.as_str() != "__MX_KWARGS__")
+                .filter(|(key, _)| !crate::vm::native_methods::hash_methods::is_internal_key(key))
                 .map(|(key, value)| {
                     (
                         key.strip_prefix(':').unwrap_or(key).to_string(),

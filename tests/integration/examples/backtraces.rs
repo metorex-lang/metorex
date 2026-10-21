@@ -37,3 +37,16 @@ fn test_an_at_exit_handler_s_backtrace_ends_at_its_block() {
         "at_exit_handler_raise.rb:1:in 'Object#boom'\nat_exit_handler_raise.rb:3:in 'block in <main>'\n"
     );
 }
+
+#[test]
+fn a_default_proc_run_by_an_index_keeps_the_frame_of_the_block_that_indexed() {
+    let output = run_example("backtraces/default_proc_called_from_a_block.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "FILE:1:in 'block in <main>'\nFILE:5:in 'block in <main>'\n",
+            "FILE:4:in 'Module#class_exec'\n--\n",
+            "FILE:9:in 'block (2 levels) in <main>'\nFILE:9:in 'Hash#fetch'\n"
+        )
+    );
+}

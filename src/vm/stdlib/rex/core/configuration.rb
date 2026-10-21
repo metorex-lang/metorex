@@ -394,7 +394,7 @@ module Rex
                     "Pass a module or one of #{MOCKING_ADAPTERS.keys.inspect}"
             end
 
-            require "rex/core/mocking_adapters/#{const_name.to_s.downcase}"
+            Rex::Support.require_rspec_core "mocking_adapters/#{const_name.to_s.downcase}"
             Rex::Core::MockingAdapters.const_get(const_name)
           end
 

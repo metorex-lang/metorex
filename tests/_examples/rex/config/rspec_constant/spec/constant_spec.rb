@@ -14,4 +14,8 @@ Rex.describe "an RSpec constant the suite defines" do
   it "leaves Rex under its own name" do
     expect(Rex.configuration.rspec_constant?).to be(false)
   end
+
+  it "keeps the backtrace formatter of Rex for expectations" do
+    expect(Rex::Expectations.configuration.backtrace_formatter).to be(Rex.configuration.backtrace_formatter)
+  end
 end

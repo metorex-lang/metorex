@@ -262,10 +262,12 @@ impl VirtualMachine {
         // positional argument: the Hash they spell.
         let alone = positional.is_empty() && !keywords.is_empty();
         if !named_only && !keywords.is_empty() && !alone {
-            let mut held: indexmap::IndexMap<String, Object> = indexmap::IndexMap::new();
-            for (name, value) in &keywords {
-                held.insert(format!(":{}", name), value.clone());
-            }
+            // The Hash keeps its keys as they were written, Strings included.
+            let mut held = match arguments.last().view() {
+                Some(View::Dict(given)) => given.borrow().clone(),
+                _ => IndexMap::new(),
+            };
+            held.shift_remove("__MX_KWARGS__");
             positional.push(Object::Dict(Rc::new(RefCell::new(held))));
             keywords = IndexMap::new();
         }

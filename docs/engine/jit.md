@@ -195,7 +195,7 @@ fit is left to the interpreter.
 
 ## Speed
 
-The README's speed table, recorded on 2026-10-18 on an Apple M5 Max with
+The README's speed table, recorded on 2026-10-18 on arm64 with
 `ruby benchmarks/compare.rb`, times Metorex with the JIT and with
 `METOREX_JIT=0`. Its Metorex columns:
 

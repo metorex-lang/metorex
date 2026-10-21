@@ -36,6 +36,9 @@ enum Node {
     /// The local variables a block closes over.
     Captured(Rc<IndexMap<String, Variable>>),
     Variable(Variable),
+    /// The singleton class of an object, which holds that object as the one
+    /// it is attached to.
+    SingletonClass(Rc<crate::class::Class>),
 }
 
 fn address<T>(held: &Rc<T>) -> usize {
@@ -67,6 +70,7 @@ impl Node {
             Node::Binding(held) => address(held),
             Node::Captured(held) => address(held),
             Node::Variable(held) => address(held),
+            Node::SingletonClass(held) => address(held),
         }
     }
 
@@ -84,12 +88,16 @@ impl Node {
             Node::Binding(held) => Rc::strong_count(held),
             Node::Captured(held) => Rc::strong_count(held),
             Node::Variable(held) => Rc::strong_count(held),
+            Node::SingletonClass(held) => Rc::strong_count(held),
         }
     }
 
     /// Whether the node is an object the list holds, rather than a part.
     fn is_listed(&self) -> bool {
-        !matches!(self, Node::Cell(_) | Node::Captured(_) | Node::Variable(_))
+        !matches!(
+            self,
+            Node::Cell(_) | Node::Captured(_) | Node::Variable(_) | Node::SingletonClass(_)
+        )
     }
 
     /// Add a node for each reference this one holds. Answers false when the
@@ -105,6 +113,9 @@ impl Node {
                 View::Block(held) => found.push(Node::Block(held.clone())),
                 View::Method(held) => found.push(Node::Method(held.clone())),
                 View::Binding(held) => found.push(Node::Binding(held.clone())),
+                View::Class(held) if held.is_singleton_class() => {
+                    found.push(Node::SingletonClass(held.clone()))
+                }
                 View::Range { start, end, .. } => {
                     value(start, found);
                     value(end, found);
@@ -138,6 +149,9 @@ impl Node {
                     .instance_vars
                     .values()
                     .for_each(|one| value(one, found));
+                if let Some(singleton) = owned_singleton_class(&instance) {
+                    found.push(Node::SingletonClass(singleton));
+                }
             }
             Node::Exception(held) => {
                 let Ok(exception) = held.try_borrow() else {
@@ -192,6 +206,12 @@ impl Node {
                 };
                 value(&object, found);
             }
+            Node::SingletonClass(held) => {
+                let Ok(variables) = held.class_variables.try_borrow() else {
+                    return false;
+                };
+                variables.values().for_each(|one| value(one, found));
+            }
         }
         true
     }
@@ -223,6 +243,12 @@ impl Node {
             Node::Instance(held) => {
                 if let Ok(mut instance) = held.try_borrow_mut() {
                     dropped.extend(std::mem::take(&mut instance.instance_vars).into_values());
+                    if owned_singleton_class(&instance).is_some()
+                        && let Ok(mut slot) = instance.singleton_class.try_borrow_mut()
+                        && let Some(singleton) = slot.take()
+                    {
+                        dropped.push(Object::Class(singleton));
+                    }
                 }
             }
             Node::Exception(held) => {
@@ -256,9 +282,23 @@ impl Node {
                     dropped.push(std::mem::replace(&mut *object, Object::Nil));
                 }
             }
+            Node::SingletonClass(held) => {
+                if let Ok(mut variables) = held.class_variables.try_borrow_mut() {
+                    dropped.extend(std::mem::take(&mut *variables).into_values());
+                }
+            }
             Node::Cell(_) | Node::Block(_) | Node::Method(_) | Node::Captured(_) => {}
         }
     }
+}
+
+/// The singleton class an instance holds through a slot no other instance
+/// shares, which is the one reference the instance has to it.
+fn owned_singleton_class(instance: &Instance) -> Option<Rc<crate::class::Class>> {
+    if Rc::strong_count(&instance.singleton_class) != 1 {
+        return None;
+    }
+    instance.singleton_class.try_borrow().ok()?.clone()
 }
 
 /// The listed objects that can hold references, as nodes.

@@ -51,7 +51,7 @@ prints none.
 
 ## The fib benchmark
 
-Recorded on 2026-10-15 on an Apple M5 Max running macOS 27.0.1, with Metorex
+Recorded on 2026-10-15 on arm64, with Metorex
 0.1.0 built by rustc 1.96.0. `fib` calls `fib(32)` once per iteration, 7,049,155
 calls of a method that holds an `if`, a comparison, two subtractions, and an
 addition.

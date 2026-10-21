@@ -1,10 +1,16 @@
 def each_pair_of(items)
-  return enum_for(:each_pair_of, items) unless block_given?
+  unless block_given?
+    return enum_for(:each_pair_of, items)
+  end
 
-  items.each_cons(2) { |first, second| yield first, second }
+  items.each_cons(2) do |first, second|
+    yield first, second
+  end
 end
 
-each_pair_of([1, 4, 9]) { |a, b| puts "#{a} -> #{b}" }
+each_pair_of([1, 4, 9]) do |a, b|
+  puts "#{a} -> #{b}"
+end
 p each_pair_of(%w[a b c]).to_a
 
 square = ->(n) { n * n }

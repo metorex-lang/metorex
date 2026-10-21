@@ -600,8 +600,8 @@ impl Parser {
         })
     }
 
-    /// Parse `undef name, :other` into the equivalent `undef_method` call on
-    /// the enclosing class or module.
+    /// Parse `undef name, :other` into a call of `__undef__`, which runs
+    /// `undef_method` on the class a `def` written there would define in.
     pub(crate) fn parse_undef(&mut self) -> Result<Statement, MetorexError> {
         let start_pos = self.advance().position;
         self.skip_whitespace();
@@ -617,11 +617,11 @@ impl Parser {
         }
 
         Ok(Statement::Expression {
-            expression: Expression::MethodCall {
-                receiver: Box::new(Expression::SelfExpr {
+            expression: Expression::Call {
+                callee: Box::new(Expression::Identifier {
+                    name: "__undef__".to_string(),
                     position: start_pos,
                 }),
-                method: "undef_method".to_string(),
                 arguments,
                 trailing_block: None,
                 position: start_pos,

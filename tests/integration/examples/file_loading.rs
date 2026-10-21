@@ -579,3 +579,21 @@ fn extend_at_the_top_of_a_required_file_extends_main_wherever_the_require_was_wr
     let output = run_example("require/extend_in_a_required_file.rb");
     assert_eq!(output, "hello from main\nfalse\nagain\n");
 }
+
+#[test]
+fn a_top_level_autoload_in_a_library_required_from_a_method_lands_on_object() {
+    let output = run_example("require/autoload_in_a_library_required_from_a_method.rb");
+    assert_eq!(output, "\"socket\"\nnil\n");
+}
+
+#[test]
+fn a_def_run_from_a_required_block_names_the_file_it_is_written_in() {
+    let output = run_example("require/def_in_a_required_block.rb");
+    assert_eq!(output, "builder.rb\n4\nbuilder.rb:4:in 'record'\n");
+}
+
+#[test]
+fn a_class_body_extend_loads_the_module_an_enclosing_module_autoloads() {
+    let output = run_example("require/autoload_reached_from_a_file_a_method_requires.rb");
+    assert_eq!(output, "terminal\n");
+}

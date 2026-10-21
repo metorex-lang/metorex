@@ -17,22 +17,22 @@ use std::rc::Rc;
 #[test]
 fn command_exit() {
     let mut core = ReplCore::new();
-    assert_eq!(core.handle_command(".exit"), CommandResult::Exit);
+    assert_eq!(core.handle_command("exit"), CommandResult::Exit);
 }
 
 #[test]
 fn command_quit() {
     let mut core = ReplCore::new();
-    assert_eq!(core.handle_command(".quit"), CommandResult::Exit);
+    assert_eq!(core.handle_command("quit"), CommandResult::Exit);
 }
 
 #[test]
 fn command_help() {
     let mut core = ReplCore::new();
-    match core.handle_command(".help") {
+    match core.handle_command("help") {
         CommandResult::Help(text) => {
-            assert!(text.contains(".help"));
-            assert!(text.contains(".exit"));
+            assert!(text.contains("help"));
+            assert!(text.contains("exit"));
             assert!(text.contains(".reset"));
             assert!(text.contains("Ctrl-C"));
         }
@@ -141,14 +141,32 @@ fn process_line_assignment_shows_the_assigned_value() {
 #[test]
 fn process_line_exit_command() {
     let mut core = ReplCore::new();
-    assert_eq!(core.process_line(".exit"), LineResult::Exit);
+    assert_eq!(core.process_line("exit"), LineResult::Exit);
+}
+
+#[test]
+fn process_line_quit_command() {
+    let mut core = ReplCore::new();
+    assert_eq!(core.process_line("quit"), LineResult::Exit);
+}
+
+#[test]
+fn process_line_exit_inside_a_multi_line_expression_is_ruby() {
+    let mut core = ReplCore::new();
+    assert_eq!(core.process_line("if false"), LineResult::Incomplete);
+    assert_eq!(core.process_line("exit"), LineResult::Incomplete);
+}
+
+#[test]
+fn process_line_exit_with_an_argument_is_ruby() {
+    assert!(!ReplCore::is_command("exit 1"));
 }
 
 #[test]
 fn process_line_help_command() {
     let mut core = ReplCore::new();
-    match core.process_line(".help") {
-        LineResult::Value(text) => assert!(text.contains(".help")),
+    match core.process_line("help") {
+        LineResult::Value(text) => assert!(text.contains("help")),
         other => panic!("Expected Value with help text, got {:?}", other),
     }
 }
@@ -284,9 +302,9 @@ fn banner_contains_version() {
 #[test]
 fn help_text_contains_commands() {
     let help = ReplCore::help_text();
-    assert!(help.contains(".help"));
-    assert!(help.contains(".exit"));
-    assert!(help.contains(".quit"));
+    assert!(help.contains("  help "));
+    assert!(help.contains("  exit "));
+    assert!(help.contains("  quit "));
     assert!(help.contains(".clear"));
     assert!(help.contains(".reset"));
 }

@@ -63,3 +63,12 @@ fn a_struct_member_reader_redefined_on_the_class_answers_in_place_of_the_member(
     let output = run_example("struct/member_reader_redefined_with_define_method.rb");
     assert_eq!(output, ":baz\n:bar\n[:bar]\n");
 }
+
+#[test]
+fn a_braceless_hash_after_positional_members_is_the_next_member() {
+    let output = run_example("struct/braceless_hash_after_positionals.rb");
+    assert_eq!(
+        output,
+        "[\"a\", \"b\"]\n[]\n{\"b\" => [\"a\"]}\nunknown keywords: b\n1\n"
+    );
+}

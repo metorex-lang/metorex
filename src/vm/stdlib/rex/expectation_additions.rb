@@ -8,6 +8,17 @@ module Rex
   ExpectationNotMet = Expectations::ExpectationNotMetError
 
   module Expectations
+    class Configuration
+      # rspec-core is looked for on the module `RSpec` names, as RSpec looks
+      # for it, unless the suite took that name back.
+      def backtrace_formatter
+        @backtrace_formatter ||= begin
+          core = ::Rex.configuration.rspec_constant_released? ? ::Rex : (::RSpec if defined?(::RSpec))
+          core.respond_to?(:configuration) ? core.configuration.backtrace_formatter : NullBacktraceFormatter
+        end
+      end
+    end
+
     class ExpectationTarget
       # Where `expect` was called, kept when `config.source_expressions` is
       # on so a failure can name the expression it was handed.

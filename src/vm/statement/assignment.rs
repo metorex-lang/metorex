@@ -809,24 +809,25 @@ impl VirtualMachine {
         // Look up the setter method and invoke it
         match receiver_obj.view() {
             View::Instance(instance_rc) => {
-                let (class, method_obj) = {
+                let (class, method_obj, written_on_the_object) = {
                     let instance = instance_rc.borrow();
                     let class = instance.class.clone();
                     // A writer written on this one object with
                     // `def obj.name=` answers before the one its
                     // class carries, whether it was recorded on
                     // the instance or on its singleton class.
-                    let method_obj = instance
-                        .find_singleton_method(&setter_method)
-                        .or_else(|| {
+                    let on_the_object =
+                        instance.find_singleton_method(&setter_method).or_else(|| {
                             instance
                                 .singleton_class
                                 .borrow()
                                 .as_ref()
                                 .and_then(|singleton| singleton.find_method(&setter_method))
-                        })
-                        .or_else(|| instance.class.find_method(&setter_method));
-                    (class, method_obj)
+                        });
+                    let written_on_the_object = on_the_object.is_some();
+                    let method_obj =
+                        on_the_object.or_else(|| instance.class.find_method(&setter_method));
+                    (class, method_obj, written_on_the_object)
                 }; // Borrow is dropped here
 
                 if let Some(method) = method_obj {
@@ -839,13 +840,15 @@ impl VirtualMachine {
                     {
                         return Err(visibility_error(&class, &setter_method, *position));
                     }
-                    self.invoke_method(
-                        class,
-                        method,
-                        Object::Instance(Rc::clone(instance_rc)),
-                        vec![value],
-                        *position,
-                    )?;
+                    let receiver = Object::Instance(Rc::clone(instance_rc));
+                    // One written on the object runs as a method of its
+                    // singleton class, as a call written out does.
+                    let class = if written_on_the_object {
+                        self.singleton_class_of(&receiver)
+                    } else {
+                        class
+                    };
+                    self.invoke_method(class, method, receiver, vec![value], *position)?;
                     Ok(())
                 } else if instance_rc
                     .borrow()

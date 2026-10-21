@@ -108,6 +108,16 @@ Each is run with `ruby benchmarks/compare.rb` on one machine, and the README's s
 - [x] Speed in the interpreter: the table after each of its items, against the bytecode baseline, by time and peak memory
 - [x] Startup: `empty` starts no slower than CRuby's
 
+## Memory
+
+Metorex's peak memory is above 1.5× CRuby's on 46 of the 50 rows of the README's table: 33 MB against 19 MB for `empty`, 304 MB against 55 MB for `rex_suite`, 604 MB against 117 MB for `30k_ifelse`, and 335 MB against 21 MB for `ruby-json`.
+
+- [ ] Where the memory goes: `METOREX_MEMORY_REPORT=1` writes, at exit, the peak bytes held by objects by class, by compiled units and their tables, by the syntax tree, by the JIT's code, and by the libraries loaded at startup, and `docs/engine/memory-management.md` records the report for `empty`, `rex_suite`, `30k_ifelse`, and `ruby-json`
+  - Acceptance: the four reports' categories add up to within 10% of each run's peak resident set size
+- [ ] Startup: `empty` peaks at no more than CRuby's
+- [ ] Every row of the table peaks at no more than 1.5× CRuby's, with no row's time made more than 5% slower
+  - Acceptance: `ruby benchmarks/compare.rb` prints the table, and the README records it
+
 ## Ruby 4.0.7
 
 - [x] Vendored libraries come from the release itself: the vendor scripts read the source tree a Ruby release's tarball unpacks to and take each gem at the version that release ships, where they took the newest one installed (prism 1.9.0, pp 0.6.4, irb 1.18.0, and reline 0.7.0, where 4.0.6 ships prism 1.8.1, pp 0.6.3, irb 1.16.0, and reline 0.6.3)
@@ -127,10 +137,12 @@ Rex runs RSpec 3.13.6's own specs with `scripts/run_rspec_suite.sh`. Parity is t
   - Acceptance: the script runs with no network access
 - [x] Results by file: the script writes each file's example, failure, and pending counts under Metorex and under MRI to a checked-in file, and prints the files whose counts differ
   - Acceptance: the file lists every spec file the script runs, and the README's table is built from it
-- [ ] rspec-expectations: every file's counts match MRI's (2437 pass under Metorex and 2438 under MRI, of 2455)
+- [x] rspec-expectations: every file's counts match MRI's (2438 pass under Metorex and under MRI, of 2455)
 - [x] rspec-mocks: every file's counts match MRI's (1794 pass under Metorex and under MRI, of 1806)
-- [ ] rspec-core: every file's counts match MRI's (2139 pass under Metorex and 2239 under MRI, of 2258)
+- [ ] rspec-core: every file's counts match MRI's (2238 pass under Metorex and 2239 under MRI, of 2258). The one example left is in `bisect/shell_command_spec.rb`, which expects the interpreter's path to contain `ruby`
 - [ ] CI fails when any file's counts differ from MRI's
+- [ ] shoulda-matchers carried in the binary, as RSpec's libraries are: `require "shoulda-matchers"` loads it with no gems installed, and `Shoulda::Matchers.configure` wires it into Rex. Its ActiveModel, ActiveRecord, and ActionController matchers need the Rails item under Popular gems first
+  - Acceptance: a fixture under `tests/_examples/rex` that uses its independent matchers (`delegate_method`) prints what RSpec with shoulda-matchers prints under MRI 4.0.7, and shoulda-matchers' own suite's counts match MRI's file by file
 
 ## Standard library
 

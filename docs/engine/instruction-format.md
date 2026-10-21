@@ -59,7 +59,7 @@ machine, and one add on the register machine with constant operands.
 cargo run --release --manifest-path prototypes/values/Cargo.toml
 ```
 
-Recorded on 2026-10-15 on an Apple M5 Max running macOS 27.0.1, with rustc
+Recorded on 2026-10-15 on arm64, with rustc
 1.96.0. Each time is the fastest of five runs.
 
 | Kernel | Stack, byte stream | Stack | Register | Register, constant operands | Register, function pointers | Stack ÷ register, constant operands |

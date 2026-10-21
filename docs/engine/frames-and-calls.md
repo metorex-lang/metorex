@@ -89,7 +89,7 @@ held inline.
 cargo run --release --manifest-path prototypes/values/Cargo.toml
 ```
 
-Recorded on 2026-10-15 on an Apple M5 Max running macOS 27.0.1, with rustc
+Recorded on 2026-10-15 on arm64, with rustc
 1.96.0. Each time is the fastest of five runs.
 
 | Workload | Calls | Heap frames | Contiguous stack | Heap ÷ stacked | Heap frames, per call | Contiguous stack, per call |

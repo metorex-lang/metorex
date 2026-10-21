@@ -790,6 +790,16 @@ impl VirtualMachine {
             // name when there is no message. Neither the location nor the
             // backtrace appears here.
             "to_s" => {
+                let held_object = exception
+                    .borrow()
+                    .instance_vars
+                    .get(crate::vm::MESSAGE_OBJECT_KEY)
+                    .cloned();
+                if let Some(given) = held_object {
+                    return self
+                        .send_to_object(given, "to_s", Vec::new(), position)
+                        .map(Some);
+                }
                 let exc = exception.borrow();
                 // The String the message was given as is answered as it was,
                 // encoding and bytes and all, while the message still reads

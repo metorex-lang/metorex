@@ -1747,3 +1747,30 @@ fn yaml_dump_of_a_struct_prints_no_warning() {
         "--- !ruby/struct:Pair\nleft: 7\nright: something\n--- !ruby/struct:Pair\nleft: 7\nright: something\n"
     );
 }
+
+#[test]
+fn a_drb_service_started_after_install_acl_answers_the_hosts_it_allows() {
+    let output = run_example("stdlib/drb_service_with_an_acl.rb");
+    assert_eq!(output, "true\n75\nfalse\n");
+}
+
+#[test]
+fn stringio_writes_into_the_string_it_was_opened_over() {
+    let output = run_example("stdlib/stringio_writes_into_its_string.rb");
+    assert_eq!(
+        output,
+        "\"first\\nsecond\"\ntrue\n\"Xbc\"\n\"one\"\n\"after\"\n"
+    );
+}
+
+#[test]
+fn an_erb_template_error_names_the_template_line() {
+    let output = run_example("stdlib/erb_error_line.rb");
+    assert_eq!(output, "(erb):1:in '<main>'\n(erb):2:in '<main>'\n");
+}
+
+#[test]
+fn a_drb_object_reaches_its_server_after_another_service_starts() {
+    let output = run_example("stdlib/drb_call_after_a_second_service.rb");
+    assert_eq!(output, "75\n");
+}

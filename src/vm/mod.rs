@@ -150,3 +150,6 @@ pub(crate) const NO_METHOD_ARGS_KEY: &str = "__args__";
 /// Where an exception keeps the String it was given as its message, which
 /// Marshal writes with its encoding.
 pub(crate) const MESSAGE_STRING_KEY: &str = "__message_string__";
+/// A message given as an object whose `to_s` failed when the exception was
+/// made, which `to_s` asks again each time.
+pub(crate) const MESSAGE_OBJECT_KEY: &str = "__message_object__";

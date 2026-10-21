@@ -1,0 +1,2 @@
+# A script named like a subcommand runs as a script, as `ruby help` would.
+puts "the script named help ran"

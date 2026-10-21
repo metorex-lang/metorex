@@ -34,6 +34,7 @@ module Rex
         Rex::ExampleGroups.remove_all_constants
         example_groups.clear
         @sources_by_path.clear if defined?(@sources_by_path)
+        @source_lines_by_path = nil
         @syntax_highlighter = nil
         @example_group_counts_by_spec_file = Hash.new(0)
       end
@@ -96,6 +97,12 @@ module Rex
 
       def reporter
         @configuration.reporter
+      end
+
+      # The lines of a file a failure quotes, read once for the run, as
+      # `source_from_file` reads a file's source.
+      def source_lines_from_file(path)
+        (@source_lines_by_path ||= {})[path] ||= File.read(path).split("\n")
       end
 
       def source_from_file(path)

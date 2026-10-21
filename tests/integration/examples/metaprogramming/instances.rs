@@ -128,3 +128,15 @@ fn a_module_written_in_nested_class_new_blocks_lands_where_the_outer_block_was_w
     let output = run_example("instance_exec/module_defined_in_nested_class_new_blocks.rb");
     assert_eq!(output, "true\ntrue\nstamped\n");
 }
+
+#[test]
+fn undef_in_instance_exec_undefines_on_the_singleton_class() {
+    let output = run_example("instance_exec/undef_on_a_class.rb");
+    assert_eq!(output, ":replaced\nfalse\n");
+}
+
+#[test]
+fn undef_in_a_block_a_method_runs_with_class_exec_undefines_on_that_class() {
+    let output = run_example("instance_exec/undef_in_a_block_a_method_class_execs.rb");
+    assert_eq!(output, ":custom\n:plain\n[:include_in]\n");
+}

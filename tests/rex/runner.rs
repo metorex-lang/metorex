@@ -199,3 +199,34 @@ fn test_naming_rspec_in_a_script_loads_rex_and_runs_the_examples() {
         expected("runner/plain_script", "expected_output.txt")
     );
 }
+
+#[test]
+fn test_spec_init_writes_the_files_rspec_init_writes() {
+    let project = std::env::temp_dir().join(format!("metorex_spec_init_{}", std::process::id()));
+    std::fs::create_dir_all(&project).expect("make the project directory");
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_metorex"))
+        .args(["spec", "--init"])
+        .current_dir(&project)
+        .output()
+        .expect("run metorex");
+    let templates = format!(
+        "{}/gems/rspec/rspec-core/lib/rspec/core/project_initializer",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let written = |file: &str| {
+        (
+            std::fs::read_to_string(project.join(file)).expect("read the written file"),
+            std::fs::read_to_string(format!("{templates}/{file}")).expect("read the template"),
+        )
+    };
+    let (dot_rspec, rspec_dot_rspec) = written(".rspec");
+    let (spec_helper, rspec_spec_helper) = written("spec/spec_helper.rb");
+    std::fs::remove_dir_all(&project).expect("remove the project directory");
+
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "  create   .rspec\n  create   spec/spec_helper.rb\n"
+    );
+    assert_eq!(dot_rspec, rspec_dot_rspec);
+    assert_eq!(spec_helper, rspec_spec_helper);
+}

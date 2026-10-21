@@ -3,8 +3,21 @@
 
 use super::*;
 
+/// The words a command line can start with in place of a script.
+const SUBCOMMANDS_HELP: &str = "Commands:
+  spec [PATHS]   Run spec files with Rex (default: spec/)
+  test [DIR]     Run the *_test.rb, test_*.rb, and *_spec.rb files under DIR (default: test/)
+  repl           Start the REPL
+  help           Print this help
+  version        Print the metorex version";
+
 #[derive(ClapParser)]
-#[command(name = "metorex", version, about = "The Metorex programming language")]
+#[command(
+    name = "metorex",
+    version,
+    about = "The Metorex programming language",
+    after_help = SUBCOMMANDS_HELP
+)]
 pub(crate) struct Cli {
     /// Source file to execute, followed by arguments for the script
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -17,15 +30,6 @@ pub(crate) struct Cli {
     /// Enable debug/verbose output
     #[arg(long)]
     pub(crate) debug: bool,
-
-    /// Start the REPL
-    #[arg(long)]
-    pub(crate) repl: bool,
-
-    /// Discover and run test files in a directory
-    /// (matches *_test.rb, test_*.rb, *_spec.rb)
-    #[arg(long)]
-    pub(crate) test: Option<String>,
 
     /// Print Ruby-compatible version string
     #[arg(short = 'v', long = "verbose")]

@@ -621,17 +621,17 @@ It takes the options `metorex spec --help` lists, which are RSpec's, and these o
 
 | Suite | Passing under MRI | Passing under Metorex | Examples | Pending |
 | :-- | --: | --: | --: | --: |
-| rspec-core | 2239 | 2139 | 2258 | 19 |
-| rspec-expectations | 2438 | 2437 | 2455 | 17 |
+| rspec-core | 2239 | 2238 | 2258 | 19 |
+| rspec-expectations | 2438 | 2438 | 2455 | 17 |
 | rspec-mocks | 1794 | 1794 | 1806 | 11 |
 
-Under MRI 4.0.7 one example fails, in rspec-mocks' `receive_spec.rb`, which stubs `respond_to?` and recurses through the `Kernel#inspect` of Ruby 4.0. diff-lcs's suite passes all 322 of its examples, with documentation output identical to RSpec's byte for byte.
+Under MRI 4.0.7 one example fails, in rspec-mocks' `receive_spec.rb`, which stubs `respond_to?` and recurses through the `Kernel#inspect` of Ruby 4.0. Under Metorex one rspec-core example fails that passes under MRI: `bisect/shell_command_spec.rb` expects the path of the interpreter a bisect run starts to contain `ruby`, and Metorex's is `metorex`. diff-lcs's suite passes all 322 of its examples, with documentation output identical to RSpec's byte for byte.
 
 ### Speed
 
 `ruby benchmarks/compare.rb`, run with a release build, times Metorex, with its JIT and with `METOREX_JIT=0`, beside CRuby with and without `--yjit` and prints this table. `--without-no-jit` leaves out the `METOREX_JIT=0` column, for a build from before the JIT. It covers startup, the scripts in `benchmarks/workloads` and `benchmarks/memory`, every benchmark in the [ruby-bench](https://github.com/ruby/ruby-bench) suite (the `benchmarks/ruby-bench` submodule) in its headline, other, and micro categories that needs no gems, and the Rex suite. Startup, workload, and Rex suite times are the fastest of three whole runs. A ruby-bench time is the mean of one iteration after the warmup ones, under ruby-bench's own harness: CRuby runs the harness's defaults, as ruby-bench's runner does, and Metorex runs one warmup iteration and two timed ones. Peak memory is the largest resident set size of the run.
 
-On an Apple M5 Max (18 CPUs, macOS 27.0.1), Metorex 0.1.0 built with rustc 1.96.0, ruby 4.0.6 (2026-07-14 revision 03b6d3f889) +PRISM [arm64-darwin25]:
+On arm64, Metorex 0.1.0 built with rustc 1.96.0, and ruby 4.0.6:
 
 | Benchmark | CRuby | CRuby --yjit | Metorex | Metorex, no JIT | Metorex ÷ CRuby | Metorex ÷ YJIT | Metorex ÷ no JIT | CRuby peak | YJIT peak | Metorex peak | Metorex, no JIT peak |
 | :-- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |
@@ -842,7 +842,7 @@ cargo run
 cargo run -- my_script.rb
 
 # Discover and run test files in a directory
-cargo run -- --test tests/
+cargo run -- test tests/
 
 # Install the coverage tool (needs the llvm-tools component)
 rustup component add llvm-tools-preview

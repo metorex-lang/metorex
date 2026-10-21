@@ -11,6 +11,8 @@ p b.to_a
 p b == Point.new(3, 4)
 
 Coordinate = Data.define(:latitude, :longitude)
-here = Coordinate.new(latitude: 36.16, longitude: -86.78)
+here = Coordinate.new(
+  latitude: 36.16, longitude: -86.78
+)
 p here
 p here.with(latitude: 40.71)

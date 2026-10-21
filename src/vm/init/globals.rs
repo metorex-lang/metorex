@@ -240,6 +240,8 @@ pub(crate) fn register_native_functions(globals: &mut GlobalRegistry) {
         "__singleton_given__",
         Object::NativeFunction("__singleton_given__".to_string()),
     );
+    // `undef name`, which acts on the class a `def` written there defines in.
+    globals.set("__undef__", Object::NativeFunction("__undef__".to_string()));
     for name in ["iterator?", "instance_variables_to_inspect"] {
         globals.set(name, Object::NativeFunction(name.to_string()));
     }

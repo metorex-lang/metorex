@@ -7,6 +7,9 @@ orders = [
 p orders.sum { it[:price] * it[:quantity] }
 p orders.max_by { it[:price] }[:item]
 p orders.partition { it[:price] > 50 }.map(&:size)
-p orders.group_by { it[:quantity] > 1 }.transform_values { |group| group.map { it[:item] } }
-p (1..Float::INFINITY).lazy.select(&:even?).map { it * it }.first(3)
+by_size = orders.group_by { it[:quantity] > 1 }
+names = ->(group) { group.map { it[:item] } }
+p by_size.transform_values(&names)
+evens = (1..Float::INFINITY).lazy.select(&:even?)
+p evens.map { it * it }.first(3)
 p %w[a b c].each_with_index.to_h

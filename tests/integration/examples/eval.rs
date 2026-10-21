@@ -153,3 +153,15 @@ fn test_eval_locals_through_bindings_execution() {
         "2\n3\n[:first, :second]\n5\n[:early, :late]\nfalse\n6\n8\nfalse\n"
     );
 }
+
+#[test]
+fn eval_counts_lines_from_zero_when_told_to() {
+    let output = run_example("eval/eval_from_line_zero.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "(template):1:in 'Object#first_frame'\n(template):in 'Object#first_frame'\n",
+            "(template):1:in 'Object#first_frame'\n(template):12:in 'Object#first_frame'\n"
+        )
+    );
+}

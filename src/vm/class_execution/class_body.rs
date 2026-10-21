@@ -422,7 +422,7 @@ impl VirtualMachine {
                         Object::Class(Rc::clone(class))
                     })
                 } else {
-                    self.resolve_constant_in_scope(module_name)
+                    self.resolve_constant_with_autoload(module_name)?
                 };
                 match resolved.view() {
                     Some(View::Module(module)) => {
@@ -658,7 +658,7 @@ impl VirtualMachine {
             Statement::Extend { position, .. } => ("extend", *position),
             _ => return Ok(None),
         };
-        if !class_answers_with_program_method(class, name) {
+        if !self.class_answers_with_program_method(class, name) {
             return Ok(None);
         }
         let arguments = match statement {
@@ -688,21 +688,32 @@ impl VirtualMachine {
     }
 }
 
-/// Whether `class` answers `name` with a method the program wrote: one on its
-/// singleton class or a module it extended, or one written `def self.name`.
-fn class_answers_with_program_method(class: &Rc<Class>, name: &str) -> bool {
-    let written = |method: &Rc<crate::object::Method>| {
-        crate::vm::method_execution::written_by_the_program(method)
-    };
-    class
-        .singleton_class_slot()
-        .as_ref()
-        .and_then(|singleton| singleton.find_method(name))
-        .is_some_and(|method| written(&method))
-        || crate::vm::method_lookup::module_extended_method(class, name)
+impl VirtualMachine {
+    /// Whether `class` answers `name` with a method the program wrote: one on
+    /// its singleton class or a module it extended, however the extending
+    /// was done, or one written `def self.name`.
+    fn class_answers_with_program_method(&self, class: &Rc<Class>, name: &str) -> bool {
+        let written = |method: &Rc<crate::object::Method>| {
+            crate::vm::method_execution::written_by_the_program(method)
+        };
+        let receiver = if class.is_module() {
+            Object::Module(Rc::clone(class))
+        } else {
+            Object::Class(Rc::clone(class))
+        };
+        class
+            .singleton_class_slot()
+            .as_ref()
+            .and_then(|singleton| singleton.find_method(name))
             .is_some_and(|method| written(&method))
-        || crate::vm::method_lookup::module_own_method(class, name)
-            .is_some_and(|method| written(&method))
+            || crate::vm::method_lookup::module_extended_method(class, name)
+                .is_some_and(|method| written(&method))
+            || crate::vm::method_lookup::module_own_method(class, name)
+                .is_some_and(|method| written(&method))
+            || self
+                .lookup_method(&receiver, name)
+                .is_some_and(|(_, method)| written(&method))
+    }
 }
 
 impl VirtualMachine {
@@ -856,7 +867,7 @@ impl VirtualMachine {
         values: Vec<Object>,
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        if class_answers_with_program_method(class, method) {
+        if self.class_answers_with_program_method(class, method) {
             let receiver = if class.is_module() {
                 Object::Module(Rc::clone(class))
             } else {

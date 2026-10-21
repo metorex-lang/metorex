@@ -1,6 +1,9 @@
 def grouped(node)
   case node["type"]
-  when "BinaryOp" then "(#{grouped(node["left"])} #{node["op"]} #{grouped(node["right"])})"
+  when "BinaryOp"
+    left = grouped(node["left"])
+    right = grouped(node["right"])
+    "(#{left} #{node["op"]} #{right})"
   when "Grouped" then grouped(node["expression"])
   when "IntLiteral" then node["value"].to_s
   when "Identifier" then node["name"]

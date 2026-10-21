@@ -14,6 +14,7 @@ pub(crate) use std::process;
 mod options;
 mod records;
 mod startup;
+mod subcommands;
 
 /// The name the interpreter was started by, as the command line spelled it,
 /// which a report made before any program runs begins with.
@@ -27,3 +28,4 @@ pub(crate) fn program_name() -> String {
 pub(crate) use options::*;
 pub(crate) use records::*;
 pub(crate) use startup::*;
+pub(crate) use subcommands::*;

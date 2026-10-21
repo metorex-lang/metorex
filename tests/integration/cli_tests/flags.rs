@@ -32,7 +32,7 @@ fn cli_help_flag() {
     assert!(stdout.contains("Metorex"));
     assert!(stdout.contains("--ast"));
     assert!(stdout.contains("--debug"));
-    assert!(stdout.contains("--repl"));
+    assert!(stdout.contains("repl"));
 }
 
 // ============================================================================
@@ -128,7 +128,7 @@ fn cli_file_with_syntax_error_exits_with_error() {
 }
 
 // ============================================================================
-// --test (test discovery)
+// metorex test (test discovery)
 // ============================================================================
 
 #[test]
@@ -136,7 +136,7 @@ fn cli_test_flag_discovers_and_runs_tests() {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let output = metorex_cmd()
         .current_dir(manifest_dir)
-        .args(["--test", "tests/_examples/test_discovery/nested"])
+        .args(["test", "tests/_examples/test_discovery/nested"])
         .output()
         .expect("failed to execute");
     assert!(output.status.success());
@@ -150,7 +150,7 @@ fn cli_test_flag_shows_discovery_count() {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let output = metorex_cmd()
         .current_dir(manifest_dir)
-        .args(["--test", "tests/_examples/test_discovery/nested"])
+        .args(["test", "tests/_examples/test_discovery/nested"])
         .output()
         .expect("failed to execute");
     assert!(output.status.success());
@@ -163,7 +163,7 @@ fn cli_test_flag_exits_nonzero_on_failure() {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let output = metorex_cmd()
         .current_dir(manifest_dir)
-        .args(["--test", "tests/_examples/test_discovery/failing"])
+        .args(["test", "tests/_examples/test_discovery/failing"])
         .output()
         .expect("failed to execute");
     assert!(!output.status.success());
@@ -175,7 +175,7 @@ fn cli_test_flag_exits_nonzero_on_failure() {
 #[test]
 fn cli_test_flag_nonexistent_dir_fails() {
     let output = metorex_cmd()
-        .args(["--test", "nonexistent_dir_xyz"])
+        .args(["test", "nonexistent_dir_xyz"])
         .output()
         .expect("failed to execute");
     assert!(!output.status.success());
@@ -184,14 +184,71 @@ fn cli_test_flag_nonexistent_dir_fails() {
 }
 
 #[test]
-fn cli_test_flag_appears_in_help() {
+fn cli_test_subcommand_appears_in_help() {
     let output = metorex_cmd()
         .arg("--help")
         .output()
         .expect("failed to execute");
     assert!(output.status.success());
     let stdout = String::from_utf8(output.stdout).unwrap();
-    assert!(stdout.contains("--test"));
+    assert!(stdout.contains("test [DIR]"));
+}
+
+#[test]
+fn cli_test_subcommand_defaults_to_the_test_directory() {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let output = metorex_cmd()
+        .current_dir(format!(
+            "{manifest_dir}/tests/_examples/test_discovery/default_directory"
+        ))
+        .arg("test")
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("Discovered 1 test file(s)"));
+}
+
+// ============================================================================
+// metorex help and metorex version
+// ============================================================================
+
+#[test]
+fn cli_help_subcommand_prints_the_help() {
+    let output = metorex_cmd()
+        .arg("help")
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("Usage: metorex"));
+    assert!(stdout.contains("spec [PATHS]"));
+}
+
+#[test]
+fn cli_version_subcommand_prints_the_binary_version() {
+    let output = metorex_cmd()
+        .arg("version")
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout, format!("metorex {}\n", env!("CARGO_PKG_VERSION")));
+}
+
+#[test]
+fn cli_a_script_named_help_runs_instead_of_the_subcommand() {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let output = metorex_cmd()
+        .current_dir(format!(
+            "{manifest_dir}/tests/_examples/cli_flags/named_like_a_subcommand"
+        ))
+        .arg("help")
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout, "the script named help ran\n");
 }
 
 // ============================================================================

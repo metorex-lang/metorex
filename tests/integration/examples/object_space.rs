@@ -129,3 +129,9 @@ fn test_object_space_cycle_shapes_no_parens_execution() {
     let output = run_example("object_space/cycle_shapes_no_parens.rb");
     assert_eq!(output, CYCLE_SHAPES_OUTPUT);
 }
+
+#[test]
+fn an_object_with_a_singleton_class_is_collected_once_nothing_holds_it() {
+    let output = run_example("object_space/objects_with_singleton_classes_are_collected.rb");
+    assert_eq!(output, "1\n0\ntrue\n");
+}

@@ -2,7 +2,8 @@
 an RSpec constant the suite defines
   is the suite's own module
   leaves Rex under its own name
+  keeps the backtrace formatter of Rex for expectations
 
 Finished in N seconds (files took N seconds to load)
-2 examples, 0 failures
+3 examples, 0 failures
 exit 0

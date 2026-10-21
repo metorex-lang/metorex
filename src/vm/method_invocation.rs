@@ -663,6 +663,7 @@ impl VirtualMachine {
             let mut named_name = None;
             let mut named_args = None;
             let mut named_private_call = None;
+            let mut message_object = None;
             let mut arguments = arguments;
             if let Some(View::Dict(entries)) = arguments.last().view() {
                 let entries = entries.borrow();
@@ -689,13 +690,20 @@ impl VirtualMachine {
                     View::String(s) => s.as_str().to_string(),
                     // Ruby renders the message with `to_s`, which a message
                     // object is free to define.
-                    _ => match self
-                        .send_to_object(arguments[0].clone(), "to_s", vec![], position)?
-                        .view()
-                    {
-                        View::String(text) => text.as_str().to_string(),
-                        rendered => rendered.to_string(),
-                    },
+                    // One whose `to_s` fails is kept, and asked again when
+                    // the message is read.
+                    _ => {
+                        match self.send_to_object(arguments[0].clone(), "to_s", vec![], position) {
+                            Ok(rendered) => match rendered.view() {
+                                View::String(text) => text.as_str().to_string(),
+                                rendered => rendered.to_string(),
+                            },
+                            Err(_) => {
+                                message_object = Some(arguments[0].clone());
+                                String::new()
+                            }
+                        }
+                    }
                 }
             } else if ((2..=3).contains(&arguments.len()) && descends_from(&class, "NameError"))
                 || (arguments.len() == 4 && descends_from(&class, "NoMethodError"))
@@ -750,6 +758,11 @@ impl VirtualMachine {
                     details
                         .instance_vars
                         .insert(crate::vm::MESSAGE_STRING_KEY.to_string(), given.to_object());
+                }
+                if let Some(given) = message_object {
+                    details
+                        .instance_vars
+                        .insert(crate::vm::MESSAGE_OBJECT_KEY.to_string(), given);
                 }
                 if let Some(value) = named_receiver {
                     details.receiver = Some(Box::new(value));

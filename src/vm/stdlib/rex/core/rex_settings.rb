@@ -83,7 +83,14 @@ module Rex
       end
       alias rspec_constant? rspec_constant
 
+      # Whether the suite took the name `RSpec` back, as against `RSpec`
+      # naming some other module for a while, as `stub_const` makes it.
+      def rspec_constant_released?
+        @rspec_constant_released ? true : false
+      end
+
       def rspec_constant=(value)
+        @rspec_constant_released = !value
         if value
           Object.const_set(:RSpec, Rex) if Object.autoload?(:RSpec) || !defined?(::RSpec)
         elsif rspec_constant

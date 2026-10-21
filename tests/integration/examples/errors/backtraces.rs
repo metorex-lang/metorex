@@ -318,3 +318,12 @@ fn test_an_uncaught_name_error_in_code_given_with_e_names_its_line_alone() {
         "-e:2:in '<main>': undefined local variable or method 'nope' for main (NameError)\n"
     );
 }
+
+#[test]
+fn an_argument_error_starts_its_backtrace_at_the_method_definition() {
+    let output = run_example("errors/argument_error_backtrace_names_the_definition.rb");
+    assert_eq!(
+        output,
+        "FILE:3:in 'record'\nFILE:12:in '<main>'\nFILE:7:in 'assign='\nFILE:18:in '<main>'\n"
+    );
+}

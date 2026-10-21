@@ -4,7 +4,9 @@ class Ledger
   end
 
   def record(amount)
-    raise ArgumentError, "an entry needs an amount" if amount.zero?
+    if amount.zero?
+      raise ArgumentError, "an entry needs an amount"
+    end
 
     @entries << amount
     self

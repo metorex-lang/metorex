@@ -47,7 +47,7 @@ ruby-bench benchmarks, written in the prototype's instructions.
 cargo run --release --manifest-path prototypes/values/Cargo.toml
 ```
 
-Recorded on 2026-10-15 on an Apple M5 Max running macOS 27.0.1, with rustc
+Recorded on 2026-10-15 on arm64, with rustc
 1.96.0. Each time is the fastest of five runs.
 
 `Object` is 32 bytes, and the tagged value is 8.

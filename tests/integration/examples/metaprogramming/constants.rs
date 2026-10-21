@@ -259,3 +259,12 @@ fn a_constant_in_nested_module_exec_blocks_lands_where_the_outer_block_was_writt
     let output = run_example("constants/constant_in_nested_module_exec_blocks.rb");
     assert_eq!(output, "true\n3\n");
 }
+
+#[test]
+fn super_from_const_missing_raises_the_name_error_module_raises() {
+    let output = run_example("constants/const_missing_super.rb");
+    assert_eq!(
+        output,
+        ":found\nuninitialized constant Inventory::Gadget\n:Gadget\nuninitialized constant Inventory::Sprocket\n"
+    );
+}

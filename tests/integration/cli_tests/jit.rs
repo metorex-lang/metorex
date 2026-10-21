@@ -308,3 +308,12 @@ fn a_local_set_through_a_binding_is_seen_by_machine_code() {
     assert_eq!(interpreted, "37\n");
     assert_eq!(compiled, interpreted);
 }
+
+#[test]
+fn a_bare_super_in_a_return_modifier_hands_on_the_arguments_once_compiled() {
+    let (compiled, _) = run_example(
+        "jit/zsuper_in_a_prepended_module_when_hot.rb",
+        &[("METOREX_JIT", "1"), ("METOREX_JIT_CALL_THRESHOLD", "1")],
+    );
+    assert_eq!(compiled, "40000\n");
+}

@@ -71,6 +71,7 @@ impl VirtualMachine {
                     .first()
                     .is_some_and(|given| self.singleton_given(given)),
             )),
+            "__undef__" => self.undefine_in_definee(arguments, position),
             "iterator?" => Ok(self.iterator_query(position)),
             // Ruby leaves the choice of instance variables to the default
             // `inspect` unless a class says otherwise.
@@ -251,5 +252,36 @@ impl VirtualMachine {
                 crate::vm::utils::position_to_location(position),
             )),
         }
+    }
+}
+
+impl VirtualMachine {
+    /// `undef name`, which undefines the name on the class a `def` written
+    /// in the same place defines in: the class body around it, the singleton
+    /// class of what `instance_eval` runs on, or Object at the top level.
+    fn undefine_in_definee(
+        &mut self,
+        arguments: Vec<Object>,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
+        let in_a_body = self
+            .body_contexts
+            .last()
+            .filter(|body| body.frame == self.current_method_frame)
+            .map(|body| Rc::clone(&body.class));
+        let definee = in_a_body
+            .or_else(|| self.running_method_def_scope())
+            .or_else(|| self.def_scope_stack.last().cloned());
+        let definee = match definee {
+            Some(class) => class,
+            None => match self.globals().get("Object").view() {
+                Some(View::Class(object)) => Rc::clone(object),
+                _ => return Ok(Object::Nil),
+            },
+        };
+        // The keyword is no call of `undef_method`, so no frame of its own
+        // stands in a backtrace.
+        self.call_class_methods(&definee, "undef_method", &arguments, position)?;
+        Ok(Object::Nil)
     }
 }

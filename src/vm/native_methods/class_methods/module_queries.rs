@@ -261,6 +261,7 @@ impl VirtualMachine {
                         names.extend(parent.private_method_names());
                         current = parent.superclass();
                     }
+                    names.extend(KERNEL_PRIVATE_FUNCTIONS.iter().map(|n| (*n).to_string()));
                 }
                 names.sort();
                 names.dedup();

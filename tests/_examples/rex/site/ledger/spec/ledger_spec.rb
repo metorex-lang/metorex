@@ -20,7 +20,9 @@ RSpec.describe Ledger do
   end
 
   it "refuses an entry of zero" do
-    expect { ledger.record(0) }.to raise_error(ArgumentError, "an entry needs an amount")
+    expect { ledger.record(0) }.to raise_error(
+      ArgumentError, "an entry needs an amount"
+    )
   end
 
   it "rounds a balance" do

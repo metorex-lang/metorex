@@ -68,6 +68,11 @@ pub(crate) struct FiberContext {
     pub(crate) method_owner_stack: Vec<Option<std::rc::Rc<crate::class::Class>>>,
     /// The class and module bodies this fiber is running as compiled units.
     pub(crate) body_contexts: Vec<crate::vm::units::BodyContext>,
+    /// The methods this fiber is running, with their arguments and frames,
+    /// which a bare `super` reads.
+    pub(crate) method_running_stack: Vec<std::rc::Rc<crate::object::Method>>,
+    pub(crate) method_arg_stack: Vec<Vec<crate::object::Object>>,
+    pub(crate) method_running_frames: Vec<Option<u64>>,
 }
 
 /// One fiber the program made, and the coroutine it runs on.

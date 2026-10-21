@@ -2,7 +2,12 @@ def describe(response)
   case response
   in { status: 200, body: { users: [] } }
     "no users"
-  in { status: 200, body: { users: [{ name: String => name }, *rest] } }
+  in {
+    status: 200,
+    body: {
+      users: [{ name: String => name }, *rest]
+    }
+  }
     "#{name} and #{rest.size} more"
   in { status: 400..499 => code }
     "client error #{code}"
@@ -12,7 +17,8 @@ def describe(response)
 end
 
 puts describe({ status: 200, body: { users: [] } })
-puts describe({ status: 200, body: { users: [{ name: "Ada" }, { name: "Grace" }] } })
+users = [{ name: "Ada" }, { name: "Grace" }]
+puts describe({ status: 200, body: { users: } })
 puts describe({ status: 404 })
 puts describe({ status: 503 })
 

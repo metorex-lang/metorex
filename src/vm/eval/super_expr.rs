@@ -320,6 +320,20 @@ impl VirtualMachine {
             if method_name == "new" && matches!(self_object.view(), View::Class(_)) {
                 return self.invoke_class(Rc::clone(&self_class), evaluated_args, position);
             }
+            // BasicObject#method_missing raises NoMethodError for the name.
+            if method_name == "method_missing" {
+                return self.super_past_every_ancestor(&method_name, evaluated_args, position);
+            }
+            if method_name == "const_missing"
+                && let [View::Symbol(name) | View::String(name)] = evaluated_args
+                    .iter()
+                    .map(Object::view)
+                    .collect::<Vec<_>>()
+                    .as_slice()
+            {
+                let name = name.as_str().to_string();
+                return self.default_const_missing(&self_class, &name, position);
+            }
             // Any other class method the core library writes natively
             // answers a `super` from an override of it.
             if let Some(result) =
@@ -1011,7 +1025,18 @@ impl VirtualMachine {
                 held.message_given = false;
             }
             Some(given) => {
-                let spelled = self.coerce_name_argument(&given.to_object(), position)?;
+                let spelled = match self.coerce_name_argument(&given.to_object(), position) {
+                    Ok(spelled) => spelled,
+                    Err(_) if !matches!(given, View::String(_)) => {
+                        let mut held = details.borrow_mut();
+                        held.message = String::new();
+                        held.message_given = true;
+                        held.instance_vars
+                            .insert(crate::vm::MESSAGE_OBJECT_KEY.to_string(), given.to_object());
+                        return Ok(Object::Nil);
+                    }
+                    Err(error) => return Err(error),
+                };
                 let mut held = details.borrow_mut();
                 held.message = spelled;
                 held.message_given = true;

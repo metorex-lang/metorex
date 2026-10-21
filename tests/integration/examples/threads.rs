@@ -372,3 +372,9 @@ fn thread_responds_to_each_of_its_class_methods() {
     let output = run_example("threads/thread_responds_to_its_class_methods.rb");
     assert_eq!(output, "true\ntrue\ntrue\ntrue\nfalse\n");
 }
+
+#[test]
+fn threads_interleaved_inside_methods_each_hand_super_their_own_arguments() {
+    let output = run_example("threads/zsuper_after_a_thread_switch.rb");
+    assert_eq!(output, "[:rent, 1200]\n[:water, 45]\n");
+}

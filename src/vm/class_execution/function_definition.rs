@@ -48,10 +48,14 @@ impl VirtualMachine {
         // running when the location is asked for.
         let mut source_location =
             crate::error::SourceLocation::new(position.line, position.column, position.offset);
-        source_location.filename = self.loading_embedded_library.clone().or_else(|| {
-            self.reported_current_file()
-                .map(|file| file.display().to_string())
-        });
+        source_location.filename = self
+            .loading_embedded_library
+            .clone()
+            .or_else(|| self.current_source_file.clone())
+            .or_else(|| {
+                self.reported_current_file()
+                    .map(|file| file.display().to_string())
+            });
 
         // Extract variadic parameter info
         let variadic_param = parameters

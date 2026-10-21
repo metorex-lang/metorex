@@ -26,6 +26,9 @@ pub struct BodyContext {
     pub module: bool,
     /// Where the body was opened.
     pub position: crate::lexer::Position,
+    /// The method frame the body runs in, which code written in the body,
+    /// blocks included, runs in too.
+    pub frame: Option<u64>,
 }
 
 /// What compiling a body gave.
@@ -111,6 +114,7 @@ impl crate::vm::VirtualMachine {
             class: Rc::clone(class),
             module,
             position,
+            frame: self.current_method_frame,
         });
         let ran = self.run_compiled_unit(None, body, kind);
         self.body_contexts.pop();

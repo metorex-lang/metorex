@@ -4,8 +4,8 @@
 #
 #   scripts/run_rspec_suite.sh [SUITE...]
 #
-# SUITE is a gem name: rspec-expectations, rspec-mocks, or rspec-core. With
-# none named, every suite runs. A spec file whose line below is commented out
+# SUITE is a gem name: rspec-expectations, rspec-mocks, or rspec-core, or one
+# spec file as its line below names it. With none named, every suite runs. A spec file whose line below is commented out
 # does not run yet. Uncomment the next one, run, fix what fails, and repeat.
 #
 # The suites come from the rspec monorepo, the gems/rspec submodule, pinned
@@ -97,7 +97,9 @@ done <<< "$BUNDLED_GEMS"
 # the ones Ruby reports, and macOS reaches its temporary directory through a
 # link.
 WORK_DIR=$(cd "$(mktemp -d -t metorex_rspec_suites.XXXXXX)" && pwd -P)
-HELPERS_DIR="$WORK_DIR/support_spec_helpers"
+# Under a `lib` directory, as in rspec-support, since RSpec leaves frames in
+# `/lib/rspec/support/` out of backtraces.
+HELPERS_DIR="$WORK_DIR/support_spec_helpers/lib"
 mkdir -p "$HELPERS_DIR/rspec/support"
 cp -R "$RSPEC_SOURCE/rspec-support/lib/rspec/support/spec" \
   "$RSPEC_SOURCE/rspec-support/lib/rspec/support/spec.rb" "$HELPERS_DIR/rspec/support/"
@@ -127,7 +129,7 @@ SUITES=("$@")
 SPEC_PATHS=()
 run_spec() {
   local suite="${1%%/*}"
-  if [ "${#SUITES[@]}" -eq 0 ] || [[ " ${SUITES[*]} " == *" $suite "* ]]; then
+  if [ "${#SUITES[@]}" -eq 0 ] || [[ " ${SUITES[*]} " == *" $suite "* ]] || [[ " ${SUITES[*]} " == *" $1 "* ]]; then
     SPEC_PATHS+=("$1")
   fi
 }

@@ -49,6 +49,9 @@ pub struct Lexer<'a> {
     /// from `prepend`; this puts the counter back at the line following the
     /// heredoc terminator afterwards.
     pub(super) restore_line: Option<usize>,
+    /// Where the source stream's offset stands while an injected heredoc
+    /// rest-of-line is lexed at the offsets it was written at.
+    pub(super) restore_offset: Option<usize>,
     /// Whether this lexer is reading the core library rather than a program.
     pub(super) prelude: bool,
     /// Whether the source says it is written in bytes rather than in text. A
@@ -150,6 +153,7 @@ impl<'a> Lexer<'a> {
             alias_names_left: 0,
             label_colon: false,
             restore_line: None,
+            restore_offset: None,
             prelude: false,
             binary_source,
             frozen_literals,
@@ -169,6 +173,7 @@ impl<'a> Lexer<'a> {
         let saved_prev = self.prev_significant.clone();
         let saved_prev_end = self.prev_significant_end;
         let saved_restore_line = self.restore_line;
+        let saved_restore_offset = self.restore_offset;
         let saved_label_colon = self.label_colon;
 
         // Get the next token
@@ -183,6 +188,7 @@ impl<'a> Lexer<'a> {
         self.prev_significant = saved_prev;
         self.prev_significant_end = saved_prev_end;
         self.restore_line = saved_restore_line;
+        self.restore_offset = saved_restore_offset;
         self.label_colon = saved_label_colon;
 
         token

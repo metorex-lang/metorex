@@ -20,8 +20,17 @@ pub(crate) fn successor_in(text: &str, unicode: bool) -> String {
         .filter(|(_, letter)| letter.is_ascii_alphanumeric() || (unicode && counts_up(**letter)))
         .map(|(index, _)| index)
         .collect();
-    let mut carry = None;
+    let mut carry: Option<(usize, char)> = None;
     for position in alphanumeric.iter().rev() {
+        // A carry stops at a character set apart from the one that wrapped
+        // by something neither letter nor digit, when one is a letter and
+        // the other a digit, so "a_9" steps to "a_10".
+        if let Some((wrapped_at, _)) = carry
+            && wrapped_at > position + 1
+            && differ_in_kind(letters[wrapped_at], letters[*position])
+        {
+            break;
+        }
         match bump(letters[*position]) {
             Neighbor::Found(next) => {
                 letters[*position] = next;
@@ -43,6 +52,13 @@ pub(crate) fn successor_in(text: &str, unicode: bool) -> String {
         }
         None => step_last_character(letters),
     }
+}
+
+/// Whether one of two characters is an ASCII letter and the other an ASCII
+/// digit.
+fn differ_in_kind(first: char, second: char) -> bool {
+    (first.is_ascii_alphabetic() && second.is_ascii_digit())
+        || (first.is_ascii_digit() && second.is_ascii_alphabetic())
 }
 
 /// The successor of a string with no letter or digit that steps, which

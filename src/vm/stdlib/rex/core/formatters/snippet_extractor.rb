@@ -31,7 +31,7 @@ module Rex
         def self.lines_of(file_path)
           raise NoSuchFileError unless File.exist?(file_path)
 
-          (@source_lines_by_path ||= {})[file_path] ||= File.read(file_path).split("\n")
+          Rex.world.source_lines_from_file(file_path)
         end
       end
     end

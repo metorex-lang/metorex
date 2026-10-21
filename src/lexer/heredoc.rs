@@ -105,6 +105,7 @@ impl<'a> Lexer<'a> {
         // characters (e.g. `, TOPLEVEL_BINDING)` in `eval(<<-EOS, TOPLEVEL_BINDING)`)
         // need to be re-lexed as tokens AFTER the heredoc string is emitted,
         // then followed by the newline that originally terminated the line.
+        let (rest_column, rest_offset) = (self.column, self.offset);
         let mut rest_of_line = String::new();
         while let Some(ch) = self.peek() {
             if ch == '\n' {
@@ -195,9 +196,12 @@ impl<'a> Lexer<'a> {
             if self.peek() == Some('\n') {
                 self.advance();
             }
+            let stream_offset = self.restore_offset.unwrap_or(self.offset);
             self.restore_line = Some(self.line);
+            self.restore_offset = Some(stream_offset);
             self.line = saved_line;
-            self.column = saved_column;
+            self.column = rest_column;
+            self.offset = rest_offset;
             let mut injection = rest_of_line;
             injection.push('\n');
             // `prepend` is LIFO (pop yields last), so push chars in reverse.

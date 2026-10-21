@@ -226,7 +226,9 @@ impl VirtualMachine {
                     return Ok(Some(Object::Method(std::rc::Rc::new(stub))));
                 }
                 if is_operator || self.responds_to(receiver, &name_str) {
-                    let owner = self.builtins().class_of(receiver);
+                    let owner = self
+                        .native_owner_of_exception_method(receiver, &name_str, position)?
+                        .unwrap_or_else(|| self.builtins().class_of(receiver));
                     let mut stub = crate::object::Method::new(
                         name_str.clone(),
                         vec!["args".to_string()],
@@ -329,6 +331,19 @@ impl VirtualMachine {
                 {
                     return Ok(Some(Object::Bool(true)));
                 }
+                // A class or module has Kernel's functions as private methods,
+                // as every object does.
+                if include_private
+                    && matches!(receiver.view(), View::Class(_) | View::Module(_))
+                    && (crate::vm::native_methods::is_kernel_private_function(&method_query)
+                        || crate::vm::native_methods::class_methods::BASIC_OBJECT_PRIVATE_METHODS
+                            .contains(&method_query.as_str()))
+                    && self
+                        .lookup_method(receiver, &method_query)
+                        .is_none_or(|(_, method)| !method.is_undefined)
+                {
+                    return Ok(Some(Object::Bool(true)));
+                }
                 // Ruby asks `respond_to_missing?` for anything the lookup
                 // missed, passing the same private flag it was given.
                 Ok(Some(Object::Bool(self.responds_via_missing(
@@ -377,5 +392,42 @@ impl VirtualMachine {
             }
             _ => Ok(None),
         }
+    }
+}
+
+impl VirtualMachine {
+    /// For an exception, the core class among its ancestors that answers
+    /// `name` natively, as SystemExit does `status`, since every exception
+    /// shares one class record.
+    fn native_owner_of_exception_method(
+        &mut self,
+        receiver: &Object,
+        name: &str,
+        position: Position,
+    ) -> Result<Option<std::rc::Rc<crate::class::Class>>, MetorexError> {
+        let View::Exception(details) = receiver.view() else {
+            return Ok(None);
+        };
+        let (class, type_name) = {
+            let held = details.borrow();
+            (held.class.clone(), held.exception_type.clone())
+        };
+        let class = match class {
+            Some(class) => class,
+            None => match self.globals().get(&type_name).view() {
+                Some(View::Class(class)) => std::rc::Rc::clone(class),
+                _ => return Ok(None),
+            },
+        };
+        let owners = self.ancestor_names(Object::Class(class), position)?;
+        let Some(owner) =
+            crate::vm::native_methods::object_methods::nearest_core_owner(&owners, name)
+        else {
+            return Ok(None);
+        };
+        Ok(match self.globals().get(owner).view() {
+            Some(View::Class(found)) => Some(std::rc::Rc::clone(found)),
+            _ => None,
+        })
     }
 }

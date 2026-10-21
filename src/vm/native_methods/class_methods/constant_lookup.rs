@@ -21,7 +21,7 @@ impl VirtualMachine {
                     crate::vm::call_frame::FrameKind::Method { .. }
                 )
         });
-        if !running_a_method {
+        if !running_a_method || self.home_method_frame_is_borrowed() {
             return None;
         }
         // The class the method was defined in, which a method written in a
@@ -212,6 +212,17 @@ impl VirtualMachine {
                 position,
             );
         }
+        self.default_const_missing(module_rc, name, position)
+    }
+
+    /// Module's own `const_missing`, which raises the NameError, as `super`
+    /// from a program's `const_missing` reaches it.
+    pub(crate) fn default_const_missing(
+        &mut self,
+        module_rc: &Rc<Class>,
+        name: &str,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
         let owner = self.module_name_for_message(module_rc, position)?;
         let qualified = if owner.is_empty() || owner == "Object" {
             name.to_string()

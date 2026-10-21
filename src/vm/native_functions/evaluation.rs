@@ -135,7 +135,7 @@ impl VirtualMachine {
             Some(View::Int(n)) => n,
             _ => 1,
         };
-        let lineno = named_lineno.max(1) as usize;
+        let lineno = named_lineno.max(0) as usize;
         let tokens = crate::lexer::Lexer::with_start_line(&code, lineno)
             .with_source_encoding(Some(
                 crate::lexer::named_source_encoding(&code).unwrap_or_else(|| code_encoding.clone()),

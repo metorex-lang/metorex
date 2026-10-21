@@ -75,3 +75,9 @@ fn test_oop_writer_methods_parens_execution() {
     let output = run_example("oop/writer_methods_parens.rb");
     assert_eq!(output, expected);
 }
+
+#[test]
+fn a_class_body_attr_accessor_runs_the_one_a_module_extended_into_the_class() {
+    let output = run_example("oop/attr_accessor_from_an_extended_module.rb");
+    assert_eq!(output, "[:status, :carrier]\n:sent\n");
+}

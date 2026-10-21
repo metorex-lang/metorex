@@ -479,7 +479,7 @@ impl VirtualMachine {
                     drop(dict);
                     let hash_obj = Object::Dict(Rc::clone(dict_rc));
                     let block_result =
-                        self.execute_block_body(&block, vec![hash_obj, key.clone()])?;
+                        self.execute_block_callable(&block, vec![hash_obj, key.clone()], position)?;
                     // The block may have set the key directly (h[k] = val), or
                     // returned a value. Check the hash first, fall back to block result.
                     let stored = dict_rc.borrow().get(&key_string).cloned();

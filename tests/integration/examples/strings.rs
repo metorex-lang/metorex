@@ -627,3 +627,15 @@ fn an_integer_format_directive_takes_an_object_answering_to_int_through_method_m
     let output = run_example("strings/format_integer_from_an_object_with_to_int.rb");
     assert_eq!(output, "3\n3\n0\n00000\n7\n");
 }
+
+#[test]
+fn succ_stops_a_carry_at_a_separator_between_a_letter_and_a_digit() {
+    let output = run_example("strings/succ_carries_past_an_underscore.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"Collision_10\"\n\"Collision_100\"\n\"az_10\"\n\"a-10\"\n",
+            "\"Zz_10\"\n\"2.0\"\n\"-10\"\n\"b_\"\n"
+        )
+    );
+}

@@ -497,6 +497,9 @@ impl VirtualMachine {
                     || held
                         .find_own_method(&format!("__class__{}", method_name))
                         .is_some_and(|written| written_by_the_program(&written))
+                    || (written_by_the_program(method)
+                        && crate::vm::method_lookup::extended_method(held, method_name)
+                            .is_some_and(|(_, extended)| Rc::ptr_eq(&extended, method)))
             }
             _ => false,
         };

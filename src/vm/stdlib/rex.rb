@@ -134,9 +134,43 @@ module Rex
       end
     end
 
+    EXECUTABLE_SOURCE = <<~'RUBY'
+      #!/usr/bin/env ruby
+
+      require 'rspec/core'
+      RSpec::Core::Runner.invoke
+    RUBY
+
+    # RSpec's `exe/rspec`, which bisect runs in each child process. Rex's
+    # files are carried in the binary, so it is written once to a directory
+    # of Rex's own.
     def self.path_to_executable
-      "metorex spec"
+      @path_to_executable ||= begin
+        require "tmpdir"
+        require "fileutils"
+        directory = File.join(Dir.tmpdir, "metorex-rex-#{Process.uid}")
+        path = File.join(directory, "rspec")
+        unless File.file?(path) && File.read(path) == EXECUTABLE_SOURCE
+          FileUtils.mkdir_p(directory)
+          written = "#{path}.#{Process.pid}"
+          File.write(written, EXECUTABLE_SOURCE)
+          File.chmod(0o755, written)
+          File.rename(written, path)
+        end
+        path
+      end
     end
+  end
+
+  MODULES_TO_AUTOLOAD = {
+    :Matchers     => "rspec/expectations",
+    :Expectations => "rspec/expectations",
+    :Mocks        => "rspec/mocks"
+  }
+
+  def self.const_missing(name)
+    require MODULES_TO_AUTOLOAD.fetch(name) { return super }
+    ::Rex.const_get(name)
   end
 
   Core::DSL.expose_globally!

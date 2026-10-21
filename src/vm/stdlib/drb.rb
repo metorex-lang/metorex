@@ -197,9 +197,11 @@ module DRb
     end
 
     def method_missing(name, *arguments, &block)
-      if DRb.here?(@uri)
-        object = DRb.to_obj(@ref)
-        DRb.current_server.check_insecure_method(object, name)
+      # An object a server in this process serves is called directly, on
+      # the server that holds the URI, which need not be the current one.
+      if (server = DRb.fetch_server(@uri))
+        object = server.to_obj(@ref)
+        server.check_insecure_method(object, name)
         return object.__send__(name, *arguments, &block)
       end
       succeeded, result = DRbConn.call(@uri) do |stream|
@@ -236,8 +238,17 @@ module DRb
 
     attr_reader :uri, :thread, :front, :config
 
+    @@acl = nil
+
+    # The ACL a server started after this checks each connection against.
+    def self.default_acl(acl)
+      @@acl = acl
+    end
+
     def initialize(uri = nil, front = nil, config = nil)
-      @config = config.is_a?(Hash) ? config.dup : {}
+      @config = config.is_a?(Hash) ? config.dup : { tcp_acl: config }
+      @config[:tcp_acl] ||= @@acl
+      @acl = @config[:tcp_acl]
       @idconv = @config[:idconv] || DRbIdConv.new
       host, port = DRb.parse_uri(uri || "druby://:0")
       if host.empty?
@@ -295,6 +306,10 @@ module DRb
     def serve
       loop do
         client = @listener.accept
+        if @acl && !@acl.allow_socket?(client)
+          client.close
+          next
+        end
         @sessions << Thread.new(client) { |stream| answer(stream) }
       end
     rescue IOError, SystemCallError
@@ -346,6 +361,10 @@ module DRb
     def stop_service
       @primary_server&.stop_service
       @primary_server = nil
+    end
+
+    def install_acl(acl)
+      DRbServer.default_acl(acl)
     end
 
     def current_server

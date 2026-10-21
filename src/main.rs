@@ -78,6 +78,9 @@ fn real_main() {
         cli.file = arguments.split_off(2);
         run_inline(&cli, spec::PROGRAM, spec::PROGRAM_NAME);
     }
+    if let Some(subcommand) = subcommands_wanted(&arguments) {
+        run_subcommand(subcommand);
+    }
     refuse_a_second_internal_encoding(&arguments);
     // RUBYOPT is read as though its words had been written on the command
     // line, ahead of what was, so a flag written there is overridden by the
@@ -122,7 +125,7 @@ fn real_main() {
     // script or `-e` written alongside it still runs.
     if cli.ruby_version {
         println!("{}", metorex::ruby_description());
-        if cli.file.is_empty() && cli.execute.is_empty() && cli.test.is_none() && !cli.repl {
+        if cli.file.is_empty() && cli.execute.is_empty() {
             return;
         }
     }
@@ -131,8 +134,6 @@ fn real_main() {
     // arrives on standard input, the way `ruby < script.rb` runs it.
     if cli.file.is_empty()
         && cli.execute.is_empty()
-        && cli.test.is_none()
-        && !cli.repl
         && !std::io::IsTerminal::is_terminal(&std::io::stdin())
     {
         let mut bytes = Vec::new();
@@ -214,40 +215,12 @@ fn run_inline(cli: &Cli, code: &str, named: &str) -> ! {
     }
 }
 
-/// Run what the command line names once inline code is ruled out: the test
-/// runner, the REPL, or a script.
+/// Run what the command line names once inline code is ruled out: the REPL
+/// or a script.
 fn real_main_after_inline(cli: Cli) {
-    // Test discovery mode
-    if let Some(ref test_dir) = cli.test {
-        let dir = Path::new(test_dir);
-        match test_discovery::run_test_discovery(dir) {
-            Ok(result) => {
-                if !result.all_passed() {
-                    process::exit(1);
-                }
-            }
-            Err(err) => {
-                eprintln!("Test discovery error: {}", err);
-                process::exit(1);
-            }
-        }
-        return;
-    }
-
-    // REPL mode: no file given or explicit --repl flag
-    if cli.file.is_empty() || cli.repl {
-        match Repl::new() {
-            Ok(mut repl) => {
-                if let Err(err) = repl.run() {
-                    eprintln!("REPL error: {}", err);
-                    process::exit(1);
-                }
-            }
-            Err(err) => {
-                eprintln!("Failed to initialize REPL: {}", err);
-                process::exit(1);
-            }
-        }
+    // With no script named, the program is typed at the REPL.
+    if cli.file.is_empty() {
+        run_repl();
         return;
     }
 
@@ -560,7 +533,6 @@ const FLAGS_TAKING_A_VALUE: &[&str] = &[
     "--enable",
     "--disable",
     "--backtrace-limit",
-    "--test",
 ];
 
 /// The command line with each interpreter flag written the way the argument
