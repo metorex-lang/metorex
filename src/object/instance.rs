@@ -26,6 +26,9 @@ pub struct Instance {
     /// The variables starting with `__` the program assigned, which it
     /// lists, unlike the interpreter's own slots of that shape.
     pub program_dunder_names: std::collections::HashSet<String>,
+    /// The variables the core library written in Ruby gave the object,
+    /// which stand for state a class MRI writes in C keeps out of sight.
+    pub interpreter_names: std::collections::HashSet<String>,
 }
 
 impl Instance {
@@ -38,6 +41,7 @@ impl Instance {
             singleton_class: Rc::new(RefCell::new(None)),
             frozen: false,
             program_dunder_names: std::collections::HashSet::new(),
+            interpreter_names: std::collections::HashSet::new(),
         }));
         super::live::record_instance(&made);
         made
@@ -69,6 +73,16 @@ impl Instance {
         if name.starts_with("__") {
             self.program_dunder_names.insert(name.clone());
         }
+        self.interpreter_names.remove(&name);
+        self.instance_vars.insert(name, value);
+    }
+
+    /// Set a variable the core library written in Ruby assigned, which
+    /// `instance_variables` leaves out unless the program assigned it first.
+    pub fn set_interpreter_var(&mut self, name: String, value: Object) {
+        if self.instance_vars.get(&name).is_none() {
+            self.interpreter_names.insert(name.clone());
+        }
         self.instance_vars.insert(name, value);
     }
 
@@ -76,7 +90,8 @@ impl Instance {
     /// every one the program assigned, and none of the interpreter's own
     /// slots, whose names start with `__`.
     pub fn lists_var(&self, name: &str) -> bool {
-        !name.starts_with("__") || self.program_dunder_names.contains(name)
+        (!name.starts_with("__") && !self.interpreter_names.contains(name))
+            || self.program_dunder_names.contains(name)
     }
 
     /// Check if this instance's class (or a superclass) knows about the variable.

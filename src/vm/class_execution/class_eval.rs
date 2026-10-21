@@ -82,6 +82,19 @@ impl VirtualMachine {
         self_obj: Object,
         constants_stay_lexical: bool,
     ) -> Result<Object, MetorexError> {
+        self.in_home_frame_of(block, |vm| {
+            vm.run_block_as_class_body_in_home(class, block, position, self_obj, constants_stay_lexical)
+        })
+    }
+
+    fn run_block_as_class_body_in_home(
+        &mut self,
+        class: &Rc<Class>,
+        block: &crate::object::BlockStatement,
+        position: Position,
+        self_obj: Object,
+        constants_stay_lexical: bool,
+    ) -> Result<Object, MetorexError> {
         let prev_self = self.environment().get("self");
         self.environment_mut()
             .define_named("self", self_obj.clone());
@@ -198,6 +211,19 @@ impl VirtualMachine {
     /// caller-supplied `args` rather than to the module. Returns the block's
     /// last value.
     pub(crate) fn class_exec_block(
+        &mut self,
+        class: &Rc<Class>,
+        self_obj: Object,
+        block: &crate::object::BlockStatement,
+        args: Vec<Object>,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
+        self.in_home_frame_of(block, |vm| {
+            vm.class_exec_block_in_home(class, self_obj, block, args, position)
+        })
+    }
+
+    fn class_exec_block_in_home(
         &mut self,
         class: &Rc<Class>,
         self_obj: Object,

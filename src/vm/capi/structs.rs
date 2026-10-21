@@ -195,13 +195,12 @@ pub extern "C-unwind" fn rb_struct_initialize(instance: Value, values: Value) ->
             View::Symbol(name) => name.as_str().to_string(),
             other => other.to_string(),
         };
-        let variable = Object::symbol(format!("@{}", named));
         let value = values.get(index).cloned().unwrap_or(Object::Nil);
-        call(
-            instance_object.clone(),
-            "instance_variable_set",
-            vec![variable, value],
-        );
+        // A Data instance keeps each member in the slot Data's own
+        // initializer writes, which `instance_variables` leaves out.
+        if let View::Instance(held) = instance_object.view() {
+            held.borrow_mut().set_var(format!("__{named}"), value);
+        }
     }
     call(instance_object, "freeze", Vec::new());
     QNIL

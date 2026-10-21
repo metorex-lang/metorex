@@ -1834,3 +1834,36 @@ fn an_ssl_context_sets_up_once_and_a_key_reads_from_a_file() {
         "true\ntrue\nnil\ntrue\n\"no implicit conversion of Object into String\"\n\"no implicit conversion of Float into String\"\n"
     );
 }
+
+#[test]
+fn a_delegator_with_nothing_delegated_answers_respond_to() {
+    let output = run_example("stdlib/simple_delegator_before_delegating.rb");
+    assert_eq!(
+        output,
+        "false\ntrue\n:nothing_delegated\n\"not delegated\"\ntrue\n42\n"
+    );
+}
+
+#[test]
+fn an_allocated_open_struct_answers_respond_to() {
+    let output = run_example("stdlib/allocated_open_struct.rb");
+    assert_eq!(output, "false\n");
+}
+
+#[test]
+fn yaml_reads_quoted_scalars_across_lines() {
+    let output = run_example("stdlib/yaml_quoted_scalars_across_lines.rb");
+    assert_eq!(
+        output,
+        "{\"first\" => \"RUBY0001 OK [Error=\\\"Exchange: Cross Server access\\\" Service=Imap4] done.\\r\\n\", \"second\" => \"[Error=\\\"Exchange: Cross access\\\" more\\nafter a blank line\", \"third\" => \"ends joined\", \"fourth\" => \"plain\"}\n"
+    );
+}
+
+#[test]
+fn yaml_dump_writes_each_value_in_the_style_psych_chooses() {
+    let output = run_example("stdlib/yaml_dump_styles.rb");
+    assert_eq!(
+        output,
+        "---\nplain: maintenance window\nquoted: '02:00'\nboolean_word: 'yes'\nempty: ''\nmultiline: |\n  first line\n  second line\ntrailing_space: 'ends with a space '\nunicode: café ☃\ncontrol: \"tab\\there\"\nsymbol: :ready\nnumbers:\n- 1\n- 2.5\n- -3\n- 100000000000000000000\nnothing:\nflags:\n- true\n- false\nnested:\n  empty_list: []\n  empty_map: {}\n  list:\n  - a\n  - b\nstruct: !ruby/struct:Reading\n  sensor: north\n  value: 21.5\nrange: !ruby/range\n  begin: 1\n  end: 3\n  excl: false\nlong: 'word word word word word word word word word word word word word word word\n  word word word word word word word word word word word word word word word '\n---\n- 1\n- - 2\n  - - 3\n---\na: 1\n--- two\n---\n- 3\n---\nfirst: &1\n- x\n- \"y\"\nsecond: *1\n{\"plain\" => \"maintenance window\", \"quoted\" => \"02:00\", \"boolean_word\" => \"yes\", \"empty\" => \"\", \"multiline\" => \"first line\\nsecond line\\n\", \"trailing_space\" => \"ends with a space \", \"unicode\" => \"café ☃\", \"control\" => \"tab\\there\", \"numbers\" => [1, 2.5, -3, 100000000000000000000], \"nothing\" => nil, \"flags\" => [true, false], \"nested\" => {\"empty_list\" => [], \"empty_map\" => {}, \"list\" => [\"a\", \"b\"]}, \"long\" => \"word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word \"}\n"
+    );
+}

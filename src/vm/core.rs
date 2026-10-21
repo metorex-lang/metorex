@@ -418,6 +418,24 @@ pub struct VirtualMachine {
     /// Whether the program asked for the place each object was made to be
     /// recorded, which `objspace/trace` and `trace_object_allocations` do.
     pub(crate) tracing_allocations: bool,
+    /// The emitters Psych::Emitter objects write through, by number.
+    pub(crate) yaml_emitters: HashMap<usize, crate::yaml::Emitter>,
+    /// The `$~` and `$_` of each method frame a call has set aside while
+    /// the method it called runs, by the frame they belong to.
+    pub(crate) parked_last_matches: Vec<(Option<u64>, Object, Object)>,
+    /// The `$~` and `$_` of method frames that have returned, which the
+    /// blocks written in them still read and set when they run.
+    pub(crate) ended_frame_matches: HashMap<u64, (Object, Object)>,
+    /// The returned frames whose `$~` and `$_` are the ones in force, while
+    /// a block written in each runs.
+    pub(crate) ended_frames_in_force: Vec<u64>,
+    /// The pairs of structs being compared, by address, so a struct that
+    /// reaches itself through its members compares equal to its match.
+    pub(crate) structs_being_compared: Vec<(usize, usize)>,
+    /// The encoding of the String whose native method is running, which a
+    /// match it records gives the pieces it cuts out.
+    pub(crate) match_subject_encoding: Option<String>,
+    pub(crate) next_yaml_emitter: usize,
     /// How many `trace_object_allocations_start` calls are still open.
     pub(crate) allocation_tracing_depth: usize,
     /// Where each object made while tracing was on was made, by address.
@@ -742,6 +760,13 @@ impl VirtualMachine {
             kernel_function_receiver: None,
             lambda_body_depth: 0,
             tracing_allocations: false,
+            yaml_emitters: HashMap::new(),
+            parked_last_matches: Vec::new(),
+            ended_frame_matches: HashMap::new(),
+            ended_frames_in_force: Vec::new(),
+            structs_being_compared: Vec::new(),
+            match_subject_encoding: None,
+            next_yaml_emitter: 0,
             allocation_tracing_depth: 0,
             allocation_sites: HashMap::new(),
             debug_frozen_string_literal: false,

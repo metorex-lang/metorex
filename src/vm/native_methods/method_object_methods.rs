@@ -73,6 +73,26 @@ impl VirtualMachine {
                     }
                     let target = arguments[0].clone();
                     self.check_bind_target(method_obj, &target, position)?;
+                    // Struct's own method runs on a struct whatever its
+                    // class wrote over it.
+                    if method_obj.body.is_empty()
+                        && method_obj.owner.as_deref() == Some("Struct")
+                        && let View::Instance(instance) = target.view()
+                    {
+                        let class = Rc::clone(&instance.borrow().class);
+                        if let Some(members) = super::struct_members(&class)
+                            && let Some(answer) = self.struct_method(
+                                &class,
+                                &members,
+                                &target,
+                                &method_obj.name,
+                                &arguments[1..],
+                                position,
+                            )?
+                        {
+                            return Ok(Some(answer));
+                        }
+                    }
                     let bound = method_obj.bind(target.clone());
                     let owner = match &bound.owner_class {
                         Some(owner) => Rc::clone(owner),

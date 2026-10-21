@@ -258,8 +258,18 @@ impl VirtualMachine {
                         if is_frozen {
                             return Err(self.frozen_modification_error(receiver, position));
                         }
-                        if position.prelude {
-                            instance_rc.borrow_mut().set_var(var_name, value.clone());
+                        // The core library keeps its own state on the object it
+                        // is running for. A variable it sets on another object,
+                        // as Marshal does restoring one, is that object's own.
+                        let running_self = self.environment().get("self");
+                        let on_itself = matches!(
+                            running_self.as_ref().map(Object::view),
+                            Some(View::Instance(running)) if std::rc::Rc::ptr_eq(running, instance_rc)
+                        );
+                        if position.prelude && on_itself {
+                            instance_rc
+                                .borrow_mut()
+                                .set_interpreter_var(var_name, value.clone());
                         } else {
                             instance_rc
                                 .borrow_mut()

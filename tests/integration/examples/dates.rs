@@ -169,3 +169,12 @@ fn strptime_matches_literal_quotes_after_a_zone_and_inspect_shows_utc_parts() {
         "1996-07-17 02:44:25 -0700\n2020-11-07 01:02:03 -0400\n#<DateTime: 2020-11-07T01:02:03-04:00 ((2459161j,18123s,0n),-14400s,2299161j)>\n#<DateTime: 2020-11-07T01:02:03-04:00 ((2459161j,18123s,0n),-14400s,2299161j)>\n{mday: 7, mon: 11, year: 2020}\n{mday: 7}\n#<Date: 2020-11-07 ((2459161j,0s,0n),+0s,2299161j)>\n#<Date: 2020-11-07 ((2459161j,0s,0n),+0s,-Infj)>\n#<DateTime: 2020-11-07T01:02:03-04:00 ((2459161j,18123s,500000000n),-14400s,2299161j)>\n#<DateTime: 2020-11-07T23:00:00+09:00 ((2459161j,50400s,0n),+32400s,2299161j)>\n#<DateTime: 1582-10-15T00:00:00+00:00 ((2299171j,0s,0n),+0s,2361222j)>\n"
     );
 }
+
+#[test]
+fn strftime_pads_a_negative_year_and_honors_width_and_spaces() {
+    let output = run_example("dates/negative_year_strftime.rb");
+    assert_eq!(
+        output,
+        "\"-0001|-0001|-001|-1|   -1|-00001\"\n\"-12345\"\n\"12345|12345\"\n\"0005|5|   5\"\n"
+    );
+}

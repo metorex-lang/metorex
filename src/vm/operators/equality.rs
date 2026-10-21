@@ -70,6 +70,15 @@ impl VirtualMachine {
         {
             return self.invoke_method(owner, method, left.clone(), vec![right], position);
         }
+        // An exception whose class writes `==` answers with it.
+        if matches!(left.view(), View::Exception(_))
+            && let Some((owner, method)) = self.lookup_method(&left, "==")
+            && !method.is_undefined
+            && !method.body.is_empty()
+        {
+            let answer = self.invoke_method(owner, method, left.clone(), vec![right], position)?;
+            return Ok(Object::Bool(answer.is_truthy()));
+        }
         if let View::Instance(inst_rc) = left.view() {
             // A class that undefined `==` answers it through its
             // `method_missing`, an object compared with itself included.

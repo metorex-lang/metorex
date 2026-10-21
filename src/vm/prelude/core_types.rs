@@ -46,6 +46,12 @@ class Struct
   # the program's own may write its own and reach this one with `super`.
   def initialize(*values, **keywords)
     named = self.class.members
+    # Keywords beside positional values, or given to a struct built with
+    # `keyword_init: false`, are one more value: the Hash they make.
+    if !keywords.empty? && (!values.empty? || self.class.keyword_init? == false)
+      values = values + [keywords]
+      keywords = {}
+    end
     if values.empty? && !keywords.empty?
       keywords.each do |key, value|
         instance_variable_set "@__struct_member_#{key}", value

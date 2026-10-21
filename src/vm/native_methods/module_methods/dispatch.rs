@@ -425,6 +425,12 @@ impl VirtualMachine {
             return Ok(Some(Object::Bool(self.tracing_allocations)));
         }
 
+        if module_rc.name() == "Psych" && method_name == "__parse__" {
+            return Ok(Some(self.yaml_parse(arguments)));
+        }
+        if module_rc.name() == "Psych" && method_name == "__emitter__" {
+            return self.yaml_emitter(arguments, position).map(Some);
+        }
         if module_rc.name() == "OpenSSL" && method_name == "__rsa_generate__" {
             return self.rsa_generate(arguments, position).map(Some);
         }

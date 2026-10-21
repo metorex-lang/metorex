@@ -247,6 +247,7 @@ impl VirtualMachine {
         subject_encoding: Option<String>,
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
+        let subject_encoding = subject_encoding.or_else(|| self.match_subject_encoding.clone());
         let Some(compiled) = compile(pattern, flags) else {
             self.globals_mut().set(LAST_MATCH, Object::Nil);
             return Ok(None);

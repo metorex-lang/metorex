@@ -1,0 +1,5 @@
+early = Time.utc(-1, 12, 16)
+p early.strftime("%Y|%5Y|%4Y|%-Y|%_Y|%06Y")
+p Time.utc(-12345, 1, 1).strftime("%Y")
+p Time.utc(12345, 1, 1).strftime("%Y|%3Y")
+p Time.utc(5, 1, 1).strftime("%Y|%-Y|%_Y")

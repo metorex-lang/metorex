@@ -147,6 +147,7 @@ fn test_equals_instance() {
         singleton_class: Rc::new(RefCell::new(None)),
         frozen: false,
         program_dunder_names: std::collections::HashSet::new(),
+        interpreter_names: std::collections::HashSet::new(),
     }));
     let inst2 = Rc::clone(&inst1);
     let inst3 = Rc::new(RefCell::new(Instance {
@@ -156,6 +157,7 @@ fn test_equals_instance() {
         singleton_class: Rc::new(RefCell::new(None)),
         frozen: false,
         program_dunder_names: std::collections::HashSet::new(),
+        interpreter_names: std::collections::HashSet::new(),
     }));
 
     let obj1 = Object::Instance(inst1);

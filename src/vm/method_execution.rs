@@ -599,6 +599,143 @@ impl VirtualMachine {
         self_value: Object,
         arguments: Vec<Object>,
     ) -> Result<Object, MetorexError> {
+        self.in_frame_of_its_own(method, |vm| {
+            vm.execute_method_body_in_frame(method, self_value, arguments)
+        })
+    }
+
+    /// Runs `run` with `$~` and `$_` of the method's own, put back as they
+    /// were when it returns, since each method frame has its own last match
+    /// and last line read. A method of the core library written in Ruby
+    /// stands for one MRI writes in C, and sets them in its caller's frame.
+    fn in_frame_of_its_own<T>(&mut self, method: &Method, run: impl FnOnce(&mut Self) -> T) -> T {
+        let core_library = method
+            .source_location
+            .as_ref()
+            .is_none_or(|written| written.filename.as_deref().is_none_or(|file| file == "<internal:prelude>"));
+        if core_library {
+            return run(self);
+        }
+        let caller = self.last_match_frame();
+        let (held_match, held_line) = self.take_last_match_and_line();
+        self.parked_last_matches.push((caller, held_match, held_line));
+        let answered = run(self);
+        if let Some((_, held_match, held_line)) = self.parked_last_matches.pop() {
+            self.put_last_match_and_line(held_match, held_line);
+        }
+        answered
+    }
+
+    /// The method frame whose `$~` and `$_` the running code reads: a
+    /// block's is the method it was written in.
+    fn last_match_frame(&self) -> Option<u64> {
+        match self.lexical_home_frame {
+            Some(home) => home,
+            None => self.current_method_frame,
+        }
+    }
+
+    /// The `$~` and `$_` in force, leaving neither set.
+    fn take_last_match_and_line(&mut self) -> (Object, Object) {
+        let held_match = self
+            .globals()
+            .get(crate::vm::native_methods::regexp_methods::LAST_MATCH)
+            .unwrap_or(Object::Nil);
+        let held_line = self.globals().get("_").unwrap_or(Object::Nil);
+        self.put_last_match_and_line(Object::Nil, Object::Nil);
+        (held_match, held_line)
+    }
+
+    /// Put `$~` and `$_` in force. A global already holding the value is
+    /// left as it is, since writing one counts as a change to the scope a
+    /// block built in a loop is reused against.
+    fn put_last_match_and_line(&mut self, held_match: Object, held_line: Object) {
+        for (name, value) in [
+            (crate::vm::native_methods::regexp_methods::LAST_MATCH, held_match),
+            ("_", held_line),
+        ] {
+            let unchanged = match self.globals().get(name) {
+                Some(current) => {
+                    crate::vm::native_methods::object_methods::same_object(&current, &value)
+                }
+                None => matches!(value.view(), View::Nil),
+            };
+            if !unchanged {
+                self.globals_mut().set(name, value);
+            }
+        }
+    }
+
+    /// Runs a block written in the method frame `home` with that frame's
+    /// `$~` and `$_` in force, when a method it called is the one running
+    /// the block, and keeps what the block leaves there for that frame.
+    /// A block of the core library written in Ruby shares the `$~` of the
+    /// code running it, as the C code it stands for does.
+    pub(crate) fn in_home_frame_of<T>(
+        &mut self,
+        block: &crate::object::BlockStatement,
+        run: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        let home = block.home_frame;
+        let core_library = block
+            .source_file
+            .as_deref()
+            .is_none_or(|file| file == "<internal:prelude>");
+        if core_library || home == self.last_match_frame() {
+            return run(self);
+        }
+        let Some(at) = self
+            .parked_last_matches
+            .iter()
+            .rposition(|(frame, _, _)| *frame == home)
+        else {
+            // A frame still running with only the core library's methods
+            // above it has the `$~` in force. One that has returned keeps
+            // what the block finds and leaves there for the next block
+            // written in it.
+            let Some(ended) = home else {
+                return run(self);
+            };
+            if self.live_frames.contains(&ended) || self.ended_frames_in_force.contains(&ended) {
+                return run(self);
+            }
+            let (running_match, running_line) = self.take_last_match_and_line();
+            let (home_match, home_line) = self
+                .ended_frame_matches
+                .remove(&ended)
+                .unwrap_or((Object::Nil, Object::Nil));
+            self.put_last_match_and_line(home_match, home_line);
+            self.ended_frames_in_force.push(ended);
+            let answered = run(self);
+            self.ended_frames_in_force.pop();
+            let left = self.take_last_match_and_line();
+            if !(matches!(left.0.view(), View::Nil) && matches!(left.1.view(), View::Nil)) {
+                self.ended_frame_matches.insert(ended, left);
+            }
+            self.put_last_match_and_line(running_match, running_line);
+            return answered;
+        };
+        let (running_match, running_line) = self.take_last_match_and_line();
+        let (_, home_match, home_line) = std::mem::replace(
+            &mut self.parked_last_matches[at],
+            (home, Object::Nil, Object::Nil),
+        );
+        self.put_last_match_and_line(home_match, home_line);
+        let answered = run(self);
+        let (left_match, left_line) = self.take_last_match_and_line();
+        if let Some(parked) = self.parked_last_matches.get_mut(at) {
+            *parked = (home, left_match, left_line);
+        }
+        self.put_last_match_and_line(running_match, running_line);
+        answered
+    }
+
+    fn execute_method_body_in_frame(
+        &mut self,
+        method: &Method,
+        self_value: Object,
+        arguments: Vec<Object>,
+    ) -> Result<Object, MetorexError> {
         self.environment_mut().push_isolated_scope();
 
         // Take the pending block now so nested calls don't see it.
@@ -819,6 +956,16 @@ impl VirtualMachine {
     /// Execute the body of a method written at the top level within a fresh
     /// scope.
     pub(crate) fn execute_function_body(
+        &mut self,
+        function: &Method,
+        arguments: Vec<Object>,
+    ) -> Result<Object, MetorexError> {
+        self.in_frame_of_its_own(function, |vm| {
+            vm.execute_function_body_in_frame(function, arguments)
+        })
+    }
+
+    fn execute_function_body_in_frame(
         &mut self,
         function: &Method,
         arguments: Vec<Object>,

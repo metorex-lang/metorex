@@ -81,3 +81,27 @@ fn a_subclass_of_an_anonymous_struct_inspects_as_a_struct() {
         "#<struct ResponseText code=nil, text=\"ready\">\n#<struct Response name=\"OK\", data=#<struct ResponseText code=nil, text=\"ready\">>\n#<struct ResponseText code=nil, text=\"\">\n#<struct Cell next_cell=#<struct Cell next_cell=#<struct Cell:...>>>\n"
     );
 }
+
+#[test]
+fn struct_and_data_members_are_not_instance_variables() {
+    let output = run_example("struct/members_are_not_instance_variables.rb");
+    assert_eq!(output, "[]\n[:@label]\ntrue\n[]\n[:@tags]\ntrue\n");
+}
+
+#[test]
+fn structs_compare_their_members_with_equals_through_super_and_nesting() {
+    let output = run_example("struct/allocated_struct_equality.rb");
+    assert_eq!(
+        output,
+        "true\ntrue\ntrue\ntrue\n[1, 2]\n[nil, nil]\ntrue\ntrue\n[\"invoice\"]\n[\"invoice\"]\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n"
+    );
+}
+
+#[test]
+fn keywords_beside_values_reach_a_struct_as_a_hash() {
+    let output = run_example("struct/forwarding_initialize_through_super.rb");
+    assert_eq!(
+        output,
+        "Fetched UIDs do not match (54321 != 22222)\n[7, nil]\n{\"UID\" => 5}\n{\"UID\" => 2}\n{\"UID\" => 2}\n{\"UID\" => 2}\n{uid: 2}\n{\"UID\" => 2}\n[[1], {\"UID\" => 2}]\n"
+    );
+}

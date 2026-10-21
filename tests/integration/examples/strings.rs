@@ -657,3 +657,21 @@ fn string_to_r_reads_the_rational_the_string_starts_with() {
         "12abc (12/1)\n1.5e2 (150/1)\n-0.25.1 (-1/4)\n1_000.5 (2001/2)\nx (0/1)\n1.2/3 (2/5)\n1/3.5 (2/7)\n.5 (1/2)\n5. (5/1)\n1/1e1 (1/10)\n3/x (3/1)\n1e (1/1)\n1e+ (1/1)\n2e-1 (1/5)\n1__0 (1/1)\n_1 (0/1)\n1_ (1/1)\n-.5 (-1/2)\n+3 (3/1)\n1/-2 (1/1)\n1/+2 (1/1)\n1.5/2.5 (3/5)\n0x10 (0/1)\n1/2/3 (1/2)\n1e2/1e1 (10/1)\n1.5.5 (3/2)\n1/2e (1/2)\n0.5.12 (1/2)\n(1/3)\n(1/1)\n\"divided by 0\"\n"
     );
 }
+
+#[test]
+fn force_encoding_reads_the_bytes_a_binary_match_cut_out() {
+    let output = run_example("strings/force_encoding_after_binary_gsub.rb");
+    assert_eq!(
+        output,
+        "#<Encoding:BINARY (ASCII-8BIT)>\n12\n\"☃ snow\\\"man\"\ntrue\n\"☃ snow\\\"man\"\nnil\n\"☃ snow\"\n\"☃\"\n[[\"* \", #<Encoding:BINARY (ASCII-8BIT)>, 2]]\n3\n\"☃\"\n\"☃\"\n"
+    );
+}
+
+#[test]
+fn the_pieces_of_a_binary_match_stay_binary() {
+    let output = run_example("strings/binary_match_pieces_stay_binary.rb");
+    assert_eq!(
+        output,
+        "[#<Encoding:BINARY (ASCII-8BIT)>, #<Encoding:BINARY (ASCII-8BIT)>]\n[#<Encoding:BINARY (ASCII-8BIT)>, #<Encoding:BINARY (ASCII-8BIT)>]\n[#<Encoding:BINARY (ASCII-8BIT)>, #<Encoding:BINARY (ASCII-8BIT)>]\n[#<Encoding:BINARY (ASCII-8BIT)>, #<Encoding:BINARY (ASCII-8BIT)>]\n[#<Encoding:BINARY (ASCII-8BIT)>, #<Encoding:BINARY (ASCII-8BIT)>]\n"
+    );
+}

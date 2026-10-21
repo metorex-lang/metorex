@@ -141,11 +141,12 @@ fn check_until_and_skip_until_and_exist_report_the_same_reach() {
 }
 
 #[test]
-fn a_searching_call_refuses_a_string_pattern() {
-    let err = run_err(&format!("{HELD}held.scan_until(\"is\")"));
-    assert!(err.contains("expected Regexp"), "Error was: {}", err);
-    let err = run_err(&format!("{HELD}held.exist?(\"is\")"));
-    assert!(err.contains("expected Regexp"), "Error was: {}", err);
+fn a_searching_call_looks_for_a_string_as_its_text() {
+    assert_eq!(
+        run(&format!("{HELD}held.scan_until(\"is\")")),
+        Some(Object::string("This"))
+    );
+    assert_eq!(run(&format!("{HELD}held.exist?(\"is\")")), Some(Object::Int(4)));
 }
 
 #[test]

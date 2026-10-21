@@ -20,6 +20,7 @@ mod processes;
 mod reachable;
 mod refinements;
 mod rsa_keys;
+mod yaml_events;
 
 pub(crate) use clocks::*;
 pub(crate) use processes::PROCESS_NATIVE_METHODS;

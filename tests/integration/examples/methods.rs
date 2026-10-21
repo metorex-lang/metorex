@@ -998,6 +998,15 @@ fn adjacent_literals_holding_bytes_join_across_a_line_continuation() {
     let output = run_example("parser/adjacent_strings_across_a_line_continuation.rb");
     assert_eq!(
         output,
-        "6\nfalse\n\"plain\"\n[\"first second\", 3]\n[\"ab\", \"cd\"]\n[195, 169, 255, 195, 188]\n#<Encoding:UTF-8>\n"
+        "6\nfalse\n\"plain\"\n[\"first second\", 3]\n[\"ab\", \"cd\"]\n[195, 169, 255, 195, 188]\n#<Encoding:UTF-8>\ntrue\n#<Encoding:UTF-8>\n[88, 194, 170, 206, 176]\n3\n\"Xaΰ\"\n"
+    );
+}
+
+#[test]
+fn not_reads_everything_before_an_and_or_an_or() {
+    let output = run_example("parser/elsif_with_not_and_or.rb");
+    assert_eq!(
+        output,
+        ":not_a_string_or_flagged\n:plain\n:not_a_string_or_flagged\ntrue\nfalse\nfalse\ntrue\nfalse\nfalse\n\"false\"\n"
     );
 }

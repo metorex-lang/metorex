@@ -107,6 +107,7 @@ fn note(unit: &Unit, instruction: &Instruction) -> Option<String> {
 
 /// One instruction of a unit as `RubyVM::InstructionSequence` lists it.
 pub struct Listed {
+    pub instruction: Instruction,
     pub name: &'static str,
     /// Each operand's field name and value, in the order the instruction
     /// declares them.
@@ -124,6 +125,7 @@ pub fn listing(unit: &Unit) -> Vec<Listed> {
         .iter()
         .enumerate()
         .map(|(at, instruction)| Listed {
+            instruction: *instruction,
             name: instruction.name(),
             operands: operands(instruction),
             line: unit.positions[at].line,

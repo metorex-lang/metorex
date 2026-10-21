@@ -653,6 +653,24 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         let self_val = self.environment().get("self").unwrap_or(Object::Nil);
+        // A struct's own methods come before the ones every object has, so
+        // `super` from a struct subclass's `==` compares the members rather
+        // than the two objects.
+        if let View::Instance(instance) = self_val.view()
+            && crate::vm::native_methods::struct_members(&instance.borrow().class).is_some()
+            && !matches!(method_name, "method_missing" | "initialize")
+        {
+            let backing = self.builtins().class_of(&self_val);
+            if let Some(result) = self.call_native_method(
+                backing.as_ref(),
+                &self_val,
+                method_name,
+                &evaluated_args,
+                position,
+            )? {
+                return Ok(result);
+            }
+        }
         // `method_missing` reached through `super` reports the method as one
         // nothing defines, which the branch below writes.
         if method_name != "method_missing"

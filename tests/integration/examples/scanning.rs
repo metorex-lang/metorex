@@ -4,7 +4,7 @@ use super::run_example;
 
 /// The expected output of both `scanning/reading_a_string` variants, which
 /// differ only in whether the calls are written with parentheses.
-const READING_A_STRING_OUTPUT: &str = "\"This\"\n4\n\" \"\nnil\n\"is\"\n5\n2\n2\n\" a test\"\n7\nfalse\n0\n\"This\"\n\"Th\"\n\" is a test\"\n\"is\"\ntrue\n2\n0\n\"This\"\n10\n\" is a\"\n5\n\" test\"\n\"2024-05\"\n\"2024-05\"\n\"2024\"\n\"2024\"\n[\"2024\", \"05\"]\n{\"year\" => \"2024\", \"month\" => \"05\"}\n[\"2024-05\", \"2024\", \"05\"]\n3\n\"a\"\n\"bc\"\n98\n98\nfalse\ntrue\n\"#<StringScanner fin>\"\nTypeError\nScanError\n";
+const READING_A_STRING_OUTPUT: &str = "\"This\"\n4\n\" \"\nnil\n\"is\"\n5\n2\n2\n\" a test\"\n7\nfalse\n0\n\"This\"\n\"Th\"\n\" is a test\"\n\"is\"\ntrue\n2\n0\n\"This\"\n10\n\" is a\"\n5\n\" test\"\n\"2024-05\"\n\"2024-05\"\n\"2024\"\n\"2024\"\n[\"2024\", \"05\"]\n{\"year\" => \"2024\", \"month\" => \"05\"}\n[\"2024-05\", \"2024\", \"05\"]\n3\n\"a\"\n\"bc\"\n98\n98\nfalse\ntrue\n\"#<StringScanner fin>\"\nStringScanner::Error\n";
 
 #[test]
 fn test_scanning_reading_a_string_execution() {
@@ -126,4 +126,22 @@ fn test_scanning_substitutions_execution() {
 fn test_scanning_substitutions_parens_execution() {
     let output = run_example("scanning/substitutions_parens.rb");
     assert_eq!(output, SUBSTITUTIONS_OUTPUT);
+}
+
+#[test]
+fn the_searching_methods_look_for_a_string_as_its_text() {
+    let output = run_example("scanning/searching_for_a_string.rb");
+    assert_eq!(
+        output,
+        "\"abc literal\"\n11\n\"literal\"\n\"abc \"\n\"literal\"\nnil\n1\n\"x\"\n1\nnil\n\"a.\"\n2\n"
+    );
+}
+
+#[test]
+fn a_scanner_reads_bytes_inside_a_character() {
+    let output = run_example("scanning/bytes_inside_a_character.rb");
+    assert_eq!(
+        output,
+        "\"\\xE2\"\n1\n\"\\xE2\"\n\"\\x88\"\n\"\\x82x\"\n2\n1\n136\n136\n2\n\"\\x88\"\nfalse\n\"\\x82x\"\n"
+    );
 }

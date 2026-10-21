@@ -88,6 +88,7 @@ impl VirtualMachine {
                         new_inst.borrow_mut().set_var(k.clone(), held);
                     }
                     new_inst.borrow_mut().program_dunder_names = inst.program_dunder_names.clone();
+                    new_inst.borrow_mut().interpreter_names = inst.interpreter_names.clone();
                     Object::Instance(new_inst)
                 };
                 // The copy gets `initialize_copy` with the original, so

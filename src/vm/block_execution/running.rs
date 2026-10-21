@@ -112,6 +112,16 @@ impl VirtualMachine {
         block: &BlockStatement,
         arguments: Vec<Object>,
     ) -> Result<Object, MetorexError> {
+        self.in_home_frame_of(block, |vm| {
+            vm.execute_block_body_in_home(block, arguments)
+        })
+    }
+
+    fn execute_block_body_in_home(
+        &mut self,
+        block: &BlockStatement,
+        arguments: Vec<Object>,
+    ) -> Result<Object, MetorexError> {
         // A block with nothing in it still lets a limit on its caller pass.
         if !self.timeout_limits.is_empty() {
             let opened = crate::lexer::Position::new(
@@ -351,6 +361,17 @@ impl VirtualMachine {
     /// Execute a block body and return ControlFlow (for use in iterators like .each)
     /// This version propagates Break/Continue instead of converting them to errors
     pub(crate) fn execute_block_with_control_flow(
+        &mut self,
+        block: &BlockStatement,
+        arguments: Vec<Object>,
+        position: Position,
+    ) -> Result<ControlFlow, MetorexError> {
+        self.in_home_frame_of(block, |vm| {
+            vm.execute_block_with_control_flow_in_home(block, arguments, position)
+        })
+    }
+
+    fn execute_block_with_control_flow_in_home(
         &mut self,
         block: &BlockStatement,
         arguments: Vec<Object>,

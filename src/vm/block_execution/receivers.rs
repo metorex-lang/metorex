@@ -180,6 +180,18 @@ impl VirtualMachine {
         arguments: Vec<Object>,
         position: Position,
     ) -> Result<Object, MetorexError> {
+        self.in_home_frame_of(block, |vm| {
+            vm.execute_block_with_receiver_in_home(block, receiver, arguments, position)
+        })
+    }
+
+    fn execute_block_with_receiver_in_home(
+        &mut self,
+        block: &BlockStatement,
+        receiver: Object,
+        arguments: Vec<Object>,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
         let defines_on_receiver = block.body().iter().any(|statement| {
             matches!(
                 statement,

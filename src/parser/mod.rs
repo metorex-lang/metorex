@@ -36,6 +36,9 @@ pub struct Parser {
     /// How many range operands the parse is inside. `or` and `and` bind
     /// looser than a range, so neither belongs to one of its ends.
     pub(crate) range_operand_depth: usize,
+    /// How many `not` operands the parse is inside. `not` takes everything
+    /// after it up to an `and` or an `or`, which apply to its answer.
+    pub(crate) not_operand_depth: usize,
     /// Depth of paren-less argument lists currently being parsed. When >0,
     /// identifier-valued arguments must NOT absorb a trailing `do...end` —
     /// the block belongs to the outer method call, per Ruby precedence.
@@ -445,6 +448,7 @@ impl Parser {
             ternary_depth: 0,
             ternary_branch_depth: 0,
             range_operand_depth: 0,
+            not_operand_depth: 0,
             paren_less_arg_depth: 0,
             condition_depth: 0,
             in_when_clause: false,

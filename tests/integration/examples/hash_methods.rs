@@ -194,3 +194,12 @@ fn find_all_on_a_hash_answers_an_array_of_pairs() {
         "[[\"xmlns\", \"a\"], [\"xmlns:x\", \"b\"]]\n[[nil, \"a\"], [\"x\", \"b\"]]\n{\"id\" => \"c\"}\n{\"id\" => \"c\"}\n[\"c\"]\n"
     );
 }
+
+#[test]
+fn an_identity_hash_takes_a_basic_object_key() {
+    let output = run_example("hash_methods/identity_hash_with_a_basic_object_key.rb");
+    assert_eq!(
+        output,
+        "true\n1\n\"undefined method 'hash' for an instance of Bare\"\n"
+    );
+}

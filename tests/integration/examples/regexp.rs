@@ -283,3 +283,27 @@ fn unicode_block_and_age_properties_match_their_characters() {
         "true\ntrue\ntrue\ntrue\nfalse\ntrue\nfalse\ntrue\nfalse\ntrue\n"
     );
 }
+
+#[test]
+fn the_last_match_belongs_to_the_method_frame_that_set_it() {
+    let output = run_example("regexp/last_match_belongs_to_its_method.rb");
+    assert_eq!(
+        output,
+        "[\"Net::IMAP::ResponseParseError\", [\"1042\", \"7\"]]\n\"gam\"\n\"x\"\nnil\n\"1042\"\nnil\n[\"w\", \"a\", \"w\", \"a\"]\n[\"w\", \"a\", \"w\", \"a\"]\n[\"w\", \"a\", \"w\", \"a\"]\n"
+    );
+}
+
+#[test]
+fn a_unicode_escape_may_list_several_code_points() {
+    let output = run_example("regexp/unicode_escape_with_several_code_points.rb");
+    assert_eq!(
+        output,
+        "true\ntrue\ntrue\ntrue\nfalse\n\"aBi̇c\"\n\"ABC\"\n\"😀 A\"\ntrue\n\"\\\\u{41 42}\"\n\"AB\"\n\"ABB\"\ntrue\n"
+    );
+}
+
+#[test]
+fn inline_flags_reach_only_to_the_end_of_their_group() {
+    let output = run_example("regexp/inline_flags_turn_extended_mode_off.rb");
+    assert_eq!(output, "true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n");
+}

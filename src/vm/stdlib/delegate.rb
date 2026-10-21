@@ -29,7 +29,10 @@ class Delegator
   # private or protected name is reported as one it does not forward, which
   # is a warning rather than an error so the caller can see why.
   def respond_to_missing?(name, include_private = false)
-    target = __getobj__
+    # Nothing delegated yet answers to nothing beyond the delegator's own.
+    delegated = true
+    target = __getobj__ { delegated = false }
+    return false unless delegated
     answered = target.respond_to? name, include_private
     if answered && include_private && !target.respond_to?(name, false)
       warn "delegator does not forward private method ##{name}"
@@ -168,6 +171,7 @@ end
 class SimpleDelegator < Delegator
   def __getobj__
     unless defined? @delegate_sd_obj
+      return yield if block_given?
       raise ArgumentError, "not delegated"
     end
     @delegate_sd_obj

@@ -210,7 +210,8 @@ impl Parser {
     ) -> Result<Expression, MetorexError> {
         let keywords_bind = self.paren_less_arg_depth == 0
             && self.assignment_rhs_depth == 0
-            && self.range_operand_depth == 0;
+            && self.range_operand_depth == 0
+            && self.not_operand_depth == 0;
         while keywords_bind && self.check(&[TokenKind::KeywordAnd, TokenKind::KeywordOr]) {
             let keyword = self.advance();
             self.skip_whitespace();

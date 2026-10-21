@@ -19,14 +19,33 @@ impl VirtualMachine {
         // `hash` replaces it.
         // A member's own reader or writer is the one Struct.new wrote, and
         // one the program wrote over it answers in its place.
+        // The method running now calling `super` reaches Struct's own, so
+        // finding that method again is no reason to step aside.
         if let Some((_, method)) = self.lookup_method(receiver, method_name)
             && !method.body.is_empty()
+            && !self
+                .method_running_stack
+                .last()
+                .is_some_and(|running| Rc::ptr_eq(running, &method))
             && !is_generated_member_accessor(&method, method_name, members)
             && !self.enumerable_stands_in(receiver, method_name)
         {
             return Ok(None);
         }
+        self.struct_method(class_rc, members, receiver, method_name, arguments, position)
+    }
 
+    /// Struct's own method `method_name`, whatever the struct's class
+    /// defines over it, which is what `bind_call` of Struct's method runs.
+    pub(crate) fn struct_method(
+        &mut self,
+        class_rc: &Rc<Class>,
+        members: &[String],
+        receiver: &Object,
+        method_name: &str,
+        arguments: &[Object],
+        position: Position,
+    ) -> Result<Option<Object>, MetorexError> {
         // A member accessor wins over Struct's own method of the same name,
         // so `Struct.new(:length).new(42).length` answers 42, not 1.
         if arguments.is_empty() && members.iter().any(|member| member == method_name) {
@@ -248,7 +267,8 @@ impl VirtualMachine {
                     receiver,
                     other,
                     method_name == "eql?",
-                ))))
+                    position,
+                )?)))
             }
             "hash" => {
                 let rendered = format!(
@@ -480,8 +500,9 @@ impl VirtualMachine {
     }
 
     /// Two structs are equal when they share a class and every member value
-    /// compares equal. `strict` selects `eql?` semantics, under which 1998
-    /// and 1998.0 differ.
+    /// compares equal, by `==`, or by `eql?` when `strict`, under which 1998
+    /// and 1998.0 differ. A pair already being compared higher up the stack,
+    /// which a struct that reaches itself comes back to, is taken as equal.
     pub(crate) fn struct_equals(
         &mut self,
         class_rc: &Rc<Class>,
@@ -489,66 +510,53 @@ impl VirtualMachine {
         receiver: &Object,
         other: &Object,
         strict: bool,
-    ) -> bool {
-        let mut in_flight = Vec::new();
-        struct_values_equal(class_rc, members, receiver, other, strict, &mut in_flight)
-    }
-}
-
-/// A cyclic struct compares equal to another cycle of the same shape, so a
-/// pair already being compared higher up the stack is taken as equal.
-pub(crate) fn struct_values_equal(
-    class_rc: &Rc<Class>,
-    members: &[String],
-    receiver: &Object,
-    other: &Object,
-    strict: bool,
-    in_flight: &mut Vec<(usize, usize)>,
-) -> bool {
-    let View::Instance(other_instance) = other.view() else {
-        return false;
-    };
-    if !Rc::ptr_eq(&other_instance.borrow().class, class_rc) {
-        return false;
-    }
-    let pair = match (receiver.view(), other.view()) {
-        (View::Instance(left), View::Instance(right)) => {
-            (Rc::as_ptr(left) as usize, Rc::as_ptr(right) as usize)
+        position: Position,
+    ) -> Result<bool, MetorexError> {
+        let View::Instance(other_instance) = other.view() else {
+            return Ok(false);
+        };
+        // The two must be of one class, the receiver's own, which a `super`
+        // from a subclass's `==` reaches this through as well.
+        let same_class = match receiver.view() {
+            View::Instance(instance) => {
+                Rc::ptr_eq(&other_instance.borrow().class, &instance.borrow().class)
+            }
+            _ => Rc::ptr_eq(&other_instance.borrow().class, class_rc),
+        };
+        if !same_class {
+            return Ok(false);
         }
-        _ => return false,
-    };
-    if pair.0 == pair.1 || in_flight.contains(&pair) {
-        return true;
+        let pair = match (receiver.view(), other.view()) {
+            (View::Instance(left), View::Instance(right)) => {
+                (Rc::as_ptr(left) as usize, Rc::as_ptr(right) as usize)
+            }
+            _ => return Ok(false),
+        };
+        if pair.0 == pair.1 || self.structs_being_compared.contains(&pair) {
+            return Ok(true);
+        }
+        self.structs_being_compared.push(pair);
+        let mut equal = Ok(true);
+        for member in members {
+            let left = member_value(receiver, member);
+            let right = member_value(other, member);
+            let same = if strict {
+                self.values_eql(&left, &right, position)
+            } else {
+                self.evaluate_binary_operation(&crate::ast::BinaryOp::Equal, left, right, position)
+                    .map(|answer| answer.is_truthy())
+            };
+            match same {
+                Ok(true) => {}
+                other => {
+                    equal = other;
+                    break;
+                }
+            }
+        }
+        self.structs_being_compared.pop();
+        equal
     }
-    in_flight.push(pair);
-    let equal = members.iter().all(|member| {
-        member_values_equal(
-            &member_value(receiver, member),
-            &member_value(other, member),
-            strict,
-            in_flight,
-        )
-    });
-    in_flight.pop();
-    equal
-}
-
-pub(crate) fn member_values_equal(
-    left: &Object,
-    right: &Object,
-    strict: bool,
-    in_flight: &mut Vec<(usize, usize)>,
-) -> bool {
-    if let View::Instance(instance) = left.view()
-        && let Some(members) = struct_members(&Rc::clone(&instance.borrow().class))
-    {
-        let class_rc = Rc::clone(&instance.borrow().class);
-        return struct_values_equal(&class_rc, &members, left, right, strict, in_flight);
-    }
-    if strict && std::mem::discriminant(&left.view()) != std::mem::discriminant(&right.view()) {
-        return false;
-    }
-    left.equals(right)
 }
 
 /// Whether `method` is the reader or writer Struct.new wrote for one of

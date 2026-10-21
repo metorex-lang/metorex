@@ -62,6 +62,14 @@ pub(crate) fn listing_of_scope(source: &str, kind: &str, line: usize) -> Option<
     let listed = crate::bytecode::disassembly::listing(&unit)
         .into_iter()
         .map(|listed| {
+            let patterns = Object::array(
+                instruction_patterns(&unit, listed.instruction)
+                    .into_iter()
+                    .map(|(pattern, flags)| {
+                        Object::Regex(std::rc::Rc::new(pattern), std::rc::Rc::new(flags))
+                    })
+                    .collect(),
+            );
             Object::array(vec![
                 Object::string(listed.name),
                 Object::array(
@@ -76,10 +84,91 @@ pub(crate) fn listing_of_scope(source: &str, kind: &str, line: usize) -> Option<
                 Object::Int(listed.line as i64),
                 Object::Bool(listed.line_event),
                 listed.note.map_or(Object::Nil, Object::string),
+                patterns,
             ])
         })
         .collect();
     Some(Object::array(listed))
+}
+
+/// The patterns, as source and flags, an instruction makes Regexps of: the
+/// one a pattern literal loads, the ones written in a `when` it tests, and
+/// every one written in a block it makes, which MRI lists inside the block's
+/// own sequence.
+fn instruction_patterns(
+    unit: &crate::bytecode::unit::Unit,
+    instruction: crate::bytecode::instruction::Instruction,
+) -> Vec<(String, String)> {
+    use crate::bytecode::instruction::Instruction;
+    match instruction {
+        Instruction::LoadRegex { pattern, .. } => unit
+            .regexes
+            .get(usize::from(pattern))
+            .map(|regex| vec![(regex.pattern.to_string(), regex.flags.to_string())])
+            .unwrap_or_default(),
+        Instruction::WhenArm { arm, .. } => unit
+            .pattern_arms
+            .get(usize::from(arm))
+            .map(|held| literal_patterns(&held.pattern))
+            .unwrap_or_default(),
+        Instruction::CaseArm { arm, .. } => unit
+            .case_arms
+            .get(usize::from(arm))
+            .map(|held| literal_patterns(&held.pattern))
+            .unwrap_or_default(),
+        Instruction::MatchPattern { pattern, .. } => unit
+            .patterns
+            .get(usize::from(pattern))
+            .map(|(held, _)| literal_patterns(held))
+            .unwrap_or_default(),
+        Instruction::MakeBlock { literal, .. } => unit
+            .block_bodies
+            .get(usize::from(literal))
+            .and_then(|body| {
+                crate::bytecode::compiler::compile_as(&body.body, crate::bytecode::compiler::UnitKind::Plain).ok()
+            })
+            .map(|inner| {
+                inner
+                    .instructions
+                    .iter()
+                    .flat_map(|held| instruction_patterns(&inner, *held))
+                    .collect()
+            })
+            .unwrap_or_default(),
+        _ => Vec::new(),
+    }
+}
+
+/// The pattern literals written in a `when` or an `in` pattern.
+fn literal_patterns(pattern: &crate::ast::MatchPattern) -> Vec<(String, String)> {
+    use crate::ast::{Expression, MatchPattern};
+    let written = |held: &Expression| match held {
+        Expression::RegexLiteral { pattern, flags, .. } => vec![(pattern.clone(), flags.clone())],
+        _ => Vec::new(),
+    };
+    match pattern {
+        MatchPattern::Expression(held) | MatchPattern::Pinned(held) => written(held),
+        MatchPattern::Multiple(choices) | MatchPattern::Array(choices) => {
+            choices.iter().flat_map(literal_patterns).collect()
+        }
+        MatchPattern::Object(pairs) => pairs.iter().flat_map(|(_, held)| literal_patterns(held)).collect(),
+        MatchPattern::Bind { pattern, .. } => literal_patterns(pattern),
+        MatchPattern::Range { start, end, .. } => {
+            let mut found = literal_patterns(start);
+            found.extend(literal_patterns(end));
+            found
+        }
+        MatchPattern::ArrayPattern { prefix, suffix, .. } => {
+            prefix.iter().chain(suffix).flat_map(literal_patterns).collect()
+        }
+        MatchPattern::FindPattern { middle, .. } => middle.iter().flat_map(literal_patterns).collect(),
+        MatchPattern::HashPattern { entries, .. } => entries
+            .iter()
+            .filter_map(|(_, held)| held.as_ref())
+            .flat_map(literal_patterns)
+            .collect(),
+        _ => Vec::new(),
+    }
 }
 
 /// A program's statements and the lines its scopes close on.

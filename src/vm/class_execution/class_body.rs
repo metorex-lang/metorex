@@ -763,6 +763,8 @@ impl VirtualMachine {
         }
         // A value written over a pending autoload takes its place.
         class.remove_autoload(const_name);
+        // An anonymous class or module takes the name it is bound to.
+        crate::vm::statement::name_constant_value(class, const_name, &const_value);
         class.set_class_var(const_name, const_value);
         let assign_file = self
             .reported_current_file()

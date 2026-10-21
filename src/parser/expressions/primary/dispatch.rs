@@ -65,7 +65,7 @@ impl Parser {
                 let (parts, holds_bytes) =
                     self.adjacent_string_parts(vec![InterpolationPart::Text(value)], false);
                 if holds_bytes && let Some(spelled) = only_text(&parts) {
-                    return Ok(literals::byte_string_literal(spelled, position));
+                    return Ok(joined_bytes_literal(spelled, position));
                 }
                 if parts
                     .iter()
@@ -85,10 +85,7 @@ impl Parser {
             TokenKind::ByteString(value) => {
                 let (parts, _) =
                     self.adjacent_string_parts(vec![InterpolationPart::Text(value)], true);
-                Ok(literals::byte_string_literal(
-                    only_text(&parts).unwrap_or_default(),
-                    position,
-                ))
+                Ok(joined_bytes_literal(only_text(&parts).unwrap_or_default(), position))
             }
             // A literal in a source that asked outright for literals that
             // change carries no notice that it will be frozen.
@@ -96,7 +93,7 @@ impl Parser {
                 let (parts, holds_bytes) =
                     self.adjacent_string_parts(vec![InterpolationPart::Text(value)], false);
                 if holds_bytes && let Some(spelled) = only_text(&parts) {
-                    return Ok(literals::byte_string_literal(spelled, position));
+                    return Ok(joined_bytes_literal(spelled, position));
                 }
                 match only_text(&parts) {
                     Some(value) => Ok(Expression::MethodCall {
@@ -116,7 +113,7 @@ impl Parser {
                 let (parts, holds_bytes) =
                     self.adjacent_string_parts(vec![InterpolationPart::Text(value)], false);
                 if holds_bytes && let Some(spelled) = only_text(&parts) {
-                    return Ok(literals::byte_string_literal(spelled, position));
+                    return Ok(joined_bytes_literal(spelled, position));
                 }
                 match only_text(&parts) {
                     Some(value) => Ok(Expression::MethodCall {
@@ -430,6 +427,17 @@ impl Parser {
             }
             self.advance();
         }
+    }
+}
+
+/// The literal a run of bytes, a character standing for each, makes: plain
+/// text when the bytes spell UTF-8, as literals joined across a split
+/// character do, and a literal holding the bytes otherwise.
+fn joined_bytes_literal(spelled: String, position: crate::lexer::Position) -> Expression {
+    let bytes: Option<Vec<u8>> = spelled.chars().map(|held| u8::try_from(held as u32).ok()).collect();
+    match bytes.and_then(|bytes| String::from_utf8(bytes).ok()) {
+        Some(text) => literals::string_literal(text, position),
+        None => literals::byte_string_literal(spelled, position),
     }
 }
 

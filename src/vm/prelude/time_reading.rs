@@ -313,7 +313,8 @@ pub(super) const SOURCE: &str = r##"
   # many places it takes when nothing else is asked for.
   def __directive_number__(letter)
     case letter
-    when "Y" then [year, "0", 4]
+    # A year before 1 is written with four digits after its sign.
+    when "Y" then [year, "0", year < 0 ? 5 : 4]
     when "C" then [year / 100, "0", 2]
     when "y" then [year % 100, "0", 2]
     when "m" then [mon, "0", 2]
@@ -365,10 +366,12 @@ pub(super) const SOURCE: &str = r##"
   # A number written with the padding and width a directive asked for.
   def __padded_number__(counted, flags, width, pad, places)
     pad = __padding_of__(flags, pad)
-    places = width if width > places
+    places = width if width > 0
     negative = counted < 0
     digits = counted.abs.to_s
     return negative ? "-#{digits}" : digits if flags.include?("-")
+    # Spaces go ahead of the sign, and zeros between the sign and the digits.
+    return (negative ? "-#{digits}" : digits).rjust(places, " ") if pad == " "
     room = places - (negative ? 1 : 0)
     digits = digits.rjust(room, pad) if digits.length < room
     negative ? "-#{digits}" : digits

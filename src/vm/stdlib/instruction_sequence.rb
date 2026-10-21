@@ -422,11 +422,20 @@ class RubyVM
     def instructions
       listed = []
       written = nil
-      listing.each do |name, operands, line, line_event, _note|
+      listing.each do |name, operands, line, line_event, _note, patterns|
         listed << line if line != written && line.positive?
         written = line
         listed << :RUBY_EVENT_LINE if line_event
-        listed << [name.to_sym, *operands.map(&:last)]
+        # A pattern literal is listed as the Regexp it makes rather than the
+        # place the unit keeps it, and the patterns a `when` tests or a block
+        # holds are listed after the instruction's operands.
+        values = operands.map(&:last)
+        if name == "LoadRegex" && patterns.size == 1
+          values[-1] = patterns[0]
+        elsif !patterns.empty?
+          values << patterns
+        end
+        listed << [name.to_sym, *values]
       end
       listed
     end

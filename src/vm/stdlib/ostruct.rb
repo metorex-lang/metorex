@@ -49,7 +49,8 @@ class OpenStruct
   def respond_to_missing?(name, include_private = false)
     spelling = name.to_s
     spelling = spelling[0, spelling.length - 1] if spelling.end_with?("=")
-    @table.key?(spelling.to_sym)
+    # One allocated and never initialized has no table of its own yet.
+    !@table.nil? && @table.key?(spelling.to_sym)
   end
 
   def method_missing(name, *args)

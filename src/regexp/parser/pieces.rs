@@ -5,7 +5,7 @@ use super::*;
 impl Parser {
     pub fn new(source: &str, flags: Flags) -> Self {
         Self {
-            letters: source.chars().collect(),
+            letters: one_code_point_per_escape(source),
             at: 0,
             groups: 0,
             names: vec![None],
@@ -283,7 +283,37 @@ impl Parser {
         Node::Letter(letter)
     }
 
+    /// A group, which keeps the flags in force at its opening for what
+    /// follows it: a `(?i)` written inside reaches only to the group's end.
+    /// A `(?i)` that is itself the group sets them for the rest of the one
+    /// around it.
     pub(crate) fn parse_group(&mut self) -> Read<Node> {
+        let opening = self.flags;
+        let toggles = self.is_bare_flag_toggle();
+        let node = self.parse_group_body()?;
+        if !toggles {
+            self.flags = opening;
+        }
+        Ok(node)
+    }
+
+    /// Whether the group at the cursor is `(?imx-imx)` with no body.
+    fn is_bare_flag_toggle(&self) -> bool {
+        if self.letters.get(self.at + 1) != Some(&'?') {
+            return false;
+        }
+        let mut at = self.at + 2;
+        while let Some(letter) = self.letters.get(at) {
+            match letter {
+                'i' | 'm' | 'x' | 'a' | 'd' | 'u' | '-' => at += 1,
+                ')' => return at > self.at + 2,
+                _ => return false,
+            }
+        }
+        false
+    }
+
+    fn parse_group_body(&mut self) -> Read<Node> {
         self.at += 1;
         if !self.eat('?') {
             let index = self.next_group(None);
@@ -449,4 +479,43 @@ impl Parser {
             _ => Err(Trouble("undefined group option".to_string())),
         }
     }
+}
+
+/// The pattern's characters, with each `\u{...}` that lists several code
+/// points written as one escape per code point, which is what it stands for
+/// in a class and out of one alike.
+fn one_code_point_per_escape(source: &str) -> Vec<char> {
+    let letters: Vec<char> = source.chars().collect();
+    let mut written = Vec::with_capacity(letters.len());
+    let mut at = 0;
+    while at < letters.len() {
+        let held = letters[at];
+        if held == '\\' && at + 1 < letters.len() {
+            if letters[at + 1] == 'u' && letters.get(at + 2) == Some(&'{') {
+                let close = letters[at + 3..].iter().position(|letter| *letter == '}');
+                if let Some(close) = close {
+                    let inside: String = letters[at + 3..at + 3 + close].iter().collect();
+                    let points: Vec<&str> = inside.split_whitespace().collect();
+                    if points.len() > 1 {
+                        for point in points {
+                            written.extend(['\\', 'u', '{']);
+                            written.extend(point.chars());
+                            written.push('}');
+                        }
+                        at += 3 + close + 1;
+                        continue;
+                    }
+                }
+            }
+            // An escaped character is copied with its backslash, so `\\u{`
+            // stays the literal backslash it was written as.
+            written.push(held);
+            written.push(letters[at + 1]);
+            at += 2;
+            continue;
+        }
+        written.push(held);
+        at += 1;
+    }
+    written
 }

@@ -523,7 +523,7 @@ impl VirtualMachine {
                         // The core library written in Ruby keeps its own
                         // slots the way the interpreter does.
                         if position.prelude {
-                            instance.set_var(name.clone(), value);
+                            instance.set_interpreter_var(name.clone(), value);
                         } else {
                             instance.set_program_var(name.clone(), value);
                         }

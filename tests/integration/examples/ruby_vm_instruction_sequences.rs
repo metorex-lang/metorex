@@ -53,3 +53,12 @@ fn test_ruby_vm_instruction_sequences_no_parens_execution() {
     let output = run_example("ruby_vm/instruction_sequences_no_parens.rb");
     assert_eq!(output, INSTRUCTION_SEQUENCES_OUTPUT);
 }
+
+#[test]
+fn an_instruction_sequence_lists_the_patterns_its_code_holds() {
+    let output = run_example("ruby_vm/instruction_sequence_lists_its_patterns.rb");
+    assert_eq!(
+        output,
+        "[:check, [/\\AAUTH=/i]]\n[:labeled, [/\\ABODY\\[/in]]\n[:as_value, [/\\ABINARY\\[/in]]\n[:words, [/ /]]\n[:args, [/\\ACHARSET\\b/i, /\\ACHARSET\\z/i]]\n"
+    );
+}

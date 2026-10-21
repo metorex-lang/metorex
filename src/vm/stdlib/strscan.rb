@@ -2,7 +2,7 @@
 # which is how a hand-written parser reads its input.
 class StringScanner
   Error = Class.new(StandardError)
-  Version = "3.1.0"
+  Version = "3.1.6"
 
   def initialize(string, fixed_anchor: false)
     self.string = string
@@ -45,8 +45,10 @@ class StringScanner
 
   # The cursor is reported in bytes, so a multi-byte character counts for
   # every byte it is made of.
+  # The byte offset reached. It may stand inside a character, after
+  # `pos=` or a byte read, which `@inside` counts the bytes of.
   def pos
-    @string[0, @position].bytesize
+    @string[0, @position].bytesize + @inside
   end
 
   def pointer
@@ -60,14 +62,15 @@ class StringScanner
       raise RangeError, "index out of range"
     end
     @position = characters_before landing
+    @inside = landing - @string[0, @position].bytesize
     offset
   end
 
-  # The number of characters standing before a byte offset.
+  # The number of whole characters standing before a byte offset.
   def characters_before(counted)
     at = 0
     seen = 0
-    while seen < counted && at < @string.length
+    while at < @string.length && seen + @string[at].bytesize <= counted
       seen += @string[at].bytesize
       at += 1
     end
@@ -80,17 +83,20 @@ class StringScanner
   end
 
   def charpos
+    return @string.byteslice(0, pos).length if @inside > 0
     @string[0, @position].length
   end
 
   def reset
     @position = 0
+    @inside = 0
     forget_match
     self
   end
 
   def terminate
     @position = @string.length
+    @inside = 0
     forget_match
     self
   end
@@ -100,6 +106,7 @@ class StringScanner
   end
 
   def rest
+    return @string.byteslice(pos..) || "" if @inside > 0
     @string[@position..-1] || ""
   end
 
@@ -116,7 +123,7 @@ class StringScanner
   end
 
   def eos?
-    @position >= @string.length
+    pos >= @string.bytesize
   end
 
   def empty?
@@ -158,9 +165,9 @@ class StringScanner
   # begin where the cursor stands.
   # The pattern a searching call was given. Unlike the ones that match where
   # the cursor stands, these take a Regexp and nothing else.
+  # A String is searched for as the text it holds, as strscan 3.1 does.
   def as_searched_pattern(pattern)
-    return pattern if pattern.is_a?(Regexp)
-    raise TypeError, "wrong argument type #{pattern.class} (expected Regexp)"
+    as_pattern(pattern)
   end
   private :as_searched_pattern
 
@@ -267,6 +274,7 @@ class StringScanner
     return nil if found.nil?
     @previous = @position
     @position = @position + @match_text.length
+    @inside = 0
     @match_text
   end
 
@@ -285,6 +293,7 @@ class StringScanner
     return nil if found.nil?
     @previous = @position
     @position = @position + @match_text.length
+    @inside = 0
     @match_text.bytesize
   end
 
@@ -294,6 +303,7 @@ class StringScanner
     @previous = @position
     taken = @string[@position, @match_start + @match_text.length - @position]
     @position = @match_start + @match_text.length
+    @inside = 0
     taken
   end
 
@@ -322,6 +332,7 @@ class StringScanner
     if advance
       @previous = @position
       @position = @position + reach
+      @inside = 0
     end
     return_string ? taken : taken.bytesize
   end
@@ -334,6 +345,7 @@ class StringScanner
     if advance
       @previous = @position
       @position = @position + reach
+      @inside = 0
     end
     return_string ? taken : taken.bytesize
   end
@@ -341,6 +353,7 @@ class StringScanner
   def unscan
     raise Error, "unscan failed: previous match record not exist" if @previous.nil?
     @position = @previous
+    @inside = 0
     forget_match
     self
   end
@@ -428,16 +441,25 @@ class StringScanner
     @match_text = letter
     @match = letter.match(/\A./m)
     @position = @position + width
+    @inside = 0
     letter
   end
 
+  # One byte, which may be a part of a character.
   def get_byte
-    getch
+    return nil if eos?
+    at = pos
+    @previous = @position
+    @match_start = @position
+    @match_text = @string.byteslice(at, 1)
+    @match = @match_text.b.match(/\A./mn)
+    self.pos = at + 1
+    @match_text
   end
 
   def scan_byte
-    letter = getch
-    letter.nil? ? nil : letter.bytes[0]
+    taken = get_byte
+    taken.nil? ? nil : taken.getbyte(0)
   end
 
   # A count of bytes rather than of characters, and never a part of one.
@@ -465,14 +487,14 @@ class StringScanner
 
   def peek_byte
     return nil if eos?
-    @string[@position].bytes[0]
+    @string.getbyte(pos)
   end
 
   # The number a scanner reads off the front, with an optional sign and an
   # optional base marker.
   def scan_integer(base: 10)
     unless base == 10 || base == 16
-      raise ArgumentError, "invalid radix #{base}"
+      raise ArgumentError, "Unsupported integer base: #{base.inspect}, expected 10 or 16"
     end
     pattern = base == 16 ? /\A[+-]?(0[xX])?\h+/ : /\A[+-]?\d+/
     found = scan(pattern)

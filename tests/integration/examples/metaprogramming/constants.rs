@@ -268,3 +268,12 @@ fn super_from_const_missing_raises_the_name_error_module_raises() {
         ":found\nuninitialized constant Inventory::Gadget\n:Gadget\nuninitialized constant Inventory::Sprocket\n"
     );
 }
+
+#[test]
+fn anonymous_classes_take_the_names_they_are_bound_to() {
+    let output = run_example("constants/anonymous_classes_take_their_constant_names.rb");
+    assert_eq!(
+        output,
+        "\"Top\"\n\"M::InModule\"\n\"C::InClass\"\n\"C::Plain\"\n\"N::Deep::Inner\"\n"
+    );
+}

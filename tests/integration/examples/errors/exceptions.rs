@@ -666,3 +666,21 @@ fn super_from_a_class_method_missing_reports_an_undefined_method() {
         )
     );
 }
+
+#[test]
+fn rescue_names_the_top_level_class_a_module_shadows() {
+    let output = run_example("rescue/rescue_a_top_level_constant.rb");
+    assert_eq!(
+        output,
+        "\"maintenance window moved\"\n\"rescued ArgumentError\"\n\"rescued IOError as ::Exception\"\n[Exception, Mailer::Exception]\n"
+    );
+}
+
+#[test]
+fn an_exception_class_answers_equals_with_its_own_method() {
+    let output = run_example("errors/exception_with_its_own_equality.rb");
+    assert_eq!(
+        output,
+        "true\nfalse\ntrue\nfalse\ntrue\n\"Mail::Parser::Token\"\n#<struct Mail::Parser::Token symbol=:SPACE, value=\" \">\n"
+    );
+}

@@ -799,7 +799,7 @@ class Data
       end
     end
     members.each do |named|
-      built.define_method(named) { instance_variable_get("@#{named}") }
+      built.define_method(named) { instance_variable_get("@__#{named}") }
     end
     built.class_eval(&body) unless body.nil?
     built
@@ -848,7 +848,7 @@ class Data
       word = missing.size == 1 ? "keyword" : "keywords"
       raise ArgumentError, "missing #{word}: #{missing.map { |named| named.inspect }.join(", ")}"
     end
-    members.each { |named| instance_variable_set("@#{named}", given[named]) }
+    members.each { |named| instance_variable_set("@__#{named}", given[named]) }
     self.freeze
     self
   end
@@ -859,13 +859,13 @@ class Data
   end
 
   def deconstruct
-    self.class.members.map { |named| instance_variable_get("@#{named}") }
+    self.class.members.map { |named| instance_variable_get("@__#{named}") }
   end
 
   def to_h
     collected = {}
     self.class.members.each do |named|
-      value = instance_variable_get("@#{named}")
+      value = instance_variable_get("@__#{named}")
       unless block_given?
         collected[named] = value
         next
@@ -898,7 +898,7 @@ class Data
       spelled = Data.member_key(key)
       named = spelled.to_sym
       return collected unless members.include?(named)
-      collected[spelled] = instance_variable_get("@#{named}")
+      collected[spelled] = instance_variable_get("@__#{named}")
     end
     collected
   end
@@ -944,8 +944,8 @@ class Data
     return false unless other.is_a?(Data)
     return false unless other.class == self.class
     self.class.members.each do |named|
-      mine = instance_variable_get("@#{named}")
-      theirs = other.instance_variable_get("@#{named}")
+      mine = instance_variable_get("@__#{named}")
+      theirs = other.instance_variable_get("@__#{named}")
       next if mine.equal?(self) && theirs.equal?(other)
       return false unless yield(mine, theirs)
     end
@@ -956,7 +956,7 @@ class Data
   def hash
     parts = [self.class.object_id]
     self.class.members.each do |named|
-      value = instance_variable_get("@#{named}")
+      value = instance_variable_get("@__#{named}")
       parts.push(value.equal?(self) ? 0 : value.hash)
     end
     parts.hash
@@ -974,11 +974,13 @@ class Data
   # object it is held by is shown as the class alone.
   def data_inspect(walking)
     label = self.class.inspect
-    anonymous = label.start_with?("#<Class:")
+    # A class with no permanent name, one written in an anonymous module
+    # among them, is left out.
+    anonymous = label.start_with?("#<")
     return "#<data #{label}:...>" if walking.any? { |held| held.equal?(self) }
     walking.push(self)
     parts = self.class.members.map do |named|
-      value = instance_variable_get("@#{named}")
+      value = instance_variable_get("@__#{named}")
       shown = value.is_a?(Data) ? value.data_inspect(walking) : value.inspect
       "#{named}=#{shown}"
     end

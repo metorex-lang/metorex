@@ -44,18 +44,27 @@ impl VirtualMachine {
         let View::String(string_value) = receiver.view() else {
             return Ok(None);
         };
-        for step in STEPS {
-            if let Some(result) = step(
-                self,
-                receiver,
-                string_value,
-                method_name,
-                arguments,
-                position,
-            )? {
-                return Ok(Some(result));
+        // A match the method records cuts its pieces out of this String,
+        // so they carry its encoding.
+        let held = self
+            .match_subject_encoding
+            .replace(string_value.encoding_name());
+        let answered = (|| {
+            for step in STEPS {
+                if let Some(result) = step(
+                    self,
+                    receiver,
+                    string_value,
+                    method_name,
+                    arguments,
+                    position,
+                )? {
+                    return Ok(Some(result));
+                }
             }
-        }
-        self.call_string_set_method(receiver, method_name, arguments, position)
+            self.call_string_set_method(receiver, method_name, arguments, position)
+        })();
+        self.match_subject_encoding = held;
+        answered
     }
 }

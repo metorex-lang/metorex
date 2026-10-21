@@ -19,7 +19,8 @@ impl Parser {
 
         let keyword_binds_here = self.paren_less_arg_depth == 0
             && self.assignment_rhs_depth == 0
-            && self.range_operand_depth == 0;
+            && self.range_operand_depth == 0
+            && self.not_operand_depth == 0;
         while self.check(&[TokenKind::LogicalOr])
             || (keyword_binds_here && self.check(&[TokenKind::KeywordOr]))
         {
@@ -45,7 +46,8 @@ impl Parser {
 
         let keyword_binds_here = self.paren_less_arg_depth == 0
             && self.assignment_rhs_depth == 0
-            && self.range_operand_depth == 0;
+            && self.range_operand_depth == 0
+            && self.not_operand_depth == 0;
         while self.check(&[TokenKind::LogicalAnd])
             || (keyword_binds_here && self.check(&[TokenKind::KeywordAnd]))
         {

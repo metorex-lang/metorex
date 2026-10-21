@@ -23,6 +23,7 @@ pub mod standard_streams;
 pub mod symbol_registry;
 pub mod test_discovery;
 pub mod vm;
+pub mod yaml;
 
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")

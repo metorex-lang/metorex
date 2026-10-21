@@ -116,10 +116,12 @@ impl VirtualMachine {
         self.responds_to(key, "hash")
     }
 
-    /// The object id a hash comparing by identity places a key by.
+    /// The object id a hash comparing by identity places a key by. It is
+    /// BasicObject's `__id__`, which every object has, as against
+    /// `object_id`, which a BasicObject does not.
     fn object_identity(&mut self, key: &Object, position: Position) -> Result<i64, MetorexError> {
         match self
-            .send_to_object(key.clone(), "object_id", vec![], position)?
+            .send_to_object(key.clone(), "__id__", vec![], position)?
             .view()
         {
             View::Int(number) => Ok(number),

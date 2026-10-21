@@ -618,8 +618,8 @@ impl VirtualMachine {
         exception: &Object,
         position: Position,
     ) -> Result<bool, MetorexError> {
-        let named = match handler.view() {
-            View::Class(class) | View::Module(class) => class.name().to_string(),
+        let (named, class) = match handler.view() {
+            View::Class(class) | View::Module(class) => (class.name().to_string(), Rc::clone(class)),
             _ => {
                 return Err(crate::vm::errors::simple_exception(
                     "TypeError",
@@ -632,6 +632,18 @@ impl VirtualMachine {
             let answered =
                 self.send_to_object(handler.clone(), "===", vec![exception.clone()], position)?;
             return Ok(answered.is_truthy());
+        }
+        // The handler is the class itself, so the exception is placed by
+        // its own class chain rather than by a name read again here, which
+        // a class of the same name in the enclosing module would answer.
+        if let View::Exception(details) = exception.view() {
+            let (carried, type_name) = {
+                let details = details.borrow();
+                (details.class.clone(), details.exception_type.clone())
+            };
+            if let Some(raised) = self.raised_class(carried, &type_name) {
+                return Ok(raised.has_ancestor(&class));
+            }
         }
         self.exception_matches(exception, &[named])
     }
@@ -701,28 +713,7 @@ impl VirtualMachine {
                     },
                 },
             };
-            let raised_class = exception_class
-                .clone()
-                .or_else(
-                    || match self.resolve_constant_in_scope(&exception_type_name).view() {
-                        Some(View::Class(class)) => Some(class.clone()),
-                        _ => None,
-                    },
-                )
-                .or_else(
-                    || match self.environment().get(&exception_type_name).view() {
-                        Some(View::Class(class)) => Some(class.clone()),
-                        _ => None,
-                    },
-                )
-                // A name written with its namespace, as `Errno::ENOENT` is,
-                // is not a name the environment holds on its own.
-                .or_else(
-                    || match self.resolve_qualified_constant(&exception_type_name).view() {
-                        Some(View::Class(class)) => Some(class.clone()),
-                        _ => None,
-                    },
-                );
+            let raised_class = self.raised_class(exception_class.clone(), &exception_type_name);
             if let (Some(target_class), Some(raised_class)) = (target_class, raised_class)
                 && raised_class.has_ancestor(&target_class)
             {
@@ -731,6 +722,30 @@ impl VirtualMachine {
         }
 
         Ok(false)
+    }
+
+    /// The class an exception was raised as: the one it carries, or else
+    /// the class its type name reaches.
+    fn raised_class(
+        &self,
+        carried: Option<Rc<crate::class::Class>>,
+        type_name: &str,
+    ) -> Option<Rc<crate::class::Class>> {
+        carried
+            .or_else(|| match self.resolve_constant_in_scope(type_name).view() {
+                Some(View::Class(class)) => Some(class.clone()),
+                _ => None,
+            })
+            .or_else(|| match self.environment().get(type_name).view() {
+                Some(View::Class(class)) => Some(class.clone()),
+                _ => None,
+            })
+            // A name written with its namespace, as `Errno::ENOENT` is,
+            // is not a name the environment holds on its own.
+            .or_else(|| match self.resolve_qualified_constant(type_name).view() {
+                Some(View::Class(class)) => Some(class.clone()),
+                _ => None,
+            })
     }
 }
 
