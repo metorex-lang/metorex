@@ -732,6 +732,7 @@ impl VirtualMachine {
                             .contains(&name)
                         || crate::vm::native_methods::is_native_kernel_method(name)
                         || self.answers_natively(receiver, name)
+                        || core_class_of_instance_defines(receiver, name)
                         || self.object_table_method(name).is_some()
                         || (self.builtins().class_of(receiver).name() == "File"
                             && crate::vm::native_methods::class_methods::is_native_io_method(name))
@@ -1735,6 +1736,28 @@ pub(crate) fn core_public_method(owner: &str, name: &str) -> bool {
         .iter()
         .find(|row| row.owner == owner)
         .is_some_and(|row| row.public.contains(&name))
+}
+
+/// Whether a core class an instance belongs to, below Object, defines
+/// `name` as a public method of its own, as Thread::Queue does `empty?`.
+/// Instances of those classes are answered by native dispatch, which no
+/// method table records.
+fn core_class_of_instance_defines(receiver: &Object, name: &str) -> bool {
+    let View::Instance(instance) = receiver.view() else {
+        return false;
+    };
+    let mut cursor = Some(Rc::clone(&instance.borrow().class));
+    while let Some(current) = cursor {
+        let named = current.ruby_name();
+        if named == "Object" || named == "BasicObject" {
+            return false;
+        }
+        if core_public_method(&named, name) {
+            return true;
+        }
+        cursor = current.superclass();
+    }
+    false
 }
 
 /// Whether `name` is one of the private instance methods the core class or

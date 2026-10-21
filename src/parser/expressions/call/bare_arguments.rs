@@ -90,6 +90,7 @@ impl Parser {
                 | TokenKind::ClassVar(_)
                 | TokenKind::GlobalVar(_)
                 | TokenKind::Bang
+                | TokenKind::Tilde
                 | TokenKind::ColonColon
                 | TokenKind::MagicFile
                 | TokenKind::SourceEncoding(_)
@@ -240,6 +241,7 @@ impl Parser {
                     | TokenKind::ClassVar(_)
                     | TokenKind::GlobalVar(_)
                     | TokenKind::Bang
+                    | TokenKind::Tilde
                     | TokenKind::NotKeyword
                     | TokenKind::ColonColon
                     | TokenKind::MagicFile

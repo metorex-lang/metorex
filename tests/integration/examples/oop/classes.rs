@@ -293,3 +293,18 @@ fn test_oop_reopened_object_no_parens_execution() {
     let output = run_example("oop/reopened_object_no_parens.rb");
     assert_eq!(output, REOPENED_OBJECT);
 }
+
+#[test]
+fn a_class_variable_in_a_class_new_block_belongs_to_the_enclosing_class() {
+    let output = run_example("oop/class_variable_in_a_class_new_block.rb");
+    assert_eq!(
+        output,
+        "{host: \"mail.example.com\"}\n{host: \"mail.example.com\"}\n[]\n[:@@settings]\n"
+    );
+}
+
+#[test]
+fn freeze_called_without_a_receiver_freezes_self() {
+    let output = run_example("oop/freeze_called_without_a_receiver.rb");
+    assert_eq!(output, "true\ntrue\ntrue\nFrozenError\n");
+}

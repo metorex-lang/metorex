@@ -72,8 +72,9 @@ impl VirtualMachine {
                 drop(waiting);
                 for thread in woken {
                     if let View::Instance(held) = thread.view() {
-                        held.borrow_mut()
-                            .set_var("__thread_waiting".to_string(), Object::Bool(false));
+                        let mut held = held.borrow_mut();
+                        held.set_var("__thread_waiting".to_string(), Object::Bool(false));
+                        held.set_var(crate::vm::fibers::WOKEN.to_string(), Object::Bool(true));
                     }
                 }
                 Ok(Some(receiver.clone()))

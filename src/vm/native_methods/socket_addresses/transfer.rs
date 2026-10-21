@@ -291,17 +291,26 @@ impl VirtualMachine {
                     .get(&handle)
                     .map(|held| held.as_raw_fd())
             });
+        // A socket with no connection held open is not connected.
         let Some(number) = found else {
-            return Err(refused(
+            return Err(crate::vm::errors::simple_exception(
+                "Errno::ENOTCONN",
+                "Socket is not connected - shutdown(2)",
                 position,
-                "shutdown of a closed connection".to_string(),
             ));
         };
         // SAFETY: `number` is a descriptor this program holds open.
         let answered = unsafe { libc::shutdown(number, port as libc::c_int) };
         if answered < 0 {
             let problem = std::io::Error::last_os_error();
-            return Err(refused(position, format!("shutdown: {problem}")));
+            return Err(crate::vm::errors::simple_exception(
+                errno_class(&problem),
+                &format!(
+                    "{} - shutdown(2)",
+                    crate::vm::init::errno_description(problem.raw_os_error().unwrap_or(0))
+                ),
+                position,
+            ));
         }
         Ok(Object::Int(0))
     }

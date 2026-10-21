@@ -1,143 +1,193 @@
-# A monitor: a lock a thread may take more than once, and the condition
-# variables that wait on it. Metorex runs one thread at a time, so the lock
-# records who holds it and how deep rather than blocking anyone.
+# A monitor: a lock a fiber may take more than once, and the condition
+# variables that wait on it. The lock underneath is a Thread::Mutex, so a
+# fiber entering a monitor another one holds waits for it to be let go.
+
+class Monitor
+  def initialize
+    @mon_mutex = Thread::Mutex.new
+    @mon_owner = nil
+    @mon_count = 0
+  end
+
+  def try_enter
+    unless @mon_owner.equal?(Fiber.current)
+      return false unless @mon_mutex.try_lock
+      @mon_owner = Fiber.current
+      @mon_count = 0
+    end
+    @mon_count += 1
+    true
+  end
+
+  def enter
+    unless @mon_owner.equal?(Fiber.current)
+      @mon_mutex.lock
+      @mon_owner = Fiber.current
+      @mon_count = 0
+    end
+    @mon_count += 1
+    nil
+  end
+
+  def exit
+    mon_check_owner
+    @mon_count -= 1
+    if @mon_count == 0
+      @mon_owner = nil
+      @mon_mutex.unlock
+    end
+    nil
+  end
+
+  def synchronize
+    enter
+    begin
+      yield
+    ensure
+      self.exit
+    end
+  end
+
+  def mon_locked?
+    @mon_mutex.locked?
+  end
+
+  def mon_owned?
+    @mon_mutex.locked? && @mon_owner.equal?(Fiber.current)
+  end
+
+  # Raised on anyone who tries to leave a monitor they are not holding.
+  def mon_check_owner
+    unless @mon_owner.equal?(Fiber.current)
+      raise ThreadError, "current fiber not owner"
+    end
+    nil
+  end
+
+  # Hands the lock back for the whole depth it is held to while waiting on
+  # `cond`, and takes it again to that depth afterwards.
+  def wait_for_cond(cond, timeout)
+    count = @mon_count
+    @mon_owner = nil
+    @mon_count = 0
+    begin
+      cond.wait(@mon_mutex, timeout) ? true : false
+    ensure
+      @mon_owner = Fiber.current
+      @mon_count = count
+    end
+  end
+
+  def new_cond
+    ::MonitorMixin::ConditionVariable.new(self)
+  end
+
+  alias try_mon_enter try_enter
+  alias mon_try_enter try_enter
+  alias mon_enter enter
+  alias mon_exit exit
+  alias mon_synchronize synchronize
+end
 
 module MonitorMixin
   # Something to wait on while the monitor is held. Waiting hands the lock
   # back for the duration and takes it again afterwards.
   class ConditionVariable
-    def initialize(monitor)
-      @monitor = monitor
-      @waiting = []
-    end
-
     def wait(timeout = nil)
       @monitor.mon_check_owner
-      count = @monitor.mon_exit_for_cond
-      begin
-        @waiting.push Thread.current
-        timeout
-      ensure
-        @monitor.mon_enter_for_cond count
-      end
+      @monitor.wait_for_cond(@cond, timeout)
     end
 
     def wait_while
-      wait until !yield
+      while yield
+        wait
+      end
     end
 
     def wait_until
-      wait until yield
+      until yield
+        wait
+      end
     end
 
     def signal
       @monitor.mon_check_owner
-      @waiting.shift
-      nil
+      @cond.signal
     end
 
     def broadcast
       @monitor.mon_check_owner
-      @waiting.clear
-      nil
+      @cond.broadcast
+    end
+
+    private
+
+    def initialize(monitor)
+      @monitor = monitor
+      @cond = Thread::ConditionVariable.new
     end
   end
 
   def self.extend_object(object)
-    super
-    object.mon_initialize
+    super(object)
+    object.__send__(:mon_initialize)
   end
 
-  def mon_initialize
-    @mon_owner = nil
-    @mon_count = 0
-    self
+  def mon_try_enter
+    @mon_data.try_enter
   end
+  alias try_mon_enter mon_try_enter
 
   def mon_enter
-    mon_initialize unless defined? @mon_count
-    if @mon_owner.equal? Thread.current
-      @mon_count = @mon_count + 1
-    else
-      @mon_owner = Thread.current
-      @mon_count = 1
-    end
-    nil
+    @mon_data.enter
   end
 
   def mon_exit
     mon_check_owner
-    @mon_count = @mon_count - 1
-    @mon_owner = nil if @mon_count == 0
-    nil
-  end
-
-  def mon_try_enter
-    mon_initialize unless defined? @mon_count
-    return false if !@mon_owner.nil? && !@mon_owner.equal?(Thread.current)
-    mon_enter
-    true
+    @mon_data.exit
   end
 
   def mon_locked?
-    mon_initialize unless defined? @mon_count
-    @mon_count > 0
+    @mon_data.mon_locked?
   end
 
   def mon_owned?
-    mon_locked? && @mon_owner.equal?(Thread.current)
+    @mon_data.mon_owned?
   end
 
-  def mon_synchronize
-    mon_enter
-    begin
-      yield
-    ensure
-      mon_exit
-    end
+  def mon_synchronize(&block)
+    @mon_data.synchronize(&block)
   end
+  alias synchronize mon_synchronize
 
   def new_cond
-    mon_initialize unless defined? @mon_count
-    MonitorMixin::ConditionVariable.new self
-  end
-
-  # Raised on anyone who tries to leave a monitor they are not holding.
-  def mon_check_owner
-    mon_initialize unless defined? @mon_count
-    unless @mon_owner.equal? Thread.current
-      raise ThreadError, "current thread not owner"
+    unless defined?(@mon_data)
+      mon_initialize
+      @mon_initialized_by_new_cond = true
     end
-    nil
+    ConditionVariable.new(@mon_data)
   end
 
-  # Hand the lock back for the whole depth it is held to, answering that
-  # depth so waiting can take it again.
-  def mon_exit_for_cond
-    held = @mon_count
-    @mon_owner = nil
-    @mon_count = 0
-    held
-  end
+  private
 
-  def mon_enter_for_cond(count)
-    @mon_owner = Thread.current
-    @mon_count = count
-    nil
-  end
-
-  alias_method :enter, :mon_enter
-  alias_method :exit, :mon_exit
-  alias_method :try_enter, :mon_try_enter
-  alias_method :synchronize, :mon_synchronize
-end
-
-# A monitor of its own, for code that wants one rather than a class that is
-# one.
-class Monitor
-  include MonitorMixin
-
-  def initialize
+  def initialize(...)
+    super
     mon_initialize
+  end
+
+  def mon_initialize
+    if defined?(@mon_data)
+      if defined?(@mon_initialized_by_new_cond)
+        return
+      elsif @mon_data_owner_object_id == object_id
+        raise ThreadError, "already initialized"
+      end
+    end
+    @mon_data = ::Monitor.new
+    @mon_data_owner_object_id = object_id
+  end
+
+  def mon_check_owner
+    @mon_data.mon_check_owner
   end
 end

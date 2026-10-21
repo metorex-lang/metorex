@@ -274,3 +274,12 @@ fn test_regexp_regexp_subclass_dispatch_no_parens_execution() {
     let output = run_example("regexp/regexp_subclass_dispatch_no_parens.rb");
     assert_eq!(output, REGEXP_SUBCLASS_DISPATCH_OUTPUT);
 }
+
+#[test]
+fn unicode_block_and_age_properties_match_their_characters() {
+    let output = run_example("regexp/unicode_block_and_age_classes.rb");
+    assert_eq!(
+        output,
+        "true\ntrue\ntrue\ntrue\nfalse\ntrue\nfalse\ntrue\nfalse\ntrue\n"
+    );
+}

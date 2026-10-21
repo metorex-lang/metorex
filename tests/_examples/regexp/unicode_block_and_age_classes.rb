@@ -1,0 +1,10 @@
+tag = "\u{E0067}"
+p tag.match?(/\p{in Tags}/)
+p tag.match?(/\p{In_Tags}/)
+p tag.match?(/[\p{in Tags}&&\p{AGE=3.2}]/)
+p "\u{E0001}".match?(/\p{Age=3.1}/)
+p "a".match?(/\p{in Tags}/)
+p "A".match?(/[\p{In_Basic_Latin}&&\p{Age=1.1}]/)
+p "\u{1F600}".match?(/\p{Age=3.2}/)
+p "€".match?(/\p{Age=2.1}/), "€".match?(/\p{Age=2.0}/)
+p "؀".match?(/\p{In_Arabic}/)

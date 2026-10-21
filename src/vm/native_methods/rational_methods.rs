@@ -201,38 +201,103 @@ pub(crate) fn parse_strict_rational_text(
 /// Text that does not start with a number answers (0, 1).
 pub(crate) fn parse_rational_text(text: &str) -> (num_bigint::BigInt, num_bigint::BigInt) {
     use num_bigint::BigInt;
-    let trimmed = text.trim();
-    if let Some((left, right)) = trimmed.split_once('/') {
-        let (numerator, scale) =
-            parse_decimal_fraction(left).unwrap_or_else(|| (BigInt::from(0), BigInt::from(1)));
-        let denominator = leading_integer(right).unwrap_or(0);
-        if denominator == 0 {
-            return (BigInt::from(0), BigInt::from(1));
+    let characters: Vec<char> = text.trim_start().chars().collect();
+    let mut at = 0;
+    let negative = match characters.first() {
+        Some('-') => {
+            at += 1;
+            true
         }
-        return (numerator, scale * BigInt::from(denominator));
+        Some('+') => {
+            at += 1;
+            false
+        }
+        _ => false,
+    };
+    let Some((numerator, scale)) = read_unsigned_decimal(&characters, &mut at) else {
+        return (BigInt::from(0), BigInt::from(1));
+    };
+    let numerator = if negative { -numerator } else { numerator };
+    if characters.get(at) == Some(&'/') {
+        let mut after_slash = at + 1;
+        if let Some((over, over_scale)) = read_unsigned_decimal(&characters, &mut after_slash) {
+            // A zero denominator answers a zero one, which building the
+            // Rational refuses with ZeroDivisionError.
+            return (numerator * over_scale, scale * over);
+        }
     }
-    // An underscore between digits is a separator rather than part of the
-    // number, the same way it is in a literal.
-    let mut digits = String::new();
-    let mut previous_was_digit = false;
-    for (index, ch) in trimmed.char_indices() {
-        if ch == '_' && previous_was_digit {
-            continue;
-        }
-        let acceptable =
-            ch.is_ascii_digit() || ch == '.' || ((ch == '+' || ch == '-') && index == 0);
-        if !acceptable {
-            break;
-        }
-        previous_was_digit = ch.is_ascii_digit();
-        digits.push(ch);
-    }
-    parse_decimal_fraction(&digits).unwrap_or_else(|| (BigInt::from(0), BigInt::from(1)))
+    (numerator, scale)
 }
 
-fn leading_integer(text: &str) -> Option<i64> {
-    let digits: String = text.chars().take_while(|ch| ch.is_ascii_digit()).collect();
-    digits.parse::<i64>().ok()
+/// The number written at `at` with no sign: digits with single underscores
+/// between them, a fraction after a `.`, and an exponent after an `e`, each
+/// read only when digits follow. Answers it as a numerator over a power of
+/// ten, and moves `at` past what it read.
+fn read_unsigned_decimal(
+    characters: &[char],
+    at: &mut usize,
+) -> Option<(num_bigint::BigInt, num_bigint::BigInt)> {
+    use num_bigint::BigInt;
+    let read_digits = |from: usize, into: &mut String| -> usize {
+        let mut cursor = from;
+        while cursor < characters.len() {
+            let held = characters[cursor];
+            if held.is_ascii_digit() {
+                into.push(held);
+                cursor += 1;
+            } else if held == '_'
+                && cursor > from
+                && characters.get(cursor + 1).is_some_and(char::is_ascii_digit)
+            {
+                cursor += 1;
+            } else {
+                break;
+            }
+        }
+        cursor
+    };
+    let mut whole = String::new();
+    let mut cursor = read_digits(*at, &mut whole);
+    let mut fraction = String::new();
+    if characters.get(cursor) == Some(&'.')
+        && characters.get(cursor + 1).is_some_and(char::is_ascii_digit)
+    {
+        cursor = read_digits(cursor + 1, &mut fraction);
+    }
+    if whole.is_empty() && fraction.is_empty() {
+        return None;
+    }
+    let mut exponent: i64 = 0;
+    if matches!(characters.get(cursor), Some('e' | 'E')) {
+        let mut exponent_at = cursor + 1;
+        let exponent_negative = match characters.get(exponent_at) {
+            Some('-') => {
+                exponent_at += 1;
+                true
+            }
+            Some('+') => {
+                exponent_at += 1;
+                false
+            }
+            _ => false,
+        };
+        let mut written = String::new();
+        let after = read_digits(exponent_at, &mut written);
+        if let Ok(read) = written.parse::<i64>() {
+            exponent = if exponent_negative { -read } else { read };
+            cursor = after;
+        }
+    }
+    *at = cursor;
+    let magnitude = BigInt::parse_bytes(format!("{whole}{fraction}").as_bytes(), 10)?;
+    let shift = exponent - fraction.len() as i64;
+    let ten = BigInt::from(10);
+    let power = ten.pow(shift.unsigned_abs() as u32);
+    Some(if shift >= 0 {
+        (magnitude * power, BigInt::from(1))
+    } else {
+        (magnitude, power)
+    })
 }
 
 impl VirtualMachine {

@@ -1225,13 +1225,9 @@ impl VirtualMachine {
                 );
             }
             Instruction::BodyClassVariable { from, name } => {
-                let body = self.running_body();
-                let name = &unit.names[index(name)].text;
-                crate::vm::class_execution::class_body_class_variable(
-                    &body.class,
-                    name,
-                    registers[register(from)].clone(),
-                );
+                let name = unit.names[index(name)].text.clone();
+                let target = Expression::ClassVariable { name, position };
+                self.assign_value(&target, registers[register(from)].clone())?;
             }
             Instruction::BodyAliasMethod { first } => {
                 let body = self.running_body();

@@ -544,3 +544,12 @@ fn test_control_flow_jump_assignments_no_parens_execution() {
     let output = run_example("control_flow/jump_assignments_no_parens.rb");
     assert_eq!(output, JUMP_ASSIGNMENTS_OUTPUT);
 }
+
+#[test]
+fn a_pattern_guard_may_hold_a_nested_pattern_match() {
+    let output = run_example("control_flow/pattern_guard_with_a_nested_match.rb");
+    assert_eq!(
+        output,
+        "string \"011\" coerces to 11\ninteger 7\nother hash 1\nother hash 2\ntrue\n\"7\"\n7\n"
+    );
+}

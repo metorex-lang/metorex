@@ -73,6 +73,9 @@ pub(crate) struct FiberContext {
     pub(crate) method_running_stack: Vec<std::rc::Rc<crate::object::Method>>,
     pub(crate) method_arg_stack: Vec<Vec<crate::object::Object>>,
     pub(crate) method_running_frames: Vec<Option<u64>>,
+    /// The tags of the `catch` blocks this fiber is inside, which a `throw`
+    /// on it reaches and a `throw` on another fiber does not.
+    pub(crate) catch_tags: Vec<crate::object::Object>,
 }
 
 /// One fiber the program made, and the coroutine it runs on.

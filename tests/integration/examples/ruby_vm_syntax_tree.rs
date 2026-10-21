@@ -1160,3 +1160,12 @@ fn test_ruby_vm_syntax_tree_of_backtrace_no_parens_execution() {
     let output = run_example("ruby_vm/syntax_tree_of_backtrace_no_parens.rb");
     assert_eq!(output, SYNTAX_TREE_OF_BACKTRACE);
 }
+
+#[test]
+fn an_in_clause_with_a_guard_and_no_body_builds_its_syntax_tree() {
+    let output = run_example("ruby_vm/syntax_tree_of_an_empty_in_clause.rb");
+    assert_eq!(
+        output,
+        ":CASE3\n:IN\n[:CONST, :LASGN, :IN]\n:IN\n[:IF, :BEGIN, :FCALL]\n:IF\n[RubyVM::AbstractSyntaxTree::Node, RubyVM::AbstractSyntaxTree::Node, NilClass]\n"
+    );
+}

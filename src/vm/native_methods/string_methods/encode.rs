@@ -117,10 +117,26 @@ impl VirtualMachine {
                         }
                         crate::vm::native_methods::euc_jp_table::euc_jp_text(&bytes)
                     }
-                    None => match latin_text(&binary_bytes(string_value), &held) {
-                        Some(spelled) if reads_bytes => spelled,
-                        _ => string_value.to_text(),
-                    },
+                    None => {
+                        let bytes = binary_bytes(string_value);
+                        match undefined_single_byte(&bytes, &held) {
+                            Some(_) if reads_bytes && options.undef_replace => {
+                                latin_text_replacing(&bytes, &held, &replacement)
+                                    .unwrap_or_else(|| string_value.to_text())
+                            }
+                            Some(byte) if reads_bytes => {
+                                return Err(self.with_conversion_ends(
+                                    undefined_byte_error(byte, &held, &wanted, position),
+                                    &held,
+                                    "UTF-8",
+                                ));
+                            }
+                            _ => match latin_text(&bytes, &held) {
+                                Some(spelled) if reads_bytes => spelled,
+                                _ => string_value.to_text(),
+                            },
+                        }
+                    }
                 };
                 // `xml:` writes a character the destination cannot spell as a
                 // character reference. Failing that, `undef: :replace` stands

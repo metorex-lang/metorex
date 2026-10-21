@@ -44,12 +44,14 @@ impl VirtualMachine {
                 // exception, whose `to_s` is its message. A pattern writes
                 // itself as the group it stands for, which is what
                 // `Regexp#to_s` answers, and an Array or a Hash as its
-                // `inspect` form.
+                // `inspect` form. A Range writes its ends through their own
+                // `to_s`.
                 View::Instance(_)
                 | View::Exception(_)
                 | View::Regex(_, _)
                 | View::Array(_)
-                | View::Dict(_) => {}
+                | View::Dict(_)
+                | View::Range { .. } => {}
                 _ => return Ok(value.to_string()),
             }
         }

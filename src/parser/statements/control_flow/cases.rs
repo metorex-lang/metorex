@@ -83,6 +83,16 @@ impl Parser {
         Ok(body)
     }
 
+    /// A guard of an `in` clause written as `value in pattern`. The `in`
+    /// stands on the guard's line, where one on the next line opens the
+    /// clause after it.
+    fn guard_pattern_test(&mut self, guard: Expression) -> Result<Expression, MetorexError> {
+        if self.check(&[TokenKind::In]) && self.peek().position.line == self.previous().position.line {
+            return self.wrap_with_pattern_test(guard);
+        }
+        Ok(guard)
+    }
+
     pub(crate) fn parse_case_statement(&mut self) -> Result<Statement, MetorexError> {
         let start_pos = self.expect(TokenKind::Case, "Expected 'case'")?.position;
         self.parse_case_after_keyword(start_pos)
@@ -257,11 +267,13 @@ impl Parser {
             // an `if` on the next line opens the clause's body instead.
             let guard = if self.match_token(&[TokenKind::If]) {
                 self.skip_whitespace();
-                Some(self.parse_expression()?)
+                let held = self.parse_expression()?;
+                Some(self.guard_pattern_test(held)?)
             } else if self.match_token(&[TokenKind::Unless]) {
                 let at = self.previous().position;
                 self.skip_whitespace();
                 let held = self.parse_expression()?;
+                let held = self.guard_pattern_test(held)?;
                 Some(Expression::UnaryOp {
                     op: crate::ast::UnaryOp::Not,
                     operand: Box::new(held),

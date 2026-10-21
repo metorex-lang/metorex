@@ -175,6 +175,7 @@ class StringIO
   # The cursor is reported in bytes, so a character made of several bytes
   # moves it by that many.
   def pos
+    return @wide_position unless @wide_position.nil?
     return @position if single_byte_characters?
     beyond = @position - @string.length
     beyond = 0 if beyond < 0
@@ -187,6 +188,7 @@ class StringIO
 
   def pos=(offset)
     raise Errno::EINVAL if offset < 0
+    @wide_position = wide_encoding? ? offset : nil
     if single_byte_characters?
       @position = offset
       @misaligned = false
@@ -392,6 +394,12 @@ class StringIO
     end
     wanted = StringIO.whole_number length
     raise ArgumentError, "negative length #{wanted} given" if wanted < 0
+    unless @wide_position.nil?
+      taken = @string.byteslice(@wide_position, wanted) || ""
+      return nil if taken.empty? && wanted > 0
+      self.pos = @wide_position + taken.bytesize
+      return filled(buffer, taken.b)
+    end
     # Every character takes at least one byte, so the next `wanted`
     # characters hold the bytes this read can take.
     remaining = @string[@position, wanted] || ""
@@ -589,6 +597,7 @@ class StringIO
   def read_line(separator, limit, chomp)
     reading_allowed
     return "" if limit == 0
+    return read_wide_line(separator, limit, chomp) unless @wide_position.nil?
     remaining = @string[@position..-1] || ""
     return nil if remaining.empty?
     line = if separator.nil?
@@ -624,6 +633,24 @@ class StringIO
     line
   end
   private :read_line
+
+  # A line of a UTF-16 or UTF-32 buffer, read by bytes from where the stream
+  # stands, which need not fall on a character.
+  def read_wide_line(separator, limit, chomp)
+    total = @string.bytesize
+    return nil if @wide_position >= total
+    remaining = @string.byteslice(@wide_position, total - @wide_position).b
+    ending = separator.nil? ? nil : separator.b
+    cut = ending.nil? || ending.empty? ? nil : remaining.index(ending)
+    length = cut.nil? ? remaining.bytesize : cut + ending.bytesize
+    length = limit if !limit.nil? && limit < length
+    line = remaining.byteslice(0, length).force_encoding(@string.encoding)
+    self.pos = @wide_position + length
+    @lineno = @lineno + 1
+    return line.chomp(separator) if chomp && !separator.nil?
+    line
+  end
+  private :read_wide_line
 
   def readline(separator = $/, limit = nil, chomp: false)
     line = self.gets(separator, limit, chomp: chomp)
@@ -887,10 +914,20 @@ class StringIO
   def set_encoding(external, internal = nil)
     @encoding = external.is_a?(String) ? Encoding.find(external) : external
     @binary = false
+    held = pos
     # The buffer is tagged along with the stream unless it refuses to change.
     @string.force_encoding @encoding unless @string.frozen?
+    @wide_position = nil
+    self.pos = held
     self
   end
+
+  # Whether the buffer holds UTF-16 or UTF-32, where a position counts bytes
+  # that need not fall on a character, so reading goes by bytes.
+  def wide_encoding?
+    @string.encoding.name.match?(/\AUTF-(16|32)/)
+  end
+  private :wide_encoding?
 
   # Read the byte-order mark the stream starts with, if any, and take the
   # encoding it names. The mark is consumed; anything else is left in place.

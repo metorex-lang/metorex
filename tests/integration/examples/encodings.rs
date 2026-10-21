@@ -668,3 +668,12 @@ fn an_encoding_matches_a_pattern_of_encoding_constants() {
     let output = run_example("encodings/encoding_alternative_pattern.rb");
     assert_eq!(output, "true\ntrue\nfalse\ntrue\n");
 }
+
+#[test]
+fn single_byte_encodings_read_and_write_through_their_own_tables() {
+    let output = run_example("encodings/single_byte_encodings.rb");
+    assert_eq!(
+        output,
+        "[\"ISO-8859-2\", \"ć\", [230]]\n[\"ISO-8859-3\", \"ĉ\", [230]]\n[\"ISO-8859-5\", \"ц\", [230]]\n[\"ISO-8859-7\", \"ζ\", [230]]\n[\"KOI8-R\", \"Ф\", [230]]\n[\"Windows-1251\", \"ж\", [230]]\n[\"IBM866\", \"ц\", [230]]\n[\"macRoman\", \"Ê\", [230]]\n[230]\n\"\\\"\\\\xA5\\\" from ISO-8859-3 to UTF-8\"\n[165]\n\"\\\"\\\\xA5\\\" to UTF-8 in conversion from ISO-8859-3 to UTF-8 to ISO-8859-1\"\n\"a�b\"\n\"U+0109 from UTF-8 to ISO-8859-5\"\n"
+    );
+}

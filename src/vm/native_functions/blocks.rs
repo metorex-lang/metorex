@@ -10,11 +10,7 @@ impl VirtualMachine {
     pub(crate) fn freeze_value(&mut self) -> Result<Object, MetorexError> {
         self.pending_block.take();
         let current_self = self.environment().get("self").unwrap_or(Object::Nil);
-        match current_self.view() {
-            View::Class(class) | View::Module(class) => class.freeze(),
-            View::Instance(instance) => instance.borrow_mut().frozen = true,
-            _ => {}
-        }
+        self.freeze_object(&current_self);
         Ok(current_self)
     }
 

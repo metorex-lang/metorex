@@ -392,7 +392,7 @@ impl VirtualMachine {
             fiber,
             handoff,
         });
-        let stepped = running.resume(given);
+        let stepped = self.across_a_fiber_switch(|| running.resume(given));
         self.fiber_frames.pop();
         let left = self.swap_context(Some(resumer));
         let state = &mut self.fibers[handle];
@@ -545,6 +545,19 @@ impl VirtualMachine {
         self.fiber_suspend_with(SuspendOutput::Yielded(value), position)
     }
 
+    /// Run `switch`, which hands control to another fiber and back. That
+    /// fiber changes the interpreter through its own pointer to it, which
+    /// `&mut self` tells the compiler cannot happen, so an optimized build
+    /// would otherwise reuse fields it read before the switch, such as the
+    /// buffer of `fibers` that a new fiber's push has since reallocated. The
+    /// opaque uses on either side make it write out and read back every field.
+    fn across_a_fiber_switch<R>(&mut self, switch: impl FnOnce() -> R) -> R {
+        std::hint::black_box(&mut *self);
+        let answer = switch();
+        std::hint::black_box(&mut *self);
+        answer
+    }
+
     /// Suspend the running fiber, handing the request out to the loop that
     /// resumed it.
     pub(crate) fn fiber_suspend_with(
@@ -570,7 +583,7 @@ impl VirtualMachine {
         }
         // The handle stays valid for as long as the body runs, and the body
         // is what is being suspended here.
-        let back = unsafe { (*yielder).suspend(handed) };
+        let back = self.across_a_fiber_switch(|| unsafe { (*yielder).suspend(handed) });
         // A fiber told to raise does so where it was suspended, so the
         // `rescue` and `ensure` blocks it is inside run the way they would
         // had the exception been raised there.
@@ -627,6 +640,7 @@ impl VirtualMachine {
                 method_running_stack: self.method_running_stack.clone(),
                 method_arg_stack: self.method_arg_stack.clone(),
                 method_running_frames: self.method_running_frames.clone(),
+                catch_tags: Vec::new(),
             }
         });
         FiberContext {
@@ -674,6 +688,7 @@ impl VirtualMachine {
                 &mut self.method_running_frames,
                 taken.method_running_frames,
             ),
+            catch_tags: std::mem::replace(&mut self.catch_tags, taken.catch_tags),
         }
     }
 

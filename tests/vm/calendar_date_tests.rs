@@ -332,7 +332,7 @@ fn iso8601_reads_and_writes_the_standard_form() {
 fn a_date_inspects_as_its_julian_day_number_and_reform_point() {
     assert_eq!(
         quoted(&format!("{DAY}day.inspect")),
-        "#<Date: 2008-01-16 ((2454482j),(0/1),(2299161j))>"
+        "#<Date: 2008-01-16 ((2454482j,0s,0n),+0s,2299161j)>"
     );
     assert_eq!(
         quoted(&format!("{DAY}day.asctime")),

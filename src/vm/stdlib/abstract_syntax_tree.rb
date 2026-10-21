@@ -1977,8 +1977,14 @@ class RubyVM
 
       def in_clause(clause)
         pattern_event, body_event, rest_event = clause.args
+        # The clause's `in` is the nearest one before its body that stands
+        # outside any bracket, which passes over one in a guard's block.
         keyword = literal_root(body_event).last
-        keyword -= 1 until @tokens[keyword].type == :k_in
+        depth = 0
+        until depth.zero? && @tokens[keyword].type == :k_in
+          depth -= nesting(@tokens[keyword])
+          keyword -= 1
+        end
         last = keyword + 1
         depth = 0
         while last < @tokens.size
@@ -2841,6 +2847,35 @@ class RubyVM
 
     # The node a Proc, a Method or a backtrace location was written as,
     # found by parsing the file it was read from again.
+    PARSED_FILES_KEPT = 8
+
+    # The source of a file and every node of its tree, kept for the last few
+    # files read while the file is unchanged, so asking for each method of a
+    # file in turn parses it once.
+    def self.__parsed_file__(path, keep_script_lines, keep_tokens)
+      @parsed_files ||= {}
+      stat = File.stat(path)
+      key = [File.expand_path(path), stat.mtime, stat.size, keep_script_lines, keep_tokens]
+      kept = @parsed_files.delete(key)
+      unless kept
+        source = File.read(path)
+        root = __parse__(source, keep_script_lines: keep_script_lines, keep_tokens: keep_tokens)
+        nodes = []
+        walk = lambda do |value|
+          case value
+          when Node
+            nodes << value
+            value.children.each { |child| walk.call(child) }
+          when Array then value.each { |item| walk.call(item) }
+          end
+        end
+        walk.call(root)
+        kept = [source, nodes]
+        @parsed_files.delete(@parsed_files.keys.first) if @parsed_files.size >= PARSED_FILES_KEPT
+      end
+      @parsed_files[key] = kept
+    end
+
     def self.__of__(body, keep_script_lines: false, keep_tokens: false)
       case body
       when Proc, Method, UnboundMethod then path, line = body.source_location
@@ -2850,18 +2885,7 @@ class RubyVM
       return nil if path.nil?
       raise ArgumentError, "cannot get AST for method defined in eval" unless File.file?(path)
 
-      source = File.read(path)
-      root = __parse__(source, keep_script_lines: keep_script_lines, keep_tokens: keep_tokens)
-      nodes = []
-      walk = lambda do |value|
-        case value
-        when Node
-          nodes << value
-          value.children.each { |child| walk.call(child) }
-        when Array then value.each { |item| walk.call(item) }
-        end
-      end
-      walk.call(root)
+      source, nodes = __parsed_file__(path, keep_script_lines, keep_tokens)
       case body
       when Proc
         # A block knows the column it opened at, which tells it from others

@@ -1207,3 +1207,9 @@ fn private_methods_leave_out_a_name_a_public_method_overrides() {
     let output = run_example("introspection/private_methods_leave_out_public_overrides.rb");
     assert_eq!(output, "false\nfalse\ntrue\ntrue\n\"running totals.rb\"\n");
 }
+
+#[test]
+fn endless_methods_report_the_line_they_start_on() {
+    let output = run_example("introspection/endless_method_source_location.rb");
+    assert_eq!(output, "2\n6\n9\n10\n");
+}

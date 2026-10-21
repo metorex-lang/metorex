@@ -3272,27 +3272,23 @@ class Socket
   def self.tcp(host, port, local_host = nil, local_port = nil, connect_timeout: nil,
                resolv_timeout: nil, open_timeout: nil)
     refuse_open_timeout_with_others open_timeout, connect_timeout, resolv_timeout
-    # The socket is opened in the family of the address it reaches.
-    remote = Socket.resolved(host).first
-    held = Socket.new remote.include?(":") ? :INET6 : :INET, :STREAM
-    held.bind Socket.sockaddr_in(local_port.to_i, local_host) unless local_host.nil?
-    limit = open_timeout || connect_timeout
-    if limit.nil?
-      held.connect Socket.sockaddr_in(port, remote)
-    else
+    remotes = Socket.resolved(host)
+    if remotes.empty?
+      raise Socket::ResolutionError.new("getaddrinfo: nodename nor servname provided, or not known", Socket::EAI_NONAME)
+    end
+    # Each address the host answers on is tried in turn, and the error of
+    # the last one is raised when none of them takes the connection.
+    held = nil
+    failed = nil
+    remotes.each do |remote|
       begin
-        held.connect_nonblock Socket.sockaddr_in(port, remote)
-      rescue IO::WaitWritable
-        unless held.wait_writable(limit)
-          held.close
-          raise Errno::ETIMEDOUT, "user specified timeout for #{host}:#{port}"
-        end
-        begin
-          held.connect_nonblock Socket.sockaddr_in(port, remote)
-        rescue Errno::EISCONN
-        end
+        held = tcp_connected_to(remote, host, port, local_host, local_port, open_timeout || connect_timeout)
+        break
+      rescue SystemCallError => problem
+        failed = problem
       end
     end
+    raise failed if held.nil?
     return held unless block_given?
     begin
       yield held
@@ -3300,6 +3296,34 @@ class Socket
       held.close unless held.closed?
     end
   end
+
+  # A socket connected to one address, opened in that address's family.
+  def self.tcp_connected_to(remote, host, port, local_host, local_port, limit)
+    held = Socket.new remote.include?(":") ? :INET6 : :INET, :STREAM
+    begin
+      held.bind Socket.sockaddr_in(local_port.to_i, local_host) unless local_host.nil?
+      if limit.nil?
+        held.connect Socket.sockaddr_in(port, remote)
+      else
+        begin
+          held.connect_nonblock Socket.sockaddr_in(port, remote)
+        rescue IO::WaitWritable
+          unless held.wait_writable(limit)
+            raise Errno::ETIMEDOUT, "user specified timeout for #{host}:#{port}"
+          end
+          begin
+            held.connect_nonblock Socket.sockaddr_in(port, remote)
+          rescue Errno::EISCONN
+          end
+        end
+      end
+    rescue Exception
+      held.close
+      raise
+    end
+    held
+  end
+  private_class_method :tcp_connected_to
 
   # `open_timeout:` limits the whole connection, so it cannot be given
   # beside a limit on one part of it.

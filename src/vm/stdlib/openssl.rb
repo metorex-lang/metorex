@@ -350,6 +350,14 @@ module OpenSSL
         @params = {}
       end
 
+      # Settle the context for use, after which it can no longer change.
+      # Only the first call does anything, and it answers true.
+      def setup
+        return nil if frozen?
+        freeze
+        true
+      end
+
       def set_params params = {}
         @params = params
         params.each do |name, value|
@@ -793,13 +801,18 @@ module OpenSSL
       # of one.
       def initialize(bits = nil, exponent = 65_537)
         return if bits.nil?
+        # A File holding a key is read for its text, as a String would be.
+        bits = bits.read if bits.is_a?(File)
+        bits = bits.to_str if !bits.is_a?(String) && !bits.is_a?(Integer) && bits.respond_to?(:to_str)
+        unless bits.is_a?(String) || bits.is_a?(Integer)
+          raise TypeError, "no implicit conversion of #{bits.class} into String"
+        end
         if bits.is_a?(String)
           parts = RSA.__read__(bits)
           raise PKeyError, "Neither PUB key nor PRIV key" if parts.nil?
           @n, @e, @d, @p, @q, @dmp1, @dmq1, @iqmp = parts
           return
         end
-        raise TypeError, "no implicit conversion of #{bits.class} into Integer" unless bits.is_a?(Integer)
         if bits < 512
           raise PKeyError, "EVP_PKEY_CTX_ctrl_str(ctx, \"rsa_keygen_bits\", \"#{bits}\"): key size too small"
         end

@@ -62,7 +62,11 @@ impl Parser {
             // Two string literals written next to each other are one string,
             // which is how a long one is split across lines.
             TokenKind::String(value) => {
-                let parts = self.adjacent_string_parts(vec![InterpolationPart::Text(value)]);
+                let (parts, holds_bytes) =
+                    self.adjacent_string_parts(vec![InterpolationPart::Text(value)], false);
+                if holds_bytes && let Some(spelled) = only_text(&parts) {
+                    return Ok(literals::byte_string_literal(spelled, position));
+                }
                 if parts
                     .iter()
                     .all(|part| matches!(part, InterpolationPart::Text(_)))
@@ -78,11 +82,22 @@ impl Parser {
                 }
                 self.primary_interpolated_string(parts, position)
             }
-            TokenKind::ByteString(value) => Ok(literals::byte_string_literal(value, position)),
+            TokenKind::ByteString(value) => {
+                let (parts, _) =
+                    self.adjacent_string_parts(vec![InterpolationPart::Text(value)], true);
+                Ok(literals::byte_string_literal(
+                    only_text(&parts).unwrap_or_default(),
+                    position,
+                ))
+            }
             // A literal in a source that asked outright for literals that
             // change carries no notice that it will be frozen.
             TokenKind::MutableString(value) => {
-                let parts = self.adjacent_string_parts(vec![InterpolationPart::Text(value)]);
+                let (parts, holds_bytes) =
+                    self.adjacent_string_parts(vec![InterpolationPart::Text(value)], false);
+                if holds_bytes && let Some(spelled) = only_text(&parts) {
+                    return Ok(literals::byte_string_literal(spelled, position));
+                }
                 match only_text(&parts) {
                     Some(value) => Ok(Expression::MethodCall {
                         receiver: Box::new(Expression::StringLiteral { value, position }),
@@ -98,7 +113,11 @@ impl Parser {
             // A literal in a source that asked for frozen literals stands for
             // the one frozen string every place writing it shares.
             TokenKind::FrozenString(value) => {
-                let parts = self.adjacent_string_parts(vec![InterpolationPart::Text(value)]);
+                let (parts, holds_bytes) =
+                    self.adjacent_string_parts(vec![InterpolationPart::Text(value)], false);
+                if holds_bytes && let Some(spelled) = only_text(&parts) {
+                    return Ok(literals::byte_string_literal(spelled, position));
+                }
                 match only_text(&parts) {
                     Some(value) => Ok(Expression::MethodCall {
                         receiver: Box::new(Expression::StringLiteral { value, position }),
@@ -118,7 +137,7 @@ impl Parser {
                 Ok(self.primary_percent_i(value, filled, position))
             }
             TokenKind::InterpolatedString(parts) => {
-                let parts = self.adjacent_string_parts(parts);
+                let (parts, _) = self.adjacent_string_parts(parts, false);
                 self.primary_interpolated_string(parts, position)
             }
             TokenKind::PercentSymbol(name) => Ok(Expression::Symbol {
@@ -366,24 +385,58 @@ impl Parser {
     }
 
     /// The parts of a string literal followed by the literals written next
-    /// to it, which Ruby reads as one string, interpolations and all.
+    /// to it, which Ruby reads as one string, interpolations and all, and
+    /// whether the string holds bytes. A literal whose escapes name bytes
+    /// spelling no text makes the whole string one of bytes, written a
+    /// character per byte, so the text beside it is written as its UTF-8
+    /// bytes the same way.
     fn adjacent_string_parts(
         &mut self,
         mut parts: Vec<InterpolationPart>,
-    ) -> Vec<InterpolationPart> {
+        mut holds_bytes: bool,
+    ) -> (Vec<InterpolationPart>, bool) {
+        let all_text = |parts: &[InterpolationPart]| {
+            parts
+                .iter()
+                .all(|part| matches!(part, InterpolationPart::Text(_)))
+        };
         loop {
             match &self.peek().kind {
                 TokenKind::String(next)
                 | TokenKind::FrozenString(next)
                 | TokenKind::MutableString(next) => {
+                    let written = if holds_bytes {
+                        a_character_per_byte(next)
+                    } else {
+                        next.clone()
+                    };
+                    parts.push(InterpolationPart::Text(written))
+                }
+                TokenKind::ByteString(next) if all_text(&parts) => {
+                    if !holds_bytes {
+                        for part in parts.iter_mut() {
+                            if let InterpolationPart::Text(text) = part {
+                                *text = a_character_per_byte(text);
+                            }
+                        }
+                        holds_bytes = true;
+                    }
                     parts.push(InterpolationPart::Text(next.clone()))
                 }
-                TokenKind::InterpolatedString(next) => parts.extend(next.iter().cloned()),
-                _ => return parts,
+                TokenKind::InterpolatedString(next) if !holds_bytes => {
+                    parts.extend(next.iter().cloned())
+                }
+                _ => return (parts, holds_bytes),
             }
             self.advance();
         }
     }
+}
+
+/// Text written as its UTF-8 bytes, a character standing for each one, the
+/// way a literal holding bytes is written.
+fn a_character_per_byte(text: &str) -> String {
+    text.bytes().map(char::from).collect()
 }
 
 /// The text of a string written as plain pieces, or nothing when one of the

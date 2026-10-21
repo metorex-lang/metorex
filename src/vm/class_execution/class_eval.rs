@@ -116,7 +116,13 @@ impl VirtualMachine {
             self.environment_mut().define(pname, self_obj);
         }
         self.def_scope_stack.push(Rc::clone(class));
-        self.class_var_cref_stack.push(Some(Rc::clone(class)));
+        // A class variable written in a block belongs to the class or module
+        // the block was written in, not the one it runs as the body of.
+        self.class_var_cref_stack.push(if constants_stay_lexical {
+            lexical_class_variable_home(block)
+        } else {
+            Some(Rc::clone(class))
+        });
         if constants_stay_lexical {
             // A block written in another block run as a class body keeps
             // that one's home rather than the class it ran on.
@@ -224,7 +230,8 @@ impl VirtualMachine {
             std::mem::replace(&mut self.def_scope_stack, block.captured_def_scope.clone());
         self.enter_block_nesting(block.captured_nesting.clone());
         self.def_scope_stack.push(Rc::clone(class));
-        self.class_var_cref_stack.push(Some(Rc::clone(class)));
+        self.class_var_cref_stack
+            .push(lexical_class_variable_home(block));
         let home = block
             .captured_constant_home
             .clone()
@@ -500,4 +507,14 @@ impl VirtualMachine {
             "method_added"
         }
     }
+}
+
+/// The class or module `block` was written in, which the class variables it
+/// names belong to.
+fn lexical_class_variable_home(block: &crate::object::BlockStatement) -> Option<Rc<Class>> {
+    block
+        .captured_nesting
+        .first()
+        .cloned()
+        .or_else(|| block.captured_def_scope.last().cloned())
 }

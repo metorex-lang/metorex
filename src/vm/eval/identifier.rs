@@ -692,6 +692,7 @@ pub(crate) fn runs_when_named_bare(name: &str) -> bool {
             | "exit"
             | "exit!"
             | "fail"
+            | "freeze"
             | "gets"
             | "global_variables"
             | "local_variables"

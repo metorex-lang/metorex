@@ -378,3 +378,39 @@ fn threads_interleaved_inside_methods_each_hand_super_their_own_arguments() {
     let output = run_example("threads/zsuper_after_a_thread_switch.rb");
     assert_eq!(output, "[:rent, 1200]\n[:water, 45]\n");
 }
+
+#[test]
+fn a_monitor_makes_a_second_thread_wait_for_its_holder() {
+    let output = run_example("threads/monitor_waits_for_its_holder.rb");
+    assert_eq!(
+        output,
+        "reply 0\nreply 1\nreply 2\ninvoice 1042\nfalse\ncurrent fiber not owner\ncurrent fiber not owner\n"
+    );
+}
+
+#[test]
+fn a_condition_variable_signal_wakes_the_main_thread() {
+    let output = run_example("threads/condition_variable_wakes_the_main_thread.rb");
+    assert_eq!(output, "[1]\n[1, 2]\n");
+}
+
+#[test]
+fn each_thread_has_a_current_fiber_of_its_own() {
+    let output = run_example("threads/fiber_current_per_thread.rb");
+    assert_eq!(output, "false\ntrue\ntrue\n");
+}
+
+#[test]
+fn a_queue_answers_respond_to_for_its_native_methods() {
+    let output = run_example("threads/queue_answers_its_methods.rb");
+    assert_eq!(output, "true\ntrue\ntrue\ntrue\ntrue\ntrue\n");
+}
+
+#[test]
+fn catch_tags_belong_to_the_thread_that_opened_them() {
+    let output = run_example("threads/catch_tags_belong_to_their_thread.rb");
+    assert_eq!(
+        output,
+        ":main_finished\n:reader_finished\n\"uncaught throw :outside\"\n"
+    );
+}

@@ -636,13 +636,13 @@ Under MRI 4.0.7 one example fails, in rspec-mocks' `receive_spec.rb`, which stub
 
 | Suite | Passing under MRI | Passing under Metorex | Examples | Pending |
 | :-- | --: | --: | --: | --: |
-| minitest | 418 | 374 | 422 | 4 |
-| net-imap | 1691 | 1130 | 1691 | 0 |
+| minitest | 418 | 396 | 422 | 4 |
+| net-imap | 1691 | 1394 | 1691 | 0 |
 | net-pop | 7 | 7 | 7 | 0 |
 | net-smtp | 95 | 55 | 95 | 0 |
 | power_assert | 102 | 60 | 102 | 0 |
-| rake | 598 | 588 | 598 | 0 |
-| rexml | 730 | 578 | 730 | 0 |
+| rake | 598 | 593 | 598 | 0 |
+| rexml | 730 | 612 | 730 | 0 |
 | rss | 362 | 304 | 362 | 0 |
 | test-unit | 443 | 431 | 452 | 6 |
 

@@ -648,3 +648,12 @@ fn a_gsub_bang_block_reads_the_match_through_the_last_match_global() {
         "\"due TODAY and FRIDAY\"\n\"due <today>\"\n\"Due [2026-11-01]\"\n"
     );
 }
+
+#[test]
+fn string_to_r_reads_the_rational_the_string_starts_with() {
+    let output = run_example("strings/string_to_r_reads_a_leading_rational.rb");
+    assert_eq!(
+        output,
+        "12abc (12/1)\n1.5e2 (150/1)\n-0.25.1 (-1/4)\n1_000.5 (2001/2)\nx (0/1)\n1.2/3 (2/5)\n1/3.5 (2/7)\n.5 (1/2)\n5. (5/1)\n1/1e1 (1/10)\n3/x (3/1)\n1e (1/1)\n1e+ (1/1)\n2e-1 (1/5)\n1__0 (1/1)\n_1 (0/1)\n1_ (1/1)\n-.5 (-1/2)\n+3 (3/1)\n1/-2 (1/1)\n1/+2 (1/1)\n1.5/2.5 (3/5)\n0x10 (0/1)\n1/2/3 (1/2)\n1e2/1e1 (10/1)\n1.5.5 (3/2)\n1/2e (1/2)\n0.5.12 (1/2)\n(1/3)\n(1/1)\n\"divided by 0\"\n"
+    );
+}

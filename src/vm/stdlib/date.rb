@@ -500,10 +500,24 @@ class Date
     at
   end
 
+  # A zone is a name, a signed offset, or GMT or UTC followed by an offset,
+  # and reading stops where it ends, so a character after it is left for
+  # the template to match.
   def self.read_zone(found, text, at)
     at = skip_whitespace(text, at)
     start = at
-    at += 1 while at < text.length && !whitespace?(text[at])
+    at += 1 while at < text.length && (letter?(text[at].downcase) || text[at] == ".")
+    named = text[start...at].downcase
+    if at < text.length && (text[at] == "+" || text[at] == "-") &&
+       (named.empty? || named == "gmt" || named == "utc" || named == "ut")
+      at += 1
+      at += 1 while at < text.length && digit?(text[at])
+      2.times do
+        break unless at + 1 < text.length && ":.,".include?(text[at]) && digit?(text[at + 1])
+        at += 1
+        at += 1 while at < text.length && digit?(text[at])
+      end
+    end
     written = text[start...at]
     return at if written.empty?
     found[:zone] = written
@@ -1103,8 +1117,28 @@ class Date
   end
 
   def inspect
-    "#<Date: #{to_s} ((#{@jd}j),(0/1),(#{@start}j))>"
+    "#<#{self.class}: #{to_s} #{inspected_parts(@jd, 0, 0)}>"
   end
+
+  # The moment as Ruby's own inspect spells it: the Julian day and the
+  # seconds and nanoseconds into it in UTC, the offset in seconds, and the
+  # day the Gregorian calendar starts.
+  def inspected_parts(jd, fraction, offset)
+    utc = fraction - offset
+    day = utc.floor
+    seconds = (utc - day) * 86400
+    whole = seconds.floor
+    nanoseconds = ((seconds - whole) * 1_000_000_000).floor
+    offset_seconds = (offset * 86400).round
+    sign = offset_seconds < 0 ? "-" : "+"
+    start = if @start.is_a?(Date::Infinity) || (@start.is_a?(Float) && @start.infinite?)
+              (@start < 0 ? "-Inf" : "Inf")
+            else
+              @start.to_i.to_s
+            end
+    "((#{jd + day}j,#{whole}s,#{nanoseconds}n),#{sign}#{offset_seconds.abs}s,#{start}j)"
+  end
+  private :inspected_parts
 
   def iso8601
     to_s
@@ -1621,7 +1655,7 @@ class DateTime < Date
   end
 
   def inspect
-    "#<DateTime: #{self.to_s} ((#{@jd}j),(#{@fraction}),(#{@offset}))>"
+    "#<#{self.class}: #{to_s} #{inspected_parts(@jd, @fraction, @offset)}>"
   end
 
   def iso8601

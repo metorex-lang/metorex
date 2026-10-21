@@ -29,6 +29,7 @@ mod encoding_tags;
 mod escapes;
 mod inspection;
 mod latin_tables;
+mod single_byte_tables;
 mod matching;
 mod numbers;
 mod padding;

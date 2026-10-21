@@ -977,3 +977,27 @@ fn public_send_reaches_a_module_function_on_its_module() {
     let output = run_example("methods/public_send_module_function.rb");
     assert_eq!(output, "true\nfalse\ntrue\n");
 }
+
+#[test]
+fn a_string_io_in_utf16_reads_lines_and_positions_in_bytes() {
+    let output = run_example("io/string_io_utf16_lines.rb");
+    assert_eq!(
+        output,
+        "3\n#<Encoding:BINARY (ASCII-8BIT)>\n9\n#<Encoding:UTF-16BE>\n\"<\\x00?\\x00x\\x00?\\x00>\"\n10\n#<Encoding:UTF-16BE>\ntrue\n\"<?x?>\"\n"
+    );
+}
+
+#[test]
+fn a_unary_operator_opens_an_argument_written_without_parentheses() {
+    let output = run_example("parser/unary_operator_starts_a_bare_argument.rb");
+    assert_eq!(output, "false\n-6\n-5\n:negated\n-6\n");
+}
+
+#[test]
+fn adjacent_literals_holding_bytes_join_across_a_line_continuation() {
+    let output = run_example("parser/adjacent_strings_across_a_line_continuation.rb");
+    assert_eq!(
+        output,
+        "6\nfalse\n\"plain\"\n[\"first second\", 3]\n[\"ab\", \"cd\"]\n[195, 169, 255, 195, 188]\n#<Encoding:UTF-8>\n"
+    );
+}

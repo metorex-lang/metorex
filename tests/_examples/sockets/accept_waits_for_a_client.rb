@@ -10,3 +10,11 @@ client = spawn(RbConfig.ruby, "-rsocket", "-e",
 accepted = server.accept
 p accepted.read
 Process.wait(client)
+
+# Shutting down a socket that never connected is ENOTCONN, as net-imap
+# rescues when it disconnects.
+begin
+  Socket.new(:INET, :STREAM).shutdown
+rescue Errno::ENOTCONN => error
+  p error.message
+end

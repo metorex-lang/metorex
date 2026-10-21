@@ -342,7 +342,7 @@ fn a_datetime_writes_itself_in_the_standard_forms() {
     );
     assert_eq!(
         quoted(&format!("{MOMENT}moment.inspect")),
-        "#<DateTime: 2012-12-24T13:45:30+03:00 ((2456286j),(1651/2880),(1/8))>"
+        "#<DateTime: 2012-12-24T13:45:30+03:00 ((2456286j,38730s,0n),+10800s,2299161j)>"
     );
 }
 

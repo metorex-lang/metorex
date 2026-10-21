@@ -1825,3 +1825,12 @@ fn a_file_requiring_test_unit_runs_its_tests_as_the_program_ends() {
         "{output}"
     );
 }
+
+#[test]
+fn an_ssl_context_sets_up_once_and_a_key_reads_from_a_file() {
+    let output = run_example("stdlib/openssl_context_setup_and_key_files.rb");
+    assert_eq!(
+        output,
+        "true\ntrue\nnil\ntrue\n\"no implicit conversion of Object into String\"\n\"no implicit conversion of Float into String\"\n"
+    );
+}

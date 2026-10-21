@@ -314,14 +314,6 @@ impl VirtualMachine {
                 let initial_value = self.evaluate_expression(value)?;
                 class_body_instance_variable(class, var_name, initial_value);
             }
-            Statement::Assignment {
-                target: Expression::ClassVariable { name: var_name, .. },
-                value,
-                ..
-            } => {
-                let initial_value = self.evaluate_expression(value)?;
-                class_body_class_variable(class, var_name, initial_value);
-            }
             Statement::Expression {
                 expression: Expression::InstanceVariable { name: var_name, .. },
                 ..
@@ -745,20 +737,6 @@ impl VirtualMachine {
 pub(crate) fn class_body_instance_variable(class: &Rc<Class>, name: &str, value: Object) {
     class.declare_instance_var(name);
     class.set_class_var(format!("@{}", name), value);
-}
-
-/// `@@name = value` in a class body. Inside a singleton class body
-/// (`class << self`) a class variable attaches to the lexical enclosing class,
-/// not the singleton itself.
-pub(crate) fn class_body_class_variable(class: &Rc<Class>, name: &str, value: Object) {
-    if class.get_class_var("__singleton__").is_some()
-        && let Some(View::Class(attached) | View::Module(attached)) =
-            class.get_class_var("__attached__").view()
-    {
-        attached.set_class_var(name, value);
-    } else {
-        class.set_class_var(name, value);
-    }
 }
 
 impl VirtualMachine {

@@ -10,6 +10,7 @@ mod classes;
 mod matcher;
 mod node;
 mod parser;
+mod unicode_properties;
 
 pub use parser::{Flags, Trouble};
 

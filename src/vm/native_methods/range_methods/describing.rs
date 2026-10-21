@@ -49,16 +49,9 @@ impl VirtualMachine {
                 }
                 let separator = if exclusive { "..." } else { ".." };
                 if method_name == "to_s" {
-                    let render = |value: &Object| match value.view() {
-                        View::Nil => String::new(),
-                        other => format!("{}", other),
-                    };
-                    return Ok(Some(Object::string(format!(
-                        "{}{}{}",
-                        render(start),
-                        separator,
-                        render(end)
-                    ))));
+                    let first = self.interpolated_text(start, position)?;
+                    let last = self.interpolated_text(end, position)?;
+                    return Ok(Some(Object::string(format!("{first}{separator}{last}"))));
                 }
                 // A range with neither end shows both nils, where one open
                 // side alone shows nothing.

@@ -176,88 +176,38 @@ fn is_punctuation(letter: char) -> bool {
 }
 
 /// Whether the character carries the Unicode property `name`. The names are
-/// read without regard to case, underscores, or hyphens, which is how Ruby
-/// reads them.
+/// read without regard to case, underscores, hyphens, or spaces, which is
+/// how Ruby reads them.
 fn in_property(name: &str, letter: char) -> bool {
     let plain: String = name
         .chars()
         .filter(|held| *held != '_' && *held != '-' && *held != ' ')
         .flat_map(|held| held.to_lowercase())
         .collect();
-    match plain.as_str() {
-        "alpha" | "alphabetic" | "l" | "letter" => letter.is_alphabetic(),
-        "alnum" => letter.is_alphanumeric(),
-        "digit" | "nd" | "decimalnumber" => is_decimal(letter),
-        "n" | "number" => letter.is_numeric(),
-        "space" | "whitespace" | "white_space" => letter.is_whitespace(),
-        "upper" | "uppercase" | "lu" => letter.is_uppercase(),
-        "lower" | "lowercase" | "ll" => letter.is_lowercase(),
-        "word" => is_word(letter),
-        "ascii" => letter.is_ascii(),
-        "cntrl" | "control" | "cc" => letter.is_control(),
-        "print" => is_graphic(letter) || letter == ' ',
-        "graph" => is_graphic(letter),
-        "punct" | "punctuation" | "p" => is_punctuation(letter),
-        "blank" => letter == ' ' || letter == '\t' || is_space_separator(letter),
-        "xdigit" => letter.is_ascii_hexdigit(),
-        "any" => true,
-        "assigned" => letter != '\u{0}',
-        "s" | "symbol" => is_graphic(letter) && !letter.is_alphanumeric() && !letter.is_ascii(),
-        "z" | "separator" => letter.is_whitespace(),
-        "latin" => in_script(letter, Script::Latin),
-        "greek" => in_script(letter, Script::Greek),
-        "cyrillic" => in_script(letter, Script::Cyrillic),
-        "han" => in_script(letter, Script::Han),
-        "hiragana" => matches!(letter, '\u{3041}'..='\u{3096}' | '\u{309d}'..='\u{309f}'),
-        "katakana" => {
-            // The prolonged sound mark and the iteration marks belong to no
-            // script of their own, so the run is written around them.
-            matches!(letter,
-                '\u{30a1}'..='\u{30fa}'
-                    | '\u{30fd}'..='\u{30ff}'
-                    | '\u{31f0}'..='\u{31ff}'
-                    | '\u{ff66}'..='\u{ff6f}'
-                    | '\u{ff71}'..='\u{ff9d}')
-        }
-        "arabic" => ('\u{0600}'..='\u{06ff}').contains(&letter),
-        "hebrew" => ('\u{0590}'..='\u{05ff}').contains(&letter),
-        "hangul" => {
-            ('\u{1100}'..='\u{11ff}').contains(&letter)
-                || ('\u{ac00}'..='\u{d7af}').contains(&letter)
-        }
-        "emoji" => ('\u{1f300}'..='\u{1faff}').contains(&letter) || letter == '\u{263a}',
-        _ => false,
-    }
+    let point = letter as u32;
+    property_ranges(&plain).is_some_and(|ranges| {
+        ranges
+            .binary_search_by(|(low, high)| {
+                if *high < point {
+                    std::cmp::Ordering::Less
+                } else if *low > point {
+                    std::cmp::Ordering::Greater
+                } else {
+                    std::cmp::Ordering::Equal
+                }
+            })
+            .is_ok()
+    })
 }
 
-enum Script {
-    Latin,
-    Greek,
-    Cyrillic,
-    Han,
-}
-
-fn in_script(letter: char, script: Script) -> bool {
-    match script {
-        Script::Latin => {
-            letter.is_ascii_alphabetic()
-                || ('\u{00c0}'..='\u{024f}').contains(&letter)
-                || ('\u{1e00}'..='\u{1eff}').contains(&letter)
-        }
-        Script::Greek => {
-            ('\u{0370}'..='\u{03ff}').contains(&letter)
-                || ('\u{1f00}'..='\u{1fff}').contains(&letter)
-        }
-        Script::Cyrillic => {
-            ('\u{0400}'..='\u{04ff}').contains(&letter)
-                || ('\u{0500}'..='\u{052f}').contains(&letter)
-        }
-        Script::Han => {
-            ('\u{4e00}'..='\u{9fff}').contains(&letter)
-                || ('\u{3400}'..='\u{4dbf}').contains(&letter)
-                || ('\u{f900}'..='\u{faff}').contains(&letter)
-        }
-    }
+/// The code point ranges of the property a normalized name stands for.
+fn property_ranges(plain: &str) -> Option<&'static [(u32, u32)]> {
+    use super::unicode_properties::{PROPERTY_NAMES, PROPERTY_RANGES, PROPERTY_TABLES};
+    let found = PROPERTY_NAMES
+        .binary_search_by(|(held, _)| (*held).cmp(plain))
+        .ok()?;
+    let (first, count) = PROPERTY_TABLES[PROPERTY_NAMES[found].1 as usize];
+    Some(&PROPERTY_RANGES[first as usize..(first + count) as usize])
 }
 
 /// Whether the character is carried on the one before it rather than

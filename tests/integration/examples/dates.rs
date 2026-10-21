@@ -20,7 +20,7 @@ fn test_dates_points_in_time_no_parens_execution() {
 
 /// The expected output of both `dates/calendar_days` variants, which differ
 /// only in whether the calls are written with parentheses.
-const CALENDAR_DAYS_OUTPUT: &str = "2454482\n2008\n1\n16\n16\n3\n2008\n3\n3\n54481\n(4908963/2)\ntrue\ntrue\n\"2008-01-16\"\n\"#<Date: 2008-01-16 ((2454482j),(0/1),(2299161j))>\"\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n\"2008-02-15\"\n\"2007-12-17\"\n\"2008-03-16\"\n\"2007-12-16\"\n\"2008-01-17\"\n\"2008-02-16\"\n\"2009-01-16\"\n29\ntrue\ntrue\nfalse\ntrue\ntrue\n\"Wednesday, January 16, 2008\"\n\"Wed Jan 16 2008\"\n\"016 02 02 03\"\n\"       JAN\"\n\"1582-10-04\"\n\"1582-10-15\"\ntrue\ntrue\ntrue\n[16, 17, 18, 19]\n[16, 18, 20, 22]\n";
+const CALENDAR_DAYS_OUTPUT: &str = "2454482\n2008\n1\n16\n16\n3\n2008\n3\n3\n54481\n(4908963/2)\ntrue\ntrue\n\"2008-01-16\"\n\"#<Date: 2008-01-16 ((2454482j,0s,0n),+0s,2299161j)>\"\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n\"2008-02-15\"\n\"2007-12-17\"\n\"2008-03-16\"\n\"2007-12-16\"\n\"2008-01-17\"\n\"2008-02-16\"\n\"2009-01-16\"\n29\ntrue\ntrue\nfalse\ntrue\ntrue\n\"Wednesday, January 16, 2008\"\n\"Wed Jan 16 2008\"\n\"016 02 02 03\"\n\"       JAN\"\n\"1582-10-04\"\n\"1582-10-15\"\ntrue\ntrue\ntrue\n[16, 17, 18, 19]\n[16, 18, 20, 22]\n";
 
 #[test]
 fn test_dates_calendar_days_execution() {
@@ -158,5 +158,14 @@ fn time_strptime_reads_a_time_in_the_format_given() {
     assert_eq!(
         output,
         "1996-07-17 02:44:25 -0700\n-25200\nfalse\n1792800000\ntrue\n\"invalid date or strptime format - 'bad' '%Y-%m-%d'\"\n{seconds: 1792800000}\n{year: 2026, mon: 10, mday: 21, zone: \"UTC\", offset: 0}\n\"2026-10-24\"\n\"2026-10-24T00:00:00+00:00\"\n"
+    );
+}
+
+#[test]
+fn strptime_matches_literal_quotes_after_a_zone_and_inspect_shows_utc_parts() {
+    let output = run_example("dates/strptime_with_quotes_and_padding.rb");
+    assert_eq!(
+        output,
+        "1996-07-17 02:44:25 -0700\n2020-11-07 01:02:03 -0400\n#<DateTime: 2020-11-07T01:02:03-04:00 ((2459161j,18123s,0n),-14400s,2299161j)>\n#<DateTime: 2020-11-07T01:02:03-04:00 ((2459161j,18123s,0n),-14400s,2299161j)>\n{mday: 7, mon: 11, year: 2020}\n{mday: 7}\n#<Date: 2020-11-07 ((2459161j,0s,0n),+0s,2299161j)>\n#<Date: 2020-11-07 ((2459161j,0s,0n),+0s,-Infj)>\n#<DateTime: 2020-11-07T01:02:03-04:00 ((2459161j,18123s,500000000n),-14400s,2299161j)>\n#<DateTime: 2020-11-07T23:00:00+09:00 ((2459161j,50400s,0n),+32400s,2299161j)>\n#<DateTime: 1582-10-15T00:00:00+00:00 ((2299171j,0s,0n),+0s,2361222j)>\n"
     );
 }

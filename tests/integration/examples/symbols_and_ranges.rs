@@ -166,3 +166,12 @@ fn test_symbols_and_ranges_ascii_symbols_one_object_no_parens_execution() {
     let output = run_example("symbols_and_ranges/ascii_symbols_one_object_no_parens.rb");
     assert_eq!(output, ASCII_SYMBOLS_ONE_OBJECT_OUTPUT);
 }
+
+#[test]
+fn rational_ranges_step_and_write_their_ends_with_to_s() {
+    let output = run_example("symbols_and_ranges/rational_range_steps.rb");
+    assert_eq!(
+        output,
+        "11\n[(0/1), (1/10), (1/5)]\n(1/1)\n[(0/1), (1/10), (1/5), (3/10), (2/5), (1/2)]\n(1/2)\n(2/5)\n((0/1..1/1).%((1/10)))\n[(0/1), (1/4), (1/2), (3/4), (1/1)]\n[[(0/1), (1/10)], [(1/10), (1/5)]]\n((1/1..).%(2))\n((1.0...3.5).step(0.5))\n(1/1.step(3, (1/2)))\n(1.step(10, (3/1)))\n\"1/1..2/1\"\n\"1..\"\n\"1/1..\"\n\"..2/1\"\n\"1/1..2/1\"\n\"1.5..2\"\n"
+    );
+}

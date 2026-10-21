@@ -490,3 +490,12 @@ fn a_numbered_parameter_read_in_a_regexp_interpolation_is_the_block_s() {
         "[\" debug=.+\", \" sasl_ir=.+\"]\n[\"debug!\", \"sasl_ir!\"]\n"
     );
 }
+
+#[test]
+fn keywords_forward_through_two_forwarding_methods() {
+    let output = run_example("functions/forwarding_keywords_through_two_methods.rb");
+    assert_eq!(
+        output,
+        "[:adapter, \"PLAIN\", [\"user\", \"secret\"], :when_cached, {}, nil]\n[:adapter, \"EXTERNAL\", [], false, {realm: \"mail.example.com\"}, :answered]\n[:adapter, \"PLAIN\", [], true, {}, nil]\n"
+    );
+}

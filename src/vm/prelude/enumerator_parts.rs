@@ -387,15 +387,16 @@ class Enumerator::ArithmeticSequence < Enumerator
     inspect
   end
 
-  # How the sequence was asked for, which is what Ruby writes it back as.
+  # How the sequence was asked for, which is what Ruby writes it back as:
+  # the receiver as `to_s` spells it, and the arguments as `inspect` does.
   def written_form
     if @source.nil?
-      return "#{@from.inspect}.step" if @to.nil? && !@step_given
-      written = "#{@from.inspect}.step(#{@to.inspect}"
+      return "#{@from}.step" if @to.nil? && !@step_given
+      written = "#{@from}.step(#{@to.inspect}"
       written = written + ", #{@by.inspect}" if @step_given
       return written + ")"
     end
-    written = "(#{@source.inspect}).#{@written_as}"
+    written = "(#{@source}).#{@written_as}"
     return written + "(#{@by.inspect})" if @step_given
     written
   end
