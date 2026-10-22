@@ -21,8 +21,6 @@ use std::rc::{Rc, Weak};
 #[derive(Default)]
 pub(super) struct NativeCallSite {
     answered: RefCell<Option<(Weak<Class>, u64)>>,
-    /// Whether the lookup `answered` was found under reached a stub.
-    answered_through_stub: Cell<bool>,
     refused: RefCell<Option<(Weak<Class>, u64)>>,
     made_otherwise: Cell<u8>,
     /// Set by `native_call_class` when the call it was asked about was made
@@ -93,6 +91,11 @@ impl VirtualMachine {
         run: &UnitRun,
         at: usize,
     ) -> Option<Rc<Class>> {
+        // A TracePoint hears each native call, which the interpreter's
+        // dispatch tells it of.
+        if !self.tracepoints.is_empty() {
+            return None;
+        }
         let unit = run.unit();
         let Instruction::Call { base, site: called } = unit.instructions[at] else {
             return None;
@@ -112,9 +115,6 @@ impl VirtualMachine {
         let class = self.builtins().class_of(&receiver);
         let state = method_state();
         if holds(&site.answered, &class, state) {
-            if site.answered_through_stub.get() && !self.tracepoints.is_empty() {
-                return None;
-            }
             return Some(class);
         }
         if holds(&site.refused, &class, state) {
@@ -130,10 +130,6 @@ impl VirtualMachine {
                 .contains(&name)
             && !self.enumerable_stands_in(&receiver, name)
             && (through_stub || found.is_none_or(|(_, method)| method.is_undefined));
-        site.answered_through_stub.set(through_stub);
-        if through_stub && !self.tracepoints.is_empty() {
-            return None;
-        }
         let kept = if passes_over {
             &site.answered
         } else {

@@ -317,3 +317,13 @@ fn a_bare_super_in_a_return_modifier_hands_on_the_arguments_once_compiled() {
     );
     assert_eq!(compiled, "40000\n");
 }
+
+#[test]
+fn a_tracepoint_hears_the_native_calls_of_compiled_code() {
+    let (interpreted, _) = run_example(
+        "stdlib_libraries/power_assert_method_chain.rb",
+        &[("METOREX_JIT", "0")],
+    );
+    let (compiled, _) = run_example("stdlib_libraries/power_assert_method_chain.rb", &EVERY_UNIT);
+    assert_eq!(compiled, interpreted);
+}
