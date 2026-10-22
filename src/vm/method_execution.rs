@@ -419,25 +419,49 @@ impl VirtualMachine {
             .map_or(position.line, |written| written.line);
         self.enter_running_code(method.body_facts.places(&method), opened_on);
         self.warn_block_the_method_ignores(&method, &class, position)?;
-        // The call event fires inside the method's frame, which is what a
-        // trace's block sees on the stack.
+        // The call and return events of a method written in Ruby fire inside
+        // its frame, which is what a trace's block sees on the stack. Those
+        // of one reported as C fire outside it, as MRI fires a C method's.
         let called_class = Rc::clone(&class);
+        let returned_name = Rc::clone(&callee_name);
+        let returns_inside = !crate::vm::tracepoint::reported_as_c(&method);
+        if !returns_inside {
+            self.fire_method_event("call", &method.name, &method, &class, None, position)?;
+        }
         let frame_file = self.frames_file();
         let execution_result = self.with_call_frame(
             CallFrame::method(Rc::clone(&frame_name), None, callee_name, defined_name)
                 .entered_at(position.line, position.column)
                 .owned_by(allocation_owner)
-                .with_source_file(frame_file),
+                .with_source_file(frame_file)
+                .labeled(method.block_label.clone()),
             move |vm| {
-                vm.fire_method_event(
-                    "call",
-                    &method_for_body.name,
-                    &method_for_body,
-                    &called_class,
-                    None,
-                    position,
+                if returns_inside {
+                    vm.fire_method_event(
+                        "call",
+                        &method_for_body.name,
+                        &method_for_body,
+                        &called_class,
+                        None,
+                        position,
+                    )?;
+                }
+                let value = vm.execute_method_body(
+                    method_for_body.as_ref(),
+                    self_for_body,
+                    arguments_for_body,
                 )?;
-                vm.execute_method_body(method_for_body.as_ref(), self_for_body, arguments_for_body)
+                if returns_inside {
+                    vm.fire_method_event(
+                        "return",
+                        &returned_name,
+                        &method_for_body,
+                        &called_class,
+                        Some(&value),
+                        position,
+                    )?;
+                }
+                Ok::<Object, MetorexError>(value)
             },
         );
         self.method_nesting_stack.pop();
@@ -452,6 +476,7 @@ impl VirtualMachine {
         self.user_def_nesting = self.user_def_nesting.saturating_sub(1);
 
         let finished = match execution_result {
+            Ok(value) if returns_inside => Ok(value),
             Ok(value) => self
                 .fire_method_event(
                     "return",

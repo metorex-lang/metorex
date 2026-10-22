@@ -568,13 +568,14 @@ class Ripper
       end
 
       def statements
-        saved = [@command_argument_depth, @command_in_parentheses, @statements_depth]
+        saved = [@command_argument_depth, @command_in_parentheses, @statements_depth, @in_command_argument]
         @command_argument_depth = 0
         @command_in_parentheses = false
+        @in_command_argument = false
         @statements_depth = (@statements_depth || 0) + 1
         statement_list
       ensure
-        @command_argument_depth, @command_in_parentheses, @statements_depth = saved
+        @command_argument_depth, @command_in_parentheses, @statements_depth, @in_command_argument = saved
       end
 
       def statement_list
@@ -942,7 +943,7 @@ class Ripper
           end
 
           value = assignment_value(command)
-          if command && peek_type == :"," && !(value.is_a?(Ev) && value.terminal)
+          if command && !@in_command_argument && peek_type == :"," && !(value.is_a?(Ev) && value.terminal)
             take
             value = multiple_rhs(ev(:args_add, ev(:args_new), value))
             return terminal(:assign, target, value)
@@ -1557,12 +1558,15 @@ class Ripper
 
       # The first argument, which may be a command. A command written as
       # the argument in parentheses takes no `do` block.
+      # An assignment written as a command's argument takes one value, and
+      # the comma after it starts the next argument.
       def command_argument(paren)
-        saved = @command_in_parentheses
+        saved = [@command_in_parentheses, @in_command_argument]
         @command_in_parentheses = paren
+        @in_command_argument = true
         arg(0, command: true)
       ensure
-        @command_in_parentheses = saved
+        @command_in_parentheses, @in_command_argument = saved
       end
 
       def command_block(node)

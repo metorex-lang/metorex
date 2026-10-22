@@ -618,3 +618,12 @@ fn file_constants_carry_binary_and_null() {
     let output = run_example("filesystem/file_constants_binary_and_null.rb");
     assert_eq!(output, "0\n0\n\"/dev/null\"\n\"/dev/null\"\n");
 }
+
+#[test]
+fn file_stat_names_a_missing_path_in_its_own_bytes() {
+    let output = run_example("filesystem/stat_missing_path_message.rb");
+    assert_eq!(
+        output,
+        "Errno::ENOENT\n\"No such file or directory @ rb_file_s_stat - /missing-file-for-stat\"\n#<Encoding:UTF-8>\nErrno::ENOENT\n\"No such file or directory @ rb_file_s_stat - /missing-file-for-stat\\xE3E4\"\n#<Encoding:BINARY (ASCII-8BIT)>\n"
+    );
+}

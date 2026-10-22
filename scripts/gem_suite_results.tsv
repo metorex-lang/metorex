@@ -1,7 +1,7 @@
 file	mri_examples	mri_failures	mri_pending	metorex_examples	metorex_failures	metorex_pending
 minitest/test/minitest/test_bisect.rb	23	0	4	23	0	4
 minitest/test/minitest/test_find_minimal_combination.rb	28	0	0	28	0	0
-minitest/test/minitest/test_minitest_assertions.rb	171	0	0	171	4	0
+minitest/test/minitest/test_minitest_assertions.rb	171	0	0	171	2	0
 minitest/test/minitest/test_minitest_benchmark.rb	14	0	0	14	0	0
 minitest/test/minitest/test_minitest_reporter.rb	22	0	0	22	0	0
 minitest/test/minitest/test_minitest_spec.rb	73	0	0	73	3	0
@@ -40,7 +40,7 @@ net-imap/test/net/imap/test_imap_uidplus.rb	4	0	0	4	0	0
 net-imap/test/net/imap/test_num_validator.rb	276	0	0	276	0	0
 net-imap/test/net/imap/test_regexps.rb	147	0	0	147	0	0
 net-imap/test/net/imap/test_response_parser.rb	210	0	0	210	0	0
-net-imap/test/net/imap/test_response_reader.rb	5	0	0	5	0	0
+net-imap/test/net/imap/test_response_reader.rb	5	0	0	5	1	0
 net-imap/test/net/imap/test_saslprep.rb	2	0	0	2	0	0
 net-imap/test/net/imap/test_search_result.rb	13	0	0	13	0	0
 net-imap/test/net/imap/test_sequence_set.rb	596	0	0	596	0	0
@@ -55,10 +55,10 @@ net-smtp/test/net/smtp/test_response.rb	14	0	0	14	0	0
 net-smtp/test/net/smtp/test_smtp.rb	55	0	0	55	0	0
 net-smtp/test/net/smtp/test_sslcontext.rb	15	0	0	15	0	0
 net-smtp/test/net/smtp/test_starttls.rb	11	0	0	11	0	0
-power_assert/test/block_test.rb	39	0	0	39	38	0
-power_assert/test/dyna_symbol_key_test.rb	2	0	0	2	1	0
-power_assert/test/parser_test.rb	56	0	0	56	1	0
-power_assert/test/safe_op_test.rb	5	0	0	5	2	0
+power_assert/test/block_test.rb	39	0	0	39	0	0
+power_assert/test/dyna_symbol_key_test.rb	2	0	0	2	0	0
+power_assert/test/parser_test.rb	56	0	0	56	0	0
+power_assert/test/safe_op_test.rb	5	0	0	5	0	0
 rake/test/test_private_reader.rb	2	0	0	2	0	0
 rake/test/test_rake.rb	3	0	0	3	0	0
 rake/test/test_rake_application.rb	46	0	0	46	0	0
@@ -211,7 +211,7 @@ rss/test/test-trackback.rb	4	0	0	4	0	0
 rss/test/test-xml-stylesheet.rb	5	0	0	5	0	0
 test-unit/test/collector/test-descendant.rb	4	0	0	4	0	0
 test-unit/test/collector/test-load.rb	10	0	0	10	0	0
-test-unit/test/test-assertions.rb	208	0	5	208	3	5
+test-unit/test/test-assertions.rb	208	0	5	208	1	5
 test-unit/test/test-attribute-matcher.rb	5	0	0	5	0	0
 test-unit/test/test-attribute.rb	5	0	0	5	0	0
 test-unit/test/test-code-snippet.rb	2	0	1	2	0	1

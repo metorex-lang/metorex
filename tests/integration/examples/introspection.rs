@@ -588,6 +588,7 @@ fn test_introspection_method_shapes_no_parens_execution() {
 const TRACEPOINT_EVENTS_OUTPUT: &str = concat!(
     "[:call, :greet, \"Greeter\", [[:req, :name], [:key, :punctuation]]]\n",
     "[:return, :greet, \"Greeter\", [[:req, :name], [:key, :punctuation]]]\n",
+    "[:call, :disable, \"TracePoint\", []]\n",
     "ArgumentError\n",
     "no name given\n",
     "[:name, :punctuation]\n"
@@ -1212,4 +1213,31 @@ fn private_methods_leave_out_a_name_a_public_method_overrides() {
 fn endless_methods_report_the_line_they_start_on() {
     let output = run_example("introspection/endless_method_source_location.rb");
     assert_eq!(output, "2\n6\n9\n10\n");
+}
+
+#[test]
+fn tracepoint_hears_the_operators_a_line_calls() {
+    let output = run_example("introspection/tracepoint_operator_calls.rb");
+    assert_eq!(
+        output,
+        "[:c_call, :[], :[], 3]\n[:c_return, :[], :[], 3]\n[:c_call, :==, :==, 3]\n[:c_return, :==, :==, 3]\n[:c_call, :+, :+, 4]\n[:c_return, :+, :+, 4]\n[:c_call, :<, :<, 4]\n[:c_return, :<, :<, 4]\nfalse\ntrue\n"
+    );
+}
+
+#[test]
+fn tracepoint_hears_unary_operators_and_the_call_of_disable() {
+    let output = run_example("introspection/tracepoint_unary_operators_and_disable.rb");
+    assert_eq!(
+        output,
+        "[:c_call, :!, \"tracepoint_unary_operators_and_disable.rb\"]\n[:c_return, :!, \"tracepoint_unary_operators_and_disable.rb\"]\n[:call, :-@, \"<internal:numeric>\"]\n[:return, :-@, \"<internal:numeric>\"]\n[:call, :+@, \"<internal:numeric>\"]\n[:return, :+@, \"<internal:numeric>\"]\n[:call, :-@, \"<internal:numeric>\"]\n[:return, :-@, \"<internal:numeric>\"]\n[:call, :disable, \"<internal:trace_point>\"]\nfalse\n-3\n3\n-1.5\n"
+    );
+}
+
+#[test]
+fn tracepoint_hears_string_conversion_and_nil_check() {
+    let output = run_example("introspection/tracepoint_conversion_and_object_methods.rb");
+    assert_eq!(
+        output,
+        "[:c_call, :String, 9]\n[:c_call, :to_s, 9]\n[:c_return, :to_s, 9]\n[:c_return, :String, 9]\n[:c_call, :to_s, 10]\n[:c_return, :to_s, 10]\n[:c_call, :nil?, 10]\n[:c_return, :nil?, 10]\n"
+    );
 }

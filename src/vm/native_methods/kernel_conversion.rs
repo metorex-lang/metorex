@@ -178,13 +178,19 @@ impl VirtualMachine {
         // An object that overrides `respond_to?` gets the last word on
         // whether `to_s` may be called at all.
         if let Some((class, method)) = self.lookup_method(value, "respond_to?") {
+            // The question is the conversion's own, which a trace does not
+            // hear unless the program wrote the method answering it.
+            let before = self.native_calls_running;
+            self.native_calls_running = before + 1;
             let answer = self.invoke_method(
                 class,
                 method,
                 value.clone(),
                 vec![Object::symbol("to_s".to_string())],
                 position,
-            )?;
+            );
+            self.native_calls_running = before;
+            let answer = answer?;
             if !answer.is_truthy() {
                 return Err(self.no_string_conversion(value, position));
             }

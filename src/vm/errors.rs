@@ -602,6 +602,41 @@ pub(crate) fn simple_exception(
     }
 }
 
+/// An Errno error naming a path, `prefix` and then the path. The message
+/// keeps the path's bytes, so a path written in bytes makes a message in
+/// bytes, as Ruby's does.
+pub(crate) fn errno_naming_path(
+    class_name: &str,
+    prefix: &str,
+    path: &crate::object::StringValue,
+    position: Position,
+) -> MetorexError {
+    let mut bytes = prefix.as_bytes().to_vec();
+    bytes.extend(crate::vm::native_methods::string_methods::binary_bytes(
+        path,
+    ));
+    let written = crate::object::StringValue::binary(bytes);
+    let binary = matches!(path.encoding_name().as_str(), "ASCII-8BIT" | "BINARY");
+    written.retag(if binary {
+        "ASCII-8BIT".to_string()
+    } else {
+        path.encoding_name()
+    });
+    let message = written.as_str().to_string();
+    let exception = Object::exception(class_name, message.clone());
+    if let crate::object::View::Exception(held) = exception.view() {
+        held.borrow_mut().instance_vars.insert(
+            crate::vm::MESSAGE_STRING_KEY.to_string(),
+            Object::String(std::rc::Rc::new(written)),
+        );
+    }
+    MetorexError::UncaughtException {
+        exception,
+        location: position_to_location(position),
+        message,
+    }
+}
+
 pub(super) fn divide_by_zero_error(position: Position) -> MetorexError {
     let message = "divided by 0".to_string();
     MetorexError::UncaughtException {

@@ -189,10 +189,11 @@ impl VirtualMachine {
                 } else {
                     std::fs::symlink_metadata(path_text(path))
                 };
-                let held = held.map_err(|problem| {
-                    crate::vm::errors::simple_exception(
+                let held = held.map_err(|_| {
+                    crate::vm::errors::errno_naming_path(
                         "Errno::ENOENT",
-                        &format!("No such file or directory @ rb_file_s_stat - {path}: {problem}"),
+                        "No such file or directory @ rb_file_s_stat - ",
+                        path,
                         position,
                     )
                 })?;

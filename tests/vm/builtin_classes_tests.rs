@@ -121,6 +121,7 @@ fn class_of_block() {
         reserved_names: Rc::default(),
         captured_def_scope: vec![],
         captured_constant_home: None,
+        class_var_home: None,
         captured_nesting: metorex::object::no_nesting(),
         defining_method: None,
         defining_owner: None,

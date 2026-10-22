@@ -2506,3 +2506,30 @@ fn each_openssl_digest_class_reads_a_digest_in_one_call() {
         "\"0cc175b9c0f1b6a831c399e269772661\"\n32\n\"hvfkN/qlp/zhXR3cuerq6jd2Z7g=\"\n\"0cc175b9c0f1b6a831c399e269772661\"\n"
     );
 }
+
+#[test]
+fn power_assert_draws_a_method_chain_in_and_out_of_methods() {
+    let output = run_example("stdlib_libraries/power_assert_method_chain.rb");
+    assert_eq!(
+        output,
+        "  'a'.sub(/./, 'b').sub!(/./, 'c')\n      |             |\n      |             \"c\"\n      \"b\"\n      'a'.sub(/./, 'b').sub!(/./, 'c')\n          |             |\n          |             \"c\"\n          \"b\"\ntrue\n  'a'.sub(/./, 'b').sub!(/./, 'c')\n      |             |\n      |             \"c\"\n      \"b\"\n"
+    );
+}
+
+#[test]
+fn power_assert_draws_operators_kernel_functions_and_aliases() {
+    let output = run_example("stdlib_libraries/power_assert_operators_and_calls.rb");
+    assert_eq!(
+        output,
+        "  ! a != (+a == -a)\n  | | |   || |  ||\n  | | |   || |  |1\n  | | |   || |  -1\n  | | |   || false\n  | | |   |1\n  | | |   1\n  | | false\n  | 1\n  false\n  bmethod\n  |\n  false\n  String(a) + String(b)\n  |      |  | |      |\n  |      |  | |      0\n  |      |  | \"0\"\n  |      |  \"10\"\n  |      1\n  \"1\"\n  \"3\".to_i.times.map { |i| i + 1 }.class\n      |    |     |                 |\n      |    |     |                 Array\n      |    |     [1, 2, 3]\n      |    #<Enumerator: 3:times>\n      3\n  Aliased.new.alias_of_original\n  |       |   |\n  |       |   :foo\n  |       #<Aliased>\n  Aliased\n"
+    );
+}
+
+#[test]
+fn ripper_reads_assignments_in_arguments_one_value_each() {
+    let output = run_example("parser/ripper_assignments_in_arguments.rb");
+    assert_eq!(
+        output,
+        "[:program,\n [[:method_add_arg,\n   [:fcall, [:@ident, \"a\", [1, 0]]],\n   [:arg_paren,\n    [:args_add_block,\n     [[:assign,\n       [:var_field, [:@ident, \"b\", [1, 2]]],\n       [:vcall, [:@ident, \"c\", [1, 6]]]],\n      [:paren,\n       [[:massign,\n         [[:var_field, [:@ident, \"d\", [1, 10]]],\n          [:var_field, [:@ident, \"e\", [1, 13]]]],\n         [:vcall, [:@ident, \"f\", [1, 17]]]]]],\n      [:assign,\n       [:var_field, [:@const, \"G\", [1, 21]]],\n       [:vcall, [:@ident, \"h\", [1, 25]]]]],\n     false]]]]]\n[:program,\n [[:command,\n   [:@ident, \"foo\", [1, 0]],\n   [:args_add_block,\n    [[:assign, [:var_field, [:@ident, \"a\", [1, 4]]], [:@int, \"1\", [1, 8]]],\n     [:@int, \"2\", [1, 11]]],\n    false]]]]\n[:program,\n [[:assign,\n   [:var_field, [:@ident, \"x\", [1, 0]]],\n   [:mrhs_new_from_args, [[:@int, \"1\", [1, 4]]], [:@int, \"2\", [1, 7]]]]]]\n[:program,\n [[:method_add_arg,\n   [:fcall, [:@ident, \"foo\", [1, 0]]],\n   [:arg_paren,\n    [:args_add_block,\n     [[:method_add_block,\n       [:method_add_arg, [:fcall, [:@ident, \"bar\", [1, 4]]], []],\n       [:brace_block,\n        nil,\n        [[:assign,\n          [:var_field, [:@ident, \"y\", [1, 10]]],\n          [:mrhs_new_from_args,\n           [[:@int, \"1\", [1, 14]]],\n           [:@int, \"2\", [1, 17]]]]]]]],\n     false]]]]]\n"
+    );
+}

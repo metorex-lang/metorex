@@ -736,6 +736,9 @@ class StringIO
   # into that encoding first. Bytes stay as they are, since there is nothing
   # to read them as.
   def __for_writing__(text)
+    # A stream in binmode writes the bytes it is given, and its string stays
+    # binary.
+    return text.b if @binary && @string.encoding == Encoding::BINARY
     named = @encoding
     return text if named.nil?
     return text if text.encoding.name == "ASCII-8BIT"
@@ -894,8 +897,10 @@ class StringIO
   end
 
   # Reading in binary tags what comes back as bytes rather than as text.
+  # A stream open for writing tags the string it writes as binary too.
   def binmode
     @binary = true
+    @string.force_encoding(Encoding::BINARY) if @writable && !@string.nil? && !@string.frozen?
     self
   end
 

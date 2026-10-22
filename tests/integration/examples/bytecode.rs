@@ -236,7 +236,8 @@ fn test_bytecode_tracing_execution() {
         output,
         concat!(
             "[[:line, 14], [:call, 2], [:line, 3], [:b_call, 3], [:line, 4], [:line, 6], ",
-            "[:return, 7], [:line, 15], [:class, 15], [:line, 18], [:raise, 18], [:line, 21]]\n",
+            "[:return, 7], [:line, 15], [:class, 15], [:line, 18], [:raise, 18], [:line, 21], ",
+            "[:call, 297], [:line, 299]]\n",
             "[[\"call\", 2, :tally], [\"line\", 3, :tally]]\n",
             "33\n",
         )

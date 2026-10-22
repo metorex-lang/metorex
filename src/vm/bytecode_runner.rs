@@ -636,36 +636,55 @@ impl VirtualMachine {
             | Instruction::GreaterEqual { to, left, right } => {
                 let left = read(registers, left);
                 let right = read(registers, right);
-                registers[register(to)] =
+                let operator = binary_operator(instruction);
+                registers[register(to)] = if self.tracepoints.is_empty() {
                     match self.specialized_operation(&instruction, &left, &right) {
                         Some(value) => value,
-                        None => {
-                            let operator = binary_operator(instruction);
-                            self.operate_on_values(&operator, left, right, &position)?
-                        }
-                    };
+                        None => self.operate_on_values(&operator, left, right, &position)?,
+                    }
+                } else {
+                    self.traced_operator(&operator, left, right, position)?
+                };
             }
             Instruction::BinaryOperator { to, first, op } => {
                 let first = register(first);
                 let operator = &BINARY_OPERATORS[usize::from(op)];
                 let (left, right) = (registers[first].clone(), registers[first + 1].clone());
-                registers[register(to)] =
-                    self.operate_on_values(operator, left, right, &position)?;
+                registers[register(to)] = if self.tracepoints.is_empty() {
+                    self.operate_on_values(operator, left, right, &position)?
+                } else {
+                    self.traced_operator(operator, left, right, position)?
+                };
             }
             Instruction::Negate { to, from } => {
                 let value = registers[register(from)].clone();
-                registers[register(to)] =
-                    self.apply_unary_operator(&UnaryOp::Minus, value, position)?;
+                registers[register(to)] = if self.tracepoints.is_empty() || position.prelude {
+                    self.apply_unary_operator(&UnaryOp::Minus, value, position)?
+                } else {
+                    self.traced_unary_operator(&value.clone(), "-@", position, |vm| {
+                        vm.apply_unary_operator(&UnaryOp::Minus, value, position)
+                    })?
+                };
             }
             Instruction::Positive { to, from } => {
                 let value = registers[register(from)].clone();
-                registers[register(to)] =
-                    self.apply_unary_operator(&UnaryOp::Plus, value, position)?;
+                registers[register(to)] = if self.tracepoints.is_empty() || position.prelude {
+                    self.apply_unary_operator(&UnaryOp::Plus, value, position)?
+                } else {
+                    self.traced_unary_operator(&value.clone(), "+@", position, |vm| {
+                        vm.apply_unary_operator(&UnaryOp::Plus, value, position)
+                    })?
+                };
             }
             Instruction::Not { to, from } => {
                 let value = registers[register(from)].clone();
-                registers[register(to)] =
-                    self.apply_unary_operator(&UnaryOp::Not, value, position)?;
+                registers[register(to)] = if self.tracepoints.is_empty() || position.prelude {
+                    self.apply_unary_operator(&UnaryOp::Not, value, position)?
+                } else {
+                    self.traced_unary_operator(&value.clone(), "!", position, |vm| {
+                        vm.apply_unary_operator(&UnaryOp::Not, value, position)
+                    })?
+                };
             }
             Instruction::Jump { target } => return Ok(Next::JumpTo(index(target))),
             Instruction::JumpIfTrue { test, target } => {
@@ -791,8 +810,13 @@ impl VirtualMachine {
                     }
                     None => false,
                 };
+                // What the function calls of the core library itself fires no
+                // events, as a C function's calls do not.
+                let before = self.native_calls_running;
+                self.native_calls_running = before + 1;
                 let answered =
                     self.call_native_function(&native, vec![Object::array(arguments)], position);
+                self.native_calls_running = before;
                 if let Some(receiver) = &receiver {
                     let reported = answered.as_ref().map(|value| Some(value.clone()));
                     let reported = reported.map_err(Clone::clone);
@@ -1016,7 +1040,13 @@ impl VirtualMachine {
             } => {
                 let collection = registers[register(collection)].clone();
                 let key = registers[register(key)].clone();
-                registers[register(to)] = self.index_value(collection, key, position)?;
+                registers[register(to)] = if self.tracepoints.is_empty() || position.prelude {
+                    self.index_value(collection, key, position)?
+                } else {
+                    self.traced_native_operation(&collection.clone(), "[]", position, |vm| {
+                        vm.index_value(collection, key, position)
+                    })?
+                };
             }
             Instruction::StoreTarget { from, target } => {
                 let target = prepared(&unit.targets[index(target)], registers);

@@ -221,13 +221,6 @@ pub(crate) fn strings_comparable(
     {
         return false;
     }
-    // Text tagged as raw bytes says nothing about the characters behind it,
-    // so it compares against anything rather than against its own tag alone.
-    let reads_as_bytes =
-        |named: &str| matches!(named, "ASCII-8BIT" | "BINARY" | "ASCII-8BIT (BINARY)");
-    if reads_as_bytes(&left.encoding_name()) || reads_as_bytes(&right.encoding_name()) {
-        return true;
-    }
     let left_plain =
         left.as_str().is_ascii() && encoding_is_ascii_compatible(&left.encoding_name());
     let right_plain =

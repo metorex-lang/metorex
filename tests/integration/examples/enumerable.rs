@@ -215,3 +215,12 @@ fn collect_without_a_block_hands_back_an_enumerator_with_index_maps() {
         "[[\"mailto:a@b.c\", 1], [\"first\", 2]]\n[\"1:mailto:a@b.c\", \"2:first\"]\n[0, 4]\n"
     );
 }
+
+#[test]
+fn times_without_a_block_answers_an_enumerator() {
+    let output = run_example("enumerable/times_without_a_block.rb");
+    assert_eq!(
+        output,
+        "#<Enumerator: 3:times>\nEnumerator\n3\n[0, 1, 2]\n[1, 2, 3]\n0\n[]\n[3, 4]\n[[0, 1], [2]]\n"
+    );
+}

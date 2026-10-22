@@ -115,11 +115,25 @@ fn discover_errors_on_nonexistent_directory() {
 }
 
 #[test]
-fn discover_returns_correct_count() {
+fn discover_finds_every_test_file_and_nothing_else() {
     let dir = Path::new(EXAMPLES_DIR).join("test_discovery");
     let files = discover_test_files(&dir).unwrap();
-    // 4 passing + 2 failing = 6 total
-    assert_eq!(files.len(), 6, "Should find exactly 6 test files");
+    let found: Vec<String> = files
+        .iter()
+        .map(|path| path.strip_prefix(&dir).unwrap().display().to_string())
+        .collect();
+    assert_eq!(
+        found,
+        [
+            "array_spec.rb",
+            "default_directory/test/default_test.rb",
+            "failing/runtime_error_test.rb",
+            "failing/syntax_error_test.rb",
+            "math_test.rb",
+            "nested/nested_test.rb",
+            "test_strings.rb",
+        ]
+    );
 }
 
 // ============================================================================

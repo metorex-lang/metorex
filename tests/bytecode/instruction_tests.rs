@@ -611,9 +611,14 @@ fn an_instruction_starting_a_statement_fires_a_line_event() {
         .parse()
         .unwrap();
     let lines = machine.execute_program(&statements).unwrap();
+    // 299 is the line of MRI's trace_point.rb that `disable` runs first.
     assert_eq!(
         lines,
-        Some(Object::array(vec![Object::Int(101), Object::Int(102)]))
+        Some(Object::array(vec![
+            Object::Int(101),
+            Object::Int(102),
+            Object::Int(299)
+        ]))
     );
 }
 

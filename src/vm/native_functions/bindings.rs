@@ -127,7 +127,6 @@ impl VirtualMachine {
         arguments: Vec<Object>,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        use crate::object::Method;
         use std::rc::Rc;
         if arguments.len() != 1 {
             return Err(MetorexError::runtime_error(
@@ -158,20 +157,7 @@ impl VirtualMachine {
                 ));
             }
         };
-        let params: Vec<String> = block.parameters.clone();
-        let body: Vec<crate::ast::Statement> = block.body.to_vec();
-        let mut method = Method::new(method_name.clone(), params, body);
-        method.captured_vars = Some(block.captured_vars().clone());
-        // Optional block params (`|a, b = 1|`) become the method's
-        // default parameters.
-        for (orig_idx, expr) in block.parameter_defaults.iter() {
-            let reg_idx = block.parameters[..*orig_idx]
-                .iter()
-                .filter(|p| !p.starts_with('&'))
-                .count();
-            method.default_parameters.push((reg_idx, expr.clone()));
-        }
-        let method_rc = Rc::new(method);
+        let method_rc = Rc::new(self.method_from_block(&method_name, block));
         // Install on current self if it's a Class/Module (e.g. inside class_eval),
         // otherwise on global Object (top-level `define_method` semantics).
         let viewed = self.environment().get("self");

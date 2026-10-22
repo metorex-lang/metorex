@@ -71,6 +71,10 @@ pub struct BlockStatement {
     /// in the body of a block run as a class body, as `class_exec` runs one:
     /// the scope that block was written in, however the block is later run.
     pub captured_constant_home: Option<Option<Rc<Class>>>,
+    /// The class or module a class variable in the body belongs to, as it
+    /// stood where the block was made, or none at the top level. Unset for
+    /// a block no literal made, whose home comes from its nesting.
+    pub class_var_home: Option<Option<Rc<Class>>>,
     /// The scopes open where the block was written, innermost first, which is
     /// what `Module.nesting` in the body reports and where an `eval` written
     /// there opens what it defines.
@@ -155,6 +159,7 @@ impl BlockStatement {
             reserved_names: no_names(),
             captured_def_scope: Vec::new(),
             captured_constant_home: None,
+            class_var_home: None,
             captured_nesting: crate::object::no_nesting(),
             defining_method: None,
             defining_owner: None,
@@ -195,6 +200,7 @@ impl BlockStatement {
             reserved_names: no_names(),
             captured_def_scope,
             captured_constant_home: None,
+            class_var_home: None,
             captured_nesting: crate::object::no_nesting(),
             defining_method,
             defining_owner: None,

@@ -79,14 +79,16 @@ impl VirtualMachine {
                                         wide_bytes(&taken, shape) == wanted
                                     })
                                 } else {
-                                    let held: Vec<char> = string_value.as_str().chars().collect();
-                                    let wanted: Vec<char> = s.as_str().chars().collect();
-                                    wanted.len() <= held.len()
-                                        && if method_name == "start_with?" {
-                                            held[..wanted.len()] == wanted[..]
-                                        } else {
-                                            held[held.len() - wanted.len()..] == wanted[..]
-                                        }
+                                    // Text that matches whole characters can
+                                    // only start and end on a character's
+                                    // edge, so only its length is compared.
+                                    let held = string_value.as_str();
+                                    let wanted = s.as_str();
+                                    if method_name == "start_with?" {
+                                        held.starts_with(&*wanted)
+                                    } else {
+                                        held.ends_with(&*wanted)
+                                    }
                                 };
                             if fits {
                                 result = true;

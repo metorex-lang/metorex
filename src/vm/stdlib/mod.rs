@@ -15,17 +15,41 @@ use rex_libraries::REX_LIBRARIES;
 use rspec_libraries::RSPEC_LIBRARIES;
 use rubygems_libraries::RUBYGEMS_LIBRARIES;
 
-/// The file a library metorex carries says its code was written in.
+/// The file a library metorex carries says its code was written in. A
+/// bundled gem's file sits in a directory of that gem's own, as it does in
+/// MRI's gem directory, so a gem that reads its own directory from a path
+/// does not take another gem's files for its own.
 pub(crate) fn embedded_library_file(name: &str) -> String {
     // A file MRI itself compiles in names itself the way MRI does.
     if name.starts_with("<internal:") {
         return name.to_string();
     }
-    format!(
-        "{}{}.rb",
-        EMBEDDED_LIBRARY_PREFIX,
-        name.strip_suffix(".rb").unwrap_or(name)
-    )
+    let feature = name.strip_suffix(".rb").unwrap_or(name);
+    match gem_directory(feature) {
+        Some(gem) => format!("{EMBEDDED_LIBRARY_PREFIX}gems/{gem}/lib/{feature}.rb"),
+        None => format!("{EMBEDDED_LIBRARY_PREFIX}{feature}.rb"),
+    }
+}
+
+/// The directory of the bundled gem the library metorex carries under
+/// `feature` belongs to, `power_assert-3.0.1` for `power_assert`, or None
+/// when the library is not a bundled gem's.
+fn gem_directory(feature: &str) -> Option<&'static str> {
+    if EMBEDDED_LIBRARIES
+        .iter()
+        .any(|(names, _)| names.contains(&feature))
+        || PRISM_LIBRARIES
+            .iter()
+            .chain(RSPEC_LIBRARIES)
+            .chain(REX_LIBRARIES)
+            .any(|(named, _)| *named == feature)
+    {
+        return None;
+    }
+    GEM_LIBRARIES
+        .iter()
+        .find(|(named, _, _)| *named == feature)
+        .map(|(_, gem, _)| *gem)
 }
 
 const EMBEDDED_LIBRARY_PREFIX: &str = "<metorex>/";
@@ -56,9 +80,7 @@ pub(crate) fn written_for_c(file: &str) -> bool {
     if file.starts_with("<internal:") {
         return true;
     }
-    file.strip_prefix(EMBEDDED_LIBRARY_PREFIX)
-        .and_then(|named| named.strip_suffix(".rb"))
-        .is_some_and(|named| C_EXTENSIONS.contains(&named))
+    carried_feature(file).is_some_and(|named| C_EXTENSIONS.contains(&named))
 }
 
 /// The libraries metorex carries: the names `require` reaches each by, and
@@ -421,8 +443,18 @@ pub(crate) fn embedded_library(name: &str) -> Option<&'static str> {
                 .iter()
                 .chain(RSPEC_LIBRARIES)
                 .chain(REX_LIBRARIES)
-                .chain(GEM_LIBRARIES)
-                .chain(RUBYGEMS_LIBRARIES)
+                .find(|(named, _)| *named == trimmed)
+                .map(|(_, source)| *source)
+        })
+        .or_else(|| {
+            GEM_LIBRARIES
+                .iter()
+                .find(|(named, _, _)| *named == trimmed)
+                .map(|(_, _, source)| *source)
+        })
+        .or_else(|| {
+            RUBYGEMS_LIBRARIES
+                .iter()
                 .chain(BUNDLER_LIBRARIES)
                 .find(|(named, _)| *named == trimmed)
                 .map(|(_, source)| *source)
@@ -435,9 +467,14 @@ pub(crate) fn gem_data() -> &'static [(&'static str, &'static str)] {
 }
 
 /// The feature name of a library metorex carries, for the path its files
-/// read under, `<metorex>/` and then the feature, as `__dir__` builds them.
+/// read under, `<metorex>/` and then the feature, as `__dir__` builds them,
+/// with a bundled gem's directory between.
 pub(crate) fn carried_feature(name: &str) -> Option<&str> {
-    let feature = name.strip_prefix("<metorex>/")?;
+    let feature = name.strip_prefix(EMBEDDED_LIBRARY_PREFIX)?;
+    let feature = match feature.strip_prefix("gems/") {
+        Some(in_gem) => in_gem.split_once("/lib/")?.1,
+        None => feature,
+    };
     let feature = feature.strip_suffix(".rb").unwrap_or(feature);
     embedded_library(feature).is_some().then_some(feature)
 }
@@ -452,9 +489,9 @@ pub(crate) fn embedded_library_names() -> impl Iterator<Item = &'static str> {
                 .iter()
                 .chain(RSPEC_LIBRARIES)
                 .chain(REX_LIBRARIES)
-                .chain(GEM_LIBRARIES)
                 .chain(RUBYGEMS_LIBRARIES)
                 .chain(BUNDLER_LIBRARIES)
                 .map(|(named, _)| *named),
         )
+        .chain(GEM_LIBRARIES.iter().map(|(named, _, _)| *named))
 }

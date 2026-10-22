@@ -34,12 +34,11 @@ impl VirtualMachine {
                             position,
                         ));
                     }
-                    // Without a block, Ruby returns an Enumerator. We
-                    // approximate by returning the integer range as an Array
-                    // so chained calls like `n.times.map { ... }` work.
                     None => {
-                        let nums: Vec<Object> = (0..*n).map(Object::Int).collect();
-                        return Ok(Some(Object::Array(Rc::new(std::cell::RefCell::new(nums)))));
+                        let size = Some((*n).max(0));
+                        return self
+                            .build_enumerator(receiver.clone(), "times", Vec::new(), size, position)
+                            .map(Some);
                     }
                 };
                 for i in 0..*n {
@@ -140,10 +139,15 @@ impl VirtualMachine {
                 // reports that it cannot count to one it does not understand.
                 let numeric_limit = matches!(arguments[0].view(), View::Int(_) | View::Float(_));
                 if !numeric_limit && self.pending_block.is_none() {
-                    let message = format!(
-                        "comparison of Integer with {} failed",
-                        crate::vm::native_methods::array_methods::inspect_element(&arguments[0])
-                    );
+                    // Ruby writes a value it holds without an object of its
+                    // own as it inspects, and anything else by its class.
+                    let named = match arguments[0].view() {
+                        View::Nil | View::Bool(_) | View::Symbol(_) => {
+                            crate::vm::native_methods::array_methods::inspect_element(&arguments[0])
+                        }
+                        _ => self.builtins().class_of(&arguments[0]).name().to_string(),
+                    };
+                    let message = format!("comparison of Integer with {named} failed");
                     let walk = self.build_enumerator(
                         receiver.clone(),
                         method_name,

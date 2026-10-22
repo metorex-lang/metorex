@@ -152,13 +152,7 @@ impl VirtualMachine {
         let saved_file = self.enter_block_file(block);
         // A class variable written in the body belongs to the class or module
         // the block was written in, which is none at the top level.
-        self.class_var_cref_stack.push(
-            block
-                .captured_nesting
-                .first()
-                .cloned()
-                .or_else(|| block.captured_def_scope.last().cloned()),
-        );
+        self.class_var_cref_stack.push(block_class_var_home(block));
         // The scopes open around the block are the ones it was written in,
         // not the ones open in the method that called it, which is what
         // `Module.nesting` in the body reports and where an `eval` written
@@ -411,13 +405,7 @@ impl VirtualMachine {
         // The body reads constants and class variables in the scopes it was
         // written in, not those of the method that runs it, which a block
         // handed on with `&block` to a native iterator would otherwise see.
-        self.class_var_cref_stack.push(
-            block
-                .captured_nesting
-                .first()
-                .cloned()
-                .or_else(|| block.captured_def_scope.last().cloned()),
-        );
+        self.class_var_cref_stack.push(block_class_var_home(block));
         self.enter_block_nesting(block.captured_nesting.clone());
         self.running_block_breaks.push(running_break_flag(block));
         let result = match self.enter_block_body(block) {
@@ -647,4 +635,18 @@ fn break_from_proc_closure(location: crate::error::SourceLocation) -> MetorexErr
 /// The flag a `break` in this block consults, which a lambda has none of.
 fn running_break_flag(block: &BlockStatement) -> Option<std::rc::Rc<std::cell::Cell<bool>>> {
     (!block.is_lambda).then(|| std::rc::Rc::clone(&block.attached_call_running))
+}
+
+/// The class or module a class variable in a block's body belongs to: the
+/// one in force where the block was made, or, for a block no literal made,
+/// the innermost scope it was written in.
+fn block_class_var_home(block: &crate::object::BlockStatement) -> Option<Rc<crate::class::Class>> {
+    match &block.class_var_home {
+        Some(home) => home.clone(),
+        None => block
+            .captured_nesting
+            .first()
+            .cloned()
+            .or_else(|| block.captured_def_scope.last().cloned()),
+    }
 }

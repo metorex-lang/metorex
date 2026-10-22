@@ -61,7 +61,10 @@ impl VirtualMachine {
         if BUILT_IN_FEATURES.contains(&plainly)
             || crate::vm::stdlib::embedded_library(plainly).is_some()
         {
-            return Ok(answer("rb", format!("<metorex>/{plainly}.rb")));
+            return Ok(answer(
+                "rb",
+                crate::vm::stdlib::embedded_library_file(plainly),
+            ));
         }
         Ok(Object::Nil)
     }
@@ -164,6 +167,18 @@ impl VirtualMachine {
                         return Ok(Object::Bool(false));
                     }
                 }
+            }
+        }
+        // A library metorex carries sits where the load path reaches, so
+        // once it is loaded a file of the same name on the load path does
+        // not load a second copy of it, as one in a gem's directory does
+        // not under MRI.
+        if !named_outright {
+            let plainly = require_name.strip_suffix(".rb").unwrap_or(&require_name);
+            if crate::vm::stdlib::embedded_library(plainly).is_some()
+                && self.feature_is_listed(&crate::vm::stdlib::embedded_library_file(plainly))
+            {
+                return Ok(Object::Bool(false));
             }
         }
         // Each ending is looked for along the whole load path before the

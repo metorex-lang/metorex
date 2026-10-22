@@ -14,7 +14,7 @@ impl VirtualMachine {
         elements: &[Object],
         in_flight: &mut Vec<usize>,
         position: Position,
-    ) -> Result<Vec<(String, String)>, MetorexError> {
+    ) -> Result<Vec<JoinedPart>, MetorexError> {
         let mut written = Vec::with_capacity(elements.len());
         for element in elements {
             self.join_element_into(element, in_flight, &mut written, position)?;
@@ -27,12 +27,16 @@ impl VirtualMachine {
         &mut self,
         element: &Object,
         in_flight: &mut Vec<usize>,
-        written: &mut Vec<(String, String)>,
+        written: &mut Vec<JoinedPart>,
         position: Position,
     ) -> Result<(), MetorexError> {
         match element.view() {
             View::Symbol(name) | View::String(name) => {
-                written.push((name.as_str().to_string(), name.encoding_name()));
+                written.push((
+                    name.as_str().to_string(),
+                    name.encoding_name(),
+                    crate::vm::native_methods::string_methods::binary_bytes(name),
+                ));
                 return Ok(());
             }
             _ => {}
@@ -77,7 +81,11 @@ impl VirtualMachine {
                 continue;
             }
             if let View::String(text) = answered.view() {
-                written.push((text.as_str().to_string(), text.encoding_name()));
+                written.push((
+                    text.as_str().to_string(),
+                    text.encoding_name(),
+                    crate::vm::native_methods::string_methods::binary_bytes(text),
+                ));
                 return Ok(());
             }
         }
@@ -97,12 +105,12 @@ impl VirtualMachine {
     /// of which is ASCII cannot be joined at all.
     pub(crate) fn joined_encoding(
         &mut self,
-        parts: &[(String, String)],
+        parts: &[JoinedPart],
         position: Position,
     ) -> Result<String, MetorexError> {
         let mut writing = "US-ASCII".to_string();
         let mut all_ascii = true;
-        for (at, (text, held)) in parts.iter().enumerate() {
+        for (at, (text, held, _)) in parts.iter().enumerate() {
             if at == 0 {
                 writing = held.clone();
                 all_ascii = text.is_ascii();
@@ -128,3 +136,7 @@ impl VirtualMachine {
         Ok(writing)
     }
 }
+
+/// One piece of a join: its text, the encoding it is written in, and its
+/// bytes.
+pub(crate) type JoinedPart = (String, String, Vec<u8>);

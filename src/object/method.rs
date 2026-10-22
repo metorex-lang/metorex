@@ -185,6 +185,9 @@ pub struct Method {
     /// True when `Method#to_proc` made this, which Ruby reports as a Proc
     /// rather than as the Method it came from.
     pub reads_as_proc: bool,
+    /// What a backtrace names a method `define_method` made from a block:
+    /// the block, as `block in <class:Name>`, since the block is what runs.
+    pub block_label: Option<Rc<str>>,
     /// Whether `ruby2_keywords` named this method, so a trailing keyword hash
     /// gathered into its splat is marked and can be passed on as keywords.
     /// The flag is shared with every copy, which is what makes it reach an
@@ -233,6 +236,7 @@ impl Method {
             body_facts: BodyFacts::default(),
             captured_nesting: crate::object::no_nesting(),
             reads_as_proc: false,
+            block_label: None,
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
             definee: None,
             c_function: None,
@@ -277,6 +281,7 @@ impl Method {
             body_facts: BodyFacts::default(),
             captured_nesting: crate::object::no_nesting(),
             reads_as_proc: false,
+            block_label: None,
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
             definee: None,
             c_function: None,
@@ -321,6 +326,7 @@ impl Method {
             body_facts: BodyFacts::default(),
             captured_nesting: crate::object::no_nesting(),
             reads_as_proc: false,
+            block_label: None,
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
             definee: None,
             c_function: None,
@@ -366,6 +372,7 @@ impl Method {
             body_facts: BodyFacts::default(),
             captured_nesting: crate::object::no_nesting(),
             reads_as_proc: false,
+            block_label: None,
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
             definee: None,
             c_function: None,
@@ -405,6 +412,7 @@ impl Method {
             body_facts: BodyFacts::default(),
             captured_nesting: crate::object::no_nesting(),
             reads_as_proc: false,
+            block_label: None,
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
             definee: None,
             c_function: None,
@@ -444,6 +452,7 @@ impl Method {
             body_facts: BodyFacts::default(),
             captured_nesting: self.captured_nesting.clone(),
             reads_as_proc: self.reads_as_proc,
+            block_label: self.block_label.clone(),
             ruby2_keywords: Rc::clone(&self.ruby2_keywords),
             definee: self.definee.clone(),
             c_function: self.c_function,

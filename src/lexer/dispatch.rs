@@ -347,6 +347,8 @@ impl<'a> Lexer<'a> {
                         {
                             let kind = if byte.is_ascii() {
                                 TokenKind::String((byte as char).to_string())
+                            } else if self.binary_source {
+                                TokenKind::BinaryString((byte as char).to_string())
                             } else {
                                 TokenKind::ByteString((byte as char).to_string())
                             };

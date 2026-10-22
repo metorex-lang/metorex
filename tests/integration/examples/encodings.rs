@@ -695,3 +695,30 @@ fn a_relabeled_string_matches_its_literal_in_searches_and_hashes() {
         "#<Encoding:UTF-8>\n#<Encoding:UTF-8>\ntrue\ntrue\n0\ntrue\n[]\n1\n1\n\"rené\"\n"
     );
 }
+
+#[test]
+fn a_binary_inspection_joins_into_a_message_as_its_bytes() {
+    let output = run_example("encodings/format_with_binary_argument.rb");
+    assert_eq!(
+        output,
+        "nil\n\"  \\xFF\"\n#<Encoding:BINARY (ASCII-8BIT)>\n[32, 32, 255]\n#<Encoding:BINARY (ASCII-8BIT)>\n[255, 120]\n#<Encoding:BINARY (ASCII-8BIT)>\n[97, 255]\nEncoding::UndefinedConversionError\n\"\\\"\\\\xFF\\\" from ASCII-8BIT to UTF-8\"\n[255]\nfalse\nEncoding::CompatibilityError\n\"invalid byte sequence in UTF-8\"\n[32, 32, 255]\n#<Encoding:UTF-8>\n[32, 32, 255]\n#<Encoding:UTF-8>\nfalse\n"
+    );
+}
+
+#[test]
+fn strip_trims_broken_utf8_only_from_a_whole_front() {
+    let output = run_example("encodings/strip_broken_utf8.rb");
+    assert_eq!(
+        output,
+        "[[:lstrip, ArgumentError, \"invalid byte sequence in UTF-8\"], [:rstrip, Encoding::CompatibilityError, \"invalid byte sequence in UTF-8\"], [:strip, ArgumentError, \"invalid byte sequence in UTF-8\"]]\n[[:lstrip, [97, 32, 255, 32], \"UTF-8\"], [:rstrip, Encoding::CompatibilityError, \"invalid byte sequence in UTF-8\"], [:strip, Encoding::CompatibilityError, \"invalid byte sequence in UTF-8\"]]\n[[:lstrip, ArgumentError, \"invalid byte sequence in UTF-8\"], [:rstrip, Encoding::CompatibilityError, \"invalid byte sequence in UTF-8\"], [:strip, ArgumentError, \"invalid byte sequence in UTF-8\"]]\n[[:lstrip, ArgumentError, \"invalid byte sequence in UTF-8\"], [:rstrip, Encoding::CompatibilityError, \"invalid byte sequence in UTF-8\"], [:strip, ArgumentError, \"invalid byte sequence in UTF-8\"]]\n[[:lstrip, [97, 255, 32, 32], \"UTF-8\"], [:rstrip, Encoding::CompatibilityError, \"invalid byte sequence in UTF-8\"], [:strip, Encoding::CompatibilityError, \"invalid byte sequence in UTF-8\"]]\n[[:lstrip, [98, 255], \"UTF-8\"], [:rstrip, Encoding::CompatibilityError, \"invalid byte sequence in UTF-8\"], [:strip, Encoding::CompatibilityError, \"invalid byte sequence in UTF-8\"]]\n\"b\\xFF\"\n[98, 255]\nFrozenError\n"
+    );
+}
+
+#[test]
+fn a_meta_character_in_a_binary_source_is_binary() {
+    let output = run_example("encodings/meta_character_in_binary_source.rb");
+    assert_eq!(
+        output,
+        "#<Encoding:BINARY (ASCII-8BIT)>\ntrue\n[154]\n#<Encoding:BINARY (ASCII-8BIT)>\n"
+    );
+}

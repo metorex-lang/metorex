@@ -26,8 +26,13 @@ impl VirtualMachine {
         });
         let traced = self.begin_native_trace(receiver, method_name, position)?;
         let entered = self.enter_native_frame(Some(receiver), method_name, position);
+        // What the method calls of the core library itself is Ruby's C code
+        // calling on, which fires no events.
+        let before = self.native_calls_running;
+        self.native_calls_running = before + 1;
         let answered =
             self.call_native_method_body(class, receiver, method_name, arguments, position);
+        self.native_calls_running = before;
         self.leave_native_call(entered, position, &answered);
         self.end_native_trace(traced, receiver, method_name, &answered, position)?;
         // A native method answers None for a name it does not have, which
@@ -52,7 +57,13 @@ impl VirtualMachine {
         let traced = std::mem::take(&mut self.program_call_pending)
             && !self.tracepoints.is_empty()
             && self.written_in_c(receiver, method_name);
-        if traced {
+        // A call the receiver's own native methods missed has had its
+        // `c_call` fired already.
+        let fired_already = self
+            .unanswered_native_call
+            .take()
+            .is_some_and(|held| held == method_name);
+        if traced && !fired_already {
             self.fire_native_event("c_call", method_name, receiver, None, position)?;
         }
         Ok(traced)
@@ -67,8 +78,21 @@ impl VirtualMachine {
         answered: &Result<Option<Object>, MetorexError>,
         position: Position,
     ) -> Result<(), MetorexError> {
-        if traced && let Ok(Some(value)) = answered {
-            self.fire_native_event("c_return", method_name, receiver, Some(value), position)?;
+        if !traced {
+            return Ok(());
+        }
+        match answered {
+            Ok(Some(value)) => {
+                self.fire_native_event("c_return", method_name, receiver, Some(value), position)?;
+            }
+            // The type's own native methods did not have the name, and what
+            // answers next is the call the program made, whose `c_call` has
+            // fired.
+            Ok(None) => {
+                self.unanswered_native_call = Some(method_name.to_string());
+                self.program_call_pending = true;
+            }
+            Err(_) => {}
         }
         Ok(())
     }

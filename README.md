@@ -328,6 +328,7 @@ Metorex compiles each method, block, class body, and file to bytecode the first 
 - **One default may set several parameters**: `def foo(a = b = c = {})` gives all three the one value
 - **Logger rotates on the calendar**: `Logger.new(path, 'daily')` moves the file aside when the day turns, naming it for the period it covered, and `shift_period_suffix:` says how that name is written
 - **TracePoint sees compiled source**: a `:script_compiled` event fires for each `eval`, `TracePoint#eval_script` answers the source it compiled, and `TracePoint#instruction_sequence` the sequence it compiled to, with the methods, classes and blocks written in it as its children. A TracePoint switched on with `enable(target:)` aimed at an instruction sequence hears the code that sequence runs
+- **TracePoint hears operators**: an operator or index a built-in value answers itself, such as `+`, `==`, `!`, or `[]`, fires `c_call` and `c_return`, and Integer's and Float's `-@` and Numeric's `+@` fire `call` and `return` from `<internal:numeric>`, the file MRI writes them in. A method written in Ruby fires its `return` while its frame is still on the stack, a method reached through an alias names the method as `method_id` and the alias as `callee_id`, and `disable` fires its `call` from `<internal:trace_point>`
 - **An UnboundMethod cut from a core operator runs the original**: `Integer.instance_method(:+)` bound back to a number does the arithmetic even where the program has since replaced `Integer#+`
 - **`retry` runs a begin body again**: written in a rescue body it goes back to the top of the begin, and written anywhere else it is refused as a SyntaxError while the source is read
 - **A copy of a callable or a Binding is its own object**: `clone` and `dup` on a Method, an UnboundMethod, a Proc, or a Binding answer a separate object that carries the instance variables the original had, keeps the finalizers `clone` copies, and compares `==` to it where Ruby does. A Binding copy shares the cells it names and keeps its own list of them
@@ -637,17 +638,17 @@ Under MRI 4.0.7 one example fails, in rspec-mocks' `receive_spec.rb`, which stub
 
 | Suite | Passing under MRI | Passing under Metorex | Examples | Pending |
 | :-- | --: | --: | --: | --: |
-| minitest | 418 | 396 | 422 | 4 |
-| net-imap | 1691 | 1691 | 1691 | 0 |
+| minitest | 418 | 398 | 422 | 4 |
+| net-imap | 1691 | 1690 | 1691 | 0 |
 | net-pop | 7 | 7 | 7 | 0 |
 | net-smtp | 95 | 95 | 95 | 0 |
-| power_assert | 102 | 60 | 102 | 0 |
+| power_assert | 102 | 102 | 102 | 0 |
 | rake | 598 | 595 | 598 | 0 |
 | rexml | 730 | 612 | 730 | 0 |
 | rss | 362 | 304 | 362 | 0 |
-| test-unit | 443 | 431 | 452 | 6 |
+| test-unit | 443 | 433 | 452 | 6 |
 
-power_assert's tests that fail build their messages from TracePoint events for every call an assertion makes, operators included.
+net-imap's one remaining failure times how its response reader grows with a response's length, which `String#rindex` with a pattern keeps from growing linearly.
 
 ### Speed
 

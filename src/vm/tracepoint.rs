@@ -78,6 +78,19 @@ impl VirtualMachine {
         {
             return Ok(());
         }
+        self.fire_native_event_now(event, method_name, receiver, value, position)
+    }
+
+    /// Fire a native method's event whatever is running now, for one whose
+    /// conditions were settled when its call began.
+    fn fire_native_event_now(
+        &mut self,
+        event: &str,
+        method_name: &str,
+        receiver: &Object,
+        value: Option<&Object>,
+        position: Position,
+    ) -> Result<(), MetorexError> {
         let class = self.builtins().class_of(receiver);
         let mut extra = vec![
             ("method_id", Object::symbol(method_name.to_string())),
@@ -347,11 +360,48 @@ impl VirtualMachine {
         }
         // The core library stands in for Ruby's C code, so a method written
         // there is reported as a C method, at the place it was called from.
-        let written_in_core = method
-            .body
-            .first()
-            .is_some_and(|held| held.position().prelude)
-            || made_by_an_attribute_call(method);
+        let written_in_core = reported_as_c(method);
+        // One a native method calls is C code calling C code, which fires
+        // nothing. The method's body has started by now, so the count is the
+        // one it set aside.
+        let called_natively = self
+            .running_code
+            .last()
+            .is_some_and(|running| running.native_calls_before > 0);
+        if written_in_core && called_natively {
+            return Ok(());
+        }
+        // MRI writes TracePoint#enable and #disable in Ruby, in its
+        // trace_point.rb. A trace hears no event of `enable`, which switches
+        // it on, and of `disable`, which switches it off, only the call and
+        // the line it runs first. C switching a trace off calls neither.
+        if found_on.name() == "TracePoint" && matches!(method_name, "enable" | "disable") {
+            if method_name == "enable" || event != "call" || called_natively {
+                return Ok(());
+            }
+            let place = |line: usize| {
+                vec![
+                    ("method_id", Object::symbol("disable")),
+                    ("callee_id", Object::symbol("disable")),
+                    ("defined_class", Object::Class(Rc::clone(found_on))),
+                    ("path", Object::string("<internal:trace_point>")),
+                    ("lineno", Object::Int(line as i64)),
+                    ("parameters", Object::empty_array()),
+                ]
+            };
+            self.fire_event("call", position, place(TRACE_POINT_DISABLE_LINE))?;
+            return self.fire_event("line", position, place(TRACE_POINT_DISABLE_FIRST_LINE));
+        }
+        // A call the native methods missed has had its `c_call` fired.
+        if written_in_core
+            && event == "call"
+            && self
+                .unanswered_native_call
+                .take()
+                .is_some_and(|held| held == method_name)
+        {
+            return Ok(());
+        }
         let (event, position) = match (written_in_core, event) {
             (true, "call") => ("c_call", position),
             (true, _) => ("c_return", position),
@@ -381,8 +431,14 @@ impl VirtualMachine {
             .strip_prefix("__class__")
             .unwrap_or(method_name)
             .to_string();
+        // A method reached through an alias is named by what it was defined
+        // as, and called by the alias.
+        let defined = method
+            .original_name
+            .clone()
+            .unwrap_or_else(|| plain.clone());
         let mut extra = vec![
-            ("method_id", Object::symbol(plain.clone())),
+            ("method_id", Object::symbol(defined)),
             ("callee_id", Object::symbol(plain)),
             // Ruby names the class the method was written on, which is not
             // always the one the call found it through.
@@ -416,6 +472,82 @@ impl VirtualMachine {
             extra.push(("binding", held));
         }
         self.fire_event(event, position, extra)
+    }
+}
+
+/// Whether a trace reports `method` as one Ruby writes in C: one the core
+/// library writes, or one an attribute call made.
+pub(crate) fn reported_as_c(method: &crate::object::Method) -> bool {
+    method
+        .body
+        .first()
+        .is_some_and(|held| held.position().prelude)
+        || made_by_an_attribute_call(method)
+}
+
+/// The line MRI 4.0.7's trace_point.rb defines `TracePoint#disable` on, and
+/// the line of its body it runs first.
+const TRACE_POINT_DISABLE_LINE: usize = 297;
+const TRACE_POINT_DISABLE_FIRST_LINE: usize = 299;
+
+/// The unary operators MRI 4.0.7 writes in Ruby in its numeric.rb, by the
+/// class each is defined on, with the lines a trace reports for its call
+/// and for its return.
+pub(crate) const NUMERIC_UNARY_METHODS: &[(&str, &str, usize, usize)] = &[
+    ("Integer", "-@", 104, 107),
+    ("Numeric", "+@", 89, 91),
+    ("Float", "-@", 389, 392),
+];
+
+impl VirtualMachine {
+    /// Run `operation`, a unary operator on `receiver`, while a TracePoint
+    /// listens. One MRI writes in numeric.rb fires `call` and `return` from
+    /// there, and any other one the receiver answers natively fires
+    /// `c_call` and `c_return`.
+    pub(crate) fn traced_unary_operator(
+        &mut self,
+        receiver: &Object,
+        name: &str,
+        position: Position,
+        operation: impl FnOnce(&mut Self) -> Result<Object, MetorexError>,
+    ) -> Result<Object, MetorexError> {
+        let class = match receiver.view() {
+            View::Int(_) | View::BigInt(_) => Some("Integer"),
+            View::Float(_) => Some("Float"),
+            _ => None,
+        };
+        let written = class.and_then(|class| {
+            NUMERIC_UNARY_METHODS.iter().find(|(owner, method, _, _)| {
+                *method == name && (*owner == class || *owner == "Numeric")
+            })
+        });
+        let Some((owner, _, call_line, return_line)) = written.copied() else {
+            return self.traced_native_operation(receiver, name, position, operation);
+        };
+        let defined_class = self.globals().get(owner).unwrap_or(Object::Nil);
+        // The event names the line in numeric.rb, while the line running
+        // stays the one that called the operator.
+        let extra = |line: usize, value: Option<Object>| {
+            let mut extra = vec![
+                ("method_id", Object::symbol(name)),
+                ("callee_id", Object::symbol(name)),
+                ("defined_class", defined_class.clone()),
+                ("path", Object::string("<internal:numeric>")),
+                ("lineno", Object::Int(line as i64)),
+            ];
+            if let Some(value) = value {
+                extra.push(("return_value", value));
+            }
+            extra
+        };
+        self.fire_event("call", position, extra(call_line, None))?;
+        let answered = operation(self)?;
+        self.fire_event(
+            "return",
+            position,
+            extra(return_line, Some(answered.clone())),
+        )?;
+        Ok(answered)
     }
 }
 

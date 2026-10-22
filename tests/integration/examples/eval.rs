@@ -165,3 +165,9 @@ fn eval_counts_lines_from_zero_when_told_to() {
         )
     );
 }
+
+#[test]
+fn a_block_made_through_a_binding_reads_its_class_variables() {
+    let output = run_example("eval/class_variable_through_a_binding.rb");
+    assert_eq!(output, "2\n2\n");
+}

@@ -77,17 +77,18 @@ impl VirtualMachine {
                 // With no separator, or with nil for one, `$,` says what
                 // goes between. Reading it warns, since a later release will
                 // drop it.
-                let default_separator = |vm: &mut Self| -> String {
+                let default_separator = |vm: &mut Self| -> Vec<u8> {
                     match vm.globals().get(",").view() {
                         Some(View::String(held)) => {
-                            let text = held.as_str().to_string();
+                            let text =
+                                crate::vm::native_methods::string_methods::binary_bytes(held);
                             vm.emit_warning_to_stderr(
                                 "warning: $, is set to non-nil value",
                                 position,
                             );
                             text
                         }
-                        _ => String::new(),
+                        _ => Vec::new(),
                     }
                 };
                 let sep = if arguments.is_empty() || matches!(arguments[0].view(), View::Nil) {
@@ -105,9 +106,11 @@ impl VirtualMachine {
                         arguments[0].clone()
                     };
                     match given.view() {
-                        View::String(s) => s.as_str().to_string(),
+                        View::String(s) => {
+                            crate::vm::native_methods::string_methods::binary_bytes(s)
+                        }
                         // A nil separator joins with nothing between.
-                        View::Nil => String::new(),
+                        View::Nil => Vec::new(),
                         _ => {
                             return Err(method_argument_type_error(
                                 method_name,
@@ -126,18 +129,17 @@ impl VirtualMachine {
                 let mut in_flight = vec![Rc::as_ptr(array_rc) as usize];
                 let parts = self.joined_parts(&elements, &mut in_flight, position)?;
                 let writing = self.joined_encoding(&parts, position)?;
-                let text = parts
-                    .iter()
-                    .map(|(written, _)| written.as_str())
-                    .collect::<Vec<&str>>()
-                    .join(&sep);
-                let made = crate::object::StringValue::with_encoding(text, writing.clone());
-                // A run of bytes joined with others is still a run of bytes,
-                // so the result says so rather than reading them as
-                // characters.
-                if matches!(writing.as_str(), "ASCII-8BIT" | "BINARY") {
-                    made.mark_bytes();
+                // The pieces join as the bytes they hold, so one whose bytes
+                // its encoding does not spell keeps them as they are.
+                let mut bytes = Vec::new();
+                for (at, (_, _, held)) in parts.iter().enumerate() {
+                    if at > 0 {
+                        bytes.extend_from_slice(&sep);
+                    }
+                    bytes.extend_from_slice(held);
                 }
+                let made = crate::object::StringValue::binary(bytes);
+                made.retag(writing.clone());
                 Ok(Some(Object::String(Rc::new(made))))
             }
             // `flatten` walks all the way down by default, or as many levels

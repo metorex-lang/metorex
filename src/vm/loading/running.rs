@@ -262,7 +262,11 @@ impl VirtualMachine {
         // A file's top level is outside any method, whichever method loaded
         // it, so `using` there is allowed.
         let caller_method_nesting = std::mem::take(&mut self.user_def_nesting);
+        // A file read from disk names itself, even when a library metorex
+        // carries is the one requiring it.
+        let caller_library = self.loading_embedded_library.take();
         let result = self.execute_program(&statements);
+        self.loading_embedded_library = caller_library;
         // An error the interpreter raised here takes its backtrace now, while
         // the file's own frame stands. Taken by the rescue that catches it,
         // the backtrace would start in the rescuing file instead.
@@ -385,7 +389,9 @@ impl VirtualMachine {
         {
             features
                 .borrow_mut()
-                .push(Object::string(format!("<metorex>/{}.rb", name)));
+                .push(Object::string(crate::vm::stdlib::embedded_library_file(
+                    name,
+                )));
         }
         Ok(true)
     }

@@ -129,6 +129,7 @@ impl VirtualMachine {
             Some(captured) => captured.clone(),
             None => self.snapshot_lexical_nesting().into(),
         };
+        block.class_var_home = Some(self.class_var_cref_stack.last().cloned().flatten());
         block.home_frame = self.lexical_home_frame.unwrap_or(self.current_method_frame);
         block.written_in = Some(self.enclosing_scope_label());
         block.written_depth = Some(self.block_nesting_depth());
@@ -222,6 +223,42 @@ impl VirtualMachine {
                 flag.set(false);
             }
         }
+    }
+
+    /// Run an operator while a TracePoint listens. One a built-in value
+    /// answers itself fires `c_call` and `c_return` around it, as the C
+    /// method MRI runs for it does, and one written in Ruby fires the
+    /// events of the method it calls.
+    pub(crate) fn traced_operator(
+        &mut self,
+        op: &BinaryOp,
+        left_value: Object,
+        right_value: Object,
+        position: crate::lexer::Position,
+    ) -> Result<Object, MetorexError> {
+        let Some(name) = binary_op_method_name(op).filter(|_| !position.prelude) else {
+            return self.operate_on_values(op, left_value, right_value, &position);
+        };
+        self.traced_native_operation(&left_value.clone(), name, position, |vm| {
+            vm.operate_on_values(op, left_value, right_value, &position)
+        })
+    }
+
+    /// Run `operation`, which calls `name` on `receiver`, firing `c_call`
+    /// and `c_return` around it when the receiver answers it natively.
+    pub(crate) fn traced_native_operation(
+        &mut self,
+        receiver: &Object,
+        name: &str,
+        position: crate::lexer::Position,
+        operation: impl FnOnce(&mut Self) -> Result<Object, MetorexError>,
+    ) -> Result<Object, MetorexError> {
+        self.program_call_pending = true;
+        let traced = self.begin_native_trace(receiver, name, position)?;
+        let answered = operation(self);
+        let reported = answered.clone().map(Some);
+        self.end_native_trace(traced, receiver, name, &reported, position)?;
+        answered
     }
 
     pub(crate) fn operate_on_values(

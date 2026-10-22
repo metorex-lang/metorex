@@ -310,6 +310,9 @@ pub(crate) fn frame_label_at(frames: &[&crate::vm::CallFrame], index: usize) -> 
     let Some(frame) = frames.get(index) else {
         return "<main>".to_string();
     };
+    if let Some(label) = frame.label() {
+        return label.to_string();
+    }
     let name = frame.name().to_string();
     let depth = if name == "<block>" {
         frame.block_depth().max(1)

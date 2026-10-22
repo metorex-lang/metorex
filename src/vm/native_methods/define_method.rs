@@ -127,7 +127,11 @@ impl VirtualMachine {
 
     /// Convert a block/Proc into a method body, carrying over its parameter
     /// shape and the variables it closed over.
-    fn method_from_block(&mut self, method_name: &str, block: &Rc<BlockStatement>) -> Method {
+    pub(crate) fn method_from_block(
+        &mut self,
+        method_name: &str,
+        block: &Rc<BlockStatement>,
+    ) -> Method {
         let mut regular_params: Vec<String> = Vec::new();
         let mut variadic_param: Option<(usize, String)> = None;
         let mut block_parameter: Option<String> = None;
@@ -174,6 +178,17 @@ impl VirtualMachine {
                 .push((positional_index, expression.clone()));
         }
         method.lambda_body = true;
+        // A block written at the top level records no scope, and is named
+        // for `<main>`.
+        let scope = block.written_in.as_deref().unwrap_or("<main>");
+        let label = crate::vm::native_functions::backtrace_label(scope);
+        method.block_label = Some(
+            match block.written_depth.unwrap_or(1) {
+                0 | 1 => format!("block in {label}"),
+                counted => format!("block ({counted} levels) in {label}"),
+            }
+            .into(),
+        );
         method.captured_def_scope = block.captured_def_scope.clone();
         method.captured_constant_home = block.captured_constant_home.clone();
         // A constant in the body is looked up through the modules the block

@@ -121,6 +121,10 @@ pub struct VirtualMachine {
     /// is on, has yet to reach the method it names, which fires `c_call`
     /// when that method is one Ruby writes in C.
     pub(crate) program_call_pending: bool,
+    /// The name of a traced native call whose `c_call` fired but which the
+    /// receiver's own native methods did not answer, so the methods every
+    /// object answers fire its `c_return`.
+    pub(crate) unanswered_native_call: Option<String>,
     /// The file a library metorex carries is read from while it loads, which
     /// is where a method it defines says it was written.
     pub(crate) loading_embedded_library: Option<String>,
@@ -683,6 +687,7 @@ impl VirtualMachine {
             running_code: Vec::new(),
             native_calls_running: 0,
             program_call_pending: false,
+            unanswered_native_call: None,
             loading_embedded_library: None,
             constant_homes: Vec::new(),
             traced_line: None,

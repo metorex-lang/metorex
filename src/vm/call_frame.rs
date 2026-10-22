@@ -54,6 +54,9 @@ pub struct CallFrame {
     owner_class: Option<Rc<crate::class::Class>>,
     /// The scope that was current when the frame was pushed.
     entering_scope: Option<Rc<RefCell<Scope>>>,
+    /// What a backtrace names the frame, where that is not its name: a
+    /// method `define_method` made from a block is named as the block.
+    label: Option<Rc<str>>,
 }
 
 impl CallFrame {
@@ -69,6 +72,7 @@ impl CallFrame {
             owner_path: None,
             owner_class: None,
             entering_scope: None,
+            label: None,
         }
     }
 
@@ -92,6 +96,7 @@ impl CallFrame {
             owner_path: None,
             owner_class: None,
             entering_scope: None,
+            label: None,
         }
     }
 
@@ -107,7 +112,19 @@ impl CallFrame {
             owner_path: None,
             owner_class: None,
             entering_scope: None,
+            label: None,
         }
+    }
+
+    /// Name the frame in backtraces by `label` when there is one.
+    pub fn labeled(mut self, label: Option<Rc<str>>) -> Self {
+        self.label = label;
+        self
+    }
+
+    /// What a backtrace names the frame, where that is not its name.
+    pub fn label(&self) -> Option<&str> {
+        self.label.as_deref()
     }
 
     /// What this frame is running.

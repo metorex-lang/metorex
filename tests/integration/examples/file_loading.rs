@@ -603,3 +603,15 @@ fn a_carried_library_that_raised_while_loading_runs_again_when_required_again() 
     let output = run_example("loading/carried_library_raising_on_load.rb");
     assert_eq!(output, "TypeError\ntrue\n3\n");
 }
+
+#[test]
+fn a_carried_library_is_not_loaded_again_from_the_load_path() {
+    let output = run_example("require/carried_library_loaded_once.rb");
+    assert_eq!(output, "false\n1\n");
+}
+
+#[test]
+fn a_disk_file_a_carried_library_requires_names_itself() {
+    let output = run_example("require/disk_file_required_by_carried_library.rb");
+    assert_eq!(output, "\"power_assert.rb\"\n2\n");
+}

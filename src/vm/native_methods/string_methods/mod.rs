@@ -33,6 +33,7 @@ mod matching;
 mod numbers;
 mod padding;
 mod searching;
+#[rustfmt::skip]
 mod single_byte_tables;
 mod slicing;
 mod splitting;

@@ -40,7 +40,7 @@ GEMS.each do |name|
     destination = File.join(library, name, path)
     FileUtils.mkdir_p(File.dirname(destination))
     File.write(destination, text)
-    entries << %(    ("#{path.delete_suffix(".rb")}", include_str!("gems/#{name}/#{path}")),\n)
+    entries << %(    ("#{path.delete_suffix(".rb")}", "#{name}-#{release.bundled_gem_version(name)}", include_str!("gems/#{name}/#{path}")),\n)
   end
 end
 
@@ -123,7 +123,7 @@ File.write(File.join(library, "rbs", "rbs", "carried_data.rb"), <<~RUBY)
     end
   end
 RUBY
-entries << %(    ("rbs/carried_data", include_str!("gems/rbs/rbs/carried_data.rb")),\n)
+entries << %(    ("rbs/carried_data", "rbs-#{release.bundled_gem_version("rbs")}", include_str!("gems/rbs/rbs/carried_data.rb")),\n)
 {
   File.join("rbs", "repository.rb") => ["DEFAULT_STDLIB_ROOT", "stdlib"],
   File.join("rbs", "environment_loader.rb") => ["DEFAULT_CORE_ROOT", "core"]
@@ -139,8 +139,8 @@ File.write(File.join(root, "src", "vm", "stdlib", "gem_libraries.rs"), <<~RUST)
   // Written by scripts/vendor_gems.rb from #{versions.join(", ")} as Ruby #{release.version} ships them.
 
   /// The files of the bundled gems metorex carries, by the feature name each
-  /// is required as.
-  pub(crate) const GEM_LIBRARIES: &[(&str, &str)] = &[
+  /// is required as, with the directory of the gem each belongs to.
+  pub(crate) const GEM_LIBRARIES: &[(&str, &str, &str)] = &[
   #{entries.join.chomp}
   ];
 

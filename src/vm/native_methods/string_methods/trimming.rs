@@ -78,17 +78,35 @@ impl VirtualMachine {
             "each_line" | "lines" => {
                 self.walk_lines(receiver, string_value, method_name, arguments, position)
             }
-            // A string whose bytes spell nothing cannot be trimmed: the
-            // scan from the front reports what it found, and the scan from
-            // the back reports that the encodings do not go together.
-            "lstrip" | "lstrip!" if !holds_valid_text(string_value) => {
-                Err(broken_text_error(string_value, position))
+            // A string whose bytes spell nothing cannot be trimmed from the
+            // back. From the front it is trimmed up to its first character
+            // that is not a space, and refused only when that one is broken.
+            "lstrip" | "lstrip!" if !holds_valid_text(string_value) && arguments.is_empty() => {
+                let bytes = binary_bytes(string_value);
+                let Some(start) = whole_first_character(string_value, &bytes) else {
+                    return Err(broken_text_error(string_value, position));
+                };
+                let trimmed = bytes[start..].to_vec();
+                if method_name == "lstrip!" {
+                    if start == 0 {
+                        return Ok(Some(Object::Nil));
+                    }
+                    string_value.replace_bytes(trimmed);
+                    return Ok(Some(receiver.clone()));
+                }
+                let made = crate::object::StringValue::binary(trimmed);
+                made.retag(string_value.encoding_name());
+                Ok(Some(Object::String(Rc::new(made))))
             }
             "rstrip" | "rstrip!" | "strip" | "strip!" if !holds_valid_text(string_value) => {
-                let message = format!(
-                    "incompatible character encodings: {} and US-ASCII",
-                    string_value.encoding_name()
-                );
+                // `strip` trims the front first, which refuses a broken first
+                // character before the back is looked at.
+                if method_name.starts_with("strip")
+                    && whole_first_character(string_value, &binary_bytes(string_value)).is_none()
+                {
+                    return Err(broken_text_error(string_value, position));
+                }
+                let message = format!("invalid byte sequence in {}", string_value.encoding_name());
                 Err(crate::vm::errors::simple_exception(
                     "Encoding::CompatibilityError",
                     &message,
@@ -153,4 +171,22 @@ impl VirtualMachine {
             _ => Ok(None),
         }
     }
+}
+
+/// Where the first character that is not a space starts in a UTF-8 string
+/// whose bytes do not all spell characters, or None when that character is
+/// broken or the string is in another encoding.
+fn whole_first_character(string_value: &crate::object::StringValue, bytes: &[u8]) -> Option<usize> {
+    if string_value.encoding_name() != "UTF-8" {
+        return None;
+    }
+    let start = bytes
+        .iter()
+        .position(|byte| !matches!(byte, b' ' | b'\t'..=b'\r' | 0))
+        .unwrap_or(bytes.len());
+    // A character is at most four bytes, so the first one is whole when
+    // those four begin with one.
+    let first = &bytes[start..bytes.len().min(start + 4)];
+    let whole = std::str::from_utf8(first).map_or_else(|broken| broken.valid_up_to() > 0, |_| true);
+    whole.then_some(start)
 }

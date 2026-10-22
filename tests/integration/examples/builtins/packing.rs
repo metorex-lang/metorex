@@ -28,13 +28,13 @@ fn test_builtins_pack_and_trace_execution() {
         "\"A\"\n",
         "false\n",
         "false\n",
-        "2\n",
+        "3\n",
         ":line\n",
         "[[:call, :traced_method], [:return, :traced_method]]\n",
         "4\n",
         "8\n",
         "Enumerator\n",
-        "\"comparison of Integer with \\\"A\\\" failed\"\n",
+        "\"comparison of Integer with String failed\"\n",
         "6\n",
     );
     let output = run_example("builtins/pack_and_trace.rb");
@@ -67,13 +67,13 @@ fn test_builtins_pack_and_trace_parens_execution() {
         "\"A\"\n",
         "false\n",
         "false\n",
-        "2\n",
+        "3\n",
         ":line\n",
         "[[:call, :traced_method], [:return, :traced_method]]\n",
         "4\n",
         "8\n",
         "Enumerator\n",
-        "\"comparison of Integer with \\\"A\\\" failed\"\n",
+        "\"comparison of Integer with String failed\"\n",
         "6\n",
     );
     let output = run_example("builtins/pack_and_trace_parens.rb");

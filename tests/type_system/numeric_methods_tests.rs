@@ -163,14 +163,17 @@ count
 }
 
 #[test]
-fn int_times_no_block_returns_range_array() {
-    let result = run("5.times");
-    let arr = match result.view() {
-        Some(View::Array(a)) => a,
-        other => panic!("expected array, got {other:?}"),
+fn int_times_no_block_walks_the_counts_through_an_enumerator() {
+    let result = run("[5.times.class.name, 5.times.to_a]");
+    let pair = match result.view() {
+        Some(View::Array(held)) => held.borrow().clone(),
+        other => panic!("expected an array, got {other:?}"),
     };
-    let expected: Vec<Object> = (0..5).map(Object::Int).collect();
-    assert_eq!(*arr.borrow(), expected);
+    let counts: Vec<Object> = (0..5).map(Object::Int).collect();
+    assert_eq!(
+        pair,
+        vec![Object::string("Enumerator"), Object::array(counts)]
+    );
 }
 
 #[test]
