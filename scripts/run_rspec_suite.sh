@@ -31,7 +31,8 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TARGET_DIR="${CARGO_TARGET_DIR:-$REPO_ROOT/target}"
-METOREX="$TARGET_DIR/debug/metorex"
+# METOREX names another binary, such as one built with `--profile suites`.
+METOREX="${METOREX:-$TARGET_DIR/debug/metorex}"
 RSPEC_SOURCE="$REPO_ROOT/gems/rspec"
 JOBS="${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}"
 # The longest one spec file may run before its process is stopped.

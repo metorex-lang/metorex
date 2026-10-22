@@ -155,6 +155,7 @@ Ruby 4.0.7's bundled gems that do not load under Metorex today without MRI's gem
 - [x] readline loads and answers as reline, as it does in MRI 4.0.7
 - [x] Bundler: `bundle install` and `bundle exec` run under Metorex and install and run a Gemfile's gems
   - Acceptance: a fixture Gemfile with a pure Ruby gem installs from a local gem server and `bundle exec` runs a script that requires it
+
 ## Popular gems
 
 The 100 most downloaded gems on rubygems.org (`rubygems.org/stats`, read on 2026-10-20). Each gem's source repository is a submodule under `gems/`, pinned to its latest release tag, since a packaged `.gem` usually leaves its specs out. A gem's suite passes when every file's example, failure, and pending counts match MRI 4.0.7's, as RSpec's do. Bundler, rake, minitest, rexml, rspec and its four parts, and diff-lcs are covered above. `rubygems-update` is RubyGems itself, which Metorex carries.

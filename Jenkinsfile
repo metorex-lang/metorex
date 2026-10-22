@@ -262,17 +262,16 @@ pipeline {
           yaml buildPod('risa', '4', '8')
         }
       }
-      // One spec file per CPU the pod may use. change_spec.rb takes about
-      // 40 seconds on a debug build with a CPU to itself, so a file is
-      // stopped only well past that.
+      // The suites run on the `suites` build, which runs them about ten
+      // times as fast as a debug build does.
       environment {
         CARGO_TARGET_DIR = '/cache/target-rspec'
+        METOREX = '/cache/target-rspec/suites/metorex'
         JOBS = '8'
-        FILE_TIMEOUT = '900'
       }
       steps {
         catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-          sh 'cargo build'
+          sh 'cargo build --profile suites'
           sh 'scripts/install_rspec_suite_gems.sh'
           sh 'scripts/compare_fast_paths.sh'
         }

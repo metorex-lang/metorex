@@ -422,11 +422,11 @@ pub(crate) fn push_module_ancestors(
 /// Append the modules `class` mixes in, in lookup order, that `chain` does
 /// not hold yet.
 fn push_mixins(class: &Rc<Class>, chain: &mut Vec<Object>, seen: &mut Vec<*const Class>) {
-    for module in class.linear_mixins() {
-        let ptr = Rc::as_ptr(&module);
+    for module in class.linear_mixins().iter() {
+        let ptr = Rc::as_ptr(module);
         if !seen.contains(&ptr) {
             seen.push(ptr);
-            chain.push(Object::Module(module));
+            chain.push(Object::Module(Rc::clone(module)));
         }
     }
 }

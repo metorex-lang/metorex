@@ -35,3 +35,11 @@ rmp-serde = "1.3"
 [profile.profiling]
 inherits = "release"
 debug = "line-tables-only"
+
+# The build CI runs the RSpec and gem suites on: optimized enough that a suite
+# runs about as fast as on a release build, and built incrementally, since
+# CI keeps its target directory from one run to the next.
+[profile.suites]
+inherits = "release"
+opt-level = 1
+incremental = true

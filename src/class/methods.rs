@@ -185,22 +185,22 @@ impl Class {
     /// and constant lookup order. A module included into an already-included
     /// module shows up here without the outer class being touched.
     pub fn transitive_mixins(&self) -> Vec<Rc<Class>> {
-        self.linear_mixins()
+        self.linear_mixins().to_vec()
     }
 
     /// The modules mixed in here, each followed by the modules it brings in,
     /// in lookup order. A module that one included later also brings in sits
     /// where that one brings it, since including a module skips each module
     /// the chain already holds.
-    pub fn linear_mixins(&self) -> Vec<Rc<Class>> {
+    pub fn linear_mixins(&self) -> Rc<[Rc<Class>]> {
         let state = method_state();
         if let Some((worked_under, chain)) = self.linear_mixins_cache.borrow().as_ref()
             && *worked_under == state
         {
-            return chain.to_vec();
+            return Rc::clone(chain);
         }
-        let chain = self.work_out_linear_mixins();
-        *self.linear_mixins_cache.borrow_mut() = Some((state, chain.clone().into()));
+        let chain: Rc<[Rc<Class>]> = self.work_out_linear_mixins().into();
+        *self.linear_mixins_cache.borrow_mut() = Some((state, Rc::clone(&chain)));
         chain
     }
 
@@ -238,9 +238,9 @@ impl Class {
     fn module_chain(self: &Rc<Class>) -> Vec<Rc<Class>> {
         let mut chain = self.transitive_prepends();
         chain.push(Rc::clone(self));
-        for module in self.linear_mixins() {
-            if !chain.iter().any(|held| Rc::ptr_eq(held, &module)) {
-                chain.push(module);
+        for module in self.linear_mixins().iter() {
+            if !chain.iter().any(|held| Rc::ptr_eq(held, module)) {
+                chain.push(Rc::clone(module));
             }
         }
         chain
@@ -314,7 +314,7 @@ impl Class {
         }
 
         if self.has_mixins() {
-            for module in self.linear_mixins() {
+            for module in self.linear_mixins().iter() {
                 if let Some(method) = module.find_own_method(name) {
                     return Some(method);
                 }
@@ -355,9 +355,9 @@ impl Class {
         }
 
         if self.has_mixins() {
-            for module in self.linear_mixins() {
+            for module in self.linear_mixins().iter() {
                 if let Some(method) = module.find_own_method(name) {
-                    return Some((module, method));
+                    return Some((Rc::clone(module), method));
                 }
             }
         }

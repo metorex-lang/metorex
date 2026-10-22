@@ -1104,9 +1104,9 @@ pub(crate) fn walk_ancestors(class: &Rc<Class>) -> Vec<Rc<Class>> {
     if !out.iter().any(|c| Rc::ptr_eq(c, class)) {
         out.push(Rc::clone(class));
     }
-    for anc in class.linear_mixins() {
-        if !out.iter().any(|c| Rc::ptr_eq(c, &anc)) {
-            out.push(anc);
+    for anc in class.linear_mixins().iter() {
+        if !out.iter().any(|c| Rc::ptr_eq(c, anc)) {
+            out.push(Rc::clone(anc));
         }
     }
     if let Some(sc) = class.superclass() {
