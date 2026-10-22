@@ -95,6 +95,9 @@ pipeline {
 
   stages {
     stage('ci-image') {
+      options {
+        timeout(time: 30, unit: 'MINUTES')
+      }
       when {
         beforeAgent true
         anyOf {
@@ -127,6 +130,9 @@ pipeline {
     // after it still run, so one run reports every failure. Each stage's
     // test reports appear under Tests, with the output of each failure.
     stage('lint') {
+      options {
+        timeout(time: 10, unit: 'MINUTES')
+      }
       agent {
         kubernetes {
           defaultContainer 'ci'
@@ -146,6 +152,9 @@ pipeline {
     }
 
     stage('test') {
+      options {
+        timeout(time: 30, unit: 'MINUTES')
+      }
       agent {
         kubernetes {
           defaultContainer 'ci'
@@ -177,6 +186,9 @@ pipeline {
     }
 
     stage('ruby-spec') {
+      options {
+        timeout(time: 40, unit: 'MINUTES')
+      }
       agent {
         kubernetes {
           defaultContainer 'ci'
@@ -208,6 +220,9 @@ pipeline {
     // The same suites with the JIT compiling every unit on its first
     // run, so each instruction runs from machine code.
     stage('jit') {
+      options {
+        timeout(time: 60, unit: 'MINUTES')
+      }
       agent {
         kubernetes {
           defaultContainer 'ci'
@@ -238,6 +253,9 @@ pipeline {
     }
 
     stage('rspec-suites') {
+      options {
+        timeout(time: 30, unit: 'MINUTES')
+      }
       agent {
         kubernetes {
           defaultContainer 'ci'
@@ -262,6 +280,9 @@ pipeline {
     }
 
     stage('coverage') {
+      options {
+        timeout(time: 20, unit: 'MINUTES')
+      }
       agent {
         kubernetes {
           defaultContainer 'ci'
