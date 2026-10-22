@@ -105,6 +105,18 @@ class BasicSocket < IO
     @closed
   end
 
+  # A socket writes through at once unless the program asks it to hold
+  # what is written.
+  def sync
+    raise IOError, "closed stream" if @closed
+    @sync != false
+  end
+
+  def sync=(wanted)
+    raise IOError, "closed stream" if @closed
+    @sync = wanted ? true : false
+  end
+
   def close
     return nil if @closed
     Socket.__net__ "close", @handle, "", 0
@@ -1894,14 +1906,32 @@ class UNIXSocket < BasicSocket
     __read_once__ length
   end
 
-  def readpartial(length, _buffer = nil)
+  def readpartial(length, buffer = nil)
     held = __read_once__ length
     raise EOFError, "end of file reached" if held.empty?
-    held
+    Socket.filled_buffer(held, buffer)
+  end
+
+  def read_nonblock(length, buffer = nil, exception: true)
+    begin
+      held = Socket.__net__ "unix_read", @handle, Socket::MSG_DONTWAIT.to_s, length.to_i
+    rescue Errno::EAGAIN
+      raise IO::EAGAINWaitReadable, "Resource temporarily unavailable - read would block" if exception
+      return :wait_readable
+    end
+    if held.empty?
+      raise EOFError, "end of file reached" if exception
+      return nil
+    end
+    Socket.filled_buffer(held, buffer)
   end
 
   def write(text)
     __write_all__ "unix_write", text.to_s
+  end
+
+  def write_nonblock(text, exception: true)
+    write text
   end
 
   def send(message, flags = 0, _destination = nil)
@@ -3011,6 +3041,15 @@ class Socket
     send text.to_s
     self
   end
+
+  # What has arrived, waiting for something when nothing has, and EOFError
+  # once the other end has finished.
+  def readpartial(length, buffer = nil)
+    held = recv length
+    raise EOFError, "end of file reached" if held.nil?
+    Socket.filled_buffer(held, buffer)
+  end
+  alias_method :sysread, :readpartial
 
   def recv_nonblock(length = nil, flags = 0, buffer = nil, exception: true)
     begin

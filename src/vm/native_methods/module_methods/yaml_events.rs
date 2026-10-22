@@ -48,7 +48,9 @@ fn event_fields(kind: &EventKind) -> Vec<Object> {
         } => vec![
             Object::symbol("start_document"),
             Object::array(match version {
-                Some((major, minor)) => vec![Object::Int(*major as i64), Object::Int(*minor as i64)],
+                Some((major, minor)) => {
+                    vec![Object::Int(*major as i64), Object::Int(*minor as i64)]
+                }
                 None => Vec::new(),
             }),
             Object::array(
@@ -66,7 +68,9 @@ fn event_fields(kind: &EventKind) -> Vec<Object> {
         EventKind::DocumentEnd { implicit } => {
             vec![Object::symbol("end_document"), Object::Bool(*implicit)]
         }
-        EventKind::Alias { anchor } => vec![Object::symbol("alias"), Object::string(anchor.clone())],
+        EventKind::Alias { anchor } => {
+            vec![Object::symbol("alias"), Object::string(anchor.clone())]
+        }
         EventKind::Scalar {
             anchor,
             tag,
@@ -126,7 +130,10 @@ fn event_from(fields: &[Object]) -> Option<EventKind> {
             let version = match fields.get(1).view() {
                 Some(View::Array(parts)) if parts.borrow().len() >= 2 => {
                     let parts = parts.borrow();
-                    Some((number_of(parts.first()) as u32, number_of(parts.get(1)) as u32))
+                    Some((
+                        number_of(parts.first()) as u32,
+                        number_of(parts.get(1)) as u32,
+                    ))
                 }
                 _ => None,
             };
@@ -153,7 +160,9 @@ fn event_from(fields: &[Object]) -> Option<EventKind> {
                 implicit: truthy(3),
             }
         }
-        "end_document" => EventKind::DocumentEnd { implicit: truthy(1) },
+        "end_document" => EventKind::DocumentEnd {
+            implicit: truthy(1),
+        },
         "alias" => EventKind::Alias {
             anchor: string_or_none(fields.get(1)).unwrap_or_default(),
         },

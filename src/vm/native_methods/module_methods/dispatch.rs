@@ -434,6 +434,9 @@ impl VirtualMachine {
         if module_rc.name() == "OpenSSL" && method_name == "__rsa_generate__" {
             return self.rsa_generate(arguments, position).map(Some);
         }
+        if module_rc.name() == "OpenSSL" && method_name == "__tls__" {
+            return self.tls_command(arguments, position).map(Some);
+        }
         if module_rc.name() == "OpenSSL" && method_name == "__object__" {
             return Ok(Some(self.openssl_object_command(arguments)));
         }

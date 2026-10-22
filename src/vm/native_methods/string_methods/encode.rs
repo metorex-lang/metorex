@@ -51,7 +51,15 @@ impl VirtualMachine {
                 };
                 let newline = newline_conversion(&options, position)?;
                 if held == wanted && xml.is_none() && newline.is_none() {
-                    let copy = relabeled_copy(string_value, &wanted);
+                    // A source named for the bytes reads them as that
+                    // encoding, the way `force_encoding` does.
+                    let copy = if arguments.len() > 1 {
+                        let made = crate::object::StringValue::binary(binary_bytes(string_value));
+                        made.retag(wanted.clone());
+                        Object::String(Rc::new(made))
+                    } else {
+                        relabeled_copy(string_value, &wanted)
+                    };
                     if let (true, View::String(copied)) = (options.invalid_replace, copy.view()) {
                         let stands_in = options.replace.map_or(Object::Nil, Object::string);
                         return self

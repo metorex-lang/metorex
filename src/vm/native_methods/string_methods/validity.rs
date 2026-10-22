@@ -191,6 +191,16 @@ pub(crate) fn encodings_clash(
     !left.as_str().is_ascii() && !right.as_str().is_ascii()
 }
 
+/// Whether two strings are equal as String#== answers: they spell the same
+/// thing, read as bytes or as characters, in encodings that can be compared.
+pub(crate) fn strings_equal(
+    left: &crate::object::StringValue,
+    right: &crate::object::StringValue,
+) -> bool {
+    (super::binary_bytes(left) == super::binary_bytes(right) || *left.as_str() == *right.as_str())
+        && strings_comparable(left, right)
+}
+
 /// Whether two strings are written in encodings Ruby will compare. Empty
 /// text goes with anything, as does text that is nothing but ASCII when the
 /// other encoding spells ASCII one byte to a letter.

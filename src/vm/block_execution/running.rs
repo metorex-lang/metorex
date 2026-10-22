@@ -112,9 +112,7 @@ impl VirtualMachine {
         block: &BlockStatement,
         arguments: Vec<Object>,
     ) -> Result<Object, MetorexError> {
-        self.in_home_frame_of(block, |vm| {
-            vm.execute_block_body_in_home(block, arguments)
-        })
+        self.in_home_frame_of(block, |vm| vm.execute_block_body_in_home(block, arguments))
     }
 
     fn execute_block_body_in_home(

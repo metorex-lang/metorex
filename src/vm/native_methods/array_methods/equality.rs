@@ -135,6 +135,11 @@ impl VirtualMachine {
             )?;
             return Ok(answer.is_truthy());
         }
+        if let (View::String(text), View::String(other)) = (element.view(), candidate.view()) {
+            return Ok(crate::vm::native_methods::string_methods::strings_equal(
+                text, other,
+            ));
+        }
         Ok(element.equals(candidate))
     }
 

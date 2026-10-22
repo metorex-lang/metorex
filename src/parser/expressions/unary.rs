@@ -90,7 +90,8 @@ impl Parser {
                 let read = self.parse_assignment();
                 self.not_operand_depth -= 1;
                 read?
-            } else if matches!(op, UnaryOp::Not) || self.check(&[TokenKind::Plus, TokenKind::Minus]) {
+            } else if matches!(op, UnaryOp::Not) || self.check(&[TokenKind::Plus, TokenKind::Minus])
+            {
                 self.parse_unary()?
             } else {
                 self.parse_power()?

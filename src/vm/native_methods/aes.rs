@@ -56,7 +56,7 @@ fn multiply(mut left: u8, mut right: u8) -> u8 {
 }
 
 /// The round keys a key of 16, 24, or 32 bytes expands to, a block each.
-fn expand_key(key: &[u8]) -> Option<Vec<[u8; BLOCK_BYTES]>> {
+pub(crate) fn expand_key(key: &[u8]) -> Option<Vec<[u8; BLOCK_BYTES]>> {
     let words_in_key = match key.len() {
         16 => 4,
         24 => 6,
@@ -142,7 +142,7 @@ fn mix_columns(state: &mut [u8; BLOCK_BYTES], factors: [u8; 4]) {
 const MIX: [u8; 4] = [2, 3, 1, 1];
 const UNMIX: [u8; 4] = [14, 11, 13, 9];
 
-fn encrypt_block(block: &mut [u8; BLOCK_BYTES], round_keys: &[[u8; BLOCK_BYTES]]) {
+pub(crate) fn encrypt_block(block: &mut [u8; BLOCK_BYTES], round_keys: &[[u8; BLOCK_BYTES]]) {
     let rounds = round_keys.len() - 1;
     add_round_key(block, &round_keys[0]);
     for (round, round_key) in round_keys.iter().enumerate().skip(1) {

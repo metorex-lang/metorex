@@ -112,7 +112,10 @@ impl Scanner {
     }
 
     fn at(&self, ahead: usize) -> char {
-        self.input.get(self.pointer + ahead).copied().unwrap_or('\0')
+        self.input
+            .get(self.pointer + ahead)
+            .copied()
+            .unwrap_or('\0')
     }
 
     fn at_end(&self) -> bool {
@@ -121,7 +124,9 @@ impl Scanner {
 
     fn is_blankz_at(&self, ahead: usize) -> bool {
         let held = self.at(ahead);
-        is_blank(held) || is_break(held) || (held == '\0' && self.pointer + ahead >= self.input.len())
+        is_blank(held)
+            || is_break(held)
+            || (held == '\0' && self.pointer + ahead >= self.input.len())
     }
 
     fn is_breakz_at(&self, ahead: usize) -> bool {
@@ -522,9 +527,9 @@ impl Scanner {
     fn fetch_block_entry(&mut self) -> Result<(), YamlError> {
         if self.flow_level == 0 {
             if !self.simple_key_allowed {
-                return Err(
-                    self.error_without_context("block sequence entries are not allowed in this context")
-                );
+                return Err(self.error_without_context(
+                    "block sequence entries are not allowed in this context",
+                ));
             }
             self.roll_indent(
                 self.mark.column as i64,
@@ -544,7 +549,9 @@ impl Scanner {
     fn fetch_key(&mut self) -> Result<(), YamlError> {
         if self.flow_level == 0 {
             if !self.simple_key_allowed {
-                return Err(self.error_without_context("mapping keys are not allowed in this context"));
+                return Err(
+                    self.error_without_context("mapping keys are not allowed in this context")
+                );
             }
             self.roll_indent(
                 self.mark.column as i64,
@@ -585,9 +592,8 @@ impl Scanner {
         } else {
             if self.flow_level == 0 {
                 if !self.simple_key_allowed {
-                    return Err(
-                        self.error_without_context("mapping values are not allowed in this context")
-                    );
+                    return Err(self
+                        .error_without_context("mapping values are not allowed in this context"));
                 }
                 self.roll_indent(
                     self.mark.column as i64,
@@ -809,7 +815,8 @@ impl Scanner {
         }
         let held = self.at(0);
         if value.is_empty()
-            || !(self.is_blankz_at(0) || matches!(held, '?' | ':' | ',' | ']' | '}' | '%' | '@' | '`'))
+            || !(self.is_blankz_at(0)
+                || matches!(held, '?' | ':' | ',' | ']' | '}' | '%' | '@' | '`'))
         {
             return Err(self.error(
                 if alias {
@@ -842,7 +849,11 @@ impl Scanner {
             self.skip();
             suffix = self.scan_tag_uri(true, false, None, start)?;
             if self.at(0) != '>' {
-                return Err(self.error("while scanning a tag", start, "did not find the expected '>'"));
+                return Err(self.error(
+                    "while scanning a tag",
+                    start,
+                    "did not find the expected '>'",
+                ));
             }
             self.skip();
         } else {
@@ -988,7 +999,11 @@ impl Scanner {
                 } else if octet & 0xF8 == 0xF0 {
                     4
                 } else {
-                    return Err(self.error(context, start, "found an incorrect leading UTF-8 octet"));
+                    return Err(self.error(
+                        context,
+                        start,
+                        "found an incorrect leading UTF-8 octet",
+                    ));
                 };
             } else if octet & 0xC0 != 0x80 {
                 return Err(self.error(context, start, "found an incorrect trailing UTF-8 octet"));

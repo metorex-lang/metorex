@@ -85,7 +85,10 @@ impl Parser {
             TokenKind::ByteString(value) => {
                 let (parts, _) =
                     self.adjacent_string_parts(vec![InterpolationPart::Text(value)], true);
-                Ok(joined_bytes_literal(only_text(&parts).unwrap_or_default(), position))
+                Ok(joined_bytes_literal(
+                    only_text(&parts).unwrap_or_default(),
+                    position,
+                ))
             }
             // A literal in a source that asked outright for literals that
             // change carries no notice that it will be frozen.
@@ -434,7 +437,10 @@ impl Parser {
 /// text when the bytes spell UTF-8, as literals joined across a split
 /// character do, and a literal holding the bytes otherwise.
 fn joined_bytes_literal(spelled: String, position: crate::lexer::Position) -> Expression {
-    let bytes: Option<Vec<u8>> = spelled.chars().map(|held| u8::try_from(held as u32).ok()).collect();
+    let bytes: Option<Vec<u8>> = spelled
+        .chars()
+        .map(|held| u8::try_from(held as u32).ok())
+        .collect();
     match bytes.and_then(|bytes| String::from_utf8(bytes).ok()) {
         Some(text) => literals::string_literal(text, position),
         None => literals::byte_string_literal(spelled, position),

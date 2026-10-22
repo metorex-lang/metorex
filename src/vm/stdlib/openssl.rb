@@ -81,6 +81,10 @@ module OpenSSL
         define_method :initialize do |data = nil|
           super(named, data)
         end
+
+        %i[digest hexdigest base64digest].each do |reading|
+          define_singleton_method(reading) { |data| new.public_send(reading, data) }
+        end
       end
       const_set named, built
     end
@@ -340,52 +344,6 @@ module OpenSSL
     class SSLErrorWaitWritable < SSLError
       include IO::WaitWritable
     end
-
-    # The settings a TLS connection is made under. Metorex carries the
-    # settings themselves, and has no TLS transport to hand them to.
-    class SSLContext
-      DEFAULT_PARAMS = {}
-
-      def initialize
-        @params = {}
-      end
-
-      # Settle the context for use, after which it can no longer change.
-      # Only the first call does anything, and it answers true.
-      def setup
-        return nil if frozen?
-        freeze
-        true
-      end
-
-      def set_params params = {}
-        @params = params
-        params.each do |name, value|
-          instance_variable_set "@#{name}", value
-        end
-        @params
-      end
-
-      def params
-        @params
-      end
-
-      def verify_mode
-        @verify_mode
-      end
-
-      def verify_mode= mode
-        @verify_mode = mode
-      end
-
-      def ca_file
-        @ca_file
-      end
-
-      def ca_file= path
-        @ca_file = path
-      end
-    end
   end
 
   # Comparing two strings without letting how long it takes say where they
@@ -459,6 +417,32 @@ module OpenSSL
       content.unpack1("H*").to_i(16)
     end
 
+    # The dotted text of an OID from its DER content.
+    def self.__oid_text__(content)
+      arcs = []
+      value = 0
+      content.each_byte do |byte|
+        value = (value << 7) | (byte & 0x7f)
+        next if byte >= 0x80
+        arcs << value
+        value = 0
+      end
+      first = arcs.shift
+      leading = first < 80 ? [first / 40, first % 40] : [2, first - 80]
+      (leading + arcs).join(".")
+    end
+
+    # A UTCTime or GeneralizedTime as a Time in UTC.
+    def self.__time_value__(tag, content)
+      digits = content.delete_suffix("Z")
+      if tag == UTCTIME
+        year = digits[0, 2].to_i
+        digits = "#{year < 50 ? 20 : 19}#{digits}"
+      end
+      Time.utc(digits[0, 4].to_i, digits[4, 2].to_i, digits[6, 2].to_i,
+               digits[8, 2].to_i, digits[10, 2].to_i, digits[12, 2].to_i)
+    end
+
     # DER: a tag, the length of the content, and the content.
     def self.__encoded__(tag, content)
       bytes = content.b
@@ -523,6 +507,7 @@ module OpenSSL
       def initialize(entries = nil, template = OBJECT_TYPE_TEMPLATE)
         @entries = []
         return if entries.nil?
+        return __read__(entries) if entries.is_a?(String)
         entries.each do |oid, value, type|
           type ||= template[oid]
           add_entry(oid, value, type)
@@ -549,6 +534,23 @@ module OpenSSL
         @entries.insert(at, entry)
         self
       end
+
+      # The entries of a name written in DER: a SEQUENCE of SETs, each
+      # holding the SEQUENCE of an object and its value.
+      def __read__(der)
+        top = OpenSSL::ASN1.__read_der__(der.b)
+        raise NameError, "X509_NAME: nested asn1 error" unless top && top[0] == 0x30
+        OpenSSL::ASN1.__read_all__(top[1]).each do |_, set|
+          OpenSSL::ASN1.__read_all__(set).each do |_, pair|
+            (_, oid_bytes), (type, value) = OpenSSL::ASN1.__read_all__(pair)
+            oid = OpenSSL::ASN1.__oid_text__(oid_bytes)
+            found = OpenSSL.__object__(:find, oid)
+            stored = type == OpenSSL::ASN1::UTF8STRING ? value.dup.force_encoding("UTF-8") : value.b
+            @entries << { short: found[0], long: found[1], oid: oid, value: stored, type: type }
+          end
+        end
+      end
+      private :__read__
 
       def to_a
         @entries.map { |entry| [entry[:short], entry[:value], entry[:type]] }
@@ -779,6 +781,14 @@ module OpenSSL
 
     class PKey; end
 
+    # The key PEM or DER text holds. RSA keys are the kind read.
+    def self.read(text, _password = nil)
+      text = text.read if text.respond_to?(:read)
+      RSA.new(text)
+    rescue PKeyError
+      raise PKeyError, "Could not parse PKey"
+    end
+
     # An RSA key pair, or the public half of one.
     class RSA < PKey
       class RSAError < PKeyError; end
@@ -963,6 +973,7 @@ module OpenSSL
     V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT = 18
     V_ERR_SELF_SIGNED_CERT_IN_CHAIN = 19
     V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY = 20
+    V_ERR_HOSTNAME_MISMATCH = 62
 
     VERIFY_ERROR_STRINGS = {
       0 => "ok",
@@ -971,7 +982,8 @@ module OpenSSL
       10 => "certificate has expired",
       18 => "self-signed certificate",
       19 => "self-signed certificate in certificate chain",
-      20 => "unable to get local issuer certificate"
+      20 => "unable to get local issuer certificate",
+      62 => "hostname mismatch"
     }.freeze
 
     # One extension: the object it names, the DER of its value, and whether
@@ -1111,15 +1123,76 @@ module OpenSSL
     class Certificate
       attr_reader :version, :subject, :issuer, :extensions
 
-      def initialize
+      # An empty certificate, or the one PEM or DER text holds.
+      def initialize(text = nil)
         @version = 0
         @serial = 0
         @subject = Name.new
         @issuer = Name.new
         @extensions = []
+        return if text.nil?
+        text = text.read if text.respond_to?(:read)
+        text = OpenSSL::KDF.coerced(text)
+        der = text.b
+        if der.include?("-----BEGIN CERTIFICATE-----")
+          matched = der.match(/-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----/m)
+          der = matched[1].unpack1("m")
+        end
+        __read__(der)
+      rescue ArgumentError, NoMethodError, TypeError
+        raise CertificateError, "PEM_read_bio_X509: no start line"
+      end
+
+      # The fields of a Certificate SEQUENCE: what is signed, the
+      # algorithm, and the signature.
+      def __read__(der)
+        top = OpenSSL::ASN1.__read_der__(der)
+        raise CertificateError, "PEM_read_bio_X509: no start line" unless top && top[0] == 0x30
+        (_, tbs), (_, algorithm), (_, signature) = OpenSSL::ASN1.__read_all__(top[1])
+        @der = OpenSSL::ASN1.__encoded__(0x30, top[1])
+        @tbs = OpenSSL::ASN1.__encoded__(0x30, tbs)
+        fields = OpenSSL::ASN1.__read_all__(tbs)
+        if fields.first[0] == 0xa0
+          @version = OpenSSL::ASN1.__integer_value__(OpenSSL::ASN1.__read_der__(fields.shift[1])[1])
+        end
+        @serial = OpenSSL::ASN1.__integer_value__(fields.shift[1])
+        fields.shift
+        @issuer = Name.new(OpenSSL::ASN1.__encoded__(0x30, fields.shift[1]))
+        @not_before, @not_after = OpenSSL::ASN1.__read_all__(fields.shift[1]).map do |tag, content|
+          OpenSSL::ASN1.__time_value__(tag, content)
+        end
+        @subject = Name.new(OpenSSL::ASN1.__encoded__(0x30, fields.shift[1]))
+        @public_key = OpenSSL::PKey::RSA.new(OpenSSL::ASN1.__encoded__(0x30, fields.shift[1]))
+        fields.each do |tag, content|
+          next unless tag == 0xa3
+          listed = OpenSSL::ASN1.__read_der__(content)[1]
+          @extensions = OpenSSL::ASN1.__read_all__(listed).map { |_, extension| Certificate.__extension__(extension) }
+        end
+        oid = OpenSSL::ASN1.__oid_text__(OpenSSL::ASN1.__read_all__(algorithm).first[1])
+        @digest_name, (@signature_algorithm, @signature_oid) = SIGNATURE_ALGORITHMS.find { |_, (_, held)| held == oid }
+        @signature = signature.byteslice(1..)
+      end
+      private :__read__
+
+      def self.__extension__(der)
+        parts = OpenSSL::ASN1.__read_all__(der)
+        oid = OpenSSL::ASN1.__oid_text__(parts.first[1])
+        critical = parts.size == 3 && parts[1][1] == "\xFF".b
+        found = OpenSSL.__object__(:find, oid)
+        Extension.new(found ? found[0] : oid, parts.last[1], critical)
+      end
+
+      def to_pem
+        "-----BEGIN CERTIFICATE-----\n#{[to_der].pack("m64")}-----END CERTIFICATE-----\n"
+      end
+      alias to_s to_pem
+
+      def ==(other)
+        other.is_a?(Certificate) && to_der == other.to_der
       end
 
       def version=(value)
+        @der = nil
         @version = value
       end
 
@@ -1128,14 +1201,17 @@ module OpenSSL
       end
 
       def serial=(value)
+        @der = nil
         @serial = value.to_i
       end
 
       def subject=(name)
+        @der = nil
         @subject = name
       end
 
       def issuer=(name)
+        @der = nil
         @issuer = name
       end
 
@@ -1150,6 +1226,7 @@ module OpenSSL
       end
 
       def public_key=(key)
+        @der = nil
         @public_key = key.public_key
       end
 
@@ -1159,6 +1236,7 @@ module OpenSSL
       end
 
       def not_before=(time)
+        @der = nil
         @not_before = Time.at(time.to_i).utc
       end
 
@@ -1168,19 +1246,23 @@ module OpenSSL
       end
 
       def not_after=(time)
+        @der = nil
         @not_after = Time.at(time.to_i).utc
       end
 
       def add_extension(extension)
+        @der = nil
         @extensions << extension
         extension
       end
 
       def extensions=(list)
+        @der = nil
         @extensions = list.to_a
       end
 
       def sign(key, digest)
+        @der = nil
         named = OpenSSL::Digest.canonical_name(digest.respond_to?(:name) ? digest.name : digest.to_s)
         @signature_algorithm, @signature_oid = SIGNATURE_ALGORITHMS.fetch(named)
         @digest_name = named
@@ -1194,6 +1276,7 @@ module OpenSSL
       end
 
       def to_der
+        return @der if @der
         raise CertificateError, "illegal zero content" if @signature.nil?
         OpenSSL::ASN1.__sequence__(
           tbs_der,
@@ -1221,6 +1304,7 @@ module OpenSSL
 
       # TBSCertificate: what the signature covers.
       def tbs_der
+        return @tbs if @der
         parts = []
         parts << OpenSSL::ASN1.__encoded__(0xa0, OpenSSL::ASN1.__integer__(@version)) unless @version.zero?
         parts << OpenSSL::ASN1.__integer__(@serial)
@@ -1254,7 +1338,30 @@ module OpenSSL
         self
       end
 
+      def __trusted__
+        @trusted
+      end
+
       def set_default_paths
+        self
+      end
+
+      # Trust each certificate a PEM file holds.
+      def add_file(path)
+        File.read(path).scan(/-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----/m) do |pem|
+          add_cert(Certificate.new(pem))
+        end
+        self
+      rescue SystemCallError
+        raise StoreError, "X509_LOOKUP_load_file: system lib"
+      end
+
+      # Trust the certificates of each file in a directory.
+      def add_path(path)
+        Dir.children(path).sort.each do |name|
+          held = File.join(path, name)
+          add_file(held) if File.file?(held)
+        end
         self
       end
 
@@ -1302,6 +1409,538 @@ module OpenSSL
         @chain = chain
         @error = code
         false
+      end
+    end
+  end
+end
+
+require "openssl/buffering"
+require "socket"
+require "ipaddr"
+
+module OpenSSL
+  module SSL
+    OP_ALL = 0x80000850
+    OP_DONT_INSERT_EMPTY_FRAGMENTS = 0x800
+    OP_NO_COMPRESSION = 0x20000
+    OP_NO_TICKET = 0x4000
+    OP_NO_SSLv2 = 0
+    OP_NO_SSLv3 = 0x2000000
+    OP_NO_TLSv1 = 0x4000000
+    OP_NO_TLSv1_1 = 0x10000000
+    OP_NO_TLSv1_2 = 0x8000000
+    OP_NO_TLSv1_3 = 0x20000000
+
+    SSL2_VERSION = 0x0002
+    SSL3_VERSION = 0x0300
+    TLS1_VERSION = 0x0301
+    TLS1_1_VERSION = 0x0302
+    TLS1_2_VERSION = 0x0303
+    TLS1_3_VERSION = 0x0304
+
+    # The one cipher suite the connection speaks, as SSLSocket#cipher and
+    # SSLContext#ciphers describe it.
+    CIPHER = ["TLS_AES_128_GCM_SHA256", "TLSv1.3", 128, 128].freeze
+
+    # The settings a TLS connection is made under.
+    class SSLContext
+      DEFAULT_PARAMS = {
+        verify_mode: OpenSSL::SSL::VERIFY_PEER,
+        verify_hostname: true,
+        options: (OpenSSL::SSL::OP_ALL & ~OpenSSL::SSL::OP_DONT_INSERT_EMPTY_FRAGMENTS) | OpenSSL::SSL::OP_NO_COMPRESSION
+      }.freeze
+
+      DEFAULT_CERT_STORE = OpenSSL::X509::Store.new
+      DEFAULT_CERT_STORE.set_default_paths
+
+      attr_accessor :cert, :key, :extra_chain_cert, :ca_file, :ca_path, :cert_store, :client_ca,
+                    :verify_mode, :verify_hostname, :verify_depth, :verify_callback, :timeout,
+                    :ssl_timeout, :options, :session_id_context, :session_cache_mode, :session_cache_size,
+                    :servername_cb, :client_cert_cb, :alpn_protocols, :alpn_select_cb,
+                    :npn_protocols, :npn_select_cb, :session_new_cb, :session_get_cb,
+                    :session_remove_cb, :renegotiation_cb, :keylog_cb, :tmp_dh_callback, :security_level
+      attr_writer :ciphersuites, :ecdh_curves, :groups, :sigalgs, :client_sigalgs, :tmp_dh,
+                  :min_version, :max_version
+
+      def initialize(version = nil)
+        @options = 0x120000
+        @session_cache_mode = 2
+        @security_level = 1
+        self.ssl_version = version if version
+        self.verify_mode = OpenSSL::SSL::VERIFY_NONE
+        self.verify_hostname = false
+      end
+
+      def set_params(params = {})
+        params = DEFAULT_PARAMS.merge(params)
+        self.options |= params.delete(:options)
+        params.each { |name, value| __send__("#{name}=", value) }
+        if verify_mode != OpenSSL::SSL::VERIFY_NONE && !ca_file && !ca_path && !cert_store
+          self.cert_store = DEFAULT_CERT_STORE
+        end
+        params
+      end
+
+      METHODS_MAP = {
+        SSLv23: 0,
+        SSLv2: OpenSSL::SSL::SSL2_VERSION,
+        SSLv3: OpenSSL::SSL::SSL3_VERSION,
+        TLSv1: OpenSSL::SSL::TLS1_VERSION,
+        TLSv1_1: OpenSSL::SSL::TLS1_1_VERSION,
+        TLSv1_2: OpenSSL::SSL::TLS1_2_VERSION
+      }.freeze
+      private_constant :METHODS_MAP
+
+      def ssl_version=(method)
+        method = method.to_s if method.is_a?(Symbol)
+        method = $` if /(_client|_server)\z/ =~ method
+        version = METHODS_MAP[method.intern] or raise ArgumentError, "unknown SSL method `%s'" % method
+        self.min_version = self.max_version = version
+      end
+
+      def ciphers
+        [CIPHER.dup]
+      end
+
+      def ciphers=(list)
+        @ciphers = list
+      end
+
+      def add_certificate(certificate, key, extra = nil)
+        @cert = certificate
+        @key = key
+        @extra_chain_cert = extra
+        self
+      end
+
+      # Settle the context for use, after which it can no longer change.
+      # Only the first call does anything, and it answers true.
+      def setup
+        return nil if frozen?
+        freeze
+        true
+      end
+
+      # The certificates the context trusts: its store's, and those of its
+      # CA file and directory.
+      def __trusted_store__
+        store = OpenSSL::X509::Store.new
+        cert_store&.__trusted__&.each { |held| store.add_cert(held) }
+        store.add_file(ca_file) if ca_file
+        store.add_path(ca_path) if ca_path
+        store
+      end
+
+      def session_add(_session) = false
+      def session_remove(_session) = false
+      def flush_sessions(_time = nil) = self
+      def enable_fallback_scsv = nil
+      def session_cache_stats = {}
+    end
+
+    module SocketForwarder
+      def fileno = to_io.fileno
+      def addr = to_io.addr
+      def peeraddr = to_io.peeraddr
+      def local_address = to_io.local_address
+      def remote_address = to_io.remote_address
+      def setsockopt(level, name, value) = to_io.setsockopt(level, name, value)
+      def getsockopt(level, name) = to_io.getsockopt(level, name)
+      def fcntl(*arguments) = to_io.fcntl(*arguments)
+      def closed? = to_io.closed?
+      def do_not_reverse_lookup=(flag)
+        to_io.do_not_reverse_lookup = flag
+      end
+      def close_on_exec=(value)
+        to_io.close_on_exec = value
+      end
+      def close_on_exec? = to_io.close_on_exec?
+      def wait(*arguments) = to_io.wait(*arguments)
+      def wait_readable(*arguments) = to_io.wait_readable(*arguments)
+      def wait_writable(*arguments) = to_io.wait_writable(*arguments)
+      def timeout = to_io.timeout
+      def timeout=(value)
+        to_io.timeout = value
+      end
+    end
+
+    def verify_certificate_identity(cert, hostname)
+      should_verify_common_name = true
+      cert.extensions.each do |extension|
+        next if extension.oid != "subjectAltName"
+        names = OpenSSL::ASN1.__read_der__(extension.value_der)
+        OpenSSL::ASN1.__read_all__(names[1]).each do |tag, value|
+          case tag
+          when 0x82
+            should_verify_common_name = false
+            return true if verify_hostname(hostname, value)
+          when 0x87
+            should_verify_common_name = false
+            if value.size == 4 || value.size == 16
+              begin
+                return true if value == IPAddr.new(hostname).hton
+              rescue IPAddr::InvalidAddressError
+              end
+            end
+          end
+        end
+      end
+      if should_verify_common_name
+        cert.subject.to_a.each do |oid, value|
+          return true if oid == "CN" && verify_hostname(hostname, value)
+        end
+      end
+      false
+    end
+    module_function :verify_certificate_identity
+
+    def verify_hostname(hostname, san)
+      return false unless san.ascii_only?
+      return false unless hostname.ascii_only?
+      san_parts = san.downcase.split(".")
+      return san == hostname if san_parts.size < 2
+      host_parts = hostname.downcase.split(".")
+      return false unless san_parts.size == host_parts.size
+      return false unless verify_wildcard(host_parts.shift, san_parts.shift)
+      san_parts.join(".") == host_parts.join(".")
+    end
+    module_function :verify_hostname
+
+    def verify_wildcard(domain_component, san_component)
+      parts = san_component.split("*", -1)
+      return false if parts.size > 2
+      return san_component == domain_component if parts.size == 1
+      return false if domain_component.start_with?("xn--") && san_component != "*"
+      parts[0].length + parts[1].length < domain_component.length &&
+        domain_component.start_with?(parts[0]) &&
+        domain_component.end_with?(parts[1])
+    end
+    module_function :verify_wildcard
+
+    # The session an established connection runs in. Sessions are not
+    # resumed, so each holds only what names it.
+    class Session
+      class SessionError < OpenSSL::OpenSSLError; end
+
+      attr_reader :id, :time
+      attr_accessor :timeout
+
+      def initialize(socket)
+        raise SessionError, "SSL session is not available" if socket.cipher.nil?
+        @id = SecureRandom.bytes(32)
+        @time = Time.now
+        @timeout = 7200
+      end
+
+      def ==(other)
+        other.is_a?(Session) && id == other.id
+      end
+    end
+
+    # A TLS connection over an IO, which the handshake and each record are
+    # read from and written to.
+    class SSLSocket
+      include Buffering
+      include SocketForwarder
+
+      attr_reader :hostname, :io, :context, :verify_result, :peer_cert_chain
+      alias to_io io
+      attr_accessor :sync_close
+      attr_writer :session
+
+      # How many bytes are read from the IO at a time.
+      READ_SIZE = 16_384
+
+      # The alert a client sends when it refuses the server's chain, by the
+      # verification error found.
+      REFUSAL_ALERTS = { 2 => 48, 7 => 51, 9 => 45, 10 => 45, 18 => 48, 19 => 48, 20 => 48 }.freeze
+
+      def self.open(remote_host, remote_port, local_host = nil, local_port = nil, context: nil)
+        socket = ::TCPSocket.open(remote_host, remote_port, local_host, local_port)
+        context.nil? ? new(socket) : new(socket, context)
+      end
+
+      def initialize(io, context = OpenSSL::SSL::SSLContext.new)
+        unless io.is_a?(IO)
+          raise TypeError, "wrong argument type #{io.class} (expected File)"
+        end
+        @io = io
+        @context = context
+        @sync_close = false
+        @hostname = nil
+        @verify_result = OpenSSL::X509::V_OK
+        @peer_cert_chain = nil
+        @connection = nil
+        @state = nil
+        @plaintext = "".b
+        @peer_closed = false
+        context.setup
+        super()
+      end
+
+      def hostname=(name)
+        @hostname = name
+      end
+
+      def connect
+        handshake(:client, "SSL_connect", true)
+        self
+      end
+
+      def connect_nonblock(exception: true)
+        handshake(:client, "SSL_connect", false, exception)
+      end
+
+      def accept
+        handshake(:server, "SSL_accept", true)
+        self
+      end
+
+      def accept_nonblock(exception: true)
+        handshake(:server, "SSL_accept", false, exception)
+      end
+
+      def sysread(length, buffer = nil)
+        data = plaintext(length, true, "SSL_read")
+        raise EOFError, "end of file reached" if data.nil?
+        buffer ? buffer.replace(data) : data
+      end
+
+      def sysread_nonblock(length, buffer = nil, exception: true)
+        data = plaintext(length, false, "SSL_read")
+        if data == :wait_readable
+          raise SSLErrorWaitReadable, "read would block" if exception
+          return :wait_readable
+        end
+        if data.nil?
+          raise EOFError, "end of file reached" if exception
+          return nil
+        end
+        buffer ? buffer.replace(data) : data
+      end
+
+      def syswrite(data)
+        data = data.to_s
+        records = OpenSSL.__tls__(:write, @connection, data.b)
+        @io.write(records)
+        data.bytesize
+      end
+
+      def syswrite_nonblock(data, exception: true)
+        syswrite(data)
+      end
+
+      def sysclose
+        return if closed?
+        stop
+        io.close if sync_close
+      end
+
+      def stop
+        return if @connection.nil?
+        begin
+          @io.write(OpenSSL.__tls__(:close, @connection)) unless @peer_closed
+        rescue SystemCallError, IOError
+        end
+        OpenSSL.__tls__(:free, @connection)
+        @connection = nil
+      end
+      private :stop
+
+      def post_connection_check(hostname)
+        raise SSLError, "Peer verification enabled, but no certificate received." if peer_cert.nil?
+        unless OpenSSL::SSL.verify_certificate_identity(peer_cert, hostname)
+          raise SSLError, "hostname \"#{hostname}\" does not match the server certificate"
+        end
+        true
+      end
+
+      def peer_cert
+        @peer_cert_chain&.first
+      end
+
+      def cert
+        @state && @mode == :server ? @context.cert : nil
+      end
+
+      def cipher
+        @state == :established ? CIPHER.dup : nil
+      end
+
+      def ssl_version
+        @state == :established ? "TLSv1.3" : nil
+      end
+
+      def state
+        @state == :established ? "SSLOK " : "before SSL initialization"
+      end
+
+      def pending
+        @plaintext.bytesize
+      end
+
+      def session
+        @established_session ||= SSL::Session.new(self)
+      rescue SSL::Session::SessionError
+        nil
+      end
+
+      def session_reused? = false
+      def alpn_protocol = nil
+      def npn_protocol = nil
+      def close_read = nil
+
+      def close_write
+        stop
+      end
+
+      private
+
+      # Run the handshake as the client or the server until it ends. When
+      # not blocking, answer :wait_readable once the IO has nothing more to
+      # read, or raise SSLErrorWaitReadable when `exception` asks for it.
+      def handshake(mode, label, blocking, exception = true)
+        if @connection.nil?
+          @mode = mode
+          @connection = if mode == :client
+                          OpenSSL.__tls__(:client, @hostname)
+                        else
+                          key = @context.key
+                          raise SSLError, "#{label} returned=1 errno=0 state=error: no shared cipher" if @context.cert.nil? || key.nil?
+                          chain = [@context.cert, *@context.extra_chain_cert].map(&:to_der)
+                          OpenSSL.__tls__(:server, chain, key.n.to_i, key.e.to_i, key.d.to_i)
+                        end
+          @state = :handshake
+          opening = OpenSSL.__tls__(:start, @connection)
+          @io.write(opening) unless opening.empty?
+        end
+        until @state == :established
+          bytes = read_io(blocking)
+          if bytes == :wait_readable
+            raise SSLErrorWaitReadable, "read would block" if exception
+            return :wait_readable
+          end
+          if bytes.nil?
+            raise SSLError, "#{label} SYSCALL returned=5 errno=0 #{peer_text}state=error: unexpected eof while reading"
+          end
+          advance(OpenSSL.__tls__(:feed, @connection, bytes), label)
+        end
+        self
+      end
+
+      def read_io(blocking)
+        if blocking
+          @io.readpartial(READ_SIZE)
+        else
+          @io.read_nonblock(READ_SIZE, exception: false)
+        end
+      rescue EOFError
+        nil
+      end
+
+      # Send what the connection answered, keep the data it read, and carry
+      # on through a chain decision or a failure.
+      def advance(progress, label)
+        outgoing, read, closed, state, problem = progress
+        @io.write(outgoing) unless outgoing.empty?
+        @plaintext << read
+        @peer_closed ||= closed
+        @state = state
+        raise SSLError, "#{label} returned=1 errno=0 #{peer_text}state=error: #{problem}" if state == :failed
+        decide_chain(label) if state == :decide
+      end
+
+      # Verify the server's chain against the certificates the context
+      # trusts, and its name against the hostname, then go on or refuse.
+      def decide_chain(label)
+        @peer_cert_chain = OpenSSL.__tls__(:peer_chain, @connection).map { |der| OpenSSL::X509::Certificate.new(der) }
+        store = @context.__trusted_store__
+        trusted = store.verify(@peer_cert_chain.first, @peer_cert_chain.drop(1))
+        @verify_result = store.error
+        if trusted && @context.verify_hostname && @hostname &&
+           !OpenSSL::SSL.verify_certificate_identity(@peer_cert_chain.first, @hostname)
+          trusted = false
+          @verify_result = OpenSSL::X509::V_ERR_HOSTNAME_MISMATCH
+        end
+        if !trusted && (@context.verify_mode.to_i & OpenSSL::SSL::VERIFY_PEER) != 0
+          alert = REFUSAL_ALERTS.fetch(@verify_result, 46)
+          outgoing, = OpenSSL.__tls__(:decide, @connection, alert)
+          @io.write(outgoing) unless outgoing.empty?
+          @state = :failed
+          reason = OpenSSL::X509::VERIFY_ERROR_STRINGS.fetch(@verify_result, "certificate verify failed")
+          raise SSLError, "#{label} returned=1 errno=0 #{peer_text}state=error: certificate verify failed (#{reason})"
+        end
+        advance(OpenSSL.__tls__(:decide, @connection, nil), label)
+      end
+
+      # Up to `length` bytes of application data, reading records from the
+      # IO until some arrive: nil at the end of the stream, and
+      # :wait_readable when not blocking and the IO has nothing to read.
+      def plaintext(length, blocking, label)
+        while @plaintext.empty?
+          return nil if @peer_closed || @connection.nil?
+          bytes = read_io(blocking)
+          return bytes if bytes == :wait_readable
+          if bytes.nil?
+            @peer_closed = true
+            return nil
+          end
+          advance(OpenSSL.__tls__(:feed, @connection, bytes), label)
+        end
+        @plaintext.slice!(0, length)
+      end
+
+      def peer_text
+        address = @io.remote_address
+        return "" unless address.ip?
+        "peeraddr=#{address.ipv6? ? "[#{address.ip_address}]" : address.ip_address}:#{address.ip_port} "
+      rescue StandardError
+        ""
+      end
+    end
+
+    # A TCP server whose connections are SSLSockets.
+    class SSLServer
+      include SocketForwarder
+
+      attr_accessor :start_immediately
+
+      def initialize(server, context)
+        @svr = server
+        @ctx = context
+        unless context.session_id_context
+          context.session_id_context = ::Random.new($0.hash).bytes(16).unpack1("H*")
+        end
+        @start_immediately = true
+      end
+
+      def to_io
+        @svr
+      end
+
+      def listen(backlog = Socket::SOMAXCONN)
+        @svr.listen(backlog)
+      end
+
+      def shutdown(how = Socket::SHUT_RDWR)
+        @svr.shutdown(how)
+      end
+
+      def accept
+        socket, = @svr.accept
+        begin
+          ssl = OpenSSL::SSL::SSLSocket.new(socket, @ctx)
+          ssl.sync_close = true
+          ssl.accept if @start_immediately
+          ssl
+        rescue Exception => error
+          ssl ? ssl.close : socket.close
+          raise error
+        end
+      end
+
+      def close
+        @svr.close
       end
     end
   end

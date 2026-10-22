@@ -303,14 +303,9 @@ impl VirtualMachine {
             let answer = self.send_to_object(right.clone(), "==", vec![left.clone()], position)?;
             return Ok(Object::Bool(answer.is_truthy()));
         }
-        // Two strings are equal when they spell the same thing,
-        // whether that is read as bytes or as characters, and their
-        // encodings can be compared at all.
         if let (View::String(text), View::String(other)) = (left.view(), right.view()) {
-            use crate::vm::native_methods::string_methods::{binary_bytes, strings_comparable};
             return Ok(Object::Bool(
-                (binary_bytes(text) == binary_bytes(other) || *text.as_str() == *other.as_str())
-                    && strings_comparable(text, other),
+                crate::vm::native_methods::string_methods::strings_equal(text, other),
             ));
         }
         // Anything else that spells itself as text answers for the

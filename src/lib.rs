@@ -22,6 +22,7 @@ pub mod scope;
 pub mod standard_streams;
 pub mod symbol_registry;
 pub mod test_discovery;
+pub mod tls;
 pub mod vm;
 pub mod yaml;
 

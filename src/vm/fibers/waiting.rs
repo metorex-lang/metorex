@@ -382,7 +382,7 @@ impl VirtualMachine {
             let started_with = self.thread_start_arguments(thread);
             self.locks_this_turn = 0;
             self.thread_current_stack.push(thread.clone());
-            let stepped = self.fiber_resume(handle, carried, started_with, position);
+            let stepped = self.resume_thread_body(handle, carried, started_with, position);
             self.thread_current_stack.pop();
             match stepped {
                 Ok(FiberStep::Finished(value)) => {

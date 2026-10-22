@@ -603,9 +603,9 @@ impl VirtualMachine {
                             (pattern.as_str().to_string(), flags.as_str().to_string());
                         let subject = s.as_str().to_string();
                         let encoding = Some(s.encoding_name());
-                        match self
-                            .regexp_match_data_in(&pattern, &flags, &subject, 0, encoding, position)?
-                        {
+                        match self.regexp_match_data_in(
+                            &pattern, &flags, &subject, 0, encoding, position,
+                        )? {
                             Some(found) => self
                                 .send_to_object(found, "[]", vec![Object::Int(0)], position)
                                 .map(Ok)?,

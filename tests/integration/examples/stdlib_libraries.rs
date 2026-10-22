@@ -2497,3 +2497,12 @@ fn the_digest_function_names_the_class_for_an_algorithm() {
         "Digest::MD5\n\"09eef89be5c56106\"\n\"library not found for class Digest::Ledger -- digest/ledger\"\ntrue\n"
     );
 }
+
+#[test]
+fn each_openssl_digest_class_reads_a_digest_in_one_call() {
+    let output = run_example("stdlib_libraries/openssl_digest_class_per_algorithm.rb");
+    assert_eq!(
+        output,
+        "\"0cc175b9c0f1b6a831c399e269772661\"\n32\n\"hvfkN/qlp/zhXR3cuerq6jd2Z7g=\"\n\"0cc175b9c0f1b6a831c399e269772661\"\n"
+    );
+}

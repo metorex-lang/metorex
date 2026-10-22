@@ -32,7 +32,14 @@ impl VirtualMachine {
         {
             return Ok(None);
         }
-        self.struct_method(class_rc, members, receiver, method_name, arguments, position)
+        self.struct_method(
+            class_rc,
+            members,
+            receiver,
+            method_name,
+            arguments,
+            position,
+        )
     }
 
     /// Struct's own method `method_name`, whatever the struct's class

@@ -146,6 +146,7 @@ Metorex compiles each method, block, class body, and file to bytecode the first 
 - **Command-line options**: `require 'optparse'` gives MRI's own `OptionParser`, with `optparse/time`, `optparse/date`, `optparse/uri`, `optparse/shellwords`, `optparse/kwargs` and `optparse/ac`. `on` describes an option by its short and long names, taking `--[no-]name` for one that negates and `--name VALUE` for one that takes a value, and `parse`, `parse!`, `order`, and `order!` read them out of an argument list, storing what they find in the hash an `into:` keyword names
 - **Syslog**: `require 'syslog'` gives the system log. `open`, `close`, `reopen`, and `opened?` work it, `ident`, `options`, `facility`, and `mask` report how it was opened, and `debug`, `info`, `notice`, `warning`, `err`, `crit`, `alert`, `emerg`, and `log` write at their severity. `Syslog::Constants` names the severities, facilities, and options, with `LOG_MASK` and `LOG_UPTO` building a mask. A message goes through the C library, and under `LOG_PERROR` it also reaches `$stderr`
 - **OpenSSL ciphers**: `OpenSSL::Cipher` runs AES-128-CBC, AES-192-CBC, and AES-256-CBC, padding as PKCS#7 pads, with `encrypt`, `decrypt`, `key=`, `iv=`, `random_key`, `random_iv`, `padding=`, `update`, and `final`, and refuses any other algorithm with `OpenSSL::Cipher::CipherError`. `OpenSSL::SSL` names the verify modes OpenSSL has
+- **TLS**: `OpenSSL::SSL::SSLSocket` and `SSLServer` speak TLS 1.3 over any IO, as a client or a server, with one cipher suite, TLS_AES_128_GCM_SHA256, keys agreed with X25519, and RSA certificates proved with rsa_pss_rsae_sha256. The engine in `src/tls` reads and writes no socket itself, and pauses once the server's chain arrives, so the client checks it through `OpenSSL::X509::Store` against the context's `ca_file`, `ca_path`, and `cert_store`, and its name with `verify_hostname` and `post_connection_check`, failing with OpenSSL's messages. `OpenSSL::X509::Certificate.new` reads PEM and DER, and `OpenSSL::PKey.read` reads RSA keys. MRI's `openssl/buffering.rb` gives the socket its IO methods. Sessions are not resumed, and client certificates are refused
 - **OpenSSL digests and keys**: `require 'openssl'` gives `OpenSSL::Digest`, named the way OpenSSL names one and reaching the same algorithms `digest` carries; `OpenSSL::HMAC` for a digest keyed with a secret; `OpenSSL::KDF.pbkdf2_hmac` for a key derived from a password; `OpenSSL::Random` for bytes nobody can guess; and `OpenSSL.secure_compare` and `fixed_length_secure_compare`, which take the same time however two strings differ
 - **A block shares the locals it closes over**: a block reads and writes the locals of the scope it was written in through one map every call shares, so calling it copies nothing. The program runs in a scope of its own beneath the core library's, so a method or a class body does not see a top-level local, while constants reach everywhere
 - **A name is a local where its scope bound it**: `name [1]` indexes a local and passes an array to a method of that name otherwise, and the parser decides by the scope the name is written in. A `def`, `class` or `module` body sees no local bound outside it, a block's locals end with the block, and a pattern, a regexp with named groups matched by `=~`, and a `->` parameter each bind a local
@@ -637,16 +638,16 @@ Under MRI 4.0.7 one example fails, in rspec-mocks' `receive_spec.rb`, which stub
 | Suite | Passing under MRI | Passing under Metorex | Examples | Pending |
 | :-- | --: | --: | --: | --: |
 | minitest | 418 | 396 | 422 | 4 |
-| net-imap | 1691 | 1662 | 1691 | 0 |
+| net-imap | 1691 | 1691 | 1691 | 0 |
 | net-pop | 7 | 7 | 7 | 0 |
-| net-smtp | 95 | 55 | 95 | 0 |
+| net-smtp | 95 | 95 | 95 | 0 |
 | power_assert | 102 | 60 | 102 | 0 |
 | rake | 598 | 595 | 598 | 0 |
 | rexml | 730 | 612 | 730 | 0 |
 | rss | 362 | 304 | 362 | 0 |
 | test-unit | 443 | 431 | 452 | 6 |
 
-The net-imap and net-smtp tests that fail start TLS, which Metorex's OpenSSL does not carry, and power_assert's build their messages from TracePoint events for every call an assertion makes, operators included.
+power_assert's tests that fail build their messages from TracePoint events for every call an assertion makes, operators included.
 
 ### Speed
 

@@ -87,7 +87,9 @@ impl Parser {
     /// stands on the guard's line, where one on the next line opens the
     /// clause after it.
     fn guard_pattern_test(&mut self, guard: Expression) -> Result<Expression, MetorexError> {
-        if self.check(&[TokenKind::In]) && self.peek().position.line == self.previous().position.line {
+        if self.check(&[TokenKind::In])
+            && self.peek().position.line == self.previous().position.line
+        {
             return self.wrap_with_pattern_test(guard);
         }
         Ok(guard)

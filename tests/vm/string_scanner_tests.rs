@@ -146,7 +146,10 @@ fn a_searching_call_looks_for_a_string_as_its_text() {
         run(&format!("{HELD}held.scan_until(\"is\")")),
         Some(Object::string("This"))
     );
-    assert_eq!(run(&format!("{HELD}held.exist?(\"is\")")), Some(Object::Int(4)));
+    assert_eq!(
+        run(&format!("{HELD}held.exist?(\"is\")")),
+        Some(Object::Int(4))
+    );
 }
 
 #[test]

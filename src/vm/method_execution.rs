@@ -609,16 +609,19 @@ impl VirtualMachine {
     /// and last line read. A method of the core library written in Ruby
     /// stands for one MRI writes in C, and sets them in its caller's frame.
     fn in_frame_of_its_own<T>(&mut self, method: &Method, run: impl FnOnce(&mut Self) -> T) -> T {
-        let core_library = method
-            .source_location
-            .as_ref()
-            .is_none_or(|written| written.filename.as_deref().is_none_or(|file| file == "<internal:prelude>"));
+        let core_library = method.source_location.as_ref().is_none_or(|written| {
+            written
+                .filename
+                .as_deref()
+                .is_none_or(|file| file == "<internal:prelude>")
+        });
         if core_library {
             return run(self);
         }
         let caller = self.last_match_frame();
         let (held_match, held_line) = self.take_last_match_and_line();
-        self.parked_last_matches.push((caller, held_match, held_line));
+        self.parked_last_matches
+            .push((caller, held_match, held_line));
         let answered = run(self);
         if let Some((_, held_match, held_line)) = self.parked_last_matches.pop() {
             self.put_last_match_and_line(held_match, held_line);
@@ -651,7 +654,10 @@ impl VirtualMachine {
     /// block built in a loop is reused against.
     fn put_last_match_and_line(&mut self, held_match: Object, held_line: Object) {
         for (name, value) in [
-            (crate::vm::native_methods::regexp_methods::LAST_MATCH, held_match),
+            (
+                crate::vm::native_methods::regexp_methods::LAST_MATCH,
+                held_match,
+            ),
             ("_", held_line),
         ] {
             let unchanged = match self.globals().get(name) {

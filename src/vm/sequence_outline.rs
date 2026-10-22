@@ -125,7 +125,11 @@ fn instruction_patterns(
             .block_bodies
             .get(usize::from(literal))
             .and_then(|body| {
-                crate::bytecode::compiler::compile_as(&body.body, crate::bytecode::compiler::UnitKind::Plain).ok()
+                crate::bytecode::compiler::compile_as(
+                    &body.body,
+                    crate::bytecode::compiler::UnitKind::Plain,
+                )
+                .ok()
             })
             .map(|inner| {
                 inner
@@ -151,17 +155,24 @@ fn literal_patterns(pattern: &crate::ast::MatchPattern) -> Vec<(String, String)>
         MatchPattern::Multiple(choices) | MatchPattern::Array(choices) => {
             choices.iter().flat_map(literal_patterns).collect()
         }
-        MatchPattern::Object(pairs) => pairs.iter().flat_map(|(_, held)| literal_patterns(held)).collect(),
+        MatchPattern::Object(pairs) => pairs
+            .iter()
+            .flat_map(|(_, held)| literal_patterns(held))
+            .collect(),
         MatchPattern::Bind { pattern, .. } => literal_patterns(pattern),
         MatchPattern::Range { start, end, .. } => {
             let mut found = literal_patterns(start);
             found.extend(literal_patterns(end));
             found
         }
-        MatchPattern::ArrayPattern { prefix, suffix, .. } => {
-            prefix.iter().chain(suffix).flat_map(literal_patterns).collect()
+        MatchPattern::ArrayPattern { prefix, suffix, .. } => prefix
+            .iter()
+            .chain(suffix)
+            .flat_map(literal_patterns)
+            .collect(),
+        MatchPattern::FindPattern { middle, .. } => {
+            middle.iter().flat_map(literal_patterns).collect()
         }
-        MatchPattern::FindPattern { middle, .. } => middle.iter().flat_map(literal_patterns).collect(),
         MatchPattern::HashPattern { entries, .. } => entries
             .iter()
             .filter_map(|(_, held)| held.as_ref())

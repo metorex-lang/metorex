@@ -57,6 +57,35 @@ impl VirtualMachine {
         Some(handle)
     }
 
+    /// Give a thread's body a turn under the `Timeout.timeout` limits that
+    /// thread has open, keeping those of the thread handing it the turn
+    /// aside until the turn ends.
+    pub(crate) fn resume_thread_body(
+        &mut self,
+        handle: usize,
+        carried: Object,
+        started_with: Vec<Object>,
+        position: Position,
+    ) -> Result<FiberStep, MetorexError> {
+        let own = self
+            .thread_timeout_limits
+            .remove(&handle)
+            .unwrap_or_default();
+        if !own.is_empty() {
+            crate::vm::jit::assumptions_changed();
+        }
+        let outer = std::mem::replace(&mut self.timeout_limits, own);
+        let stepped = self.fiber_resume(handle, carried, started_with, position);
+        let left = std::mem::replace(&mut self.timeout_limits, outer);
+        if !left.is_empty() {
+            self.thread_timeout_limits.insert(handle, left);
+        }
+        if !self.timeout_limits.is_empty() {
+            crate::vm::jit::assumptions_changed();
+        }
+        stepped
+    }
+
     /// What `Thread.new` was handed, which the body's block is given the
     /// first time the thread runs. They are handed over once, so a body that
     /// suspends and resumes is not handed them again.
@@ -151,7 +180,7 @@ impl VirtualMachine {
             self.locks_this_turn = 0;
             self.thread_current_stack.push(thread.clone());
             self.turn_started = std::time::Instant::now();
-            let stepped = self.fiber_resume(handle, carried, started_with, position);
+            let stepped = self.resume_thread_body(handle, carried, started_with, position);
             self.thread_current_stack.pop();
             match stepped {
                 Ok(FiberStep::Finished(value)) => self.finish_thread(&thread, value),

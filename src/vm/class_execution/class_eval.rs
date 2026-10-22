@@ -83,7 +83,13 @@ impl VirtualMachine {
         constants_stay_lexical: bool,
     ) -> Result<Object, MetorexError> {
         self.in_home_frame_of(block, |vm| {
-            vm.run_block_as_class_body_in_home(class, block, position, self_obj, constants_stay_lexical)
+            vm.run_block_as_class_body_in_home(
+                class,
+                block,
+                position,
+                self_obj,
+                constants_stay_lexical,
+            )
         })
     }
 

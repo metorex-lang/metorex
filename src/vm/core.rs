@@ -217,6 +217,9 @@ pub struct VirtualMachine {
     /// runs out, and what to raise when it does. A sleep that would run past
     /// the nearest one ends the block instead.
     pub(crate) timeout_limits: Vec<(std::time::Instant, Object, Object)>,
+    /// The limits each thread has open while another thread has the turn,
+    /// by the fiber the thread's body runs on.
+    pub(crate) thread_timeout_limits: HashMap<usize, Vec<(std::time::Instant, Object, Object)>>,
     /// Every object sent to another Ractor with `move: true`, held so its
     /// address names it alone, and those addresses.
     pub(crate) moved_objects: (Vec<Object>, std::collections::HashSet<usize>),
@@ -420,6 +423,10 @@ pub struct VirtualMachine {
     pub(crate) tracing_allocations: bool,
     /// The emitters Psych::Emitter objects write through, by number.
     pub(crate) yaml_emitters: HashMap<usize, crate::yaml::Emitter>,
+    /// The TLS connections OpenSSL::SSL::SSLSocket objects run through, by
+    /// number.
+    pub(crate) tls_connections: HashMap<usize, crate::tls::Connection>,
+    pub(crate) next_tls_connection: usize,
     /// The `$~` and `$_` of each method frame a call has set aside while
     /// the method it called runs, by the frame they belong to.
     pub(crate) parked_last_matches: Vec<(Option<u64>, Object, Object)>,
@@ -705,6 +712,7 @@ impl VirtualMachine {
             file_encodings: HashMap::new(),
             reported_files: std::collections::HashMap::new(),
             timeout_limits: Vec::new(),
+            thread_timeout_limits: HashMap::new(),
             moved_objects: (Vec::new(), std::collections::HashSet::new()),
             thread_schedulers: HashMap::new(),
             scheduler_waiting: HashMap::new(),
@@ -761,6 +769,8 @@ impl VirtualMachine {
             lambda_body_depth: 0,
             tracing_allocations: false,
             yaml_emitters: HashMap::new(),
+            tls_connections: HashMap::new(),
+            next_tls_connection: 0,
             parked_last_matches: Vec::new(),
             ended_frame_matches: HashMap::new(),
             ended_frames_in_force: Vec::new(),

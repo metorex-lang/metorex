@@ -81,7 +81,12 @@ fn parser_error(problem: &str, problem_mark: Mark) -> YamlError {
     }
 }
 
-fn parser_error_in(context: &str, context_mark: Mark, problem: &str, problem_mark: Mark) -> YamlError {
+fn parser_error_in(
+    context: &str,
+    context_mark: Mark,
+    problem: &str,
+    problem_mark: Mark,
+) -> YamlError {
     YamlError {
         context: Some(context.to_string()),
         context_mark,
@@ -134,7 +139,10 @@ impl Parser {
     fn stream_start(&mut self) -> Result<Event, YamlError> {
         let token = self.peek()?;
         if token.kind != TokenKind::StreamStart {
-            return Err(parser_error("did not find expected <stream-start>", token.start));
+            return Err(parser_error(
+                "did not find expected <stream-start>",
+                token.start,
+            ));
         }
         self.state = State::ImplicitDocumentStart;
         self.skip();
@@ -175,7 +183,10 @@ impl Parser {
             let (version, tags) = self.process_directives()?;
             let token = self.peek()?;
             if token.kind != TokenKind::DocumentStart {
-                return Err(parser_error("did not find expected <document start>", token.start));
+                return Err(parser_error(
+                    "did not find expected <document start>",
+                    token.start,
+                ));
             }
             self.states.push(State::DocumentEnd);
             self.state = State::DocumentContent;
@@ -198,7 +209,9 @@ impl Parser {
     /// The `%YAML` and `%TAG` directives before a document, which also put
     /// the default `!` and `!!` handles in force.
     #[allow(clippy::type_complexity)]
-    fn process_directives(&mut self) -> Result<(Option<(u32, u32)>, Vec<(String, String)>), YamlError> {
+    fn process_directives(
+        &mut self,
+    ) -> Result<(Option<(u32, u32)>, Vec<(String, String)>), YamlError> {
         let mut version = None;
         let mut tags = Vec::new();
         loop {
@@ -209,7 +222,10 @@ impl Parser {
                         return Err(parser_error("found duplicate %YAML directive", token.start));
                     }
                     if major != 1 || (minor != 1 && minor != 2) {
-                        return Err(parser_error("found incompatible YAML document", token.start));
+                        return Err(parser_error(
+                            "found incompatible YAML document",
+                            token.start,
+                        ));
                     }
                     version = Some((major, minor));
                 }
@@ -226,7 +242,8 @@ impl Parser {
         }
         for (handle, prefix) in [("!", "!"), ("!!", "tag:yaml.org,2002:")] {
             if !self.tag_directives.iter().any(|(held, _)| held == handle) {
-                self.tag_directives.push((handle.to_string(), prefix.to_string()));
+                self.tag_directives
+                    .push((handle.to_string(), prefix.to_string()));
             }
         }
         Ok((version, tags))
@@ -365,8 +382,12 @@ impl Parser {
             ));
         }
         let collection = match token.kind {
-            TokenKind::FlowSequenceStart => Some((State::FlowSequenceFirstEntry, true, CollectionStyle::Flow)),
-            TokenKind::FlowMappingStart => Some((State::FlowMappingFirstKey, false, CollectionStyle::Flow)),
+            TokenKind::FlowSequenceStart => {
+                Some((State::FlowSequenceFirstEntry, true, CollectionStyle::Flow))
+            }
+            TokenKind::FlowMappingStart => {
+                Some((State::FlowMappingFirstKey, false, CollectionStyle::Flow))
+            }
             TokenKind::BlockSequenceStart if block => {
                 Some((State::BlockSequenceFirstEntry, true, CollectionStyle::Block))
             }
@@ -486,7 +507,10 @@ impl Parser {
             let mark = token.end;
             self.skip();
             let token = self.peek()?;
-            if !matches!(token.kind, TokenKind::Key | TokenKind::Value | TokenKind::BlockEnd) {
+            if !matches!(
+                token.kind,
+                TokenKind::Key | TokenKind::Value | TokenKind::BlockEnd
+            ) {
                 self.states.push(State::BlockMappingValue);
                 return self.node(true, true);
             }
@@ -514,7 +538,10 @@ impl Parser {
             let mark = token.end;
             self.skip();
             let token = self.peek()?;
-            if !matches!(token.kind, TokenKind::Key | TokenKind::Value | TokenKind::BlockEnd) {
+            if !matches!(
+                token.kind,
+                TokenKind::Key | TokenKind::Value | TokenKind::BlockEnd
+            ) {
                 self.states.push(State::BlockMappingKey);
                 return self.node(true, true);
             }
@@ -590,7 +617,10 @@ impl Parser {
         if token.kind == TokenKind::Value {
             self.skip();
             token = self.peek()?;
-            if !matches!(token.kind, TokenKind::FlowEntry | TokenKind::FlowSequenceEnd) {
+            if !matches!(
+                token.kind,
+                TokenKind::FlowEntry | TokenKind::FlowSequenceEnd
+            ) {
                 self.states.push(State::FlowSequenceEntryMappingEnd);
                 return self.node(false, false);
             }

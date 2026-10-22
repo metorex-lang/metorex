@@ -247,7 +247,9 @@ impl Emitter {
             return Err(format!("{kind} value must not be empty"));
         }
         if !anchor.chars().all(is_alpha) {
-            return Err(format!("{kind} value must contain alphanumerical characters only"));
+            return Err(format!(
+                "{kind} value must contain alphanumerical characters only"
+            ));
         }
         self.anchor_data = AnchorData {
             anchor: Some(anchor.to_string()),
@@ -501,7 +503,8 @@ impl Emitter {
                 }
                 for (handle, prefix) in [("!", "!"), ("!!", "tag:yaml.org,2002:")] {
                     if !self.tag_directives.iter().any(|(held, _)| held == handle) {
-                        self.tag_directives.push((handle.to_string(), prefix.to_string()));
+                        self.tag_directives
+                            .push((handle.to_string(), prefix.to_string()));
                     }
                 }
                 let mut implicit = *implicit;
@@ -516,7 +519,12 @@ impl Emitter {
                 if let Some((_, minor)) = version {
                     implicit = false;
                     self.write_indicator("%YAML", true, false, false);
-                    self.write_indicator(if *minor == 1 { "1.1" } else { "1.2" }, true, false, false);
+                    self.write_indicator(
+                        if *minor == 1 { "1.1" } else { "1.2" },
+                        true,
+                        false,
+                        false,
+                    );
                     self.write_indent();
                 }
                 if !tags.is_empty() {
@@ -833,7 +841,8 @@ impl Emitter {
             {
                 style = ScalarStyle::SingleQuoted;
             }
-            if self.scalar_data.value.is_empty() && (self.flow_level > 0 || self.simple_key_context) {
+            if self.scalar_data.value.is_empty() && (self.flow_level > 0 || self.simple_key_context)
+            {
                 style = ScalarStyle::SingleQuoted;
             }
             if no_tag && !plain_implicit {
@@ -1025,7 +1034,9 @@ impl Emitter {
         let mut breaks = false;
         for (index, held) in characters.iter().copied().enumerate() {
             if is_space(held) {
-                let next_is_space = characters.get(index + 1).is_some_and(|next| is_space(*next));
+                let next_is_space = characters
+                    .get(index + 1)
+                    .is_some_and(|next| is_space(*next));
                 if allow_breaks && !spaces && self.column > self.best_width && !next_is_space {
                     self.write_indent();
                 } else {
@@ -1064,7 +1075,9 @@ impl Emitter {
         let mut breaks = false;
         for (index, held) in characters.iter().copied().enumerate() {
             if is_space(held) {
-                let next_is_space = characters.get(index + 1).is_some_and(|next| is_space(*next));
+                let next_is_space = characters
+                    .get(index + 1)
+                    .is_some_and(|next| is_space(*next));
                 if allow_breaks
                     && !spaces
                     && self.column > self.best_width
@@ -1111,7 +1124,12 @@ impl Emitter {
         let last = characters.len().saturating_sub(1);
         let mut spaces = false;
         for (index, held) in characters.iter().copied().enumerate() {
-            if !is_printable(held) || held == '\u{feff}' || is_break(held) || held == '"' || held == '\\' {
+            if !is_printable(held)
+                || held == '\u{feff}'
+                || is_break(held)
+                || held == '"'
+                || held == '\\'
+            {
                 self.put('\\');
                 let short = match held {
                     '\0' => Some('0'),
@@ -1149,9 +1167,17 @@ impl Emitter {
                 }
                 spaces = false;
             } else if is_space(held) {
-                if allow_breaks && !spaces && self.column > self.best_width && index != 0 && index != last {
+                if allow_breaks
+                    && !spaces
+                    && self.column > self.best_width
+                    && index != 0
+                    && index != last
+                {
                     self.write_indent();
-                    if characters.get(index + 1).is_some_and(|next| is_space(*next)) {
+                    if characters
+                        .get(index + 1)
+                        .is_some_and(|next| is_space(*next))
+                    {
                         self.put('\\');
                     }
                 } else {
@@ -1250,7 +1276,9 @@ impl Emitter {
                     self.write_indent();
                     leading_spaces = is_blank(held);
                 }
-                let next_is_space = characters.get(index + 1).is_some_and(|next| is_space(*next));
+                let next_is_space = characters
+                    .get(index + 1)
+                    .is_some_and(|next| is_space(*next));
                 if !breaks && is_space(held) && !next_is_space && self.column > self.best_width {
                     self.write_indent();
                 } else {

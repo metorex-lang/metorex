@@ -8,5 +8,6 @@ source = <<~RUBY
 RUBY
 
 io = StringIO.new
-SyntaxSuggest.call(io: io, source: source, filename: "refused.rb")
+# With no limit, a slow machine still finishes the search.
+SyntaxSuggest.call(io: io, source: source, filename: "refused.rb", timeout: nil)
 puts io.string

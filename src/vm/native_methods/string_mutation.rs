@@ -248,6 +248,8 @@ impl VirtualMachine {
             "append_as_bytes" => {
                 let mut bytes = super::string_methods::binary_bytes(target);
                 for given in arguments {
+                    let given = &super::subclasses::string_subclass_value(given)
+                        .unwrap_or_else(|| given.clone());
                     match given.view() {
                         View::String(text) => {
                             bytes.extend(super::string_methods::binary_bytes(text));

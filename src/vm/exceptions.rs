@@ -619,7 +619,9 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<bool, MetorexError> {
         let (named, class) = match handler.view() {
-            View::Class(class) | View::Module(class) => (class.name().to_string(), Rc::clone(class)),
+            View::Class(class) | View::Module(class) => {
+                (class.name().to_string(), Rc::clone(class))
+            }
             _ => {
                 return Err(crate::vm::errors::simple_exception(
                     "TypeError",

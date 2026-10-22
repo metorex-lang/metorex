@@ -414,3 +414,9 @@ fn catch_tags_belong_to_the_thread_that_opened_them() {
         ":main_finished\n:reader_finished\n\"uncaught throw :outside\"\n"
     );
 }
+
+#[test]
+fn a_timeout_limit_reaches_only_the_thread_that_opened_it() {
+    let output = run_example("threads/timeout_limit_belongs_to_its_thread.rb");
+    assert_eq!(output, ":woken\n\"execution expired\"\n");
+}
