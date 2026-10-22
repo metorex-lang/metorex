@@ -307,3 +307,12 @@ fn inline_flags_reach_only_to_the_end_of_their_group() {
     let output = run_example("regexp/inline_flags_turn_extended_mode_off.rb");
     assert_eq!(output, "true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n");
 }
+
+#[test]
+fn a_repeat_led_by_one_character_reads_any_length_of_text() {
+    let output = run_example("regexp/long_single_character_repeats.rb");
+    assert_eq!(
+        output,
+        "0\n\"root\"\n50001\nnil\n\"b\"\n\"aaa\"\n\"aa\"\n\"aa\"\nnil\n\"a\\nb\"\n0\n\"ab&amp;cd%x;e\"\n\"x\"\n\"amp\"\n\"aab\"\n\"aaa\"\nnil\n"
+    );
+}

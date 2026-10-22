@@ -184,14 +184,11 @@ fn a_field_that_would_not_read_back_is_quoted() {
 }
 
 #[test]
-fn rows_pushed_onto_a_sheet_are_read_back_off_it() {
+fn rows_pushed_onto_a_sheet_are_written_into_its_string_past_the_read_position() {
     const SHEET: &str =
         "require 'csv'\nsheet = CSV.new('')\nsheet << ['a', 1]\nsheet.add_row(['b', 2])\n";
     assert_eq!(shown(&format!("{SHEET}sheet.string")), "\"a,1\\nb,2\\n\"");
-    assert_eq!(
-        shown(&format!("{SHEET}sheet.read")),
-        "[[\"a\", \"1\"], [\"b\", \"2\"]]"
-    );
+    assert_eq!(shown(&format!("{SHEET}sheet.read")), "[]");
     assert_eq!(
         shown(
             "require 'csv'\nfound = []\nCSV.new(\"x,1\\ny,2\").each { |row| found.push(row) }\nfound"

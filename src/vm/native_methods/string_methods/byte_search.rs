@@ -24,15 +24,10 @@ impl VirtualMachine {
         // `index` and `rindex` count in characters, `byteindex` and
         // `byterindex` in bytes.
         let in_bytes = method_name.starts_with("byte");
-        let places = {
-            let text = string_value.as_str();
-            if in_bytes {
-                Places::Bytes(string_value.bytes().len())
-            } else if text.is_ascii() {
-                Places::Bytes(text.len())
-            } else {
-                Places::Characters(text.chars().count())
-            }
+        let places = if in_bytes || string_value.is_ascii() {
+            Places::Bytes(string_value.byte_len())
+        } else {
+            Places::Characters(string_value.character_count())
         };
         let total = places.last() as i64;
         let from_end = method_name.ends_with("rindex");

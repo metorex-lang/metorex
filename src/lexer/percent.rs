@@ -339,7 +339,17 @@ impl<'a> Lexer<'a> {
                 let hole_line = self.line;
                 self.advance();
                 if self.peek() != Some('{') {
-                    content.push('#');
+                    match self.read_short_interpolation() {
+                        Some(named) => {
+                            if !content.is_empty() {
+                                parts.push(super::InterpolationPart::Text(std::mem::take(
+                                    &mut content,
+                                )));
+                            }
+                            parts.push(super::InterpolationPart::Expression(named, hole_line));
+                        }
+                        None => content.push('#'),
+                    }
                     continue;
                 }
                 self.advance();

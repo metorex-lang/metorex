@@ -416,8 +416,18 @@ pub(crate) fn push_module_ancestors(
     seen.push(ptr);
     push_prepend_ancestors(module, chain);
     chain.push(Object::Module(Rc::clone(module)));
-    for mixin in module.mixin_chain() {
-        push_module_ancestors(&mixin, chain, seen);
+    push_mixins(module, chain, seen);
+}
+
+/// Append the modules `class` mixes in, in lookup order, that `chain` does
+/// not hold yet.
+fn push_mixins(class: &Rc<Class>, chain: &mut Vec<Object>, seen: &mut Vec<*const Class>) {
+    for module in class.linear_mixins() {
+        let ptr = Rc::as_ptr(&module);
+        if !seen.contains(&ptr) {
+            seen.push(ptr);
+            chain.push(Object::Module(module));
+        }
     }
 }
 
@@ -434,9 +444,7 @@ pub(crate) fn push_class_ancestors(
         push_prepend_ancestors(class, chain);
         chain.push(Object::Class(Rc::clone(class)));
     }
-    for mixin in class.mixin_chain() {
-        push_module_ancestors(&mixin, chain, seen);
-    }
+    push_mixins(class, chain, seen);
     let mut current = class.superclass();
     while let Some(parent) = current {
         let pptr = Rc::as_ptr(&parent);
@@ -445,9 +453,7 @@ pub(crate) fn push_class_ancestors(
             push_prepend_ancestors(&parent, chain);
             chain.push(Object::Class(Rc::clone(&parent)));
         }
-        for mixin in parent.mixin_chain() {
-            push_module_ancestors(&mixin, chain, seen);
-        }
+        push_mixins(&parent, chain, seen);
         current = parent.superclass();
     }
 }

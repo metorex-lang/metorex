@@ -217,12 +217,14 @@ class Date
       # rather than the nearest Float to it.
       if $4.include?(".")
         whole, fraction = $4.split(".")
-        clock[:sec] = whole.to_i + Rational(fraction.to_i, 10 ** fraction.length)
+        clock[:sec] = whole.to_i
+        clock[:sec_fraction] = Rational(fraction.to_i, 10 ** fraction.length)
       else
         clock[:sec] = $4.to_i
       end
     end
     unless $6.nil?
+      clock[:zone] = $6
       clock[:offset] = (DateTime.read_offset(zone_text($6)) * 86400).to_i
     end
     text.sub(pattern, " ")
@@ -1594,7 +1596,7 @@ class DateTime < Date
   def with_fields(fields)
     offset = fields[:offset].nil? ? @offset : Rational(fields[:offset], 86400)
     DateTime.with_clock(@jd, fields[:hour] || 0, fields[:min] || 0,
-                        fields[:sec] || 0, offset, @start, true)
+                        (fields[:sec] || 0) + (fields[:sec_fraction] || 0), offset, @start, true)
   end
 
   def rebuild(jd)

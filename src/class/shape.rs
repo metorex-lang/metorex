@@ -5,6 +5,10 @@ use super::*;
 /// A method lookup's answer, with the method state it was found under.
 pub(crate) type CachedLookup = (u64, Option<Rc<Method>>);
 
+/// The modules mixed into a class in lookup order, with the method state they
+/// were worked out under.
+pub(crate) type LinearMixins = (u64, Rc<[Rc<Class>]>);
+
 /// Runtime class definition with method table and inheritance.
 pub struct Class {
     pub(crate) name: String,
@@ -89,6 +93,9 @@ pub struct Class {
     /// What `find_method` found for each name, with the method state it was
     /// found under. An entry from an earlier state is looked up again.
     pub(crate) method_cache: RefCell<crate::fast_hash::NameMap<String, CachedLookup>>,
+    /// What `linear_mixins` answered, with the method state it was worked
+    /// out under, which a change to any mixin chain moves on.
+    pub(crate) linear_mixins_cache: RefCell<Option<LinearMixins>>,
     /// How many times `find_method` walked the ancestry for each name rather
     /// than answering from the cache.
     pub(crate) method_walks: RefCell<crate::fast_hash::NameMap<String, u64>>,

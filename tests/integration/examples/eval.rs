@@ -171,3 +171,24 @@ fn a_block_made_through_a_binding_reads_its_class_variables() {
     let output = run_example("eval/class_variable_through_a_binding.rb");
     assert_eq!(output, "2\n2\n");
 }
+
+#[test]
+fn index_assignment_on_a_scoped_constant_calls_its_singleton_setter() {
+    let output = run_example("eval/scoped_constant_index_assignment.rb");
+    assert_eq!(output, "set local=0\nset inverted=1\nset top=2\n");
+}
+
+#[test]
+fn an_exception_extended_with_a_module_is_one_of_that_module() {
+    let output = run_example("eval/module_case_equality_on_extended_object.rb");
+    assert_eq!(output, "true\ntrue\ntrue\ntrue\n\"Error\"\n");
+}
+
+#[test]
+fn including_a_module_skips_the_modules_the_chain_already_holds() {
+    let output = run_example("eval/include_of_a_module_already_in_the_ancestors.rb");
+    assert_eq!(
+        output,
+        "[Holder, Later, Wrapper, Base, Object]\n\"wrapper then base\"\nWrapper\n"
+    );
+}

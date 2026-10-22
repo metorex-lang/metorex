@@ -1667,7 +1667,15 @@ class TCPSocket < IPSocket
   # Read up to and including the separator, which is what a protocol written
   # in lines asks for, and no more than `limit` bytes when one is given.
   # Without either the next thing to arrive is the answer.
-  def gets(separator = "\n", limit = nil)
+  # With `chomp: true` the separator is left off the line.
+  def gets(separator = "\n", limit = nil, chomp: false)
+    line = __read_through__(separator, limit)
+    return line unless chomp && line
+    ending = separator.is_a?(Integer) || separator.nil? ? "\n" : separator.to_s
+    line.end_with?(ending) ? line[0, line.length - ending.length] : line
+  end
+
+  def __read_through__(separator, limit)
     separator, limit = "\n", separator if separator.is_a?(Integer)
     return nil if separator.nil? && limit.nil? && (held = read).empty?
     return held if separator.nil? && limit.nil?
@@ -1691,6 +1699,7 @@ class TCPSocket < IPSocket
     end
     collected.empty? ? nil : collected
   end
+  private :__read_through__
 
   def write(text)
     __write_all__ "write", text.to_s

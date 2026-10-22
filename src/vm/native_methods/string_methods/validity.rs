@@ -281,6 +281,11 @@ pub(crate) fn utf8_sequence_width(bytes: &[u8]) -> usize {
 /// as it was.
 pub(crate) fn character_count(string_value: &crate::object::StringValue) -> i64 {
     let named = string_value.encoding_name();
+    // ASCII text is one character to the byte in any encoding that spells
+    // ASCII as itself.
+    if string_value.is_ascii() && !named.starts_with("UTF-16") && !named.starts_with("UTF-32") {
+        return string_value.byte_len() as i64;
+    }
     match named.as_str() {
         // A run of bytes has one character to the byte however it is tagged.
         "ASCII-8BIT" | "BINARY" => binary_bytes(string_value).len() as i64,
@@ -303,7 +308,7 @@ pub(crate) fn character_count(string_value: &crate::object::StringValue) -> i64 
         "UTF-8" if string_value.holds_bytes() => {
             utf8_characters(&binary_bytes(string_value)).len() as i64
         }
-        _ => string_value.as_str().chars().count() as i64,
+        _ => string_value.character_count() as i64,
     }
 }
 

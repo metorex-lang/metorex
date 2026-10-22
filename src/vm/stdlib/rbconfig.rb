@@ -58,6 +58,8 @@ module RbConfig
   # interpreter again joins with `ruby_install_name`.
   CONFIG["bindir"] = File.dirname(__interpreter_path__())
   CONFIG["prefix"] = prefix
+  CONFIG["rubylibprefix"] = "#{prefix}/lib/metorex"
+  CONFIG["rubylibdir"] = "#{CONFIG["rubylibprefix"]}/#{CONFIG["ruby_version"]}"
   CONFIG["sitelibdir"] = "#{prefix}/lib/metorex/#{RUBY_VERSION}"
   CONFIG["sitearchdir"] = "#{CONFIG["sitelibdir"]}/#{RUBY_PLATFORM}"
   CONFIG["rubyhdrdir"] = __header_directory__()

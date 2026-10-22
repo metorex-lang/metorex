@@ -857,6 +857,12 @@ impl VirtualMachine {
                 };
                 let skipping = mode & 1 != 0;
                 let paragraph = mode & 2 != 0;
+                // A separator starts where a character does, counted in the
+                // pieces the stream's encoding writes characters with.
+                let unit = match arguments.get(5).view() {
+                    Some(View::Int(held)) if held > 1 => held as usize,
+                    _ => 1,
+                };
                 let limit = if count > 0 {
                     Some(count as usize)
                 } else {
@@ -922,11 +928,12 @@ impl VirtualMachine {
                     collected.extend_from_slice(&buffer[..read as usize]);
                     if !separator.is_empty() {
                         let from = had.saturating_sub(separator.len() - 1);
-                        if let Some(at) = collected[from..]
-                            .windows(separator.len())
-                            .position(|run| run == separator.as_slice())
+                        let from = from.next_multiple_of(unit);
+                        if let Some(at) = (from..=collected.len().saturating_sub(separator.len()))
+                            .step_by(unit)
+                            .find(|at| collected[*at..].starts_with(&separator))
                         {
-                            let ends = from + at + separator.len();
+                            let ends = at + separator.len();
                             let mut extra: Vec<u8> = collected[ends..].to_vec();
                             // The newlines standing after a paragraph belong
                             // to it, so the next read starts at the line

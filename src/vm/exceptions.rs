@@ -715,9 +715,18 @@ impl VirtualMachine {
                     },
                 },
             };
+            let Some(target_class) = target_class else {
+                continue;
+            };
             let raised_class = self.raised_class(exception_class.clone(), &exception_type_name);
-            if let (Some(target_class), Some(raised_class)) = (target_class, raised_class)
-                && raised_class.has_ancestor(&target_class)
+            if raised_class.is_some_and(|raised| raised.has_ancestor(&target_class)) {
+                return Ok(true);
+            }
+            // An exception extended with a module carries it on its
+            // singleton class.
+            if self
+                .existing_singleton_class(exception)
+                .is_some_and(|singleton| singleton.has_ancestor(&target_class))
             {
                 return Ok(true);
             }

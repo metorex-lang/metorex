@@ -281,7 +281,12 @@ impl VirtualMachine {
                 if *is_class_method {
                     // def self.method_name — store as class method with __class__ prefix
                     class.define_method(format!("__class__{}", method_name), method);
-                    self.invoke_class_hook(class, "singleton_method_added", method_name, position)?;
+                    self.invoke_class_hook(
+                        class,
+                        "singleton_method_added",
+                        method_name,
+                        *def_position,
+                    )?;
                 } else {
                     self.warn_redefined_optimized_method(class.name(), method_name, *def_position)?;
                     self.refuse_frozen_definee(class, *def_position)?;
@@ -291,9 +296,9 @@ impl VirtualMachine {
                     // singleton method of the attached object, so it
                     // fires the singleton hook rather than the plain one.
                     let hook = Self::method_added_hook_for(class);
-                    self.invoke_class_hook(class, hook, method_name, position)?;
+                    self.invoke_class_hook(class, hook, method_name, *def_position)?;
                     if module_function_is_active(class) {
-                        self.copy_to_module_function(class, method_name, position)?;
+                        self.copy_to_module_function(class, method_name, *def_position)?;
                     }
                 }
                 if self.coverage.is_some() {

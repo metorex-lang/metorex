@@ -1241,3 +1241,30 @@ fn tracepoint_hears_string_conversion_and_nil_check() {
         "[:c_call, :String, 9]\n[:c_call, :to_s, 9]\n[:c_return, :to_s, 9]\n[:c_return, :String, 9]\n[:c_call, :to_s, 10]\n[:c_return, :to_s, 10]\n[:c_call, :nil?, 10]\n[:c_return, :nil?, 10]\n"
     );
 }
+
+#[test]
+fn a_method_of_an_anonymous_class_is_labeled_by_its_name_alone() {
+    let output = run_example("introspection/anonymous_class_backtrace_labels.rb");
+    assert_eq!(
+        output,
+        "failing\n'failing'\nfailing_on_the_class\nfailing\n"
+    );
+}
+
+#[test]
+fn method_added_sees_the_line_of_the_def_that_added_the_method() {
+    let output = run_example("introspection/method_added_caller_line.rb");
+    assert_eq!(
+        output,
+        "in_a_block 9 block in <main>\nafter_a_statement 12 block in <main>\nin_a_class_body 17 <class:Named>\nin_a_method_block 26 block in Maker#make\n25\n"
+    );
+}
+
+#[test]
+fn a_class_body_frame_sits_on_the_def_while_method_added_runs() {
+    let output = run_example("introspection/method_added_caller_frames.rb");
+    assert_eq!(
+        output,
+        "tests/_examples/introspection/method_added_caller_frames.rb:3:in 'Recorder.method_added'\ntests/_examples/introspection/method_added_caller_frames.rb:8:in '<class:Named>'\ntests/_examples/introspection/method_added_caller_frames.rb:7:in '<main>'\n"
+    );
+}

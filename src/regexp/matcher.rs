@@ -564,6 +564,127 @@ impl<'a> Matcher<'a> {
         }
     }
 
+    /// Whether `node` reads the character at `at`, for a node that reads one
+    /// character and nothing else, or None for any other node.
+    fn reads_one_letter(&self, node: &Node, at: usize) -> Option<bool> {
+        match node {
+            Node::Letter(letter) => Some(self.letters.get(at) == Some(letter)),
+            Node::AnyChar { newline } => Some(
+                self.letters
+                    .get(at)
+                    .is_some_and(|held| *held != '\n' || *newline),
+            ),
+            Node::Class(class) => Some(
+                self.letters
+                    .get(at)
+                    .is_some_and(|held| in_class(class, *held)),
+            ),
+            _ => None,
+        }
+    }
+
+    /// A repetition of a node that reads one character, run as a loop over
+    /// the characters it can read rather than a frame for each, so its
+    /// length is not held to how deep a match may nest.
+    #[allow(clippy::too_many_arguments)]
+    fn repeat_letters<'r>(
+        &mut self,
+        node: &'a Node,
+        least: u32,
+        most: Option<u32>,
+        greed: Greed,
+        done: u32,
+        at: usize,
+        rest: &'r Rest<'a, 'r>,
+    ) -> Option<usize> {
+        let fewest = least.saturating_sub(done) as usize;
+        let most_left = most.map(|counted| counted.saturating_sub(done) as usize);
+        let mut run = 0;
+        while most_left.is_none_or(|counted| run < counted)
+            && self.reads_one_letter(node, at + run) == Some(true)
+        {
+            run += 1;
+        }
+        if run < fewest {
+            return None;
+        }
+        let lengths: Box<dyn Iterator<Item = usize>> = match greed {
+            Greed::Greedy => Box::new((fewest..=run).rev()),
+            Greed::Lazy => Box::new(fewest..=run),
+            Greed::Possessive => Box::new(std::iter::once(run)),
+        };
+        for taken in lengths {
+            let saved = self.saved();
+            if let Some(end) = self.carry_on(rest, at + taken) {
+                return Some(end);
+            }
+            self.restore(saved);
+            if self.timed_out || self.steps > STEP_BUDGET {
+                return None;
+            }
+        }
+        None
+    }
+
+    /// A greedy repetition of alternatives whose first reads one character.
+    /// The turns that take the first alternative run as a loop, and from the
+    /// furthest of them back, each place tries the other alternatives and
+    /// then stopping there, which is the order a turn at a time would try
+    /// them in.
+    #[allow(clippy::too_many_arguments)]
+    fn repeat_led_by_a_letter<'r>(
+        &mut self,
+        node: &'a Node,
+        first: &'a Node,
+        others: &'a [Node],
+        least: u32,
+        most: Option<u32>,
+        done: u32,
+        at: usize,
+        rest: &'r Rest<'a, 'r>,
+    ) -> Option<usize> {
+        let room = |counted: u32| most.is_none_or(|limit| counted < limit);
+        let mut run = 0;
+        while room(done + run as u32) && self.reads_one_letter(first, at + run) == Some(true) {
+            run += 1;
+        }
+        for taken in (0..=run).rev() {
+            let counted = done + taken as u32;
+            let place = at + taken;
+            if room(counted) {
+                for branch in others {
+                    let saved = self.saved();
+                    let frame = Rest::Again {
+                        node,
+                        least,
+                        most,
+                        greed: Greed::Greedy,
+                        clears: None,
+                        done: counted + 1,
+                        from: place,
+                        writes: self.state_mark(),
+                        next: rest,
+                    };
+                    if let Some(end) = self.run(branch, place, &frame) {
+                        return Some(end);
+                    }
+                    self.restore(saved);
+                }
+            }
+            if counted >= least {
+                let saved = self.saved();
+                if let Some(end) = self.carry_on(rest, place) {
+                    return Some(end);
+                }
+                self.restore(saved);
+            }
+            if self.timed_out || self.steps > STEP_BUDGET {
+                return None;
+            }
+        }
+        None
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn repeat<'r>(
         &mut self,
@@ -576,6 +697,17 @@ impl<'a> Matcher<'a> {
         at: usize,
         rest: &'r Rest<'a, 'r>,
     ) -> Option<usize> {
+        if clears.is_none() && self.reads_one_letter(node, at).is_some() {
+            return self.repeat_letters(node, least, most, greed, done, at, rest);
+        }
+        if clears.is_none()
+            && greed == Greed::Greedy
+            && let Node::Alternate(branches) = without_groups(node)
+            && let Some((first, others)) = branches.split_first()
+            && self.reads_one_letter(first, at).is_some()
+        {
+            return self.repeat_led_by_a_letter(node, first, others, least, most, done, at, rest);
+        }
         let room = most.is_none_or(|counted| done < counted);
         if done < least {
             let frame = Rest::Again {
@@ -842,5 +974,13 @@ fn collect_bodies<'a>(node: &'a Node, bodies: &mut Vec<Option<&'a Node>>) {
             collect_bodies(else_node, bodies);
         }
         _ => {}
+    }
+}
+
+/// What a node stands for under the groups that report nothing around it.
+fn without_groups(node: &Node) -> &Node {
+    match node {
+        Node::Group(inner) => without_groups(inner),
+        other => other,
     }
 }

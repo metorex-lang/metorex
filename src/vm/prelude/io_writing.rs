@@ -62,6 +62,9 @@ pub(super) const SOURCE: &str = r##"
       return self
     end
     @__encodings_reset = nil
+    # The encodings named here stand in place of the internal one the stream
+    # was opened under.
+    @__made_internal = nil
     # One encoding named on its own is read into the program's internal one.
     if internal.nil? && !(external.is_a?(String) && external.include?(":"))
       internal = Encoding.default_internal

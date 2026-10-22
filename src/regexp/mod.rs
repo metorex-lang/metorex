@@ -155,6 +155,22 @@ impl Pattern {
         self.captures_within(subject, start, None).ok().flatten()
     }
 
+    /// The leftmost match at or after the byte offset `start` of a subject
+    /// read into its characters once, for a search made over it again and
+    /// again, as a global substitution makes.
+    pub fn captures_in<'t, 'p>(
+        &'p self,
+        read: &ReadSubject,
+        subject: &'t str,
+        start: usize,
+    ) -> Option<Captures<'t, 'p>> {
+        let reading = &read.0;
+        let from = reading.char_index(start)?;
+        let mut matcher = Matcher::new(&reading.letters, &self.names, &self.root);
+        let found = matcher.search(&self.root, from)?;
+        Some(reading.captures(subject, &self.names, &found))
+    }
+
     /// The same, given up on once `limit` has passed. Answers Err when the
     /// match was given up on rather than failing on its own.
     pub fn captures_within<'t, 'p>(
@@ -243,6 +259,15 @@ impl Pattern {
 
 /// A subject read as characters, with the byte offset each one sits at so a
 /// match can be reported the way the rest of the interpreter counts.
+/// A subject read into its characters, for `Pattern::captures_in`.
+pub struct ReadSubject(Reading);
+
+impl ReadSubject {
+    pub fn of(subject: &str) -> Self {
+        Self(Reading::of(subject))
+    }
+}
+
 struct Reading {
     letters: Vec<char>,
     offsets: Vec<usize>,

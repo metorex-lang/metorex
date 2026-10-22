@@ -185,19 +185,63 @@ impl Class {
     /// and constant lookup order. A module included into an already-included
     /// module shows up here without the outer class being touched.
     pub fn transitive_mixins(&self) -> Vec<Rc<Class>> {
-        let mut chain = Vec::new();
-        let mut seen: Vec<*const Class> = Vec::new();
-        let mut pending: Vec<Rc<Class>> = self.mixin_chain();
-        while !pending.is_empty() {
-            let module = pending.remove(0);
-            let ptr = Rc::as_ptr(&module);
-            if seen.contains(&ptr) {
-                continue;
+        self.linear_mixins()
+    }
+
+    /// The modules mixed in here, each followed by the modules it brings in,
+    /// in lookup order. A module that one included later also brings in sits
+    /// where that one brings it, since including a module skips each module
+    /// the chain already holds.
+    pub fn linear_mixins(&self) -> Vec<Rc<Class>> {
+        let state = method_state();
+        if let Some((worked_under, chain)) = self.linear_mixins_cache.borrow().as_ref()
+            && *worked_under == state
+        {
+            return chain.to_vec();
+        }
+        let chain = self.work_out_linear_mixins();
+        *self.linear_mixins_cache.borrow_mut() = Some((state, chain.clone().into()));
+        chain
+    }
+
+    fn work_out_linear_mixins(&self) -> Vec<Rc<Class>> {
+        let expansions: Vec<Vec<Rc<Class>>> = self
+            .mixin_chain()
+            .iter()
+            .map(|module| module.module_chain())
+            .collect();
+        // The last expansion each module appears in, which is the include
+        // that brought it in first.
+        let mut last_seen: std::collections::HashMap<*const Class, usize> =
+            std::collections::HashMap::new();
+        for (at, expansion) in expansions.iter().enumerate() {
+            for module in expansion {
+                last_seen.insert(Rc::as_ptr(module), at);
             }
-            seen.push(ptr);
-            let nested = module.mixin_chain();
-            chain.push(module);
-            pending.splice(0..0, nested);
+        }
+        let mut placed: std::collections::HashSet<*const Class> = std::collections::HashSet::new();
+        let mut chain: Vec<Rc<Class>> = Vec::new();
+        for (at, expansion) in expansions.iter().enumerate() {
+            for module in expansion {
+                let held = Rc::as_ptr(module);
+                if last_seen[&held] > at || !placed.insert(held) {
+                    continue;
+                }
+                chain.push(Rc::clone(module));
+            }
+        }
+        chain
+    }
+
+    /// A module's own ancestry: what is prepended to it, itself, and what it
+    /// includes.
+    fn module_chain(self: &Rc<Class>) -> Vec<Rc<Class>> {
+        let mut chain = self.transitive_prepends();
+        chain.push(Rc::clone(self));
+        for module in self.linear_mixins() {
+            if !chain.iter().any(|held| Rc::ptr_eq(held, &module)) {
+                chain.push(module);
+            }
         }
         chain
     }
@@ -269,9 +313,11 @@ impl Class {
             return Some(method);
         }
 
-        for mixin in self.mixins.borrow().iter() {
-            if let Some(method) = mixin.find_method(name) {
-                return Some(method);
+        if self.has_mixins() {
+            for module in self.linear_mixins() {
+                if let Some(method) = module.find_own_method(name) {
+                    return Some(method);
+                }
             }
         }
 
@@ -308,9 +354,11 @@ impl Class {
             return Some((Rc::clone(self), method));
         }
 
-        for mixin in self.mixins.borrow().iter() {
-            if let Some(found) = mixin.find_method_with_owner(name) {
-                return Some(found);
+        if self.has_mixins() {
+            for module in self.linear_mixins() {
+                if let Some(method) = module.find_own_method(name) {
+                    return Some((module, method));
+                }
             }
         }
 

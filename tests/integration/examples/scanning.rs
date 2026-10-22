@@ -145,3 +145,12 @@ fn a_scanner_reads_bytes_inside_a_character() {
         "\"\\xE2\"\n1\n\"\\xE2\"\n\"\\x88\"\n\"\\x82x\"\n2\n1\n136\n136\n2\n\"\\x88\"\nfalse\n\"\\x82x\"\n"
     );
 }
+
+#[test]
+fn a_scanner_placed_at_a_byte_offset_reads_from_there() {
+    let output = run_example("scanning/byte_position_inside_multibyte_text.rb");
+    assert_eq!(
+        output,
+        "[0, 0, 0, \"aé日本x\"]\n[1, 1, 1, \"é日本x\"]\n[3, 3, 2, \"日本x\"]\n[4, 4, 3, \"\\x97\\xA5本x\"]\n[6, 6, 3, \"本x\"]\n[9, 9, 4, \"x\"]\n[10, 10, 5, \"\"]\n"
+    );
+}

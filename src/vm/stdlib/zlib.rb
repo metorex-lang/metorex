@@ -484,8 +484,8 @@ module Zlib
   class GzipReader < GzipFile
     include Enumerable
 
-    def self.open(name)
-      reader = new File.open(name, "rb")
+    def self.open(name, *arguments, **options)
+      reader = new File.open(name, "rb"), *arguments, **options
       return reader unless block_given?
       begin
         yield reader
@@ -502,8 +502,10 @@ module Zlib
       super()
       @io = io
       # What the stream holds is read as bytes and tagged with the encoding
-      # the reader was told to read it in.
-      @external_encoding = options[:external_encoding]
+      # the reader was told to read it in, which `encoding:` names ahead of
+      # a colon as an IO's does.
+      named = options[:external_encoding] || options[:encoding]&.to_s&.split(":")&.first
+      @external_encoding = named && Encoding.find(named.to_s)
       # A stream is asked for everything it holds, named rather than left
       # out, since a reader may take the count as a required argument.
       held = io.read nil

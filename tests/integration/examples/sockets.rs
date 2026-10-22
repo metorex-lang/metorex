@@ -107,3 +107,9 @@ fn a_socket_reads_a_literal_after_a_line_into_a_buffer() {
         "\"* 1 FETCH (BODY[] {12345}\\r\\n\"\n12345\ntrue\n12345\n\")\\r\\n\"\n\"RUBY0001 OK done\\r\\n\"\n"
     );
 }
+
+#[test]
+fn a_socket_reads_lines_by_separator_and_chomps_them() {
+    let output = run_example("sockets/readline_with_separator_and_chomp.rb");
+    assert_eq!(output, "\"<fo\"\n\"o>\"\n\"<bar\"\n\"\"\n\"lin\"\n");
+}

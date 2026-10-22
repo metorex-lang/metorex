@@ -1104,14 +1104,9 @@ pub(crate) fn walk_ancestors(class: &Rc<Class>) -> Vec<Rc<Class>> {
     if !out.iter().any(|c| Rc::ptr_eq(c, class)) {
         out.push(Rc::clone(class));
     }
-    for mixin in class.mixin_chain() {
-        // Include the mixin itself AND any modules it transitively
-        // includes, so e.g. Target→Child→Parent is visited when only
-        // `Target includes Child` and `Child includes Parent`.
-        for anc in walk_ancestors(&mixin) {
-            if !out.iter().any(|c| Rc::ptr_eq(c, &anc)) {
-                out.push(anc);
-            }
+    for anc in class.linear_mixins() {
+        if !out.iter().any(|c| Rc::ptr_eq(c, &anc)) {
+            out.push(anc);
         }
     }
     if let Some(sc) = class.superclass() {

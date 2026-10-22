@@ -265,7 +265,6 @@ const EMBEDDED_LIBRARIES: &[(&[&str], &str)] = &[
     (&["io/console/size"], include_str!("io_console_size.rb")),
     (&["ipaddr"], include_str!("ipaddr.rb")),
     (&["coverage"], include_str!("coverage.rb")),
-    (&["csv"], include_str!("csv.rb")),
     (&["date"], include_str!("date.rb")),
     (&["delegate"], include_str!("delegate.rb")),
     (

@@ -585,7 +585,8 @@ pub(super) const SOURCE: &str = r##"
       __stream_handle__,
       ending.nil? ? "" : ending,
       wanted,
-      (paragraph ? 2 : 0) + (paragraph && collected.empty? ? 1 : 0)
+      (paragraph ? 2 : 0) + (paragraph && collected.empty? ? 1 : 0),
+      __code_unit_bytes__
     )
     collected = collected + held.to_s
     return nil if collected.empty?
@@ -593,6 +594,16 @@ pub(super) const SOURCE: &str = r##"
     return __finish_line__ collected, ending, chomp
   end
   private :__read_line__
+
+  # How many bytes each piece of a character the stream reads takes, which
+  # is where a separator may start.
+  def __code_unit_bytes__
+    named = external_encoding&.name.to_s
+    return 2 if named.start_with?("UTF-16")
+    return 4 if named.start_with?("UTF-32")
+    1
+  end
+  private :__code_unit_bytes__
 
   # A line read, counted and tagged the way the stream reads text, with the
   # separator taken off where the reader asked for that.

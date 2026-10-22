@@ -68,12 +68,9 @@ class StringScanner
 
   # The number of whole characters standing before a byte offset.
   def characters_before(counted)
-    at = 0
-    seen = 0
-    while at < @string.length && seen + @string[at].bytesize <= counted
-      seen += @string[at].bytesize
-      at += 1
-    end
+    at = @string.byteslice(0, counted).length
+    # A character the offset falls inside of is not one before it.
+    at -= 1 while at > 0 && @string[0, at].bytesize > counted
     at
   end
   private :characters_before

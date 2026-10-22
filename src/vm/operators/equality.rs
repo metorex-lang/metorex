@@ -432,12 +432,17 @@ impl VirtualMachine {
                         _ => self.resolve_qualified_constant(&exc_type),
                     },
                 };
-                if let Some(View::Class(exc_class)) = resolved.view() {
-                    return Ok(Object::Bool(
-                        self.builtins().is_subclass_of(exc_class, class_rc),
-                    ));
+                if let Some(View::Class(exc_class)) = resolved.view()
+                    && self.builtins().is_subclass_of(exc_class, class_rc)
+                {
+                    return Ok(Object::Bool(true));
                 }
-                return Ok(Object::Bool(false));
+                // An exception extended with a module carries it on its
+                // singleton class.
+                let extended = self
+                    .existing_singleton_class(&right)
+                    .is_some_and(|singleton| self.builtins().is_subclass_of(&singleton, class_rc));
+                return Ok(Object::Bool(extended));
             }
             // A module made by a subclass of Module is an object of that
             // subclass, of what it inherits from, and of what they include.

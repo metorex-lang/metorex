@@ -354,6 +354,13 @@ pub(crate) fn backtrace_label(name: &str) -> String {
     {
         return format!("{}{}", &rest[..at], &rest[at + 1..]);
     }
+    // A method of an anonymous class or module has no owner to name.
+    if let Some(method) = name.strip_prefix(['#', '.'])
+        && !method.is_empty()
+        && !method.starts_with('<')
+    {
+        return method.to_string();
+    }
     name.to_string()
 }
 

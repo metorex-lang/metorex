@@ -77,10 +77,11 @@ impl VirtualMachine {
             encoding: string_value.encoding_name(),
             holds_only_ascii: true,
         };
+        let read = crate::regexp::ReadSubject::of(&subject);
         let mut cursor = 0usize;
         let mut last: Option<usize> = None;
         while cursor <= subject.len() {
-            let Some(captured) = compiled.captures_at(&subject, cursor) else {
+            let Some(captured) = compiled.captures_in(&read, &subject, cursor) else {
                 break;
             };
             let Some(whole) = captured.get(0) else { break };
@@ -104,7 +105,11 @@ impl VirtualMachine {
             // which searching from its start does not when `\K` left text
             // the pattern read before it.
             last = Some(cursor);
-            self.regexp_match_data_in(&source, &flags, &subject, cursor, None, position)?;
+            // A block, or a Hash's default proc, may read `$~`, which names
+            // the match it was handed.
+            if block.is_some() || matches!(arguments.get(1).view(), Some(View::Dict(_))) {
+                self.regexp_match_data_in(&source, &flags, &subject, cursor, None, position)?;
+            }
             let (piece, piece_encoding) = self.replacement_text(
                 receiver,
                 arguments.get(1),

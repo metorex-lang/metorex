@@ -627,3 +627,30 @@ fn file_stat_names_a_missing_path_in_its_own_bytes() {
         "Errno::ENOENT\n\"No such file or directory @ rb_file_s_stat - /missing-file-for-stat\"\n#<Encoding:UTF-8>\nErrno::ENOENT\n\"No such file or directory @ rb_file_s_stat - /missing-file-for-stat\\xE3E4\"\n#<Encoding:BINARY (ASCII-8BIT)>\n"
     );
 }
+
+#[test]
+fn super_from_module_eval_passes_keyword_defaults_ahead_of_given_options() {
+    let output = run_example("filesystem/module_eval_super_with_keyword_defaults.rb");
+    assert_eq!(
+        output,
+        "remove a noop=true\nremove b noop=false\nremove c noop=true\n"
+    );
+}
+
+#[test]
+fn a_utf16_stream_finds_a_separator_only_where_a_character_starts() {
+    let output = run_example("filesystem/utf16_readline_with_separator.rb");
+    assert_eq!(
+        output,
+        "[255, 254]\n#<Encoding:UTF-16LE>\n[#<Encoding:UTF-16LE>, \"<a>\"]\n[#<Encoding:UTF-16LE>, \"b</a>\"]\ntrue\n[255, 254, 60]\n[#<Encoding:UTF-16LE>, 15]\ntrue\n"
+    );
+}
+
+#[test]
+fn set_encoding_with_both_encodings_drops_the_default_internal() {
+    let output = run_example("filesystem/utf16_stream_under_default_internal.rb");
+    assert_eq!(
+        output,
+        "[#<Encoding:UTF-8>, nil]\n[255, 254]\n[#<Encoding:UTF-16LE>, nil]\n[#<Encoding:UTF-16LE>, [60, 0, 97, 0, 62, 0]]\n"
+    );
+}

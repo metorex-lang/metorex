@@ -675,3 +675,21 @@ fn the_pieces_of_a_binary_match_stay_binary() {
         "[#<Encoding:BINARY (ASCII-8BIT)>, #<Encoding:BINARY (ASCII-8BIT)>]\n[#<Encoding:BINARY (ASCII-8BIT)>, #<Encoding:BINARY (ASCII-8BIT)>]\n[#<Encoding:BINARY (ASCII-8BIT)>, #<Encoding:BINARY (ASCII-8BIT)>]\n[#<Encoding:BINARY (ASCII-8BIT)>, #<Encoding:BINARY (ASCII-8BIT)>]\n[#<Encoding:BINARY (ASCII-8BIT)>, #<Encoding:BINARY (ASCII-8BIT)>]\n"
     );
 }
+
+#[test]
+fn length_rindex_and_slices_read_each_encoding_by_its_characters() {
+    let output = run_example("strings/length_rindex_and_slices_by_encoding.rb");
+    assert_eq!(
+        output,
+        "100000\n69\n70\n99929\n12\n7\n\"café\"\n\"au lait\"\n5\n2\n\"\\xC3\\xA9\"\n#<Encoding:BINARY (ASCII-8BIT)>\n2\n[98, 0]\n1429\n\"aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa\"\n40\n"
+    );
+}
+
+#[test]
+fn gsub_leaves_the_last_match_in_last_match_for_every_replacement_kind() {
+    let output = run_example("strings/gsub_last_match_by_replacement_kind.rb");
+    assert_eq!(
+        output,
+        "\"1a 2b 3c\"\n\"c3\"\n\"a1 b2 \"\n\"1a 2b 3c\"\n\"c3\"\n\"A1 B2 C3\"\n[\"a\", \"b\", \"c\"]\n\"c\"\n\"a1 b2 c3\"\nnil\n250000\n"
+    );
+}

@@ -2533,3 +2533,12 @@ fn ripper_reads_assignments_in_arguments_one_value_each() {
         "[:program,\n [[:method_add_arg,\n   [:fcall, [:@ident, \"a\", [1, 0]]],\n   [:arg_paren,\n    [:args_add_block,\n     [[:assign,\n       [:var_field, [:@ident, \"b\", [1, 2]]],\n       [:vcall, [:@ident, \"c\", [1, 6]]]],\n      [:paren,\n       [[:massign,\n         [[:var_field, [:@ident, \"d\", [1, 10]]],\n          [:var_field, [:@ident, \"e\", [1, 13]]]],\n         [:vcall, [:@ident, \"f\", [1, 17]]]]]],\n      [:assign,\n       [:var_field, [:@const, \"G\", [1, 21]]],\n       [:vcall, [:@ident, \"h\", [1, 25]]]]],\n     false]]]]]\n[:program,\n [[:command,\n   [:@ident, \"foo\", [1, 0]],\n   [:args_add_block,\n    [[:assign, [:var_field, [:@ident, \"a\", [1, 4]]], [:@int, \"1\", [1, 8]]],\n     [:@int, \"2\", [1, 11]]],\n    false]]]]\n[:program,\n [[:assign,\n   [:var_field, [:@ident, \"x\", [1, 0]]],\n   [:mrhs_new_from_args, [[:@int, \"1\", [1, 4]]], [:@int, \"2\", [1, 7]]]]]]\n[:program,\n [[:method_add_arg,\n   [:fcall, [:@ident, \"foo\", [1, 0]]],\n   [:arg_paren,\n    [:args_add_block,\n     [[:method_add_block,\n       [:method_add_arg, [:fcall, [:@ident, \"bar\", [1, 4]]], []],\n       [:brace_block,\n        nil,\n        [[:assign,\n          [:var_field, [:@ident, \"y\", [1, 10]]],\n          [:mrhs_new_from_args,\n           [[:@int, \"1\", [1, 14]]],\n           [:@int, \"2\", [1, 17]]]]]]]],\n     false]]]]]\n"
     );
 }
+
+#[test]
+fn gzip_reader_open_reads_in_the_encoding_it_is_given() {
+    let output = run_example("stdlib_libraries/gzip_reader_open_with_encoding.rb");
+    assert_eq!(
+        output,
+        "#<Encoding:UTF-8>\n\"maintenance window moves to 02:00\\n\"\n#<Encoding:BINARY (ASCII-8BIT)>\n\"maintenance window moves to 02:00\\n\"\n"
+    );
+}

@@ -178,3 +178,12 @@ fn strftime_pads_a_negative_year_and_honors_width_and_spaces() {
         "\"-0001|-0001|-001|-1|   -1|-00001\"\n\"-12345\"\n\"12345|12345\"\n\"0005|5|   5\"\n"
     );
 }
+
+#[test]
+fn time_parse_keeps_the_zone_and_fraction_the_text_names() {
+    let output = run_example("dates/time_parse_utc_designator.rb");
+    assert_eq!(
+        output,
+        "{hour: 15, mday: 8, min: 43, mon: 11, offset: 0, sec: 59, year: 2012, zone: \"Z\"}\n0\n#<NoMethodError: private method 'zone_utc?' called for class Time>\ntrue\n2012-11-08 15:43:59 +0000\n\"2012-11-08 15:43:59 UTC\"\n\"2012-11-08 15:43:59 +0900\"\n[2, (1/4)]\n250000\n(1/4)\n"
+    );
+}

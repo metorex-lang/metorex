@@ -1867,3 +1867,9 @@ fn yaml_dump_writes_each_value_in_the_style_psych_chooses() {
         "---\nplain: maintenance window\nquoted: '02:00'\nboolean_word: 'yes'\nempty: ''\nmultiline: |\n  first line\n  second line\ntrailing_space: 'ends with a space '\nunicode: café ☃\ncontrol: \"tab\\there\"\nsymbol: :ready\nnumbers:\n- 1\n- 2.5\n- -3\n- 100000000000000000000\nnothing:\nflags:\n- true\n- false\nnested:\n  empty_list: []\n  empty_map: {}\n  list:\n  - a\n  - b\nstruct: !ruby/struct:Reading\n  sensor: north\n  value: 21.5\nrange: !ruby/range\n  begin: 1\n  end: 3\n  excl: false\nlong: 'word word word word word word word word word word word word word word word\n  word word word word word word word word word word word word word word word '\n---\n- 1\n- - 2\n  - - 3\n---\na: 1\n--- two\n---\n- 3\n---\nfirst: &1\n- x\n- \"y\"\nsecond: *1\n{\"plain\" => \"maintenance window\", \"quoted\" => \"02:00\", \"boolean_word\" => \"yes\", \"empty\" => \"\", \"multiline\" => \"first line\\nsecond line\\n\", \"trailing_space\" => \"ends with a space \", \"unicode\" => \"café ☃\", \"control\" => \"tab\\there\", \"numbers\" => [1, 2.5, -3, 100000000000000000000], \"nothing\" => nil, \"flags\" => [true, false], \"nested\" => {\"empty_list\" => [], \"empty_map\" => {}, \"list\" => [\"a\", \"b\"]}, \"long\" => \"word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word \"}\n"
     );
 }
+
+#[test]
+fn rbconfig_names_the_library_directories_under_the_prefix() {
+    let output = run_example("stdlib/rbconfig_library_directories.rb");
+    assert_eq!(output, "true\ntrue\ntrue\n");
+}

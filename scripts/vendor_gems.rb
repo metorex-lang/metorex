@@ -16,7 +16,7 @@ require_relative "ruby_release"
 release = RubyRelease.from_arguments("vendor_gems.rb")
 
 GEMS = %w[
-  debug irb minitest mutex_m net-imap net-pop net-smtp nkf power_assert racc rake rbs rdoc readline
+  csv debug irb minitest mutex_m net-imap net-pop net-smtp nkf power_assert racc rake rbs rdoc readline
   reline repl_type_completor resolv-replace rexml rinda rss test-unit typeprof
 ].freeze
 
@@ -152,10 +152,12 @@ File.write(File.join(root, "src", "vm", "stdlib", "gem_libraries.rs"), <<~RUST)
 RUST
 
 # Libraries MRI writes in Ruby that metorex carries as MRI has them: its own
-# resolv.rb, io/console/size.rb, pp.rb, prettyprint.rb, and pathname.rb, and
-# pathname_builtin.rb, which MRI compiles in rather than installing.
+# resolv.rb, time.rb, io/console/size.rb, pp.rb, prettyprint.rb, and
+# pathname.rb, and pathname_builtin.rb, which MRI compiles in rather than
+# installing.
 {
   release.path("lib", "resolv.rb") => "resolv.rb",
+  release.path("lib", "time.rb") => "time.rb",
   release.path("lib", "pp.rb") => "pp.rb",
   release.path("lib", "prettyprint.rb") => "prettyprint.rb",
   release.path("ext", "io", "console", "lib", "console", "size.rb") => "io_console_size.rb",

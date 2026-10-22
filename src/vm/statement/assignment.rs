@@ -746,15 +746,13 @@ impl VirtualMachine {
                     .call_warning_methods(cls, "[]=", &[idx.clone(), value.clone()], *position)?
                     .is_some()
                     || self
-                        .call_class_methods(cls, "[]=", &[idx, value], *position)?
+                        .call_class_methods(cls, "[]=", &[idx.clone(), value.clone()], *position)?
                         .is_some()
                 {
                     Ok(())
                 } else {
-                    Err(MetorexError::runtime_error(
-                        "No []= method defined on class/module",
-                        position_to_location(*position),
-                    ))
+                    self.send_to_object(receiver, "[]=", vec![idx, value], *position)?;
+                    Ok(())
                 }
             }
             // `str[at] = text` writes into the string itself, which

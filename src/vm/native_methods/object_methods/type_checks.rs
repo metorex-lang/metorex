@@ -109,11 +109,12 @@ impl VirtualMachine {
                             _ => self.resolve_qualified_constant(&exception_type),
                         },
                     };
-                    if let Some(View::Class(exception_class)) = resolved.view() {
-                        return Ok(Some(Object::Bool(
-                            self.builtins()
-                                .is_subclass_of(exception_class, target_class),
-                        )));
+                    if let Some(View::Class(exception_class)) = resolved.view()
+                        && self
+                            .builtins()
+                            .is_subclass_of(exception_class, target_class)
+                    {
+                        return Ok(Some(Object::Bool(true)));
                     }
                 }
                 if self.builtins().is_instance_of(receiver, target_class) {

@@ -407,6 +407,11 @@ impl StringValue {
             let bytes = self.bytes.borrow();
             let end = to.min(bytes.len());
             let cut = &bytes[from.min(end)..end];
+            if let Ok(text) = std::str::from_utf8(cut)
+                && text.is_ascii()
+            {
+                return text.to_string();
+            }
             return characters_of_bytes(cut);
         }
         let marks = self.character_marks();
