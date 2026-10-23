@@ -23,6 +23,8 @@ def buildPod(String node, String cpuRequest, String cpuLimit) {
           env:
             - name: CARGO_HOME
               value: /cache/cargo
+            - name: LANG
+              value: C.UTF-8
           resources:
             requests:
               cpu: "${cpuRequest}"
@@ -299,6 +301,8 @@ pipeline {
       }
       steps {
         catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+          // power_assert's gemspec lists its files through git.
+          sh 'git --version'
           sh 'cargo build --profile suites'
           script {
             parallel(
