@@ -168,6 +168,19 @@ impl BuiltinClasses {
             View::Class(c) | View::Module(c) => c.singleton_class_slot().clone(),
             _ => None,
         };
+        // A class's singleton class inherits from those of the classes
+        // above it, so a module one of them was extended with counts too.
+        if let View::Class(c) = obj.view() {
+            let mut above = c.superclass();
+            while let Some(held) = above {
+                if let Some(sc) = held.singleton_class_slot().clone()
+                    && self.is_subclass_of(&sc, class)
+                {
+                    return true;
+                }
+                above = held.superclass();
+            }
+        }
         if let Some(sc) = singleton
             && self.is_subclass_of(&sc, class)
         {

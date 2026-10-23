@@ -13,8 +13,10 @@
 # ENGINE=mri runs each file under MRI in place of Metorex. With RECORD=1 the
 # counts each file reached are stored as that engine's in
 # scripts/gem_suite_results.tsv. A Metorex run then lists the files whose
-# counts differ from MRI's there. With LOG_DIR set, what each file printed is
-# copied there, named after the file.
+# counts differ from MRI's there. With CHECK=1 a Metorex run is compared with
+# the Metorex counts stored there instead, and fails when a file passes fewer
+# examples than it did. With LOG_DIR set, what each file printed is copied
+# there, named after the file.
 
 set -euo pipefail
 
@@ -123,7 +125,11 @@ fi
 if [ -n "${RECORD:-}" ]; then
   ruby "$REPO_ROOT/scripts/suite_results.rb" record "$ENGINE" "$RESULTS"
 fi
-if [ "$ENGINE" = "metorex" ]; then
+checked=0
+if [ "$ENGINE" = "metorex" ] && [ -n "${CHECK:-}" ]; then
+  echo "Files whose counts differ from the recorded ones:"
+  ruby "$REPO_ROOT/scripts/suite_results.rb" regressions "$RESULTS" || checked=1
+elif [ "$ENGINE" = "metorex" ]; then
   echo "Files whose counts differ from MRI's:"
   ruby "$REPO_ROOT/scripts/suite_results.rb" differences "$RESULTS" || true
 fi
@@ -138,3 +144,4 @@ while IFS=$'\t' read -r name summary; do
   fi
 done < <(sort "$RESULTS")
 printf '%s files, %s did not finish\n' "$files" "$unfinished"
+exit "$checked"

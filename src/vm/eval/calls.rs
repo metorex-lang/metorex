@@ -78,6 +78,13 @@ impl VirtualMachine {
             }
             return Ok(CallRoute::OnSelf);
         }
+        // A local holding a proc is not called by `name(...)` when `self`
+        // has a method of that name, as `message = message { ... }` needs.
+        if matches!(self.environment().get(name).view(), Some(View::Block(_)))
+            && self.self_defines_method(name)
+        {
+            return Ok(CallRoute::OnSelf);
+        }
 
         // If the name is not a local variable, the call is a method call
         // with the supplied arguments. Self-method dispatch also wins when

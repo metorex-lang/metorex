@@ -53,9 +53,9 @@ impl AnswerText {
         {
             return Err(crate::vm::errors::simple_exception(
                 "Encoding::CompatibilityError",
-                &format!(
-                    "incompatible character encodings: {} and {}",
-                    self.encoding, encoding
+                &crate::vm::native_methods::string_methods::incompatible_encodings_message(
+                    &self.encoding,
+                    encoding,
                 ),
                 position,
             ));
@@ -67,9 +67,9 @@ impl AnswerText {
             } else if self.encoding != encoding {
                 return Err(crate::vm::errors::simple_exception(
                     "Encoding::CompatibilityError",
-                    &format!(
-                        "incompatible character encodings: {} and {}",
-                        self.encoding, encoding
+                    &crate::vm::native_methods::string_methods::incompatible_encodings_message(
+                        &self.encoding,
+                        encoding,
                     ),
                     position,
                 ));

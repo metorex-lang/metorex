@@ -158,6 +158,9 @@ impl VirtualMachine {
         let saved_nesting = self.user_def_nesting;
         self.user_def_nesting = 0;
         self.push_refinement_scope();
+        // The body reads its nesting as the scopes the block was written in,
+        // whichever method handed the block on.
+        self.enter_block_nesting(block.captured_nesting.clone());
         // The method running this block did not write it.
         self.borrowed_frames.push(self.current_method_frame);
         let frame = self.block_frame_at(block, position);
@@ -171,6 +174,7 @@ impl VirtualMachine {
             )
         });
         self.borrowed_frames.pop();
+        self.leave_block_nesting();
         self.pop_refinement_scope();
         self.user_def_nesting = saved_nesting;
         if constants_stay_lexical {

@@ -2542,3 +2542,9 @@ fn gzip_reader_open_reads_in_the_encoding_it_is_given() {
         "#<Encoding:UTF-8>\n\"maintenance window moves to 02:00\\n\"\n#<Encoding:BINARY (ASCII-8BIT)>\n\"maintenance window moves to 02:00\\n\"\n"
     );
 }
+
+#[test]
+fn drb_serves_calls_over_a_unix_socket() {
+    let output = run_example("stdlib_libraries/drb_over_a_unix_socket.rb");
+    assert_eq!(output, "5\ntrue\n");
+}

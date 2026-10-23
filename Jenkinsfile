@@ -278,6 +278,39 @@ pipeline {
       }
     }
 
+    // Each group of gem suites is a branch of its own, so a failing group
+    // shows by name. A branch fails when a file passes fewer examples than
+    // scripts/gem_suite_results.tsv records for Metorex.
+    stage('gems') {
+      options {
+        timeout(time: 30, unit: 'MINUTES')
+      }
+      agent {
+        kubernetes {
+          defaultContainer 'ci'
+          yaml buildPod('risa', '4', '8')
+        }
+      }
+      environment {
+        CARGO_TARGET_DIR = '/cache/target-rspec'
+        METOREX = '/cache/target-rspec/suites/metorex'
+        JOBS = '8'
+        CHECK = '1'
+      }
+      steps {
+        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+          sh 'cargo build --profile suites'
+          script {
+            parallel(
+              'bundled gems': {
+                sh 'scripts/run_gem_suites.sh minitest test-unit power_assert rake rexml rss net-imap net-pop net-smtp'
+              }
+            )
+          }
+        }
+      }
+    }
+
     stage('coverage') {
       options {
         timeout(time: 20, unit: 'MINUTES')

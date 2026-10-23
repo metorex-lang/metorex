@@ -150,7 +150,7 @@ Ruby 4.0.7's bundled gems that do not load under Metorex today without MRI's gem
 
 - [x] Each of those bundled gems is carried in the binary, as csv and logger are, and loads with no gem directory set
   - Acceptance: a `tests/_examples/stdlib` file requires each and uses one of its methods
-- [ ] The bundled gems' own test suites pass under Metorex: minitest, test-unit, power_assert, rake, rexml, rss, and the net-imap, net-pop, and net-smtp suites that need no network
+- [x] The bundled gems' own test suites pass under Metorex: minitest, test-unit, power_assert, rake, rexml, rss, and the net-imap, net-pop, and net-smtp suites that need no network
   - Acceptance: a script like `scripts/run_rspec_suite.sh` runs each suite under Metorex and MRI and the counts match
 - [x] readline loads and answers as reline, as it does in MRI 4.0.7
 - [x] Bundler: `bundle install` and `bundle exec` run under Metorex and install and run a Gemfile's gems

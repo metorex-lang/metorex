@@ -23,12 +23,16 @@ COMPARE_DIR=$(mktemp -d -t metorex_fast_paths.XXXXXX)
 # the temporary directory.
 run_suites() {
   local log="$COMPARE_DIR/$1.txt"
+  local name="$1"
+  local started=$SECONDS
   shift
   if ! "$@" > "$log" 2>&1; then
     printf 'scripts/run_rspec_suite.sh failed, having printed:\n' >&2
     cat "$log" >&2
     exit 1
   fi
+  # Each pass reports when it ends, so a log cut short shows how far it got.
+  printf 'fast paths %s: %s seconds, %s\n' "$name" "$((SECONDS - started))" "$(tail -2 "$log" | head -1)"
 }
 
 run_suites on env LOG_DIR="$COMPARE_DIR/on" "$REPO_ROOT/scripts/run_rspec_suite.sh" "$@"

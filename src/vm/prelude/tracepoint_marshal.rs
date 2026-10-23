@@ -719,14 +719,16 @@ module Marshal
       end
     end
 
-    # An Exception, written as an object holding its message, its backtrace,
-    # its cause when it has one, and its own instance variables.
+    # An Exception, written as an object holding its message, the backtrace
+    # it holds whatever its class's `backtrace` answers, its cause when it
+    # has one, and its own instance variables.
     def write_exception(object, held_class, limit)
       remember object
       write_extended object
       text "o"
       symbol Marshal.__class_path__(held_class)
-      pairs = [[:mesg, object.__given_message__], [:bt, object.backtrace]]
+      held_backtrace = Exception.instance_method(:backtrace).bind_call(object)
+      pairs = [[:mesg, object.__given_message__], [:bt, held_backtrace]]
       pairs << [:cause, object.cause] unless object.cause.nil?
       Marshal.__variables_of__(object).each do |name|
         pairs << [name, object.instance_variable_get(name)]

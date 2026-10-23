@@ -220,10 +220,27 @@ impl VirtualMachine {
             });
         }
         let written_trace = arguments.get(2).cloned();
+        let traced_before =
+            matches!(exception.view(), View::Exception(held) if held.borrow().backtrace.is_some());
         let exception = self.add_stack_trace_to_exception(exception, position);
         // A program's own `set_backtrace` is handed the backtrace named in
-        // the call.
+        // the call, or the one the call stack gave an exception that held
+        // none.
         let mut written_trace = written_trace;
+        if written_trace.is_none()
+            && !traced_before
+            && let View::Exception(held) = exception.view()
+            && self
+                .lookup_method(&exception, "set_backtrace")
+                .is_some_and(|(_, method)| {
+                    crate::vm::method_execution::written_by_the_program(&method)
+                })
+        {
+            let lines = held.borrow().backtrace.clone().unwrap_or_default();
+            written_trace = Some(Object::array(
+                lines.into_iter().map(Object::string).collect(),
+            ));
+        }
         if let Some(trace @ View::Array(_)) = written_trace.view()
             && matches!(exception.view(), View::Exception(_))
             && let Some((_, method)) = self.lookup_method(&exception, "set_backtrace")

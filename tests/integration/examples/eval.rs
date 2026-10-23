@@ -192,3 +192,30 @@ fn including_a_module_skips_the_modules_the_chain_already_holds() {
         "[Holder, Later, Wrapper, Base, Object]\n\"wrapper then base\"\nWrapper\n"
     );
 }
+
+#[test]
+fn a_call_with_arguments_reaches_the_method_a_proc_local_is_named_after() {
+    let output = run_example("eval/method_call_named_like_a_proc_local.rb");
+    assert_eq!(
+        output,
+        "\"blah1\"\nProc\n\"|blah1\"\n0\n#<MatchData \"blah\">\n"
+    );
+}
+
+#[test]
+fn a_subclass_is_a_kind_of_the_modules_its_superclass_was_extended_with() {
+    let output = run_example("eval/kind_of_a_module_a_superclass_was_extended_with.rb");
+    assert_eq!(
+        output,
+        "true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n0\ntrue\ntrue\ntrue\ntrue\ntrue\n"
+    );
+}
+
+#[test]
+fn a_block_handed_on_to_class_eval_reads_constants_through_the_scopes_it_was_written_in() {
+    let output = run_example("eval/class_eval_of_a_block_handed_on_keeps_its_nesting.rb");
+    assert_eq!(
+        output,
+        "\"uninitialized constant Outer::NOPE\"\n\"uninitialized constant Outer::NOPE\"\n\"uninitialized constant Outer::NOPE\"\n\"uninitialized constant Outer::NOPE\"\n[Outer]\n[Outer]\n[Outer]\n"
+    );
+}

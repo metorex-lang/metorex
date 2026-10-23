@@ -710,19 +710,30 @@ impl VirtualMachine {
         };
         let outcome = self.execute_block_callable(block, Vec::new(), position);
         let _ = std::io::stdout().flush();
-        let status = match &outcome {
-            Ok(_) => 0,
-            Err(MetorexError::UncaughtException { exception, .. })
+        let (status, ending, unhandled) = match outcome {
+            Ok(_) => (0, None, None),
+            Err(MetorexError::UncaughtException { ref exception, .. })
                 if let View::Exception(details) = exception.view()
                     && details.borrow().is_system_exit() =>
             {
-                details.borrow().status.unwrap_or(0) as i32
+                let status = details.borrow().status.unwrap_or(0) as i32;
+                (status, Some(exception.clone()), None)
             }
             Err(error) => {
-                eprintln!("{}", error);
-                1
+                let ending = match &error {
+                    MetorexError::UncaughtException { exception, .. } => Some(exception.clone()),
+                    _ => None,
+                };
+                (1, ending, Some(error))
             }
         };
+        // The child inherited what `at_exit` registered, and runs it as it
+        // ends, ahead of reporting what it ended with.
+        let status = self.run_at_exit_handlers(status, ending);
+        let _ = std::io::stdout().flush();
+        if let Some(error) = unhandled {
+            eprintln!("{}", error);
+        }
         std::process::exit(status);
     }
 }

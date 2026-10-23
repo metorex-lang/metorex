@@ -389,6 +389,24 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
+        let converted: Vec<Object>;
+        let arguments = match arguments.first() {
+            Some(subject)
+                if matches!(method_name, "=~" | "match" | "match?" | "===")
+                    && !matches!(
+                        subject.view(),
+                        View::String(_) | View::Symbol(_) | View::Nil
+                    )
+                    && self.responds_to(subject, "to_str") =>
+            {
+                let text = self.send_to_object(subject.clone(), "to_str", vec![], position)?;
+                converted = std::iter::once(text)
+                    .chain(arguments[1..].iter().cloned())
+                    .collect();
+                &converted[..]
+            }
+            _ => arguments,
+        };
         match method_name {
             // StringScanner's match: `__scan_spans__(string, at, anchored)`
             // matches the characters of `string` from `at` on as a subject of

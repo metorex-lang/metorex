@@ -5,6 +5,7 @@
 #
 #   ruby scripts/suite_results.rb record ENGINE RESULTS
 #   ruby scripts/suite_results.rb differences [RESULTS]
+#   ruby scripts/suite_results.rb regressions RESULTS
 #   ruby scripts/suite_results.rb table
 #
 # ENGINE is mri or metorex. RESULTS is the file scripts/run_rspec_suite.sh or
@@ -13,7 +14,10 @@
 # an error with it, and a pending test counts an omission or a skip. `record` stores those counts as the engine's. `differences` lists
 # the files whose Metorex counts differ from MRI's, from RESULTS when it is
 # given and from the stored counts otherwise, and exits 1 when there are any.
-# `table` prints the README's table of each suite's totals.
+# `regressions` compares RESULTS with the stored Metorex counts instead: it
+# lists each file that passes fewer examples than it did, and exits 1 when
+# there are any, and prints the stored row to write for each file that passes
+# more. `table` prints the README's table of each suite's totals.
 
 STORE = ENV.fetch("SUITE_RESULTS", File.expand_path("rspec_suite_results.tsv", __dir__))
 ENGINES = %w[mri metorex].freeze
@@ -60,6 +64,10 @@ def write_store(store)
   File.write(STORE, lines.join("\n") + "\n")
 end
 
+def passing(found)
+  found ? found[0] - found[1] - found[2] : -1
+end
+
 def describe(found)
   found ? format("%d examples, %d failures, %d pending", *found) : "did not finish"
 end
@@ -83,6 +91,23 @@ when "differences"
     puts "#{file}: MRI #{describe(store.dig(file, "mri"))}, Metorex #{describe(found)}"
   end
   exit(differing.empty? ? 0 : 1)
+when "regressions"
+  abort "usage: ruby scripts/suite_results.rb regressions RESULTS" unless arguments.first
+  store = read_store
+  fell = []
+  read_results(arguments.first).sort.each do |file, found|
+    recorded = store.dig(file, "metorex")
+    next if passing(found) == passing(recorded)
+    if passing(found) < passing(recorded)
+      fell << file
+      puts "#{file}: recorded #{describe(recorded)}, now #{describe(found)}"
+    else
+      fields = ENGINES.flat_map { |engine| (engine == "metorex" ? found : store.dig(file, engine)) || %w[- - -] }
+      puts "#{file} passes more than recorded, update its row to:"
+      puts [file, *fields].join("\t")
+    end
+  end
+  exit(fell.empty? ? 0 : 1)
 when "table"
   totals = Hash.new { |hash, suite| hash[suite] = Hash.new(0) }
   read_store.each do |file, by_engine|
@@ -100,5 +125,5 @@ when "table"
     puts "| #{suite} | #{total["mri_passing"]} | #{total["metorex_passing"]} | #{total["mri_examples"]} | #{total["mri_pending"]} |"
   end
 else
-  abort "usage: ruby scripts/suite_results.rb record|differences|table"
+  abort "usage: ruby scripts/suite_results.rb record|differences|regressions|table"
 end

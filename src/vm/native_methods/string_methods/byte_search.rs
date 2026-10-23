@@ -91,10 +91,9 @@ impl VirtualMachine {
             .compatible_encoding(receiver, &Object::String(Rc::clone(&needle)))
             .is_none()
         {
-            let message = format!(
-                "incompatible character encodings: {} and {}",
-                string_value.encoding_name(),
-                needle.encoding_name()
+            let message = crate::vm::native_methods::string_methods::incompatible_encodings_message(
+                &string_value.encoding_name(),
+                &needle.encoding_name(),
             );
             return Err(crate::vm::errors::simple_exception(
                 "Encoding::CompatibilityError",

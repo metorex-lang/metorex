@@ -316,3 +316,9 @@ fn a_repeat_led_by_one_character_reads_any_length_of_text() {
         "0\n\"root\"\n50001\nnil\n\"b\"\n\"aaa\"\n\"aa\"\n\"aa\"\nnil\n\"a\\nb\"\n0\n\"ab&amp;cd%x;e\"\n\"x\"\n\"amp\"\n\"aab\"\n\"aaa\"\nnil\n"
     );
 }
+
+#[test]
+fn a_pattern_matches_an_object_through_its_to_str() {
+    let output = run_example("regexp/match_against_an_object_with_to_str.rb");
+    assert_eq!(output, "0\n#<MatchData \"blah\">\ntrue\ntrue\n0\n");
+}

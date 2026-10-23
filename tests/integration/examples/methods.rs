@@ -1010,3 +1010,9 @@ fn not_reads_everything_before_an_and_or_an_or() {
         ":not_a_string_or_flagged\n:plain\n:not_a_string_or_flagged\ntrue\nfalse\nfalse\ntrue\nfalse\nfalse\n\"false\"\n"
     );
 }
+
+#[test]
+fn a_forked_child_runs_the_at_exit_handlers_it_inherited() {
+    let output = run_example("io/forked_child_runs_the_at_exit_handlers.rb");
+    assert_eq!(output, "0\n0\n");
+}

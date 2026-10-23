@@ -16,7 +16,7 @@ require_relative "ruby_release"
 release = RubyRelease.from_arguments("vendor_gems.rb")
 
 GEMS = %w[
-  csv debug irb minitest mutex_m net-imap net-pop net-smtp nkf power_assert racc rake rbs rdoc readline
+  csv debug drb irb minitest mutex_m net-imap net-pop net-smtp nkf power_assert racc rake rbs rdoc readline
   reline repl_type_completor resolv-replace rexml rinda rss test-unit typeprof
 ].freeze
 

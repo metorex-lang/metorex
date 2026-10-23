@@ -20,7 +20,8 @@ impl VirtualMachine {
         {
             return Ok(());
         }
-        let message = format!("incompatible character encodings: {} and {}", from, to);
+        let message =
+            crate::vm::native_methods::string_methods::incompatible_encodings_message(&from, &to);
         Err(MetorexError::UncaughtException {
             exception: Object::exception("Encoding::CompatibilityError", message.clone()),
             location: crate::vm::utils::position_to_location(position),

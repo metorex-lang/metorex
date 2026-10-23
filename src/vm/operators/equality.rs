@@ -471,26 +471,9 @@ impl VirtualMachine {
             // of the left, which is `right.is_a?(left)` whatever the
             // right is. A class is an object too, so `Module ===
             // String` is true and `String === String` is false.
-            {
-                if crate::builtin_classes::value_class_name(&right)
-                    .is_some_and(|name| name == class_rc.name())
-                {
-                    return Ok(Object::Bool(true));
-                }
-                let right_class = self.builtins().class_of(&right);
-                if self.builtins().is_subclass_of(&right_class, class_rc) {
-                    return Ok(Object::Bool(true));
-                }
-                if let View::Instance(inst_rc) = right.view() {
-                    let sc_opt = inst_rc.borrow().singleton_class.borrow().clone();
-                    if let Some(sc) = sc_opt
-                        && self.builtins().is_subclass_of(&sc, class_rc)
-                    {
-                        return Ok(Object::Bool(true));
-                    }
-                }
-                return Ok(Object::Bool(false));
-            }
+            return Ok(Object::Bool(
+                self.builtins().is_instance_of(&right, class_rc),
+            ));
         }
         // Object#=== is the same object, or whatever #== says. It
         // consults neither #equal? nor #object_id, so a class that

@@ -755,6 +755,9 @@ class StringIO
     written = 0
     values.each do |value|
       text = __for_writing__ value.to_s
+      # Text the buffer cannot be joined with is written as its bytes, and
+      # the buffer keeps its own encoding.
+      text = text.b.force_encoding(@string.encoding) if Encoding.compatible?(@string, text).nil?
       @position = @string.length if @appends
       landing = @position
       if landing > @string.length

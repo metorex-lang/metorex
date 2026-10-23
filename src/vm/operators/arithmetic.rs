@@ -35,6 +35,12 @@ impl VirtualMachine {
             (View::Int(a), View::Float(b)) => Ok(Object::Float((a as f64) + b)),
             (View::Float(a), View::Int(b)) => Ok(Object::Float(a + (b as f64))),
             (View::String(a), View::String(b)) => {
+                use crate::vm::native_methods::string_methods::{
+                    clashing_encodings_error, strings_comparable,
+                };
+                if !strings_comparable(a, b) {
+                    return Err(clashing_encodings_error(a, b, position));
+                }
                 // Where either side stands for the bytes it was read from,
                 // the answer does too, and the other side is written out in
                 // the bytes its own encoding spells it with.

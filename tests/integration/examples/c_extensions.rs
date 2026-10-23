@@ -1644,7 +1644,7 @@ const C_ENCODINGS_OUTPUT: &str = concat!(
     "#<Encoding:BINARY (ASCII-8BIT)>\n",
     "[\"UTF-8\", nil]\n",
     "\"UTF-8\"\n",
-    "Encoding::CompatibilityError: incompatible character encodings: ASCII-8BIT and UTF-8\n",
+    "Encoding::CompatibilityError: incompatible character encodings: BINARY (ASCII-8BIT) and UTF-8\n",
     "[#<Encoding:US-ASCII>, #<Encoding:BINARY (ASCII-8BIT)>]\n",
     "[\"literal\", #<Encoding:US-ASCII>, #<Encoding:BINARY (ASCII-8BIT)>]\n",
     "[:seven_bit, :valid, :seven_bit, :valid, :broken, :broken]\n",

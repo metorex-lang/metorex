@@ -88,6 +88,14 @@ impl VirtualMachine {
                 ));
                 return Ok(());
             }
+            // A `to_s` answering something other than a String leaves the
+            // element written as Kernel#to_s writes it.
+            if name == "to_s" {
+                let text = element.to_string();
+                let bytes = text.clone().into_bytes();
+                written.push((text, "US-ASCII".to_string(), bytes));
+                return Ok(());
+            }
         }
         Err(crate::vm::errors::simple_exception(
             "NoMethodError",
@@ -125,7 +133,10 @@ impl VirtualMachine {
                 continue;
             }
             if held != &writing {
-                let message = format!("incompatible character encodings: {} and {}", writing, held);
+                let message =
+                    crate::vm::native_methods::string_methods::incompatible_encodings_message(
+                        &writing, held,
+                    );
                 return Err(crate::vm::errors::simple_exception(
                     "Encoding::CompatibilityError",
                     &message,

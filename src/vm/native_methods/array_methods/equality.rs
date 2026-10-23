@@ -124,8 +124,11 @@ impl VirtualMachine {
         candidate: &Object,
         position: Position,
     ) -> Result<bool, MetorexError> {
-        if matches!(element.view(), View::Instance(_))
-            || matches!(candidate.view(), View::Instance(_))
+        if let (View::Array(_), View::Array(_)) = (element.view(), candidate.view()) {
+            return self.arrays_equal_within(element, candidate, &mut Vec::new(), position);
+        }
+        if matches!(element.view(), View::Instance(_) | View::Regex(..))
+            || matches!(candidate.view(), View::Instance(_) | View::Regex(..))
         {
             let answer = self.evaluate_binary_operation(
                 &crate::ast::BinaryOp::Equal,

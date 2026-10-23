@@ -549,11 +549,11 @@ impl VirtualMachine {
                     &padding,
                     &pad_encoding,
                 ) else {
-                    let message = format!(
-                        "incompatible character encodings: {} and {}",
-                        string_value.encoding_name(),
-                        pad_encoding
-                    );
+                    let message =
+                        crate::vm::native_methods::string_methods::incompatible_encodings_message(
+                            &string_value.encoding_name(),
+                            &pad_encoding,
+                        );
                     return Err(MetorexError::UncaughtException {
                         exception: Object::exception(
                             "Encoding::CompatibilityError",

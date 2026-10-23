@@ -200,10 +200,9 @@ pub extern "C-unwind" fn rb_enc_check(first: Value, second: Value) -> *const RbE
         let named = |object: Value| call(to_object(object), "encoding", Vec::new()).to_string();
         error(
             "Encoding::CompatibilityError",
-            &format!(
-                "incompatible character encodings: {} and {}",
-                named(first),
-                named(second)
+            &crate::vm::native_methods::string_methods::incompatible_encodings_message(
+                &named(first),
+                &named(second),
             ),
         );
     }

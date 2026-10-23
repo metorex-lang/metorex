@@ -89,7 +89,7 @@ Metorex compiles each method, block, class body, and file to bytecode the first 
 - **error_highlight**: the report of a NameError, NoMethodError, TypeError or ArgumentError shows the line of the program it was raised on with `^` under the call, name or operator that failed, as MRI's does. An ArgumentError from a call to a method the program wrote shows both the call and the method's `def` line. `ErrorHighlight.spot` answers the columns and the snippet, `detailed_message(highlight: false)` carries the same lines, and `--disable=error_highlight` leaves them out. Code run by `eval` has no snippet
 - **syntax_suggest**: the report of a program that does not parse, and the `detailed_message` of a SyntaxError raised by `load` or `require`, open with the lines around a missing or extra `end`, as MRI's do. This is Ruby's syntax_suggest, which reads the file through Prism as MRI's does. `--disable=syntax_suggest` and `--disable=gems` leave it out, and `detailed_message(syntax_suggest: false)` leaves it off one message
 - **prism**: `require "prism"` loads Prism 1.8.1, the version MRI 4.0.7 ships. `Prism.parse`, `parse_file`, `parse_stream`, `lex`, `lex_file`, `parse_lex`, `parse_comments`, `dump`, `parse_success?` and the rest answer Prism's own node, token, location and diagnostic objects, and its visitors, `Prism::Pattern`, `Prism::Dispatcher`, `Prism.lex_compat` and `Prism::Translation::Ripper` work on them. build.rs compiles Prism's C parser from `vendor/prism` into the binary, and its Ruby library runs over the parser's serialized results. `scripts/vendor_prism.rb` copies it in from the source tree of a Ruby release
-- **Bundled gems**: `require` finds MRI's `csv`, `nkf` and `kconv`, `racc` with its runtime parser `racc/parser` and its grammar compiler, `mutex_m`, `resolv-replace`, `rinda`, `minitest`, `test-unit`, `power_assert`, `rake`, `rexml`, `rss`, `net-imap`, `net-pop`, `net-smtp`, `rdoc`, `rbs`, `typeprof`, `repl_type_completor`, `debug`, and `readline`, which answers as `Reline`, copied in by `scripts/vendor_gems.rb` from the source tree of a Ruby release at the versions it ships, with no gem directory set. The C extensions of nkf, rbs, and debug are compiled into the binary and start when their gems require them. rbs's signatures of Ruby's core and standard library are carried too, and written once to `metorex-<uid>/rbs-<version>` under the temporary directory, which rbs reads them from. `resolv` is MRI's own, with its DNS resolver, `Resolv::IPv4` and `Resolv::IPv6`
+- **Bundled gems**: `require` finds MRI's `csv`, `drb` with its `drbunix:` transport, `nkf` and `kconv`, `racc` with its runtime parser `racc/parser` and its grammar compiler, `mutex_m`, `resolv-replace`, `rinda`, `minitest`, `test-unit`, `power_assert`, `rake`, `rexml`, `rss`, `net-imap`, `net-pop`, `net-smtp`, `rdoc`, `rbs`, `typeprof`, `repl_type_completor`, `debug`, and `readline`, which answers as `Reline`, copied in by `scripts/vendor_gems.rb` from the source tree of a Ruby release at the versions it ships, with no gem directory set. The C extensions of nkf, rbs, and debug are compiled into the binary and start when their gems require them. rbs's signatures of Ruby's core and standard library are carried too, and written once to `metorex-<uid>/rbs-<version>` under the temporary directory, which rbs reads them from. `resolv` is MRI's own, with its DNS resolver, `Resolv::IPv4` and `Resolv::IPv6`
 - **irb**: `binding.irb` and `IRB.start` run MRI's irb 1.16.0. On a terminal it reads through reline 0.6.3, which completes names on Tab and keeps history, and on a pipe it reads standard input, both as MRI's do. io/console works on a terminal: `raw`, `noecho`, `echo=`, `winsize`, `console_mode`, `getch`, `getpass`, `cursor`, `goto` and the rest of io-console 0.8.2, the version MRI 4.0 carries
 - **pp**: `pp` and `pretty_inspect` are MRI's, loaded the first time `pp` is called, so a value wider than 80 columns is broken across lines by nesting
 - **Ruby 4.0's additions**: `Array#rfind` answers the last element its block accepts, or what the `if_none` callable answers, and `Method#box` answers nil while namespaces are off, as MRI's do. Time, Thread, Fiber, the thread queues and mutexes, and Process::Status descend from Object, so their ancestors end in Kernel and BasicObject
@@ -633,21 +633,21 @@ It takes the options `metorex spec --help` lists, which are RSpec's, and these o
 
 Under MRI 4.0.7 one example fails, in rspec-mocks' `receive_spec.rb`, which stubs `respond_to?` and recurses through the `Kernel#inspect` of Ruby 4.0. Under Metorex one rspec-core example fails that passes under MRI: `bisect/shell_command_spec.rb` expects the path of the interpreter a bisect run starts to contain `ruby`, and Metorex's is `metorex`. diff-lcs's suite passes all 322 of its examples, with documentation output identical to RSpec's byte for byte.
 
-`scripts/run_gem_suites.sh` runs the suites of the bundled gems Ruby 4.0.7 ships, from submodules under `gems/` at the releases Ruby 4.0.7 ships, a test file to a process, with the arguments each gem's own Rakefile gives a file. It runs them under Metorex, and with `ENGINE=mri` under MRI, against each gem's own library, with the assertions Ruby's repository keeps in `tool/lib`, which `scripts/vendor_gems.rb` copies into `scripts/gem_suite/lib`. `RECORD=1` stores each file's counts in `scripts/gem_suite_results.tsv`, and `SUITE_RESULTS=scripts/gem_suite_results.tsv ruby scripts/suite_results.rb table` prints this table, where an example is a test and an omission counts as pending:
+`scripts/run_gem_suites.sh` runs the suites of the bundled gems Ruby 4.0.7 ships, from submodules under `gems/` at the releases Ruby 4.0.7 ships, a test file to a process, with the arguments each gem's own Rakefile gives a file. It runs them under Metorex, and with `ENGINE=mri` under MRI, against each gem's own library, with the assertions Ruby's repository keeps in `tool/lib`, which `scripts/vendor_gems.rb` copies into `scripts/gem_suite/lib`. `RECORD=1` stores each file's counts in `scripts/gem_suite_results.tsv`. `CHECK=1` compares a Metorex run with the Metorex counts stored there, fails when a file passes fewer examples than recorded, and prints the row to store for a file that passes more, which is what Jenkins's `gems` stage runs. `SUITE_RESULTS=scripts/gem_suite_results.tsv ruby scripts/suite_results.rb table` prints this table, where an example is a test and an omission counts as pending:
 
 | Suite | Passing under MRI | Passing under Metorex | Examples | Pending |
 | :-- | --: | --: | --: | --: |
-| minitest | 418 | 398 | 422 | 4 |
-| net-imap | 1691 | 1690 | 1691 | 0 |
+| minitest | 418 | 418 | 422 | 4 |
+| net-imap | 1691 | 1691 | 1691 | 0 |
 | net-pop | 7 | 7 | 7 | 0 |
 | net-smtp | 95 | 95 | 95 | 0 |
 | power_assert | 102 | 102 | 102 | 0 |
-| rake | 598 | 595 | 598 | 0 |
-| rexml | 730 | 612 | 730 | 0 |
-| rss | 362 | 304 | 362 | 0 |
-| test-unit | 443 | 433 | 452 | 6 |
+| rake | 598 | 598 | 598 | 0 |
+| rexml | 730 | 730 | 730 | 0 |
+| rss | 362 | 362 | 362 | 0 |
+| test-unit | 443 | 443 | 452 | 6 |
 
-net-imap's one remaining failure times how its response reader grows with a response's length, which `String#rindex` with a pattern keeps from growing linearly.
+Every file's counts match MRI's. net-imap's `test_stringprep_tables.rb` runs under neither, since it reads `rfcs/rfc3454-stringprep_tables.json`, which net-imap's rake tasks build from RFC 3454 downloaded from the network.
 
 ### Speed
 

@@ -693,3 +693,30 @@ fn gsub_leaves_the_last_match_in_last_match_for_every_replacement_kind() {
         "\"1a 2b 3c\"\n\"c3\"\n\"a1 b2 \"\n\"1a 2b 3c\"\n\"c3\"\n\"A1 B2 C3\"\n[\"a\", \"b\", \"c\"]\n\"c\"\n\"a1 b2 c3\"\nnil\n250000\n"
     );
 }
+
+#[test]
+fn a_to_s_answering_no_string_leaves_the_default_form_in_joins_and_interpolations() {
+    let output = run_example("strings/join_and_interpolation_when_to_s_answers_no_string.rb");
+    assert_eq!(
+        output,
+        "\"#<Class:ID>::inner\"\n\"#<Object:ID>\"\n\"#<Object:ID>\"\n"
+    );
+}
+
+#[test]
+fn joining_text_in_incompatible_encodings_raises_naming_both() {
+    let output = run_example("strings/joining_text_in_incompatible_encodings.rb");
+    assert_eq!(
+        output,
+        "\"incompatible character encodings: UTF-8 and BINARY (ASCII-8BIT)\"\n\"incompatible character encodings: BINARY (ASCII-8BIT) and UTF-8\"\n\"incompatible character encodings: UTF-8 and BINARY (ASCII-8BIT)\"\n\"incompatible character encodings: UTF-8 and BINARY (ASCII-8BIT)\"\n\"incompatible character encodings: UTF-8 and BINARY (ASCII-8BIT)\"\n"
+    );
+}
+
+#[test]
+fn a_string_io_writes_text_it_cannot_join_as_its_bytes() {
+    let output = run_example("strings/string_io_writes_binary_text_as_bytes.rb");
+    assert_eq!(
+        output,
+        "#<Encoding:UTF-8>\n54\n#<Encoding:BINARY (ASCII-8BIT)>\n#<Encoding:BINARY (ASCII-8BIT)>\n#<Encoding::CompatibilityError: incompatible character encodings: UTF-8 and BINARY (ASCII-8BIT)>\n#<Encoding:UTF-8>\n"
+    );
+}

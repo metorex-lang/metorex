@@ -58,7 +58,9 @@ impl VirtualMachine {
         let written = self.send_to_object(value.clone(), "to_s", Vec::new(), position)?;
         Ok(match written.view() {
             View::String(text) => text.as_str().to_string(),
-            other => other.to_string(),
+            // A `to_s` answering something other than a String leaves the
+            // value written as Kernel#to_s writes it.
+            _ => value.to_string(),
         })
     }
 }
@@ -118,11 +120,11 @@ impl Interpolation {
             if let Some((held, _)) = &self.carried
                 && *held != spelled.encoding_name()
             {
-                let message = format!(
-                    "incompatible character encodings: {} and {}",
-                    held,
-                    spelled.encoding_name()
-                );
+                let message =
+                    crate::vm::native_methods::string_methods::incompatible_encodings_message(
+                        held,
+                        &spelled.encoding_name(),
+                    );
                 return Err(MetorexError::UncaughtException {
                     exception: Object::exception("Encoding::CompatibilityError", message.clone()),
                     location: position_to_location(position),

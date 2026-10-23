@@ -241,12 +241,25 @@ pub(crate) fn clashing_encodings_error(
     right: &crate::object::StringValue,
     position: Position,
 ) -> MetorexError {
-    let message = format!(
-        "incompatible character encodings: {} and {}",
-        left.encoding_name(),
-        right.encoding_name()
-    );
+    let message = incompatible_encodings_message(&left.encoding_name(), &right.encoding_name());
     crate::vm::errors::simple_exception("Encoding::CompatibilityError", &message, position)
+}
+
+/// The message of the Encoding::CompatibilityError for text in `left` and
+/// `right`, which names ASCII-8BIT as Encoding#inspect does.
+pub(crate) fn incompatible_encodings_message(left: &str, right: &str) -> String {
+    let shown = |named: &str| {
+        if named == "ASCII-8BIT" {
+            "BINARY (ASCII-8BIT)".to_string()
+        } else {
+            named.to_string()
+        }
+    };
+    format!(
+        "incompatible character encodings: {} and {}",
+        shown(left),
+        shown(right)
+    )
 }
 
 /// How many bytes the character opening a run takes in UTF-8, or 0 when the

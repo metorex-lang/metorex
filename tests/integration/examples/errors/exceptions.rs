@@ -684,3 +684,18 @@ fn an_exception_class_answers_equals_with_its_own_method() {
         "true\nfalse\ntrue\nfalse\ntrue\n\"Mail::Parser::Token\"\n#<struct Mail::Parser::Token symbol=:SPACE, value=\" \">\n"
     );
 }
+
+#[test]
+fn marshal_writes_the_backtrace_an_exception_holds_rather_than_what_its_method_answers() {
+    let output = run_example("errors/marshal_of_an_exception_with_its_own_backtrace.rb");
+    assert_eq!(output, "nil\n[\"app.rb:3\"]\ntrue\nfalse\n");
+}
+
+#[test]
+fn raise_hands_the_call_stack_backtrace_to_a_set_backtrace_the_program_wrote() {
+    let output = run_example("errors/raise_hands_the_backtrace_to_a_written_set_backtrace.rb");
+    assert_eq!(
+        output,
+        "Array\ntrue\n[\"given.rb:1\"]\nnil\n[\"first.rb:2\"]\n"
+    );
+}
