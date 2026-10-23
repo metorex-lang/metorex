@@ -16,7 +16,7 @@ def buildPod(String node, String cpuRequest, String cpuLimit) {
         runAsGroup: 1000
       containers:
         - name: ci
-          image: harbor.home.gregdonald.com/metorex/ci:latest
+          image: harbor.home.gregdonald.com/metorex/ci:${env.BUILD_TAG}
           imagePullPolicy: Always
           command: ["sleep"]
           args: ["infinity"]
@@ -110,7 +110,7 @@ pipeline {
             --local dockerfile=docker \
             --import-cache type=registry,ref=harbor.home.gregdonald.com/metorex/ci:buildcache \
             --export-cache type=registry,ref=harbor.home.gregdonald.com/metorex/ci:buildcache,mode=max \
-            --output type=image,name=harbor.home.gregdonald.com/metorex/ci:latest,push=true
+            --output "type=image,\\"name=harbor.home.gregdonald.com/metorex/ci:$BUILD_TAG,harbor.home.gregdonald.com/metorex/ci:latest\\",push=true"
         '''
       }
     }

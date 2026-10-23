@@ -388,7 +388,10 @@ export -f run_one
 export WORK_DIR HELPERS_DIR BUNDLE_LOAD_PATH METOREX FILE_TIMEOUT SPEC_ARGS ENGINE RSPEC_SOURCE
 
 RESULTS="$WORK_DIR/results.tsv"
-printf '%s\n' "${SPEC_PATHS[@]}" | xargs -P "$JOBS" -I {} bash -c 'run_one "$@"' _ {} > "$RESULTS"
+# Each file's result is printed as it finishes, so a run stopped partway
+# shows which files had finished.
+printf 'running %s spec files, %s at a time\n' "${#SPEC_PATHS[@]}" "$JOBS"
+printf '%s\n' "${SPEC_PATHS[@]}" | xargs -P "$JOBS" -I {} bash -c 'run_one "$@"' _ {} | tee "$RESULTS"
 if [ -n "${LOG_DIR:-}" ]; then
   mkdir -p "$LOG_DIR"
   cp "$WORK_DIR"/logs/*.txt "$LOG_DIR/"
