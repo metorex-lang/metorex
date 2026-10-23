@@ -7,20 +7,26 @@ FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# `binutils` carries the tools RbConfig names, such as the one that strips a
-# binary. `libcrypt-dev` carries the library `String#crypt` links against,
-# which Linux keeps separate from the C library. `mold` is the linker the
-# Rust builds use, since linking dominates a rebuild. `netbase` carries
-# /etc/services, which a port named by its service reads. `tzdata` and
-# `tzdata-legacy` carry the zones a time in a named place is read against, down
-# to the older names a spec still writes. `libyaml-dev` is what Ruby loads YAML
-# through.
+# Without a locale Ruby reads and writes text as US-ASCII, and the gem suites
+# are written for UTF-8, as on a developer's machine.
+ENV LANG=C.UTF-8
+
+# `git` is what a gemspec lists its files through, and a suite that loads
+# its gem through Bundler reads the gemspec. `binutils` carries the tools
+# RbConfig names, such as the one that strips a binary. `libcrypt-dev`
+# carries the library `String#crypt` links against, which Linux keeps
+# separate from the C library. `mold` is the linker the Rust builds use,
+# since linking dominates a rebuild. `netbase` carries /etc/services, which
+# a port named by its service reads. `tzdata` and `tzdata-legacy` carry the
+# zones a time in a named place is read against, down to the older names a
+# spec still writes. `libyaml-dev` is what Ruby loads YAML through.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
        binutils \
        build-essential \
        ca-certificates \
        curl \
+       git \
        libcrypt-dev \
        libyaml-dev \
        mold \
