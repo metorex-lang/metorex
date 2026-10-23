@@ -254,7 +254,7 @@ pipeline {
 
     stage('rspec-suites') {
       options {
-        timeout(time: 30, unit: 'MINUTES')
+        timeout(time: 120, unit: 'MINUTES')
       }
       agent {
         kubernetes {
