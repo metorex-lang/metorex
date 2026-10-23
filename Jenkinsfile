@@ -91,24 +91,10 @@ pipeline {
     disableConcurrentBuilds(abortPrevious: true)
   }
 
-  parameters {
-    booleanParam(name: 'BUILD_CI_IMAGE', defaultValue: false, description: 'Rebuild and push harbor.home.gregdonald.com/metorex/ci:latest before the checks')
-  }
-
   stages {
     stage('ci-image') {
       options {
         timeout(time: 30, unit: 'MINUTES')
-      }
-      when {
-        beforeAgent true
-        anyOf {
-          expression { params.BUILD_CI_IMAGE }
-          allOf {
-            branch 'main'
-            changeset 'docker/Dockerfile'
-          }
-        }
       }
       agent {
         kubernetes {
@@ -122,6 +108,8 @@ pipeline {
             --frontend dockerfile.v0 \
             --local context=docker \
             --local dockerfile=docker \
+            --import-cache type=registry,ref=harbor.home.gregdonald.com/metorex/ci:buildcache \
+            --export-cache type=registry,ref=harbor.home.gregdonald.com/metorex/ci:buildcache,mode=max \
             --output type=image,name=harbor.home.gregdonald.com/metorex/ci:latest,push=true
         '''
       }
