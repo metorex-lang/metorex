@@ -33,7 +33,13 @@ class StringScanner
   end
 
   def concat(text)
-    @string = @string + text
+    unless text.is_a?(String)
+      unless text.respond_to?(:to_str)
+        raise TypeError, "no implicit conversion of #{text.class} into String"
+      end
+      text = text.to_str
+    end
+    @string << text
     self
   end
 
@@ -48,6 +54,7 @@ class StringScanner
   # The byte offset reached. It may stand inside a character, after
   # `pos=` or a byte read, which `@inside` counts the bytes of.
   def pos
+    return @position + @inside if @string.ascii_only?
     @string[0, @position].bytesize + @inside
   end
 
@@ -60,6 +67,11 @@ class StringScanner
     landing = offset < 0 ? offset + counted : offset
     if landing < 0 || landing > counted
       raise RangeError, "index out of range"
+    end
+    if @string.ascii_only?
+      @position = landing
+      @inside = 0
+      return offset
     end
     @position = characters_before landing
     @inside = landing - @string[0, @position].bytesize

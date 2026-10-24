@@ -154,3 +154,9 @@ fn a_scanner_placed_at_a_byte_offset_reads_from_there() {
         "[0, 0, 0, \"aé日本x\"]\n[1, 1, 1, \"é日本x\"]\n[3, 3, 2, \"日本x\"]\n[4, 4, 3, \"\\x97\\xA5本x\"]\n[6, 6, 3, \"本x\"]\n[9, 9, 4, \"x\"]\n[10, 10, 5, \"\"]\n"
     );
 }
+
+#[test]
+fn test_scanning_appending_to_the_scanned_string_execution() {
+    let output = run_example("scanning/appending_to_the_scanned_string.rb");
+    assert_eq!(output, "\"abcd\"\ntrue\nFrozenError\n");
+}

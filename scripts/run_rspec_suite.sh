@@ -89,7 +89,15 @@ BUNDLED_GEMS="$(bundle exec ruby -rfileutils -e '
 ' "$TARGET_DIR/rspec_default_gems")"
 BUNDLE_LOAD_PATH=""
 while read -r feature paths; do
-  if [ "$ENGINE" = "mri" ] || ! "$METOREX" -e "require '$feature'" > /dev/null 2>&1; then
+  # A require that does not return in time counts as one Metorex cannot make.
+  loads=0
+  if [ "$ENGINE" = "metorex" ]; then
+    perl -e 'alarm shift; exec @ARGV' 60 "$METOREX" -e "require '$feature'" > /dev/null 2>&1 < /dev/null || loads=$?
+  fi
+  if [ "$loads" = "142" ]; then
+    printf 'require %s did not return within 60 seconds\n' "$feature"
+  fi
+  if [ "$ENGINE" = "mri" ] || [ "$loads" != "0" ]; then
     for path in $paths; do BUNDLE_LOAD_PATH+=" -I $path"; done
   fi
 done <<< "$BUNDLED_GEMS"

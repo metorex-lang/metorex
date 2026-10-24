@@ -286,6 +286,9 @@ pipeline {
         METOREX = '/cache/target-rspec/suites/metorex'
         JOBS = '8'
         CHECK = '1'
+        // rexml's linear performance tests parse documents of up to 200,000
+        // characters, which takes this node longer than the default 300.
+        FILE_TIMEOUT = '900'
       }
       steps {
         catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {

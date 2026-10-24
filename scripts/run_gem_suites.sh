@@ -113,6 +113,9 @@ export -f run_one
 export WORK_DIR REPO_ROOT METOREX FILE_TIMEOUT ENGINE
 # net-imap's helper measures coverage with SimpleCov unless told not to.
 export SIMPLECOV_DISABLE=1
+# A test that omits itself under CI would count differently there than in
+# the recorded runs.
+unset CI
 
 RESULTS="$WORK_DIR/results.tsv"
 while IFS=$'\t' read -r gem file arguments; do

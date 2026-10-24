@@ -598,11 +598,17 @@ class StringIO
     reading_allowed
     return "" if limit == 0
     return read_wide_line(separator, limit, chomp) unless @wide_position.nil?
-    remaining = @string[@position..-1] || ""
-    return nil if remaining.empty?
-    line = if separator.nil?
-      remaining
-    elsif separator == ""
+    return nil if @position >= @string.length
+    line = if separator.is_a?(String) && !separator.empty?
+      # The search starts at the cursor, so a read copies its line alone
+      # rather than all that is left.
+      cut = @string.index(separator, @position)
+      ending = cut.nil? ? @string.length : cut + separator.length
+      @string[@position, ending - @position]
+    elsif separator.nil?
+      @string[@position..-1]
+    else
+      remaining = @string[@position..-1]
       # A blank separator reads a paragraph: the newlines before it are
       # stepped over, and the run ends at the blank line that follows.
       skipped = 0
@@ -619,9 +625,6 @@ class StringIO
         ending += 1 while ending < remaining.length && remaining[ending] == "\n"
         remaining[0, ending]
       end
-    else
-      cut = remaining.index(separator)
-      cut.nil? ? remaining : remaining[0, cut + separator.length]
     end
     line = line[0, limit] unless limit.nil?
     return nil if line.empty?
