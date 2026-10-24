@@ -90,9 +90,11 @@ BUNDLED_GEMS="$(bundle exec ruby -rfileutils -e '
 BUNDLE_LOAD_PATH=""
 while read -r feature paths; do
   # A require that does not return in time counts as one Metorex cannot make.
+  # `exit!` skips the at_exit hooks a library installs, such as test-unit's
+  # runner, which would load and run every test file under the directory.
   loads=0
   if [ "$ENGINE" = "metorex" ]; then
-    perl -e 'alarm shift; exec @ARGV' 60 "$METOREX" -e "require '$feature'" > /dev/null 2>&1 < /dev/null || loads=$?
+    perl -e 'alarm shift; exec @ARGV' 60 "$METOREX" -e "require '$feature'; exit! 0" > /dev/null 2>&1 < /dev/null || loads=$?
   fi
   if [ "$loads" = "142" ]; then
     printf 'require %s did not return within 60 seconds\n' "$feature"
