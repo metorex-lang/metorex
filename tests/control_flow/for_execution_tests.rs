@@ -18,19 +18,19 @@ fn test_for_loop_over_array() {
 
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "sum".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 0,
                 position: pos(1, 7),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::For {
             variable: "x".to_string(),
-            iterable: Expression::Array {
+            iterable: Box::new(Expression::Array {
                 elements: vec![
                     Expression::IntLiteral {
                         value: 1,
@@ -50,13 +50,13 @@ fn test_for_loop_over_array() {
                     },
                 ],
                 position: pos(2, 13),
-            },
+            }),
             body: vec![Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "sum".to_string(),
                     position: pos(3, 3),
-                },
-                value: Expression::BinaryOp {
+                }),
+                value: Box::new(Expression::BinaryOp {
                     op: BinaryOp::Add,
                     left: Box::new(Expression::Identifier {
                         name: "sum".to_string(),
@@ -67,7 +67,7 @@ fn test_for_loop_over_array() {
                         position: pos(3, 15),
                     }),
                     position: pos(3, 13),
-                },
+                }),
                 position: pos(3, 3),
             }],
             position: pos(2, 1),
@@ -86,28 +86,28 @@ fn test_for_loop_over_empty_array() {
 
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "count".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 0,
                 position: pos(1, 9),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::For {
             variable: "x".to_string(),
-            iterable: Expression::Array {
+            iterable: Box::new(Expression::Array {
                 elements: vec![],
                 position: pos(2, 13),
-            },
+            }),
             body: vec![Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "count".to_string(),
                     position: pos(3, 3),
-                },
-                value: Expression::BinaryOp {
+                }),
+                value: Box::new(Expression::BinaryOp {
                     op: BinaryOp::Add,
                     left: Box::new(Expression::Identifier {
                         name: "count".to_string(),
@@ -118,7 +118,7 @@ fn test_for_loop_over_empty_array() {
                         position: pos(3, 19),
                     }),
                     position: pos(3, 17),
-                },
+                }),
                 position: pos(3, 3),
             }],
             position: pos(2, 1),
@@ -137,19 +137,19 @@ fn test_for_loop_with_break() {
 
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 0,
                 position: pos(1, 10),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::For {
             variable: "x".to_string(),
-            iterable: Expression::Array {
+            iterable: Box::new(Expression::Array {
                 elements: vec![
                     Expression::IntLiteral {
                         value: 1,
@@ -173,10 +173,10 @@ fn test_for_loop_with_break() {
                     },
                 ],
                 position: pos(2, 13),
-            },
+            }),
             body: vec![
                 Statement::If {
-                    condition: Expression::BinaryOp {
+                    condition: Box::new(Expression::BinaryOp {
                         op: BinaryOp::Equal,
                         left: Box::new(Expression::Identifier {
                             name: "x".to_string(),
@@ -187,7 +187,7 @@ fn test_for_loop_with_break() {
                             position: pos(3, 11),
                         }),
                         position: pos(3, 8),
-                    },
+                    }),
                     then_branch: vec![Statement::Break {
                         value: None,
                         position: pos(4, 5),
@@ -197,14 +197,14 @@ fn test_for_loop_with_break() {
                     position: pos(3, 3),
                 },
                 Statement::Assignment {
-                    target: Expression::Identifier {
+                    target: Box::new(Expression::Identifier {
                         name: "result".to_string(),
                         position: pos(6, 3),
-                    },
-                    value: Expression::Identifier {
+                    }),
+                    value: Box::new(Expression::Identifier {
                         name: "x".to_string(),
                         position: pos(6, 12),
-                    },
+                    }),
                     position: pos(6, 3),
                 },
             ],
@@ -224,19 +224,19 @@ fn test_for_loop_with_continue() {
 
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "sum".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 0,
                 position: pos(1, 7),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::For {
             variable: "x".to_string(),
-            iterable: Expression::Array {
+            iterable: Box::new(Expression::Array {
                 elements: vec![
                     Expression::IntLiteral {
                         value: 1,
@@ -260,10 +260,10 @@ fn test_for_loop_with_continue() {
                     },
                 ],
                 position: pos(2, 13),
-            },
+            }),
             body: vec![
                 Statement::If {
-                    condition: Expression::BinaryOp {
+                    condition: Box::new(Expression::BinaryOp {
                         op: BinaryOp::Equal,
                         left: Box::new(Expression::BinaryOp {
                             op: BinaryOp::Modulo,
@@ -282,7 +282,7 @@ fn test_for_loop_with_continue() {
                             position: pos(3, 15),
                         }),
                         position: pos(3, 13),
-                    },
+                    }),
                     then_branch: vec![Statement::Continue {
                         value: None,
                         position: pos(4, 5),
@@ -292,11 +292,11 @@ fn test_for_loop_with_continue() {
                     position: pos(3, 3),
                 },
                 Statement::Assignment {
-                    target: Expression::Identifier {
+                    target: Box::new(Expression::Identifier {
                         name: "sum".to_string(),
                         position: pos(6, 3),
-                    },
-                    value: Expression::BinaryOp {
+                    }),
+                    value: Box::new(Expression::BinaryOp {
                         op: BinaryOp::Add,
                         left: Box::new(Expression::Identifier {
                             name: "sum".to_string(),
@@ -307,7 +307,7 @@ fn test_for_loop_with_continue() {
                             position: pos(6, 15),
                         }),
                         position: pos(6, 13),
-                    },
+                    }),
                     position: pos(6, 3),
                 },
             ],
@@ -327,25 +327,25 @@ fn test_for_loop_variable_scope() {
 
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "x".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 100,
                 position: pos(1, 5),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::For {
             variable: "x".to_string(),
-            iterable: Expression::Array {
+            iterable: Box::new(Expression::Array {
                 elements: vec![Expression::IntLiteral {
                     value: 42,
                     position: pos(2, 14),
                 }],
                 position: pos(2, 13),
-            },
+            }),
             body: vec![Statement::Expression {
                 expression: Expression::Identifier {
                     name: "x".to_string(),
@@ -371,19 +371,19 @@ fn test_nested_for_loops() {
 
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 0,
                 position: pos(1, 10),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::For {
             variable: "i".to_string(),
-            iterable: Expression::Array {
+            iterable: Box::new(Expression::Array {
                 elements: vec![
                     Expression::IntLiteral {
                         value: 1,
@@ -395,10 +395,10 @@ fn test_nested_for_loops() {
                     },
                 ],
                 position: pos(2, 13),
-            },
+            }),
             body: vec![Statement::For {
                 variable: "j".to_string(),
-                iterable: Expression::Array {
+                iterable: Box::new(Expression::Array {
                     elements: vec![
                         Expression::IntLiteral {
                             value: 10,
@@ -410,13 +410,13 @@ fn test_nested_for_loops() {
                         },
                     ],
                     position: pos(3, 15),
-                },
+                }),
                 body: vec![Statement::Assignment {
-                    target: Expression::Identifier {
+                    target: Box::new(Expression::Identifier {
                         name: "result".to_string(),
                         position: pos(4, 5),
-                    },
-                    value: Expression::BinaryOp {
+                    }),
+                    value: Box::new(Expression::BinaryOp {
                         op: BinaryOp::Add,
                         left: Box::new(Expression::Identifier {
                             name: "result".to_string(),
@@ -435,7 +435,7 @@ fn test_nested_for_loops() {
                             position: pos(4, 25),
                         }),
                         position: pos(4, 21),
-                    },
+                    }),
                     position: pos(4, 5),
                 }],
                 position: pos(3, 3),
@@ -456,10 +456,10 @@ fn test_for_loop_error_on_non_iterable() {
 
     let program = vec![Statement::For {
         variable: "x".to_string(),
-        iterable: Expression::IntLiteral {
+        iterable: Box::new(Expression::IntLiteral {
             value: 42,
             position: pos(1, 13),
-        },
+        }),
         body: vec![Statement::Expression {
             expression: Expression::Identifier {
                 name: "x".to_string(),

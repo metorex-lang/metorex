@@ -80,3 +80,18 @@ fn a_held_copy_decodes_a_class_holding_a_method() {
 
     assert_eq!(decoded, statements);
 }
+
+#[test]
+fn a_position_is_two_words_wide() {
+    assert_eq!(std::mem::size_of::<metorex::lexer::Position>(), 16);
+}
+
+#[test]
+fn an_expression_takes_88_bytes() {
+    assert_eq!(std::mem::size_of::<Expression>(), 88);
+}
+
+#[test]
+fn a_statement_takes_120_bytes() {
+    assert_eq!(std::mem::size_of::<Statement>(), 120);
+}

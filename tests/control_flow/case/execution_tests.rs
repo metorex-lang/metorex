@@ -12,10 +12,10 @@ fn test_case_integer_literal_match() {
 
     // case 42 when 42 => "matched" end
     let case_stmt = Statement::Match {
-        expression: Expression::IntLiteral {
+        expression: Box::new(Expression::IntLiteral {
             value: 42,
             position: pos(),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::IntLiteral(42),
             guard: None,
@@ -41,10 +41,10 @@ fn test_case_string_literal_match() {
 
     // case "hello" when "hello" => "matched" end
     let case_stmt = Statement::Match {
-        expression: Expression::StringLiteral {
+        expression: Box::new(Expression::StringLiteral {
             value: "hello".to_string(),
             position: pos(),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::StringLiteral("hello".to_string()),
             guard: None,
@@ -70,10 +70,10 @@ fn test_case_wildcard_match() {
 
     // case 999 when 1 => "one" when _ => "other" end
     let case_stmt = Statement::Match {
-        expression: Expression::IntLiteral {
+        expression: Box::new(Expression::IntLiteral {
             value: 999,
             position: pos(),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::IntLiteral(1),
@@ -113,10 +113,10 @@ fn test_case_multiple_when_clauses() {
 
     // case 2 when 0 => "zero" when 1 => "one" when 2 => "two" end
     let case_stmt = Statement::Match {
-        expression: Expression::IntLiteral {
+        expression: Box::new(Expression::IntLiteral {
             value: 2,
             position: pos(),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::IntLiteral(0),
@@ -168,10 +168,10 @@ fn test_case_type_pattern_integer() {
 
     // case 42 when Integer => "matched" end
     let case_stmt = Statement::Match {
-        expression: Expression::IntLiteral {
+        expression: Box::new(Expression::IntLiteral {
             value: 42,
             position: pos(),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Type("Integer".to_string()),
             guard: None,
@@ -197,10 +197,10 @@ fn test_case_type_pattern_string() {
 
     // case "hello" when String => "matched" end
     let case_stmt = Statement::Match {
-        expression: Expression::StringLiteral {
+        expression: Box::new(Expression::StringLiteral {
             value: "hello".to_string(),
             position: pos(),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Type("String".to_string()),
             guard: None,
@@ -226,7 +226,7 @@ fn test_case_type_pattern_array() {
 
     // case [1, 2, 3] when Array => "matched" end
     let case_stmt = Statement::Match {
-        expression: Expression::Array {
+        expression: Box::new(Expression::Array {
             elements: vec![
                 Expression::IntLiteral {
                     value: 1,
@@ -242,7 +242,7 @@ fn test_case_type_pattern_array() {
                 },
             ],
             position: pos(),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Type("Array".to_string()),
             guard: None,
@@ -268,7 +268,7 @@ fn test_case_type_pattern_hash() {
 
     // case {"key" => "value"} when Hash => "matched" end
     let case_stmt = Statement::Match {
-        expression: Expression::Dictionary {
+        expression: Box::new(Expression::Dictionary {
             entries: vec![(
                 Expression::StringLiteral {
                     value: "key".to_string(),
@@ -280,7 +280,7 @@ fn test_case_type_pattern_hash() {
                 },
             )],
             position: pos(),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Type("Hash".to_string()),
             guard: None,
@@ -306,10 +306,10 @@ fn test_case_type_pattern_multiple() {
 
     // case 3.14 when Integer => "int" when Float => "float" end
     let case_stmt = Statement::Match {
-        expression: Expression::FloatLiteral {
+        expression: Box::new(Expression::FloatLiteral {
             value: 3.14,
             position: pos(),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::Type("Integer".to_string()),

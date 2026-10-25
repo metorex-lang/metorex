@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 /// Convert a Position to SourceLocation
 fn pos_to_loc(pos: Position) -> SourceLocation {
-    SourceLocation::new(pos.line, pos.column, pos.offset)
+    SourceLocation::from(pos)
 }
 
 /// Represents information about a variable declaration
@@ -237,7 +237,7 @@ impl Resolver {
                 self.resolve_expression(value);
 
                 // Then handle the target - this declares or updates a variable
-                match target {
+                match &**target {
                     Expression::Identifier { name, position } => {
                         // Check if variable exists in CURRENT scope only
                         let exists_in_current_scope =
@@ -742,7 +742,7 @@ impl Resolver {
                     self.resolve_statement(stmt);
                 }
                 self.pop_scope();
-                for elsif in elsif_branches {
+                for elsif in elsif_branches.iter() {
                     self.resolve_expression(&elsif.condition);
                     self.push_scope();
                     for stmt in &elsif.body {

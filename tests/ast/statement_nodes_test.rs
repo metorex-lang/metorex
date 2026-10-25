@@ -18,14 +18,14 @@ fn test_expression_statement() {
 #[test]
 fn test_assignment_statement() {
     let stmt = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "x".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::IntLiteral {
+        }),
+        value: Box::new(Expression::IntLiteral {
             value: 42,
             position: pos(1, 5),
-        },
+        }),
         position: pos(1, 1),
     };
     assert_eq!(stmt.position(), pos(1, 1));
@@ -95,10 +95,10 @@ fn test_class_def_with_superclass() {
 #[test]
 fn test_if_statement_no_else() {
     let stmt = Statement::If {
-        condition: Expression::BoolLiteral {
+        condition: Box::new(Expression::BoolLiteral {
             value: true,
             position: pos(1, 4),
-        },
+        }),
         then_branch: vec![Statement::Expression {
             expression: Expression::IntLiteral {
                 value: 1,
@@ -118,10 +118,10 @@ fn test_if_statement_no_else() {
 #[test]
 fn test_if_statement_with_else() {
     let stmt = Statement::If {
-        condition: Expression::BoolLiteral {
+        condition: Box::new(Expression::BoolLiteral {
             value: true,
             position: pos(1, 4),
-        },
+        }),
         then_branch: vec![Statement::Expression {
             expression: Expression::IntLiteral {
                 value: 1,
@@ -145,7 +145,7 @@ fn test_if_statement_with_else() {
 #[test]
 fn test_while_statement() {
     let stmt = Statement::While {
-        condition: Expression::BinaryOp {
+        condition: Box::new(Expression::BinaryOp {
             op: BinaryOp::Less,
             left: Box::new(Expression::Identifier {
                 name: "i".to_string(),
@@ -156,7 +156,7 @@ fn test_while_statement() {
                 position: pos(1, 11),
             }),
             position: pos(1, 9),
-        },
+        }),
         body: vec![Statement::Expression {
             expression: Expression::IntLiteral {
                 value: 1,
@@ -173,10 +173,10 @@ fn test_while_statement() {
 #[test]
 fn test_return_statement_with_value() {
     let stmt = Statement::Return {
-        value: Some(Expression::IntLiteral {
+        value: Some(Box::new(Expression::IntLiteral {
             value: 42,
             position: pos(1, 8),
-        }),
+        })),
         position: pos(1, 1),
     };
     assert_eq!(stmt.position(), pos(1, 1));

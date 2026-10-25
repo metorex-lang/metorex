@@ -231,12 +231,12 @@ impl VirtualMachine {
             file: path,
             owner,
             name: name.to_string(),
-            start_line: start.line,
+            start_line: (start.line as usize),
             // Ruby counts columns from zero, and the span runs to just past
             // the `end` that closes the definition.
-            start_column: start.column.saturating_sub(1),
-            end_line: end.line,
-            end_column: end.column.saturating_sub(1) + "end".len(),
+            start_column: (start.column.saturating_sub(1) as usize),
+            end_line: (end.line as usize),
+            end_column: (end.column.saturating_sub(1) as usize) + "end".len(),
             calls: 0,
         });
     }
@@ -383,11 +383,15 @@ fn collect(body: &[Statement], found: &mut Vec<usize>) {
         // `begin` is not a line of its own in Ruby's counting: what runs is
         // the body inside it.
         if !matches!(statement, Statement::Begin { .. } | Statement::Block { .. }) {
-            found.push(statement.position().line);
+            found.push(statement.position().line as usize);
         }
         // An `elsif` line counts as its condition is tested.
         if let Statement::If { elsif_branches, .. } = statement {
-            found.extend(elsif_branches.iter().map(|branch| branch.position.line));
+            found.extend(
+                elsif_branches
+                    .iter()
+                    .map(|branch| branch.position.line as usize),
+            );
         }
         for inner in nested_bodies(statement) {
             collect(inner, found);
@@ -473,10 +477,9 @@ fn nested_blocks(statement: &Statement) -> Vec<&[Statement]> {
 
 pub(crate) fn own_expressions(statement: &Statement) -> Vec<&Expression> {
     match statement {
-        Statement::Expression { expression, .. } | Statement::Match { expression, .. } => {
-            vec![expression]
-        }
-        Statement::Assignment { target, value, .. } => vec![target, value],
+        Statement::Expression { expression, .. } => vec![expression],
+        Statement::Match { expression, .. } => vec![expression],
+        Statement::Assignment { target, value, .. } => vec![&**target, &**value],
         Statement::MultipleAssignment {
             targets, values, ..
         } => targets.iter().chain(values.iter()).collect(),
@@ -535,7 +538,7 @@ pub(crate) struct BranchArm {
 #[derive(Default, Clone)]
 pub(crate) struct FileBranches {
     pub(crate) sites: Vec<BranchSite>,
-    pub(crate) by_offset: std::collections::HashMap<(usize, usize), usize>,
+    pub(crate) by_offset: std::collections::HashMap<(u32, u32), usize>,
 }
 
 impl FileBranches {
@@ -547,7 +550,7 @@ impl FileBranches {
         self.by_offset.insert(key, self.sites.len());
         self.sites.push(BranchSite {
             kind,
-            line: position.line,
+            line: (position.line as usize),
             arms: arms
                 .into_iter()
                 .map(|(kind, line)| BranchArm {
@@ -564,7 +567,7 @@ impl FileBranches {
 /// arm with nothing in it.
 fn first_line(body: &[Statement], fallback: usize) -> usize {
     body.first()
-        .map(|statement| statement.position().line)
+        .map(|statement| statement.position().line as usize)
         .unwrap_or(fallback)
 }
 
@@ -576,7 +579,10 @@ fn if_arms(
 ) -> Vec<(&'static str, usize)> {
     let mut arms = vec![("then", first_line(then_branch, line))];
     for branch in elsif_branches {
-        arms.push(("elsif", first_line(&branch.body, branch.position.line)));
+        arms.push((
+            "elsif",
+            first_line(&branch.body, branch.position.line as usize),
+        ));
     }
     arms.push((
         "else",
@@ -621,7 +627,7 @@ fn branch_statement(statement: &Statement, found: &mut FileBranches) {
             found.add(
                 "while",
                 *position,
-                vec![("body", first_line(body, position.line))],
+                vec![("body", first_line(body, position.line as usize))],
             );
             branch_expression(condition, found);
             register_branches(body, found);
@@ -669,7 +675,12 @@ fn branch_statement(statement: &Statement, found: &mut FileBranches) {
             found.add(
                 "if",
                 *position,
-                if_arms(then_branch, elsif_branches, else_branch, position.line),
+                if_arms(
+                    then_branch,
+                    elsif_branches,
+                    else_branch,
+                    position.line as usize,
+                ),
             );
             branch_expression(condition, found);
             register_branches(then_branch, found);
@@ -691,12 +702,14 @@ fn branch_statement(statement: &Statement, found: &mut FileBranches) {
                 "unless",
                 *position,
                 vec![
-                    ("then", first_line(then_branch, position.line)),
+                    ("then", first_line(then_branch, position.line as usize)),
                     (
                         "else",
                         else_branch
                             .as_deref()
-                            .map_or(position.line, |body| first_line(body, position.line)),
+                            .map_or(position.line as usize, |body| {
+                                first_line(body, position.line as usize)
+                            }),
                     ),
                 ],
             );
@@ -725,9 +738,12 @@ fn branch_statement(statement: &Statement, found: &mut FileBranches) {
                 .iter()
                 .map(|case| {
                     if matches!(case.pattern, crate::ast::MatchPattern::Wildcard) {
-                        ("else", first_line(&case.body, case.position.line))
+                        ("else", first_line(&case.body, case.position.line as usize))
                     } else {
-                        (pattern_kind, first_line(&case.body, case.position.line))
+                        (
+                            pattern_kind,
+                            first_line(&case.body, case.position.line as usize),
+                        )
                     }
                 })
                 .collect();
@@ -735,7 +751,7 @@ fn branch_statement(statement: &Statement, found: &mut FileBranches) {
                 .last()
                 .is_some_and(|case| matches!(case.pattern, crate::ast::MatchPattern::Wildcard));
             if !has_else {
-                arms.push(("else", position.line));
+                arms.push(("else", (position.line as usize)));
             }
             found.add("case", *position, arms);
             branch_expression(expression, found);
@@ -811,7 +827,10 @@ fn branch_expression(expression: &Expression, found: &mut FileBranches) {
                 found.add(
                     "&.",
                     *position,
-                    vec![("then", position.line), ("else", position.line)],
+                    vec![
+                        ("then", (position.line as usize)),
+                        ("else", (position.line as usize)),
+                    ],
                 );
             }
             branch_expression(receiver, found);
@@ -858,7 +877,7 @@ fn branch_expression(expression: &Expression, found: &mut FileBranches) {
             body,
             ..
         } => {
-            for (_, default) in parameter_defaults {
+            for (_, default) in parameter_defaults.iter() {
                 branch_expression(default, found);
             }
             register_branches(body, found);
@@ -909,11 +928,16 @@ fn branch_expression(expression: &Expression, found: &mut FileBranches) {
             found.add(
                 "if",
                 *position,
-                if_arms(then_branch, elsif_branches, else_branch, position.line),
+                if_arms(
+                    then_branch,
+                    elsif_branches,
+                    else_branch,
+                    position.line as usize,
+                ),
             );
             branch_expression(condition, found);
             register_branches(then_branch, found);
-            for branch in elsif_branches {
+            for branch in elsif_branches.iter() {
                 branch_expression(&branch.condition, found);
                 register_branches(&branch.body, found);
             }
@@ -931,12 +955,14 @@ fn branch_expression(expression: &Expression, found: &mut FileBranches) {
                 "unless",
                 *position,
                 vec![
-                    ("then", first_line(then_branch, position.line)),
+                    ("then", first_line(then_branch, position.line as usize)),
                     (
                         "else",
                         else_branch
                             .as_deref()
-                            .map_or(position.line, |body| first_line(body, position.line)),
+                            .map_or(position.line as usize, |body| {
+                                first_line(body, position.line as usize)
+                            }),
                     ),
                 ],
             );
@@ -954,13 +980,13 @@ fn branch_expression(expression: &Expression, found: &mut FileBranches) {
         } => {
             let mut arms: Vec<(&'static str, usize)> = cases
                 .iter()
-                .map(|case| ("when", case.body.position().line))
+                .map(|case| ("when", case.body.position().line as usize))
                 .collect();
             arms.push((
                 "else",
                 else_case
                     .as_ref()
-                    .map_or(position.line, |held| held.position().line),
+                    .map_or(position.line as usize, |held| held.position().line as usize),
             ));
             found.add("case", *position, arms);
             branch_expression(expression, found);

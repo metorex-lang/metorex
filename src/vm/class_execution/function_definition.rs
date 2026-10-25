@@ -18,8 +18,7 @@ impl VirtualMachine {
         // read from the way that file names itself. Code handed to `eval`
         // with a name of its own reports that name rather than whatever is
         // running when the location is asked for.
-        let mut source_location =
-            crate::error::SourceLocation::new(position.line, position.column, position.offset);
+        let mut source_location = crate::error::SourceLocation::from(position);
         source_location.filename = self
             .loading_embedded_library
             .clone()

@@ -71,7 +71,7 @@ impl Parser {
                         if written_on > 0 {
                             written_on
                         } else {
-                            position.line
+                            position.line as usize
                         },
                     );
                     let expr_tokens = expr_lexer.tokenize();
@@ -104,7 +104,7 @@ impl Parser {
             if self.is_at_end() {
                 break;
             }
-            body.push(self.parse_statement()?);
+            crate::parser::push_tight(&mut body, self.parse_statement()?);
         }
         if body.len() == 1
             && let crate::ast::Statement::Expression { expression, .. } = &body[0]
@@ -196,7 +196,7 @@ impl Parser {
         if let Some(unknown) = flags.chars().find(|held| !"imxonesu".contains(*held)) {
             return Err(MetorexError::syntax_error(
                 format!("unknown regexp option - {unknown}"),
-                crate::error::SourceLocation::new(position.line, position.column, position.offset),
+                crate::error::SourceLocation::from(position),
             ));
         }
         // Of the letters naming an encoding, the last one written decides.
@@ -213,11 +213,7 @@ impl Parser {
             if let Err(trouble) = crate::regexp::Pattern::compile(&pattern, written) {
                 return Err(MetorexError::syntax_error(
                     format!("{}: /{}/", trouble.0, pattern),
-                    crate::error::SourceLocation::new(
-                        position.line,
-                        position.column,
-                        position.offset,
-                    ),
+                    crate::error::SourceLocation::from(position),
                 ));
             }
             return Ok(regex_literal(pattern, flags.replace('o', ""), position));

@@ -10,11 +10,11 @@ fn pos() -> Position {
 
 fn execute_case_expr(vm: &mut VirtualMachine, case_expr: Expression) -> Object {
     let assign_stmt = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "result".to_string(),
             position: pos(),
-        },
-        value: case_expr,
+        }),
+        value: Box::new(case_expr),
         position: pos(),
     };
     vm.execute_program(&[assign_stmt])
@@ -174,14 +174,14 @@ fn test_case_expression_nested_with_outer_variable_reference() {
 
     // Set up an outer variable
     let setup_stmt = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "multiplier".to_string(),
             position: pos(),
-        },
-        value: Expression::IntLiteral {
+        }),
+        value: Box::new(Expression::IntLiteral {
             value: 3,
             position: pos(),
-        },
+        }),
         position: pos(),
     };
     vm.execute_program(&[setup_stmt]).expect("Setup failed");

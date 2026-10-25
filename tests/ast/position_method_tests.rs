@@ -113,7 +113,7 @@ fn if_expression_position() {
             position: pos(),
         }),
         then_branch: vec![],
-        elsif_branches: vec![],
+        elsif_branches: Box::default(),
         else_branch: None,
         position: pos(),
     };
@@ -139,10 +139,10 @@ fn unless_expression_position() {
 #[test]
 fn unless_statement_position() {
     let stmt = Statement::Unless {
-        condition: metorex::ast::Expression::BoolLiteral {
+        condition: Box::new(metorex::ast::Expression::BoolLiteral {
             value: false,
             position: pos(),
-        },
+        }),
         then_branch: vec![],
         else_branch: None,
         position: pos(),
@@ -153,7 +153,7 @@ fn unless_statement_position() {
 #[test]
 fn case_in_statement_position() {
     let stmt = Statement::CaseIn {
-        expression: int_lit(1),
+        expression: Box::new(int_lit(1)),
         cases: vec![],
         position: pos(),
     };

@@ -357,7 +357,7 @@ pub fn prism_refuses(source: &str, reading: &PrismReading) -> bool {
 impl VirtualMachine {
     /// Whether MRI's parser refuses the main script `source`, wrapped by the
     /// command-line switches `command_line` names, such as `n` for `-n`.
-    pub fn prism_refuses_program(&self, source: &str, command_line: &str) -> bool {
+    pub fn prism_refuses_program(source: &str, command_line: &str) -> bool {
         prism_refuses(
             source,
             &PrismReading {

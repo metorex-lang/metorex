@@ -19,14 +19,14 @@ fn test_block_assigned_to_variable() {
     // result = my_block.call(5)
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "my_block".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::Lambda {
-                outer_locals: Vec::new(),
+            }),
+            value: Box::new(Expression::Lambda {
+                outer_locals: Box::new(Vec::new()),
                 parameters: vec!["x".to_string()],
-                parameter_defaults: Vec::new(),
+                parameter_defaults: Box::new(Vec::new()),
                 body: vec![Statement::Expression {
                     expression: Expression::BinaryOp {
                         op: BinaryOp::Multiply,
@@ -46,15 +46,15 @@ fn test_block_assigned_to_variable() {
                 captured_vars: None,
                 is_lambda: false,
                 position: pos(1, 13),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(2, 1),
-            },
-            value: Expression::Call {
+            }),
+            value: Box::new(Expression::Call {
                 callee: Box::new(Expression::Identifier {
                     name: "my_block".to_string(),
                     position: pos(2, 10),
@@ -65,7 +65,7 @@ fn test_block_assigned_to_variable() {
                 }],
                 trailing_block: None,
                 position: pos(2, 10),
-            },
+            }),
             position: pos(2, 1),
         },
     ];
@@ -102,11 +102,11 @@ fn test_block_passed_as_argument_with_function() {
             ],
             body: vec![
                 Statement::Assignment {
-                    target: Expression::Identifier {
+                    target: Box::new(Expression::Identifier {
                         name: "result".to_string(),
                         position: pos(2, 3),
-                    },
-                    value: Expression::Call {
+                    }),
+                    value: Box::new(Expression::Call {
                         callee: Box::new(Expression::Identifier {
                             name: "func".to_string(),
                             position: pos(2, 12),
@@ -117,7 +117,7 @@ fn test_block_passed_as_argument_with_function() {
                         }],
                         trailing_block: None,
                         position: pos(2, 12),
-                    },
+                    }),
                     position: pos(2, 3),
                 },
                 Statement::Expression {
@@ -143,14 +143,14 @@ fn test_block_passed_as_argument_with_function() {
         },
         // Create increment block
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "increment".to_string(),
                 position: pos(6, 1),
-            },
-            value: Expression::Lambda {
-                outer_locals: Vec::new(),
+            }),
+            value: Box::new(Expression::Lambda {
+                outer_locals: Box::new(Vec::new()),
                 parameters: vec!["x".to_string()],
-                parameter_defaults: Vec::new(),
+                parameter_defaults: Box::new(Vec::new()),
                 body: vec![Statement::Expression {
                     expression: Expression::BinaryOp {
                         op: BinaryOp::Add,
@@ -170,16 +170,16 @@ fn test_block_passed_as_argument_with_function() {
                 captured_vars: None,
                 is_lambda: false,
                 position: pos(6, 13),
-            },
+            }),
             position: pos(6, 1),
         },
         // Call function with block
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(7, 1),
-            },
-            value: Expression::Call {
+            }),
+            value: Box::new(Expression::Call {
                 callee: Box::new(Expression::Identifier {
                     name: "apply_twice".to_string(),
                     position: pos(7, 10),
@@ -196,7 +196,7 @@ fn test_block_passed_as_argument_with_function() {
                 ],
                 trailing_block: None,
                 position: pos(7, 10),
-            },
+            }),
             position: pos(7, 1),
         },
     ];
@@ -227,9 +227,9 @@ fn test_block_returned_from_function_standalone() {
             parameters: vec![Parameter::simple("n".to_string(), pos(1, 17))],
             body: vec![Statement::Expression {
                 expression: Expression::Lambda {
-                    outer_locals: Vec::new(),
+                    outer_locals: Box::new(Vec::new()),
                     parameters: vec!["x".to_string()],
-                    parameter_defaults: Vec::new(),
+                    parameter_defaults: Box::new(Vec::new()),
                     body: vec![Statement::Expression {
                         expression: Expression::BinaryOp {
                             op: BinaryOp::Add,
@@ -246,7 +246,7 @@ fn test_block_returned_from_function_standalone() {
                         position: pos(2, 13),
                     }]
                     .into(),
-                    captured_vars: Some(vec!["n".to_string()]),
+                    captured_vars: Some(Box::new(vec!["n".to_string()])),
                     is_lambda: false,
                     position: pos(2, 3),
                 },
@@ -259,11 +259,11 @@ fn test_block_returned_from_function_standalone() {
         },
         // Call function to get block
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "add_five".to_string(),
                 position: pos(5, 1),
-            },
-            value: Expression::Call {
+            }),
+            value: Box::new(Expression::Call {
                 callee: Box::new(Expression::Identifier {
                     name: "make_adder".to_string(),
                     position: pos(5, 12),
@@ -274,16 +274,16 @@ fn test_block_returned_from_function_standalone() {
                 }],
                 trailing_block: None,
                 position: pos(5, 12),
-            },
+            }),
             position: pos(5, 1),
         },
         // Call the returned block
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(6, 1),
-            },
-            value: Expression::Call {
+            }),
+            value: Box::new(Expression::Call {
                 callee: Box::new(Expression::Identifier {
                     name: "add_five".to_string(),
                     position: pos(6, 10),
@@ -294,7 +294,7 @@ fn test_block_returned_from_function_standalone() {
                 }],
                 trailing_block: None,
                 position: pos(6, 10),
-            },
+            }),
             position: pos(6, 1),
         },
     ];
@@ -311,14 +311,14 @@ fn test_block_with_multiple_parameters() {
     // result = multiply.call(6, 7)
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "multiply".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::Lambda {
-                outer_locals: Vec::new(),
+            }),
+            value: Box::new(Expression::Lambda {
+                outer_locals: Box::new(Vec::new()),
                 parameters: vec!["x".to_string(), "y".to_string()],
-                parameter_defaults: Vec::new(),
+                parameter_defaults: Box::new(Vec::new()),
                 body: vec![Statement::Expression {
                     expression: Expression::BinaryOp {
                         op: BinaryOp::Multiply,
@@ -338,15 +338,15 @@ fn test_block_with_multiple_parameters() {
                 captured_vars: None,
                 is_lambda: false,
                 position: pos(1, 13),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(2, 1),
-            },
-            value: Expression::Call {
+            }),
+            value: Box::new(Expression::Call {
                 callee: Box::new(Expression::Identifier {
                     name: "multiply".to_string(),
                     position: pos(2, 10),
@@ -363,7 +363,7 @@ fn test_block_with_multiple_parameters() {
                 ],
                 trailing_block: None,
                 position: pos(2, 10),
-            },
+            }),
             position: pos(2, 1),
         },
     ];
@@ -380,13 +380,13 @@ fn test_block_with_no_parameters() {
     // result = get_answer.call()
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "get_answer".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::Lambda {
+            }),
+            value: Box::new(Expression::Lambda {
                 parameters: vec![],
-                parameter_defaults: Vec::new(),
+                parameter_defaults: Box::new(Vec::new()),
                 body: vec![Statement::Expression {
                     expression: Expression::IntLiteral {
                         value: 42,
@@ -396,18 +396,18 @@ fn test_block_with_no_parameters() {
                 }]
                 .into(),
                 captured_vars: None,
-                outer_locals: Vec::new(),
+                outer_locals: Box::new(Vec::new()),
                 is_lambda: false,
                 position: pos(1, 14),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(2, 1),
-            },
-            value: Expression::Call {
+            }),
+            value: Box::new(Expression::Call {
                 callee: Box::new(Expression::Identifier {
                     name: "get_answer".to_string(),
                     position: pos(2, 10),
@@ -415,7 +415,7 @@ fn test_block_with_no_parameters() {
                 arguments: vec![],
                 trailing_block: None,
                 position: pos(2, 10),
-            },
+            }),
             position: pos(2, 1),
         },
     ];
@@ -436,16 +436,16 @@ fn test_block_stored_in_array() {
     // result = operations[1].call(5)  # Should be 10
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "operations".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::Array {
+            }),
+            value: Box::new(Expression::Array {
                 elements: vec![
                     Expression::Lambda {
-                        outer_locals: Vec::new(),
+                        outer_locals: Box::new(Vec::new()),
                         parameters: vec!["x".to_string()],
-                        parameter_defaults: Vec::new(),
+                        parameter_defaults: Box::new(Vec::new()),
                         body: vec![Statement::Expression {
                             expression: Expression::BinaryOp {
                                 op: BinaryOp::Add,
@@ -467,9 +467,9 @@ fn test_block_stored_in_array() {
                         position: pos(2, 3),
                     },
                     Expression::Lambda {
-                        outer_locals: Vec::new(),
+                        outer_locals: Box::new(Vec::new()),
                         parameters: vec!["x".to_string()],
-                        parameter_defaults: Vec::new(),
+                        parameter_defaults: Box::new(Vec::new()),
                         body: vec![Statement::Expression {
                             expression: Expression::BinaryOp {
                                 op: BinaryOp::Multiply,
@@ -491,9 +491,9 @@ fn test_block_stored_in_array() {
                         position: pos(3, 3),
                     },
                     Expression::Lambda {
-                        outer_locals: Vec::new(),
+                        outer_locals: Box::new(Vec::new()),
                         parameters: vec!["x".to_string()],
-                        parameter_defaults: Vec::new(),
+                        parameter_defaults: Box::new(Vec::new()),
                         body: vec![Statement::Expression {
                             expression: Expression::BinaryOp {
                                 op: BinaryOp::Subtract,
@@ -516,15 +516,15 @@ fn test_block_stored_in_array() {
                     },
                 ],
                 position: pos(1, 14),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(6, 1),
-            },
-            value: Expression::MethodCall {
+            }),
+            value: Box::new(Expression::MethodCall {
                 receiver: Box::new(Expression::Index {
                     array: Box::new(Expression::Identifier {
                         name: "operations".to_string(),
@@ -543,7 +543,7 @@ fn test_block_stored_in_array() {
                 }],
                 trailing_block: None,
                 position: pos(6, 10),
-            },
+            }),
             position: pos(6, 1),
         },
     ];
@@ -577,10 +577,10 @@ fn test_block_returned_from_method() {
                 name: "create_multiplier".to_string(),
                 parameters: vec![Parameter::simple("factor".to_string(), pos(2, 26))],
                 body: vec![Statement::Return {
-                    value: Some(Expression::Lambda {
-                        outer_locals: Vec::new(),
+                    value: Some(Box::new(Expression::Lambda {
+                        outer_locals: Box::new(Vec::new()),
                         parameters: vec!["x".to_string()],
-                        parameter_defaults: Vec::new(),
+                        parameter_defaults: Box::new(Vec::new()),
                         body: vec![Statement::Expression {
                             expression: Expression::BinaryOp {
                                 op: BinaryOp::Multiply,
@@ -597,10 +597,10 @@ fn test_block_returned_from_method() {
                             position: pos(3, 15),
                         }]
                         .into(),
-                        captured_vars: Some(vec!["factor".to_string()]),
+                        captured_vars: Some(Box::new(vec!["factor".to_string()])),
                         is_lambda: false,
                         position: pos(3, 12),
-                    }),
+                    })),
                     position: pos(3, 5),
                 }]
                 .into(),
@@ -611,11 +611,11 @@ fn test_block_returned_from_method() {
             position: pos(1, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "factory".to_string(),
                 position: pos(7, 1),
-            },
-            value: Expression::MethodCall {
+            }),
+            value: Box::new(Expression::MethodCall {
                 receiver: Box::new(Expression::Identifier {
                     name: "BlockFactory".to_string(),
                     position: pos(7, 11),
@@ -624,15 +624,15 @@ fn test_block_returned_from_method() {
                 arguments: vec![],
                 trailing_block: None,
                 position: pos(7, 11),
-            },
+            }),
             position: pos(7, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "times_three".to_string(),
                 position: pos(8, 1),
-            },
-            value: Expression::MethodCall {
+            }),
+            value: Box::new(Expression::MethodCall {
                 receiver: Box::new(Expression::Identifier {
                     name: "factory".to_string(),
                     position: pos(8, 15),
@@ -644,15 +644,15 @@ fn test_block_returned_from_method() {
                 }],
                 trailing_block: None,
                 position: pos(8, 15),
-            },
+            }),
             position: pos(8, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(9, 1),
-            },
-            value: Expression::Call {
+            }),
+            value: Box::new(Expression::Call {
                 callee: Box::new(Expression::Identifier {
                     name: "times_three".to_string(),
                     position: pos(9, 10),
@@ -663,7 +663,7 @@ fn test_block_returned_from_method() {
                 }],
                 trailing_block: None,
                 position: pos(9, 10),
-            },
+            }),
             position: pos(9, 1),
         },
     ];
@@ -687,30 +687,30 @@ fn test_nested_block_closures() {
 
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "outer".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 10,
                 position: pos(1, 9),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "make_nested".to_string(),
                 position: pos(2, 1),
-            },
-            value: Expression::Lambda {
-                outer_locals: Vec::new(),
+            }),
+            value: Box::new(Expression::Lambda {
+                outer_locals: Box::new(Vec::new()),
                 parameters: vec!["x".to_string()],
-                parameter_defaults: Vec::new(),
+                parameter_defaults: Box::new(Vec::new()),
                 body: vec![Statement::Expression {
                     expression: Expression::Lambda {
-                        outer_locals: Vec::new(),
+                        outer_locals: Box::new(Vec::new()),
                         parameters: vec!["y".to_string()],
-                        parameter_defaults: Vec::new(),
+                        parameter_defaults: Box::new(Vec::new()),
                         body: vec![Statement::Expression {
                             expression: Expression::BinaryOp {
                                 op: BinaryOp::Add,
@@ -735,25 +735,25 @@ fn test_nested_block_closures() {
                             position: pos(3, 15),
                         }]
                         .into(),
-                        captured_vars: Some(vec!["outer".to_string(), "x".to_string()]),
+                        captured_vars: Some(Box::new(vec!["outer".to_string(), "x".to_string()])),
                         is_lambda: false,
                         position: pos(3, 3),
                     },
                     position: pos(3, 3),
                 }]
                 .into(),
-                captured_vars: Some(vec!["outer".to_string()]),
+                captured_vars: Some(Box::new(vec!["outer".to_string()])),
                 is_lambda: false,
                 position: pos(2, 15),
-            },
+            }),
             position: pos(2, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "inner".to_string(),
                 position: pos(6, 1),
-            },
-            value: Expression::Call {
+            }),
+            value: Box::new(Expression::Call {
                 callee: Box::new(Expression::Identifier {
                     name: "make_nested".to_string(),
                     position: pos(6, 9),
@@ -764,15 +764,15 @@ fn test_nested_block_closures() {
                 }],
                 trailing_block: None,
                 position: pos(6, 9),
-            },
+            }),
             position: pos(6, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(7, 1),
-            },
-            value: Expression::Call {
+            }),
+            value: Box::new(Expression::Call {
                 callee: Box::new(Expression::Identifier {
                     name: "inner".to_string(),
                     position: pos(7, 10),
@@ -783,7 +783,7 @@ fn test_nested_block_closures() {
                 }],
                 trailing_block: None,
                 position: pos(7, 10),
-            },
+            }),
             position: pos(7, 1),
         },
     ];
@@ -800,11 +800,11 @@ fn test_array_map_with_block() {
     // doubled = numbers.map { |x| x * 2 }
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "numbers".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::Array {
+            }),
+            value: Box::new(Expression::Array {
                 elements: vec![
                     Expression::IntLiteral {
                         value: 1,
@@ -820,15 +820,15 @@ fn test_array_map_with_block() {
                     },
                 ],
                 position: pos(1, 11),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "doubled".to_string(),
                 position: pos(2, 1),
-            },
-            value: Expression::MethodCall {
+            }),
+            value: Box::new(Expression::MethodCall {
                 receiver: Box::new(Expression::Identifier {
                     name: "numbers".to_string(),
                     position: pos(2, 11),
@@ -836,9 +836,9 @@ fn test_array_map_with_block() {
                 method: "map".to_string(),
                 arguments: vec![],
                 trailing_block: Some(Box::new(Expression::Lambda {
-                    outer_locals: Vec::new(),
+                    outer_locals: Box::new(Vec::new()),
                     parameters: vec!["x".to_string()],
-                    parameter_defaults: Vec::new(),
+                    parameter_defaults: Box::new(Vec::new()),
                     body: vec![Statement::Expression {
                         expression: Expression::BinaryOp {
                             op: BinaryOp::Multiply,
@@ -860,7 +860,7 @@ fn test_array_map_with_block() {
                     position: pos(2, 24),
                 })),
                 position: pos(2, 11),
-            },
+            }),
             position: pos(2, 1),
         },
     ];
@@ -885,11 +885,11 @@ fn test_range_map_with_block() {
 
     // doubled = (0...5).map { |i| i * 2 }
     let program = vec![Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "doubled".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::MethodCall {
+        }),
+        value: Box::new(Expression::MethodCall {
             receiver: Box::new(Expression::Range {
                 start: Box::new(Expression::IntLiteral {
                     value: 0,
@@ -905,9 +905,9 @@ fn test_range_map_with_block() {
             method: "map".to_string(),
             arguments: vec![],
             trailing_block: Some(Box::new(Expression::Lambda {
-                outer_locals: Vec::new(),
+                outer_locals: Box::new(Vec::new()),
                 parameters: vec!["i".to_string()],
-                parameter_defaults: Vec::new(),
+                parameter_defaults: Box::new(Vec::new()),
                 body: vec![Statement::Expression {
                     expression: Expression::BinaryOp {
                         op: BinaryOp::Multiply,
@@ -929,7 +929,7 @@ fn test_range_map_with_block() {
                 position: pos(1, 24),
             })),
             position: pos(1, 11),
-        },
+        }),
         position: pos(1, 1),
     }];
 

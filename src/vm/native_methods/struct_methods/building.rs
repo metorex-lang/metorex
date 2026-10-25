@@ -144,10 +144,10 @@ impl VirtualMachine {
 
         for member in &members {
             let reader_body = vec![crate::ast::Statement::Return {
-                value: Some(crate::ast::Expression::InstanceVariable {
+                value: Some(Box::new(crate::ast::Expression::InstanceVariable {
                     name: member_slot(member),
                     position,
-                }),
+                })),
                 position,
             }];
             generated.define_method(
@@ -161,14 +161,14 @@ impl VirtualMachine {
 
             let writer_name = format!("{}=", member);
             let writer_body = vec![crate::ast::Statement::Assignment {
-                target: crate::ast::Expression::InstanceVariable {
+                target: Box::new(crate::ast::Expression::InstanceVariable {
                     name: member_slot(member),
                     position,
-                },
-                value: crate::ast::Expression::Identifier {
+                }),
+                value: Box::new(crate::ast::Expression::Identifier {
                     name: crate::object::UNNAMED_PARAMETER.to_string(),
                     position,
-                },
+                }),
                 position,
             }];
             generated.define_method(

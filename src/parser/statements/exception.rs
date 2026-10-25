@@ -31,8 +31,8 @@ impl Parser {
         Ok(Expression::BeginRescue {
             body: parts.body,
             rescue_clauses: parts.rescue_clauses,
-            else_clause: parts.else_clause,
-            ensure_block: parts.ensure_block,
+            else_clause: parts.else_clause.map(Box::new),
+            ensure_block: parts.ensure_block.map(Box::new),
             position: start_pos,
         })
     }
@@ -61,7 +61,7 @@ impl Parser {
             ]) {
                 break;
             }
-            body.push(self.parse_statement()?);
+            crate::parser::push_tight(&mut body, self.parse_statement()?);
             self.skip_whitespace();
         }
 
@@ -81,7 +81,7 @@ impl Parser {
                 if self.check(&[TokenKind::Ensure, TokenKind::End]) {
                     break;
                 }
-                else_body.push(self.parse_statement()?);
+                crate::parser::push_tight(&mut else_body, self.parse_statement()?);
                 self.skip_whitespace();
             }
             Some(else_body)
@@ -98,7 +98,7 @@ impl Parser {
                 if self.check(&[TokenKind::End]) {
                     break;
                 }
-                ensure_body.push(self.parse_statement()?);
+                crate::parser::push_tight(&mut ensure_body, self.parse_statement()?);
                 self.skip_whitespace();
             }
             Some(ensure_body)
@@ -113,11 +113,7 @@ impl Parser {
         if else_clause.is_some() && rescue_clauses.is_empty() && ensure_block.is_none() {
             return Err(MetorexError::syntax_error(
                 "else without rescue is useless",
-                SourceLocation::new(
-                    self.previous().position.line,
-                    self.previous().position.column,
-                    self.previous().position.offset,
-                ),
+                SourceLocation::from(self.previous().position),
             ));
         }
 
@@ -233,11 +229,7 @@ impl Parser {
             } else {
                 return Err(MetorexError::syntax_error(
                     "Expected variable name after '=>'",
-                    SourceLocation::new(
-                        self.peek().position.line,
-                        self.peek().position.column,
-                        self.peek().position.offset,
-                    ),
+                    SourceLocation::from(self.peek().position),
                 ));
             }
         }
@@ -262,7 +254,7 @@ impl Parser {
             ]) {
                 break;
             }
-            body.push(self.parse_statement()?);
+            crate::parser::push_tight(&mut body, self.parse_statement()?);
             self.skip_whitespace();
         }
 
@@ -431,7 +423,7 @@ impl Parser {
         };
 
         let stmt = Statement::Raise {
-            exception,
+            exception: exception.map(Box::new),
             position: start_pos,
         };
         self.wrap_with_modifier(stmt)

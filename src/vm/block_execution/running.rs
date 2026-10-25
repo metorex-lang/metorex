@@ -84,7 +84,7 @@ impl VirtualMachine {
             // somewhere, and that is the call site the frame records.
             None => CallFrame::boundary(frame_name),
         }
-        .entered_at(position.line, position.column)
+        .entered_at(position.line as usize, position.column as usize)
         .nested_in_a_block(depth)
         .written_in_scope(block.written_in.clone())
         .owned_by(block.defining_owner.clone())
@@ -391,7 +391,7 @@ impl VirtualMachine {
             }
             None => CallFrame::boundary(frame_name),
         }
-        .entered_at(position.line, position.column)
+        .entered_at(position.line as usize, position.column as usize)
         .nested_in_a_block(depth)
         .written_in_scope(block.written_in.clone())
         .owned_by(block.defining_owner.clone())
@@ -532,7 +532,7 @@ impl VirtualMachine {
         };
         self.enter_running_code(
             std::rc::Rc::clone(&block.written_within),
-            block_position.line,
+            block_position.line as usize,
         );
         if !self.events_wanted() {
             return Ok((block_position, None));
@@ -563,13 +563,13 @@ impl VirtualMachine {
         let line = self
             .running_code
             .last()
-            .map_or(block_position.line, |running| running.line);
+            .map_or(block_position.line, |running| running.line as u32);
         // A trace turned on while the body ran sees the parameters too.
         let declared =
             declared.unwrap_or_else(|| crate::vm::native_methods::block_parameter_list(block));
         let mut extra = vec![("parameters", declared), ("return_value", value.clone())];
         extra.extend(block_method_names(block));
-        let fired = self.fire_event("b_return", Position::new(line, 0, 0), extra);
+        let fired = self.fire_event("b_return", Position::new(line as usize, 0, 0), extra);
         self.leave_running_code();
         fired
     }

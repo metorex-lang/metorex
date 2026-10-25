@@ -502,7 +502,7 @@ fn lexer_percent_r_brackets() {
     assert!(
         tokens
             .iter()
-            .any(|t| matches!(&t.kind, TokenKind::Regex(p, _) if p == "foo"))
+            .any(|t| matches!(&t.kind, TokenKind::Regex(held) if held.0 == "foo"))
     );
 }
 
@@ -512,7 +512,7 @@ fn lexer_percent_r_braces() {
     assert!(
         tokens
             .iter()
-            .any(|t| matches!(&t.kind, TokenKind::Regex(p, _) if p == "bar"))
+            .any(|t| matches!(&t.kind, TokenKind::Regex(held) if held.0 == "bar"))
     );
 }
 
@@ -522,7 +522,7 @@ fn lexer_percent_r_angle_brackets() {
     assert!(
         tokens
             .iter()
-            .any(|t| matches!(&t.kind, TokenKind::Regex(p, _) if p == "baz"))
+            .any(|t| matches!(&t.kind, TokenKind::Regex(held) if held.0 == "baz"))
     );
 }
 
@@ -532,7 +532,7 @@ fn lexer_percent_r_parens() {
     assert!(
         tokens
             .iter()
-            .any(|t| matches!(&t.kind, TokenKind::Regex(p, _) if p == "qux"))
+            .any(|t| matches!(&t.kind, TokenKind::Regex(held) if held.0 == "qux"))
     );
 }
 
@@ -543,7 +543,7 @@ fn lexer_percent_r_with_escape() {
     assert!(
         tokens
             .iter()
-            .any(|t| matches!(&t.kind, TokenKind::Regex(p, _) if p.contains("\\")))
+            .any(|t| matches!(&t.kind, TokenKind::Regex(held) if held.0.contains("\\")))
     );
 }
 
@@ -553,7 +553,7 @@ fn lexer_percent_r_with_flags() {
     assert!(
         tokens
             .iter()
-            .any(|t| matches!(&t.kind, TokenKind::Regex(_, f) if f == "im"))
+            .any(|t| matches!(&t.kind, TokenKind::Regex(held) if held.1 == "im"))
     );
 }
 

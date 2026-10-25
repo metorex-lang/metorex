@@ -16,7 +16,7 @@ fn parse_case_expr(source: &str) -> Expression {
     assert_eq!(program.len(), 1, "Expected single statement");
 
     match &program[0] {
-        Statement::Assignment { value, .. } => value.clone(),
+        Statement::Assignment { value, .. } => (**value).clone(),
         other => panic!("Expected assignment statement, got {:?}", other),
     }
 }
@@ -328,7 +328,7 @@ end
     assert_eq!(program.len(), 1);
     match &program[0] {
         Statement::Assignment { value, .. } => {
-            assert!(matches!(value, Expression::Case { .. }));
+            assert!(matches!(**value, Expression::Case { .. }));
         }
         _ => panic!("Expected assignment statement"),
     }

@@ -41,7 +41,7 @@ impl<'a> Lexer<'a> {
                     | TokenKind::Float(_)
                     | TokenKind::String(_)
                     | TokenKind::InterpolatedString(_)
-                    | TokenKind::Regex(_, _)
+                    | TokenKind::Regex(_)
                     | TokenKind::True
                     | TokenKind::False
                     | TokenKind::Nil
@@ -56,7 +56,7 @@ impl<'a> Lexer<'a> {
                     | TokenKind::MagicLine
                     // A number written with a suffix is a value too, so the
                     // `/` after `9999r` divides rather than opening a regex.
-                    | TokenKind::Rational(_, _)
+                    | TokenKind::Rational(_)
                     | TokenKind::Imaginary(_, _)
                     // After `def`, / is an operator method name, not regex
                     | TokenKind::Def
@@ -163,6 +163,6 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        TokenKind::Regex(pattern, flags)
+        TokenKind::Regex(Box::new((pattern, flags)))
     }
 }

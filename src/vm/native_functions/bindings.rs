@@ -90,7 +90,7 @@ impl VirtualMachine {
             self.reported_current_file()
                 .map(|file| file.display().to_string())
                 .unwrap_or_default(),
-            position.line,
+            (position.line as usize),
         ));
         Ok(Object::Binding(std::rc::Rc::new(held)))
     }

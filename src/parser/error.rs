@@ -33,7 +33,7 @@ impl ErrorHandler {
 
     /// Convert a Position to a SourceLocation
     pub fn position_to_location(&self, position: Position) -> SourceLocation {
-        SourceLocation::new(position.line, position.column, position.offset)
+        SourceLocation::from(position)
     }
 
     /// Create an error at the current token

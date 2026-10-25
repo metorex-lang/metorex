@@ -381,8 +381,8 @@ impl VirtualMachine {
             if exc.location.is_none() {
                 exc.location = Some(crate::object::SourceLocation::new(
                     "script".to_string(),
-                    position.line,
-                    position.column,
+                    position.line as usize,
+                    position.column as usize,
                 ));
             }
 
@@ -829,8 +829,8 @@ pub(crate) fn backtrace_sites(
     // frame records where it was called from, so its location pairs
     // with the name of the frame below it: the method that made the
     // call. The outermost one is the file body itself.
-    let mut sites = vec![(raise_file.clone(), position.line, raising_method)];
-    let mut columns = vec![Some(position.column.saturating_sub(1))];
+    let mut sites = vec![(raise_file.clone(), position.line as usize, raising_method)];
+    let mut columns = vec![Some(position.column.saturating_sub(1) as usize)];
     for (index, frame) in frames.iter().enumerate() {
         // A frame with no call site was entered from nowhere, such
         // as a fiber's own block, so it names no place of its own.
@@ -917,8 +917,8 @@ pub(crate) fn backtrace_sites(
 /// undefined method or a wrong type among them, can be rescued.
 pub(crate) fn rescuable_exception(error: &MetorexError) -> Option<(Object, Position)> {
     let at = |location: &crate::error::SourceLocation| Position {
-        line: location.line,
-        column: location.column,
+        line: location.line as u32,
+        column: location.column as u32,
         offset: 0,
         prelude: false,
     };

@@ -545,14 +545,14 @@ fn statement_block_executes_scoped() {
     let pos = Position::new(1, 1, 0);
     let block = Statement::Block {
         statements: vec![Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "inner".to_string(),
                 position: pos,
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 42,
                 position: pos,
-            },
+            }),
             position: pos,
         }],
         position: pos,

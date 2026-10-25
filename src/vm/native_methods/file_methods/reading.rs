@@ -74,14 +74,14 @@ impl VirtualMachine {
                 if from >= held.len() && counted.is_some() {
                     return Ok(Some(Object::Nil));
                 }
-                let rest = &held[from.min(held.len())..];
-                let taken = match counted {
-                    Some(wanted) => &rest[..wanted.min(rest.len())],
-                    None => rest,
-                };
-                Ok(Some(
-                    crate::vm::native_methods::pack_format::bytes_to_string(taken),
-                ))
+                let mut taken = held;
+                taken.drain(..from.min(taken.len()));
+                if let Some(wanted) = counted {
+                    taken.truncate(wanted);
+                }
+                Ok(Some(Object::String(std::rc::Rc::new(
+                    crate::object::StringValue::binary(taken),
+                ))))
             }
             // File.read(path) answers everything the file holds.
             // The Ruby side reads a file through `File.open`, so this answers
@@ -142,14 +142,14 @@ impl VirtualMachine {
                 if from >= bytes.len() && counted.is_some() {
                     return Ok(Some(Object::Nil));
                 }
-                let rest = &bytes[from.min(bytes.len())..];
-                let taken = match counted {
-                    Some(wanted) => &rest[..wanted.min(rest.len())],
-                    None => rest,
-                };
-                Ok(Some(
-                    crate::vm::native_methods::pack_format::bytes_to_string(taken),
-                ))
+                let mut taken = bytes;
+                taken.drain(..from.min(taken.len()));
+                if let Some(wanted) = counted {
+                    taken.truncate(wanted);
+                }
+                Ok(Some(Object::String(std::rc::Rc::new(
+                    crate::object::StringValue::binary(taken),
+                ))))
             }
             "__stat_fields__" => {
                 use std::os::unix::fs::MetadataExt;

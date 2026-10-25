@@ -211,7 +211,10 @@ impl VirtualMachine {
             })
             .collect();
         let (line, path) = if level == 0 {
-            (Some(position.line), self.current_source_file.clone())
+            (
+                Some(position.line as usize),
+                self.current_source_file.clone(),
+            )
         } else {
             counted
                 .len()

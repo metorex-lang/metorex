@@ -178,7 +178,7 @@ impl VirtualMachine {
                 m.owner_class = Some(Rc::clone(class));
                 m.definee = Some(Rc::clone(class));
                 m.source_location = Some(self.source_location_for(*def_position));
-                m.end_line = Some(def_end.line);
+                m.end_line = Some(def_end.line as usize);
                 self.warn_redefined_optimized_method(class.name(), method_name, *def_position)?;
                 self.refuse_frozen_definee(class, *def_position)?;
                 class.define_method(method_name, Rc::new(m));
@@ -211,7 +211,7 @@ impl VirtualMachine {
                     self.def_nesting(),
                 );
                 m.source_location = Some(self.source_location_for(*def_position));
-                m.end_line = Some(def_end.line);
+                m.end_line = Some(def_end.line as usize);
                 class.define_method(format!("__class__{}", method_name), Rc::new(m));
                 *last_value = Object::symbol(method_name.clone());
             }
@@ -242,7 +242,7 @@ impl VirtualMachine {
                     self.def_nesting(),
                 );
                 m.source_location = Some(self.source_location_for(*def_position));
-                m.end_line = Some(def_end.line);
+                m.end_line = Some(def_end.line as usize);
                 m.owner = Some(class.name().to_string());
                 m.owner_class = Some(Rc::clone(class));
                 m.definee = Some(Rc::clone(class));
@@ -280,11 +280,9 @@ impl VirtualMachine {
                 }
                 *last_value = Object::symbol(method_name.clone());
             }
-            Statement::Assignment {
-                target: Expression::InstanceVariable { name: var_name, .. },
-                value,
-                ..
-            } => {
+            Statement::Assignment { target, value, .. }
+                if let Expression::InstanceVariable { name: var_name, .. } = &**target =>
+            {
                 let initial_value = self.evaluate_expression(value)?;
                 class_body_instance_variable(class, var_name, initial_value);
             }
@@ -307,17 +305,14 @@ impl VirtualMachine {
                 let names = self.resolve_attribute_names(attributes, position)?;
                 self.define_attribute_methods(class, "attr_accessor", &names, position)?;
             }
-            Statement::Assignment {
-                target:
-                    Expression::Identifier {
-                        name: const_name, ..
-                    },
-                value,
-                ..
-            } if const_name
-                .chars()
-                .next()
-                .is_some_and(|c| c.is_ascii_uppercase()) =>
+            Statement::Assignment { target, value, .. }
+                if let Expression::Identifier {
+                    name: const_name, ..
+                } = &**target
+                    && const_name
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_ascii_uppercase()) =>
             {
                 // Constant assignment in class body (e.g., PI = 3.14159).
                 // Lowercase identifiers fall through to the `_` arm and are
@@ -763,10 +758,10 @@ impl VirtualMachine {
         for attr_name in names {
             if readers {
                 let getter_body = vec![Statement::Return {
-                    value: Some(Expression::InstanceVariable {
+                    value: Some(Box::new(Expression::InstanceVariable {
                         name: attr_name.clone(),
                         position,
-                    }),
+                    })),
                     position,
                 }];
                 let method = Rc::new(Method::new(attr_name.clone(), vec![], getter_body));
@@ -775,14 +770,14 @@ impl VirtualMachine {
             }
             if writers {
                 let setter_body = vec![Statement::Assignment {
-                    target: Expression::InstanceVariable {
+                    target: Box::new(Expression::InstanceVariable {
                         name: attr_name.clone(),
                         position,
-                    },
-                    value: Expression::Identifier {
+                    }),
+                    value: Box::new(Expression::Identifier {
                         name: crate::object::UNNAMED_PARAMETER.to_string(),
                         position,
-                    },
+                    }),
                     position,
                 }];
                 let setter_name = format!("{}=", attr_name);
@@ -957,14 +952,14 @@ pub(crate) fn define_block_accessors(class: &Rc<Class>, names: &[String]) {
         );
         // Setter
         let setter_body = vec![Statement::Assignment {
-            target: Expression::InstanceVariable {
+            target: Box::new(Expression::InstanceVariable {
                 name: format!("@{}", attr_name),
                 position: crate::lexer::Position::default(),
-            },
-            value: Expression::Identifier {
+            }),
+            value: Box::new(Expression::Identifier {
                 name: crate::object::UNNAMED_PARAMETER.to_string(),
                 position: crate::lexer::Position::default(),
-            },
+            }),
             position: crate::lexer::Position::default(),
         }];
         class.define_method(

@@ -9,14 +9,14 @@ fn test_simple_variable_declaration() {
     let mut resolver = Resolver::new();
 
     let stmt = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "x".to_string(),
             position: Position::default(),
-        },
-        value: Expression::IntLiteral {
+        }),
+        value: Box::new(Expression::IntLiteral {
             value: 42,
             position: Position::default(),
-        },
+        }),
         position: Position::default(),
     };
 
@@ -32,14 +32,14 @@ fn test_variable_usage_after_declaration() {
 
     let stmts = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "x".to_string(),
                 position: Position::default(),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 42,
                 position: Position::default(),
-            },
+            }),
             position: Position::default(),
         },
         Statement::Expression {
@@ -82,14 +82,14 @@ fn test_variable_shadowing_warning() {
 
     // Declare x in outer scope
     let stmt1 = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "x".to_string(),
             position: Position::default(),
-        },
-        value: Expression::IntLiteral {
+        }),
+        value: Box::new(Expression::IntLiteral {
             value: 1,
             position: Position::default(),
-        },
+        }),
         position: Position::default(),
     };
 
@@ -98,14 +98,14 @@ fn test_variable_shadowing_warning() {
         name: "foo".to_string(),
         parameters: vec![],
         body: vec![Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "x".to_string(),
                 position: Position::default(),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 2,
                 position: Position::default(),
-            },
+            }),
             position: Position::default(),
         }]
         .into(),
@@ -163,14 +163,14 @@ fn test_nested_scopes() {
 
     // Outer variable
     let outer_var = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "outer".to_string(),
             position: Position::default(),
-        },
-        value: Expression::IntLiteral {
+        }),
+        value: Box::new(Expression::IntLiteral {
             value: 1,
             position: Position::default(),
-        },
+        }),
         position: Position::default(),
     };
 
@@ -202,7 +202,7 @@ fn test_loop_variable_scope() {
     // for i in array
     let stmt = Statement::For {
         variable: "i".to_string(),
-        iterable: Expression::Array {
+        iterable: Box::new(Expression::Array {
             elements: vec![
                 Expression::IntLiteral {
                     value: 1,
@@ -214,7 +214,7 @@ fn test_loop_variable_scope() {
                 },
             ],
             position: Position::default(),
-        },
+        }),
         body: vec![Statement::Expression {
             expression: Expression::Identifier {
                 name: "i".to_string(),
@@ -237,19 +237,19 @@ fn test_if_statement_scope() {
     //   x = 10
     // end
     let stmt = Statement::If {
-        condition: Expression::BoolLiteral {
+        condition: Box::new(Expression::BoolLiteral {
             value: true,
             position: Position::default(),
-        },
+        }),
         then_branch: vec![Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "x".to_string(),
                 position: Position::default(),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 10,
                 position: Position::default(),
-            },
+            }),
             position: Position::default(),
         }],
         elsif_branches: vec![],
@@ -267,25 +267,25 @@ fn test_binary_operation_resolution() {
 
     let stmts = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "a".to_string(),
                 position: Position::default(),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 5,
                 position: Position::default(),
-            },
+            }),
             position: Position::default(),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "b".to_string(),
                 position: Position::default(),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 10,
                 position: Position::default(),
-            },
+            }),
             position: Position::default(),
         },
         Statement::Expression {
@@ -314,14 +314,14 @@ fn test_unused_variable_warning() {
     let mut resolver = Resolver::new();
 
     let stmt = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "unused".to_string(),
             position: Position::default(),
-        },
-        value: Expression::IntLiteral {
+        }),
+        value: Box::new(Expression::IntLiteral {
             value: 42,
             position: Position::default(),
-        },
+        }),
         position: Position::default(),
     };
 
@@ -336,14 +336,14 @@ fn test_underscore_prefix_no_warning() {
     let mut resolver = Resolver::new();
 
     let stmt = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "_unused".to_string(),
             position: Position::default(),
-        },
-        value: Expression::IntLiteral {
+        }),
+        value: Box::new(Expression::IntLiteral {
             value: 42,
             position: Position::default(),
-        },
+        }),
         position: Position::default(),
     };
 
@@ -358,14 +358,14 @@ fn test_method_call_resolution() {
 
     let stmts = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "obj".to_string(),
                 position: Position::default(),
-            },
-            value: Expression::Array {
+            }),
+            value: Box::new(Expression::Array {
                 elements: vec![],
                 position: Position::default(),
-            },
+            }),
             position: Position::default(),
         },
         Statement::Expression {
@@ -392,13 +392,13 @@ fn test_lambda_parameter_scope() {
     let mut resolver = Resolver::new();
 
     let stmt = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "fn".to_string(),
             position: Position::default(),
-        },
-        value: Expression::Lambda {
+        }),
+        value: Box::new(Expression::Lambda {
             parameters: vec!["x".to_string()],
-            parameter_defaults: Vec::new(),
+            parameter_defaults: Box::new(Vec::new()),
             body: vec![Statement::Expression {
                 expression: Expression::Identifier {
                     name: "x".to_string(),
@@ -408,10 +408,10 @@ fn test_lambda_parameter_scope() {
             }]
             .into(),
             captured_vars: None,
-            outer_locals: Vec::new(),
+            outer_locals: Box::new(Vec::new()),
             is_lambda: false,
             position: Position::default(),
-        },
+        }),
         position: Position::default(),
     };
 
@@ -425,17 +425,17 @@ fn test_array_indexing_resolution() {
 
     let stmts = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "arr".to_string(),
                 position: Position::default(),
-            },
-            value: Expression::Array {
+            }),
+            value: Box::new(Expression::Array {
                 elements: vec![Expression::IntLiteral {
                     value: 1,
                     position: Position::default(),
                 }],
                 position: Position::default(),
-            },
+            }),
             position: Position::default(),
         },
         Statement::Expression {
@@ -503,14 +503,14 @@ fn test_class_definition_scope() {
             name: "initialize".to_string(),
             parameters: vec![],
             body: vec![Statement::Assignment {
-                target: Expression::InstanceVariable {
+                target: Box::new(Expression::InstanceVariable {
                     name: "@x".to_string(),
                     position: Position::default(),
-                },
-                value: Expression::IntLiteral {
+                }),
+                value: Box::new(Expression::IntLiteral {
                     value: 10,
                     position: Position::default(),
-                },
+                }),
                 position: Position::default(),
             }]
             .into(),
@@ -531,18 +531,18 @@ fn test_while_loop_scope() {
 
     let stmts = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "i".to_string(),
                 position: Position::default(),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 0,
                 position: Position::default(),
-            },
+            }),
             position: Position::default(),
         },
         Statement::While {
-            condition: Expression::BinaryOp {
+            condition: Box::new(Expression::BinaryOp {
                 op: metorex::ast::node::BinaryOp::Less,
                 left: Box::new(Expression::Identifier {
                     name: "i".to_string(),
@@ -553,13 +553,13 @@ fn test_while_loop_scope() {
                     position: Position::default(),
                 }),
                 position: Position::default(),
-            },
+            }),
             body: vec![Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "i".to_string(),
                     position: Position::default(),
-                },
-                value: Expression::BinaryOp {
+                }),
+                value: Box::new(Expression::BinaryOp {
                     op: metorex::ast::node::BinaryOp::Add,
                     left: Box::new(Expression::Identifier {
                         name: "i".to_string(),
@@ -570,7 +570,7 @@ fn test_while_loop_scope() {
                         position: Position::default(),
                     }),
                     position: Position::default(),
-                },
+                }),
                 position: Position::default(),
             }],
             position: Position::default(),
@@ -590,21 +590,21 @@ fn test_return_statement_resolution() {
         parameters: vec![],
         body: vec![
             Statement::Assignment {
-                target: Expression::Identifier {
-                    name: "x".to_string(),
-                    position: Position::default(),
-                },
-                value: Expression::IntLiteral {
-                    value: 42,
-                    position: Position::default(),
-                },
-                position: Position::default(),
-            },
-            Statement::Return {
-                value: Some(Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "x".to_string(),
                     position: Position::default(),
                 }),
+                value: Box::new(Expression::IntLiteral {
+                    value: 42,
+                    position: Position::default(),
+                }),
+                position: Position::default(),
+            },
+            Statement::Return {
+                value: Some(Box::new(Expression::Identifier {
+                    name: "x".to_string(),
+                    position: Position::default(),
+                })),
                 position: Position::default(),
             },
         ]
@@ -640,33 +640,33 @@ fn test_dictionary_literal_resolution() {
 
     let stmts = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "key".to_string(),
                 position: Position::default(),
-            },
-            value: Expression::StringLiteral {
+            }),
+            value: Box::new(Expression::StringLiteral {
                 value: "name".to_string(),
                 position: Position::default(),
-            },
+            }),
             position: Position::default(),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "value".to_string(),
                 position: Position::default(),
-            },
-            value: Expression::StringLiteral {
+            }),
+            value: Box::new(Expression::StringLiteral {
                 value: "Alice".to_string(),
                 position: Position::default(),
-            },
+            }),
             position: Position::default(),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "dict".to_string(),
                 position: Position::default(),
-            },
-            value: Expression::Dictionary {
+            }),
+            value: Box::new(Expression::Dictionary {
                 entries: vec![(
                     Expression::Identifier {
                         name: "key".to_string(),
@@ -678,7 +678,7 @@ fn test_dictionary_literal_resolution() {
                     },
                 )],
                 position: Position::default(),
-            },
+            }),
             position: Position::default(),
         },
     ];

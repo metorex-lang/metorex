@@ -40,11 +40,11 @@ fn assignment_creates_variable_in_environment() {
     let value_position = pos(1, 5);
 
     let assignment = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "x".to_string(),
             position: target_position,
-        },
-        value: int_literal(42, value_position),
+        }),
+        value: Box::new(int_literal(42, value_position)),
         position: stmt_position,
     };
 
@@ -66,11 +66,11 @@ fn assignment_updates_existing_variable() {
     let value_position = pos(1, 10);
 
     let assignment = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "counter".to_string(),
             position: target_position,
-        },
-        value: int_literal(2, value_position),
+        }),
+        value: Box::new(int_literal(2, value_position)),
         position: stmt_position,
     };
 
@@ -91,15 +91,15 @@ fn return_statement_halts_execution_and_returns_value() {
 
     let statements = vec![
         Statement::Return {
-            value: Some(int_literal(99, value_position)),
+            value: Some(Box::new(int_literal(99, value_position))),
             position: return_position,
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "after".to_string(),
                 position: assignment_target_position,
-            },
-            value: int_literal(123, assignment_value_position),
+            }),
+            value: Box::new(int_literal(123, assignment_value_position)),
             position: assignment_position,
         },
     ];

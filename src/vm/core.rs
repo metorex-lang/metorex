@@ -106,7 +106,7 @@ pub struct VirtualMachine {
 
     /// Where a number variable too big to name a capture has already been
     /// reported, so each place in the source says so once.
-    pub(crate) reported_big_number_variables: std::collections::HashSet<(String, usize, usize)>,
+    pub(crate) reported_big_number_variables: std::collections::HashSet<(String, u32, u32)>,
     /// The tracepoints switched on, in the order they were. Empty almost
     /// always, which is what keeps the check on each statement cheap.
     pub(crate) tracepoints: Vec<Object>,
@@ -170,7 +170,7 @@ pub struct VirtualMachine {
     pub(crate) at_exit_handlers: Vec<Object>,
     /// The places a `BEGIN` block was written, so one reached again while a
     /// program reads its input line by line runs only the first time.
-    pub(crate) opened_blocks: std::collections::HashSet<(String, usize, usize)>,
+    pub(crate) opened_blocks: std::collections::HashSet<(String, u32, u32)>,
     /// How many frames under the top one a report writes out, or -1 when it
     /// writes every one of them. `--backtrace-limit` settles it.
     pub(crate) backtrace_limit: i64,
@@ -483,7 +483,7 @@ pub struct VirtualMachine {
     /// The mark each range written with literal ends carries, against where
     /// it was written. Ruby builds such a range once, so every run of the
     /// line answers the same object.
-    pub(crate) written_ranges: HashMap<(String, usize, usize), Rc<()>>,
+    pub(crate) written_ranges: HashMap<(String, u32, u32), Rc<()>>,
     /// Where the `require` or `load` now running was written, which is what a
     /// warning raised at the top of the loaded file names as its caller.
     pub(crate) load_call_site: Option<(String, crate::lexer::Position)>,
@@ -997,8 +997,7 @@ impl VirtualMachine {
         &self,
         position: crate::lexer::Position,
     ) -> crate::error::SourceLocation {
-        let mut location =
-            crate::error::SourceLocation::new(position.line, position.column, position.offset);
+        let mut location = crate::error::SourceLocation::from(position);
         // A `def` belongs to the file it was written in, which is not always
         // the file being run: a block from another file runs with that file
         // still current.
@@ -1291,8 +1290,8 @@ impl VirtualMachine {
         let depth = self.call_stack.len();
         if let Some(top) = self.native_frames.last()
             && top.depth == depth
-            && top.line == position.line
-            && top.column == position.column
+            && top.line == (position.line as usize)
+            && top.column == (position.column as usize)
             && &*top.name == name
         {
             return false;
@@ -1309,8 +1308,8 @@ impl VirtualMachine {
         self.native_frames.push(NativeFrame {
             receiver: receiver.cloned(),
             name,
-            line: position.line,
-            column: position.column,
+            line: (position.line as usize),
+            column: (position.column as usize),
             file,
             depth,
         });

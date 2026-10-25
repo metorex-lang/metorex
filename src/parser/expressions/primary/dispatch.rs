@@ -30,14 +30,14 @@ impl Parser {
             TokenKind::BigInt(digits) => Ok(Expression::BigIntLiteral { digits, position }),
             TokenKind::Float(value) => Ok(literals::float_literal(value, position)),
             // `5r` is spelled out as the `Rational(5, 1)` it stands for.
-            TokenKind::Rational(numerator, denominator) => Ok(Expression::Call {
+            TokenKind::Rational(held) => Ok(Expression::Call {
                 callee: Box::new(Expression::Identifier {
                     name: "Rational".to_string(),
                     position,
                 }),
                 arguments: vec![
-                    literals::whole_number(&numerator, position),
-                    literals::whole_number(&denominator, position),
+                    literals::whole_number(&held.0, position),
+                    literals::whole_number(&held.1, position),
                 ],
                 trailing_block: None,
                 position,
@@ -129,7 +129,7 @@ impl Parser {
                     None => self.primary_interpolated_string(parts, position),
                 }
             }
-            TokenKind::Regex(pattern, flags) => self.regex_expression(pattern, flags, position),
+            TokenKind::Regex(held) => self.regex_expression(held.0, held.1, position),
             TokenKind::PercentW(value, filled) => {
                 Ok(self.primary_percent_w(value, filled, position))
             }
@@ -242,7 +242,7 @@ impl Parser {
             // source, rather than while it runs it.
             TokenKind::SourceEncoding(_) => Err(MetorexError::syntax_error(
                 "Can't set variable __ENCODING__".to_string(),
-                crate::error::SourceLocation::new(position.line, position.column, position.offset),
+                crate::error::SourceLocation::from(position),
             )),
             TokenKind::MagicLine => Ok(literals::magic_line(position)),
             TokenKind::MagicDir => Ok(Expression::MagicDir { position }),

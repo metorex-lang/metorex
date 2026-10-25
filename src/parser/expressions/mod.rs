@@ -133,11 +133,7 @@ impl Parser {
         if self.call_argument_depth > 0 {
             return Err(MetorexError::syntax_error(
                 "a rescue modifier in an argument list needs parentheses of its own",
-                crate::error::SourceLocation::new(
-                    self.peek().position.line,
-                    self.peek().position.column,
-                    self.peek().position.offset,
-                ),
+                crate::error::SourceLocation::from(self.peek().position),
             ));
         }
         // After a command, or where the expression opened the statement, the
@@ -176,11 +172,7 @@ impl Parser {
         ]) {
             return Err(MetorexError::syntax_error(
                 "unexpected argument after a rescue modifier",
-                crate::error::SourceLocation::new(
-                    self.peek().position.line,
-                    self.peek().position.column,
-                    self.peek().position.offset,
-                ),
+                crate::error::SourceLocation::from(self.peek().position),
             ));
         }
         Ok(Expression::BeginRescue {
@@ -382,7 +374,7 @@ impl Parser {
                     expression: then_expr,
                     position,
                 }],
-                elsif_branches: vec![],
+                elsif_branches: Box::default(),
                 else_branch: Some(vec![Statement::Expression {
                     expression: else_expr,
                     position,
@@ -613,10 +605,10 @@ impl Parser {
 
         Ok(Expression::Lambda {
             parameters,
-            parameter_defaults,
+            parameter_defaults: Box::new(parameter_defaults),
             body: body.into(),
             captured_vars: None, // Will be filled by semantic analysis
-            outer_locals,
+            outer_locals: Box::new(outer_locals),
             is_lambda: false,
             position: start_pos,
         })
@@ -639,7 +631,7 @@ impl Parser {
             TokenKind::Ensure,
         ]) && !self.is_at_end()
         {
-            body.push(self.parse_statement()?);
+            crate::parser::push_tight(&mut body, self.parse_statement()?);
             self.skip_whitespace();
         }
 
@@ -658,7 +650,7 @@ impl Parser {
             self.skip_whitespace();
             let mut else_body = Vec::new();
             while !self.check(&[TokenKind::Ensure, TokenKind::End]) && !self.is_at_end() {
-                else_body.push(self.parse_statement()?);
+                crate::parser::push_tight(&mut else_body, self.parse_statement()?);
                 self.skip_whitespace();
             }
             Some(else_body)
@@ -670,7 +662,7 @@ impl Parser {
             self.skip_whitespace();
             let mut ensure_body = Vec::new();
             while !self.check(&[TokenKind::End]) && !self.is_at_end() {
-                ensure_body.push(self.parse_statement()?);
+                crate::parser::push_tight(&mut ensure_body, self.parse_statement()?);
                 self.skip_whitespace();
             }
             Some(ensure_body)
@@ -681,8 +673,8 @@ impl Parser {
         let begin_rescue = Expression::BeginRescue {
             body,
             rescue_clauses,
-            else_clause,
-            ensure_block,
+            else_clause: else_clause.map(Box::new),
+            ensure_block: ensure_block.map(Box::new),
             position: start_pos,
         };
         Ok(vec![Statement::Expression {
@@ -719,7 +711,7 @@ impl Parser {
         if mentions_it && wrote_parameter_list && !names_it {
             return Err(MetorexError::syntax_error(
                 "'it' is not allowed when an ordinary parameter is defined".to_string(),
-                crate::error::SourceLocation::new(position.line, position.column, position.offset),
+                crate::error::SourceLocation::from(position),
             ));
         }
         let numbered_at = self.mentions_a_numbered_parameter(opened_at, closed_at);
@@ -727,7 +719,7 @@ impl Parser {
             return Err(MetorexError::syntax_error(
                 "a numbered parameter is not allowed when an ordinary parameter is defined"
                     .to_string(),
-                crate::error::SourceLocation::new(position.line, position.column, position.offset),
+                crate::error::SourceLocation::from(position),
             ));
         }
         // A block whose body reads a numbered parameter cannot hold another
@@ -739,7 +731,7 @@ impl Parser {
         {
             return Err(MetorexError::syntax_error(
                 "numbered parameter is already used in an outer block".to_string(),
-                crate::error::SourceLocation::new(position.line, position.column, position.offset),
+                crate::error::SourceLocation::from(position),
             ));
         }
         if numbered_at.is_some() {
@@ -748,14 +740,14 @@ impl Parser {
         if mentions_it && self.numbered_parameter_comes_first(opened_at, closed_at) {
             return Err(MetorexError::syntax_error(
                 "'it' is not allowed when a numbered parameter is already used".to_string(),
-                crate::error::SourceLocation::new(position.line, position.column, position.offset),
+                crate::error::SourceLocation::from(position),
             ));
         }
         let settled = self.with_numbered_parameters(declared, opened_at, closed_at);
         if mentions_it && settled.first().is_some_and(|held| held.starts_with('_')) {
             return Err(MetorexError::syntax_error(
                 "numbered parameters are not allowed when 'it' is already used".to_string(),
-                crate::error::SourceLocation::new(position.line, position.column, position.offset),
+                crate::error::SourceLocation::from(position),
             ));
         }
         Ok(settled)
@@ -887,8 +879,8 @@ impl Parser {
                     }
                 }
                 // So does `/#{_1}=/`, whose pattern holds its `#{}` as text.
-                TokenKind::Regex(pattern, _) => {
-                    for name in pattern_interpolated_names(pattern) {
+                TokenKind::Regex(held) => {
+                    for name in pattern_interpolated_names(&held.0) {
                         note(&name);
                     }
                 }
@@ -1037,7 +1029,7 @@ impl Parser {
             while !self.check(&[TokenKind::RBrace]) && !self.is_at_end() {
                 // For brace blocks, we typically expect a single expression
                 // but we'll parse statements to be flexible
-                body.push(self.parse_statement()?);
+                crate::parser::push_tight(&mut body, self.parse_statement()?);
                 self.skip_whitespace();
             }
             Ok(())
@@ -1059,10 +1051,10 @@ impl Parser {
 
         Ok(Expression::Lambda {
             parameters,
-            parameter_defaults,
+            parameter_defaults: Box::new(parameter_defaults),
             body: body.into(),
             captured_vars: None, // Will be filled by semantic analysis
-            outer_locals,
+            outer_locals: Box::new(outer_locals),
             is_lambda: false,
             position: start_pos,
         })

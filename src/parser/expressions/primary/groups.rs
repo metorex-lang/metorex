@@ -103,7 +103,7 @@ impl Parser {
             if self.check(&[TokenKind::RParen]) {
                 break;
             }
-            body.push(self.parse_statement()?);
+            crate::parser::push_tight(&mut body, self.parse_statement()?);
             self.skip_whitespace();
             while self.match_token(&[TokenKind::Semicolon]) {
                 self.skip_whitespace();
@@ -122,14 +122,13 @@ impl Parser {
         // `(args = 1, 2, 3)` assigns the whole list, which reading the group
         // as one expression would cut short at the first comma.
         let holds_one_assignment = body.len() == 1
-            && matches!(
-                body[0],
-                crate::ast::Statement::MultipleAssignment { .. }
-                    | crate::ast::Statement::Assignment {
-                        value: crate::ast::Expression::Array { .. },
-                        ..
-                    }
-            );
+            && match &body[0] {
+                crate::ast::Statement::MultipleAssignment { .. } => true,
+                crate::ast::Statement::Assignment { value, .. } => {
+                    matches!(**value, crate::ast::Expression::Array { .. })
+                }
+                _ => false,
+            };
         if body.len() < 2 && !holds_one_assignment {
             return Err(self.error_at_previous("Expected ')' after expression"));
         }

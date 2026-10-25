@@ -71,7 +71,7 @@ impl Parser {
             TokenKind::Ident(_)
                 | TokenKind::Int(_)
                 | TokenKind::BigInt(_)
-                | TokenKind::Rational(_, _)
+                | TokenKind::Rational(_)
                 | TokenKind::Imaginary(_, _)
                 | TokenKind::Float(_)
                 | TokenKind::String(_)
@@ -80,7 +80,7 @@ impl Parser {
                 | TokenKind::FrozenString(_)
                 | TokenKind::MutableString(_)
                 | TokenKind::InterpolatedString(_)
-                | TokenKind::Regex(_, _)
+                | TokenKind::Regex(_)
                 | TokenKind::True
                 | TokenKind::False
                 | TokenKind::Nil
@@ -224,7 +224,7 @@ impl Parser {
                 TokenKind::Ident(_)
                     | TokenKind::Int(_)
                     | TokenKind::BigInt(_)
-                    | TokenKind::Rational(_, _)
+                    | TokenKind::Rational(_)
                     | TokenKind::Imaginary(_, _)
                     | TokenKind::Float(_)
                     | TokenKind::String(_)
@@ -233,7 +233,7 @@ impl Parser {
                     | TokenKind::FrozenString(_)
                     | TokenKind::MutableString(_)
                     | TokenKind::InterpolatedString(_)
-                    | TokenKind::Regex(_, _)
+                    | TokenKind::Regex(_)
                     | TokenKind::True
                     | TokenKind::False
                     | TokenKind::Nil
@@ -363,7 +363,10 @@ impl Parser {
         let result = self.parse_arguments_without_parens_inner();
         self.paren_less_arg_depth -= 1;
         self.command_arguments_end = self.stream.current_position();
-        result
+        result.map(|mut arguments| {
+            arguments.shrink_to_fit();
+            arguments
+        })
     }
 
     pub(crate) fn parse_arguments_without_parens_inner(

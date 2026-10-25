@@ -49,6 +49,8 @@ pub enum UnaryOp {
 }
 
 /// Expressions in Metorex - values that can be evaluated
+// The lists the rarer variants box keep them within the size of a call.
+#[allow(clippy::box_collection)]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Expression {
     // Literals
@@ -181,13 +183,13 @@ pub enum Expression {
         parameters: Vec<String>,
         /// Default values for optional parameters, keyed by index into
         /// `parameters` (e.g. `{ |a, b = 1| }` records `(1, <1>)`).
-        parameter_defaults: Vec<(usize, Expression)>,
+        parameter_defaults: Box<Vec<(usize, Expression)>>,
         body: Body,
-        captured_vars: Option<Vec<String>>, // Variables captured from outer scope
+        captured_vars: Option<Box<Vec<String>>>, // Variables captured from outer scope
         /// The locals of the enclosing scope the body reads or assigns, in
         /// the order it first names them, each with whether its scope assigns
         /// it more than once. Isolating the block for a Ractor refuses them.
-        outer_locals: Vec<(String, bool)>,
+        outer_locals: Box<Vec<(String, bool)>>,
         /// True for `-> {}` and `lambda {}`, false for `proc {}` and every
         /// ordinary block. Lambdas check arity strictly and return from
         /// themselves; procs do neither.
@@ -269,8 +271,8 @@ pub enum Expression {
     BeginRescue {
         body: Vec<Statement>,
         rescue_clauses: Vec<RescueClause>,
-        else_clause: Option<Vec<Statement>>,
-        ensure_block: Option<Vec<Statement>>,
+        else_clause: Option<Box<Vec<Statement>>>,
+        ensure_block: Option<Box<Vec<Statement>>>,
         position: Position,
     },
 
@@ -310,7 +312,7 @@ pub enum Expression {
     If {
         condition: Box<Expression>,
         then_branch: Vec<Statement>,
-        elsif_branches: Vec<ElsifBranch>,
+        elsif_branches: Box<Vec<ElsifBranch>>,
         else_branch: Option<Vec<Statement>>,
         position: Position,
     },

@@ -104,7 +104,7 @@ impl Parser {
             self.skip_whitespace();
             let condition = self.parse_modifier_condition()?;
             Ok(Statement::If {
-                condition,
+                condition: Box::new(condition),
                 then_branch: vec![stmt],
                 elsif_branches: vec![],
                 else_branch: None,
@@ -115,7 +115,7 @@ impl Parser {
             self.skip_whitespace();
             let condition = self.parse_modifier_condition()?;
             Ok(Statement::Unless {
-                condition,
+                condition: Box::new(condition),
                 then_branch: vec![stmt],
                 else_branch: None,
                 position,
@@ -132,13 +132,13 @@ impl Parser {
             // has run, so the body runs at least once.
             if runs_before_the_test(&stmt) {
                 return Ok(Statement::DoWhile {
-                    condition,
+                    condition: Box::new(condition),
                     body: vec![stmt],
                     position,
                 });
             }
             Ok(Statement::While {
-                condition,
+                condition: Box::new(condition),
                 body: vec![stmt],
                 position,
             })
@@ -157,13 +157,13 @@ impl Parser {
             };
             if runs_before_the_test(&stmt) {
                 return Ok(Statement::DoWhile {
-                    condition,
+                    condition: Box::new(condition),
                     body: vec![stmt],
                     position,
                 });
             }
             Ok(Statement::While {
-                condition,
+                condition: Box::new(condition),
                 body: vec![stmt],
                 position,
             })

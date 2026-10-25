@@ -346,16 +346,12 @@ impl Parser {
                     if reads_as_void(&final_value) {
                         return Err(crate::error::MetorexError::syntax_error(
                             "void value expression",
-                            crate::error::SourceLocation::new(
-                                token.position.line,
-                                token.position.column,
-                                token.position.offset,
-                            ),
+                            crate::error::SourceLocation::from(token.position),
                         ));
                     }
                     let stmt = Statement::Assignment {
-                        target: expr,
-                        value: final_value,
+                        target: Box::new(expr),
+                        value: Box::new(final_value),
                         position: token.position,
                     };
                     let stmt = self.fold_keyword_logic(stmt)?;

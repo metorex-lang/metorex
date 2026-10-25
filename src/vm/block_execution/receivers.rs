@@ -278,7 +278,7 @@ impl VirtualMachine {
         let definee = defines_on_receiver.then(|| self.singleton_class_of(&receiver));
         self.enter_running_code(
             std::rc::Rc::clone(&block.written_within),
-            block.opened_at.unwrap_or(position.line),
+            block.opened_at.unwrap_or(position.line as usize),
         );
         // A `def` in the block, or in a block it opens, installs on the
         // receiver's singleton class rather than where the method running

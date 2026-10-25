@@ -173,7 +173,9 @@ impl VirtualMachine {
         let View::String(string_value) = receiver.view() else {
             return Ok(None);
         };
-        let text = string_value.as_str().to_string();
+        // Most methods reaching here are answered by none of these, and a
+        // long binary string spells its text out byte by byte.
+        let text = std::cell::LazyCell::new(|| string_value.as_str().to_string());
         // A set written in an encoding that does not go with the string's
         // cannot be read against it.
         if matches!(method_name, "count" | "delete" | "squeeze" | "tr" | "tr_s") {
@@ -571,7 +573,7 @@ impl VirtualMachine {
                 };
                 let held = text.chars().count() as i64;
                 if *width <= held {
-                    return Ok(Some(tagged(text)));
+                    return Ok(Some(tagged(text.to_string())));
                 }
                 // The odd character of an uneven gap goes on the right, which
                 // is where Ruby puts it.
@@ -586,7 +588,7 @@ impl VirtualMachine {
                 Ok(Some(tagged(format!(
                     "{}{}{}",
                     run(left, 0),
-                    text,
+                    *text,
                     run(gap - left, 0)
                 ))))
             }

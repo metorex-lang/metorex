@@ -566,6 +566,39 @@ impl Unit {
         Unit::default()
     }
 
+    /// Give back the room the tables grew into while the unit was compiled.
+    pub fn shrink_to_fit(&mut self) {
+        self.instructions.shrink_to_fit();
+        self.positions.shrink_to_fit();
+        self.statement_starts.places.shrink_to_fit();
+        self.statement_starts.starts.shrink_to_fit();
+        self.error_spots.spots.shrink_to_fit();
+        self.constants.shrink_to_fit();
+        self.names.shrink_to_fit();
+        self.constant_caches.shrink_to_fit();
+        self.slot_caches.shrink_to_fit();
+        self.symbol_caches.shrink_to_fit();
+        self.locals.shrink_to_fit();
+        self.call_sites.shrink_to_fit();
+        self.regexes.shrink_to_fit();
+        self.hashes.shrink_to_fit();
+        self.interpolations.shrink_to_fit();
+        self.targets.shrink_to_fit();
+        self.multiple_assignments.shrink_to_fit();
+        self.defined.shrink_to_fit();
+        self.blocks.shrink_to_fit();
+        self.block_bodies.shrink_to_fit();
+        self.body_statements.shrink_to_fit();
+        self.definitions.shrink_to_fit();
+        self.case_arms.shrink_to_fit();
+        self.pattern_arms.shrink_to_fit();
+        self.when_lists.shrink_to_fit();
+        self.flip_flops.shrink_to_fit();
+        self.patterns.shrink_to_fit();
+        self.handlers.shrink_to_fit();
+        self.rescue_clauses.shrink_to_fit();
+    }
+
     /// Add an instruction, answering where it is.
     pub fn emit(&mut self, instruction: Instruction, position: Position) -> usize {
         self.instructions.push(instruction);
@@ -695,7 +728,7 @@ impl Unit {
         let (body, outer_locals) = match &literal {
             crate::ast::Expression::Lambda {
                 body, outer_locals, ..
-            } => (body.clone(), outer_locals.clone()),
+            } => (body.clone(), (**outer_locals).clone()),
             _ => (crate::ast::Body::from([]), Vec::new()),
         };
         self.block_bodies.push(SharedBody {

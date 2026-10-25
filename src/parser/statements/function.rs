@@ -108,7 +108,8 @@ impl Parser {
     /// method `def total= amount` from the endless `def total = amount`.
     pub(crate) fn writer_equal_follows(&self, name: &str) -> bool {
         self.check(&[TokenKind::Equal])
-            && self.peek().position.offset == self.previous().position.offset + name.len()
+            && self.peek().position.offset as usize
+                == self.previous().position.offset as usize + name.len()
     }
 
     /// Parse a function definition, whose parameters and body are a scope of
@@ -395,7 +396,7 @@ impl Parser {
                 if self.check(&[TokenKind::End, TokenKind::Rescue, TokenKind::Ensure]) {
                     break;
                 }
-                body.push(self.parse_statement()?);
+                crate::parser::push_tight(&mut body, self.parse_statement()?);
                 self.skip_whitespace();
             }
             Ok(())
@@ -474,7 +475,7 @@ impl Parser {
                 if self.check(&[TokenKind::Ensure, TokenKind::End]) {
                     break;
                 }
-                else_body.push(self.parse_statement()?);
+                crate::parser::push_tight(&mut else_body, self.parse_statement()?);
                 self.skip_whitespace();
             }
             Some(else_body)
@@ -490,7 +491,7 @@ impl Parser {
                 if self.check(&[TokenKind::End]) {
                     break;
                 }
-                ensure_body.push(self.parse_statement()?);
+                crate::parser::push_tight(&mut ensure_body, self.parse_statement()?);
                 self.skip_whitespace();
             }
             Some(ensure_body)

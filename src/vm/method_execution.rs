@@ -420,7 +420,7 @@ impl VirtualMachine {
             .source_location
             .as_ref()
             .filter(|written| written.filename.is_some())
-            .map_or(position.line, |written| written.line);
+            .map_or(position.line as usize, |written| written.line);
         self.enter_running_code(method.body_facts.places(&method), opened_on);
         self.warn_block_the_method_ignores(&method, &class, position)?;
         // The call and return events of a method written in Ruby fire inside
@@ -435,7 +435,7 @@ impl VirtualMachine {
         let frame_file = self.frames_file();
         let execution_result = self.with_call_frame(
             CallFrame::method(Rc::clone(&frame_name), None, callee_name, defined_name)
-                .entered_at(position.line, position.column)
+                .entered_at(position.line as usize, position.column as usize)
                 .owned_by(allocation_owner)
                 .with_source_file(frame_file)
                 .labeled(method.provenance.block_label.clone()),

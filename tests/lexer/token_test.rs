@@ -283,7 +283,7 @@ fn test_percent_w_display() {
 #[test]
 fn test_regex_token_display() {
     assert_eq!(
-        TokenKind::Regex("foo".to_string(), "i".to_string()).to_string(),
+        TokenKind::Regex(Box::new(("foo".to_string(), "i".to_string()))).to_string(),
         "/foo/i"
     );
 }
@@ -336,4 +336,9 @@ fn test_position_clone() {
     let pos2 = pos1;
 
     assert_eq!(pos1, pos2);
+}
+
+#[test]
+fn a_token_takes_56_bytes() {
+    assert_eq!(std::mem::size_of::<Token>(), 56);
 }

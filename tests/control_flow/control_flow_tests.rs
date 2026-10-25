@@ -13,10 +13,10 @@ fn pos(line: usize, column: usize) -> Position {
 #[test]
 fn test_if_statement_simple() {
     let stmt = Statement::If {
-        condition: Expression::BoolLiteral {
+        condition: Box::new(Expression::BoolLiteral {
             value: true,
             position: pos(1, 4),
-        },
+        }),
         then_branch: vec![Statement::Expression {
             expression: Expression::IntLiteral {
                 value: 1,
@@ -36,10 +36,10 @@ fn test_if_statement_simple() {
 #[test]
 fn test_if_statement_with_else() {
     let stmt = Statement::If {
-        condition: Expression::BoolLiteral {
+        condition: Box::new(Expression::BoolLiteral {
             value: false,
             position: pos(1, 4),
-        },
+        }),
         then_branch: vec![Statement::Expression {
             expression: Expression::IntLiteral {
                 value: 1,
@@ -64,7 +64,7 @@ fn test_if_statement_with_else() {
 #[test]
 fn test_if_statement_with_comparison() {
     let stmt = Statement::If {
-        condition: Expression::BinaryOp {
+        condition: Box::new(Expression::BinaryOp {
             op: BinaryOp::Greater,
             left: Box::new(Expression::Identifier {
                 name: "x".to_string(),
@@ -75,7 +75,7 @@ fn test_if_statement_with_comparison() {
                 position: pos(1, 8),
             }),
             position: pos(1, 6),
-        },
+        }),
         then_branch: vec![Statement::Expression {
             expression: Expression::StringLiteral {
                 value: "positive".to_string(),
@@ -93,10 +93,10 @@ fn test_if_statement_with_comparison() {
 #[test]
 fn test_nested_if_statements() {
     let inner_if = Statement::If {
-        condition: Expression::BoolLiteral {
+        condition: Box::new(Expression::BoolLiteral {
             value: true,
             position: pos(2, 6),
-        },
+        }),
         then_branch: vec![Statement::Expression {
             expression: Expression::IntLiteral {
                 value: 1,
@@ -110,10 +110,10 @@ fn test_nested_if_statements() {
     };
 
     let stmt = Statement::If {
-        condition: Expression::BoolLiteral {
+        condition: Box::new(Expression::BoolLiteral {
             value: true,
             position: pos(1, 4),
-        },
+        }),
         then_branch: vec![inner_if],
         elsif_branches: vec![],
         else_branch: None,
@@ -128,10 +128,10 @@ fn test_nested_if_statements() {
 #[test]
 fn test_while_loop_simple() {
     let stmt = Statement::While {
-        condition: Expression::BoolLiteral {
+        condition: Box::new(Expression::BoolLiteral {
             value: true,
             position: pos(1, 7),
-        },
+        }),
         body: vec![Statement::Expression {
             expression: Expression::IntLiteral {
                 value: 1,
@@ -148,7 +148,7 @@ fn test_while_loop_simple() {
 #[test]
 fn test_while_loop_with_condition() {
     let stmt = Statement::While {
-        condition: Expression::BinaryOp {
+        condition: Box::new(Expression::BinaryOp {
             op: BinaryOp::Less,
             left: Box::new(Expression::Identifier {
                 name: "i".to_string(),
@@ -159,7 +159,7 @@ fn test_while_loop_with_condition() {
                 position: pos(1, 11),
             }),
             position: pos(1, 9),
-        },
+        }),
         body: vec![
             Statement::Expression {
                 expression: Expression::MethodCall {
@@ -175,11 +175,11 @@ fn test_while_loop_with_condition() {
                 position: pos(2, 3),
             },
             Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "i".to_string(),
                     position: pos(3, 3),
-                },
-                value: Expression::BinaryOp {
+                }),
+                value: Box::new(Expression::BinaryOp {
                     op: BinaryOp::Add,
                     left: Box::new(Expression::Identifier {
                         name: "i".to_string(),
@@ -190,7 +190,7 @@ fn test_while_loop_with_condition() {
                         position: pos(3, 11),
                     }),
                     position: pos(3, 9),
-                },
+                }),
                 position: pos(3, 3),
             },
         ],
@@ -205,7 +205,7 @@ fn test_while_loop_with_condition() {
 fn test_for_loop_simple() {
     let stmt = Statement::For {
         variable: "x".to_string(),
-        iterable: Expression::Array {
+        iterable: Box::new(Expression::Array {
             elements: vec![
                 Expression::IntLiteral {
                     value: 1,
@@ -221,7 +221,7 @@ fn test_for_loop_simple() {
                 },
             ],
             position: pos(1, 13),
-        },
+        }),
         body: vec![Statement::Expression {
             expression: Expression::MethodCall {
                 receiver: Box::new(Expression::Identifier {
@@ -245,7 +245,7 @@ fn test_for_loop_simple() {
 fn test_for_loop_with_range() {
     let stmt = Statement::For {
         variable: "i".to_string(),
-        iterable: Expression::MethodCall {
+        iterable: Box::new(Expression::MethodCall {
             receiver: Box::new(Expression::IntLiteral {
                 value: 0,
                 position: pos(1, 13),
@@ -257,7 +257,7 @@ fn test_for_loop_with_range() {
             }],
             trailing_block: None,
             position: pos(1, 13),
-        },
+        }),
         body: vec![Statement::Expression {
             expression: Expression::Identifier {
                 name: "i".to_string(),
@@ -274,7 +274,7 @@ fn test_for_loop_with_range() {
 fn test_for_loop_nested() {
     let inner_for = Statement::For {
         variable: "y".to_string(),
-        iterable: Expression::Array {
+        iterable: Box::new(Expression::Array {
             elements: vec![
                 Expression::IntLiteral {
                     value: 1,
@@ -286,7 +286,7 @@ fn test_for_loop_nested() {
                 },
             ],
             position: pos(2, 15),
-        },
+        }),
         body: vec![Statement::Expression {
             expression: Expression::BinaryOp {
                 op: BinaryOp::Add,
@@ -307,7 +307,7 @@ fn test_for_loop_nested() {
 
     let stmt = Statement::For {
         variable: "x".to_string(),
-        iterable: Expression::Array {
+        iterable: Box::new(Expression::Array {
             elements: vec![
                 Expression::IntLiteral {
                     value: 1,
@@ -319,7 +319,7 @@ fn test_for_loop_nested() {
                 },
             ],
             position: pos(1, 13),
-        },
+        }),
         body: vec![inner_for],
         position: pos(1, 1),
     };
@@ -332,10 +332,10 @@ fn test_for_loop_nested() {
 #[test]
 fn test_match_statement_simple() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "x".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::IntLiteral(0),
@@ -383,10 +383,10 @@ fn test_match_statement_simple() {
 #[test]
 fn test_match_with_guard() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "x".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Identifier("n".to_string()),
             guard: Some(Expression::BinaryOp {
@@ -418,10 +418,10 @@ fn test_match_with_guard() {
 #[test]
 fn test_match_with_string_patterns() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "command".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::StringLiteral("start".to_string()),
@@ -468,10 +468,10 @@ fn test_match_with_string_patterns() {
 #[test]
 fn test_match_with_boolean_patterns() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "flag".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::BoolLiteral(true),
@@ -506,19 +506,19 @@ fn test_match_with_boolean_patterns() {
 #[test]
 fn test_match_with_nil_pattern() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "value".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::NilLiteral,
                 guard: None,
                 body: vec![Statement::Return {
-                    value: Some(Expression::IntLiteral {
+                    value: Some(Box::new(Expression::IntLiteral {
                         value: 0,
                         position: pos(2, 19),
-                    }),
+                    })),
                     position: pos(2, 12),
                 }],
                 position: pos(2, 3),
@@ -544,10 +544,10 @@ fn test_match_with_nil_pattern() {
 #[test]
 fn test_match_with_array_pattern() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "arr".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Array(vec![
                 MatchPattern::Identifier("first".to_string()),
@@ -572,10 +572,10 @@ fn test_match_with_array_pattern() {
 #[test]
 fn test_match_with_type_pattern() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "obj".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::Type("String".to_string()),
@@ -613,13 +613,13 @@ fn test_match_with_type_pattern() {
 fn test_for_loop_with_break() {
     let stmt = Statement::For {
         variable: "item".to_string(),
-        iterable: Expression::Identifier {
+        iterable: Box::new(Expression::Identifier {
             name: "items".to_string(),
             position: pos(1, 14),
-        },
+        }),
         body: vec![
             Statement::If {
-                condition: Expression::BinaryOp {
+                condition: Box::new(Expression::BinaryOp {
                     op: BinaryOp::Equal,
                     left: Box::new(Expression::Identifier {
                         name: "item".to_string(),
@@ -629,7 +629,7 @@ fn test_for_loop_with_break() {
                         position: pos(2, 14),
                     }),
                     position: pos(2, 11),
-                },
+                }),
                 then_branch: vec![Statement::Break {
                     value: None,
                     position: pos(3, 5),
@@ -660,10 +660,10 @@ fn test_for_loop_with_break() {
 #[test]
 fn test_match_in_loop() {
     let match_stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "value".to_string(),
             position: pos(2, 9),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::IntLiteral(0),
@@ -691,10 +691,10 @@ fn test_match_in_loop() {
     };
 
     let stmt = Statement::While {
-        condition: Expression::BoolLiteral {
+        condition: Box::new(Expression::BoolLiteral {
             value: true,
             position: pos(1, 7),
-        },
+        }),
         body: vec![match_stmt],
         position: pos(1, 1),
     };
@@ -714,10 +714,10 @@ fn test_nested_control_flow() {
     // end
 
     let match_stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "x".to_string(),
             position: pos(3, 11),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::IntLiteral(0),
@@ -743,19 +743,19 @@ fn test_nested_control_flow() {
 
     let for_stmt = Statement::For {
         variable: "x".to_string(),
-        iterable: Expression::Identifier {
+        iterable: Box::new(Expression::Identifier {
             name: "items".to_string(),
             position: pos(2, 12),
-        },
+        }),
         body: vec![match_stmt],
         position: pos(2, 3),
     };
 
     let stmt = Statement::If {
-        condition: Expression::Identifier {
+        condition: Box::new(Expression::Identifier {
             name: "condition1".to_string(),
             position: pos(1, 4),
-        },
+        }),
         then_branch: vec![for_stmt],
         elsif_branches: vec![],
         else_branch: None,

@@ -52,8 +52,8 @@ impl VirtualMachine {
         }
         self.pass_checkpoint(position)?;
         let line = position.line;
-        if self.coverage_skip_line.take() != Some(line) && self.coverage.is_some() {
-            self.coverage_count(line);
+        if self.coverage_skip_line.take() != Some(line as usize) && self.coverage.is_some() {
+            self.coverage_count(line as usize);
         }
         Ok(())
     }
@@ -106,7 +106,7 @@ impl VirtualMachine {
                 body,
                 *position,
                 singleton_class.as_deref(),
-                end_position.line,
+                end_position.line as usize,
             ),
             Statement::Include {
                 module_name,
@@ -148,8 +148,8 @@ impl VirtualMachine {
                 // would, with no class variable home of the code around it.
                 if self.coverage.is_some() {
                     let line = statement.position().line;
-                    self.coverage_count(line);
-                    self.coverage_skip_line = Some(line);
+                    self.coverage_count(line as usize);
+                    self.coverage_skip_line = Some(line as usize);
                 }
                 let held_home = std::mem::take(&mut self.class_var_home);
                 let mut last_value = Object::Nil;

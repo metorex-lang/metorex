@@ -15,19 +15,19 @@ fn test_elsif_first_condition_true() {
     let mut vm = VirtualMachine::new();
 
     let program = vec![Statement::If {
-        condition: Expression::BoolLiteral {
+        condition: Box::new(Expression::BoolLiteral {
             value: true,
             position: pos(1, 4),
-        },
+        }),
         then_branch: vec![Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(2, 3),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 1,
                 position: pos(2, 12),
-            },
+            }),
             position: pos(2, 3),
         }],
         elsif_branches: vec![ElsifBranch {
@@ -36,27 +36,27 @@ fn test_elsif_first_condition_true() {
                 position: pos(3, 7),
             },
             body: vec![Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "result".to_string(),
                     position: pos(4, 3),
-                },
-                value: Expression::IntLiteral {
+                }),
+                value: Box::new(Expression::IntLiteral {
                     value: 2,
                     position: pos(4, 12),
-                },
+                }),
                 position: pos(4, 3),
             }],
             position: pos(3, 1),
         }],
         else_branch: Some(vec![Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(6, 3),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 3,
                 position: pos(6, 12),
-            },
+            }),
             position: pos(6, 3),
         }]),
         position: pos(1, 1),
@@ -73,19 +73,19 @@ fn test_elsif_second_condition_true() {
     let mut vm = VirtualMachine::new();
 
     let program = vec![Statement::If {
-        condition: Expression::BoolLiteral {
+        condition: Box::new(Expression::BoolLiteral {
             value: false,
             position: pos(1, 4),
-        },
+        }),
         then_branch: vec![Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(2, 3),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 1,
                 position: pos(2, 12),
-            },
+            }),
             position: pos(2, 3),
         }],
         elsif_branches: vec![ElsifBranch {
@@ -94,27 +94,27 @@ fn test_elsif_second_condition_true() {
                 position: pos(3, 7),
             },
             body: vec![Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "result".to_string(),
                     position: pos(4, 3),
-                },
-                value: Expression::IntLiteral {
+                }),
+                value: Box::new(Expression::IntLiteral {
                     value: 2,
                     position: pos(4, 12),
-                },
+                }),
                 position: pos(4, 3),
             }],
             position: pos(3, 1),
         }],
         else_branch: Some(vec![Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(6, 3),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 3,
                 position: pos(6, 12),
-            },
+            }),
             position: pos(6, 3),
         }]),
         position: pos(1, 1),
@@ -131,19 +131,19 @@ fn test_elsif_multiple_branches() {
     let mut vm = VirtualMachine::new();
 
     let program = vec![Statement::If {
-        condition: Expression::BoolLiteral {
+        condition: Box::new(Expression::BoolLiteral {
             value: false,
             position: pos(1, 4),
-        },
+        }),
         then_branch: vec![Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(2, 3),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 1,
                 position: pos(2, 12),
-            },
+            }),
             position: pos(2, 3),
         }],
         elsif_branches: vec![
@@ -153,14 +153,14 @@ fn test_elsif_multiple_branches() {
                     position: pos(3, 7),
                 },
                 body: vec![Statement::Assignment {
-                    target: Expression::Identifier {
+                    target: Box::new(Expression::Identifier {
                         name: "result".to_string(),
                         position: pos(4, 3),
-                    },
-                    value: Expression::IntLiteral {
+                    }),
+                    value: Box::new(Expression::IntLiteral {
                         value: 2,
                         position: pos(4, 12),
-                    },
+                    }),
                     position: pos(4, 3),
                 }],
                 position: pos(3, 1),
@@ -171,28 +171,28 @@ fn test_elsif_multiple_branches() {
                     position: pos(5, 7),
                 },
                 body: vec![Statement::Assignment {
-                    target: Expression::Identifier {
+                    target: Box::new(Expression::Identifier {
                         name: "result".to_string(),
                         position: pos(6, 3),
-                    },
-                    value: Expression::IntLiteral {
+                    }),
+                    value: Box::new(Expression::IntLiteral {
                         value: 3,
                         position: pos(6, 12),
-                    },
+                    }),
                     position: pos(6, 3),
                 }],
                 position: pos(5, 1),
             },
         ],
         else_branch: Some(vec![Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(8, 3),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 4,
                 position: pos(8, 12),
-            },
+            }),
             position: pos(8, 3),
         }]),
         position: pos(1, 1),
@@ -209,19 +209,19 @@ fn test_elsif_all_false_fallback_to_else() {
     let mut vm = VirtualMachine::new();
 
     let program = vec![Statement::If {
-        condition: Expression::BoolLiteral {
+        condition: Box::new(Expression::BoolLiteral {
             value: false,
             position: pos(1, 4),
-        },
+        }),
         then_branch: vec![Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(2, 3),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 1,
                 position: pos(2, 12),
-            },
+            }),
             position: pos(2, 3),
         }],
         elsif_branches: vec![ElsifBranch {
@@ -230,27 +230,27 @@ fn test_elsif_all_false_fallback_to_else() {
                 position: pos(3, 7),
             },
             body: vec![Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "result".to_string(),
                     position: pos(4, 3),
-                },
-                value: Expression::IntLiteral {
+                }),
+                value: Box::new(Expression::IntLiteral {
                     value: 2,
                     position: pos(4, 12),
-                },
+                }),
                 position: pos(4, 3),
             }],
             position: pos(3, 1),
         }],
         else_branch: Some(vec![Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(6, 3),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 3,
                 position: pos(6, 12),
-            },
+            }),
             position: pos(6, 3),
         }]),
         position: pos(1, 1),
@@ -268,30 +268,30 @@ fn test_elsif_without_else_no_match() {
 
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 0,
                 position: pos(1, 10),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::If {
-            condition: Expression::BoolLiteral {
+            condition: Box::new(Expression::BoolLiteral {
                 value: false,
                 position: pos(2, 4),
-            },
+            }),
             then_branch: vec![Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "result".to_string(),
                     position: pos(3, 3),
-                },
-                value: Expression::IntLiteral {
+                }),
+                value: Box::new(Expression::IntLiteral {
                     value: 1,
                     position: pos(3, 12),
-                },
+                }),
                 position: pos(3, 3),
             }],
             elsif_branches: vec![ElsifBranch {
@@ -300,14 +300,14 @@ fn test_elsif_without_else_no_match() {
                     position: pos(4, 7),
                 },
                 body: vec![Statement::Assignment {
-                    target: Expression::Identifier {
+                    target: Box::new(Expression::Identifier {
                         name: "result".to_string(),
                         position: pos(5, 3),
-                    },
-                    value: Expression::IntLiteral {
+                    }),
+                    value: Box::new(Expression::IntLiteral {
                         value: 2,
                         position: pos(5, 12),
-                    },
+                    }),
                     position: pos(5, 3),
                 }],
                 position: pos(4, 1),
@@ -329,18 +329,18 @@ fn test_elsif_with_comparison() {
 
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "x".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 5,
                 position: pos(1, 5),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::If {
-            condition: Expression::BinaryOp {
+            condition: Box::new(Expression::BinaryOp {
                 left: Box::new(Expression::Identifier {
                     name: "x".to_string(),
                     position: pos(2, 4),
@@ -351,16 +351,16 @@ fn test_elsif_with_comparison() {
                     position: pos(2, 8),
                 }),
                 position: pos(2, 4),
-            },
+            }),
             then_branch: vec![Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "result".to_string(),
                     position: pos(3, 3),
-                },
-                value: Expression::StringLiteral {
+                }),
+                value: Box::new(Expression::StringLiteral {
                     value: "negative".to_string(),
                     position: pos(3, 12),
-                },
+                }),
                 position: pos(3, 3),
             }],
             elsif_branches: vec![
@@ -378,14 +378,14 @@ fn test_elsif_with_comparison() {
                         position: pos(4, 7),
                     },
                     body: vec![Statement::Assignment {
-                        target: Expression::Identifier {
+                        target: Box::new(Expression::Identifier {
                             name: "result".to_string(),
                             position: pos(5, 3),
-                        },
-                        value: Expression::StringLiteral {
+                        }),
+                        value: Box::new(Expression::StringLiteral {
                             value: "zero".to_string(),
                             position: pos(5, 12),
-                        },
+                        }),
                         position: pos(5, 3),
                     }],
                     position: pos(4, 1),
@@ -404,28 +404,28 @@ fn test_elsif_with_comparison() {
                         position: pos(6, 7),
                     },
                     body: vec![Statement::Assignment {
-                        target: Expression::Identifier {
+                        target: Box::new(Expression::Identifier {
                             name: "result".to_string(),
                             position: pos(7, 3),
-                        },
-                        value: Expression::StringLiteral {
+                        }),
+                        value: Box::new(Expression::StringLiteral {
                             value: "small".to_string(),
                             position: pos(7, 12),
-                        },
+                        }),
                         position: pos(7, 3),
                     }],
                     position: pos(6, 1),
                 },
             ],
             else_branch: Some(vec![Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "result".to_string(),
                     position: pos(9, 3),
-                },
-                value: Expression::StringLiteral {
+                }),
+                value: Box::new(Expression::StringLiteral {
                     value: "large".to_string(),
                     position: pos(9, 12),
-                },
+                }),
                 position: pos(9, 3),
             }]),
             position: pos(2, 1),

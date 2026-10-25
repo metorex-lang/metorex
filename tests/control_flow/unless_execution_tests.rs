@@ -15,19 +15,19 @@ fn test_unless_condition_false_executes_body() {
     let mut vm = VirtualMachine::new();
 
     let program = vec![Statement::Unless {
-        condition: Expression::BoolLiteral {
+        condition: Box::new(Expression::BoolLiteral {
             value: false,
             position: pos(1, 8),
-        },
+        }),
         then_branch: vec![Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(2, 3),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 42,
                 position: pos(2, 12),
-            },
+            }),
             position: pos(2, 3),
         }],
         else_branch: None,
@@ -46,30 +46,30 @@ fn test_unless_condition_true_skips_body() {
 
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 0,
                 position: pos(1, 10),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::Unless {
-            condition: Expression::BoolLiteral {
+            condition: Box::new(Expression::BoolLiteral {
                 value: true,
                 position: pos(2, 8),
-            },
+            }),
             then_branch: vec![Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "result".to_string(),
                     position: pos(3, 3),
-                },
-                value: Expression::IntLiteral {
+                }),
+                value: Box::new(Expression::IntLiteral {
                     value: 42,
                     position: pos(3, 12),
-                },
+                }),
                 position: pos(3, 3),
             }],
             else_branch: None,
@@ -88,30 +88,30 @@ fn test_unless_with_else_condition_false() {
     let mut vm = VirtualMachine::new();
 
     let program = vec![Statement::Unless {
-        condition: Expression::BoolLiteral {
+        condition: Box::new(Expression::BoolLiteral {
             value: false,
             position: pos(1, 8),
-        },
+        }),
         then_branch: vec![Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(2, 3),
-            },
-            value: Expression::StringLiteral {
+            }),
+            value: Box::new(Expression::StringLiteral {
                 value: "then".to_string(),
                 position: pos(2, 12),
-            },
+            }),
             position: pos(2, 3),
         }],
         else_branch: Some(vec![Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(4, 3),
-            },
-            value: Expression::StringLiteral {
+            }),
+            value: Box::new(Expression::StringLiteral {
                 value: "else".to_string(),
                 position: pos(4, 12),
-            },
+            }),
             position: pos(4, 3),
         }]),
         position: pos(1, 1),
@@ -128,30 +128,30 @@ fn test_unless_with_else_condition_true() {
     let mut vm = VirtualMachine::new();
 
     let program = vec![Statement::Unless {
-        condition: Expression::BoolLiteral {
+        condition: Box::new(Expression::BoolLiteral {
             value: true,
             position: pos(1, 8),
-        },
+        }),
         then_branch: vec![Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(2, 3),
-            },
-            value: Expression::StringLiteral {
+            }),
+            value: Box::new(Expression::StringLiteral {
                 value: "then".to_string(),
                 position: pos(2, 12),
-            },
+            }),
             position: pos(2, 3),
         }],
         else_branch: Some(vec![Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(4, 3),
-            },
-            value: Expression::StringLiteral {
+            }),
+            value: Box::new(Expression::StringLiteral {
                 value: "else".to_string(),
                 position: pos(4, 12),
-            },
+            }),
             position: pos(4, 3),
         }]),
         position: pos(1, 1),
@@ -169,18 +169,18 @@ fn test_unless_with_comparison() {
 
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "x".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 5,
                 position: pos(1, 5),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::Unless {
-            condition: Expression::BinaryOp {
+            condition: Box::new(Expression::BinaryOp {
                 left: Box::new(Expression::Identifier {
                     name: "x".to_string(),
                     position: pos(2, 8),
@@ -191,16 +191,16 @@ fn test_unless_with_comparison() {
                     position: pos(2, 12),
                 }),
                 position: pos(2, 8),
-            },
+            }),
             then_branch: vec![Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "result".to_string(),
                     position: pos(3, 3),
-                },
-                value: Expression::StringLiteral {
+                }),
+                value: Box::new(Expression::StringLiteral {
                     value: "not greater".to_string(),
                     position: pos(3, 12),
-                },
+                }),
                 position: pos(3, 3),
             }],
             else_branch: None,
@@ -220,29 +220,29 @@ fn test_unless_with_nil_is_falsy() {
 
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "x".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::NilLiteral {
+            }),
+            value: Box::new(Expression::NilLiteral {
                 position: pos(1, 5),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::Unless {
-            condition: Expression::Identifier {
+            condition: Box::new(Expression::Identifier {
                 name: "x".to_string(),
                 position: pos(2, 8),
-            },
+            }),
             then_branch: vec![Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "result".to_string(),
                     position: pos(3, 3),
-                },
-                value: Expression::StringLiteral {
+                }),
+                value: Box::new(Expression::StringLiteral {
                     value: "x is nil".to_string(),
                     position: pos(3, 12),
-                },
+                }),
                 position: pos(3, 3),
             }],
             else_branch: None,
@@ -262,30 +262,30 @@ fn test_unless_with_false_literal() {
 
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "flag".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::BoolLiteral {
+            }),
+            value: Box::new(Expression::BoolLiteral {
                 value: false,
                 position: pos(1, 8),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::Unless {
-            condition: Expression::Identifier {
+            condition: Box::new(Expression::Identifier {
                 name: "flag".to_string(),
                 position: pos(2, 8),
-            },
+            }),
             then_branch: vec![Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "result".to_string(),
                     position: pos(3, 3),
-                },
-                value: Expression::StringLiteral {
+                }),
+                value: Box::new(Expression::StringLiteral {
                     value: "flag is false".to_string(),
                     position: pos(3, 12),
-                },
+                }),
                 position: pos(3, 3),
             }],
             else_branch: None,
@@ -305,46 +305,46 @@ fn test_unless_nested_in_if() {
 
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "a".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::BoolLiteral {
+            }),
+            value: Box::new(Expression::BoolLiteral {
                 value: true,
                 position: pos(1, 5),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "b".to_string(),
                 position: pos(2, 1),
-            },
-            value: Expression::BoolLiteral {
+            }),
+            value: Box::new(Expression::BoolLiteral {
                 value: false,
                 position: pos(2, 5),
-            },
+            }),
             position: pos(2, 1),
         },
         Statement::If {
-            condition: Expression::Identifier {
+            condition: Box::new(Expression::Identifier {
                 name: "a".to_string(),
                 position: pos(3, 4),
-            },
+            }),
             then_branch: vec![Statement::Unless {
-                condition: Expression::Identifier {
+                condition: Box::new(Expression::Identifier {
                     name: "b".to_string(),
                     position: pos(4, 10),
-                },
+                }),
                 then_branch: vec![Statement::Assignment {
-                    target: Expression::Identifier {
+                    target: Box::new(Expression::Identifier {
                         name: "result".to_string(),
                         position: pos(5, 5),
-                    },
-                    value: Expression::StringLiteral {
+                    }),
+                    value: Box::new(Expression::StringLiteral {
                         value: "nested".to_string(),
                         position: pos(5, 14),
-                    },
+                    }),
                     position: pos(5, 5),
                 }],
                 else_branch: None,
@@ -367,39 +367,39 @@ fn test_unless_multiple_statements_in_body() {
     let mut vm = VirtualMachine::new();
 
     let program = vec![Statement::Unless {
-        condition: Expression::BoolLiteral {
+        condition: Box::new(Expression::BoolLiteral {
             value: false,
             position: pos(1, 8),
-        },
+        }),
         then_branch: vec![
             Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "x".to_string(),
                     position: pos(2, 3),
-                },
-                value: Expression::IntLiteral {
+                }),
+                value: Box::new(Expression::IntLiteral {
                     value: 10,
                     position: pos(2, 7),
-                },
+                }),
                 position: pos(2, 3),
             },
             Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "y".to_string(),
                     position: pos(3, 3),
-                },
-                value: Expression::IntLiteral {
+                }),
+                value: Box::new(Expression::IntLiteral {
                     value: 20,
                     position: pos(3, 7),
-                },
+                }),
                 position: pos(3, 3),
             },
             Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "result".to_string(),
                     position: pos(4, 3),
-                },
-                value: Expression::BinaryOp {
+                }),
+                value: Box::new(Expression::BinaryOp {
                     left: Box::new(Expression::Identifier {
                         name: "x".to_string(),
                         position: pos(4, 12),
@@ -410,7 +410,7 @@ fn test_unless_multiple_statements_in_body() {
                         position: pos(4, 16),
                     }),
                     position: pos(4, 12),
-                },
+                }),
                 position: pos(4, 3),
             },
         ],

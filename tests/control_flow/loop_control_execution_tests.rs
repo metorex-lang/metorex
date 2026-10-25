@@ -19,30 +19,30 @@ fn test_break_in_while_loop() {
     let program = vec![
         // x = 0
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "x".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 0,
                 position: pos(1, 5),
-            },
+            }),
             position: pos(1, 1),
         },
         // while true
         Statement::While {
-            condition: Expression::BoolLiteral {
+            condition: Box::new(Expression::BoolLiteral {
                 value: true,
                 position: pos(2, 7),
-            },
+            }),
             body: vec![
                 // x = x + 1
                 Statement::Assignment {
-                    target: Expression::Identifier {
+                    target: Box::new(Expression::Identifier {
                         name: "x".to_string(),
                         position: pos(3, 3),
-                    },
-                    value: Expression::BinaryOp {
+                    }),
+                    value: Box::new(Expression::BinaryOp {
                         op: BinaryOp::Add,
                         left: Box::new(Expression::Identifier {
                             name: "x".to_string(),
@@ -53,12 +53,12 @@ fn test_break_in_while_loop() {
                             position: pos(3, 11),
                         }),
                         position: pos(3, 9),
-                    },
+                    }),
                     position: pos(3, 3),
                 },
                 // if x >= 5: break
                 Statement::If {
-                    condition: Expression::BinaryOp {
+                    condition: Box::new(Expression::BinaryOp {
                         op: BinaryOp::GreaterEqual,
                         left: Box::new(Expression::Identifier {
                             name: "x".to_string(),
@@ -69,7 +69,7 @@ fn test_break_in_while_loop() {
                             position: pos(4, 11),
                         }),
                         position: pos(4, 8),
-                    },
+                    }),
                     then_branch: vec![Statement::Break {
                         value: None,
                         position: pos(5, 5),
@@ -94,31 +94,31 @@ fn test_continue_in_while_loop() {
     let program = vec![
         // x = 0
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "x".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 0,
                 position: pos(1, 5),
-            },
+            }),
             position: pos(1, 1),
         },
         // count = 0
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "count".to_string(),
                 position: pos(2, 1),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 0,
                 position: pos(2, 9),
-            },
+            }),
             position: pos(2, 1),
         },
         // while x < 10
         Statement::While {
-            condition: Expression::BinaryOp {
+            condition: Box::new(Expression::BinaryOp {
                 op: BinaryOp::Less,
                 left: Box::new(Expression::Identifier {
                     name: "x".to_string(),
@@ -129,15 +129,15 @@ fn test_continue_in_while_loop() {
                     position: pos(3, 11),
                 }),
                 position: pos(3, 9),
-            },
+            }),
             body: vec![
                 // x = x + 1
                 Statement::Assignment {
-                    target: Expression::Identifier {
+                    target: Box::new(Expression::Identifier {
                         name: "x".to_string(),
                         position: pos(4, 3),
-                    },
-                    value: Expression::BinaryOp {
+                    }),
+                    value: Box::new(Expression::BinaryOp {
                         op: BinaryOp::Add,
                         left: Box::new(Expression::Identifier {
                             name: "x".to_string(),
@@ -148,12 +148,12 @@ fn test_continue_in_while_loop() {
                             position: pos(4, 11),
                         }),
                         position: pos(4, 9),
-                    },
+                    }),
                     position: pos(4, 3),
                 },
                 // if x % 2 == 0: continue
                 Statement::If {
-                    condition: Expression::BinaryOp {
+                    condition: Box::new(Expression::BinaryOp {
                         op: BinaryOp::Equal,
                         left: Box::new(Expression::BinaryOp {
                             op: BinaryOp::Modulo,
@@ -172,7 +172,7 @@ fn test_continue_in_while_loop() {
                             position: pos(5, 15),
                         }),
                         position: pos(5, 12),
-                    },
+                    }),
                     then_branch: vec![Statement::Continue {
                         value: None,
                         position: pos(6, 5),
@@ -183,11 +183,11 @@ fn test_continue_in_while_loop() {
                 },
                 // count = count + 1
                 Statement::Assignment {
-                    target: Expression::Identifier {
+                    target: Box::new(Expression::Identifier {
                         name: "count".to_string(),
                         position: pos(7, 3),
-                    },
-                    value: Expression::BinaryOp {
+                    }),
+                    value: Box::new(Expression::BinaryOp {
                         op: BinaryOp::Add,
                         left: Box::new(Expression::Identifier {
                             name: "count".to_string(),
@@ -198,7 +198,7 @@ fn test_continue_in_while_loop() {
                             position: pos(7, 19),
                         }),
                         position: pos(7, 17),
-                    },
+                    }),
                     position: pos(7, 3),
                 },
             ],

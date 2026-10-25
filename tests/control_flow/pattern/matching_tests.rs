@@ -27,10 +27,10 @@ fn test_match_int_literal_pattern() {
     };
 
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "x".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![case],
         position: pos(1, 1),
     };
@@ -55,10 +55,10 @@ fn test_match_string_literal_pattern() {
     };
 
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "s".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![case],
         position: pos(1, 1),
     };
@@ -69,10 +69,10 @@ fn test_match_string_literal_pattern() {
 #[test]
 fn test_match_bool_literal_patterns() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "flag".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::BoolLiteral(true),
@@ -108,18 +108,18 @@ fn test_match_bool_literal_patterns() {
 #[test]
 fn test_match_nil_literal_pattern() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "value".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::NilLiteral,
             guard: None,
             body: vec![Statement::Return {
-                value: Some(Expression::IntLiteral {
+                value: Some(Box::new(Expression::IntLiteral {
                     value: 0,
                     position: pos(2, 17),
-                }),
+                })),
                 position: pos(2, 10),
             }],
             position: pos(2, 1),
@@ -133,10 +133,10 @@ fn test_match_nil_literal_pattern() {
 #[test]
 fn test_match_float_literal_pattern() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "x".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::FloatLiteral(3.14),
             guard: None,
@@ -160,10 +160,10 @@ fn test_match_float_literal_pattern() {
 #[test]
 fn test_match_identifier_pattern() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "value".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Identifier("x".to_string()),
             guard: None,
@@ -187,10 +187,10 @@ fn test_match_identifier_pattern() {
 #[test]
 fn test_match_wildcard_pattern() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "x".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::IntLiteral(0),
@@ -228,10 +228,10 @@ fn test_match_wildcard_pattern() {
 #[test]
 fn test_match_array_pattern_empty() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "arr".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Array(vec![]),
             guard: None,
@@ -253,10 +253,10 @@ fn test_match_array_pattern_empty() {
 #[test]
 fn test_match_array_pattern_with_literals() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "arr".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Array(vec![
                 MatchPattern::IntLiteral(1),
@@ -282,10 +282,10 @@ fn test_match_array_pattern_with_literals() {
 #[test]
 fn test_match_array_pattern_with_variables() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "arr".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Array(vec![
                 MatchPattern::Identifier("first".to_string()),
@@ -310,10 +310,10 @@ fn test_match_array_pattern_with_variables() {
 #[test]
 fn test_match_array_pattern_with_wildcard() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "arr".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Array(vec![
                 MatchPattern::Identifier("first".to_string()),
@@ -339,10 +339,10 @@ fn test_match_array_pattern_with_wildcard() {
 #[test]
 fn test_match_nested_array_pattern() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "matrix".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Array(vec![
                 MatchPattern::Array(vec![
@@ -375,10 +375,10 @@ fn test_match_nested_array_pattern() {
 #[test]
 fn test_match_array_with_rest_pattern() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "arr".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Array(vec![
                 MatchPattern::Identifier("first".to_string()),
@@ -403,10 +403,10 @@ fn test_match_array_with_rest_pattern() {
 #[test]
 fn test_match_array_rest_at_end() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "arr".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Array(vec![
                 MatchPattern::Identifier("a".to_string()),
@@ -434,10 +434,10 @@ fn test_match_array_rest_at_end() {
 #[test]
 fn test_match_object_pattern_empty() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "obj".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Object(vec![]),
             guard: None,
@@ -459,10 +459,10 @@ fn test_match_object_pattern_empty() {
 #[test]
 fn test_match_object_pattern_simple() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "point".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Object(vec![
                 ("x".to_string(), MatchPattern::Identifier("x".to_string())),
@@ -487,10 +487,10 @@ fn test_match_object_pattern_simple() {
 #[test]
 fn test_match_object_pattern_with_literals() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "config".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Object(vec![
                 (
@@ -518,10 +518,10 @@ fn test_match_object_pattern_with_literals() {
 #[test]
 fn test_match_object_pattern_with_nested_patterns() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "data".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Object(vec![
                 (
@@ -563,10 +563,10 @@ fn test_match_object_pattern_with_nested_patterns() {
 #[test]
 fn test_match_type_pattern() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "value".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::Type("String".to_string()),
@@ -604,10 +604,10 @@ fn test_match_type_pattern() {
 #[test]
 fn test_match_with_guard() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "x".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Identifier("n".to_string()),
             guard: Some(Expression::BinaryOp {
@@ -640,10 +640,10 @@ fn test_match_with_guard() {
 #[test]
 fn test_match_multiple_cases_with_guards() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "x".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::Identifier("n".to_string()),
@@ -703,10 +703,10 @@ fn test_match_multiple_cases_with_guards() {
 #[test]
 fn test_match_array_with_object_elements() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "data".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Array(vec![MatchPattern::Object(vec![
                 ("id".to_string(), MatchPattern::Identifier("id".to_string())),
@@ -734,10 +734,10 @@ fn test_match_array_with_object_elements() {
 #[test]
 fn test_match_object_with_array_values() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "data".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Object(vec![(
                 "items".to_string(),
@@ -765,10 +765,10 @@ fn test_match_object_with_array_values() {
 #[test]
 fn test_match_mixed_patterns_comprehensive() {
     let stmt = Statement::Match {
-        expression: Expression::Identifier {
+        expression: Box::new(Expression::Identifier {
             name: "value".to_string(),
             position: pos(1, 7),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::IntLiteral(0),

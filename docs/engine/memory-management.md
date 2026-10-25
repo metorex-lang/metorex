@@ -227,6 +227,17 @@ parameters past the plain positional ones and what an alias,
 `define_method`, `Method#to_proc`, or a C extension records, are kept in two
 boxes made when one of them is first written.
 
+A program's syntax tree stays alive as long as its methods do, since each
+method keeps its body. A position is 16 bytes, a token 56, an expression 88,
+and a statement 120, which tests check. The expression variants larger than
+a method call keep their rarer lists in boxes, and the larger statement
+variants keep their expressions in boxes. A list of statements grows by half
+its length from one, where a `Vec` of elements that size starts with room
+for four, so a body of one statement holds one. A compiled unit gives back
+the room its tables grew into once it is compiled. The main script is
+checked against prism after Metorex's parser frees its tokens, so prism's
+tree takes the blocks they held.
+
 The reports on macOS, of 2026-10-25 for `empty` and 2026-10-24 for the
 rest, with the ruby-bench rows run for one warmup iteration and two more,
 and `rex_suite` run with `metorex spec`, in MB. Where a row has two numbers,

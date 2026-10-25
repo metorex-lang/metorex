@@ -45,8 +45,8 @@ pub fn for_over_each(
         }
     } else {
         Statement::Assignment {
-            target: targets.into_iter().next().expect("one target"),
-            value,
+            target: Box::new(targets.into_iter().next().expect("one target")),
+            value: Box::new(value),
             position,
         }
     };
@@ -64,10 +64,10 @@ pub fn for_over_each(
             arguments: Vec::new(),
             trailing_block: Some(Box::new(Expression::Lambda {
                 parameters: vec![HANDED_OVER.to_string()],
-                parameter_defaults: Vec::new(),
+                parameter_defaults: Box::new(Vec::new()),
                 body: statements.into(),
                 captured_vars: None,
-                outer_locals: Vec::new(),
+                outer_locals: Box::new(Vec::new()),
                 is_lambda: false,
                 position,
             })),

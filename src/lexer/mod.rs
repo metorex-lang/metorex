@@ -234,7 +234,7 @@ impl<'a> Lexer<'a> {
                 };
                 self.label_colon = matches!(other, TokenKind::Colon)
                     && matches!(self.prev_significant, Some(TokenKind::Ident(_)))
-                    && token.position.offset == self.prev_significant_end;
+                    && token.position.offset as usize == self.prev_significant_end;
                 self.prev_significant = Some(other.clone());
                 self.prev_significant_end = self.offset;
             }

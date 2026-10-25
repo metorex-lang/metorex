@@ -23,10 +23,10 @@ fn test_match_int_literal() {
 
     // match 42 when 42 => "matched" end
     let match_stmt = Statement::Match {
-        expression: Expression::IntLiteral {
+        expression: Box::new(Expression::IntLiteral {
             value: 42,
             position: pos(),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::IntLiteral(42),
             guard: None,
@@ -52,10 +52,10 @@ fn test_match_string_literal() {
 
     // match "hello" when "hello" => "matched" end
     let match_stmt = Statement::Match {
-        expression: Expression::StringLiteral {
+        expression: Box::new(Expression::StringLiteral {
             value: "hello".to_string(),
             position: pos(),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::StringLiteral("hello".to_string()),
             guard: None,
@@ -81,10 +81,10 @@ fn test_match_bool_literal() {
 
     // match true when true => "matched" end
     let match_stmt = Statement::Match {
-        expression: Expression::BoolLiteral {
+        expression: Box::new(Expression::BoolLiteral {
             value: true,
             position: pos(),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::BoolLiteral(true),
             guard: None,
@@ -110,7 +110,7 @@ fn test_match_nil_literal() {
 
     // match nil when nil => "matched" end
     let match_stmt = Statement::Match {
-        expression: Expression::NilLiteral { position: pos() },
+        expression: Box::new(Expression::NilLiteral { position: pos() }),
         cases: vec![MatchCase {
             pattern: MatchPattern::NilLiteral,
             guard: None,
@@ -136,10 +136,10 @@ fn test_match_identifier_binding() {
 
     // match 42 when x => x end
     let match_stmt = Statement::Match {
-        expression: Expression::IntLiteral {
+        expression: Box::new(Expression::IntLiteral {
             value: 42,
             position: pos(),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Identifier("x".to_string()),
             guard: None,
@@ -166,10 +166,10 @@ fn test_match_wildcard() {
 
     // match 42 when _ => "matched" end
     let match_stmt = Statement::Match {
-        expression: Expression::IntLiteral {
+        expression: Box::new(Expression::IntLiteral {
             value: 42,
             position: pos(),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Wildcard,
             guard: None,
@@ -195,7 +195,7 @@ fn test_match_array_exact() {
 
     // match [1, 2, 3] when [1, 2, 3] => "matched" end
     let match_stmt = Statement::Match {
-        expression: Expression::Array {
+        expression: Box::new(Expression::Array {
             elements: vec![
                 Expression::IntLiteral {
                     value: 1,
@@ -211,7 +211,7 @@ fn test_match_array_exact() {
                 },
             ],
             position: pos(),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Array(vec![
                 MatchPattern::IntLiteral(1),
@@ -241,7 +241,7 @@ fn test_match_array_with_bindings() {
 
     // match [1, 2, 3] when [a, b, c] => a + b + c end
     let match_stmt = Statement::Match {
-        expression: Expression::Array {
+        expression: Box::new(Expression::Array {
             elements: vec![
                 Expression::IntLiteral {
                     value: 1,
@@ -257,7 +257,7 @@ fn test_match_array_with_bindings() {
                 },
             ],
             position: pos(),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Array(vec![
                 MatchPattern::Identifier("a".to_string()),
@@ -304,7 +304,7 @@ fn test_match_array_with_rest() {
 
     // match [1, 2, 3, 4, 5] when [first, ...rest] => rest end
     let match_stmt = Statement::Match {
-        expression: Expression::Array {
+        expression: Box::new(Expression::Array {
             elements: vec![
                 Expression::IntLiteral {
                     value: 1,
@@ -328,7 +328,7 @@ fn test_match_array_with_rest() {
                 },
             ],
             position: pos(),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Array(vec![
                 MatchPattern::Identifier("first".to_string()),
@@ -369,7 +369,7 @@ fn test_match_array_rest_middle() {
 
     // match [1, 2, 3, 4, 5] when [first, ...middle, last] => middle end
     let match_stmt = Statement::Match {
-        expression: Expression::Array {
+        expression: Box::new(Expression::Array {
             elements: vec![
                 Expression::IntLiteral {
                     value: 1,
@@ -393,7 +393,7 @@ fn test_match_array_rest_middle() {
                 },
             ],
             position: pos(),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Array(vec![
                 MatchPattern::Identifier("first".to_string()),
@@ -435,7 +435,7 @@ fn test_match_object_pattern() {
     // Create a dictionary: {x: 10, y: 20}
     // match {x: 10, y: 20} when {x, y} => x + y end
     let match_stmt = Statement::Match {
-        expression: Expression::Dictionary {
+        expression: Box::new(Expression::Dictionary {
             entries: vec![
                 (
                     Expression::StringLiteral {
@@ -459,7 +459,7 @@ fn test_match_object_pattern() {
                 ),
             ],
             position: pos(),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Object(vec![
                 ("x".to_string(), MatchPattern::Identifier("x".to_string())),
@@ -497,10 +497,10 @@ fn test_match_with_guard_true() {
 
     // match 42 when x if x > 40 => "big" end
     let match_stmt = Statement::Match {
-        expression: Expression::IntLiteral {
+        expression: Box::new(Expression::IntLiteral {
             value: 42,
             position: pos(),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Identifier("x".to_string()),
             guard: Some(Expression::BinaryOp {
@@ -537,10 +537,10 @@ fn test_match_with_guard_false_fallthrough() {
 
     // match 30 when x if x > 40 => "big" when x => "small" end
     let match_stmt = Statement::Match {
-        expression: Expression::IntLiteral {
+        expression: Box::new(Expression::IntLiteral {
             value: 30,
             position: pos(),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::Identifier("x".to_string()),
@@ -591,10 +591,10 @@ fn test_match_multiple_cases() {
 
     // match 2 when 1 => "one" when 2 => "two" when 3 => "three" end
     let match_stmt = Statement::Match {
-        expression: Expression::IntLiteral {
+        expression: Box::new(Expression::IntLiteral {
             value: 2,
             position: pos(),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::IntLiteral(1),
@@ -647,10 +647,10 @@ fn test_match_with_no_matching_branch_is_nil() {
     // `case 5 when 1 ... when 2 ... end` has no `else`, so Ruby evaluates it
     // to nil rather than raising.
     let match_stmt = Statement::Match {
-        expression: Expression::IntLiteral {
+        expression: Box::new(Expression::IntLiteral {
             value: 5,
             position: pos(),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::IntLiteral(1),
@@ -690,7 +690,7 @@ fn test_match_nested_array_pattern() {
 
     // match [[1, 2], [3, 4]] when [[a, b], [c, d]] => a + b + c + d end
     let match_stmt = Statement::Match {
-        expression: Expression::Array {
+        expression: Box::new(Expression::Array {
             elements: vec![
                 Expression::Array {
                     elements: vec![
@@ -720,7 +720,7 @@ fn test_match_nested_array_pattern() {
                 },
             ],
             position: pos(),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Array(vec![
                 MatchPattern::Array(vec![
@@ -780,7 +780,7 @@ fn test_match_mixed_array_patterns() {
 
     // match [1, "hello", true] when [1, x, y] => x end
     let match_stmt = Statement::Match {
-        expression: Expression::Array {
+        expression: Box::new(Expression::Array {
             elements: vec![
                 Expression::IntLiteral {
                     value: 1,
@@ -796,7 +796,7 @@ fn test_match_mixed_array_patterns() {
                 },
             ],
             position: pos(),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Array(vec![
                 MatchPattern::IntLiteral(1),

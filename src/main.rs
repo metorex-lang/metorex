@@ -181,10 +181,13 @@ fn run_inline(cli: &Cli, code: &str, named: &str) -> ! {
         let lexer = Lexer::new(code).with_source_encoding(source_encoding.clone());
         let tokens = lexer.tokenize();
         let parsed = Parser::new(tokens).parse();
+        let prism_refused = prism_refuses_main_script(code, cli);
         let mut vm = VirtualMachine::new();
         apply_cli_flags(&mut vm, cli);
         let errors = parsed.as_ref().err().cloned().unwrap_or_default();
-        if let Some(messages) = refused_program_messages(&mut vm, code, named, cli, &errors) {
+        if let Some(messages) =
+            refused_program_messages(&mut vm, code, named, prism_refused, &errors)
+        {
             for message in messages {
                 eprintln!("{}: {}", named, vm.syntax_error_report(&message, named));
             }
@@ -317,17 +320,21 @@ fn real_main_after_inline(cli: Cli) {
     // Parse
     let mut parser = Parser::new(tokens);
     let parsed = parser.parse();
+    let warnings = parser.default_warnings().to_vec();
+    // The parser holds the tokens, which take more memory than the program.
+    drop(parser);
+    let prism_refused = prism_refuses_main_script(&source, &cli);
     let errors = parsed.as_ref().err().cloned().unwrap_or_default();
-    if let Some(messages) = refused_program_messages(&mut vm, &source, filename, &cli, &errors) {
+    if let Some(messages) =
+        refused_program_messages(&mut vm, &source, filename, prism_refused, &errors)
+    {
         for message in messages {
             let report = vm.syntax_error_report(&message, filename);
             eprintln!("{}: {}", filename, report);
         }
         process::exit(vm.run_at_exit_handlers(1, None));
     }
-    vm.report_parse_warnings(filename, parser.default_warnings());
-    // The parser holds the tokens, which take more memory than the program.
-    drop(parser);
+    vm.report_parse_warnings(filename, &warnings);
     let program = parsed.unwrap_or_default();
 
     if cli.debug {

@@ -77,14 +77,12 @@ impl VirtualMachine {
                     }
                 }
             }
-            Statement::Assignment {
-                target:
-                    Expression::Identifier {
-                        name: const_name, ..
-                    },
-                value,
-                ..
-            } if const_name.starts_with(|c: char| c.is_uppercase()) => {
+            Statement::Assignment { target, value, .. }
+                if let Expression::Identifier {
+                    name: const_name, ..
+                } = &**target
+                    && const_name.starts_with(|c: char| c.is_uppercase()) =>
+            {
                 let assign_pos = statement.position();
                 let const_value = match self.evaluate_constant_assignment(statement, value)? {
                     Ok(written) => written,

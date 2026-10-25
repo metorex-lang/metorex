@@ -36,10 +36,10 @@ fn parse_err(code: &str) -> String {
 fn float_pattern_does_not_match_int_value() {
     let mut vm = VirtualMachine::new();
     let case_stmt = Statement::Match {
-        expression: Expression::IntLiteral {
+        expression: Box::new(Expression::IntLiteral {
             value: 1,
             position: pos(),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::FloatLiteral(1.5),
@@ -78,10 +78,10 @@ fn float_pattern_does_not_match_int_value() {
 fn string_pattern_does_not_match_int_value() {
     let mut vm = VirtualMachine::new();
     let case_stmt = Statement::Match {
-        expression: Expression::IntLiteral {
+        expression: Box::new(Expression::IntLiteral {
             value: 42,
             position: pos(),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::StringLiteral("hello".to_string()),
@@ -120,10 +120,10 @@ fn string_pattern_does_not_match_int_value() {
 fn bool_pattern_does_not_match_int_value() {
     let mut vm = VirtualMachine::new();
     let case_stmt = Statement::Match {
-        expression: Expression::IntLiteral {
+        expression: Box::new(Expression::IntLiteral {
             value: 1,
             position: pos(),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::BoolLiteral(true),
@@ -162,10 +162,10 @@ fn bool_pattern_does_not_match_int_value() {
 fn array_pattern_does_not_match_int_value() {
     let mut vm = VirtualMachine::new();
     let case_stmt = Statement::Match {
-        expression: Expression::IntLiteral {
+        expression: Box::new(Expression::IntLiteral {
             value: 42,
             position: pos(),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::Array(vec![MatchPattern::Wildcard]),
@@ -204,10 +204,10 @@ fn array_pattern_does_not_match_int_value() {
 fn object_pattern_does_not_match_int_value() {
     let mut vm = VirtualMachine::new();
     let case_stmt = Statement::Match {
-        expression: Expression::IntLiteral {
+        expression: Box::new(Expression::IntLiteral {
             value: 42,
             position: pos(),
-        },
+        }),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::Object(vec![("x".to_string(), MatchPattern::Wildcard)]),
@@ -274,7 +274,7 @@ end
 fn multiple_rest_patterns_in_array_error() {
     let mut vm = VirtualMachine::new();
     let case_stmt = Statement::Match {
-        expression: Expression::Array {
+        expression: Box::new(Expression::Array {
             elements: vec![
                 Expression::IntLiteral {
                     value: 1,
@@ -290,7 +290,7 @@ fn multiple_rest_patterns_in_array_error() {
                 },
             ],
             position: pos(),
-        },
+        }),
         cases: vec![MatchCase {
             pattern: MatchPattern::Array(vec![
                 MatchPattern::Rest("first".to_string()),

@@ -22,7 +22,7 @@ impl Parser {
             if self.check(&[TokenKind::Elsif, TokenKind::Else, TokenKind::End]) {
                 break;
             }
-            then_branch.push(self.parse_statement()?);
+            crate::parser::push_tight(&mut then_branch, self.parse_statement()?);
             self.skip_whitespace();
         }
 
@@ -46,7 +46,7 @@ impl Parser {
                 if self.check(&[TokenKind::Elsif, TokenKind::Else, TokenKind::End]) {
                     break;
                 }
-                elsif_body.push(self.parse_statement()?);
+                crate::parser::push_tight(&mut elsif_body, self.parse_statement()?);
                 self.skip_whitespace();
             }
 
@@ -66,7 +66,7 @@ impl Parser {
                 if self.check(&[TokenKind::End]) {
                     break;
                 }
-                else_stmts.push(self.parse_statement()?);
+                crate::parser::push_tight(&mut else_stmts, self.parse_statement()?);
                 self.skip_whitespace();
             }
             Some(else_stmts)
@@ -81,7 +81,7 @@ impl Parser {
         )?;
 
         Ok(Statement::If {
-            condition,
+            condition: Box::new(condition),
             then_branch,
             elsif_branches,
             else_branch,
@@ -109,7 +109,7 @@ impl Parser {
             if self.check(&[TokenKind::End]) {
                 break;
             }
-            body.push(self.parse_statement()?);
+            crate::parser::push_tight(&mut body, self.parse_statement()?);
             self.skip_whitespace();
         }
         self.jump_target_depth -= 1;
@@ -117,7 +117,7 @@ impl Parser {
         self.expect(TokenKind::End, "Expected 'end' after while loop")?;
 
         Ok(Statement::While {
-            condition,
+            condition: Box::new(condition),
             body,
             position: start_pos,
         })
@@ -141,7 +141,7 @@ impl Parser {
                 if self.check(&[TokenKind::End]) {
                     break;
                 }
-                body.push(self.parse_statement()?);
+                crate::parser::push_tight(&mut body, self.parse_statement()?);
                 self.skip_whitespace();
             }
             Ok(())
@@ -151,11 +151,11 @@ impl Parser {
         self.expect(TokenKind::End, "Expected 'end' after until loop")?;
 
         Ok(Statement::While {
-            condition: crate::ast::Expression::UnaryOp {
+            condition: Box::new(crate::ast::Expression::UnaryOp {
                 op: crate::ast::UnaryOp::Not,
                 operand: Box::new(condition),
                 position: start_pos,
-            },
+            }),
             body,
             position: start_pos,
         })
@@ -220,7 +220,7 @@ impl Parser {
             if self.check(&[TokenKind::End]) {
                 break;
             }
-            body.push(self.parse_statement()?);
+            crate::parser::push_tight(&mut body, self.parse_statement()?);
             self.skip_whitespace();
         }
         self.jump_target_depth -= 1;
@@ -233,7 +233,7 @@ impl Parser {
         if !destructures && let [Expression::Identifier { name, .. }] = targets.as_slice() {
             return Ok(Statement::For {
                 variable: name.clone(),
-                iterable,
+                iterable: Box::new(iterable),
                 body,
                 position: start_pos,
             });

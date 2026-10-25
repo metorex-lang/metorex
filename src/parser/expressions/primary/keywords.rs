@@ -223,7 +223,7 @@ impl Parser {
         if self.def_body_depth == 0 {
             return Err(MetorexError::syntax_error(
                 "Invalid yield".to_string(),
-                crate::error::SourceLocation::new(position.line, position.column, position.offset),
+                crate::error::SourceLocation::from(position),
             ));
         }
         let arguments = if self.check(&[TokenKind::LParen]) {

@@ -14,14 +14,14 @@ fn block_returns_last_expression() {
 
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "block".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::Lambda {
-                outer_locals: Vec::new(),
+            }),
+            value: Box::new(Expression::Lambda {
+                outer_locals: Box::new(Vec::new()),
                 parameters: vec!["x".to_string()],
-                parameter_defaults: Vec::new(),
+                parameter_defaults: Box::new(Vec::new()),
                 body: vec![Statement::Expression {
                     expression: Expression::BinaryOp {
                         op: BinaryOp::Add,
@@ -41,15 +41,15 @@ fn block_returns_last_expression() {
                 captured_vars: None,
                 is_lambda: false,
                 position: pos(1, 5),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(2, 1),
-            },
-            value: Expression::Call {
+            }),
+            value: Box::new(Expression::Call {
                 callee: Box::new(Expression::Identifier {
                     name: "block".to_string(),
                     position: pos(2, 1),
@@ -60,7 +60,7 @@ fn block_returns_last_expression() {
                 }],
                 trailing_block: None,
                 position: pos(2, 1),
-            },
+            }),
             position: pos(2, 1),
         },
     ];
@@ -76,25 +76,25 @@ fn block_captures_outer_variable() {
 
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "outer".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 3,
                 position: pos(1, 10),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "block".to_string(),
                 position: pos(2, 1),
-            },
-            value: Expression::Lambda {
-                outer_locals: Vec::new(),
+            }),
+            value: Box::new(Expression::Lambda {
+                outer_locals: Box::new(Vec::new()),
                 parameters: vec!["y".to_string()],
-                parameter_defaults: Vec::new(),
+                parameter_defaults: Box::new(Vec::new()),
                 body: vec![Statement::Expression {
                     expression: Expression::BinaryOp {
                         op: BinaryOp::Add,
@@ -111,18 +111,18 @@ fn block_captures_outer_variable() {
                     position: pos(2, 11),
                 }]
                 .into(),
-                captured_vars: Some(vec!["outer".to_string()]),
+                captured_vars: Some(Box::new(vec!["outer".to_string()])),
                 is_lambda: false,
                 position: pos(2, 5),
-            },
+            }),
             position: pos(2, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "sum".to_string(),
                 position: pos(3, 1),
-            },
-            value: Expression::Call {
+            }),
+            value: Box::new(Expression::Call {
                 callee: Box::new(Expression::Identifier {
                     name: "block".to_string(),
                     position: pos(3, 1),
@@ -133,7 +133,7 @@ fn block_captures_outer_variable() {
                 }],
                 trailing_block: None,
                 position: pos(3, 1),
-            },
+            }),
             position: pos(3, 1),
         },
     ];
@@ -149,13 +149,13 @@ fn block_argument_mismatch_raises_error() {
 
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "block".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::Lambda {
+            }),
+            value: Box::new(Expression::Lambda {
                 parameters: vec!["x".to_string()],
-                parameter_defaults: Vec::new(),
+                parameter_defaults: Box::new(Vec::new()),
                 body: vec![Statement::Expression {
                     expression: Expression::Identifier {
                         name: "x".to_string(),
@@ -165,10 +165,10 @@ fn block_argument_mismatch_raises_error() {
                 }]
                 .into(),
                 captured_vars: None,
-                outer_locals: Vec::new(),
+                outer_locals: Box::new(Vec::new()),
                 is_lambda: true,
                 position: pos(1, 5),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::Expression {
@@ -203,20 +203,20 @@ fn block_return_statement_exits_early() {
 
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "block".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::Lambda {
-                outer_locals: Vec::new(),
+            }),
+            value: Box::new(Expression::Lambda {
+                outer_locals: Box::new(Vec::new()),
                 parameters: vec![],
-                parameter_defaults: Vec::new(),
+                parameter_defaults: Box::new(Vec::new()),
                 body: vec![
                     Statement::Return {
-                        value: Some(Expression::IntLiteral {
+                        value: Some(Box::new(Expression::IntLiteral {
                             value: 42,
                             position: pos(1, 15),
-                        }),
+                        })),
                         position: pos(1, 11),
                     },
                     Statement::Expression {
@@ -231,15 +231,15 @@ fn block_return_statement_exits_early() {
                 captured_vars: None,
                 is_lambda: true,
                 position: pos(1, 5),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "value".to_string(),
                 position: pos(2, 1),
-            },
-            value: Expression::Call {
+            }),
+            value: Box::new(Expression::Call {
                 callee: Box::new(Expression::Identifier {
                     name: "block".to_string(),
                     position: pos(2, 1),
@@ -247,7 +247,7 @@ fn block_return_statement_exits_early() {
                 arguments: vec![],
                 trailing_block: None,
                 position: pos(2, 1),
-            },
+            }),
             position: pos(2, 1),
         },
     ];

@@ -34,16 +34,16 @@ fn string_literal(value: &str, line: usize, column: usize) -> Expression {
 fn evaluates_integer_addition() {
     let mut vm = VirtualMachine::new();
     let assignment = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "result".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::BinaryOp {
+        }),
+        value: Box::new(Expression::BinaryOp {
             op: BinaryOp::Add,
             left: Box::new(int_literal(40, 1, 1)),
             right: Box::new(int_literal(2, 1, 6)),
             position: pos(1, 5),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -55,16 +55,16 @@ fn evaluates_integer_addition() {
 fn promotes_integer_and_float_in_binary_ops() {
     let mut vm = VirtualMachine::new();
     let assignment = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "mixed".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::BinaryOp {
+        }),
+        value: Box::new(Expression::BinaryOp {
             op: BinaryOp::Divide,
             left: Box::new(int_literal(7, 1, 1)),
             right: Box::new(float_literal(2.0, 1, 6)),
             position: pos(1, 5),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -79,16 +79,16 @@ fn promotes_integer_and_float_in_binary_ops() {
 fn concatenates_strings_with_addition() {
     let mut vm = VirtualMachine::new();
     let assignment = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "text".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::BinaryOp {
+        }),
+        value: Box::new(Expression::BinaryOp {
             op: BinaryOp::Add,
             left: Box::new(string_literal("Hello", 1, 1)),
             right: Box::new(string_literal(", world", 1, 10)),
             position: pos(1, 6),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -103,15 +103,15 @@ fn concatenates_strings_with_addition() {
 fn evaluates_unary_minus() {
     let mut vm = VirtualMachine::new();
     let assignment = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "value".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::UnaryOp {
+        }),
+        value: Box::new(Expression::UnaryOp {
             op: UnaryOp::Minus,
             operand: Box::new(int_literal(10, 1, 2)),
             position: pos(1, 1),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -123,11 +123,11 @@ fn evaluates_unary_minus() {
 fn creates_array_literal_with_values() {
     let mut vm = VirtualMachine::new();
     let assignment = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "arr".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::Array {
+        }),
+        value: Box::new(Expression::Array {
             elements: vec![
                 int_literal(1, 1, 2),
                 int_literal(2, 1, 5),
@@ -137,7 +137,7 @@ fn creates_array_literal_with_values() {
                 },
             ],
             position: pos(1, 1),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -159,11 +159,11 @@ fn creates_array_literal_with_values() {
 fn creates_dictionary_literal_with_entries() {
     let mut vm = VirtualMachine::new();
     let assignment = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "dict".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::Dictionary {
+        }),
+        value: Box::new(Expression::Dictionary {
             entries: vec![
                 (
                     string_literal("name", 1, 3),
@@ -172,7 +172,7 @@ fn creates_dictionary_literal_with_entries() {
                 (string_literal("count", 2, 3), int_literal(3, 2, 12)),
             ],
             position: pos(1, 1),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -196,29 +196,29 @@ fn indexes_into_array_literal() {
     let mut vm = VirtualMachine::new();
     let statements = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "arr".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::Array {
+            }),
+            value: Box::new(Expression::Array {
                 elements: vec![int_literal(10, 1, 2), int_literal(20, 1, 6)],
                 position: pos(1, 1),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "second".to_string(),
                 position: pos(2, 1),
-            },
-            value: Expression::Index {
+            }),
+            value: Box::new(Expression::Index {
                 array: Box::new(Expression::Identifier {
                     name: "arr".to_string(),
                     position: pos(2, 1),
                 }),
                 index: Box::new(int_literal(1, 2, 6)),
                 position: pos(2, 1),
-            },
+            }),
             position: pos(2, 1),
         },
     ];
@@ -232,29 +232,29 @@ fn indexes_into_dictionary_literal() {
     let mut vm = VirtualMachine::new();
     let statements = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "dict".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::Dictionary {
+            }),
+            value: Box::new(Expression::Dictionary {
                 entries: vec![(string_literal("key", 1, 2), string_literal("value", 1, 9))],
                 position: pos(1, 1),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(2, 1),
-            },
-            value: Expression::Index {
+            }),
+            value: Box::new(Expression::Index {
                 array: Box::new(Expression::Identifier {
                     name: "dict".to_string(),
                     position: pos(2, 1),
                 }),
                 index: Box::new(string_literal("key", 2, 8)),
                 position: pos(2, 1),
-            },
+            }),
             position: pos(2, 1),
         },
     ];
@@ -271,14 +271,14 @@ fn array_index_past_the_end_answers_nil() {
     let mut vm = VirtualMachine::new();
     let statements = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "arr".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::Array {
+            }),
+            value: Box::new(Expression::Array {
                 elements: vec![int_literal(1, 1, 2)],
                 position: pos(1, 1),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::Expression {
@@ -352,11 +352,11 @@ fn evaluates_interpolated_string() {
         .define("name".to_string(), Object::string("Metorex".to_string()));
 
     let assignment = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "message".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::InterpolatedString {
+        }),
+        value: Box::new(Expression::InterpolatedString {
             parts: vec![
                 InterpolationPart::Text("Hello, ".to_string()),
                 InterpolationPart::Expression(Box::new(Expression::Identifier {
@@ -366,7 +366,7 @@ fn evaluates_interpolated_string() {
                 InterpolationPart::Text("!".to_string()),
             ],
             position: pos(1, 1),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -381,11 +381,11 @@ fn evaluates_interpolated_string() {
 fn evaluates_logical_and_true_true() {
     let mut vm = VirtualMachine::new();
     let assignment = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "result".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::BinaryOp {
+        }),
+        value: Box::new(Expression::BinaryOp {
             op: BinaryOp::And,
             left: Box::new(Expression::BoolLiteral {
                 value: true,
@@ -396,7 +396,7 @@ fn evaluates_logical_and_true_true() {
                 position: pos(1, 8),
             }),
             position: pos(1, 6),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -408,11 +408,11 @@ fn evaluates_logical_and_true_true() {
 fn evaluates_logical_and_true_false() {
     let mut vm = VirtualMachine::new();
     let assignment = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "result".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::BinaryOp {
+        }),
+        value: Box::new(Expression::BinaryOp {
             op: BinaryOp::And,
             left: Box::new(Expression::BoolLiteral {
                 value: true,
@@ -423,7 +423,7 @@ fn evaluates_logical_and_true_false() {
                 position: pos(1, 8),
             }),
             position: pos(1, 6),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -436,11 +436,11 @@ fn evaluates_logical_and_short_circuits_on_false() {
     let mut vm = VirtualMachine::new();
     // false && (x = 99) — right side must NOT be evaluated
     let assignment = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "result".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::BinaryOp {
+        }),
+        value: Box::new(Expression::BinaryOp {
             op: BinaryOp::And,
             left: Box::new(Expression::BoolLiteral {
                 value: false,
@@ -459,7 +459,7 @@ fn evaluates_logical_and_short_circuits_on_false() {
                 position: pos(1, 9),
             }),
             position: pos(1, 6),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -475,11 +475,11 @@ fn evaluates_logical_and_short_circuits_on_false() {
 fn evaluates_logical_or_false_true() {
     let mut vm = VirtualMachine::new();
     let assignment = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "result".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::BinaryOp {
+        }),
+        value: Box::new(Expression::BinaryOp {
             op: BinaryOp::Or,
             left: Box::new(Expression::BoolLiteral {
                 value: false,
@@ -490,7 +490,7 @@ fn evaluates_logical_or_false_true() {
                 position: pos(1, 9),
             }),
             position: pos(1, 7),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -503,11 +503,11 @@ fn evaluates_logical_or_short_circuits_on_true() {
     let mut vm = VirtualMachine::new();
     // true || (x = 99) — right side must NOT be evaluated
     let assignment = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "result".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::BinaryOp {
+        }),
+        value: Box::new(Expression::BinaryOp {
             op: BinaryOp::Or,
             left: Box::new(Expression::BoolLiteral {
                 value: true,
@@ -526,7 +526,7 @@ fn evaluates_logical_or_short_circuits_on_true() {
                 position: pos(1, 8),
             }),
             position: pos(1, 6),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -543,11 +543,11 @@ fn evaluates_logical_or_nil_fallback() {
     let mut vm = VirtualMachine::new();
     // nil || 42 -> 42
     let assignment = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "result".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::BinaryOp {
+        }),
+        value: Box::new(Expression::BinaryOp {
             op: BinaryOp::Or,
             left: Box::new(Expression::NilLiteral {
                 position: pos(1, 1),
@@ -557,7 +557,7 @@ fn evaluates_logical_or_nil_fallback() {
                 position: pos(1, 8),
             }),
             position: pos(1, 5),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -569,18 +569,18 @@ fn evaluates_logical_or_nil_fallback() {
 fn evaluates_not_true_to_false() {
     let mut vm = VirtualMachine::new();
     let assignment = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "result".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::UnaryOp {
+        }),
+        value: Box::new(Expression::UnaryOp {
             op: UnaryOp::Not,
             operand: Box::new(Expression::BoolLiteral {
                 value: true,
                 position: pos(1, 2),
             }),
             position: pos(1, 1),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -592,18 +592,18 @@ fn evaluates_not_true_to_false() {
 fn evaluates_not_false_to_true() {
     let mut vm = VirtualMachine::new();
     let assignment = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "result".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::UnaryOp {
+        }),
+        value: Box::new(Expression::UnaryOp {
             op: UnaryOp::Not,
             operand: Box::new(Expression::BoolLiteral {
                 value: false,
                 position: pos(1, 2),
             }),
             position: pos(1, 1),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -615,17 +615,17 @@ fn evaluates_not_false_to_true() {
 fn evaluates_not_nil_to_true() {
     let mut vm = VirtualMachine::new();
     let assignment = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "result".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::UnaryOp {
+        }),
+        value: Box::new(Expression::UnaryOp {
             op: UnaryOp::Not,
             operand: Box::new(Expression::NilLiteral {
                 position: pos(1, 2),
             }),
             position: pos(1, 1),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -637,15 +637,15 @@ fn evaluates_not_nil_to_true() {
 fn evaluates_not_integer_to_false() {
     let mut vm = VirtualMachine::new();
     let assignment = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "result".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::UnaryOp {
+        }),
+        value: Box::new(Expression::UnaryOp {
             op: UnaryOp::Not,
             operand: Box::new(int_literal(42, 1, 2)),
             position: pos(1, 1),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -657,22 +657,22 @@ fn evaluates_not_integer_to_false() {
 fn evaluates_global_variable_assignment_and_read() {
     let mut vm = VirtualMachine::new();
     let set_global = Statement::Assignment {
-        target: Expression::GlobalVariable {
+        target: Box::new(Expression::GlobalVariable {
             name: "count".to_string(),
             position: pos(1, 1),
-        },
-        value: int_literal(99, 1, 10),
+        }),
+        value: Box::new(int_literal(99, 1, 10)),
         position: pos(1, 1),
     };
     let read_global = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "result".to_string(),
             position: pos(2, 1),
-        },
-        value: Expression::GlobalVariable {
+        }),
+        value: Box::new(Expression::GlobalVariable {
             name: "count".to_string(),
             position: pos(2, 10),
-        },
+        }),
         position: pos(2, 1),
     };
 
@@ -685,14 +685,14 @@ fn evaluates_global_variable_assignment_and_read() {
 fn global_variable_defaults_to_nil_when_unset() {
     let mut vm = VirtualMachine::new();
     let read_global = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "result".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::GlobalVariable {
+        }),
+        value: Box::new(Expression::GlobalVariable {
             name: "unset_global".to_string(),
             position: pos(1, 10),
-        },
+        }),
         position: pos(1, 1),
     };
 

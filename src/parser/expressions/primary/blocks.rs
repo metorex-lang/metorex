@@ -77,10 +77,10 @@ impl Parser {
 
         Ok(Expression::Lambda {
             parameters,
-            parameter_defaults,
+            parameter_defaults: Box::new(parameter_defaults),
             body: body.into(),
-            captured_vars: Some(Vec::new()),
-            outer_locals: Vec::new(),
+            captured_vars: Some(Box::new(Vec::new())),
+            outer_locals: Box::new(Vec::new()),
             is_lambda: false,
             position: token_position,
         })
@@ -141,10 +141,10 @@ impl Parser {
                 if let Expression::Lambda { body, position, .. } = block {
                     return self.parse_postfix_calls(Expression::Lambda {
                         parameters: params,
-                        parameter_defaults: defaults,
+                        parameter_defaults: Box::new(defaults),
                         body,
-                        captured_vars: Some(Vec::new()),
-                        outer_locals: Vec::new(),
+                        captured_vars: Some(Box::new(Vec::new())),
+                        outer_locals: Box::new(Vec::new()),
                         is_lambda: true,
                         position,
                     });
@@ -169,11 +169,7 @@ impl Parser {
         ) {
             return Err(MetorexError::syntax_error(
                 "syntax error, unexpected '|'",
-                crate::error::SourceLocation::new(
-                    self.peek_ahead(offset).position.line,
-                    self.peek_ahead(offset).position.column,
-                    self.peek_ahead(offset).position.offset,
-                ),
+                crate::error::SourceLocation::from(self.peek_ahead(offset).position),
             ));
         }
         Ok(())
@@ -191,10 +187,10 @@ impl Parser {
         {
             Ok(Expression::Lambda {
                 parameters,
-                parameter_defaults: Vec::new(),
+                parameter_defaults: Box::new(Vec::new()),
                 body,
-                captured_vars: Some(Vec::new()),
-                outer_locals: Vec::new(),
+                captured_vars: Some(Box::new(Vec::new())),
+                outer_locals: Box::new(Vec::new()),
                 is_lambda: true,
                 position,
             })
@@ -215,10 +211,10 @@ impl Parser {
         {
             Ok(Expression::Lambda {
                 parameters,
-                parameter_defaults: Vec::new(),
+                parameter_defaults: Box::new(Vec::new()),
                 body,
-                captured_vars: Some(Vec::new()),
-                outer_locals: Vec::new(),
+                captured_vars: Some(Box::new(Vec::new())),
+                outer_locals: Box::new(Vec::new()),
                 is_lambda: true,
                 position,
             })
@@ -371,21 +367,17 @@ impl Parser {
                 if let Some(message) = refusal {
                     return Err(MetorexError::syntax_error(
                         message.to_string(),
-                        crate::error::SourceLocation::new(
-                            position.line,
-                            position.column,
-                            position.offset,
-                        ),
+                        crate::error::SourceLocation::from(position),
                     ));
                 }
                 // A lambda literal is a receiver like any other, so
                 // `-> (a) { a }.call(1)` chains onto it.
                 return self.parse_postfix_calls(Expression::Lambda {
                     parameters: params,
-                    parameter_defaults: defaults,
+                    parameter_defaults: Box::new(defaults),
                     body,
-                    captured_vars: Some(Vec::new()),
-                    outer_locals: Vec::new(),
+                    captured_vars: Some(Box::new(Vec::new())),
+                    outer_locals: Box::new(Vec::new()),
                     is_lambda: true,
                     position,
                 });

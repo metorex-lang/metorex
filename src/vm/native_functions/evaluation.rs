@@ -241,7 +241,7 @@ impl VirtualMachine {
                 .map(|(at, warning)| {
                     let mut shifted = *at;
                     shifted.line =
-                        ((at.line as i64) - (lineno as i64) + named_lineno).max(0) as usize;
+                        ((at.line as i64) - (lineno as i64) + named_lineno).max(0) as usize as u32;
                     (shifted, warning.clone())
                 })
                 .collect();

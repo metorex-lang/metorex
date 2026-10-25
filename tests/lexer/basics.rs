@@ -450,7 +450,7 @@ fn line_continuation_backslash_newline() {
 #[test]
 fn line_continuation_backslash_not_followed_by_newline() {
     let tokens = Lexer::new("/a\\/b/").tokenize();
-    assert!(matches!(&tokens[0].kind, TokenKind::Regex(_, _)));
+    assert!(matches!(&tokens[0].kind, TokenKind::Regex(_)));
 }
 
 #[test]

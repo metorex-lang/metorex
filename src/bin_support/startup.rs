@@ -34,10 +34,13 @@ pub(crate) fn embedded_script(source: &str, asked: bool) -> Result<String, Strin
 /// Report whether source parses, the way `ruby -c` does, and end there.
 pub(crate) fn check_syntax(source: &str, name: &str, cli: &Cli) -> ! {
     let lexer = Lexer::new(source);
-    let mut parser = Parser::new(lexer.tokenize());
-    let errors = parser.parse().err().unwrap_or_default();
+    let errors = Parser::new(lexer.tokenize())
+        .parse()
+        .err()
+        .unwrap_or_default();
+    let prism_refused = prism_refuses_main_script(source, cli);
     let mut vm = VirtualMachine::new();
-    match refused_program_messages(&mut vm, source, name, cli, &errors) {
+    match refused_program_messages(&mut vm, source, name, prism_refused, &errors) {
         None => {
             println!("Syntax OK");
             process::exit(0)
@@ -71,16 +74,24 @@ fn wrapping_switches(cli: &Cli) -> String {
     switches
 }
 
-/// The SyntaxError messages for a program MRI refuses, given the errors the
-/// interpreter's own parser found, or None when the program reads.
+/// Whether MRI's parser refuses the main script `source` under the
+/// switches `cli` names. It runs once the interpreter's tokens are freed,
+/// so prism's tree takes the blocks they held.
+pub(crate) fn prism_refuses_main_script(source: &str, cli: &Cli) -> bool {
+    VirtualMachine::prism_refuses_program(source, &wrapping_switches(cli))
+}
+
+/// The SyntaxError messages for a program MRI refuses, given whether prism
+/// refused it and the errors the interpreter's own parser found, or None
+/// when the program reads.
 pub(crate) fn refused_program_messages<E: ToString>(
     vm: &mut VirtualMachine,
     source: &str,
     named: &str,
-    cli: &Cli,
+    prism_refused: bool,
     parse_errors: &[E],
 ) -> Option<Vec<String>> {
-    if parse_errors.is_empty() && !vm.prism_refuses_program(source, &wrapping_switches(cli)) {
+    if parse_errors.is_empty() && !prism_refused {
         return None;
     }
     if let Some(message) = vm.program_syntax_message(source, named, 1) {

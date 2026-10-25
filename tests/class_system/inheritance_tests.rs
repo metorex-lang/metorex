@@ -34,10 +34,10 @@ fn test_basic_inheritance_method_lookup() {
                 name: "speak".to_string(),
                 parameters: vec![],
                 body: vec![Statement::Return {
-                    value: Some(Expression::StringLiteral {
+                    value: Some(Box::new(Expression::StringLiteral {
                         value: "Some sound".to_string(),
                         position: pos(3, 5),
-                    }),
+                    })),
                     position: pos(3, 5),
                 }]
                 .into(),
@@ -56,11 +56,11 @@ fn test_basic_inheritance_method_lookup() {
             position: pos(6, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "d".to_string(),
                 position: pos(8, 1),
-            },
-            value: Expression::MethodCall {
+            }),
+            value: Box::new(Expression::MethodCall {
                 receiver: Box::new(Expression::Identifier {
                     name: "Dog".to_string(),
                     position: pos(8, 5),
@@ -69,15 +69,15 @@ fn test_basic_inheritance_method_lookup() {
                 arguments: vec![],
                 trailing_block: None,
                 position: pos(8, 5),
-            },
+            }),
             position: pos(8, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(9, 1),
-            },
-            value: Expression::MethodCall {
+            }),
+            value: Box::new(Expression::MethodCall {
                 receiver: Box::new(Expression::Identifier {
                     name: "d".to_string(),
                     position: pos(9, 10),
@@ -86,7 +86,7 @@ fn test_basic_inheritance_method_lookup() {
                 arguments: vec![],
                 trailing_block: None,
                 position: pos(9, 10),
-            },
+            }),
             position: pos(9, 1),
         },
     ];
@@ -124,10 +124,10 @@ fn test_method_overriding() {
                 name: "speak".to_string(),
                 parameters: vec![],
                 body: vec![Statement::Return {
-                    value: Some(Expression::StringLiteral {
+                    value: Some(Box::new(Expression::StringLiteral {
                         value: "Some sound".to_string(),
                         position: pos(3, 5),
-                    }),
+                    })),
                     position: pos(3, 5),
                 }]
                 .into(),
@@ -147,10 +147,10 @@ fn test_method_overriding() {
                 name: "speak".to_string(),
                 parameters: vec![],
                 body: vec![Statement::Return {
-                    value: Some(Expression::StringLiteral {
+                    value: Some(Box::new(Expression::StringLiteral {
                         value: "Woof!".to_string(),
                         position: pos(8, 5),
-                    }),
+                    })),
                     position: pos(8, 5),
                 }]
                 .into(),
@@ -161,11 +161,11 @@ fn test_method_overriding() {
             position: pos(6, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "d".to_string(),
                 position: pos(11, 1),
-            },
-            value: Expression::MethodCall {
+            }),
+            value: Box::new(Expression::MethodCall {
                 receiver: Box::new(Expression::Identifier {
                     name: "Dog".to_string(),
                     position: pos(11, 5),
@@ -174,15 +174,15 @@ fn test_method_overriding() {
                 arguments: vec![],
                 trailing_block: None,
                 position: pos(11, 5),
-            },
+            }),
             position: pos(11, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(12, 1),
-            },
-            value: Expression::MethodCall {
+            }),
+            value: Box::new(Expression::MethodCall {
                 receiver: Box::new(Expression::Identifier {
                     name: "d".to_string(),
                     position: pos(12, 10),
@@ -191,7 +191,7 @@ fn test_method_overriding() {
                 arguments: vec![],
                 trailing_block: None,
                 position: pos(12, 10),
-            },
+            }),
             position: pos(12, 1),
         },
     ];
@@ -234,10 +234,10 @@ fn test_inheritance_chain_method_lookup() {
                 name: "method_a".to_string(),
                 parameters: vec![],
                 body: vec![Statement::Return {
-                    value: Some(Expression::StringLiteral {
+                    value: Some(Box::new(Expression::StringLiteral {
                         value: "A".to_string(),
                         position: pos(3, 5),
-                    }),
+                    })),
                     position: pos(3, 5),
                 }]
                 .into(),
@@ -257,10 +257,10 @@ fn test_inheritance_chain_method_lookup() {
                 name: "method_b".to_string(),
                 parameters: vec![],
                 body: vec![Statement::Return {
-                    value: Some(Expression::StringLiteral {
+                    value: Some(Box::new(Expression::StringLiteral {
                         value: "B".to_string(),
                         position: pos(8, 5),
-                    }),
+                    })),
                     position: pos(8, 5),
                 }]
                 .into(),
@@ -280,10 +280,10 @@ fn test_inheritance_chain_method_lookup() {
                 name: "method_c".to_string(),
                 parameters: vec![],
                 body: vec![Statement::Return {
-                    value: Some(Expression::StringLiteral {
+                    value: Some(Box::new(Expression::StringLiteral {
                         value: "C".to_string(),
                         position: pos(13, 5),
-                    }),
+                    })),
                     position: pos(13, 5),
                 }]
                 .into(),
@@ -294,11 +294,11 @@ fn test_inheritance_chain_method_lookup() {
             position: pos(11, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "c".to_string(),
                 position: pos(16, 1),
-            },
-            value: Expression::MethodCall {
+            }),
+            value: Box::new(Expression::MethodCall {
                 receiver: Box::new(Expression::Identifier {
                     name: "Child".to_string(),
                     position: pos(16, 5),
@@ -307,15 +307,15 @@ fn test_inheritance_chain_method_lookup() {
                 arguments: vec![],
                 trailing_block: None,
                 position: pos(16, 5),
-            },
+            }),
             position: pos(16, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(17, 1),
-            },
-            value: Expression::MethodCall {
+            }),
+            value: Box::new(Expression::MethodCall {
                 receiver: Box::new(Expression::Identifier {
                     name: "c".to_string(),
                     position: pos(17, 10),
@@ -324,7 +324,7 @@ fn test_inheritance_chain_method_lookup() {
                 arguments: vec![],
                 trailing_block: None,
                 position: pos(17, 10),
-            },
+            }),
             position: pos(17, 1),
         },
     ];
@@ -363,14 +363,14 @@ fn test_inherited_initialize_method() {
                     name: "initialize".to_string(),
                     parameters: vec![Parameter::simple("name".to_string(), pos(2, 18))],
                     body: vec![Statement::Assignment {
-                        target: Expression::InstanceVariable {
+                        target: Box::new(Expression::InstanceVariable {
                             name: "name".to_string(),
                             position: pos(3, 5),
-                        },
-                        value: Expression::Identifier {
+                        }),
+                        value: Box::new(Expression::Identifier {
                             name: "name".to_string(),
                             position: pos(3, 13),
-                        },
+                        }),
                         position: pos(3, 5),
                     }]
                     .into(),
@@ -382,10 +382,10 @@ fn test_inherited_initialize_method() {
                     name: "get_name".to_string(),
                     parameters: vec![],
                     body: vec![Statement::Return {
-                        value: Some(Expression::InstanceVariable {
+                        value: Some(Box::new(Expression::InstanceVariable {
                             name: "name".to_string(),
                             position: pos(6, 5),
-                        }),
+                        })),
                         position: pos(6, 5),
                     }]
                     .into(),
@@ -405,11 +405,11 @@ fn test_inherited_initialize_method() {
             position: pos(9, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "d".to_string(),
                 position: pos(11, 1),
-            },
-            value: Expression::MethodCall {
+            }),
+            value: Box::new(Expression::MethodCall {
                 receiver: Box::new(Expression::Identifier {
                     name: "Dog".to_string(),
                     position: pos(11, 5),
@@ -421,15 +421,15 @@ fn test_inherited_initialize_method() {
                 }],
                 trailing_block: None,
                 position: pos(11, 5),
-            },
+            }),
             position: pos(11, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(12, 1),
-            },
-            value: Expression::MethodCall {
+            }),
+            value: Box::new(Expression::MethodCall {
                 receiver: Box::new(Expression::Identifier {
                     name: "d".to_string(),
                     position: pos(12, 10),
@@ -438,7 +438,7 @@ fn test_inherited_initialize_method() {
                 arguments: vec![],
                 trailing_block: None,
                 position: pos(12, 10),
-            },
+            }),
             position: pos(12, 1),
         },
     ];
@@ -483,25 +483,25 @@ fn test_overriding_with_instance_variables() {
                     parameters: vec![Parameter::simple("name".to_string(), pos(2, 18))],
                     body: vec![
                         Statement::Assignment {
-                            target: Expression::InstanceVariable {
+                            target: Box::new(Expression::InstanceVariable {
                                 name: "name".to_string(),
                                 position: pos(3, 5),
-                            },
-                            value: Expression::Identifier {
+                            }),
+                            value: Box::new(Expression::Identifier {
                                 name: "name".to_string(),
                                 position: pos(3, 13),
-                            },
+                            }),
                             position: pos(3, 5),
                         },
                         Statement::Assignment {
-                            target: Expression::InstanceVariable {
+                            target: Box::new(Expression::InstanceVariable {
                                 name: "sound".to_string(),
                                 position: pos(4, 5),
-                            },
-                            value: Expression::StringLiteral {
+                            }),
+                            value: Box::new(Expression::StringLiteral {
                                 value: "Some sound".to_string(),
                                 position: pos(4, 14),
-                            },
+                            }),
                             position: pos(4, 5),
                         },
                     ]
@@ -514,10 +514,10 @@ fn test_overriding_with_instance_variables() {
                     name: "speak".to_string(),
                     parameters: vec![],
                     body: vec![Statement::Return {
-                        value: Some(Expression::InstanceVariable {
+                        value: Some(Box::new(Expression::InstanceVariable {
                             name: "sound".to_string(),
                             position: pos(7, 5),
-                        }),
+                        })),
                         position: pos(7, 5),
                     }]
                     .into(),
@@ -539,25 +539,25 @@ fn test_overriding_with_instance_variables() {
                 parameters: vec![Parameter::simple("name".to_string(), pos(11, 18))],
                 body: vec![
                     Statement::Assignment {
-                        target: Expression::InstanceVariable {
+                        target: Box::new(Expression::InstanceVariable {
                             name: "name".to_string(),
                             position: pos(12, 5),
-                        },
-                        value: Expression::Identifier {
+                        }),
+                        value: Box::new(Expression::Identifier {
                             name: "name".to_string(),
                             position: pos(12, 13),
-                        },
+                        }),
                         position: pos(12, 5),
                     },
                     Statement::Assignment {
-                        target: Expression::InstanceVariable {
+                        target: Box::new(Expression::InstanceVariable {
                             name: "sound".to_string(),
                             position: pos(13, 5),
-                        },
-                        value: Expression::StringLiteral {
+                        }),
+                        value: Box::new(Expression::StringLiteral {
                             value: "Woof!".to_string(),
                             position: pos(13, 14),
-                        },
+                        }),
                         position: pos(13, 5),
                     },
                 ]
@@ -569,11 +569,11 @@ fn test_overriding_with_instance_variables() {
             position: pos(10, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "d".to_string(),
                 position: pos(16, 1),
-            },
-            value: Expression::MethodCall {
+            }),
+            value: Box::new(Expression::MethodCall {
                 receiver: Box::new(Expression::Identifier {
                     name: "Dog".to_string(),
                     position: pos(16, 5),
@@ -585,15 +585,15 @@ fn test_overriding_with_instance_variables() {
                 }],
                 trailing_block: None,
                 position: pos(16, 5),
-            },
+            }),
             position: pos(16, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(17, 1),
-            },
-            value: Expression::MethodCall {
+            }),
+            value: Box::new(Expression::MethodCall {
                 receiver: Box::new(Expression::Identifier {
                     name: "d".to_string(),
                     position: pos(17, 10),
@@ -602,7 +602,7 @@ fn test_overriding_with_instance_variables() {
                 arguments: vec![],
                 trailing_block: None,
                 position: pos(17, 10),
-            },
+            }),
             position: pos(17, 1),
         },
     ];
@@ -632,10 +632,10 @@ fn test_multiple_inheritance_levels() {
                 name: "get_value".to_string(),
                 parameters: vec![],
                 body: vec![Statement::Return {
-                    value: Some(Expression::IntLiteral {
+                    value: Some(Box::new(Expression::IntLiteral {
                         value: 1,
                         position: pos(3, 5),
-                    }),
+                    })),
                     position: pos(3, 5),
                 }]
                 .into(),
@@ -655,10 +655,10 @@ fn test_multiple_inheritance_levels() {
                 name: "get_value".to_string(),
                 parameters: vec![],
                 body: vec![Statement::Return {
-                    value: Some(Expression::IntLiteral {
+                    value: Some(Box::new(Expression::IntLiteral {
                         value: 2,
                         position: pos(8, 5),
-                    }),
+                    })),
                     position: pos(8, 5),
                 }]
                 .into(),
@@ -678,10 +678,10 @@ fn test_multiple_inheritance_levels() {
                 name: "get_value".to_string(),
                 parameters: vec![],
                 body: vec![Statement::Return {
-                    value: Some(Expression::IntLiteral {
+                    value: Some(Box::new(Expression::IntLiteral {
                         value: 3,
                         position: pos(13, 5),
-                    }),
+                    })),
                     position: pos(13, 5),
                 }]
                 .into(),
@@ -692,11 +692,11 @@ fn test_multiple_inheritance_levels() {
             position: pos(11, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "c".to_string(),
                 position: pos(16, 1),
-            },
-            value: Expression::MethodCall {
+            }),
+            value: Box::new(Expression::MethodCall {
                 receiver: Box::new(Expression::Identifier {
                     name: "Child".to_string(),
                     position: pos(16, 5),
@@ -705,15 +705,15 @@ fn test_multiple_inheritance_levels() {
                 arguments: vec![],
                 trailing_block: None,
                 position: pos(16, 5),
-            },
+            }),
             position: pos(16, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "result".to_string(),
                 position: pos(17, 1),
-            },
-            value: Expression::MethodCall {
+            }),
+            value: Box::new(Expression::MethodCall {
                 receiver: Box::new(Expression::Identifier {
                     name: "c".to_string(),
                     position: pos(17, 10),
@@ -722,7 +722,7 @@ fn test_multiple_inheritance_levels() {
                 arguments: vec![],
                 trailing_block: None,
                 position: pos(17, 10),
-            },
+            }),
             position: pos(17, 1),
         },
     ];

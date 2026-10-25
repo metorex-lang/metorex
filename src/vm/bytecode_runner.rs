@@ -1386,7 +1386,7 @@ impl VirtualMachine {
             Instruction::CoverBranch { arm } => self.coverage_branch(position, usize::from(arm)),
             Instruction::CoverLine => {
                 if self.coverage.is_some() {
-                    self.coverage_count(position.line);
+                    self.coverage_count(position.line as usize);
                 }
             }
             Instruction::CaseArm { subject, arm } => {
@@ -1647,7 +1647,7 @@ impl VirtualMachine {
 
     /// What happens as a statement starts.
     fn start_statement(&mut self, statement: StatementStart) -> Result<(), MetorexError> {
-        let line = statement.position.line;
+        let line = statement.position.line as usize;
         match statement.kind {
             StartKind::Statement { line_event } => {
                 self.begin_statement(statement.position, line_event)

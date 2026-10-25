@@ -27,13 +27,13 @@ impl Parser {
         if reads_as_void(&value) {
             return Err(crate::error::MetorexError::syntax_error(
                 "void value expression",
-                crate::error::SourceLocation::new(position.line, position.column, position.offset),
+                crate::error::SourceLocation::from(position),
             ));
         }
         let mut left = crate::ast::Expression::BinaryOp {
             op: BinaryOp::Assign,
-            left: Box::new(target),
-            right: Box::new(value),
+            left: target,
+            right: value,
             position,
         };
         while self.check(&[TokenKind::KeywordAnd, TokenKind::KeywordOr]) {
@@ -314,8 +314,8 @@ pub(crate) fn statement_as_expression(
             position,
         } => Expression::BinaryOp {
             op: BinaryOp::Assign,
-            left: Box::new(target),
-            right: Box::new(value),
+            left: target,
+            right: value,
             position,
         },
         other => Expression::BeginRescue {

@@ -16,7 +16,10 @@ impl Parser {
         if !written_apart {
             self.call_argument_depth -= 1;
         }
-        read
+        read.map(|mut arguments| {
+            arguments.shrink_to_fit();
+            arguments
+        })
     }
 
     pub(crate) fn parse_arguments_inside_parens(

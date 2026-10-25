@@ -582,16 +582,12 @@ fn is_generated_member_accessor(
     match &method.body[..] {
         [
             Statement::Return {
-                value: Some(Expression::InstanceVariable { name, .. }),
-                ..
+                value: Some(value), ..
             },
-        ] => *name == slot,
-        [
-            Statement::Assignment {
-                target: Expression::InstanceVariable { name, .. },
-                ..
-            },
-        ] => *name == slot,
+        ] => matches!(&**value, Expression::InstanceVariable { name, .. } if *name == slot),
+        [Statement::Assignment { target, .. }] => {
+            matches!(&**target, Expression::InstanceVariable { name, .. } if *name == slot)
+        }
         _ => false,
     }
 }

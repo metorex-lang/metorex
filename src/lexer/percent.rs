@@ -178,7 +178,7 @@ impl<'a> Lexer<'a> {
                 break;
             }
         }
-        Token::new(TokenKind::Regex(pattern, flags), position)
+        Token::new(TokenKind::Regex(Box::new((pattern, flags))), position)
     }
 
     /// Lex a `%w[a b c]` word array or a `%i[a b c]` symbol array. The token

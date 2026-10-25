@@ -25,17 +25,17 @@ fn calls_string_length_method() {
     let mut vm = VirtualMachine::new();
 
     let assign = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "len".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::MethodCall {
+        }),
+        value: Box::new(Expression::MethodCall {
             receiver: Box::new(string_literal("hello", pos(1, 1))),
             method: "length".to_string(),
             arguments: vec![],
             trailing_block: None,
             position: pos(1, 10),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -48,17 +48,17 @@ fn string_upcase_returns_new_string() {
     let mut vm = VirtualMachine::new();
 
     let assign = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "shout".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::MethodCall {
+        }),
+        value: Box::new(Expression::MethodCall {
             receiver: Box::new(string_literal("Metorex", pos(1, 1))),
             method: "upcase".to_string(),
             arguments: vec![],
             trailing_block: None,
             position: pos(1, 15),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -74,14 +74,14 @@ fn array_push_and_pop_updates_collection() {
     let mut vm = VirtualMachine::new();
 
     let setup = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "items".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::Array {
+        }),
+        value: Box::new(Expression::Array {
             elements: vec![int_literal(1, pos(1, 9)), int_literal(2, pos(1, 12))],
             position: pos(1, 9),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -100,11 +100,11 @@ fn array_push_and_pop_updates_collection() {
     };
 
     let pop_assign = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "last".to_string(),
             position: pos(3, 1),
-        },
-        value: Expression::MethodCall {
+        }),
+        value: Box::new(Expression::MethodCall {
             receiver: Box::new(Expression::Identifier {
                 name: "items".to_string(),
                 position: pos(3, 10),
@@ -113,7 +113,7 @@ fn array_push_and_pop_updates_collection() {
             arguments: vec![],
             trailing_block: None,
             position: pos(3, 16),
-        },
+        }),
         position: pos(3, 1),
     };
 
@@ -138,14 +138,14 @@ fn array_append_adds_element() {
     let mut vm = VirtualMachine::new();
 
     let setup = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "items".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::Array {
+        }),
+        value: Box::new(Expression::Array {
             elements: vec![int_literal(1, pos(1, 9)), int_literal(2, pos(1, 12))],
             position: pos(1, 9),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -205,17 +205,17 @@ fn string_strip_removes_whitespace() {
     let mut vm = VirtualMachine::new();
 
     let assign = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "trimmed".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::MethodCall {
+        }),
+        value: Box::new(Expression::MethodCall {
             receiver: Box::new(string_literal("  hello  ", pos(1, 1))),
             method: "strip".to_string(),
             arguments: vec![],
             trailing_block: None,
             position: pos(1, 15),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -231,17 +231,17 @@ fn string_reverse_reverses_characters() {
     let mut vm = VirtualMachine::new();
 
     let assign = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "reversed".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::MethodCall {
+        }),
+        value: Box::new(Expression::MethodCall {
             receiver: Box::new(string_literal("abc", pos(1, 1))),
             method: "reverse".to_string(),
             arguments: vec![],
             trailing_block: None,
             position: pos(1, 15),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -257,17 +257,17 @@ fn string_chars_returns_array_of_characters() {
     let mut vm = VirtualMachine::new();
 
     let assign = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "chars".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::MethodCall {
+        }),
+        value: Box::new(Expression::MethodCall {
             receiver: Box::new(string_literal("Hi", pos(1, 1))),
             method: "chars".to_string(),
             arguments: vec![],
             trailing_block: None,
             position: pos(1, 15),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -289,17 +289,17 @@ fn string_bytes_returns_array_of_byte_values() {
     let mut vm = VirtualMachine::new();
 
     let assign = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "bytes".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::MethodCall {
+        }),
+        value: Box::new(Expression::MethodCall {
             receiver: Box::new(string_literal("AB", pos(1, 1))),
             method: "bytes".to_string(),
             arguments: vec![],
             trailing_block: None,
             position: pos(1, 15),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -321,17 +321,17 @@ fn string_reverse_handles_unicode() {
     let mut vm = VirtualMachine::new();
 
     let assign = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "reversed".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::MethodCall {
+        }),
+        value: Box::new(Expression::MethodCall {
             receiver: Box::new(string_literal("こんにちは", pos(1, 1))),
             method: "reverse".to_string(),
             arguments: vec![],
             trailing_block: None,
             position: pos(1, 15),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -351,17 +351,17 @@ fn float_round_rounds_to_precision() {
     let mut vm = VirtualMachine::new();
 
     let assign = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "rounded".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::MethodCall {
+        }),
+        value: Box::new(Expression::MethodCall {
             receiver: Box::new(float_literal(69.85, pos(1, 1))),
             method: "round".to_string(),
             arguments: vec![int_literal(1, pos(1, 20))],
             trailing_block: None,
             position: pos(1, 15),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -374,17 +374,17 @@ fn float_round_with_zero_precision() {
     let mut vm = VirtualMachine::new();
 
     let assign = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "rounded".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::MethodCall {
+        }),
+        value: Box::new(Expression::MethodCall {
             receiver: Box::new(float_literal(3.7, pos(1, 1))),
             method: "round".to_string(),
             arguments: vec![int_literal(0, pos(1, 20))],
             trailing_block: None,
             position: pos(1, 15),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -397,17 +397,17 @@ fn float_round_with_two_decimals() {
     let mut vm = VirtualMachine::new();
 
     let assign = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "rounded".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::MethodCall {
+        }),
+        value: Box::new(Expression::MethodCall {
             receiver: Box::new(float_literal(3.14159, pos(1, 1))),
             method: "round".to_string(),
             arguments: vec![int_literal(2, pos(1, 20))],
             trailing_block: None,
             position: pos(1, 15),
-        },
+        }),
         position: pos(1, 1),
     };
 
@@ -420,17 +420,17 @@ fn float_round_with_negative_precision_answers_a_whole_number() {
     let mut vm = VirtualMachine::new();
 
     let statements = vec![Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "rounded".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::MethodCall {
+        }),
+        value: Box::new(Expression::MethodCall {
             receiver: Box::new(float_literal(1234.5, pos(1, 1))),
             method: "round".to_string(),
             arguments: vec![int_literal(-2, pos(1, 20))],
             trailing_block: None,
             position: pos(1, 15),
-        },
+        }),
         position: pos(1, 1),
     }];
 
@@ -443,17 +443,17 @@ fn float_round_with_non_integer_precision_fails() {
     let mut vm = VirtualMachine::new();
 
     let statements = vec![Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "rounded".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::MethodCall {
+        }),
+        value: Box::new(Expression::MethodCall {
             receiver: Box::new(float_literal(3.7, pos(1, 1))),
             method: "round".to_string(),
             arguments: vec![string_literal("hello", pos(1, 20))],
             trailing_block: None,
             position: pos(1, 15),
-        },
+        }),
         position: pos(1, 1),
     }];
 

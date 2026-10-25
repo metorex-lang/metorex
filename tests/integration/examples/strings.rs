@@ -80,6 +80,21 @@ fn test_strings_byte_splices_parens_execution() {
     assert_eq!(output, BYTE_SPLICES_OUTPUT);
 }
 
+/// The expected output of both `strings/byte_slices_after_conversion` variants.
+const BYTE_SLICES_AFTER_CONVERSION_OUTPUT: &str = "\"ELL\"\nnil\n";
+
+#[test]
+fn test_strings_byte_slices_after_conversion_execution() {
+    let output = run_example("strings/byte_slices_after_conversion.rb");
+    assert_eq!(output, BYTE_SLICES_AFTER_CONVERSION_OUTPUT);
+}
+
+#[test]
+fn test_strings_byte_slices_after_conversion_parens_execution() {
+    let output = run_example("strings/byte_slices_after_conversion_parens.rb");
+    assert_eq!(output, BYTE_SLICES_AFTER_CONVERSION_OUTPUT);
+}
+
 /// The expected output of both `strings/byte_sets` variants.
 const BYTE_SETS_OUTPUT: &str = "[0, 32, 45, 32, 255]\n#<Encoding:BINARY (ASCII-8BIT)>\ntrue\nfalse\ninvalid byte sequence in UTF-8\ninvalid range \"h-e\" in string transliteration\n\"heo\"\n";
 

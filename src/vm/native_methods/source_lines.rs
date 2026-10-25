@@ -284,17 +284,17 @@ fn through_heredoc_bodies(source: &str, placed: &[Placed], first: usize, last: u
         let mut body_line = through.max(line) + 1;
         for item in placed
             .iter()
-            .filter(|item| item.token.position.line == line)
+            .filter(|item| item.token.position.line as usize == line)
         {
             if item.token.kind == TokenKind::Shovel
                 || !source
-                    .get(item.token.position.offset..)
+                    .get(item.token.position.offset as usize..)
                     .is_some_and(|text| text.starts_with("<<"))
             {
                 continue;
             }
             if let Some(end) =
-                heredoc_terminator_line(source, item.token.position.offset, body_line)
+                heredoc_terminator_line(source, item.token.position.offset as usize, body_line)
             {
                 through = through.max(end);
                 body_line = end + 1;
@@ -317,7 +317,7 @@ pub(crate) fn statement_lines(source: &str, line: usize) -> Option<(usize, usize
         .iter()
         .enumerate()
         .filter(|(_, item)| {
-            item.token.position.line == line
+            item.token.position.line as usize == line
                 && !matches!(item.token.kind, TokenKind::Newline | TokenKind::EOF)
         })
         .map(|(at, _)| at)
@@ -364,7 +364,7 @@ pub(crate) fn statement_lines(source: &str, line: usize) -> Option<(usize, usize
     // On to the newline that ends it, or the closing token that leaves the
     // depth it is written at.
     let mut end = on_line[on_line.len() - 1];
-    let mut last_line = placed[end].token.position.line;
+    let mut last_line = placed[end].token.position.line as usize;
     while end + 1 < placed.len() {
         let item = &placed[end + 1];
         match item.token.kind {
@@ -372,16 +372,16 @@ pub(crate) fn statement_lines(source: &str, line: usize) -> Option<(usize, usize
             TokenKind::Newline | TokenKind::Semicolon
                 if item.depth_after == depth && ends_statement(&placed, end + 1) =>
             {
-                last_line = last_line.max(item.token.position.line);
+                last_line = last_line.max(item.token.position.line as usize);
                 break;
             }
             _ if item.depth_after < depth => break,
             TokenKind::Newline => {}
-            _ => last_line = last_line.max(item.token.position.line),
+            _ => last_line = last_line.max(item.token.position.line as usize),
         }
         end += 1;
     }
-    let first_line = placed[start].token.position.line;
+    let first_line = placed[start].token.position.line as usize;
     Some((
         first_line,
         through_heredoc_bodies(source, &placed, first_line, last_line),
@@ -394,7 +394,7 @@ pub(crate) fn expect_argument(source: &str, line: usize) -> Option<String> {
     let tokens = Lexer::new(source).tokenize();
     let mut found = None;
     for (at, token) in tokens.iter().enumerate() {
-        if token.position.line != line
+        if token.position.line as usize != line
             || !matches!(&token.kind, TokenKind::Ident(name) if name == "expect")
         {
             continue;
@@ -424,7 +424,8 @@ pub(crate) fn expect_argument(source: &str, line: usize) -> Option<String> {
         if found.is_some() {
             return None;
         }
-        let text = source.get(opening.position.offset + 1..tokens[close].position.offset)?;
+        let text = source
+            .get(opening.position.offset as usize + 1..tokens[close].position.offset as usize)?;
         found = Some(text.trim().to_string());
     }
     found.filter(|text| !text.is_empty())

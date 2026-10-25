@@ -15,9 +15,9 @@ pub enum InterpolationPart {
 /// Represents the position of a token in the source code
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub struct Position {
-    pub line: usize,
-    pub column: usize,
-    pub offset: usize,
+    pub line: u32,
+    pub column: u32,
+    pub offset: u32,
     /// Whether this came from the core library metorex loads at startup.
     /// Ruby never traces its own C code, and the prelude stands in for it.
     pub prelude: bool,
@@ -26,11 +26,21 @@ pub struct Position {
 impl Position {
     pub fn new(line: usize, column: usize, offset: usize) -> Self {
         Self {
-            line,
-            column,
-            offset,
+            line: line as u32,
+            column: column as u32,
+            offset: offset as u32,
             prelude: false,
         }
+    }
+}
+
+impl From<Position> for crate::error::SourceLocation {
+    fn from(position: Position) -> Self {
+        crate::error::SourceLocation::new(
+            position.line as usize,
+            position.column as usize,
+            position.offset as usize,
+        )
     }
 }
 
@@ -87,7 +97,7 @@ pub enum TokenKind {
     Float(f64),
     /// The `r` literal suffix: numerator and denominator as base-ten digits,
     /// which a literal past an i64 needs.
-    Rational(String, String),
+    Rational(Box<(String, String)>),
     /// The `i` literal suffix, as in `1.3i`: the number as it was written,
     /// and whether it was written as a float.
     Imaginary(String, bool),
@@ -100,9 +110,9 @@ pub enum TokenKind {
     CommandSymbol,
     /// `%s{name}`, a symbol written the way a `%q` string is.
     PercentSymbol(String),
-    Regex(String, String),  // pattern, flags
-    PercentW(String, bool), // %w[...] words, true when %W fills in `#{}`
-    PercentI(String, bool), // %i[...] symbols, true when %I fills in `#{}`
+    Regex(Box<(String, String)>), // pattern, flags
+    PercentW(String, bool),       // %w[...] words, true when %W fills in `#{}`
+    PercentI(String, bool),       // %i[...] symbols, true when %I fills in `#{}`
     True,
     False,
     Nil,
@@ -304,7 +314,7 @@ impl fmt::Display for TokenKind {
                 }
                 write!(f, "\"")
             }
-            TokenKind::Regex(pat, flags) => write!(f, "/{}/{}", pat, flags),
+            TokenKind::Regex(held) => write!(f, "/{}/{}", held.0, held.1),
             TokenKind::True => write!(f, "true"),
             TokenKind::False => write!(f, "false"),
             TokenKind::Nil => write!(f, "nil"),
@@ -329,9 +339,7 @@ impl fmt::Display for TokenKind {
             TokenKind::BangEqual => write!(f, "!="),
             TokenKind::Match => write!(f, "=~"),
             TokenKind::NotMatch => write!(f, "!~"),
-            TokenKind::Rational(numerator, denominator) => {
-                write!(f, "{}/{}r", numerator, denominator)
-            }
+            TokenKind::Rational(held) => write!(f, "{}/{}r", held.0, held.1),
             TokenKind::Imaginary(value, _) => write!(f, "{value}i"),
             TokenKind::StarStar => write!(f, "**"),
             TokenKind::Less => write!(f, "<"),

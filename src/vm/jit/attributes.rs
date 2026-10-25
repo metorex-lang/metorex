@@ -82,10 +82,14 @@ pub(super) fn plain_reader(method: &Method) -> Option<&str> {
     match &*method.body {
         [
             Statement::Return {
-                value: Some(Expression::InstanceVariable { name, .. }),
-                ..
-            }
-            | Statement::Expression {
+                value: Some(value), ..
+            },
+        ] => match &**value {
+            Expression::InstanceVariable { name, .. } => Some(name),
+            _ => None,
+        },
+        [
+            Statement::Expression {
                 expression: Expression::InstanceVariable { name, .. },
                 ..
             },
@@ -115,13 +119,13 @@ fn plain_writer(method: &Method) -> Option<(&str, bool)> {
     if !plain {
         return None;
     }
-    let [
-        Statement::Assignment {
-            target: Expression::InstanceVariable { name, position },
-            value: Expression::Identifier { name: read, .. },
-            ..
-        },
-    ] = &*method.body
+    let [Statement::Assignment { target, value, .. }] = &*method.body else {
+        return None;
+    };
+    let (
+        Expression::InstanceVariable { name, position },
+        Expression::Identifier { name: read, .. },
+    ) = (&**target, &**value)
     else {
         return None;
     };

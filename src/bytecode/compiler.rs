@@ -111,6 +111,7 @@ pub fn compile_as(body: &[Statement], kind: UnitKind) -> Result<Unit, &'static s
         _ => compiler.statements(body, ANSWER, true)?,
     }
     compiler.emit(Instruction::Return { from: ANSWER as u8 }, end);
+    compiler.unit.shrink_to_fit();
     Ok(compiler.unit)
 }
 
@@ -125,6 +126,7 @@ pub fn compile_expression(expression: &Expression) -> Result<Unit, &'static str>
     }]);
     compiler.expression(expression, ANSWER)?;
     compiler.emit(Instruction::Return { from: ANSWER as u8 }, position);
+    compiler.unit.shrink_to_fit();
     Ok(compiler.unit)
 }
 
@@ -137,6 +139,7 @@ pub fn compile_statement(statement: &Statement) -> Result<Unit, &'static str> {
         Instruction::Return { from: ANSWER as u8 },
         statement.position(),
     );
+    compiler.unit.shrink_to_fit();
     Ok(compiler.unit)
 }
 
@@ -318,11 +321,10 @@ impl Compiler {
                 self.body_statement_as_written(statement, ANSWER)?;
                 Ok(false)
             }
-            Statement::Assignment {
-                target: target @ Expression::Identifier { name, .. },
-                value,
-                ..
-            } if starts_uppercase(name) => {
+            Statement::Assignment { target, value, .. }
+                if let Expression::Identifier { name, .. } = &**target
+                    && starts_uppercase(name) =>
+            {
                 let decided = self.assigned_value(target, value, ANSWER)?;
                 let name = self.name(name)?;
                 self.emit(
@@ -421,11 +423,9 @@ impl Compiler {
                 );
                 Ok(false)
             }
-            Statement::Assignment {
-                target: Expression::InstanceVariable { name, .. },
-                value,
-                ..
-            } => {
+            Statement::Assignment { target, value, .. }
+                if let Expression::InstanceVariable { name, .. } = &**target =>
+            {
                 self.expression(value, unchanged)?;
                 let name = self.name(name)?;
                 self.emit(
@@ -437,11 +437,9 @@ impl Compiler {
                 );
                 Ok(false)
             }
-            Statement::Assignment {
-                target: Expression::ClassVariable { name, .. },
-                value,
-                ..
-            } => {
+            Statement::Assignment { target, value, .. }
+                if let Expression::ClassVariable { name, .. } = &**target =>
+            {
                 self.expression(value, unchanged)?;
                 let name = self.name(name)?;
                 self.emit(
@@ -777,7 +775,7 @@ impl Compiler {
                 // written, ahead of the value, so a block on the right-hand
                 // side closes over the name being assigned. That is what
                 // lets `walk = -> { walk.call }` call itself.
-                if let Expression::Identifier { name, .. } = target
+                if let Expression::Identifier { name, .. } = &**target
                     && self.assigned.contains(name)
                 {
                     let slot = wide(Some(self.unit.local(name)))?;
@@ -867,7 +865,7 @@ impl Compiler {
                         position: *position,
                     }],
                     false,
-                    iterable.clone(),
+                    (**iterable).clone(),
                     body.clone(),
                     *position,
                 );
@@ -996,7 +994,7 @@ impl Compiler {
                 self.unhoist_assigned(statement)
             }
             Statement::Return { value, position } => {
-                self.optional_value(value.as_ref(), to, *position)?;
+                self.optional_value(value.as_deref(), to, *position)?;
                 self.leave_protections(0, *position)?;
                 self.emit(
                     Instruction::ExitReturn {
@@ -1567,7 +1565,7 @@ impl Compiler {
                 },
                 case.position,
             );
-            self.statements_in(&case.body, to, false, Some(position.line))?;
+            self.statements_in(&case.body, to, false, Some(position.line as usize))?;
             done.push(self.emit(Instruction::Jump { target: 0 }, case.position));
             self.jump_here(next_arm)?;
         }
@@ -1646,7 +1644,7 @@ impl Compiler {
             }
             let arm_number = u16::try_from(index).map_err(|_| OVER_LIMIT)?;
             self.emit(Instruction::CoverBranch { arm: arm_number }, position);
-            self.statements_in(&case.body, to, false, Some(position.line))?;
+            self.statements_in(&case.body, to, false, Some(position.line as usize))?;
             done.push(self.emit(Instruction::Jump { target: 0 }, case.position));
             for jump in next_arm {
                 self.jump_here(jump)?;
@@ -1757,7 +1755,7 @@ impl Compiler {
         position: Position,
         as_expression: bool,
     ) -> Result<(), &'static str> {
-        let condition_line = as_expression.then_some(condition.position().line);
+        let condition_line = as_expression.then_some(condition.position().line as usize);
         let test = to as u8;
         let mut done = Vec::new();
         self.condition(condition, to)?;
@@ -1778,7 +1776,7 @@ impl Compiler {
             not_taken = self.emit(Instruction::JumpIfFalse { test, target: 0 }, position);
             let arm = u16::try_from(index + 1).map_err(|_| OVER_LIMIT)?;
             self.emit(Instruction::CoverBranch { arm }, position);
-            let elsif_line = as_expression.then_some(elsif.position.line);
+            let elsif_line = as_expression.then_some(elsif.position.line as usize);
             self.statements_in(&elsif.body, to, false, elsif_line)?;
             done.push(self.emit(Instruction::Jump { target: 0 }, position));
         }
@@ -2038,7 +2036,7 @@ impl Compiler {
                     case_position: position,
                     index,
                     counted_line: (!matches!(case.body, Expression::BeginRescue { .. }))
-                        .then(|| case.body.position().line),
+                        .then(|| case.body.position().line as usize),
                 }),
             ))?;
             self.emit(
@@ -2981,8 +2979,8 @@ impl Compiler {
                 return self.begin(
                     body,
                     rescue_clauses,
-                    else_clause.as_deref(),
-                    ensure_block.as_deref(),
+                    else_clause.as_deref().map(Vec::as_slice),
+                    ensure_block.as_deref().map(Vec::as_slice),
                     to,
                     position,
                     true,
@@ -3460,7 +3458,7 @@ impl Compiler {
             self.expression(value, value_register)?;
             shape.entries.push(HashEntry::Pair {
                 key_position: key.position(),
-                value_line: value.position().line,
+                value_line: (value.position().line as usize),
                 literal_key: crate::vm::expression::is_literal_key(key),
             });
         }

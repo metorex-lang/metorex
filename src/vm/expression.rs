@@ -318,10 +318,11 @@ impl VirtualMachine {
                     .map(|path| path.display().to_string())
             })
             .unwrap_or_default();
-        if !self
-            .reported_duplicate_keys
-            .insert((file.clone(), position.line, position.column))
-        {
+        if !self.reported_duplicate_keys.insert((
+            file.clone(),
+            (position.line as usize),
+            (position.column as usize),
+        )) {
             return Ok(());
         }
         let rendered = crate::vm::native_methods::array_methods::inspect_element(key);
@@ -713,9 +714,9 @@ impl VirtualMachine {
     fn flip_flop_site(&self, position: Position) -> (String, usize, usize, usize) {
         (
             self.current_source_file.clone().unwrap_or_default(),
-            position.line,
-            position.column,
-            position.offset,
+            (position.line as usize),
+            (position.column as usize),
+            (position.offset as usize),
         )
     }
 

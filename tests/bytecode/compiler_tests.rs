@@ -69,7 +69,7 @@ fn a_capitalized_name_is_read_as_a_constant() {
 #[test]
 fn each_statement_starts_at_its_first_instruction() {
     let unit = unit_of("first = 1\nsecond = 2\n");
-    let starts: Vec<(usize, Option<usize>, usize)> = unit
+    let starts: Vec<(usize, Option<usize>, u32)> = unit
         .statement_starts
         .iter()
         .enumerate()
@@ -475,7 +475,7 @@ fn a_do_while_loop_runs_its_body_before_it_reads_its_condition() {
         panic!("not an expression: {:?}", parsed[2]);
     };
     let looped = metorex::ast::Statement::DoWhile {
-        condition,
+        condition: Box::new(condition),
         body: vec![parsed[1].clone()],
         position: metorex::lexer::Position::new(2, 1, 0),
     };

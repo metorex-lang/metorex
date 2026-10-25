@@ -51,7 +51,7 @@ impl VirtualMachine {
                 captured = self.environment().current_scope_var_refs();
             } else {
                 // Explicit list of variables to capture
-                for name in names {
+                for name in names.iter() {
                     if let Some(value_ref) = self.environment().get_ref(name) {
                         captured.insert(name.clone(), value_ref);
                     }
@@ -66,7 +66,7 @@ impl VirtualMachine {
         }
         let mut block = BlockStatement::with_def_scope(
             parameters.clone(),
-            parameter_defaults.clone(),
+            (**parameter_defaults).clone(),
             shared.body.clone(),
             captured,
             self.def_scope_stack.clone(),
@@ -117,10 +117,10 @@ impl VirtualMachine {
             });
             // Where the block was opened, which is the line
             // `source_location` names however far down the body starts.
-            block.opened_at = Some(position.line);
-            block.opened_column = Some(position.column.saturating_sub(1));
+            block.opened_at = Some(position.line as usize);
+            block.opened_column = Some(position.column.saturating_sub(1) as usize);
             if let Some(file) = &block.source_file {
-                block.written_within = self.places_within(shared, file, position.line);
+                block.written_within = self.places_within(shared, file, position.line as usize);
             }
         }
         // The scopes open here are what the body reads its own

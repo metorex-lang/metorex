@@ -207,7 +207,7 @@ impl Parser {
             if self.check(&[TokenKind::Elsif, TokenKind::Else, TokenKind::End]) {
                 break;
             }
-            then_branch.push(self.parse_statement()?);
+            crate::parser::push_tight(&mut then_branch, self.parse_statement()?);
             self.skip_whitespace();
         }
 
@@ -227,7 +227,7 @@ impl Parser {
                 if self.check(&[TokenKind::Elsif, TokenKind::Else, TokenKind::End]) {
                     break;
                 }
-                elsif_body.push(self.parse_statement()?);
+                crate::parser::push_tight(&mut elsif_body, self.parse_statement()?);
                 self.skip_whitespace();
             }
             elsif_branches.push(ElsifBranch {
@@ -245,7 +245,7 @@ impl Parser {
                 if self.check(&[TokenKind::End]) {
                     break;
                 }
-                else_stmts.push(self.parse_statement()?);
+                crate::parser::push_tight(&mut else_stmts, self.parse_statement()?);
                 self.skip_whitespace();
             }
             Some(else_stmts)
@@ -259,7 +259,7 @@ impl Parser {
         Ok(Expression::If {
             condition,
             then_branch,
-            elsif_branches,
+            elsif_branches: Box::new(elsif_branches),
             else_branch,
             position: start_pos,
         })
@@ -282,7 +282,7 @@ impl Parser {
             if self.check(&[TokenKind::Else, TokenKind::End]) {
                 break;
             }
-            then_branch.push(self.parse_statement()?);
+            crate::parser::push_tight(&mut then_branch, self.parse_statement()?);
             self.skip_whitespace();
         }
 
@@ -294,7 +294,7 @@ impl Parser {
                 if self.check(&[TokenKind::End]) {
                     break;
                 }
-                else_stmts.push(self.parse_statement()?);
+                crate::parser::push_tight(&mut else_stmts, self.parse_statement()?);
                 self.skip_whitespace();
             }
             Some(else_stmts)

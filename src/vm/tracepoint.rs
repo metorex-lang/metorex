@@ -138,14 +138,14 @@ impl VirtualMachine {
             return Ok(());
         }
         if let Some(running) = self.running_code.last_mut() {
-            running.line = position.line;
+            running.line = position.line as usize;
         }
         if self.tracing {
             return Ok(());
         }
         // One line reports once, and the same line number in another file is
         // a line of its own.
-        let reached = (self.traced_path(), position.line);
+        let reached = (self.traced_path(), position.line as usize);
         if self.traced_line.as_ref() == Some(&reached) {
             return Ok(());
         }
@@ -564,17 +564,14 @@ fn made_by_an_attribute_call(method: &crate::object::Method) -> bool {
     match &method.body[..] {
         [
             Statement::Return {
-                value: Some(Expression::InstanceVariable { .. }),
-                ..
+                value: Some(value), ..
             },
-        ] => method.parameters.is_empty(),
-        [
-            Statement::Assignment {
-                target: Expression::InstanceVariable { .. },
-                value: Expression::Identifier { name, .. },
-                ..
-            },
-        ] => name == crate::object::UNNAMED_PARAMETER,
+        ] => matches!(**value, Expression::InstanceVariable { .. }) && method.parameters.is_empty(),
+        [Statement::Assignment { target, value, .. }] => {
+            matches!(**target, Expression::InstanceVariable { .. })
+                && matches!(&**value, Expression::Identifier { name, .. }
+                    if name == crate::object::UNNAMED_PARAMETER)
+        }
         _ => false,
     }
 }

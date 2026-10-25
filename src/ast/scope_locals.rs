@@ -394,8 +394,8 @@ fn walk_expression(expr: &Expression, names: &mut Vec<String>) {
         } => walk_begin_parts(
             body,
             rescue_clauses,
-            else_clause.as_deref(),
-            ensure_block.as_deref(),
+            else_clause.as_deref().map(Vec::as_slice),
+            ensure_block.as_deref().map(Vec::as_slice),
             names,
         ),
         Expression::If {
@@ -407,7 +407,7 @@ fn walk_expression(expr: &Expression, names: &mut Vec<String>) {
         } => {
             walk_expression(condition, names);
             walk_body(then_branch, names);
-            for branch in elsif_branches {
+            for branch in elsif_branches.iter() {
                 walk_expression(&branch.condition, names);
                 walk_body(&branch.body, names);
             }

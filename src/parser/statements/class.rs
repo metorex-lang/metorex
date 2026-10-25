@@ -641,8 +641,10 @@ impl Parser {
         match named.kind {
             // A setter's `=` is written against its name: `alias range= set_range`.
             TokenKind::Ident(name) => {
-                let name_ends = named.position.offset + name.len();
-                if self.check(&[TokenKind::Equal]) && self.peek().position.offset == name_ends {
+                let name_ends = named.position.offset as usize + name.len();
+                if self.check(&[TokenKind::Equal])
+                    && self.peek().position.offset as usize == name_ends
+                {
                     self.advance();
                     return Ok(format!("{name}="));
                 }

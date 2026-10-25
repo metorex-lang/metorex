@@ -9,7 +9,7 @@ fn regex_with_escaped_slash() {
     let tokens = Lexer::new(r"/path\/to/").tokenize();
     assert_eq!(
         tokens[0].kind,
-        TokenKind::Regex("path\\/to".to_string(), "".to_string())
+        TokenKind::Regex(Box::new(("path\\/to".to_string(), "".to_string())))
     );
 }
 
@@ -18,7 +18,7 @@ fn regex_with_character_class() {
     let tokens = Lexer::new("/[a-z]+/").tokenize();
     assert_eq!(
         tokens[0].kind,
-        TokenKind::Regex("[a-z]+".to_string(), "".to_string())
+        TokenKind::Regex(Box::new(("[a-z]+".to_string(), "".to_string())))
     );
 }
 
@@ -27,7 +27,7 @@ fn regex_slash_inside_character_class() {
     let tokens = Lexer::new("/[/]+/").tokenize();
     assert_eq!(
         tokens[0].kind,
-        TokenKind::Regex("[/]+".to_string(), "".to_string())
+        TokenKind::Regex(Box::new(("[/]+".to_string(), "".to_string())))
     );
 }
 
@@ -36,7 +36,7 @@ fn regex_with_interpolation() {
     let tokens = Lexer::new("/hello#{1+2}world/").tokenize();
     assert_eq!(
         tokens[0].kind,
-        TokenKind::Regex("hello#{1+2}world".to_string(), "".to_string())
+        TokenKind::Regex(Box::new(("hello#{1+2}world".to_string(), "".to_string())))
     );
 }
 
@@ -45,7 +45,7 @@ fn regex_interpolation_with_nested_braces() {
     let tokens = Lexer::new("/#{a{b}}/").tokenize();
     assert_eq!(
         tokens[0].kind,
-        TokenKind::Regex("#{a{b}}".to_string(), "".to_string())
+        TokenKind::Regex(Box::new(("#{a{b}}".to_string(), "".to_string())))
     );
 }
 
@@ -54,7 +54,7 @@ fn regex_hash_without_interpolation() {
     let tokens = Lexer::new("/#comment/").tokenize();
     assert_eq!(
         tokens[0].kind,
-        TokenKind::Regex("#comment".to_string(), "".to_string())
+        TokenKind::Regex(Box::new(("#comment".to_string(), "".to_string())))
     );
 }
 
@@ -63,7 +63,7 @@ fn regex_empty() {
     let tokens = Lexer::new("//").tokenize();
     assert_eq!(
         tokens[0].kind,
-        TokenKind::Regex("".to_string(), "".to_string())
+        TokenKind::Regex(Box::new(("".to_string(), "".to_string())))
     );
 }
 
@@ -74,7 +74,7 @@ fn regex_runs_across_lines() {
     let tokens = Lexer::new("/abc\ndef").tokenize();
     assert_eq!(
         tokens[0].kind,
-        TokenKind::Regex("abc\ndef".to_string(), "".to_string())
+        TokenKind::Regex(Box::new(("abc\ndef".to_string(), "".to_string())))
     );
 }
 
@@ -83,7 +83,7 @@ fn regex_interpolation_runs_across_lines() {
     let tokens = Lexer::new("/#{x\n}/").tokenize();
     assert_eq!(
         tokens[0].kind,
-        TokenKind::Regex("#{x\n}".to_string(), "".to_string())
+        TokenKind::Regex(Box::new(("#{x\n}".to_string(), "".to_string())))
     );
 }
 
@@ -151,7 +151,7 @@ fn slash_is_division_after_nil() {
 #[test]
 fn slash_is_regex_after_operator() {
     let tokens = Lexer::new("x = /abc/").tokenize();
-    assert!(matches!(&tokens[2].kind, TokenKind::Regex(_, _)));
+    assert!(matches!(&tokens[2].kind, TokenKind::Regex(_)));
 }
 
 #[test]
@@ -195,7 +195,7 @@ fn regex_escaped_bracket_in_char_class() {
     let tokens = Lexer::new(r"/[a\]b]/").tokenize();
     assert_eq!(
         tokens[0].kind,
-        TokenKind::Regex("[a\\]b]".to_string(), "".to_string())
+        TokenKind::Regex(Box::new(("[a\\]b]".to_string(), "".to_string())))
     );
 }
 
@@ -222,13 +222,13 @@ fn slash_is_division_after_interpolated_string() {
 #[test]
 fn slash_is_regex_at_start_of_input() {
     let tokens = Lexer::new("/abc/i").tokenize();
-    assert!(matches!(&tokens[0].kind, TokenKind::Regex(_, _)));
+    assert!(matches!(&tokens[0].kind, TokenKind::Regex(_)));
 }
 
 #[test]
 fn slash_is_regex_after_plus() {
     let tokens = Lexer::new("x + /abc/").tokenize();
-    assert!(matches!(&tokens[2].kind, TokenKind::Regex(_, _)));
+    assert!(matches!(&tokens[2].kind, TokenKind::Regex(_)));
 }
 
 #[test]
@@ -236,7 +236,7 @@ fn regex_hash_at_end_of_pattern() {
     let tokens = Lexer::new("/#/").tokenize();
     assert_eq!(
         tokens[0].kind,
-        TokenKind::Regex("#".to_string(), "".to_string())
+        TokenKind::Regex(Box::new(("#".to_string(), "".to_string())))
     );
 }
 
@@ -247,7 +247,7 @@ fn lexes_a_pattern(source: &str) -> bool {
     Lexer::new(source)
         .tokenize()
         .iter()
-        .any(|token| matches!(token.kind, TokenKind::Regex(_, _)))
+        .any(|token| matches!(token.kind, TokenKind::Regex(_)))
 }
 
 #[test]

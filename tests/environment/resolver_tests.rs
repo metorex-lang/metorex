@@ -34,8 +34,8 @@ fn ident(name: &str) -> Expression {
 
 fn assign(name: &str, value: Expression) -> Statement {
     Statement::Assignment {
-        target: ident(name),
-        value,
+        target: Box::new(ident(name)),
+        value: Box::new(value),
         position: pos(),
     }
 }
@@ -46,7 +46,7 @@ fn assign(name: &str, value: Expression) -> Statement {
 fn resolver_unless_statement() {
     let mut r = Resolver::new();
     let stmt = Statement::Unless {
-        condition: bool_lit(false),
+        condition: Box::new(bool_lit(false)),
         then_branch: vec![assign("x", int_lit(1))],
         else_branch: None,
         position: pos(),
@@ -59,7 +59,7 @@ fn resolver_unless_statement() {
 fn resolver_unless_with_else_branch() {
     let mut r = Resolver::new();
     let stmt = Statement::Unless {
-        condition: bool_lit(true),
+        condition: Box::new(bool_lit(true)),
         then_branch: vec![assign("x", int_lit(1))],
         else_branch: Some(vec![assign("y", int_lit(2))]),
         position: pos(),
@@ -101,10 +101,10 @@ fn resolver_break_and_continue() {
 fn resolver_raise_with_expression() {
     let mut r = Resolver::new();
     let stmt = Statement::Raise {
-        exception: Some(Expression::StringLiteral {
+        exception: Some(Box::new(Expression::StringLiteral {
             value: "oops".to_string(),
             position: pos(),
-        }),
+        })),
         position: pos(),
     };
     let result = r.resolve(&[stmt]);
@@ -205,7 +205,7 @@ fn resolver_begin_with_rescue_else_ensure() {
 fn resolver_match_statement() {
     let mut r = Resolver::new();
     let stmt = Statement::Match {
-        expression: int_lit(42),
+        expression: Box::new(int_lit(42)),
         cases: vec![MatchCase {
             pattern: MatchPattern::IntLiteral(42),
             guard: None,
@@ -222,7 +222,7 @@ fn resolver_match_statement() {
 fn resolver_match_with_guard() {
     let mut r = Resolver::new();
     let stmt = Statement::Match {
-        expression: int_lit(5),
+        expression: Box::new(int_lit(5)),
         cases: vec![MatchCase {
             pattern: MatchPattern::Identifier("n".to_string()),
             guard: Some(Expression::BinaryOp {
@@ -246,7 +246,7 @@ fn resolver_match_with_guard() {
 fn resolver_if_with_elsif_and_else() {
     let mut r = Resolver::new();
     let stmt = Statement::If {
-        condition: bool_lit(true),
+        condition: Box::new(bool_lit(true)),
         then_branch: vec![assign("x", int_lit(1))],
         elsif_branches: vec![ElsifBranch {
             condition: bool_lit(false),
@@ -266,7 +266,7 @@ fn resolver_if_with_elsif_and_else() {
 fn resolver_pattern_array() {
     let mut r = Resolver::new();
     let stmt = Statement::Match {
-        expression: int_lit(1),
+        expression: Box::new(int_lit(1)),
         cases: vec![MatchCase {
             pattern: MatchPattern::Array(vec![
                 MatchPattern::Identifier("a".to_string()),
@@ -286,7 +286,7 @@ fn resolver_pattern_array() {
 fn resolver_pattern_rest() {
     let mut r = Resolver::new();
     let stmt = Statement::Match {
-        expression: int_lit(1),
+        expression: Box::new(int_lit(1)),
         cases: vec![MatchCase {
             pattern: MatchPattern::Rest("rest".to_string()),
             guard: None,
@@ -303,7 +303,7 @@ fn resolver_pattern_rest() {
 fn resolver_pattern_object() {
     let mut r = Resolver::new();
     let stmt = Statement::Match {
-        expression: int_lit(1),
+        expression: Box::new(int_lit(1)),
         cases: vec![MatchCase {
             pattern: MatchPattern::Object(vec![(
                 "name".to_string(),
@@ -323,7 +323,7 @@ fn resolver_pattern_object() {
 fn resolver_pattern_literal() {
     let mut r = Resolver::new();
     let stmt = Statement::Match {
-        expression: int_lit(42),
+        expression: Box::new(int_lit(42)),
         cases: vec![
             MatchCase {
                 pattern: MatchPattern::IntLiteral(42),
@@ -489,7 +489,7 @@ fn resolver_lambda_expression() {
         "f",
         Expression::Lambda {
             parameters: vec!["x".to_string(), "y".to_string()],
-            parameter_defaults: Vec::new(),
+            parameter_defaults: Box::new(Vec::new()),
             body: vec![assign(
                 "r",
                 Expression::BinaryOp {
@@ -501,7 +501,7 @@ fn resolver_lambda_expression() {
             )]
             .into(),
             captured_vars: None,
-            outer_locals: Vec::new(),
+            outer_locals: Box::new(Vec::new()),
             is_lambda: false,
             position: pos(),
         },
@@ -626,11 +626,11 @@ fn resolver_if_expression() {
         Expression::If {
             condition: Box::new(bool_lit(true)),
             then_branch: vec![assign("a", int_lit(1))],
-            elsif_branches: vec![ElsifBranch {
+            elsif_branches: Box::new(vec![ElsifBranch {
                 condition: bool_lit(false),
                 body: vec![assign("b", int_lit(2))],
                 position: pos(),
-            }],
+            }]),
             else_branch: Some(vec![assign("c", int_lit(3))]),
             position: pos(),
         },
@@ -669,12 +669,12 @@ fn resolver_index_assignment_target() {
             },
         ),
         Statement::Assignment {
-            target: Expression::Index {
+            target: Box::new(Expression::Index {
                 array: Box::new(ident("arr")),
                 index: Box::new(int_lit(0)),
                 position: pos(),
-            },
-            value: int_lit(99),
+            }),
+            value: Box::new(int_lit(99)),
             position: pos(),
         },
     ];
@@ -687,11 +687,11 @@ fn resolver_other_assignment_target() {
     let mut r = Resolver::new();
     // Global variable as assignment target
     let stmt = Statement::Assignment {
-        target: Expression::GlobalVariable {
+        target: Box::new(Expression::GlobalVariable {
             name: "G".to_string(),
             position: pos(),
-        },
-        value: int_lit(42),
+        }),
+        value: Box::new(int_lit(42)),
         position: pos(),
     };
     let result = r.resolve(&[stmt]);
@@ -772,7 +772,7 @@ fn resolver_default_creates_new_resolver() {
 fn resolver_case_in_statement() {
     let mut r = Resolver::new();
     let stmt = Statement::CaseIn {
-        expression: int_lit(42),
+        expression: Box::new(int_lit(42)),
         cases: vec![MatchCase {
             pattern: MatchPattern::IntLiteral(42),
             guard: None,
@@ -926,8 +926,8 @@ fn resolver_variable_reassignment_in_function_scope() {
         body: vec![
             // Reassign x (already in scope) - triggers lines 227-228
             Statement::Assignment {
-                target: ident("x"),
-                value: int_lit(99),
+                target: Box::new(ident("x")),
+                value: Box::new(int_lit(99)),
                 position: pos(),
             },
         ]

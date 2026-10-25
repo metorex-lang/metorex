@@ -12,6 +12,16 @@ pub(crate) use statements::names_a_numbered_parameter;
 mod token_stream;
 
 use crate::ast::Statement;
+
+/// Push `item`, growing `list` by half its length when it is full. A `Vec`
+/// of elements this size starts with room for four, and most bodies hold
+/// one statement.
+pub(crate) fn push_tight<T>(list: &mut Vec<T>, item: T) {
+    if list.len() == list.capacity() {
+        list.reserve_exact((list.len() / 2).max(1));
+    }
+    list.push(item);
+}
 use crate::error::MetorexError;
 use crate::lexer::{Position, Token, TokenKind};
 
@@ -497,8 +507,10 @@ impl Parser {
     /// token at hand.
     pub(crate) fn note_closing_line(&mut self, opened: Position) {
         let line = self.peek().position.line;
-        self.closing_lines
-            .insert((opened.line, opened.column), line);
+        self.closing_lines.insert(
+            (opened.line as usize, opened.column as usize),
+            line as usize,
+        );
     }
 
     /// Whether a `{` here opens a block for the call just read. Inside a
@@ -606,7 +618,7 @@ impl Parser {
         }
         Err(MetorexError::syntax_error(
             message,
-            crate::error::SourceLocation::new(opened_at.line, opened_at.column, opened_at.offset),
+            crate::error::SourceLocation::from(opened_at),
         ))
     }
 
@@ -719,7 +731,7 @@ impl Parser {
                 self.refuse_unlooped_jumps_after(statement_start)
                     .map(|_| stmt)
             }) {
-                Ok(stmt) => statements.push(stmt),
+                Ok(stmt) => push_tight(&mut statements, stmt),
                 Err(err) => {
                     self.report_error(err);
                     self.synchronize();

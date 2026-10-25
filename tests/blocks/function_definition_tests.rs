@@ -16,10 +16,10 @@ fn test_simple_function_definition() {
         name: "greet".to_string(),
         parameters: vec![Parameter::simple("name".to_string(), pos(1, 11))],
         body: vec![Statement::Return {
-            value: Some(Expression::StringLiteral {
+            value: Some(Box::new(Expression::StringLiteral {
                 value: "Hello".to_string(),
                 position: pos(2, 3),
-            }),
+            })),
             position: pos(2, 3),
         }]
         .into(),
@@ -38,10 +38,10 @@ fn test_function_with_no_parameters() {
         name: "get_greeting".to_string(),
         parameters: vec![],
         body: vec![Statement::Return {
-            value: Some(Expression::StringLiteral {
+            value: Some(Box::new(Expression::StringLiteral {
                 value: "Hello, World!".to_string(),
                 position: pos(2, 3),
-            }),
+            })),
             position: pos(2, 3),
         }]
         .into(),
@@ -62,7 +62,7 @@ fn test_function_with_multiple_parameters() {
             Parameter::simple("b".to_string(), pos(1, 12)),
         ],
         body: vec![Statement::Return {
-            value: Some(Expression::BinaryOp {
+            value: Some(Box::new(Expression::BinaryOp {
                 op: metorex::ast::BinaryOp::Add,
                 left: Box::new(Expression::Identifier {
                     name: "a".to_string(),
@@ -73,7 +73,7 @@ fn test_function_with_multiple_parameters() {
                     position: pos(2, 7),
                 }),
                 position: pos(2, 5),
-            }),
+            })),
             position: pos(2, 3),
         }]
         .into(),
@@ -120,7 +120,7 @@ fn test_function_with_default_parameters() {
             ),
         ],
         body: vec![Statement::Return {
-            value: Some(Expression::BinaryOp {
+            value: Some(Box::new(Expression::BinaryOp {
                 op: metorex::ast::BinaryOp::Add,
                 left: Box::new(Expression::Identifier {
                     name: "greeting".to_string(),
@@ -131,7 +131,7 @@ fn test_function_with_default_parameters() {
                     position: pos(2, 14),
                 }),
                 position: pos(2, 12),
-            }),
+            })),
             position: pos(2, 3),
         }]
         .into(),
@@ -194,21 +194,21 @@ fn test_function_with_variadic_parameter() {
         parameters: vec![Parameter::variadic("numbers".to_string(), pos(1, 13))],
         body: vec![
             Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "total".to_string(),
                     position: pos(2, 3),
-                },
-                value: Expression::IntLiteral {
+                }),
+                value: Box::new(Expression::IntLiteral {
                     value: 0,
                     position: pos(2, 11),
-                },
+                }),
                 position: pos(2, 3),
             },
             Statement::Return {
-                value: Some(Expression::Identifier {
+                value: Some(Box::new(Expression::Identifier {
                     name: "total".to_string(),
                     position: pos(3, 3),
-                }),
+                })),
                 position: pos(3, 3),
             },
         ]
@@ -316,10 +316,10 @@ fn test_simple_method_definition() {
         name: "get_name".to_string(),
         parameters: vec![],
         body: vec![Statement::Return {
-            value: Some(Expression::InstanceVariable {
+            value: Some(Box::new(Expression::InstanceVariable {
                 name: "name".to_string(),
                 position: pos(2, 3),
-            }),
+            })),
             position: pos(2, 3),
         }]
         .into(),
@@ -338,14 +338,14 @@ fn test_method_with_parameters() {
         name: "set_value".to_string(),
         parameters: vec![Parameter::simple("value".to_string(), pos(1, 15))],
         body: vec![Statement::Assignment {
-            target: Expression::InstanceVariable {
+            target: Box::new(Expression::InstanceVariable {
                 name: "value".to_string(),
                 position: pos(2, 3),
-            },
-            value: Expression::Identifier {
+            }),
+            value: Box::new(Expression::Identifier {
                 name: "value".to_string(),
                 position: pos(2, 12),
-            },
+            }),
             position: pos(2, 3),
         }]
         .into(),
@@ -374,25 +374,25 @@ fn test_method_with_default_parameters() {
         ],
         body: vec![
             Statement::Assignment {
-                target: Expression::InstanceVariable {
+                target: Box::new(Expression::InstanceVariable {
                     name: "name".to_string(),
                     position: pos(2, 3),
-                },
-                value: Expression::Identifier {
+                }),
+                value: Box::new(Expression::Identifier {
                     name: "name".to_string(),
                     position: pos(2, 11),
-                },
+                }),
                 position: pos(2, 3),
             },
             Statement::Assignment {
-                target: Expression::InstanceVariable {
+                target: Box::new(Expression::InstanceVariable {
                     name: "age".to_string(),
                     position: pos(3, 3),
-                },
-                value: Expression::Identifier {
+                }),
+                value: Box::new(Expression::Identifier {
                     name: "age".to_string(),
                     position: pos(3, 10),
-                },
+                }),
                 position: pos(3, 3),
             },
         ]
@@ -415,7 +415,7 @@ fn test_function_with_conditional_body() {
             Parameter::simple("b".to_string(), pos(1, 12)),
         ],
         body: vec![Statement::If {
-            condition: Expression::BinaryOp {
+            condition: Box::new(Expression::BinaryOp {
                 op: metorex::ast::BinaryOp::Greater,
                 left: Box::new(Expression::Identifier {
                     name: "a".to_string(),
@@ -426,20 +426,20 @@ fn test_function_with_conditional_body() {
                     position: pos(2, 10),
                 }),
                 position: pos(2, 8),
-            },
+            }),
             then_branch: vec![Statement::Return {
-                value: Some(Expression::Identifier {
+                value: Some(Box::new(Expression::Identifier {
                     name: "a".to_string(),
                     position: pos(3, 5),
-                }),
+                })),
                 position: pos(3, 5),
             }],
             elsif_branches: vec![],
             else_branch: Some(vec![Statement::Return {
-                value: Some(Expression::Identifier {
+                value: Some(Box::new(Expression::Identifier {
                     name: "b".to_string(),
                     position: pos(5, 5),
-                }),
+                })),
                 position: pos(5, 5),
             }]),
             position: pos(2, 3),
@@ -460,18 +460,18 @@ fn test_function_with_loop_body() {
         parameters: vec![Parameter::simple("n".to_string(), pos(1, 15))],
         body: vec![
             Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "result".to_string(),
                     position: pos(2, 3),
-                },
-                value: Expression::IntLiteral {
+                }),
+                value: Box::new(Expression::IntLiteral {
                     value: 1,
                     position: pos(2, 12),
-                },
+                }),
                 position: pos(2, 3),
             },
             Statement::While {
-                condition: Expression::BinaryOp {
+                condition: Box::new(Expression::BinaryOp {
                     op: metorex::ast::BinaryOp::Greater,
                     left: Box::new(Expression::Identifier {
                         name: "n".to_string(),
@@ -482,14 +482,14 @@ fn test_function_with_loop_body() {
                         position: pos(3, 13),
                     }),
                     position: pos(3, 11),
-                },
+                }),
                 body: vec![
                     Statement::Assignment {
-                        target: Expression::Identifier {
+                        target: Box::new(Expression::Identifier {
                             name: "result".to_string(),
                             position: pos(4, 5),
-                        },
-                        value: Expression::BinaryOp {
+                        }),
+                        value: Box::new(Expression::BinaryOp {
                             op: metorex::ast::BinaryOp::Multiply,
                             left: Box::new(Expression::Identifier {
                                 name: "result".to_string(),
@@ -500,15 +500,15 @@ fn test_function_with_loop_body() {
                                 position: pos(4, 23),
                             }),
                             position: pos(4, 21),
-                        },
+                        }),
                         position: pos(4, 5),
                     },
                     Statement::Assignment {
-                        target: Expression::Identifier {
+                        target: Box::new(Expression::Identifier {
                             name: "n".to_string(),
                             position: pos(5, 5),
-                        },
-                        value: Expression::BinaryOp {
+                        }),
+                        value: Box::new(Expression::BinaryOp {
                             op: metorex::ast::BinaryOp::Subtract,
                             left: Box::new(Expression::Identifier {
                                 name: "n".to_string(),
@@ -519,17 +519,17 @@ fn test_function_with_loop_body() {
                                 position: pos(5, 13),
                             }),
                             position: pos(5, 11),
-                        },
+                        }),
                         position: pos(5, 5),
                     },
                 ],
                 position: pos(3, 3),
             },
             Statement::Return {
-                value: Some(Expression::Identifier {
+                value: Some(Box::new(Expression::Identifier {
                     name: "result".to_string(),
                     position: pos(7, 3),
-                }),
+                })),
                 position: pos(7, 3),
             },
         ]
@@ -549,7 +549,7 @@ fn test_function_with_exception_handling() {
         parameters: vec![Parameter::simple("x".to_string(), pos(1, 20))],
         body: vec![Statement::Begin {
             body: vec![Statement::Return {
-                value: Some(Expression::BinaryOp {
+                value: Some(Box::new(Expression::BinaryOp {
                     op: metorex::ast::BinaryOp::Divide,
                     left: Box::new(Expression::IntLiteral {
                         value: 100,
@@ -560,7 +560,7 @@ fn test_function_with_exception_handling() {
                         position: pos(3, 11),
                     }),
                     position: pos(3, 9),
-                }),
+                })),
                 position: pos(3, 5),
             }],
             rescue_clauses: vec![metorex::ast::RescueClause {
@@ -569,9 +569,9 @@ fn test_function_with_exception_handling() {
                 variable_target: None,
                 splatted_types: Vec::new(),
                 body: vec![Statement::Return {
-                    value: Some(Expression::NilLiteral {
+                    value: Some(Box::new(Expression::NilLiteral {
                         position: pos(5, 5),
-                    }),
+                    })),
                     position: pos(5, 5),
                 }],
                 position: pos(4, 3),
@@ -600,7 +600,7 @@ fn test_nested_function_definition() {
             name: "inner".to_string(),
             parameters: vec![Parameter::simple("y".to_string(), pos(2, 13))],
             body: vec![Statement::Return {
-                value: Some(Expression::BinaryOp {
+                value: Some(Box::new(Expression::BinaryOp {
                     op: metorex::ast::BinaryOp::Add,
                     left: Box::new(Expression::Identifier {
                         name: "x".to_string(),
@@ -611,7 +611,7 @@ fn test_nested_function_definition() {
                         position: pos(3, 9),
                     }),
                     position: pos(3, 7),
-                }),
+                })),
                 position: pos(3, 5),
             }]
             .into(),

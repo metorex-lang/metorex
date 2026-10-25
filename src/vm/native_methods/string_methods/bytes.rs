@@ -63,8 +63,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let bytes = binary_bytes(string_value);
-                let total = bytes.len() as i64;
+                let total = string_value.byte_len() as i64;
                 let (from, count) = if let Some(span) =
                     crate::vm::native_methods::as_range(&arguments[0])
                     && arguments.len() == 1
@@ -115,6 +114,10 @@ impl VirtualMachine {
                     };
                     (opening, wanted)
                 };
+                // The bytes are read once the arguments are converted, since
+                // a conversion runs code that may change the string.
+                let bytes = string_value.bytes();
+                let total = bytes.len() as i64;
                 if from < 0 || from > total || count < 0 {
                     return Ok(Some(Object::Nil));
                 }

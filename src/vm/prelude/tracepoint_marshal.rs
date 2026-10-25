@@ -844,7 +844,7 @@ module Marshal
   # hands it to the proc when there is one.
   class Reader
     def initialize(source, handler = nil, freeze = false)
-      @bytes = source.bytes
+      @bytes = source.b
       @at = 0
       @symbols = []
       @objects = []
@@ -865,7 +865,7 @@ module Marshal
     private
 
     def next_byte
-      held = @bytes[@at]
+      held = @bytes.getbyte(@at)
       raise ArgumentError, "marshal data too short" if held.nil?
       @at += 1
       held
@@ -895,10 +895,10 @@ module Marshal
     end
 
     def read_bytes(count)
-      raise ArgumentError, "marshal data too short" if @at + count > @bytes.length
-      held = @bytes[@at, count]
+      raise ArgumentError, "marshal data too short" if @at + count > @bytes.bytesize
+      held = @bytes.byteslice(@at, count)
       @at += count
-      held.pack("C*").force_encoding Encoding::BINARY
+      held
     end
 
     # Put an object in the table links refer to, as one still being built.
@@ -999,7 +999,7 @@ module Marshal
       when "I"
         raise ArgumentError, "dump format error (symlink with encoding)" unless next_byte.chr == ":"
         read_symbol_body true
-      else raise ArgumentError, "dump format error for symbol(0x#{@bytes[@at - 1].to_s(16)})"
+      else raise ArgumentError, "dump format error for symbol(0x#{@bytes.getbyte(@at - 1).to_s(16)})"
       end
     end
 

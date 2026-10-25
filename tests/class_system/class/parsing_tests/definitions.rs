@@ -114,10 +114,10 @@ fn test_class_with_single_method() {
             name: "greet".to_string(),
             parameters: vec![],
             body: vec![Statement::Return {
-                value: Some(Expression::StringLiteral {
+                value: Some(Box::new(Expression::StringLiteral {
                     value: "Hello".to_string(),
                     position: pos(3, 5),
-                }),
+                })),
                 position: pos(3, 5),
             }]
             .into(),
@@ -148,7 +148,7 @@ fn test_class_with_multiple_methods() {
                     Parameter::simple("b".to_string(), pos(2, 14)),
                 ],
                 body: vec![Statement::Return {
-                    value: Some(Expression::BinaryOp {
+                    value: Some(Box::new(Expression::BinaryOp {
                         op: metorex::ast::BinaryOp::Add,
                         left: Box::new(Expression::Identifier {
                             name: "a".to_string(),
@@ -159,7 +159,7 @@ fn test_class_with_multiple_methods() {
                             position: pos(3, 9),
                         }),
                         position: pos(3, 7),
-                    }),
+                    })),
                     position: pos(3, 5),
                 }]
                 .into(),
@@ -174,7 +174,7 @@ fn test_class_with_multiple_methods() {
                     Parameter::simple("b".to_string(), pos(6, 19)),
                 ],
                 body: vec![Statement::Return {
-                    value: Some(Expression::BinaryOp {
+                    value: Some(Box::new(Expression::BinaryOp {
                         op: metorex::ast::BinaryOp::Subtract,
                         left: Box::new(Expression::Identifier {
                             name: "a".to_string(),
@@ -185,7 +185,7 @@ fn test_class_with_multiple_methods() {
                             position: pos(7, 9),
                         }),
                         position: pos(7, 7),
-                    }),
+                    })),
                     position: pos(7, 5),
                 }]
                 .into(),
@@ -218,25 +218,25 @@ fn test_class_with_constructor() {
             ],
             body: vec![
                 Statement::Assignment {
-                    target: Expression::InstanceVariable {
+                    target: Box::new(Expression::InstanceVariable {
                         name: "name".to_string(),
                         position: pos(3, 5),
-                    },
-                    value: Expression::Identifier {
+                    }),
+                    value: Box::new(Expression::Identifier {
                         name: "name".to_string(),
                         position: pos(3, 13),
-                    },
+                    }),
                     position: pos(3, 5),
                 },
                 Statement::Assignment {
-                    target: Expression::InstanceVariable {
+                    target: Box::new(Expression::InstanceVariable {
                         name: "age".to_string(),
                         position: pos(4, 5),
-                    },
-                    value: Expression::Identifier {
+                    }),
+                    value: Box::new(Expression::Identifier {
                         name: "age".to_string(),
                         position: pos(4, 12),
-                    },
+                    }),
                     position: pos(4, 5),
                 },
             ]
@@ -268,25 +268,25 @@ fn test_class_with_constructor_and_methods() {
                 ],
                 body: vec![
                     Statement::Assignment {
-                        target: Expression::InstanceVariable {
+                        target: Box::new(Expression::InstanceVariable {
                             name: "width".to_string(),
                             position: pos(3, 5),
-                        },
-                        value: Expression::Identifier {
+                        }),
+                        value: Box::new(Expression::Identifier {
                             name: "width".to_string(),
                             position: pos(3, 14),
-                        },
+                        }),
                         position: pos(3, 5),
                     },
                     Statement::Assignment {
-                        target: Expression::InstanceVariable {
+                        target: Box::new(Expression::InstanceVariable {
                             name: "height".to_string(),
                             position: pos(4, 5),
-                        },
-                        value: Expression::Identifier {
+                        }),
+                        value: Box::new(Expression::Identifier {
                             name: "height".to_string(),
                             position: pos(4, 15),
-                        },
+                        }),
                         position: pos(4, 5),
                     },
                 ]
@@ -299,7 +299,7 @@ fn test_class_with_constructor_and_methods() {
                 name: "area".to_string(),
                 parameters: vec![],
                 body: vec![Statement::Return {
-                    value: Some(Expression::BinaryOp {
+                    value: Some(Box::new(Expression::BinaryOp {
                         op: metorex::ast::BinaryOp::Multiply,
                         left: Box::new(Expression::InstanceVariable {
                             name: "width".to_string(),
@@ -310,7 +310,7 @@ fn test_class_with_constructor_and_methods() {
                             position: pos(8, 14),
                         }),
                         position: pos(8, 12),
-                    }),
+                    })),
                     position: pos(8, 5),
                 }]
                 .into(),
@@ -339,14 +339,14 @@ fn test_class_with_instance_variable_initialization() {
             name: "initialize".to_string(),
             parameters: vec![],
             body: vec![Statement::Assignment {
-                target: Expression::InstanceVariable {
+                target: Box::new(Expression::InstanceVariable {
                     name: "count".to_string(),
                     position: pos(3, 5),
-                },
-                value: Expression::IntLiteral {
+                }),
+                value: Box::new(Expression::IntLiteral {
                     value: 0,
                     position: pos(3, 14),
-                },
+                }),
                 position: pos(3, 5),
             }]
             .into(),
@@ -377,36 +377,36 @@ fn test_class_with_multiple_instance_variables() {
             ],
             body: vec![
                 Statement::Assignment {
-                    target: Expression::InstanceVariable {
+                    target: Box::new(Expression::InstanceVariable {
                         name: "name".to_string(),
                         position: pos(3, 5),
-                    },
-                    value: Expression::Identifier {
+                    }),
+                    value: Box::new(Expression::Identifier {
                         name: "name".to_string(),
                         position: pos(3, 13),
-                    },
+                    }),
                     position: pos(3, 5),
                 },
                 Statement::Assignment {
-                    target: Expression::InstanceVariable {
+                    target: Box::new(Expression::InstanceVariable {
                         name: "age".to_string(),
                         position: pos(4, 5),
-                    },
-                    value: Expression::Identifier {
+                    }),
+                    value: Box::new(Expression::Identifier {
                         name: "age".to_string(),
                         position: pos(4, 12),
-                    },
+                    }),
                     position: pos(4, 5),
                 },
                 Statement::Assignment {
-                    target: Expression::InstanceVariable {
+                    target: Box::new(Expression::InstanceVariable {
                         name: "email".to_string(),
                         position: pos(5, 5),
-                    },
-                    value: Expression::Identifier {
+                    }),
+                    value: Box::new(Expression::Identifier {
                         name: "email".to_string(),
                         position: pos(5, 14),
-                    },
+                    }),
                     position: pos(5, 5),
                 },
             ]
@@ -435,14 +435,14 @@ fn test_class_with_class_variable() {
             name: "initialize".to_string(),
             parameters: vec![],
             body: vec![Statement::Assignment {
-                target: Expression::ClassVariable {
+                target: Box::new(Expression::ClassVariable {
                     name: "count".to_string(),
                     position: pos(3, 5),
-                },
-                value: Expression::IntLiteral {
+                }),
+                value: Box::new(Expression::IntLiteral {
                     value: 0,
                     position: pos(3, 15),
-                },
+                }),
                 position: pos(3, 5),
             }]
             .into(),

@@ -27,12 +27,7 @@ fn pos() -> Position {
 
 /// Create a Position at specific line and column
 fn pos_at(line: usize, column: usize) -> Position {
-    Position {
-        line,
-        column,
-        offset: 0,
-        prelude: false,
-    }
+    Position::new(line, column, 0)
 }
 
 #[test]
@@ -131,11 +126,11 @@ fn test_index_past_the_end_answers_nil() {
     // arr[10]
     let statements = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "arr".to_string(),
                 position: pos_at(1, 1),
-            },
-            value: Expression::Array {
+            }),
+            value: Box::new(Expression::Array {
                 elements: vec![
                     Expression::IntLiteral {
                         value: 1,
@@ -151,7 +146,7 @@ fn test_index_past_the_end_answers_nil() {
                     },
                 ],
                 position: pos_at(1, 7),
-            },
+            }),
             position: pos_at(1, 1),
         },
         Statement::Expression {
@@ -288,11 +283,11 @@ fn test_nested_method_call_shows_stack_trace() {
     let statements = vec![
         class_def,
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "obj".to_string(),
                 position: pos_at(13, 1),
-            },
-            value: Expression::MethodCall {
+            }),
+            value: Box::new(Expression::MethodCall {
                 receiver: Box::new(Expression::Identifier {
                     name: "TestClass".to_string(),
                     position: pos_at(13, 7),
@@ -301,7 +296,7 @@ fn test_nested_method_call_shows_stack_trace() {
                 arguments: vec![],
                 trailing_block: None,
                 position: pos_at(13, 7),
-            },
+            }),
             position: pos_at(13, 1),
         },
         Statement::Expression {
@@ -381,14 +376,14 @@ fn test_invalid_assignment_target_error() {
 
     // Try to assign to a literal (invalid): 42 = 10
     let stmt = Statement::Assignment {
-        target: Expression::IntLiteral {
+        target: Box::new(Expression::IntLiteral {
             value: 42,
             position: pos_at(25, 1),
-        },
-        value: Expression::IntLiteral {
+        }),
+        value: Box::new(Expression::IntLiteral {
             value: 10,
             position: pos_at(25, 6),
-        },
+        }),
         position: pos_at(25, 1),
     };
 
@@ -445,11 +440,11 @@ fn test_method_argument_count_error_has_location() {
             position: pos(),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "calc".to_string(),
                 position: pos(),
-            },
-            value: Expression::MethodCall {
+            }),
+            value: Box::new(Expression::MethodCall {
                 receiver: Box::new(Expression::Identifier {
                     name: "Calculator".to_string(),
                     position: pos(),
@@ -458,7 +453,7 @@ fn test_method_argument_count_error_has_location() {
                 arguments: vec![],
                 trailing_block: None,
                 position: pos(),
-            },
+            }),
             position: pos(),
         },
         // Call add with wrong number of arguments
@@ -541,10 +536,10 @@ fn test_pattern_match_no_match_error() {
     // `case 5 in 1 ... in 2 ... end` raises when nothing matches, and the
     // error carries the case's own position.
     let stmt = Statement::CaseIn {
-        expression: Expression::IntLiteral {
+        expression: Box::new(Expression::IntLiteral {
             value: 5,
             position: pos_at(45, 7),
-        },
+        }),
         cases: vec![
             metorex::ast::MatchCase {
                 pattern: metorex::ast::MatchPattern::IntLiteral(1),
@@ -647,11 +642,11 @@ fn test_error_in_deeply_nested_calls() {
             position: pos(),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "obj".to_string(),
                 position: pos(),
-            },
-            value: Expression::MethodCall {
+            }),
+            value: Box::new(Expression::MethodCall {
                 receiver: Box::new(Expression::Identifier {
                     name: "Deep".to_string(),
                     position: pos(),
@@ -660,7 +655,7 @@ fn test_error_in_deeply_nested_calls() {
                 arguments: vec![],
                 trailing_block: None,
                 position: pos(),
-            },
+            }),
             position: pos(),
         },
         Statement::Expression {

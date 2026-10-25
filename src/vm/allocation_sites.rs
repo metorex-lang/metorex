@@ -58,7 +58,7 @@ impl VirtualMachine {
         };
         let site = AllocationSite {
             file,
-            line: position.line,
+            line: (position.line as usize),
             class_path,
             method_id,
             generation: self.gc_collection_count(),

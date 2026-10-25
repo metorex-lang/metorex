@@ -38,7 +38,7 @@ fn test_lexer_regex_literal() {
     let tokens = Lexer::new("/pattern/").tokenize();
     assert_eq!(
         tokens[0].kind,
-        TokenKind::Regex("pattern".to_string(), "".to_string())
+        TokenKind::Regex(Box::new(("pattern".to_string(), "".to_string())))
     );
 }
 
@@ -47,7 +47,7 @@ fn test_lexer_regex_literal_with_flags() {
     let tokens = Lexer::new("/hello/im").tokenize();
     assert_eq!(
         tokens[0].kind,
-        TokenKind::Regex("hello".to_string(), "im".to_string())
+        TokenKind::Regex(Box::new(("hello".to_string(), "im".to_string())))
     );
 }
 

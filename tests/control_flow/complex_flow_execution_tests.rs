@@ -18,35 +18,35 @@ fn test_for_loop_in_if_branch() {
 
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "flag".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::BoolLiteral {
+            }),
+            value: Box::new(Expression::BoolLiteral {
                 value: true,
                 position: pos(1, 8),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "sum".to_string(),
                 position: pos(2, 1),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 0,
                 position: pos(2, 7),
-            },
+            }),
             position: pos(2, 1),
         },
         Statement::If {
-            condition: Expression::Identifier {
+            condition: Box::new(Expression::Identifier {
                 name: "flag".to_string(),
                 position: pos(3, 4),
-            },
+            }),
             then_branch: vec![Statement::For {
                 variable: "x".to_string(),
-                iterable: Expression::Array {
+                iterable: Box::new(Expression::Array {
                     elements: vec![
                         Expression::IntLiteral {
                             value: 1,
@@ -62,13 +62,13 @@ fn test_for_loop_in_if_branch() {
                         },
                     ],
                     position: pos(4, 15),
-                },
+                }),
                 body: vec![Statement::Assignment {
-                    target: Expression::Identifier {
+                    target: Box::new(Expression::Identifier {
                         name: "sum".to_string(),
                         position: pos(5, 5),
-                    },
-                    value: Expression::BinaryOp {
+                    }),
+                    value: Box::new(Expression::BinaryOp {
                         op: BinaryOp::Add,
                         left: Box::new(Expression::Identifier {
                             name: "sum".to_string(),
@@ -79,7 +79,7 @@ fn test_for_loop_in_if_branch() {
                             position: pos(5, 17),
                         }),
                         position: pos(5, 15),
-                    },
+                    }),
                     position: pos(5, 5),
                 }],
                 position: pos(4, 3),
@@ -102,19 +102,19 @@ fn test_while_loop_in_for_loop() {
 
     let program = vec![
         Statement::Assignment {
-            target: Expression::Identifier {
+            target: Box::new(Expression::Identifier {
                 name: "total".to_string(),
                 position: pos(1, 1),
-            },
-            value: Expression::IntLiteral {
+            }),
+            value: Box::new(Expression::IntLiteral {
                 value: 0,
                 position: pos(1, 9),
-            },
+            }),
             position: pos(1, 1),
         },
         Statement::For {
             variable: "outer".to_string(),
-            iterable: Expression::Array {
+            iterable: Box::new(Expression::Array {
                 elements: vec![
                     Expression::IntLiteral {
                         value: 2,
@@ -126,21 +126,21 @@ fn test_while_loop_in_for_loop() {
                     },
                 ],
                 position: pos(2, 17),
-            },
+            }),
             body: vec![
                 Statement::Assignment {
-                    target: Expression::Identifier {
+                    target: Box::new(Expression::Identifier {
                         name: "inner".to_string(),
                         position: pos(3, 3),
-                    },
-                    value: Expression::IntLiteral {
+                    }),
+                    value: Box::new(Expression::IntLiteral {
                         value: 0,
                         position: pos(3, 11),
-                    },
+                    }),
                     position: pos(3, 3),
                 },
                 Statement::While {
-                    condition: Expression::BinaryOp {
+                    condition: Box::new(Expression::BinaryOp {
                         op: BinaryOp::Less,
                         left: Box::new(Expression::Identifier {
                             name: "inner".to_string(),
@@ -151,14 +151,14 @@ fn test_while_loop_in_for_loop() {
                             position: pos(4, 17),
                         }),
                         position: pos(4, 15),
-                    },
+                    }),
                     body: vec![
                         Statement::Assignment {
-                            target: Expression::Identifier {
+                            target: Box::new(Expression::Identifier {
                                 name: "total".to_string(),
                                 position: pos(5, 5),
-                            },
-                            value: Expression::BinaryOp {
+                            }),
+                            value: Box::new(Expression::BinaryOp {
                                 op: BinaryOp::Add,
                                 left: Box::new(Expression::Identifier {
                                     name: "total".to_string(),
@@ -169,15 +169,15 @@ fn test_while_loop_in_for_loop() {
                                     position: pos(5, 21),
                                 }),
                                 position: pos(5, 19),
-                            },
+                            }),
                             position: pos(5, 5),
                         },
                         Statement::Assignment {
-                            target: Expression::Identifier {
+                            target: Box::new(Expression::Identifier {
                                 name: "inner".to_string(),
                                 position: pos(6, 5),
-                            },
-                            value: Expression::BinaryOp {
+                            }),
+                            value: Box::new(Expression::BinaryOp {
                                 op: BinaryOp::Add,
                                 left: Box::new(Expression::Identifier {
                                     name: "inner".to_string(),
@@ -188,7 +188,7 @@ fn test_while_loop_in_for_loop() {
                                     position: pos(6, 21),
                                 }),
                                 position: pos(6, 19),
-                            },
+                            }),
                             position: pos(6, 5),
                         },
                     ],
@@ -212,7 +212,7 @@ fn test_control_flow_with_return() {
     let program = vec![
         Statement::For {
             variable: "x".to_string(),
-            iterable: Expression::Array {
+            iterable: Box::new(Expression::Array {
                 elements: vec![
                     Expression::IntLiteral {
                         value: 1,
@@ -228,9 +228,9 @@ fn test_control_flow_with_return() {
                     },
                 ],
                 position: pos(1, 13),
-            },
+            }),
             body: vec![Statement::If {
-                condition: Expression::BinaryOp {
+                condition: Box::new(Expression::BinaryOp {
                     op: BinaryOp::Equal,
                     left: Box::new(Expression::Identifier {
                         name: "x".to_string(),
@@ -241,12 +241,12 @@ fn test_control_flow_with_return() {
                         position: pos(2, 11),
                     }),
                     position: pos(2, 8),
-                },
+                }),
                 then_branch: vec![Statement::Return {
-                    value: Some(Expression::Identifier {
+                    value: Some(Box::new(Expression::Identifier {
                         name: "x".to_string(),
                         position: pos(3, 12),
-                    }),
+                    })),
                     position: pos(3, 5),
                 }],
                 elsif_branches: vec![],
@@ -256,10 +256,10 @@ fn test_control_flow_with_return() {
             position: pos(1, 1),
         },
         Statement::Return {
-            value: Some(Expression::IntLiteral {
+            value: Some(Box::new(Expression::IntLiteral {
                 value: 999,
                 position: pos(6, 8),
-            }),
+            })),
             position: pos(6, 1),
         },
     ];

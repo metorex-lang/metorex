@@ -53,10 +53,10 @@ impl VirtualMachine {
                 for attr_name in &names {
                     if want_reader {
                         let getter_body = vec![crate::ast::Statement::Return {
-                            value: Some(crate::ast::Expression::InstanceVariable {
+                            value: Some(Box::new(crate::ast::Expression::InstanceVariable {
                                 name: attr_name.clone(),
                                 position,
-                            }),
+                            })),
                             position,
                         }];
                         let getter =
@@ -69,14 +69,14 @@ impl VirtualMachine {
                     }
                     if want_writer {
                         let setter_body = vec![crate::ast::Statement::Assignment {
-                            target: crate::ast::Expression::InstanceVariable {
+                            target: Box::new(crate::ast::Expression::InstanceVariable {
                                 name: attr_name.clone(),
                                 position,
-                            },
-                            value: crate::ast::Expression::Identifier {
+                            }),
+                            value: Box::new(crate::ast::Expression::Identifier {
                                 name: crate::object::UNNAMED_PARAMETER.to_string(),
                                 position,
-                            },
+                            }),
                             position,
                         }];
                         let setter_name = format!("{}=", attr_name);

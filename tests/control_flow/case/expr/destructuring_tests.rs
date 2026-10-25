@@ -10,11 +10,11 @@ fn pos() -> Position {
 
 fn execute_case_expr(vm: &mut VirtualMachine, case_expr: Expression) -> Object {
     let assign_stmt = Statement::Assignment {
-        target: Expression::Identifier {
+        target: Box::new(Expression::Identifier {
             name: "result".to_string(),
             position: pos(),
-        },
-        value: case_expr,
+        }),
+        value: Box::new(case_expr),
         position: pos(),
     };
     vm.execute_program(&[assign_stmt])

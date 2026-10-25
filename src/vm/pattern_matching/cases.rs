@@ -26,7 +26,7 @@ impl VirtualMachine {
                 self.warn_through_warning_module(message, position)?;
                 continue;
             }
-            seen.push((spelling, line));
+            seen.push((spelling, (line as usize)));
         }
         Ok(())
     }

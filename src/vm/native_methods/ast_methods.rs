@@ -207,7 +207,7 @@ pub fn serialize_statement(stmt: &Statement) -> Object {
             (
                 "value",
                 value
-                    .as_ref()
+                    .as_deref()
                     .map(serialize_expression)
                     .unwrap_or(Object::Nil),
             ),
@@ -276,7 +276,7 @@ pub fn serialize_statement(stmt: &Statement) -> Object {
             (
                 "exception",
                 exception
-                    .as_ref()
+                    .as_deref()
                     .map(serialize_expression)
                     .unwrap_or(Object::Nil),
             ),

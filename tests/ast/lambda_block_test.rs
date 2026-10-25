@@ -5,7 +5,7 @@ use metorex::ast::{BinaryOp, Expression, Statement};
 fn test_lambda_without_captured_vars() {
     let expr = Expression::Lambda {
         parameters: vec!["x".to_string()],
-        parameter_defaults: Vec::new(),
+        parameter_defaults: Box::new(Vec::new()),
         body: vec![Statement::Expression {
             expression: Expression::Identifier {
                 name: "x".to_string(),
@@ -15,7 +15,7 @@ fn test_lambda_without_captured_vars() {
         }]
         .into(),
         captured_vars: None,
-        outer_locals: Vec::new(),
+        outer_locals: Box::new(Vec::new()),
         is_lambda: false,
         position: pos(1, 1),
     };
@@ -26,9 +26,9 @@ fn test_lambda_without_captured_vars() {
 fn test_lambda_with_captured_vars() {
     // Lambda that captures 'y' from outer scope: x -> x + y
     let expr = Expression::Lambda {
-        outer_locals: Vec::new(),
+        outer_locals: Box::new(Vec::new()),
         parameters: vec!["x".to_string()],
-        parameter_defaults: Vec::new(),
+        parameter_defaults: Box::new(Vec::new()),
         body: vec![Statement::Expression {
             expression: Expression::BinaryOp {
                 op: BinaryOp::Add,
@@ -45,7 +45,7 @@ fn test_lambda_with_captured_vars() {
             position: pos(1, 10),
         }]
         .into(),
-        captured_vars: Some(vec!["y".to_string()]),
+        captured_vars: Some(Box::new(vec!["y".to_string()])),
         is_lambda: false,
         position: pos(1, 1),
     };
@@ -56,9 +56,9 @@ fn test_lambda_with_captured_vars() {
 fn test_lambda_with_multiple_captured_vars() {
     // Lambda that captures 'a', 'b', 'c' from outer scope
     let expr = Expression::Lambda {
-        outer_locals: Vec::new(),
+        outer_locals: Box::new(Vec::new()),
         parameters: vec!["x".to_string()],
-        parameter_defaults: Vec::new(),
+        parameter_defaults: Box::new(Vec::new()),
         body: vec![Statement::Expression {
             expression: Expression::BinaryOp {
                 op: BinaryOp::Add,
@@ -83,7 +83,11 @@ fn test_lambda_with_multiple_captured_vars() {
             position: pos(1, 10),
         }]
         .into(),
-        captured_vars: Some(vec!["a".to_string(), "b".to_string(), "c".to_string()]),
+        captured_vars: Some(Box::new(vec![
+            "a".to_string(),
+            "b".to_string(),
+            "c".to_string(),
+        ])),
         is_lambda: false,
         position: pos(1, 1),
     };
@@ -94,9 +98,9 @@ fn test_lambda_with_multiple_captured_vars() {
 fn test_lambda_implicit_return() {
     // Lambda with implicit return (last expression): x -> x * 2
     let expr = Expression::Lambda {
-        outer_locals: Vec::new(),
+        outer_locals: Box::new(Vec::new()),
         parameters: vec!["x".to_string()],
-        parameter_defaults: Vec::new(),
+        parameter_defaults: Box::new(Vec::new()),
         body: vec![Statement::Expression {
             expression: Expression::BinaryOp {
                 op: BinaryOp::Multiply,
@@ -124,16 +128,16 @@ fn test_lambda_implicit_return() {
 fn test_lambda_with_multiple_statements() {
     // Lambda with multiple statements, last one is implicit return
     let expr = Expression::Lambda {
-        outer_locals: Vec::new(),
+        outer_locals: Box::new(Vec::new()),
         parameters: vec!["x".to_string()],
-        parameter_defaults: Vec::new(),
+        parameter_defaults: Box::new(Vec::new()),
         body: vec![
             Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "temp".to_string(),
                     position: pos(2, 3),
-                },
-                value: Expression::BinaryOp {
+                }),
+                value: Box::new(Expression::BinaryOp {
                     op: BinaryOp::Multiply,
                     left: Box::new(Expression::Identifier {
                         name: "x".to_string(),
@@ -144,7 +148,7 @@ fn test_lambda_with_multiple_statements() {
                         position: pos(2, 14),
                     }),
                     position: pos(2, 12),
-                },
+                }),
                 position: pos(2, 3),
             },
             Statement::Expression {
@@ -168,7 +172,7 @@ fn test_lambda_no_parameters() {
     // Lambda with no parameters: -> 42
     let expr = Expression::Lambda {
         parameters: vec![],
-        parameter_defaults: Vec::new(),
+        parameter_defaults: Box::new(Vec::new()),
         body: vec![Statement::Expression {
             expression: Expression::IntLiteral {
                 value: 42,
@@ -178,7 +182,7 @@ fn test_lambda_no_parameters() {
         }]
         .into(),
         captured_vars: None,
-        outer_locals: Vec::new(),
+        outer_locals: Box::new(Vec::new()),
         is_lambda: false,
         position: pos(1, 1),
     };
@@ -189,9 +193,9 @@ fn test_lambda_no_parameters() {
 fn test_lambda_with_instance_var_capture() {
     // Lambda that captures instance variable @count
     let expr = Expression::Lambda {
-        outer_locals: Vec::new(),
+        outer_locals: Box::new(Vec::new()),
         parameters: vec!["x".to_string()],
-        parameter_defaults: Vec::new(),
+        parameter_defaults: Box::new(Vec::new()),
         body: vec![Statement::Expression {
             expression: Expression::BinaryOp {
                 op: BinaryOp::Add,
@@ -208,7 +212,7 @@ fn test_lambda_with_instance_var_capture() {
             position: pos(1, 10),
         }]
         .into(),
-        captured_vars: Some(vec!["@count".to_string()]),
+        captured_vars: Some(Box::new(vec!["@count".to_string()])),
         is_lambda: false,
         position: pos(1, 1),
     };
@@ -219,9 +223,9 @@ fn test_lambda_with_instance_var_capture() {
 fn test_nested_lambdas() {
     // Outer lambda that returns an inner lambda
     let inner_lambda = Expression::Lambda {
-        outer_locals: Vec::new(),
+        outer_locals: Box::new(Vec::new()),
         parameters: vec!["y".to_string()],
-        parameter_defaults: Vec::new(),
+        parameter_defaults: Box::new(Vec::new()),
         body: vec![Statement::Expression {
             expression: Expression::BinaryOp {
                 op: BinaryOp::Add,
@@ -238,21 +242,21 @@ fn test_nested_lambdas() {
             position: pos(2, 10),
         }]
         .into(),
-        captured_vars: Some(vec!["x".to_string()]),
+        captured_vars: Some(Box::new(vec!["x".to_string()])),
         is_lambda: false,
         position: pos(2, 1),
     };
 
     let outer_lambda = Expression::Lambda {
         parameters: vec!["x".to_string()],
-        parameter_defaults: Vec::new(),
+        parameter_defaults: Box::new(Vec::new()),
         body: vec![Statement::Expression {
             expression: inner_lambda,
             position: pos(2, 1),
         }]
         .into(),
         captured_vars: None,
-        outer_locals: Vec::new(),
+        outer_locals: Box::new(Vec::new()),
         is_lambda: false,
         position: pos(1, 1),
     };
@@ -266,25 +270,25 @@ fn test_block_with_multiple_statements() {
     let stmt = Statement::Block {
         statements: vec![
             Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "x".to_string(),
                     position: pos(2, 3),
-                },
-                value: Expression::IntLiteral {
+                }),
+                value: Box::new(Expression::IntLiteral {
                     value: 10,
                     position: pos(2, 7),
-                },
+                }),
                 position: pos(2, 3),
             },
             Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "y".to_string(),
                     position: pos(3, 3),
-                },
-                value: Expression::IntLiteral {
+                }),
+                value: Box::new(Expression::IntLiteral {
                     value: 20,
                     position: pos(3, 7),
-                },
+                }),
                 position: pos(3, 3),
             },
             Statement::Expression {
@@ -326,14 +330,14 @@ fn test_nested_blocks() {
     let stmt = Statement::Block {
         statements: vec![
             Statement::Assignment {
-                target: Expression::Identifier {
+                target: Box::new(Expression::Identifier {
                     name: "x".to_string(),
                     position: pos(2, 3),
-                },
-                value: Expression::IntLiteral {
+                }),
+                value: Box::new(Expression::IntLiteral {
                     value: 10,
                     position: pos(2, 7),
-                },
+                }),
                 position: pos(2, 3),
             },
             Statement::Block {

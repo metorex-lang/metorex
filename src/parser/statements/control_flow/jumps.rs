@@ -120,7 +120,7 @@ impl Parser {
         if self.rescue_depth == 0 && !self.in_defined_argument {
             return Err(MetorexError::syntax_error(
                 "Invalid retry without rescue",
-                crate::error::SourceLocation::new(pos.line, pos.column, pos.offset),
+                crate::error::SourceLocation::from(pos),
             ));
         }
         self.wrap_with_modifier(Statement::Retry { position: pos })
@@ -139,10 +139,7 @@ impl Parser {
 
     /// Refuse a `redo`, `break` or `next` written from `offset` on that no
     /// loop took in.
-    pub(crate) fn refuse_unlooped_jumps_after(
-        &mut self,
-        offset: usize,
-    ) -> Result<(), MetorexError> {
+    pub(crate) fn refuse_unlooped_jumps_after(&mut self, offset: u32) -> Result<(), MetorexError> {
         let Some((at, refusal)) = self
             .unlooped_jumps
             .iter()
@@ -154,7 +151,7 @@ impl Parser {
         self.unlooped_jumps.retain(|(at, _)| at.offset < offset);
         Err(MetorexError::syntax_error(
             refusal.to_string(),
-            SourceLocation::new(at.line, at.column, at.offset),
+            SourceLocation::from(at),
         ))
     }
 
@@ -178,7 +175,7 @@ impl Parser {
             if self.check(&[TokenKind::Else, TokenKind::End]) {
                 break;
             }
-            then_branch.push(self.parse_statement()?);
+            crate::parser::push_tight(&mut then_branch, self.parse_statement()?);
             self.skip_whitespace();
         }
 
@@ -191,7 +188,7 @@ impl Parser {
                 if self.check(&[TokenKind::End]) {
                     break;
                 }
-                else_stmts.push(self.parse_statement()?);
+                crate::parser::push_tight(&mut else_stmts, self.parse_statement()?);
                 self.skip_whitespace();
             }
             Some(else_stmts)
@@ -202,7 +199,7 @@ impl Parser {
         self.expect(TokenKind::End, "Expected 'end' after unless statement")?;
 
         Ok(Statement::Unless {
-            condition,
+            condition: Box::new(condition),
             then_branch,
             else_branch,
             position: start_pos,
@@ -261,7 +258,7 @@ impl Parser {
         };
 
         Ok(Statement::Return {
-            value,
+            value: value.map(Box::new),
             position: pos,
         })
     }

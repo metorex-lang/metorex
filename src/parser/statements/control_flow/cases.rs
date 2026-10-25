@@ -61,7 +61,7 @@ impl Parser {
             .next()
             .expect("a case with no subject holds at least one when");
         Ok(Statement::If {
-            condition: first.condition,
+            condition: Box::new(first.condition),
             then_branch: first.body,
             elsif_branches: branches.collect(),
             else_branch,
@@ -78,7 +78,7 @@ impl Parser {
             if self.check(&[TokenKind::When, TokenKind::Else, TokenKind::End]) || self.is_at_end() {
                 break;
             }
-            body.push(self.parse_statement()?);
+            crate::parser::push_tight(&mut body, self.parse_statement()?);
         }
         Ok(body)
     }
@@ -134,11 +134,7 @@ impl Parser {
         if self.check(&[TokenKind::Else]) {
             return Err(MetorexError::syntax_error(
                 "else without rescue is useless".to_string(),
-                SourceLocation::new(
-                    self.peek().position.line,
-                    self.peek().position.column,
-                    self.peek().position.offset,
-                ),
+                SourceLocation::from(self.peek().position),
             ));
         }
         // Parse when clauses
@@ -181,7 +177,7 @@ impl Parser {
                 if self.check(&[TokenKind::When, TokenKind::Else, TokenKind::End]) {
                     break;
                 }
-                body.push(self.parse_statement()?);
+                crate::parser::push_tight(&mut body, self.parse_statement()?);
                 self.skip_whitespace();
             }
 
@@ -205,7 +201,7 @@ impl Parser {
                 if self.check(&[TokenKind::End]) {
                     break;
                 }
-                else_body.push(self.parse_statement()?);
+                crate::parser::push_tight(&mut else_body, self.parse_statement()?);
                 self.skip_whitespace();
             }
 
@@ -222,7 +218,7 @@ impl Parser {
         self.expect(TokenKind::End, "Expected 'end' after case statement")?;
 
         Ok(Statement::Match {
-            expression,
+            expression: Box::new(expression),
             cases,
             position: start_pos,
         })
@@ -298,7 +294,7 @@ impl Parser {
                 if self.check(&[TokenKind::In, TokenKind::Else, TokenKind::End]) {
                     break;
                 }
-                body.push(self.parse_statement()?);
+                crate::parser::push_tight(&mut body, self.parse_statement()?);
                 self.skip_whitespace();
             }
 
@@ -322,7 +318,7 @@ impl Parser {
                 if self.check(&[TokenKind::End]) {
                     break;
                 }
-                else_body.push(self.parse_statement()?);
+                crate::parser::push_tight(&mut else_body, self.parse_statement()?);
                 self.skip_whitespace();
             }
 
@@ -338,7 +334,7 @@ impl Parser {
         self.expect(TokenKind::End, "Expected 'end' after case/in statement")?;
 
         Ok(Statement::CaseIn {
-            expression,
+            expression: Box::new(expression),
             cases,
             position: start_pos,
         })

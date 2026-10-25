@@ -295,11 +295,11 @@ fn test_method_call_on_self() {
 fn test_self_in_instance_variable_assignment() {
     // In a method: @name = self.name
     let stmt = Statement::Assignment {
-        target: Expression::InstanceVariable {
+        target: Box::new(Expression::InstanceVariable {
             name: "name".to_string(),
             position: pos(1, 1),
-        },
-        value: Expression::MethodCall {
+        }),
+        value: Box::new(Expression::MethodCall {
             receiver: Box::new(Expression::SelfExpr {
                 position: pos(1, 9),
             }),
@@ -307,7 +307,7 @@ fn test_self_in_instance_variable_assignment() {
             arguments: vec![],
             trailing_block: None,
             position: pos(1, 9),
-        },
+        }),
         position: pos(1, 1),
     };
     assert_eq!(stmt.position(), pos(1, 1));

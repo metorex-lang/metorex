@@ -13,15 +13,15 @@ pub enum Statement {
 
     // Variable assignment
     Assignment {
-        target: Expression,
-        value: Expression,
+        target: Box<Expression>,
+        value: Box<Expression>,
         position: Position,
     },
 
     // `begin ... end while cond`, which runs its body before it first reads
     // the condition.
     DoWhile {
-        condition: Expression,
+        condition: Box<Expression>,
         body: Vec<Statement>,
         position: Position,
     },
@@ -118,7 +118,7 @@ pub enum Statement {
 
     // Conditional statements
     If {
-        condition: Expression,
+        condition: Box<Expression>,
         then_branch: Vec<Statement>,
         elsif_branches: Vec<ElsifBranch>,
         else_branch: Option<Vec<Statement>>,
@@ -127,7 +127,7 @@ pub enum Statement {
 
     // Unless statement (inverted if)
     Unless {
-        condition: Expression,
+        condition: Box<Expression>,
         then_branch: Vec<Statement>,
         else_branch: Option<Vec<Statement>>,
         position: Position,
@@ -135,7 +135,7 @@ pub enum Statement {
 
     // While loop
     While {
-        condition: Expression,
+        condition: Box<Expression>,
         body: Vec<Statement>,
         position: Position,
     },
@@ -143,14 +143,14 @@ pub enum Statement {
     // For loop (iteration over collections)
     For {
         variable: String,
-        iterable: Expression,
+        iterable: Box<Expression>,
         body: Vec<Statement>,
         position: Position,
     },
 
     // Match statement (case/when pattern matching)
     Match {
-        expression: Expression,
+        expression: Box<Expression>,
         cases: Vec<MatchCase>,
         position: Position,
     },
@@ -158,14 +158,14 @@ pub enum Statement {
     // CaseIn statement (Ruby 2.7+ case/in pattern matching)
     // Raises NoMatchingPatternError if no arm matches and no else is present.
     CaseIn {
-        expression: Expression,
+        expression: Box<Expression>,
         cases: Vec<MatchCase>,
         position: Position,
     },
 
     // Return statement
     Return {
-        value: Option<Expression>,
+        value: Option<Box<Expression>>,
         position: Position,
     },
 
@@ -210,7 +210,7 @@ pub enum Statement {
 
     // Raise statement (throw exception)
     Raise {
-        exception: Option<Expression>, // None means re-raise current exception
+        exception: Option<Box<Expression>>, // None means re-raise current exception
         position: Position,
     },
 

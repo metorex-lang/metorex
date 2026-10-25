@@ -9,7 +9,7 @@ use crate::object::View;
 
 /// Convert a lexer position into a runtime source location.
 pub(super) fn position_to_location(position: Position) -> SourceLocation {
-    SourceLocation::new(position.line, position.column, position.offset)
+    SourceLocation::from(position)
 }
 
 /// Format an exception object for display.

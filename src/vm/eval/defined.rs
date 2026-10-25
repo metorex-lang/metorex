@@ -433,11 +433,11 @@ impl VirtualMachine {
 fn defined_statement(statement: &Statement) -> &'static str {
     match statement {
         Statement::Assignment { target, value, .. } => {
-            let element = matches!(target, Expression::Index { .. })
-                || matches!(target, Expression::MethodCall { method, .. } if method == "[]");
-            let compound = match value {
-                Expression::BinaryOp { left, .. } => left.as_ref() == target,
-                Expression::MethodCall { receiver, .. } => receiver.as_ref() == target,
+            let element = matches!(**target, Expression::Index { .. })
+                || matches!(&**target, Expression::MethodCall { method, .. } if method == "[]");
+            let compound = match &**value {
+                Expression::BinaryOp { left, .. } => left == target,
+                Expression::MethodCall { receiver, .. } => receiver == target,
                 _ => false,
             };
             if element && !compound {

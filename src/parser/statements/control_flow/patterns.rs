@@ -114,11 +114,7 @@ impl Parser {
                         } else {
                             return Err(MetorexError::syntax_error(
                                 "Expected identifier after ... in array pattern".to_string(),
-                                SourceLocation::new(
-                                    self.peek().position.line,
-                                    self.peek().position.column,
-                                    self.peek().position.offset,
-                                ),
+                                SourceLocation::from(self.peek().position),
                             ));
                         }
                     } else {
@@ -165,11 +161,7 @@ impl Parser {
                     } else {
                         return Err(MetorexError::syntax_error(
                             "Expected identifier or string key in object pattern".to_string(),
-                            SourceLocation::new(
-                                self.peek().position.line,
-                                self.peek().position.column,
-                                self.peek().position.offset,
-                            ),
+                            SourceLocation::from(self.peek().position),
                         ));
                     };
 
@@ -327,7 +319,7 @@ impl Parser {
             }
             // A `when` may be written with anything that answers `===`, such
             // as a pattern literal, so what is left is read as an expression.
-            TokenKind::Regex(_, _) => {
+            TokenKind::Regex(_) => {
                 let held = self.parse_primary()?;
                 Ok(MatchPattern::Expression(Box::new(held)))
             }
@@ -339,11 +331,7 @@ impl Parser {
             }
             _ => Err(MetorexError::syntax_error(
                 format!("Expected pattern, found {:?}", token.kind),
-                SourceLocation::new(
-                    token.position.line,
-                    token.position.column,
-                    token.position.offset,
-                ),
+                SourceLocation::from(token.position),
             )),
         }
     }

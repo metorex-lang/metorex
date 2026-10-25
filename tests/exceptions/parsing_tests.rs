@@ -13,10 +13,10 @@ fn pos(line: usize, column: usize) -> Position {
 #[test]
 fn test_raise_with_expression() {
     let stmt = Statement::Raise {
-        exception: Some(Expression::StringLiteral {
+        exception: Some(Box::new(Expression::StringLiteral {
             value: "Error occurred".to_string(),
             position: pos(1, 7),
-        }),
+        })),
         position: pos(1, 1),
     };
     assert_eq!(stmt.position(), pos(1, 1));
@@ -26,7 +26,7 @@ fn test_raise_with_expression() {
 #[test]
 fn test_raise_with_call() {
     let stmt = Statement::Raise {
-        exception: Some(Expression::MethodCall {
+        exception: Some(Box::new(Expression::MethodCall {
             receiver: Box::new(Expression::Identifier {
                 name: "StandardError".to_string(),
                 position: pos(1, 7),
@@ -38,7 +38,7 @@ fn test_raise_with_call() {
             }],
             trailing_block: None,
             position: pos(1, 7),
-        }),
+        })),
         position: pos(1, 1),
     };
     assert_eq!(stmt.position(), pos(1, 1));
@@ -499,9 +499,9 @@ fn test_begin_in_method() {
             variable_target: None,
             splatted_types: Vec::new(),
             body: vec![Statement::Return {
-                value: Some(Expression::NilLiteral {
+                value: Some(Box::new(Expression::NilLiteral {
                     position: pos(4, 12),
-                }),
+                })),
                 position: pos(4, 5),
             }],
             position: pos(3, 1),
@@ -578,10 +578,10 @@ fn test_begin_with_return_in_ensure() {
                 position: pos(4, 3),
             },
             Statement::Return {
-                value: Some(Expression::BoolLiteral {
+                value: Some(Box::new(Expression::BoolLiteral {
                     value: true,
                     position: pos(5, 10),
-                }),
+                })),
                 position: pos(5, 3),
             },
         ]),

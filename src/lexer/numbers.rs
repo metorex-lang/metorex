@@ -36,9 +36,12 @@ impl<'a> Lexer<'a> {
             let digits = format!("{whole}{fraction}");
             let mut denominator = String::from("1");
             denominator.extend(std::iter::repeat_n('0', fraction.len()));
-            Some(TokenKind::Rational(digits, denominator))
+            Some(TokenKind::Rational(Box::new((digits, denominator))))
         } else {
-            Some(TokenKind::Rational(number.to_string(), "1".to_string()))
+            Some(TokenKind::Rational(Box::new((
+                number.to_string(),
+                "1".to_string(),
+            ))))
         }
     }
 

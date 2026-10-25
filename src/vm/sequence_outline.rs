@@ -315,12 +315,12 @@ impl Walk<'_> {
                 end_position,
                 ..
             } => {
-                self.lines.push(position.line);
+                self.lines.push(position.line as usize);
                 let scope = Scope {
                     kind: "method",
                     label: name.clone(),
-                    first: position.line,
-                    last: end_position.line,
+                    first: (position.line as usize),
+                    last: (end_position.line as usize),
                     parameters: parameters.iter().map(parameter_pair).collect(),
                 };
                 self.children
@@ -328,7 +328,7 @@ impl Walk<'_> {
             }
             _ => {
                 if !matches!(statement, Statement::Begin { .. } | Statement::Block { .. }) {
-                    self.lines.push(statement.position().line);
+                    self.lines.push(statement.position().line as usize);
                 }
                 for inner in nested_bodies(statement) {
                     self.statements(inner);
@@ -344,13 +344,13 @@ impl Walk<'_> {
     /// constant it opens.
     fn definition(&mut self, opening: &str, name: &str, opened: Position, body: &[Statement]) {
         let line = opened.line;
-        self.lines.push(line);
+        self.lines.push(line as usize);
         let constant = name.rsplit("::").next().unwrap_or(name);
         let label = format!("{opening}{constant}>");
         let scope = Scope {
             kind: "class",
             label: label.clone(),
-            first: line,
+            first: (line as usize),
             last: self.closing_line(opened),
             parameters: Vec::new(),
         };
@@ -377,7 +377,7 @@ impl Walk<'_> {
                 let scope = Scope {
                     kind: "block",
                     label,
-                    first: position.line,
+                    first: (position.line as usize),
                     last: self.closing_line(*position),
                     parameters: block_parameter_pairs(
                         parameters,
@@ -395,7 +395,7 @@ impl Walk<'_> {
                 let scope = Scope {
                     kind: "class",
                     label: "singleton class".to_string(),
-                    first: position.line,
+                    first: (position.line as usize),
                     last: self.closing_line(*position),
                     parameters: Vec::new(),
                 };
@@ -477,7 +477,7 @@ impl Walk<'_> {
             } => {
                 self.blocks_in(condition);
                 self.statements(then_branch);
-                for branch in elsif_branches {
+                for branch in elsif_branches.iter() {
                     self.blocks_in(&branch.condition);
                     self.statements(&branch.body);
                 }
@@ -537,9 +537,9 @@ impl Walk<'_> {
     fn closing_line(&self, opened: Position) -> usize {
         self.context
             .closing
-            .get(&(opened.line, opened.column))
+            .get(&((opened.line as usize), (opened.column as usize)))
             .copied()
-            .unwrap_or(opened.line)
+            .unwrap_or(opened.line as usize)
     }
 }
 
