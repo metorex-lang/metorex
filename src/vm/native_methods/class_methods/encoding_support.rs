@@ -217,24 +217,39 @@ impl VirtualMachine {
 impl VirtualMachine {
     /// Record the encoding of the text a pattern was built from.
     pub(crate) fn record_pattern_encoding(&mut self, pattern: &Rc<String>, named: String) {
-        self.pattern_encodings.insert(
-            Rc::as_ptr(pattern) as usize,
+        record_for_pattern(
+            &mut self.pattern_encodings,
+            pattern,
             (Rc::downgrade(pattern), named),
+            |(held, _)| held,
         );
     }
 
     /// Make a pattern report `named` as its encoding, whatever it holds.
     pub(crate) fn force_pattern_encoding(&mut self, pattern: &Rc<String>, named: String) {
-        self.forced_pattern_encodings.insert(
-            Rc::as_ptr(pattern) as usize,
+        record_for_pattern(
+            &mut self.forced_pattern_encodings,
+            pattern,
             (Rc::downgrade(pattern), named),
+            |(held, _)| held,
         );
+    }
+
+    /// How many entries the tables kept against patterns' addresses hold.
+    pub fn pattern_record_count(&self) -> usize {
+        self.pattern_encodings.len()
+            + self.forced_pattern_encodings.len()
+            + self.built_patterns.len()
     }
 
     /// Record a pattern as built by `Regexp.new` rather than written.
     pub(crate) fn record_built_pattern(&mut self, pattern: &Rc<String>) {
-        self.built_patterns
-            .insert(Rc::as_ptr(pattern) as usize, Rc::downgrade(pattern));
+        record_for_pattern(
+            &mut self.built_patterns,
+            pattern,
+            Rc::downgrade(pattern),
+            |held| held,
+        );
     }
 
     /// Whether a pattern was built by `Regexp.new`, if it is the pattern the
@@ -297,4 +312,20 @@ fn holds_only_ascii(value: &Object) -> bool {
     crate::vm::native_methods::string_methods::binary_bytes(&text)
         .iter()
         .all(|byte| byte.is_ascii())
+}
+
+/// Record `entry` against `pattern`'s address in `table`. Before the table
+/// would grow, the entries of the patterns that were freed are dropped, so a
+/// program that builds patterns in a loop keeps a table the size of the ones
+/// alive.
+fn record_for_pattern<T>(
+    table: &mut std::collections::HashMap<usize, T>,
+    pattern: &Rc<String>,
+    entry: T,
+    held: impl Fn(&T) -> &std::rc::Weak<String>,
+) {
+    if table.len() == table.capacity() {
+        table.retain(|_, recorded| held(recorded).strong_count() > 0);
+    }
+    table.insert(Rc::as_ptr(pattern) as usize, entry);
 }

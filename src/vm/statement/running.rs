@@ -48,7 +48,7 @@ impl VirtualMachine {
         }
         self.deliver_pending_signals(position)?;
         if crate::object::live::collection_due() {
-            self.collect_garbage(position)?;
+            self.collect_garbage(position, crate::object::live::whole_collection_due())?;
         }
         self.pass_checkpoint(position)?;
         let line = position.line;

@@ -180,8 +180,7 @@ fn run_inline(cli: &Cli, code: &str, named: &str) -> ! {
             .or_else(metorex::vm::locale_encoding_name);
         let lexer = Lexer::new(code).with_source_encoding(source_encoding.clone());
         let tokens = lexer.tokenize();
-        let mut parser = Parser::new(tokens);
-        let parsed = parser.parse();
+        let parsed = Parser::new(tokens).parse();
         let mut vm = VirtualMachine::new();
         apply_cli_flags(&mut vm, cli);
         let errors = parsed.as_ref().err().cloned().unwrap_or_default();
@@ -327,6 +326,8 @@ fn real_main_after_inline(cli: Cli) {
         process::exit(vm.run_at_exit_handlers(1, None));
     }
     vm.report_parse_warnings(filename, parser.default_warnings());
+    // The parser holds the tokens, which take more memory than the program.
+    drop(parser);
     let program = parsed.unwrap_or_default();
 
     if cli.debug {

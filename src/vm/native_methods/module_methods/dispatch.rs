@@ -307,7 +307,7 @@ impl VirtualMachine {
                     return Ok(Some(Object::Int(self.gc_total_time())));
                 }
                 "start" | "garbage_collect" => {
-                    self.collect_garbage(position)?;
+                    self.collect_garbage(position, true)?;
                     return Ok(Some(Object::Nil));
                 }
                 "__collecting__" => {

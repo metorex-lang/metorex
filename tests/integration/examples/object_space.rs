@@ -115,6 +115,12 @@ fn test_object_space_cycles_no_parens_execution() {
     assert_eq!(output, CYCLES_OUTPUT);
 }
 
+#[test]
+fn cycles_are_freed_by_routine_collections_and_survivors_by_gc_start() {
+    let output = run_example("object_space/generations.rb");
+    assert_eq!(output, "true\n2\n0\n0\n");
+}
+
 /// The expected output of both `object_space/cycle_shapes` variants.
 const CYCLE_SHAPES_OUTPUT: &str = "first finalized\n0\n0\n0\n0\n";
 

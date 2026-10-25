@@ -94,16 +94,22 @@ enum Body {
     Block(Rc<BlockStatement>),
     Exception(Rc<RefCell<Exception>>),
     Set(Rc<RefCell<indexmap::IndexSet<ObjectHash>>>),
-    Result(Result<Box<Object>, Box<Object>>),
-    NativeFunction(String),
-    Range {
-        start: Box<Object>,
-        end: Box<Object>,
-        exclusive: bool,
-        mark: Rc<()>,
-    },
+    // Those that hold more than a pointer are boxed, which keeps the cell
+    // every String, Array, Hash, and instance is reached through at 32 bytes.
+    Result(Box<Result<Box<Object>, Box<Object>>>),
+    // A `Box<str>` is two words, which would grow the cell.
+    #[allow(clippy::box_collection)]
+    NativeFunction(Box<String>),
+    Range(Box<RangeParts>),
     Binding(Rc<Binding>),
-    Regex(Rc<String>, Rc<String>),
+    Regex(Box<(Rc<String>, Rc<String>)>),
+}
+
+struct RangeParts {
+    start: Box<Object>,
+    end: Box<Object>,
+    exclusive: bool,
+    mark: Rc<()>,
 }
 
 /// The bytes the cell a pointer value points at takes, its counts included,
@@ -290,20 +296,20 @@ impl Object {
     }
 
     pub fn Result(result: Result<Box<Object>, Box<Object>>) -> Object {
-        Object::on_heap(Body::Result(result))
+        Object::on_heap(Body::Result(Box::new(result)))
     }
 
     pub fn NativeFunction(name: String) -> Object {
-        Object::on_heap(Body::NativeFunction(name))
+        Object::on_heap(Body::NativeFunction(Box::new(name)))
     }
 
     pub fn Range(start: Box<Object>, end: Box<Object>, exclusive: bool, mark: Rc<()>) -> Object {
-        Object::on_heap(Body::Range {
+        Object::on_heap(Body::Range(Box::new(RangeParts {
             start,
             end,
             exclusive,
             mark,
-        })
+        })))
     }
 
     pub fn Binding(binding: Rc<Binding>) -> Object {
@@ -312,7 +318,7 @@ impl Object {
     }
 
     pub fn Regex(pattern: Rc<String>, flags: Rc<String>) -> Object {
-        Object::on_heap(Body::Regex(pattern, flags))
+        Object::on_heap(Body::Regex(Box::new((pattern, flags))))
     }
 
     /// The value's parts, for matching on.
@@ -354,19 +360,14 @@ impl Object {
             Body::Set(members) => View::Set(members),
             Body::Result(result) => View::Result(result),
             Body::NativeFunction(name) => View::NativeFunction(name),
-            Body::Range {
-                start,
-                end,
-                exclusive,
-                mark,
-            } => View::Range {
-                start,
-                end,
-                exclusive: *exclusive,
-                mark,
+            Body::Range(parts) => View::Range {
+                start: &parts.start,
+                end: &parts.end,
+                exclusive: parts.exclusive,
+                mark: &parts.mark,
             },
             Body::Binding(binding) => View::Binding(binding),
-            Body::Regex(pattern, flags) => View::Regex(pattern, flags),
+            Body::Regex(parts) => View::Regex(&parts.0, &parts.1),
         }
     }
 

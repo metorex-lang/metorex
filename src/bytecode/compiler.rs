@@ -259,7 +259,9 @@ impl Compiler {
             }
         }
         let at = self.unit.emit(instruction, position);
-        self.unit.error_spots[at] = self.spots.iter().rev().flatten().next().cloned();
+        self.unit
+            .error_spots
+            .set(at, self.spots.iter().rev().flatten().next().cloned());
         at
     }
 

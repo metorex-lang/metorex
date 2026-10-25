@@ -151,12 +151,19 @@ class StringScanner
 
   # ── Matching ─────────────────────────────────────────────────────────────
 
+  # How many of the Strings a scanner was given as patterns it keeps the
+  # Regexp of.
+  STRING_PATTERNS_KEPT = 32
+  private_constant :STRING_PATTERNS_KEPT
+
   # The pattern a call was given, as a Regexp. A String stands for itself
   # rather than for what it would mean as a pattern.
   def as_pattern(pattern)
     return pattern if pattern.is_a?(Regexp)
     if pattern.is_a?(String)
-      return Regexp.new(Regexp.escape(pattern))
+      built = (@string_patterns ||= {})
+      built.clear if built.size >= STRING_PATTERNS_KEPT
+      return built[pattern] ||= Regexp.new(Regexp.escape(pattern))
     end
     raise TypeError, "wrong argument type #{pattern.class} (expected Regexp)"
   end

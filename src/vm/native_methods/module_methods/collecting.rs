@@ -29,18 +29,23 @@ impl VirtualMachine {
             .set("__gc_total_time", Object::Int(total));
     }
 
-    /// Run the cycle collector unless the program switched it off, clear the
-    /// dead out of the list of objects, and run the finalizers of the
-    /// objects freed since the last time.
-    pub(crate) fn collect_garbage(&mut self, position: Position) -> Result<(), MetorexError> {
+    /// Run the cycle collector unless the program switched it off, over
+    /// every object when `whole` and else over those made since the last
+    /// collection, clear the dead out of the list of objects, and run the
+    /// finalizers of the objects freed since the last time.
+    pub(crate) fn collect_garbage(
+        &mut self,
+        position: Position,
+        whole: bool,
+    ) -> Result<(), MetorexError> {
         crate::vm::block_reuse::release_kept_blocks();
         if crate::object::live::collecting() {
             let started = std::time::Instant::now();
             self.collect_unreached_data(position)?;
-            crate::object::collector::collect();
+            crate::object::collector::collect(whole);
             self.record_gc_run(started.elapsed());
         }
-        crate::object::live::settle();
+        crate::object::live::settle(whole);
         self.run_freed_finalizers(position)
     }
 

@@ -131,12 +131,14 @@ impl VirtualMachine {
                 let writing = self.joined_encoding(&parts, position)?;
                 // The pieces join as the bytes they hold, so one whose bytes
                 // its encoding does not spell keeps them as they are.
-                let mut bytes = Vec::new();
-                for (at, (_, _, held)) in parts.iter().enumerate() {
+                let joined_length = parts.iter().map(|part| part.byte_len()).sum::<usize>()
+                    + sep.len() * parts.len().saturating_sub(1);
+                let mut bytes = Vec::with_capacity(joined_length);
+                for (at, part) in parts.iter().enumerate() {
                     if at > 0 {
                         bytes.extend_from_slice(&sep);
                     }
-                    bytes.extend_from_slice(held);
+                    bytes.extend_from_slice(&part.bytes());
                 }
                 let made = crate::object::StringValue::binary(bytes);
                 made.retag(writing.clone());

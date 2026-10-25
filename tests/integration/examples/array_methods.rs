@@ -312,3 +312,9 @@ fn test_array_methods_counted_min_max_no_parens_execution() {
     let output = run_example("array_methods/counted_min_max_no_parens.rb");
     assert_eq!(output, COUNTED_MIN_MAX_OUTPUT);
 }
+
+#[test]
+fn a_join_keeps_a_string_as_it_was_when_taken() {
+    let output = run_example("array_methods/join_after_a_piece_changes.rb");
+    assert_eq!(output, "\"first-appended\"\n\"first!\"\n\"name,text,3\"\n");
+}

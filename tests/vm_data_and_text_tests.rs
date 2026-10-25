@@ -9,6 +9,7 @@ mod vm {
     mod matrix_shapes_tests;
     mod matrix_tests;
     mod open_struct_tests;
+    mod pattern_record_tests;
     mod regexp_encoding_tests;
     mod regexp_match_tests;
     mod string_io_tests;

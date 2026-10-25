@@ -209,14 +209,16 @@ fn test_spec_init_writes_the_files_rspec_init_writes() {
         .current_dir(&project)
         .output()
         .expect("run metorex");
-    let templates = format!(
-        "{}/gems/rspec/rspec-core/lib/rspec/core/project_initializer",
-        env!("CARGO_MANIFEST_DIR")
-    );
     let written = |file: &str| {
         (
-            std::fs::read_to_string(project.join(file)).expect("read the written file"),
-            std::fs::read_to_string(format!("{templates}/{file}")).expect("read the template"),
+            std::fs::read_to_string(project.join(file)).unwrap_or_else(|_| {
+                panic!(
+                    "metorex spec --init wrote no {file}, printing:\n{}{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                )
+            }),
+            expected("runner/spec_init", file),
         )
     };
     let (dot_rspec, rspec_dot_rspec) = written(".rspec");

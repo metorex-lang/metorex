@@ -16,10 +16,10 @@ pub struct Unit {
     /// The statement each instruction starts, if it starts one. A line event
     /// fires there and the interpreter checks for signals, thread switches,
     /// and collections, as it does before each statement it walks.
-    pub statement_starts: Vec<Option<StatementStart>>,
+    pub statement_starts: StatementStarts,
     /// Where an error each instruction raises is pointed at, which
     /// `error_highlight` reads.
-    pub error_spots: Vec<Option<ErrorSpot>>,
+    pub error_spots: ErrorSpots,
     pub constants: Vec<Object>,
     pub names: Vec<Name>,
     /// A cache for each name, which a `GetConstant` naming it reads through.
@@ -114,6 +114,106 @@ pub enum StartKind {
 pub struct ErrorSpot {
     pub start: Position,
     pub name: Option<String>,
+}
+
+/// The statement each instruction starts, kept for the instructions that
+/// start one, which are a few of them.
+#[derive(Debug, Default)]
+pub struct StatementStarts {
+    /// For each instruction, where in `starts` the statement it starts is,
+    /// or `STARTS_NONE`.
+    places: Vec<u32>,
+    starts: Vec<(u32, Option<StatementStart>)>,
+    /// How many of `starts` are statements of the body itself.
+    of_the_body: usize,
+}
+
+const STARTS_NONE: u32 = u32::MAX;
+
+impl StatementStarts {
+    /// The statement the instruction at `at` starts, if it is an instruction.
+    pub fn get(&self, at: usize) -> Option<&Option<StatementStart>> {
+        self.places.get(at).map(|&place| self.start_at(place))
+    }
+
+    /// The statement each instruction starts, in order.
+    pub fn iter(&self) -> impl Iterator<Item = &Option<StatementStart>> {
+        self.places.iter().map(|&place| self.start_at(place))
+    }
+
+    fn start_at(&self, place: u32) -> &Option<StatementStart> {
+        match place {
+            STARTS_NONE => &None,
+            place => &self.starts[place as usize].1,
+        }
+    }
+
+    fn set(&mut self, at: usize, start: StatementStart) {
+        if start.index.is_some() {
+            self.of_the_body += 1;
+        }
+        match self.places[at] {
+            STARTS_NONE => {
+                self.places[at] = self.starts.len() as u32;
+                self.starts.push((at as u32, Some(start)));
+            }
+            place => {
+                let held = &mut self.starts[place as usize].1;
+                if held.is_some_and(|held| held.index.is_some()) {
+                    self.of_the_body -= 1;
+                }
+                *held = Some(start);
+            }
+        }
+    }
+}
+
+impl std::ops::Index<usize> for StatementStarts {
+    type Output = Option<StatementStart>;
+
+    fn index(&self, at: usize) -> &Option<StatementStart> {
+        self.start_at(self.places[at])
+    }
+}
+
+/// Where an error each instruction raises is pointed at, kept for the
+/// instructions that have a spot, in the order of the instructions.
+#[derive(Debug, Default)]
+pub struct ErrorSpots {
+    spots: Vec<(u32, Option<ErrorSpot>)>,
+}
+
+impl ErrorSpots {
+    pub fn set(&mut self, at: usize, spot: Option<ErrorSpot>) {
+        let at = at as u32;
+        match self
+            .spots
+            .binary_search_by_key(&at, |(held_at, _)| *held_at)
+        {
+            Ok(place) => match spot {
+                Some(_) => self.spots[place].1 = spot,
+                None => {
+                    self.spots.remove(place);
+                }
+            },
+            Err(place) if spot.is_some() => self.spots.insert(place, (at, spot)),
+            Err(_) => {}
+        }
+    }
+}
+
+impl std::ops::Index<usize> for ErrorSpots {
+    type Output = Option<ErrorSpot>;
+
+    fn index(&self, at: usize) -> &Option<ErrorSpot> {
+        match self
+            .spots
+            .binary_search_by_key(&(at as u32), |(held_at, _)| *held_at)
+        {
+            Ok(place) => &self.spots[place].1,
+            Err(_) => &None,
+        }
+    }
 }
 
 /// The Symbol a `LoadSymbol` made last, with the source encoding it was made
@@ -470,8 +570,7 @@ impl Unit {
     pub fn emit(&mut self, instruction: Instruction, position: Position) -> usize {
         self.instructions.push(instruction);
         self.positions.push(position);
-        self.statement_starts.push(None);
-        self.error_spots.push(None);
+        self.statement_starts.places.push(STARTS_NONE);
         self.instructions.len() - 1
     }
 
@@ -485,43 +584,47 @@ impl Unit {
     /// Mark the instruction at `at` as the start of the next statement of
     /// the body, written at `position`.
     pub fn start_statement(&mut self, at: usize, position: Position) {
-        let index = self
-            .statement_starts
-            .iter()
-            .flatten()
-            .filter(|start| start.index.is_some())
-            .count();
-        self.statement_starts[at] = Some(StatementStart {
-            index: Some(index),
-            position,
-            live: 1,
-            kind: StartKind::Statement { line_event: true },
-        });
+        let index = self.statement_starts.of_the_body;
+        self.statement_starts.set(
+            at,
+            StatementStart {
+                index: Some(index),
+                position,
+                live: 1,
+                kind: StartKind::Statement { line_event: true },
+            },
+        );
     }
 
     /// Mark what happens as the statement starting at `at` starts.
     pub fn set_start_kind(&mut self, at: usize, kind: StartKind) {
-        if let Some(start) = self.statement_starts[at].as_mut() {
-            start.kind = kind;
+        if let Some(start) = self.statement_starts[at] {
+            self.statement_starts
+                .set(at, StatementStart { kind, ..start });
         }
     }
 
     /// Mark the instruction at `at` as the start of a statement inside a
     /// branch or a loop, with registers from `live` on holding nothing yet.
     pub fn start_inner_statement(&mut self, at: usize, position: Position, live: usize) {
-        self.statement_starts[at] = Some(StatementStart {
-            index: None,
-            position,
-            live,
-            kind: StartKind::Statement { line_event: true },
-        });
+        self.statement_starts.set(
+            at,
+            StatementStart {
+                index: None,
+                position,
+                live,
+                kind: StartKind::Statement { line_event: true },
+            },
+        );
     }
 
     /// Where the statement of the body numbered `index` starts.
     pub fn statement_at(&self, index: usize) -> Option<usize> {
         self.statement_starts
+            .starts
             .iter()
-            .position(|start| start.is_some_and(|start| start.index == Some(index)))
+            .find(|(_, start)| start.is_some_and(|start| start.index == Some(index)))
+            .map(|(at, _)| *at as usize)
     }
 
     /// Give a register count of at least `count`.

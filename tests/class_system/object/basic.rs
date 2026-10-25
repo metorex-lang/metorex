@@ -315,6 +315,12 @@ fn an_object_is_eight_bytes() {
 }
 
 #[test]
+fn a_string_fits_the_112_byte_malloc_size_class() {
+    let counts = 2 * std::mem::size_of::<usize>();
+    assert!(std::mem::size_of::<metorex::object::StringValue>() + counts <= 112);
+}
+
+#[test]
 fn integers_read_back_on_both_sides_of_the_inline_range() {
     for number in [
         0,

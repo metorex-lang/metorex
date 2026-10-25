@@ -11,6 +11,7 @@ mod vm {
     mod control_tests;
     mod core_tests;
     mod execution;
+    mod live_list_tests;
     mod raising_with_a_cause_tests;
     mod redo_target_tests;
     mod rescue_module_tests;

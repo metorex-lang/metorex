@@ -160,3 +160,12 @@ fn test_scanning_appending_to_the_scanned_string_execution() {
     let output = run_example("scanning/appending_to_the_scanned_string.rb");
     assert_eq!(output, "\"abcd\"\ntrue\nFrozenError\n");
 }
+
+#[test]
+fn a_string_pattern_matches_what_it_holds_at_each_call() {
+    let output = run_example("scanning/string_patterns_reused.rb");
+    assert_eq!(
+        output,
+        "\"ab\"\n\"ab\"\n\"cd\"\n[3]\ntrue\nnil\ntrue\ntrue\n"
+    );
+}

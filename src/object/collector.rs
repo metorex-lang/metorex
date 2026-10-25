@@ -10,13 +10,13 @@
 // each reference it holds exactly once.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 
 use indexmap::{IndexMap, IndexSet};
 
 use super::live;
 use super::{Binding, BlockStatement, Exception, Instance, Method, Object, ObjectHash, View};
+use crate::fast_hash::NameMap;
 
 type Variable = Rc<RefCell<Object>>;
 
@@ -45,10 +45,40 @@ fn address<T>(held: &Rc<T>) -> usize {
     Rc::as_ptr(held) as *const () as usize
 }
 
-/// The cell a value points at, as a node.
+/// The cell a value points at, as a node. A cell no other copy of the value
+/// points at is held only by the node being walked, so what it holds is
+/// walked in its place.
 fn value(object: &Object, found: &mut Vec<Node>) {
-    if object.is_pointer() {
+    if !object.is_pointer() {
+        return;
+    }
+    if object.cell_count() == 1 {
+        cell_held(object, found);
+    } else {
         found.push(Node::Cell(object.clone()));
+    }
+}
+
+/// Add a node for what the cell a value points at holds.
+fn cell_held(object: &Object, found: &mut Vec<Node>) {
+    match object.view() {
+        View::Array(held) => found.push(Node::Array(held.clone())),
+        View::Dict(held) => found.push(Node::Hash(held.clone())),
+        View::Set(held) => found.push(Node::Set(held.clone())),
+        View::Instance(held) => found.push(Node::Instance(held.clone())),
+        View::Exception(held) => found.push(Node::Exception(held.clone())),
+        View::Block(held) => found.push(Node::Block(held.clone())),
+        View::Method(held) => found.push(Node::Method(held.clone())),
+        View::Binding(held) => found.push(Node::Binding(held.clone())),
+        View::Class(held) if held.is_singleton_class() => {
+            found.push(Node::SingletonClass(held.clone()))
+        }
+        View::Range { start, end, .. } => {
+            value(start, found);
+            value(end, found);
+        }
+        View::Result(Ok(held) | Err(held)) => value(held, found),
+        _ => {}
     }
 }
 
@@ -104,25 +134,7 @@ impl Node {
     /// node is borrowed for writing, which means something running holds it.
     fn held(&self, found: &mut Vec<Node>) -> bool {
         match self {
-            Node::Cell(object) => match object.view() {
-                View::Array(held) => found.push(Node::Array(held.clone())),
-                View::Dict(held) => found.push(Node::Hash(held.clone())),
-                View::Set(held) => found.push(Node::Set(held.clone())),
-                View::Instance(held) => found.push(Node::Instance(held.clone())),
-                View::Exception(held) => found.push(Node::Exception(held.clone())),
-                View::Block(held) => found.push(Node::Block(held.clone())),
-                View::Method(held) => found.push(Node::Method(held.clone())),
-                View::Binding(held) => found.push(Node::Binding(held.clone())),
-                View::Class(held) if held.is_singleton_class() => {
-                    found.push(Node::SingletonClass(held.clone()))
-                }
-                View::Range { start, end, .. } => {
-                    value(start, found);
-                    value(end, found);
-                }
-                View::Result(Ok(held) | Err(held)) => value(held, found),
-                _ => {}
-            },
+            Node::Cell(object) => cell_held(object, found),
             Node::Array(held) => {
                 let Ok(elements) = held.try_borrow() else {
                     return false;
@@ -304,71 +316,97 @@ fn owned_singleton_class(instance: &Instance) -> Option<Rc<crate::class::Class>>
     instance.singleton_class.try_borrow().ok()?.clone()
 }
 
-/// The listed objects that can hold references, as nodes.
-fn listed_nodes() -> Vec<Node> {
+/// The listed objects that can hold references, as nodes: every one when
+/// `whole`, else those made since the last collection.
+fn listed_nodes(whole: bool) -> Vec<Node> {
     live::with_lists(|lists| {
         let mut nodes = Vec::new();
-        nodes.extend(lists.arrays.alive().into_iter().map(Node::Array));
-        nodes.extend(lists.hashes.alive().into_iter().map(Node::Hash));
-        nodes.extend(lists.sets.alive().into_iter().map(Node::Set));
-        nodes.extend(lists.instances.alive().into_iter().map(Node::Instance));
-        nodes.extend(lists.exceptions.alive().into_iter().map(Node::Exception));
-        nodes.extend(lists.blocks.alive().into_iter().map(Node::Block));
-        nodes.extend(lists.methods.alive().into_iter().map(Node::Method));
-        nodes.extend(lists.bindings.alive().into_iter().map(Node::Binding));
+        macro_rules! add {
+            ($field:ident, $node:path) => {
+                let alive = if whole {
+                    lists.$field.alive()
+                } else {
+                    lists.$field.alive_young()
+                };
+                nodes.extend(alive.into_iter().map($node));
+            };
+        }
+        add!(arrays, Node::Array);
+        add!(hashes, Node::Hash);
+        add!(sets, Node::Set);
+        add!(instances, Node::Instance);
+        add!(exceptions, Node::Exception);
+        add!(blocks, Node::Block);
+        add!(methods, Node::Method);
+        add!(bindings, Node::Binding);
         nodes
     })
 }
 
 /// Free the cycles nothing outside them reaches, answering how many listed
-/// objects they held.
-pub fn collect() -> usize {
-    let mut nodes = Vec::new();
-    let mut places: HashMap<usize, usize> = HashMap::new();
-    for node in listed_nodes() {
+/// objects they held. When not `whole`, only the objects made since the
+/// last collection are candidates. An older object one of them refers to is
+/// left out, and one that refers to them leaves them with more references
+/// than the candidates account for, so they are kept.
+pub fn collect(whole: bool) -> usize {
+    let listed = listed_nodes(whole);
+    let mut nodes = Vec::with_capacity(listed.len());
+    let mut places: NameMap<usize, u32> = NameMap::default();
+    places.reserve(listed.len());
+    for node in listed {
         places.entry(node.address()).or_insert_with(|| {
             nodes.push(node);
-            nodes.len() - 1
+            (nodes.len() - 1) as u32
         });
     }
     // How many references each node gets from the other nodes, and which
-    // nodes each one holds.
-    let mut internal = vec![0usize; nodes.len()];
-    let mut edges: Vec<Vec<usize>> = Vec::new();
+    // nodes each one holds: those of node `at` are
+    // `held_nodes[held_from[at]..held_from[at + 1]]`.
+    let mut internal = vec![0u32; nodes.len()];
+    let mut held_from: Vec<u32> = Vec::with_capacity(nodes.capacity() + 1);
+    let mut held_nodes: Vec<u32> = Vec::new();
     let mut unreadable = Vec::new();
+    let mut found = Vec::new();
     let mut at = 0;
     while at < nodes.len() {
-        let mut found = Vec::new();
+        held_from.push(held_nodes.len() as u32);
         if !nodes[at].held(&mut found) {
             unreadable.push(at);
         }
-        let mut targets = Vec::with_capacity(found.len());
-        for node in found {
-            let target = *places.entry(node.address()).or_insert_with(|| {
-                nodes.push(node);
-                internal.push(0);
-                nodes.len() - 1
-            });
-            internal[target] += 1;
-            targets.push(target);
+        for node in found.drain(..) {
+            let target = match places.get(&node.address()) {
+                Some(&target) => target,
+                None if !whole && node.is_listed() => continue,
+                None => {
+                    places.insert(node.address(), nodes.len() as u32);
+                    nodes.push(node);
+                    internal.push(0);
+                    (nodes.len() - 1) as u32
+                }
+            };
+            internal[target as usize] += 1;
+            held_nodes.push(target);
         }
-        edges.push(targets);
         at += 1;
     }
+    held_from.push(held_nodes.len() as u32);
+    drop(places);
     // A node with more references than the nodes and the collector's own
     // copy account for is held from outside, and so is everything it holds.
     let mut reached = vec![false; nodes.len()];
-    let mut waiting: Vec<usize> = (0..nodes.len())
-        .filter(|&at| nodes[at].count() > internal[at] + 1)
+    let mut waiting: Vec<u32> = (0..nodes.len())
+        .filter(|&at| nodes[at].count() > internal[at] as usize + 1)
         .chain(unreadable)
+        .map(|at| at as u32)
         .collect();
     for &at in &waiting {
-        reached[at] = true;
+        reached[at as usize] = true;
     }
     while let Some(at) = waiting.pop() {
-        for &target in &edges[at] {
-            if !reached[target] {
-                reached[target] = true;
+        let at = at as usize;
+        for &target in &held_nodes[held_from[at] as usize..held_from[at + 1] as usize] {
+            if !reached[target as usize] {
+                reached[target as usize] = true;
                 waiting.push(target);
             }
         }

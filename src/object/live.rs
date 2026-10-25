@@ -13,20 +13,40 @@ use super::{
     Binding, BlockStatement, Exception, Instance, Method, Object, ObjectHash, StringValue,
 };
 
-/// How many entries the list holds before the first collection. Each
-/// collection doubles what it leaves for the next one to wait for.
+/// The fewest entries made between two collections.
 const FIRST_COLLECTION_AT: usize = 2048;
+
+/// The share of the objects that survived earlier collections that a
+/// collection waits for the program to make before it runs: a fourth.
+const OLD_ENTRIES_PER_YOUNG_ONE: usize = 4;
+
+/// How much the objects that survived collections grow before a collection
+/// covers them too, rather than only the objects made since the last one.
+const OLD_GROWTH_BEFORE_A_WHOLE_COLLECTION: usize = 8;
+
+/// The share of the live entries that dead ones reach before they are
+/// cleared out between collections: a sixteenth. A dead entry's weak
+/// reference keeps the object's allocation.
+const LIVE_ENTRIES_PER_DEAD_ONE: usize = 16;
+
+/// The fewest new entries between two clearings.
+const FEWEST_ENTRIES_BETWEEN_CLEARINGS: usize = 1024;
 
 /// Weak references to what was made, in the order it was made. A reference
 /// keeps only its allocation, not the object, so the dead ones are cleared
-/// out at each collection.
+/// out at each collection, and between collections whenever enough have been
+/// made. The entries before `young_from` survived a collection.
 pub(crate) struct Registry<T> {
     held: Vec<Weak<T>>,
+    young_from: usize,
 }
 
 impl<T> Registry<T> {
     const fn new() -> Self {
-        Self { held: Vec::new() }
+        Self {
+            held: Vec::new(),
+            young_from: 0,
+        }
     }
 
     fn record(&mut self, made: &Rc<T>) {
@@ -37,6 +57,14 @@ impl<T> Registry<T> {
         self.held.iter().filter_map(Weak::upgrade).collect()
     }
 
+    /// The objects alive that were made since the last collection.
+    pub(crate) fn alive_young(&self) -> Vec<Rc<T>> {
+        self.held[self.young_from..]
+            .iter()
+            .filter_map(Weak::upgrade)
+            .collect()
+    }
+
     fn alive_count(&self) -> usize {
         self.held
             .iter()
@@ -44,9 +72,26 @@ impl<T> Registry<T> {
             .count()
     }
 
-    fn clear_dead(&mut self) -> usize {
-        self.held.retain(|one| one.strong_count() > 0);
-        self.held.len()
+    /// Clear out the dead entries, answering how many are left and how many
+    /// of those survived a collection.
+    fn clear_dead(&mut self) -> (usize, usize) {
+        let mut at = 0;
+        let mut old = 0;
+        let young_from = self.young_from;
+        self.held.retain(|one| {
+            let alive = one.strong_count() > 0;
+            if alive && at < young_from {
+                old += 1;
+            }
+            at += 1;
+            alive
+        });
+        self.young_from = old;
+        (self.held.len(), old)
+    }
+
+    fn promote(&mut self) {
+        self.young_from = self.held.len();
     }
 }
 
@@ -68,8 +113,14 @@ pub(crate) struct Lists {
 struct Account {
     /// Entries in the list, dead or alive.
     entries: usize,
+    /// The entries that survived a collection.
+    old: usize,
+    /// The entries that survived the last collection that covered them all.
+    old_after_whole: usize,
     /// The entry count that makes the next collection due.
     due_at: usize,
+    /// The entry count at which the dead entries are next cleared out.
+    clear_at: usize,
     /// Every object ever listed.
     allocated: u64,
 }
@@ -92,7 +143,10 @@ thread_local! {
     static ACCOUNT: RefCell<Account> = const {
         RefCell::new(Account {
             entries: 0,
+            old: 0,
+            old_after_whole: FIRST_COLLECTION_AT,
             due_at: FIRST_COLLECTION_AT,
+            clear_at: FEWEST_ENTRIES_BETWEEN_CLEARINGS,
             allocated: 0,
         })
     };
@@ -101,14 +155,25 @@ thread_local! {
 }
 
 fn count_entry() {
-    ACCOUNT.with(|account| {
+    let clearing_due = ACCOUNT.with(|account| {
         let mut account = account.borrow_mut();
         account.entries += 1;
         account.allocated += 1;
         if account.entries >= account.due_at {
             DUE.with(|due| due.set(true));
         }
+        account.entries >= account.clear_at
     });
+    if clearing_due {
+        let (alive, old) = clear_dead_entries();
+        ACCOUNT.with(|account| {
+            let mut account = account.borrow_mut();
+            account.entries = alive;
+            account.old = old;
+            account.due_at = old + next_collection_after(old);
+            account.clear_at = alive + next_clearing_after(alive);
+        });
+    }
     if crate::vm::memory_report::walk_wanted() {
         walk_for_memory_report();
     }
@@ -283,25 +348,78 @@ pub fn set_collecting(wanted: bool) -> bool {
     ENABLED.with(|enabled| !enabled.replace(wanted))
 }
 
-/// Clear the dead entries out of the list, and wait for it to double again.
-pub(crate) fn settle() {
-    let alive = LISTS.with(|lists| {
+/// How many entries are made before the dead ones among them are cleared
+/// out, with `alive` entries left by the last clearing.
+fn next_clearing_after(alive: usize) -> usize {
+    (alive / LIVE_ENTRIES_PER_DEAD_ONE).max(FEWEST_ENTRIES_BETWEEN_CLEARINGS)
+}
+
+/// How many entries are made before the next collection, with `old`
+/// entries surviving earlier ones.
+fn next_collection_after(old: usize) -> usize {
+    (old / OLD_ENTRIES_PER_YOUNG_ONE).max(FIRST_COLLECTION_AT)
+}
+
+/// Clear the dead entries out of the list, answering how many are left and
+/// how many of those survived a collection.
+fn clear_dead_entries() -> (usize, usize) {
+    LISTS.with(|lists| {
         let mut lists = lists.borrow_mut();
-        lists.instances.clear_dead()
-            + lists.classes.clear_dead()
-            + lists.strings.clear_dead()
-            + lists.arrays.clear_dead()
-            + lists.hashes.clear_dead()
-            + lists.sets.clear_dead()
-            + lists.exceptions.clear_dead()
-            + lists.blocks.clear_dead()
-            + lists.methods.clear_dead()
-            + lists.bindings.clear_dead()
+        [
+            lists.instances.clear_dead(),
+            lists.classes.clear_dead(),
+            lists.strings.clear_dead(),
+            lists.arrays.clear_dead(),
+            lists.hashes.clear_dead(),
+            lists.sets.clear_dead(),
+            lists.exceptions.clear_dead(),
+            lists.blocks.clear_dead(),
+            lists.methods.clear_dead(),
+            lists.bindings.clear_dead(),
+        ]
+        .into_iter()
+        .fold((0, 0), |(alive, old), (more_alive, more_old)| {
+            (alive + more_alive, old + more_old)
+        })
+    })
+}
+
+/// Whether the next collection covers every object, since those that
+/// survived collections have grown enough since one last did.
+pub(crate) fn whole_collection_due() -> bool {
+    ACCOUNT.with(|account| {
+        let account = account.borrow();
+        account.old >= account.old_after_whole * OLD_GROWTH_BEFORE_A_WHOLE_COLLECTION
+    })
+}
+
+/// Clear the dead entries out of the list after a collection, which covered
+/// every object when `whole`, count every entry left as having survived
+/// one, and wait for the next.
+pub(crate) fn settle(whole: bool) {
+    let (alive, _) = clear_dead_entries();
+    LISTS.with(|lists| {
+        let mut lists = lists.borrow_mut();
+        lists.instances.promote();
+        lists.classes.promote();
+        lists.strings.promote();
+        lists.arrays.promote();
+        lists.hashes.promote();
+        lists.sets.promote();
+        lists.exceptions.promote();
+        lists.blocks.promote();
+        lists.methods.promote();
+        lists.bindings.promote();
     });
     ACCOUNT.with(|account| {
         let mut account = account.borrow_mut();
         account.entries = alive;
-        account.due_at = (alive * 2).max(FIRST_COLLECTION_AT);
+        account.old = alive;
+        if whole {
+            account.old_after_whole = alive.max(FIRST_COLLECTION_AT);
+        }
+        account.due_at = alive + next_collection_after(alive);
+        account.clear_at = alive + next_clearing_after(alive);
     });
     DUE.with(|due| due.set(false));
 }
@@ -320,6 +438,11 @@ pub fn alive_count() -> usize {
             + lists.methods.alive_count()
             + lists.bindings.alive_count()
     })
+}
+
+/// How many entries the list holds, dead or alive.
+pub fn entry_count() -> usize {
+    ACCOUNT.with(|account| account.borrow().entries)
 }
 
 /// How many objects have ever been listed.

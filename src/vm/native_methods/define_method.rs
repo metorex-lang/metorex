@@ -174,7 +174,7 @@ impl VirtualMachine {
                 (positional_index, expression.clone())
             })
             .collect();
-        let mut method = Method::new(method_name.to_string(), regular_params, block.body.to_vec());
+        let mut method = Method::new(method_name.to_string(), regular_params, block.body.clone());
         method.signature = Seldom::holding(Signature {
             default_parameters,
             keyword_parameters,

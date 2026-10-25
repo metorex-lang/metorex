@@ -9,7 +9,7 @@ impl VirtualMachine {
         &mut self,
         name: &str,
         parameters: &[crate::ast::Parameter],
-        body: &[Statement],
+        body: &crate::ast::Body,
         position: crate::lexer::Position,
         singleton_class: Option<&str>,
         end_line: usize,
@@ -32,7 +32,7 @@ impl VirtualMachine {
         let mut function = build_method_from_params(
             name.to_string(),
             parameters,
-            body.to_vec(),
+            body.clone(),
             self.snapshot_active_refinements(),
             self.def_nesting(),
         );

@@ -1,7 +1,7 @@
 // Building the text a `join` answers.
 
 use super::*;
-use crate::object::{OptionView, View};
+use crate::object::{OptionView, StringValue, View};
 
 impl VirtualMachine {
     /// The pieces an array joins from, each with the encoding it is written
@@ -32,11 +32,7 @@ impl VirtualMachine {
     ) -> Result<(), MetorexError> {
         match element.view() {
             View::Symbol(name) | View::String(name) => {
-                written.push((
-                    name.as_str().to_string(),
-                    name.encoding_name(),
-                    crate::vm::native_methods::string_methods::binary_bytes(name),
-                ));
+                written.push(JoinedPart::Held(Rc::clone(name)));
                 return Ok(());
             }
             _ => {}
@@ -65,6 +61,12 @@ impl VirtualMachine {
             written.extend(joined?);
             return Ok(());
         }
+        // The program's own methods may change a string already taken.
+        for part in written.iter_mut() {
+            if let JoinedPart::Held(held) = part {
+                *part = JoinedPart::Copied(Box::new((**held).clone()));
+            }
+        }
         for name in ["to_str", "to_ary", "to_s"] {
             if !self.responds_to(element, name) {
                 continue;
@@ -81,19 +83,16 @@ impl VirtualMachine {
                 continue;
             }
             if let View::String(text) = answered.view() {
-                written.push((
-                    text.as_str().to_string(),
-                    text.encoding_name(),
-                    crate::vm::native_methods::string_methods::binary_bytes(text),
-                ));
+                written.push(JoinedPart::Copied(Box::new((**text).clone())));
                 return Ok(());
             }
             // A `to_s` answering something other than a String leaves the
             // element written as Kernel#to_s writes it.
             if name == "to_s" {
-                let text = element.to_string();
-                let bytes = text.clone().into_bytes();
-                written.push((text, "US-ASCII".to_string(), bytes));
+                written.push(JoinedPart::Copied(Box::new(StringValue::with_encoding(
+                    element.to_string(),
+                    "US-ASCII",
+                ))));
                 return Ok(());
             }
         }
@@ -118,24 +117,25 @@ impl VirtualMachine {
     ) -> Result<String, MetorexError> {
         let mut writing = "US-ASCII".to_string();
         let mut all_ascii = true;
-        for (at, (text, held, _)) in parts.iter().enumerate() {
+        for (at, part) in parts.iter().enumerate() {
+            let held = part.encoding_name();
             if at == 0 {
-                writing = held.clone();
-                all_ascii = text.is_ascii();
+                writing = held;
+                all_ascii = part.is_ascii();
                 continue;
             }
-            if text.is_ascii() {
+            if part.is_ascii() {
                 continue;
             }
             if all_ascii {
-                writing = held.clone();
+                writing = held;
                 all_ascii = false;
                 continue;
             }
-            if held != &writing {
+            if held != writing {
                 let message =
                     crate::vm::native_methods::string_methods::incompatible_encodings_message(
-                        &writing, held,
+                        &writing, &held,
                     );
                 return Err(crate::vm::errors::simple_exception(
                     "Encoding::CompatibilityError",
@@ -148,6 +148,20 @@ impl VirtualMachine {
     }
 }
 
-/// One piece of a join: its text, the encoding it is written in, and its
-/// bytes.
-pub(crate) type JoinedPart = (String, String, Vec<u8>);
+/// One piece of a join: an element that is a String or a Symbol, or a copy
+/// of what the program answered for one that is not.
+pub(crate) enum JoinedPart {
+    Held(Rc<StringValue>),
+    Copied(Box<StringValue>),
+}
+
+impl std::ops::Deref for JoinedPart {
+    type Target = StringValue;
+
+    fn deref(&self) -> &StringValue {
+        match self {
+            JoinedPart::Held(held) => held,
+            JoinedPart::Copied(copied) => copied,
+        }
+    }
+}

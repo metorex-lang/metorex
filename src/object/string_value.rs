@@ -46,6 +46,24 @@ pub fn bytes_of_characters(text: &str) -> Vec<u8> {
     bytes
 }
 
+/// The one copy of an encoding's name every string tagged with it shares.
+/// The names are the encodings Ruby knows and the few a program adds, so
+/// each is kept for the life of the process.
+fn shared_encoding_name(name: String) -> &'static str {
+    thread_local! {
+        static NAMES: RefCell<std::collections::HashSet<&'static str>> =
+            RefCell::new([DEFAULT_ENCODING, "ASCII-8BIT", "US-ASCII"].into_iter().collect());
+    }
+    NAMES.with(|names| {
+        if let Some(shared) = names.borrow().get(name.as_str()) {
+            return *shared;
+        }
+        let shared: &'static str = String::leak(name);
+        names.borrow_mut().insert(shared);
+        shared
+    })
+}
+
 /// The text of bytes read one character per byte.
 fn characters_of_bytes(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| *byte as char).collect()
@@ -57,7 +75,7 @@ pub struct StringValue {
     /// every reference to it sees the change, so the bytes sit behind a cell
     /// rather than being fixed when the string is made.
     bytes: RefCell<Vec<u8>>,
-    encoding: RefCell<String>,
+    encoding: Cell<&'static str>,
     /// The id this string answers, handed out the first time one is asked
     /// for. A counter rather than an address, since an address a dropped
     /// string leaves behind can be handed to the next one.
@@ -160,11 +178,9 @@ impl CharacterMarks {
 }
 
 impl StringValue {
-    /// The heap bytes the string's text and encoding name hold, for the
-    /// memory report.
+    /// The heap bytes the string's text holds, for the memory report.
     pub(crate) fn held_bytes(&self) -> usize {
         self.bytes.try_borrow().map_or(0, |bytes| bytes.capacity())
-            + self.encoding.try_borrow().map_or(0, |name| name.capacity())
     }
 }
 
@@ -172,7 +188,7 @@ impl StringValue {
     fn built(bytes: Vec<u8>, encoding: String, holds_bytes: bool) -> Self {
         Self {
             bytes: RefCell::new(bytes),
-            encoding: RefCell::new(encoding),
+            encoding: Cell::new(shared_encoding_name(encoding)),
             object_id: Cell::new(0),
             frozen: Cell::new(false),
             holds_bytes: Cell::new(holds_bytes),
@@ -245,7 +261,7 @@ impl StringValue {
 
     /// Whether each byte reads as a character of its own.
     pub fn reads_bytes(&self) -> bool {
-        self.holds_bytes.get() || encoding_reads_bytes(&self.encoding.borrow())
+        self.holds_bytes.get() || encoding_reads_bytes(self.encoding.get())
     }
 
     /// Whether the string is marked as holding bytes under a text encoding.
@@ -287,14 +303,14 @@ impl StringValue {
 
     /// The name of the encoding this string says it is in.
     pub fn encoding_name(&self) -> String {
-        self.encoding.borrow().clone()
+        self.encoding.get().to_string()
     }
 
     /// Tag the string as being in another encoding, keeping the text it
     /// reads as. Every reference to the same string sees the new tag.
     pub fn set_encoding(&self, encoding: impl Into<String>) {
-        let encoding = encoding.into();
-        self.reread(|| *self.encoding.borrow_mut() = encoding);
+        let encoding = shared_encoding_name(encoding.into());
+        self.reread(|| self.encoding.set(encoding));
     }
 
     /// Tag the string as being in another encoding, keeping its bytes, which
@@ -309,7 +325,7 @@ impl StringValue {
         } else {
             broken || self.reads_bytes() || encoding_reads_bytes(&encoding)
         };
-        *self.encoding.borrow_mut() = encoding;
+        self.encoding.set(shared_encoding_name(encoding));
         self.holds_bytes.set(holds_bytes);
         self.forget_readings();
     }
@@ -579,7 +595,7 @@ impl Clone for StringValue {
     fn clone(&self) -> Self {
         let copy = Self::built(
             self.bytes.borrow().clone(),
-            self.encoding.borrow().clone(),
+            self.encoding.get().to_string(),
             self.holds_bytes.get(),
         );
         if let Some(notes) = self.notes.borrow().as_deref() {
