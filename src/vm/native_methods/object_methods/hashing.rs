@@ -130,9 +130,10 @@ impl VirtualMachine {
             // The name the method was defined under tells two aliases apart
             // from two different methods.
             let named = method
+                .provenance
                 .original_name
                 .clone()
-                .or_else(|| method.native_alias.clone())
+                .or_else(|| method.provenance.native_alias.clone())
                 .unwrap_or_else(|| method.name.clone());
             // Two names for one native method stand for that method, so they
             // hash alike.

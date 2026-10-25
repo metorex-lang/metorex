@@ -830,7 +830,7 @@ impl VirtualMachine {
         for index in 0..method.parameters.len() {
             let local = crate::vm::param_binding::parameter_local(&method.parameters, index);
             let value = self.environment().get(&local);
-            match (&method.variadic_param, value) {
+            match (&method.signature.variadic_param, value) {
                 (Some((at, _)), value) if *at == index => match value.view() {
                     Some(View::Array(items)) => {
                         tail_from_splat =
@@ -846,7 +846,7 @@ impl VirtualMachine {
         // The keyword rest goes first and the named keywords after it, the
         // order Ruby hands them on in.
         let mut keywords = indexmap::IndexMap::new();
-        if let Some(rest) = &method.keyword_rest_parameter
+        if let Some(rest) = &method.signature.keyword_rest_parameter
             && let Some(View::Dict(held)) = self.environment().get(rest).view()
         {
             for (key, value) in held.borrow().iter() {
@@ -855,7 +855,7 @@ impl VirtualMachine {
                 }
             }
         }
-        for (name, _) in &method.keyword_parameters {
+        for (name, _) in &method.signature.keyword_parameters {
             let value = self.environment().get(name).unwrap_or(Object::Nil);
             keywords.insert(format!(":{name}"), value);
         }

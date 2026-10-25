@@ -33,20 +33,50 @@ fn a_held_copy_decodes_to_the_statements_it_was_encoded_from() {
     assert_eq!(decoded, statements);
 }
 
-#[test]
-fn a_held_copy_writes_its_bodies_after_the_statements_around_them() {
-    let held = encode_held(&vec![method_returning(42)]);
-    let outer_length = u32::from_le_bytes(held[..4].try_into().unwrap()) as usize;
-    let body_bytes = held.len() - 4 - outer_length;
+fn class_holding(statement: Statement) -> Statement {
+    Statement::ClassDef {
+        name: "Ledger".to_string(),
+        namespace: None,
+        superclass: None,
+        superclass_expression: None,
+        body: Body::from(vec![statement]),
+        position: pos(1, 1),
+    }
+}
 
-    let encoded_body = rmp_serde::to_vec(&vec![Statement::Expression {
+/// The lengths `encode_held` writes first: of the statements around the
+/// bodies, and of the bodies that run as the copy loads.
+fn area_lengths(held: &[u8]) -> (usize, usize) {
+    let length = |at: usize| u32::from_le_bytes(held[at..at + 4].try_into().unwrap()) as usize;
+    (length(0), length(4))
+}
+
+fn encoded_answer(value: i64) -> Vec<u8> {
+    rmp_serde::to_vec(&vec![Statement::Expression {
         expression: Expression::IntLiteral {
-            value: 42,
+            value,
             position: pos(2, 3),
         },
         position: pos(2, 3),
     }])
-    .unwrap();
+    .unwrap()
+}
 
-    assert_eq!(body_bytes, encoded_body.len());
+#[test]
+fn a_held_copy_writes_a_method_body_after_the_bodies_that_run_as_it_loads() {
+    let held = encode_held(&vec![class_holding(method_returning(42))]);
+    let (outer_length, at_load_length) = area_lengths(&held);
+    let when_called_length = held.len() - 8 - outer_length - at_load_length;
+
+    assert_eq!(when_called_length, encoded_answer(42).len());
+}
+
+#[test]
+fn a_held_copy_decodes_a_class_holding_a_method() {
+    let statements = vec![class_holding(method_returning(7))];
+    let held: &'static [u8] = Vec::leak(encode_held(&statements));
+
+    let decoded: Vec<Statement> = decode_held(held);
+
+    assert_eq!(decoded, statements);
 }

@@ -179,10 +179,13 @@ impl Node {
             }
             Node::Block(held) => found.push(Node::Captured(held.captured_vars.clone())),
             Node::Method(held) => {
-                for boxed in [&held.receiver, &held.bound_self].into_iter().flatten() {
+                for boxed in [&held.receiver, &held.provenance.bound_self]
+                    .into_iter()
+                    .flatten()
+                {
                     value(boxed, found);
                 }
-                if let Some(captured) = &held.captured_vars {
+                if let Some(captured) = &held.provenance.captured_vars {
                     variables(captured.values(), found);
                 }
             }

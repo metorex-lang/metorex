@@ -238,9 +238,10 @@ impl VirtualMachine {
                 // Validate positional argument count, accounting for defaults
                 let expected = method.parameters.len();
                 let positional_count = positional_arg_count(&arguments);
-                let has_variadic = method.variadic_param.is_some();
-                let required =
-                    expected - method.default_parameters.len() - if has_variadic { 1 } else { 0 };
+                let has_variadic = method.signature.variadic_param.is_some();
+                let required = expected
+                    - method.signature.default_parameters.len()
+                    - if has_variadic { 1 } else { 0 };
                 if !has_variadic && (positional_count < required || positional_count > expected) {
                     let accepted = if required == expected {
                         crate::vm::errors::Arity::Exact(expected)
@@ -262,10 +263,11 @@ impl VirtualMachine {
                 }
                 // Execute function body without self.
                 self.user_def_nesting += 1;
-                let has_captured = !method.captured_refinements.is_empty();
+                let has_captured = !method.provenance.captured_refinements.is_empty();
                 if has_captured {
                     self.refinement_scopes.push(
                         method
+                            .provenance
                             .captured_refinements
                             .iter()
                             .map(|(module, classes)| crate::vm::core::RefinementEntry {
@@ -278,6 +280,7 @@ impl VirtualMachine {
                 // A top-level function is still a method activation, so
                 // `__method__` and `__callee__` inside it name it.
                 let defined_name = method
+                    .provenance
                     .original_name
                     .clone()
                     .unwrap_or_else(|| method.name.clone());

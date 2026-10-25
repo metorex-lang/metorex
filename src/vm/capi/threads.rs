@@ -56,8 +56,8 @@ pub extern "C-unwind" fn rb_thread_wakeup(thread: Value) -> Value {
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_thread_create(function: *const (), data: *mut c_void) -> Value {
     let mut method = Method::new("call".to_string(), vec!["values".to_string()], Vec::new());
-    method.variadic_param = Some((0, "values".to_string()));
-    method.c_function = Some(CFunction {
+    method.signature.variadic_param = Some((0, "values".to_string()));
+    method.provenance.c_function = Some(CFunction {
         address: function as usize,
         arity: THREAD_FUNCTION_ARITY,
         data: data as usize,

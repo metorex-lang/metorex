@@ -39,6 +39,7 @@ fn main() {
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     if target_os == "macos" {
         println!("cargo:rustc-link-arg-bins=-Wl,-export_dynamic");
+        order_startup_functions();
     } else {
         println!("cargo:rustc-link-arg-bins=-rdynamic");
     }
@@ -49,6 +50,40 @@ fn main() {
     compile_rbs();
     compile_debug();
     parse_carried_sources();
+}
+
+/// Hand the linker of a release build `build/startup.order`, the functions a
+/// start runs, which `scripts/startup_order.rb` writes. Its first line names
+/// the compiler and the package version it was written under, since the
+/// names in it hold hashes of both and name nothing in a build under others.
+fn order_startup_functions() {
+    let order = Path::new(env!("CARGO_MANIFEST_DIR")).join("build/startup.order");
+    println!("cargo:rerun-if-changed={}", order.display());
+    if std::env::var("PROFILE").as_deref() != Ok("release") {
+        return;
+    }
+    let Ok(written) = std::fs::read_to_string(&order) else {
+        return;
+    };
+    let rustc = std::env::var("RUSTC").unwrap_or_else(|_| "rustc".to_string());
+    let version = std::process::Command::new(rustc)
+        .arg("-V")
+        .output()
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+        .unwrap_or_default();
+    let building_under = format!("# {version} metorex {}", env!("CARGO_PKG_VERSION"));
+    let written_under = written.lines().next().unwrap_or_default();
+    if written_under != building_under {
+        println!(
+            "cargo:warning=build/startup.order was written under {:?} and this build is {:?}, so it names none of this build's functions. `ruby scripts/startup_order.rb` rewrites it.",
+            written_under.trim_start_matches("# "),
+            building_under.trim_start_matches("# ")
+        );
+    }
+    println!(
+        "cargo:rustc-link-arg-bins=-Wl,-order_file,{}",
+        order.display()
+    );
 }
 
 /// The libraries a default start loads, under src/vm/stdlib.

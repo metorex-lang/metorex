@@ -359,7 +359,7 @@ fn test_object_respond_to_parameters() {
     let respond_to = object_class.find_method("respond_to?").unwrap();
     assert_eq!(respond_to.parameters, vec!["arguments".to_string()]);
     assert_eq!(
-        respond_to.variadic_param,
+        respond_to.signature.variadic_param,
         Some((0, "arguments".to_string()))
     );
 }

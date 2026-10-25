@@ -30,7 +30,7 @@ pub use block::{
 pub use exception::{Exception, SourceLocation};
 pub use hash::ObjectHash;
 pub use instance::Instance;
-pub use method::Method;
+pub use method::{Method, Provenance, Seldom, Signature};
 
 /// The classes and modules lexically open where a method or block was
 /// written, innermost first, shared by every frame that runs it.

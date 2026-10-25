@@ -65,7 +65,7 @@ pub(crate) fn method_missing_dispatcher(
             position,
         }],
     );
-    method.variadic_param = Some((0, crate::object::UNNAMED_PARAMETER.to_string()));
+    method.signature.variadic_param = Some((0, crate::object::UNNAMED_PARAMETER.to_string()));
     method.receiver = Some(Box::new(receiver.clone()));
     method
 }

@@ -1823,6 +1823,7 @@ pub(crate) fn main_object_method(name: &str) -> bool {
 /// name other than its own.
 fn aliases_another_name(method: &Method, name: &str) -> bool {
     method
+        .provenance
         .native_alias
         .as_deref()
         .is_some_and(|target| target != name)

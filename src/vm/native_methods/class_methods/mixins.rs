@@ -102,7 +102,7 @@ impl VirtualMachine {
         // A copy `alias_method` made of the default stands for the default
         // rather than for an override.
         let overridden = |name: &str| {
-            let written = |method: &crate::object::Method| method.native_alias.is_none();
+            let written = |method: &crate::object::Method| method.provenance.native_alias.is_none();
             class_rc
                 .find_method(&format!("__class__{}", name))
                 .is_some_and(|method| written(&method))

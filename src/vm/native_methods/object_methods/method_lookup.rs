@@ -97,7 +97,7 @@ impl VirtualMachine {
                     );
                     stub.receiver = Some(Box::new(receiver.clone()));
                     stub.owner = Some(owner.ruby_name());
-                    stub.original_name = Some(name_str.clone());
+                    stub.provenance.original_name = Some(name_str.clone());
                     stub.owner_class = Some(owner.clone());
                     return Ok(Some(Object::Method(std::rc::Rc::new(stub))));
                 }
@@ -113,8 +113,8 @@ impl VirtualMachine {
                     if let Some(target) =
                         native_alias_target(self.builtins().class_of(receiver).name(), &name_str)
                     {
-                        if bound.original_name.is_none() {
-                            bound.original_name = Some(target.to_string());
+                        if bound.provenance.original_name.is_none() {
+                            bound.provenance.original_name = Some(target.to_string());
                         }
                         // The receiver's own class answers it, whatever the
                         // lookup walked past to get here.
@@ -217,11 +217,11 @@ impl VirtualMachine {
                         vec!["args".to_string()],
                         vec![],
                     );
-                    stub.variadic_param = Some((0, "args".to_string()));
+                    stub.signature.variadic_param = Some((0, "args".to_string()));
                     stub.receiver = Some(Box::new(receiver.clone()));
                     stub.owner = Some("Class".to_string());
-                    stub.original_name = Some(name_str.clone());
-                    stub.native_alias = Some(name_str.clone());
+                    stub.provenance.original_name = Some(name_str.clone());
+                    stub.provenance.native_alias = Some(name_str.clone());
                     stub.owner_class = Some(class_class.clone());
                     return Ok(Some(Object::Method(std::rc::Rc::new(stub))));
                 }
@@ -239,7 +239,7 @@ impl VirtualMachine {
                     // Two names that are the same native method answer the
                     // same Method object, which is what makes `method(:to_s)
                     // == method(:inspect)` hold for an alias.
-                    stub.original_name = Some(
+                    stub.provenance.original_name = Some(
                         native_alias_target(owner.name(), &name_str)
                             .unwrap_or(&name_str)
                             .to_string(),
@@ -273,7 +273,7 @@ impl VirtualMachine {
                     );
                     stub.receiver = Some(Box::new(receiver.clone()));
                     stub.owner = Some("Kernel".to_string());
-                    stub.original_name = Some(name_str.clone());
+                    stub.provenance.original_name = Some(name_str.clone());
                     stub.owner_class = Some(kernel.clone());
                     return Ok(Some(Object::Method(std::rc::Rc::new(stub))));
                 }
@@ -319,6 +319,7 @@ impl VirtualMachine {
                     self.lookup_method(receiver, &method_query)
                         .is_some_and(|(_, method)| {
                             method
+                                .provenance
                                 .c_function
                                 .as_ref()
                                 .is_some_and(crate::vm::capi::is_not_implemented)

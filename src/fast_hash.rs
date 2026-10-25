@@ -56,5 +56,8 @@ pub type NameHashing = BuildHasherDefault<NameHasher>;
 /// A HashMap keyed by names from the program's source.
 pub type NameMap<K, V> = std::collections::HashMap<K, V, NameHashing>;
 
+/// A HashSet of names from the program's source.
+pub type NameSet<K> = std::collections::HashSet<K, NameHashing>;
+
 /// An IndexMap keyed by names from the program's source.
 pub type NameIndexMap<K, V> = indexmap::IndexMap<K, V, NameHashing>;

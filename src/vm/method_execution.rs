@@ -111,7 +111,7 @@ impl VirtualMachine {
         // A Proc cut from a bound Method carries the object it was bound to,
         // so the native tables answer for that one rather than for whatever
         // the new name was called on.
-        let receiver = match &method.bound_self {
+        let receiver = match &method.provenance.bound_self {
             Some(bound) => (**bound).clone(),
             None => receiver,
         };
@@ -130,7 +130,7 @@ impl VirtualMachine {
             ));
         }
 
-        if let Some(function) = method.c_function {
+        if let Some(function) = method.provenance.c_function {
             return self.call_c_function(
                 function,
                 class,
@@ -166,7 +166,7 @@ impl VirtualMachine {
         // A stub standing in for a native method dispatches under the name it
         // was cut from, even when the alias has been put back under that same
         // name. There is no body to run either way.
-        if let Some(target) = method.native_alias.clone() {
+        if let Some(target) = method.provenance.native_alias.clone() {
             for owner in [Rc::clone(&class), self.builtins().class_of(&receiver)] {
                 if let Some(result) = self.call_native_method(
                     owner.as_ref(),
@@ -224,8 +224,8 @@ impl VirtualMachine {
         // The receiver's own class is what dispatches it, since the stub may
         // live on a singleton class that names no native table.
         if method.body.is_empty()
-            && method.captured_vars.is_none()
-            && let Some(original) = &method.original_name
+            && method.provenance.captured_vars.is_none()
+            && let Some(original) = &method.provenance.original_name
             && original != method_name
         {
             let original = original.clone();
@@ -246,7 +246,7 @@ impl VirtualMachine {
         // any class's table, so a stub standing in for one goes there for it,
         // naming the receiver it was bound to.
         if method.body.is_empty()
-            && method.captured_vars.is_none()
+            && method.provenance.captured_vars.is_none()
             && method.owner.as_deref() == Some("Kernel")
             && crate::vm::native_methods::is_kernel_private_function(method_name)
         {
@@ -261,7 +261,7 @@ impl VirtualMachine {
         // A method the program wrote with an empty body names its place in the
         // source, and runs as the empty method it is.
         if method.body.is_empty()
-            && method.captured_vars.is_none()
+            && method.provenance.captured_vars.is_none()
             && method.source_location.is_none()
         {
             self.bound_stub_depth += 1;
@@ -273,11 +273,12 @@ impl VirtualMachine {
         }
 
         let expected = method.parameters.len();
-        let takes_keywords =
-            !method.keyword_parameters.is_empty() || method.keyword_rest_parameter.is_some();
+        let takes_keywords = !method.signature.keyword_parameters.is_empty()
+            || method.signature.keyword_rest_parameter.is_some();
         // A method declaring `**nil` refuses keywords before it counts the
         // rest of what it was given.
-        if method.keyword_rest_parameter.as_deref() == Some(crate::object::NO_KEYWORDS_PARAM)
+        if method.signature.keyword_rest_parameter.as_deref()
+            == Some(crate::object::NO_KEYWORDS_PARAM)
             && matches!(arguments.last().view(), Some(View::Dict(entries))
                 if entries.borrow().contains_key(crate::vm::param_binding::KWARGS_MARKER))
         {
@@ -292,20 +293,20 @@ impl VirtualMachine {
         // method has no room for it as a positional, since `&` is what makes
         // a Proc the block: `detect(ifnone)` reads the Proc as the argument
         // it was written as.
-        if method.block_parameter.is_some()
+        if method.signature.block_parameter.is_some()
             && self.pending_block.is_none()
             && !arguments.is_empty()
             && matches!(arguments.last().view(), Some(View::Block(_)))
-            && method.variadic_param.is_none()
+            && method.signature.variadic_param.is_none()
             && positional_count > method.parameters.len()
         {
             self.pending_block = arguments.pop();
             self.pending_block_from_ampersand = false;
             positional_count = positional_arg_count_for(&arguments, takes_keywords);
         }
-        let has_variadic = method.variadic_param.is_some();
+        let has_variadic = method.signature.variadic_param.is_some();
         let required =
-            expected - method.default_parameters.len() - if has_variadic { 1 } else { 0 };
+            expected - method.signature.default_parameters.len() - if has_variadic { 1 } else { 0 };
         if !has_variadic && (positional_count < required || positional_count > expected) {
             let accepted = if required == expected {
                 crate::vm::errors::Arity::Exact(expected)
@@ -357,12 +358,14 @@ impl VirtualMachine {
         });
         let captured_scope: Vec<crate::vm::core::RefinementEntry> = if defined_in_refinement {
             method
+                .provenance
                 .captured_refinements
                 .iter()
                 .flat_map(|(module, _)| Self::refinement_entries_for(module))
                 .collect()
         } else {
             method
+                .provenance
                 .captured_refinements
                 .iter()
                 .map(|(module, classes)| crate::vm::core::RefinementEntry {
@@ -383,6 +386,7 @@ impl VirtualMachine {
         // the right link even when the module has no name.
         self.method_owner_stack.push(
             method
+                .provenance
                 .alias_origin
                 .clone()
                 .or_else(|| method.owner_class.clone())
@@ -399,7 +403,7 @@ impl VirtualMachine {
                 .captured_nesting
                 .first()
                 .cloned()
-                .or_else(|| method.captured_def_scope.last().cloned())
+                .or_else(|| method.provenance.captured_def_scope.last().cloned())
                 .or_else(|| Some(Rc::clone(&class))),
         );
         // A method defined on one object, as `def self.name` in a class body
@@ -434,7 +438,7 @@ impl VirtualMachine {
                 .entered_at(position.line, position.column)
                 .owned_by(allocation_owner)
                 .with_source_file(frame_file)
-                .labeled(method.block_label.clone()),
+                .labeled(method.provenance.block_label.clone()),
             move |vm| {
                 if returns_inside {
                     vm.fire_method_event(
@@ -774,22 +778,22 @@ impl VirtualMachine {
 
         // A method produced by `Method#to_proc` keeps running against the
         // object it was extracted from, whatever receiver it is invoked on.
-        let self_value = match &method.bound_self {
+        let self_value = match &method.provenance.bound_self {
             Some(bound) => (**bound).clone(),
             None => self_value,
         };
 
         // Restore the lexical nesting the Proc was written in, so a nested
         // `def` in the body lands where Ruby's default definee points.
-        let saved_def_scope = if method.captured_def_scope.is_empty() {
+        let saved_def_scope = if method.provenance.captured_def_scope.is_empty() {
             None
         } else {
             Some(std::mem::replace(
                 &mut self.def_scope_stack,
-                method.captured_def_scope.clone(),
+                method.provenance.captured_def_scope.clone(),
             ))
         };
-        let carries_constant_home = match &method.captured_constant_home {
+        let carries_constant_home = match &method.provenance.captured_constant_home {
             Some(home) => {
                 self.constant_homes
                     .push((self.def_scope_stack.len(), home.clone()));
@@ -799,6 +803,7 @@ impl VirtualMachine {
         };
         // A `def` the body runs installs where the method itself was defined.
         let definee = method
+            .provenance
             .captured_def_scope
             .last()
             .cloned()
@@ -862,7 +867,7 @@ impl VirtualMachine {
             // Inject captured closure variables (from define_method blocks).
             // Skip `self` — the method receiver should always be the method's
             // `self_value`, not the captured `self` from where the block was created.
-            if let Some(captured) = &method.captured_vars {
+            if let Some(captured) = &method.provenance.captured_vars {
                 for (name, value_ref) in captured.iter() {
                     if name == "self" {
                         continue;
@@ -878,8 +883,9 @@ impl VirtualMachine {
             // keeps the `block_given?` of the frame the block was written
             // in, which is why Ruby answers false there however the method
             // is called.
-            let from_a_block = method.captured_vars.is_some();
+            let from_a_block = method.provenance.captured_vars.is_some();
             let inherits_block_given = method
+                .provenance
                 .captured_vars
                 .as_ref()
                 .is_some_and(|captured| captured.contains_key("block_given?"));
@@ -899,36 +905,40 @@ impl VirtualMachine {
             let keyword_hash = arguments.last().cloned();
             let (positional, kwargs) = crate::vm::param_binding::split_keyword_args_for(
                 arguments,
-                !method.keyword_parameters.is_empty() || method.keyword_rest_parameter.is_some(),
+                !method.signature.keyword_parameters.is_empty()
+                    || method.signature.keyword_rest_parameter.is_some(),
                 method.ruby2_keywords.get(),
             );
-            refuse_keywords_for_none_declared(method.keyword_rest_parameter.as_deref(), &kwargs)?;
+            refuse_keywords_for_none_declared(
+                method.signature.keyword_rest_parameter.as_deref(),
+                &kwargs,
+            )?;
             bind_params(
                 self,
                 &method.parameters,
                 &positional,
-                &method.default_parameters,
-                &method.variadic_param,
+                &method.signature.default_parameters,
+                &method.signature.variadic_param,
             )?;
             let bound = self.bind_keyword_params(
-                &method.keyword_parameters,
-                method.keyword_rest_parameter.as_deref(),
+                &method.signature.keyword_parameters,
+                method.signature.keyword_rest_parameter.as_deref(),
                 kwargs,
             );
             bound.map_err(|error| self.keyword_error_in_callee(error, method))?;
             let refused = self.refuse_unknown_keywords(
                 keyword_hash.as_ref(),
-                &method.keyword_parameters,
-                method.keyword_rest_parameter.as_deref(),
+                &method.signature.keyword_parameters,
+                method.signature.keyword_rest_parameter.as_deref(),
             );
             refused.map_err(|error| self.keyword_error_in_callee(error, method))?;
 
             if let Some(block_value) = block {
-                if let Some(block_param) = &method.block_parameter {
+                if let Some(block_param) = &method.signature.block_parameter {
                     self.environment_mut()
                         .define(block_param.clone(), block_value);
                 }
-            } else if let Some(block_param) = &method.block_parameter {
+            } else if let Some(block_param) = &method.signature.block_parameter {
                 self.environment_mut()
                     .define(block_param.clone(), Object::Nil);
             }
@@ -1035,34 +1045,37 @@ impl VirtualMachine {
             let keyword_hash = arguments.last().cloned();
             let (positional, kwargs) = split_keyword_args(
                 arguments,
-                !function.keyword_parameters.is_empty()
-                    || function.keyword_rest_parameter.is_some(),
+                !function.signature.keyword_parameters.is_empty()
+                    || function.signature.keyword_rest_parameter.is_some(),
             );
-            refuse_keywords_for_none_declared(function.keyword_rest_parameter.as_deref(), &kwargs)?;
+            refuse_keywords_for_none_declared(
+                function.signature.keyword_rest_parameter.as_deref(),
+                &kwargs,
+            )?;
             bind_params(
                 self,
                 &function.parameters,
                 &positional,
-                &function.default_parameters,
-                &function.variadic_param,
+                &function.signature.default_parameters,
+                &function.signature.variadic_param,
             )?;
             self.bind_keyword_params(
-                &function.keyword_parameters,
-                function.keyword_rest_parameter.as_deref(),
+                &function.signature.keyword_parameters,
+                function.signature.keyword_rest_parameter.as_deref(),
                 kwargs,
             )?;
             self.refuse_unknown_keywords(
                 keyword_hash.as_ref(),
-                &function.keyword_parameters,
-                function.keyword_rest_parameter.as_deref(),
+                &function.signature.keyword_parameters,
+                function.signature.keyword_rest_parameter.as_deref(),
             )?;
 
             if let Some(block_value) = block {
-                if let Some(block_param) = &function.block_parameter {
+                if let Some(block_param) = &function.signature.block_parameter {
                     self.environment_mut()
                         .define(block_param.clone(), block_value);
                 }
-            } else if let Some(block_param) = &function.block_parameter {
+            } else if let Some(block_param) = &function.signature.block_parameter {
                 self.environment_mut()
                     .define(block_param.clone(), Object::Nil);
             }
@@ -1319,7 +1332,7 @@ impl VirtualMachine {
         on_a_module: bool,
     ) -> (Rc<str>, Rc<str>, Rc<str>) {
         let slot = usize::from(on_a_module);
-        let cacheable = method.alias_origin.is_none() && method.owner.is_some();
+        let cacheable = method.provenance.alias_origin.is_none() && method.owner.is_some();
         if cacheable
             && let Some((callee, frame_name, defined)) = &method.frame_names.slots().borrow()[slot]
             && **callee == *method_name
@@ -1331,6 +1344,7 @@ impl VirtualMachine {
         // lets `super` walk from the method's true defining class. An alias
         // is named for the module the method it copies was written in.
         let owning_class_name = method
+            .provenance
             .alias_origin
             .as_ref()
             .map(|origin| origin.ruby_name())
@@ -1339,6 +1353,7 @@ impl VirtualMachine {
         // `super` follows the definition, so the frame is named for the
         // method as defined even when it was reached through an alias.
         let defined: Rc<str> = method
+            .provenance
             .original_name
             .as_deref()
             .unwrap_or(method_name)

@@ -434,6 +434,7 @@ impl VirtualMachine {
         // A method reached through an alias is named by what it was defined
         // as, and called by the alias.
         let defined = method
+            .provenance
             .original_name
             .clone()
             .unwrap_or_else(|| plain.clone());

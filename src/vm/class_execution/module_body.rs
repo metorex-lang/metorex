@@ -46,44 +46,14 @@ impl VirtualMachine {
                 position: def_position,
                 ..
             } => {
-                let param_names: Vec<String> = parameters
-                    .iter()
-                    .filter(|p| !p.is_named_keyword && !p.is_keyword && !p.is_block)
-                    .map(|p| p.name.clone())
-                    .collect();
-                let keyword_parameters: Vec<(String, Option<crate::ast::Expression>)> = parameters
-                    .iter()
-                    .filter(|p| p.is_named_keyword)
-                    .map(|p| (p.name.clone(), p.default_value.clone()))
-                    .collect();
-                let block_parameter = parameters
-                    .iter()
-                    .find(|p| p.is_block)
-                    .map(|p| p.name.clone());
-                let default_params: Vec<(usize, crate::ast::Expression)> = parameters
-                    .iter()
-                    .filter(|p| !p.is_named_keyword && !p.is_keyword && !p.is_block)
-                    .enumerate()
-                    .filter_map(|(i, p)| p.default_value.clone().map(|dv| (i, dv)))
-                    .collect();
-                let variadic_param = parameters
-                    .iter()
-                    .filter(|p| !p.is_named_keyword && !p.is_keyword && !p.is_block)
-                    .enumerate()
-                    .find(|(_, p)| p.is_variadic)
-                    .map(|(i, p)| (i, p.name.clone()));
-                let mut m = Method::new(method_name.clone(), param_names, method_body.clone());
+                let mut m = build_method_from_params(
+                    method_name.clone(),
+                    parameters,
+                    method_body.clone(),
+                    self.snapshot_active_refinements(),
+                    self.def_nesting(),
+                );
                 m.source_location = Some(self.source_location_for(*def_position));
-                m.default_parameters = default_params;
-                m.keyword_parameters = keyword_parameters;
-                m.keyword_rest_parameter = parameters
-                    .iter()
-                    .find(|p| p.is_keyword)
-                    .map(|p| p.name.clone());
-                m.block_parameter = block_parameter;
-                m.variadic_param = variadic_param;
-                m.captured_refinements = self.snapshot_active_refinements();
-                m.captured_nesting = self.def_nesting().into();
                 m.owner = Some(module.name().to_string());
                 m.owner_class = Some(Rc::clone(module));
                 m.definee = Some(Rc::clone(module));

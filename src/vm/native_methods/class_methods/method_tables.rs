@@ -276,7 +276,7 @@ pub(crate) fn native_kernel_method_stub(name: &str) -> Option<Method> {
     );
     if *variadic {
         let last = parameters.len().saturating_sub(1);
-        stub.variadic_param = Some((last, parameters[last].to_string()));
+        stub.signature.variadic_param = Some((last, parameters[last].to_string()));
     }
     Some(stub)
 }
@@ -325,7 +325,7 @@ pub(crate) fn native_module_method_stub(name: &str) -> Option<Method> {
     );
     if *variadic {
         let last = unnamed.len().saturating_sub(1);
-        stub.variadic_param = Some((last, unnamed[last].clone()));
+        stub.signature.variadic_param = Some((last, unnamed[last].clone()));
     }
     Some(stub)
 }

@@ -24,7 +24,7 @@ pub struct Class {
     pub(crate) instance_of: RefCell<Option<Rc<Class>>>,
     pub(crate) superclass: Option<Rc<Class>>,
     pub(crate) methods: RefCell<crate::fast_hash::NameMap<String, Rc<Method>>>,
-    pub(crate) instance_variables: RefCell<HashSet<String>>,
+    pub(crate) instance_variables: RefCell<crate::fast_hash::NameSet<String>>,
     /// Class variables, constants, and class-level bookkeeping keyed by name.
     /// Insertion-ordered so `Module#class_variables` reports definition order.
     pub(crate) class_variables:
@@ -36,16 +36,16 @@ pub struct Class {
     /// and the class's copy is what `super` reaches from it.
     pub(crate) prepends: RefCell<Vec<Rc<Class>>>,
     /// Names of methods whose visibility has been set to private.
-    pub(crate) private_method_names: RefCell<HashSet<String>>,
+    pub(crate) private_method_names: RefCell<crate::fast_hash::NameSet<String>>,
     /// Names of methods whose visibility has been set to protected. Like
     /// private, these cannot be called with an explicit receiver from
     /// outside, but they are reported as instance methods rather than
     /// private ones.
-    pub(crate) protected_method_names: RefCell<HashSet<String>>,
+    pub(crate) protected_method_names: RefCell<crate::fast_hash::NameSet<String>>,
     /// Methods explicitly marked public on this class via `public :name` —
     /// distinct from "no entry" so we can override an inherited private
     /// without adding the method itself to this class's method table.
-    pub(crate) public_overrides: RefCell<HashSet<String>>,
+    pub(crate) public_overrides: RefCell<crate::fast_hash::NameSet<String>>,
     /// Lazily-allocated singleton class attached to *this class object* — the
     /// thing `class << SomeClass; end` opens. Holds class-level (def self.x)
     /// methods once we start tracking them as a real class.
@@ -65,31 +65,31 @@ pub struct Class {
     pub(crate) current_visibility: RefCell<String>,
     /// `autoload :Const, "path"` registry. Maps constant name → unresolved
     /// path string (the value Ruby's `autoload?` returns verbatim).
-    pub(crate) autoloads: RefCell<HashMap<String, String>>,
+    pub(crate) autoloads: RefCell<crate::fast_hash::NameMap<String, String>>,
     /// Constant names that *were* registered as autoloads, fired, and
     /// completed loading without actually defining the constant. MRI keeps
     /// these visible in `Module#constants` for a while afterward (so the
     /// name persists as an "unrealized" constant) even though `autoload?`
     /// and `const_defined?` both report nothing. Storing them separately
     /// here keeps `#constants` in sync without resurrecting the autoload.
-    pub(crate) unrealized_autoloads: RefCell<HashSet<String>>,
+    pub(crate) unrealized_autoloads: RefCell<crate::fast_hash::NameSet<String>>,
     /// Constant names marked private via `Module#private_constant`. When
     /// any of these is referenced via qualified `Mod::Const` access from
     /// outside the module's lexical scope, MRI raises NameError /private
     /// constant/.
-    pub(crate) private_constants: RefCell<HashSet<String>>,
+    pub(crate) private_constants: RefCell<crate::fast_hash::NameSet<String>>,
     /// Constant names marked deprecated via `Module#deprecate_constant`.
     /// Reading one emits a "constant Mod::Const is deprecated" warning.
-    pub(crate) deprecated_constants: RefCell<HashSet<String>>,
+    pub(crate) deprecated_constants: RefCell<crate::fast_hash::NameSet<String>>,
     /// Source location (file, line) of each `autoload :Const, ...` call.
     /// Returned by `Module#const_source_location` when an autoload is
     /// pending or when another thread asks during a load.
-    pub(crate) autoload_locations: RefCell<HashMap<String, (String, i64)>>,
+    pub(crate) autoload_locations: RefCell<crate::fast_hash::NameMap<String, (String, i64)>>,
     /// Source location (file, line) of each constant assignment that
     /// produced a class_var on this class — `class Foo; X = 1; end`,
     /// `class Foo; class Bar; end; end`, etc. Returned by
     /// `Module#const_source_location` once the constant is bound.
-    pub(crate) const_locations: RefCell<HashMap<String, (String, i64)>>,
+    pub(crate) const_locations: RefCell<crate::fast_hash::NameMap<String, (String, i64)>>,
     /// What `find_method` found for each name, with the method state it was
     /// found under. An entry from an earlier state is looked up again.
     pub(crate) method_cache: RefCell<crate::fast_hash::NameMap<String, CachedLookup>>,

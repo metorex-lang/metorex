@@ -153,8 +153,8 @@ impl VirtualMachine {
         ] {
             let held = crate::parser::ANONYMOUS_SPLAT.to_string();
             let mut stub = crate::object::Method::new(name.to_string(), vec![held.clone()], vec![]);
-            stub.variadic_param = Some((0, held));
-            stub.native_alias = Some(name.to_string());
+            stub.signature.variadic_param = Some((0, held));
+            stub.provenance.native_alias = Some(name.to_string());
             singleton.define_method(name, std::rc::Rc::new(stub));
             singleton.set_method_private(name);
         }

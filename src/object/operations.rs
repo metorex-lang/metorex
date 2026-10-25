@@ -202,6 +202,7 @@ impl Object {
                 // `obj.method(:x)` do.
                 let defined_name = |method: &Method| {
                     method
+                        .provenance
                         .original_name
                         .clone()
                         .unwrap_or_else(|| method.name.clone())
@@ -219,7 +220,8 @@ impl Object {
                     && a.body == b.body
                     && a.source_location.is_some()
                     && a.source_location == b.source_location;
-                let same_c_function = a.c_function.is_some() && a.c_function == b.c_function;
+                let same_c_function = a.provenance.c_function.is_some()
+                    && a.provenance.c_function == b.provenance.c_function;
                 Rc::ptr_eq(a, b)
                     || (same_receiver
                         && (same_written_method

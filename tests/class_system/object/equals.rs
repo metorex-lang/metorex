@@ -184,89 +184,22 @@ fn test_equals_class() {
 
 #[test]
 fn test_equals_method() {
-    let method1 = Rc::new(Method {
-        name: "foo".to_string(),
-        parameters: vec![],
-        default_parameters: vec![],
-        keyword_parameters: vec![],
-        keyword_rest_parameter: None,
-        original_name: None,
-        native_alias: None,
-        block_parameter: None,
-        variadic_param: None,
-        body: vec![].into(),
-        receiver: None,
-        bound_self: None,
-        owner: None,
-        owner_class: None,
-        origin_class: None,
-        source_location: Some(metorex::error::SourceLocation {
-            line: 3,
-            column: 1,
-            offset: 0,
-            filename: Some("ledger.rb".to_string()),
-        }),
-        end_line: None,
-        captured_vars: None,
-        is_undefined: false,
-        lambda_body: false,
-        captured_def_scope: Vec::new(),
-        captured_constant_home: None,
-        captured_refinements: Vec::new(),
-        alias_origin: None,
-        frame_names: Default::default(),
-        native_miss: Default::default(),
-        body_facts: Default::default(),
-        captured_nesting: metorex::object::no_nesting(),
-        reads_as_proc: false,
-        block_label: None,
-        ruby2_keywords: std::rc::Rc::new(std::cell::Cell::new(false)),
-        definee: None,
-        c_function: None,
-        unit: Default::default(),
-    });
+    let written_at = || {
+        Method::with_source_location(
+            "foo".to_string(),
+            vec![],
+            vec![],
+            metorex::error::SourceLocation {
+                line: 3,
+                column: 1,
+                offset: 0,
+                filename: Some("ledger.rb".to_string()),
+            },
+        )
+    };
+    let method1 = Rc::new(written_at());
     let method2 = Rc::clone(&method1);
-    let method3 = Rc::new(Method {
-        name: "foo".to_string(),
-        parameters: vec![],
-        default_parameters: vec![],
-        keyword_parameters: vec![],
-        keyword_rest_parameter: None,
-        original_name: None,
-        native_alias: None,
-        block_parameter: None,
-        variadic_param: None,
-        body: vec![].into(),
-        receiver: None,
-        bound_self: None,
-        owner: None,
-        owner_class: None,
-        origin_class: None,
-        source_location: Some(metorex::error::SourceLocation {
-            line: 3,
-            column: 1,
-            offset: 0,
-            filename: Some("ledger.rb".to_string()),
-        }),
-        end_line: None,
-        captured_vars: None,
-        is_undefined: false,
-        lambda_body: false,
-        captured_def_scope: Vec::new(),
-        captured_constant_home: None,
-        captured_refinements: Vec::new(),
-        alias_origin: None,
-        frame_names: Default::default(),
-        native_miss: Default::default(),
-        body_facts: Default::default(),
-        captured_nesting: metorex::object::no_nesting(),
-        reads_as_proc: false,
-        block_label: None,
-        ruby2_keywords: std::rc::Rc::new(std::cell::Cell::new(false)),
-        definee: None,
-        c_function: None,
-        unit: Default::default(),
-    });
+    let method3 = Rc::new(written_at());
 
     let obj1 = Object::Method(method1);
     let obj2 = Object::Method(method2);

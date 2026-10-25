@@ -43,8 +43,8 @@ pub extern "C-unwind" fn rb_tracepoint_new(
         .collect();
     let trace = call(top_level_module("TracePoint"), "allocate", Vec::new());
     let mut hook = Method::new("call".to_string(), Vec::new(), Vec::new());
-    hook.bound_self = Some(Box::new(trace.clone()));
-    hook.c_function = Some(CFunction {
+    hook.provenance.bound_self = Some(Box::new(trace.clone()));
+    hook.provenance.c_function = Some(CFunction {
         address: function as usize,
         arity: TRACEPOINT_HOOK_ARITY,
         data,

@@ -7,6 +7,15 @@ rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 [target.aarch64-unknown-linux-gnu]
 rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 
+# A macOS build names its functions in the v0 scheme, which names the types a
+# generic function was made for, so `scripts/startup_order.rb` can find in the
+# release build each function a build with coverage counters saw run.
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "symbol-mangling-version=v0"]
+
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "symbol-mangling-version=v0"]
+
 # The tests' expected output is what a program prints under a UTF-8 locale,
 # which decides Ruby's default external encoding. A container's environment
 # leaves the locale unset, which is the C locale and US-ASCII, so the tests

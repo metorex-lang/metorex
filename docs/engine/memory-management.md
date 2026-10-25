@@ -208,18 +208,33 @@ The core library and the libraries a default start loads are held in the
 binary as they were parsed when it was built, with each method, block,
 class, and module body encoded after the statements around it. A body is
 decoded the first time something reads it, so a method that never runs
-keeps no syntax tree and leaves its bytes in the binary unread. The
-libraries' sources sit in a section of the binary of their own, apart from
-the table of their names a `require` reads.
+keeps no syntax tree and leaves its bytes in the binary unread. The bodies
+of methods are written after the bodies that run as a library loads, so a
+start reads 255 KB of the 1.8 MB. The libraries' sources sit in a section of
+the binary of their own, apart from the table of their names a `require`
+reads.
 
-The reports of 2026-10-24 on macOS, with the ruby-bench rows run for one
-warmup iteration and two more, and `rex_suite` run with `metorex spec`, in
-MB. Where a row has two numbers, the first is startup's and the second the
-program's.
+The macOS linker places the functions an empty start runs at the front of
+the binary, as `build/startup.order` lists them, and the standard library's
+after them. `scripts/startup_order.rb` writes the file from a build with
+coverage counters. The names in it hold hashes of the compiler's version and
+the package's, so the script is run again after either changes, and a
+release build warns until it is.
+
+A method definition and a class fit the malloc size classes of 320 and 896
+bytes, which tests check. The fields most methods leave unset, the
+parameters past the plain positional ones and what an alias,
+`define_method`, `Method#to_proc`, or a C extension records, are kept in two
+boxes made when one of them is first written.
+
+The reports on macOS, of 2026-10-25 for `empty` and 2026-10-24 for the
+rest, with the ruby-bench rows run for one warmup iteration and two more,
+and `rex_suite` run with `metorex spec`, in MB. Where a row has two numbers,
+the first is startup's and the second the program's.
 
 | Row | Peak resident | Syntax tree | Compiled units | JIT compiling | Other heap blocks | Headers | malloc's other pages | Machine code | Files | Stack | Accounted for |
 | :-- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |
-| empty | 22.5 | 0.6, 0.0 | 1.0, 0.0 | 0.0 | 5.0, 0.0 | 0.9 | 3.1 | 0.0 | 10.0 | 0.2 | 93% |
+| empty | 19.7 | 0.7, 0.0 | 1.1, 0.0 | 0.0 | 4.2, 0.0 | 1.0 | 3.0 | 0.0 | 8.5 | 0.2 | 94% |
 | rex_suite | 279.1 | 0.6, 13.1 | 1.0, 14.5 | 0.7 | 7.9, 117.5 | 23.4 | 85.9 | 0.4 | 12.2 | 0.4 | 99% |
 | 30k_ifelse | 631.6 | 0.6, 297.7 | 1.0, 67.6 | 9.5 | 7.7, 130.7 | 38.6 | 59.8 | 5.8 | 10.9 | 0.4 | 100% |
 | ruby-json | 413.9 | 0.6, 2.6 | 1.0, 2.5 | 0.0 | 5.1, 216.7 | 51.1 | 121.8 | 0.0 | 11.0 | 0.2 | 100% |
@@ -228,13 +243,14 @@ The objects the last walk found:
 
 | Row | Objects' bytes | Largest classes |
 | :-- | --: | :-- |
-| empty | 0.8 | 445 classes and modules, 0.5 MB, and 728 Strings, 0.2 MB |
+| empty | 0.6 | 445 classes and modules, 0.4 MB, and 724 Strings, 0.1 MB |
 | rex_suite | 44.7 | 37,244 Strings, 12.2 MB, 12,847 Hashes, 9.8 MB, and 12,907 Procs, 5.3 MB |
 | 30k_ifelse | 19.3 | 30,200 method definitions, 18.4 MB |
 | ruby-json | 1.8 | 2,343 Strings, 0.8 MB |
 
-- In `empty` the binary's pages and the system libraries' are 10.0 MB, the
-  largest part. Most of them are the code a start runs.
+- In `empty` the binary's pages and the system libraries' are 8.5 MB, the
+  largest part. Most of them are the code a start runs. Without the report
+  `empty` peaks at 19.4 MB, where CRuby 4.0.7 peaks at 19.8 MB.
 - In `30k_ifelse` the program's syntax tree is 297.7 MB, and it stays after
   its units are compiled.
 - In `ruby-json` 216.7 MB of the program's heap blocks are in neither the

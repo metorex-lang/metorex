@@ -40,7 +40,7 @@ GEMS.each do |name|
     destination = File.join(library, name, path)
     FileUtils.mkdir_p(File.dirname(destination))
     File.write(destination, text)
-    entries << %(    ("#{path.delete_suffix(".rb")}", "#{name}-#{release.bundled_gem_version(name)}", include_str!("gems/#{name}/#{path}")),\n)
+    entries << %(    ("#{path.delete_suffix(".rb")}", "#{name}-#{release.bundled_gem_version(name)}", carried_source!("gems/#{name}/#{path}")),\n)
   end
 end
 
@@ -87,7 +87,7 @@ data = []
     destination = File.join(library, "rbs", "data", part, path)
     FileUtils.mkdir_p(File.dirname(destination))
     FileUtils.cp(source, destination)
-    data << %(    ("rbs/#{part}/#{path}", include_str!("gems/rbs/data/#{part}/#{path}")),\n)
+    data << %(    ("rbs/#{part}/#{path}", carried_source!("gems/rbs/data/#{part}/#{path}")),\n)
   end
 end
 File.write(File.join(library, "rbs", "rbs", "carried_data.rb"), <<~RUBY)
@@ -123,7 +123,7 @@ File.write(File.join(library, "rbs", "rbs", "carried_data.rb"), <<~RUBY)
     end
   end
 RUBY
-entries << %(    ("rbs/carried_data", "rbs-#{release.bundled_gem_version("rbs")}", include_str!("gems/rbs/rbs/carried_data.rb")),\n)
+entries << %(    ("rbs/carried_data", "rbs-#{release.bundled_gem_version("rbs")}", carried_source!("gems/rbs/rbs/carried_data.rb")),\n)
 {
   File.join("rbs", "repository.rb") => ["DEFAULT_STDLIB_ROOT", "stdlib"],
   File.join("rbs", "environment_loader.rb") => ["DEFAULT_CORE_ROOT", "core"]

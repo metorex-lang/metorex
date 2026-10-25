@@ -123,8 +123,8 @@ impl VirtualMachine {
                 .lookup_method(receiver, name)
                 .is_none_or(|(_, method)| {
                     method.body.is_empty()
-                        && method.c_function.is_none()
-                        && method.native_alias.is_none()
+                        && method.provenance.c_function.is_none()
+                        && method.provenance.native_alias.is_none()
                         && !method.is_undefined
                 })
     }

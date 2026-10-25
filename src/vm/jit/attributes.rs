@@ -65,15 +65,15 @@ struct AttributeRead {
 /// variable and it takes no parameters.
 pub(super) fn plain_reader(method: &Method) -> Option<&str> {
     let plain = method.parameters.is_empty()
-        && method.default_parameters.is_empty()
-        && method.keyword_parameters.is_empty()
-        && method.keyword_rest_parameter.is_none()
-        && method.block_parameter.is_none()
-        && method.variadic_param.is_none()
-        && method.native_alias.is_none()
+        && method.signature.default_parameters.is_empty()
+        && method.signature.keyword_parameters.is_empty()
+        && method.signature.keyword_rest_parameter.is_none()
+        && method.signature.block_parameter.is_none()
+        && method.signature.variadic_param.is_none()
+        && method.provenance.native_alias.is_none()
         && method.receiver.is_none()
-        && method.bound_self.is_none()
-        && method.captured_vars.is_none()
+        && method.provenance.bound_self.is_none()
+        && method.provenance.captured_vars.is_none()
         && !method.lambda_body
         && !method.is_undefined;
     if !plain {
@@ -101,15 +101,15 @@ fn plain_writer(method: &Method) -> Option<(&str, bool)> {
     let [parameter] = method.parameters.as_slice() else {
         return None;
     };
-    let plain = method.default_parameters.is_empty()
-        && method.keyword_parameters.is_empty()
-        && method.keyword_rest_parameter.is_none()
-        && method.block_parameter.is_none()
-        && method.variadic_param.is_none()
-        && method.native_alias.is_none()
+    let plain = method.signature.default_parameters.is_empty()
+        && method.signature.keyword_parameters.is_empty()
+        && method.signature.keyword_rest_parameter.is_none()
+        && method.signature.block_parameter.is_none()
+        && method.signature.variadic_param.is_none()
+        && method.provenance.native_alias.is_none()
         && method.receiver.is_none()
-        && method.bound_self.is_none()
-        && method.captured_vars.is_none()
+        && method.provenance.bound_self.is_none()
+        && method.provenance.captured_vars.is_none()
         && !method.lambda_body
         && !method.is_undefined;
     if !plain {

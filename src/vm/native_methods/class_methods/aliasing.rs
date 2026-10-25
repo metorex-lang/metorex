@@ -23,13 +23,15 @@ impl VirtualMachine {
             && let Some(method) = class_rc.find_own_method(&new_name)
             && method.body.is_empty()
             && !method.is_undefined
-            && method.native_alias.is_none()
-            && method.c_function.is_none()
+            && method.provenance.native_alias.is_none()
+            && method.provenance.c_function.is_none()
             && method.source_location.is_none()
         {
             let mut stub = (*method).clone();
-            stub.native_alias = Some(old_name.clone());
-            stub.original_name.get_or_insert_with(|| old_name.clone());
+            stub.provenance.native_alias = Some(old_name.clone());
+            stub.provenance
+                .original_name
+                .get_or_insert_with(|| old_name.clone());
             class_rc.define_method(&new_name, Rc::new(stub));
         }
         if !copied {
@@ -50,8 +52,8 @@ impl VirtualMachine {
                     vec![],
                     "Kernel".to_string(),
                 );
-                stub.variadic_param = Some((0, "args".to_string()));
-                stub.native_alias = Some(old_name.clone());
+                stub.signature.variadic_param = Some((0, "args".to_string()));
+                stub.provenance.native_alias = Some(old_name.clone());
                 class_rc.define_method(&new_name, Rc::new(stub));
                 // A Kernel function is a private method, and a name given to
                 // one is private the same way.
@@ -74,9 +76,9 @@ impl VirtualMachine {
                     vec![],
                     class_rc.name().to_string(),
                 );
-                stub.variadic_param = Some((0, "args".to_string()));
-                stub.original_name = Some(old_name.clone());
-                stub.native_alias = Some(old_name.clone());
+                stub.signature.variadic_param = Some((0, "args".to_string()));
+                stub.provenance.original_name = Some(old_name.clone());
+                stub.provenance.native_alias = Some(old_name.clone());
                 class_rc.define_method(&new_name, Rc::new(stub));
                 found = true;
             }
@@ -100,9 +102,9 @@ impl VirtualMachine {
                         vec![],
                         refined.name().to_string(),
                     );
-                    stub.variadic_param = Some((0, "args".to_string()));
-                    stub.original_name = Some(old_name.clone());
-                    stub.native_alias = Some(old_name.clone());
+                    stub.signature.variadic_param = Some((0, "args".to_string()));
+                    stub.provenance.original_name = Some(old_name.clone());
+                    stub.provenance.native_alias = Some(old_name.clone());
                     class_rc.define_method(&new_name, Rc::new(stub));
                     found = true;
                 }
@@ -129,9 +131,9 @@ impl VirtualMachine {
                     vec![],
                     class_rc.name().to_string(),
                 );
-                stub.variadic_param = Some((0, "args".to_string()));
-                stub.original_name = Some(old_name.clone());
-                stub.native_alias = Some(old_name.clone());
+                stub.signature.variadic_param = Some((0, "args".to_string()));
+                stub.provenance.original_name = Some(old_name.clone());
+                stub.provenance.native_alias = Some(old_name.clone());
                 class_rc.define_method(&new_name, Rc::new(stub));
                 found = true;
             }

@@ -55,13 +55,18 @@ fn method_to_proc_block(target: &Object, position: Position) -> BlockStatement {
         && written_in_ruby(method)
     {
         let optional: std::collections::HashSet<usize> = method
+            .signature
             .default_parameters
             .iter()
             .map(|(index, _)| *index)
             .collect();
         // The splat's own name sits among the positional ones, and it is
         // forwarded as a splat rather than as one more positional.
-        let splat_at = method.variadic_param.as_ref().map(|(index, _)| *index);
+        let splat_at = method
+            .signature
+            .variadic_param
+            .as_ref()
+            .map(|(index, _)| *index);
         for index in 0..method.parameters.len() {
             if splat_at == Some(index) {
                 continue;
@@ -73,7 +78,7 @@ fn method_to_proc_block(target: &Object, position: Position) -> BlockStatement {
             parameters.push(name.clone());
             forwarded.push(Expression::Identifier { name, position });
         }
-        if method.variadic_param.is_some() {
+        if method.signature.variadic_param.is_some() {
             let name = "__method_proc_rest".to_string();
             parameters.push(format!("*{name}"));
             forwarded.push(Expression::Splat {

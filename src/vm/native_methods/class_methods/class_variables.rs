@@ -202,11 +202,12 @@ impl VirtualMachine {
                         });
                     };
                     let takes_bare_splat = method
+                        .signature
                         .variadic_param
                         .as_ref()
                         .is_some_and(|(index, _)| *index + 1 == method.parameters.len());
-                    let takes_keywords = !method.keyword_parameters.is_empty()
-                        || method.keyword_rest_parameter.is_some();
+                    let takes_keywords = !method.signature.keyword_parameters.is_empty()
+                        || method.signature.keyword_rest_parameter.is_some();
                     if !takes_bare_splat || takes_keywords {
                         self.emit_warning_to_stderr(
                             &format!(

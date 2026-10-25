@@ -4,7 +4,7 @@
 use crate::class::Class;
 use crate::error::MetorexError;
 use crate::lexer::Position;
-use crate::object::{BlockStatement, Method, Object};
+use crate::object::{BlockStatement, Method, Object, Seldom, Signature};
 use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 use crate::vm::utils::position_to_location;
@@ -161,40 +161,45 @@ impl VirtualMachine {
             }
         }
 
-        let mut method = Method::new(method_name.to_string(), regular_params, block.body.to_vec());
-        method.variadic_param = variadic_param;
-        method.block_parameter = block_parameter;
-        method.keyword_rest_parameter = keyword_rest_parameter;
-        method.keyword_parameters = keyword_parameters;
         // Optional block params (`|a, b = 1|`) become the method's default
         // parameters, keyed by positional index.
-        for (original_index, expression) in block.parameter_defaults.iter() {
-            let positional_index = block.parameters[..*original_index]
-                .iter()
-                .filter(|p| !p.starts_with('&'))
-                .count();
-            method
-                .default_parameters
-                .push((positional_index, expression.clone()));
-        }
+        let default_parameters = block
+            .parameter_defaults
+            .iter()
+            .map(|(original_index, expression)| {
+                let positional_index = block.parameters[..*original_index]
+                    .iter()
+                    .filter(|p| !p.starts_with('&'))
+                    .count();
+                (positional_index, expression.clone())
+            })
+            .collect();
+        let mut method = Method::new(method_name.to_string(), regular_params, block.body.to_vec());
+        method.signature = Seldom::holding(Signature {
+            default_parameters,
+            keyword_parameters,
+            keyword_rest_parameter,
+            block_parameter,
+            variadic_param,
+        });
         method.lambda_body = true;
         // A block written at the top level records no scope, and is named
         // for `<main>`.
         let scope = block.written_in.as_deref().unwrap_or("<main>");
         let label = crate::vm::native_functions::backtrace_label(scope);
-        method.block_label = Some(
+        method.provenance.block_label = Some(
             match block.written_depth.unwrap_or(1) {
                 0 | 1 => format!("block in {label}"),
                 counted => format!("block ({counted} levels) in {label}"),
             }
             .into(),
         );
-        method.captured_def_scope = block.captured_def_scope.clone();
-        method.captured_constant_home = block.captured_constant_home.clone();
+        method.provenance.captured_def_scope = block.captured_def_scope.clone();
+        method.provenance.captured_constant_home = block.captured_constant_home.clone();
         // A constant in the body is looked up through the modules the block
         // was written in, as it is while the block runs as a block.
         method.captured_nesting = block.captured_nesting.clone();
-        method.captured_vars = Some(Box::new(if block.captured_vars.is_empty() {
+        method.provenance.captured_vars = Some(Box::new(if block.captured_vars.is_empty() {
             self.environment().current_scope_var_refs()
         } else {
             (*block.captured_vars).clone()
@@ -213,7 +218,7 @@ impl VirtualMachine {
     ) -> Result<Method, MetorexError> {
         // A Proc built by `Method#to_proc` carries its own receiver, so there
         // is nothing to rebind and nothing to validate.
-        if source.bound_self.is_none()
+        if source.provenance.bound_self.is_none()
             && let Some(owner) = &source.owner_class
         {
             if owner.is_singleton_class() {
@@ -246,8 +251,9 @@ impl VirtualMachine {
         // The copy remembers the name it was cut from: a body-less stub needs
         // it to reach the native method, and two names for one definition are
         // equal because of it.
-        method.original_name = Some(
+        method.provenance.original_name = Some(
             method
+                .provenance
                 .original_name
                 .clone()
                 .unwrap_or_else(|| method.name.clone()),

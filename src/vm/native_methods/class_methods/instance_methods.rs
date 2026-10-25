@@ -102,9 +102,9 @@ impl VirtualMachine {
                         vec![],
                         "Class".to_string(),
                     );
-                    stub.variadic_param = Some((0, "args".to_string()));
-                    stub.native_alias = Some(name_str.clone());
-                    stub.original_name = Some(name_str.clone());
+                    stub.signature.variadic_param = Some((0, "args".to_string()));
+                    stub.provenance.native_alias = Some(name_str.clone());
+                    stub.provenance.original_name = Some(name_str.clone());
                     stub.owner_class = Some(Rc::clone(class_rc));
                     return Ok(Answered(Object::Method(Rc::new(stub))));
                 }
@@ -135,11 +135,11 @@ impl VirtualMachine {
                             vec![],
                             owner.to_string(),
                         );
-                        stub.variadic_param = Some((0, "args".to_string()));
+                        stub.signature.variadic_param = Some((0, "args".to_string()));
                         if name_str == "warn" {
                             stub.parameters = vec!["msgs".to_string()];
-                            stub.variadic_param = Some((0, "msgs".to_string()));
-                            stub.keyword_parameters = ["uplevel", "category"]
+                            stub.signature.variadic_param = Some((0, "msgs".to_string()));
+                            stub.signature.keyword_parameters = ["uplevel", "category"]
                                 .map(|keyword| {
                                     (
                                         keyword.to_string(),
@@ -148,8 +148,8 @@ impl VirtualMachine {
                                 })
                                 .to_vec();
                         }
-                        stub.native_alias = Some(name_str.clone());
-                        stub.original_name = Some(name_str.clone());
+                        stub.provenance.native_alias = Some(name_str.clone());
+                        stub.provenance.original_name = Some(name_str.clone());
                         stub.owner_class = Some(owner_rc.clone());
                         stub.origin_class = Some(Rc::clone(class_rc));
                         return Ok(Answered(Object::Method(Rc::new(stub))));
@@ -168,13 +168,13 @@ impl VirtualMachine {
                         vec![],
                         "Kernel".to_string(),
                     );
-                    stub.variadic_param = Some((0, "args".to_string()));
+                    stub.signature.variadic_param = Some((0, "args".to_string()));
                     // `warn` names its keywords, which is how a library tells
                     // whether it takes `category:`.
                     if name_str == "warn" {
                         stub.parameters = vec!["msgs".to_string()];
-                        stub.variadic_param = Some((0, "msgs".to_string()));
-                        stub.keyword_parameters = ["uplevel", "category"]
+                        stub.signature.variadic_param = Some((0, "msgs".to_string()));
+                        stub.signature.keyword_parameters = ["uplevel", "category"]
                             .map(|keyword| {
                                 (
                                     keyword.to_string(),
@@ -198,9 +198,9 @@ impl VirtualMachine {
                         vec![],
                         "BasicObject".to_string(),
                     );
-                    stub.variadic_param = Some((0, "args".to_string()));
-                    stub.native_alias = Some(name_str.clone());
-                    stub.original_name = Some(name_str.clone());
+                    stub.signature.variadic_param = Some((0, "args".to_string()));
+                    stub.provenance.native_alias = Some(name_str.clone());
+                    stub.provenance.original_name = Some(name_str.clone());
                     stub.owner_class = Some(Rc::clone(class_rc));
                     return Ok(Answered(Object::Method(Rc::new(stub))));
                 }
@@ -240,7 +240,7 @@ impl VirtualMachine {
                         vec![],
                         owner,
                     );
-                    stub.variadic_param = Some((0, "args".to_string()));
+                    stub.signature.variadic_param = Some((0, "args".to_string()));
                     // Two names for one native method stand for that one
                     // method, which is what makes them equal and alike.
                     let named = crate::vm::native_methods::object_methods::native_alias_target(
@@ -249,8 +249,8 @@ impl VirtualMachine {
                     )
                     .unwrap_or(name_str.as_str())
                     .to_string();
-                    stub.native_alias = Some(named.clone());
-                    stub.original_name = Some(named);
+                    stub.provenance.native_alias = Some(named.clone());
+                    stub.provenance.original_name = Some(named);
                     stub.origin_class = Some(Rc::clone(class_rc));
                     return Ok(Answered(Object::Method(Rc::new(stub))));
                 }
@@ -266,7 +266,7 @@ impl VirtualMachine {
                         vec![],
                         class_rc.name().to_string(),
                     );
-                    stub.variadic_param = Some((0, "args".to_string()));
+                    stub.signature.variadic_param = Some((0, "args".to_string()));
                     return Ok(Answered(Object::Method(Rc::new(stub))));
                 }
                 // A singleton class holds the class methods Ruby's core
@@ -289,9 +289,9 @@ impl VirtualMachine {
                         vec![],
                         owner.name().to_string(),
                     );
-                    stub.variadic_param = Some((0, "args".to_string()));
-                    stub.native_alias = Some(name_str.clone());
-                    stub.original_name = Some(name_str.clone());
+                    stub.signature.variadic_param = Some((0, "args".to_string()));
+                    stub.provenance.native_alias = Some(name_str.clone());
+                    stub.provenance.original_name = Some(name_str.clone());
                     stub.owner_class = Some(owner);
                     stub.origin_class = Some(Rc::clone(class_rc));
                     return Ok(Answered(Object::Method(Rc::new(stub))));

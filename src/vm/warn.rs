@@ -339,9 +339,9 @@ fn warning_warn_takes_keywords(warning: &Object) -> bool {
         return true;
     };
     let only_the_message = method.parameters.len() == 1
-        && method.variadic_param.is_none()
-        && method.keyword_parameters.is_empty()
-        && method.keyword_rest_parameter.is_none();
+        && method.signature.variadic_param.is_none()
+        && method.signature.keyword_parameters.is_empty()
+        && method.signature.keyword_rest_parameter.is_none();
     !only_the_message
 }
 
@@ -536,8 +536,8 @@ impl VirtualMachine {
 /// Whether a method takes the block it is called with: by a block parameter,
 /// `yield`, or `super`, or as a block `define_method` made it from.
 fn uses_its_block(method: &crate::object::Method) -> bool {
-    method.block_parameter.is_some()
-        || method.captured_vars.is_some()
+    method.signature.block_parameter.is_some()
+        || method.provenance.captured_vars.is_some()
         || body_takes_a_block(&method.body)
 }
 

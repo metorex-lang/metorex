@@ -69,7 +69,7 @@ pub extern "C-unwind" fn rb_define_method(
     let mut method = Method::new(name.clone(), Vec::new(), Vec::new());
     method.owner = Some(class.name().to_string());
     method.owner_class = Some(Rc::clone(&class));
-    method.c_function = Some(CFunction {
+    method.provenance.c_function = Some(CFunction {
         address: function as usize,
         arity,
         data: 0,

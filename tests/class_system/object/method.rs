@@ -1,6 +1,6 @@
 // Method Tests - Method structure, Callable trait, and BlockStatement
 
-use metorex::object::{BlockStatement, Method, Object};
+use metorex::object::{BlockStatement, Method, Object, Seldom, Signature};
 use std::rc::Rc;
 
 #[test]
@@ -162,4 +162,40 @@ fn test_method_with_owner_and_location() {
     assert_eq!(method.name, "bar");
     assert_eq!(method.owner, Some("OtherClass".to_string()));
     assert!(method.source_location.is_some());
+}
+
+/// macOS malloc serves a block of 257 to 320 bytes from its 320-byte size
+/// class, and the next one up is 384.
+#[test]
+fn a_method_definition_with_its_reference_counts_fits_in_320_bytes() {
+    let counts = 2 * std::mem::size_of::<usize>();
+    assert!(std::mem::size_of::<Method>() + counts <= 320);
+}
+
+#[test]
+fn a_new_method_holds_no_signature_or_provenance_box() {
+    let method = Method::new("total".to_string(), vec!["amount".to_string()], vec![]);
+    assert!(!method.signature.holds_any() && !method.provenance.holds_any());
+}
+
+#[test]
+fn a_signature_holding_only_unset_fields_holds_no_box() {
+    let signature = Seldom::holding(Signature::default());
+    assert!(!signature.holds_any());
+}
+
+#[test]
+fn a_signature_holding_a_block_parameter_holds_a_box() {
+    let signature = Seldom::holding(Signature {
+        block_parameter: Some("block".to_string()),
+        ..Signature::default()
+    });
+    assert_eq!(signature.block_parameter.as_deref(), Some("block"));
+}
+
+#[test]
+fn writing_a_provenance_field_boxes_the_group() {
+    let mut method = Method::new("total".to_string(), vec![], vec![]);
+    method.provenance.original_name = Some("sum".to_string());
+    assert!(method.provenance.holds_any());
 }

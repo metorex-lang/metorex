@@ -48,7 +48,7 @@ entries = files.map do |path|
   destination = File.join(stdlib, path)
   FileUtils.mkdir_p(File.dirname(destination))
   File.write(destination, text)
-  %(    ("#{path.delete_suffix(".rb")}", include_str!("#{path}")),\n)
+  %(    ("#{path.delete_suffix(".rb")}", carried_source!("#{path}")),\n)
 end
 
 File.write(File.join(stdlib, "rubygems_libraries.rs"), <<~RUST)

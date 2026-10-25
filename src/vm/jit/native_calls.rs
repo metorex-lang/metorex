@@ -154,18 +154,20 @@ impl VirtualMachine {
         Rc::ptr_eq(owner, class)
             && method.body.is_empty()
             && !method.is_undefined
-            && method.c_function.is_none()
-            && method.captured_vars.is_none()
-            && method.bound_self.is_none()
+            && method.provenance.c_function.is_none()
+            && method.provenance.captured_vars.is_none()
+            && method.provenance.bound_self.is_none()
             && method
                 .source_location
                 .as_ref()
                 .is_none_or(|written| written.filename.is_none())
             && method
+                .provenance
                 .native_alias
                 .as_deref()
                 .is_none_or(|target| target == name)
             && method
+                .provenance
                 .original_name
                 .as_deref()
                 .is_none_or(|original| original == name)

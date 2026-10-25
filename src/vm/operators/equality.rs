@@ -140,7 +140,7 @@ impl VirtualMachine {
             // the same pair, and then it is not asked again.
             let pair = (Rc::as_ptr(inst_rc) as usize, identity_of(&right));
             let is_stub = |method: &crate::object::Method| {
-                method.body.is_empty() && method.captured_vars.is_none()
+                method.body.is_empty() && method.provenance.captured_vars.is_none()
             };
             if let Some((class, method)) = self.lookup_method(&left, "==")
                 && !method.is_undefined

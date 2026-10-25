@@ -51,6 +51,7 @@ pub enum Statement {
     FunctionDef {
         name: String,
         parameters: Vec<Parameter>,
+        #[serde(serialize_with = "super::body::serialize_called")]
         body: Body,
         position: Position,
         /// For `def (expr).method_name`, the singleton receiver class name
@@ -64,6 +65,7 @@ pub enum Statement {
     MethodDef {
         name: String,
         parameters: Vec<Parameter>,
+        #[serde(serialize_with = "super::body::serialize_called")]
         body: Body,
         is_class_method: bool,
         position: Position,

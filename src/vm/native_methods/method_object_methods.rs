@@ -163,6 +163,7 @@ impl VirtualMachine {
                 }
                 "original_name" => {
                     let original = method_obj
+                        .provenance
                         .original_name
                         .clone()
                         .unwrap_or_else(|| method_obj.name.clone());
@@ -183,7 +184,7 @@ impl VirtualMachine {
                 "inspect" | "to_s" => {
                     // A Method handed over as a callable describes itself the
                     // way a callable does, in bytes rather than in text.
-                    if method_obj.bound_self.is_some() {
+                    if method_obj.provenance.bound_self.is_some() {
                         let where_written = self.method_source_label(method_obj);
                         return Ok(Some(Object::String(Rc::new(
                             crate::object::StringValue::with_encoding(
@@ -219,7 +220,7 @@ impl VirtualMachine {
                     let shape = method_parameter_shape(method_obj);
                     let where_written = self.method_source_label(method_obj);
                     // An alias names the method it copies after its own name.
-                    let named = match &method_obj.original_name {
+                    let named = match &method_obj.provenance.original_name {
                         Some(original) if *original != method_obj.name => {
                             format!("{}({original})", method_obj.name)
                         }
@@ -382,6 +383,7 @@ impl VirtualMachine {
                     let held = crate::object::Binding::with_receiver(
                         std::collections::HashMap::new(),
                         method_obj
+                            .provenance
                             .bound_self
                             .as_deref()
                             .or(method_obj.receiver.as_deref())
@@ -392,7 +394,7 @@ impl VirtualMachine {
                 }
                 "to_proc" => {
                     let mut as_proc = (**method_obj).clone();
-                    as_proc.bound_self = method_obj.receiver.clone();
+                    as_proc.provenance.bound_self = method_obj.receiver.clone();
                     as_proc.reads_as_proc = true;
                     return Ok(Some(Object::Method(Rc::new(as_proc))));
                 }
@@ -688,11 +690,12 @@ fn native_arity(method_obj: &crate::object::Method) -> Option<i8> {
     use super::native_arities::{INSTANCE_ARITIES, SINGLETON_ARITIES};
     if method_obj.source_location.is_some()
         || !method_obj.body.is_empty()
-        || method_obj.c_function.is_some()
+        || method_obj.provenance.c_function.is_some()
     {
         return None;
     }
     let written = method_obj
+        .provenance
         .original_name
         .as_deref()
         .unwrap_or(&method_obj.name);
@@ -739,12 +742,17 @@ pub(crate) fn method_parameter_list(method_obj: &crate::object::Method) -> Objec
     if let Some(arity) = native_arity(method_obj) {
         return native_parameter_list(arity);
     }
-    let splat_index = method_obj.variadic_param.as_ref().map(|(index, _)| *index);
+    let splat_index = method_obj
+        .signature
+        .variadic_param
+        .as_ref()
+        .map(|(index, _)| *index);
     let mut listed = Vec::new();
     for (index, name) in method_obj.parameters.iter().enumerate() {
         let kind = if Some(index) == splat_index {
             "rest"
         } else if method_obj
+            .signature
             .default_parameters
             .iter()
             .any(|(defaulted, _)| *defaulted == index)
@@ -755,11 +763,11 @@ pub(crate) fn method_parameter_list(method_obj: &crate::object::Method) -> Objec
         };
         listed.push(parameter_pair(kind, name));
     }
-    for (name, default) in &method_obj.keyword_parameters {
+    for (name, default) in &method_obj.signature.keyword_parameters {
         let kind = if default.is_some() { "key" } else { "keyreq" };
         listed.push(parameter_pair(kind, name));
     }
-    if let Some(name) = &method_obj.keyword_rest_parameter {
+    if let Some(name) = &method_obj.signature.keyword_rest_parameter {
         // `**nil` is a declaration that no keyword is taken rather than a
         // parameter of its own, and Ruby reports it as one kind with no name.
         if name == crate::object::NO_KEYWORDS_PARAM {
@@ -768,7 +776,7 @@ pub(crate) fn method_parameter_list(method_obj: &crate::object::Method) -> Objec
             listed.push(parameter_pair("keyrest", name));
         }
     }
-    if let Some(name) = &method_obj.block_parameter {
+    if let Some(name) = &method_obj.signature.block_parameter {
         listed.push(parameter_pair("block", name));
     }
     Object::array(listed)
@@ -782,10 +790,14 @@ fn method_arity(method_obj: &crate::object::Method) -> i64 {
     }
     // A method a C extension defined takes the count it was defined with,
     // and either variadic form takes any number.
-    if let Some(function) = method_obj.c_function {
+    if let Some(function) = method_obj.provenance.c_function {
         return i64::from(function.arity.max(-1));
     }
-    let splat_index = method_obj.variadic_param.as_ref().map(|(index, _)| *index);
+    let splat_index = method_obj
+        .signature
+        .variadic_param
+        .as_ref()
+        .map(|(index, _)| *index);
     let mut required = 0i64;
     let mut optional_positional = false;
     for index in 0..method_obj.parameters.len() {
@@ -793,6 +805,7 @@ fn method_arity(method_obj: &crate::object::Method) -> i64 {
             continue;
         }
         if method_obj
+            .signature
             .default_parameters
             .iter()
             .any(|(defaulted, _)| *defaulted == index)
@@ -803,6 +816,7 @@ fn method_arity(method_obj: &crate::object::Method) -> i64 {
         }
     }
     let required_keyword = method_obj
+        .signature
         .keyword_parameters
         .iter()
         .any(|(_, default)| default.is_none());
@@ -810,10 +824,11 @@ fn method_arity(method_obj: &crate::object::Method) -> i64 {
         required += 1;
     }
     let optional_keyword = method_obj
+        .signature
         .keyword_parameters
         .iter()
         .any(|(_, default)| default.is_some())
-        || method_obj.keyword_rest_parameter.is_some();
+        || method_obj.signature.keyword_rest_parameter.is_some();
     let open_ended =
         optional_positional || splat_index.is_some() || (!required_keyword && optional_keyword);
     if open_ended {
@@ -1003,7 +1018,11 @@ pub(crate) fn block_arity(block_obj: &crate::object::BlockStatement) -> i64 {
 /// How a method's parameters are written inside its rendering, which shows
 /// each one's shape rather than any default it carries.
 fn method_parameter_shape(method_obj: &crate::object::Method) -> String {
-    let splat_index = method_obj.variadic_param.as_ref().map(|(index, _)| *index);
+    let splat_index = method_obj
+        .signature
+        .variadic_param
+        .as_ref()
+        .map(|(index, _)| *index);
     let mut parts = Vec::new();
     for (index, name) in method_obj.parameters.iter().enumerate() {
         let shown = if name == ANONYMOUS_SPLAT {
@@ -1014,6 +1033,7 @@ fn method_parameter_shape(method_obj: &crate::object::Method) -> String {
         if Some(index) == splat_index {
             parts.push(format!("*{}", shown));
         } else if method_obj
+            .signature
             .default_parameters
             .iter()
             .any(|(defaulted, _)| *defaulted == index)
@@ -1023,14 +1043,14 @@ fn method_parameter_shape(method_obj: &crate::object::Method) -> String {
             parts.push(shown.to_string());
         }
     }
-    for (name, default) in &method_obj.keyword_parameters {
+    for (name, default) in &method_obj.signature.keyword_parameters {
         if default.is_some() {
             parts.push(format!("{}: ...", name));
         } else {
             parts.push(format!("{}:", name));
         }
     }
-    if let Some(name) = &method_obj.keyword_rest_parameter {
+    if let Some(name) = &method_obj.signature.keyword_rest_parameter {
         let shown = if name == ANONYMOUS_KWREST {
             ""
         } else {
@@ -1038,7 +1058,7 @@ fn method_parameter_shape(method_obj: &crate::object::Method) -> String {
         };
         parts.push(format!("**{}", shown));
     }
-    if let Some(name) = &method_obj.block_parameter {
+    if let Some(name) = &method_obj.signature.block_parameter {
         let shown = if name == ANONYMOUS_BLOCK {
             ""
         } else {
@@ -1111,6 +1131,7 @@ impl VirtualMachine {
         // An alias carries the body of whatever the name it was cut from
         // resolved to, so the walk passes that definition as well.
         let lookup = method_obj
+            .provenance
             .original_name
             .clone()
             .unwrap_or_else(|| method_obj.name.clone());

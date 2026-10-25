@@ -29,8 +29,8 @@ pub(crate) fn register_builtin_classes(globals: &mut GlobalRegistry, builtins: &
     // the call straight back to the native one.
     let mut stub =
         crate::object::Method::new("initialize".to_string(), vec!["args".to_string()], vec![]);
-    stub.variadic_param = Some((0, "args".to_string()));
-    stub.native_alias = Some("initialize".to_string());
+    stub.signature.variadic_param = Some((0, "args".to_string()));
+    stub.provenance.native_alias = Some("initialize".to_string());
     builtins
         .array_class
         .define_method("initialize", Rc::new(stub));
@@ -131,8 +131,8 @@ pub(crate) fn register_singletons(globals: &mut GlobalRegistry) {
     for name in ["include", "prepend"] {
         let held = crate::parser::ANONYMOUS_SPLAT.to_string();
         let mut stub = crate::object::Method::new(name.to_string(), vec![held.clone()], vec![]);
-        stub.variadic_param = Some((0, held));
-        stub.native_alias = Some(name.to_string());
+        stub.signature.variadic_param = Some((0, held));
+        stub.provenance.native_alias = Some(name.to_string());
         module_class.define_method(name, Rc::new(stub));
     }
     let class_class = Class::new("Class", Some(Rc::clone(&module_class)));

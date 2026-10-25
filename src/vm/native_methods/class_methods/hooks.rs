@@ -86,10 +86,10 @@ impl VirtualMachine {
                     vec![],
                     module_rc.name().to_string(),
                 );
-                stub.variadic_param = Some((0, "args".to_string()));
+                stub.signature.variadic_param = Some((0, "args".to_string()));
                 // The name it stands for is what the refined class answers
                 // to, which is what the call reaches through.
-                stub.original_name = Some(name.to_string());
+                stub.provenance.original_name = Some(name.to_string());
                 Rc::new(stub)
             }
             // Kernel's own methods are native rather than table entries; a
@@ -101,7 +101,7 @@ impl VirtualMachine {
                     vec![],
                     "Kernel".to_string(),
                 );
-                stub.variadic_param = Some((0, "args".to_string()));
+                stub.signature.variadic_param = Some((0, "args".to_string()));
                 Rc::new(stub)
             }
             None => {

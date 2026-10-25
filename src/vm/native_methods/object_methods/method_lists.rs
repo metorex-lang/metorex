@@ -712,9 +712,9 @@ pub(crate) fn written_by_program(method: &crate::object::Method) -> bool {
         Some(statement) => !statement.position().prelude,
         None => {
             method.source_location.is_some()
-                || method.c_function.is_some()
-                || method.native_alias.is_some()
-                || method.original_name.is_some()
+                || method.provenance.c_function.is_some()
+                || method.provenance.native_alias.is_some()
+                || method.provenance.original_name.is_some()
         }
     }
 }

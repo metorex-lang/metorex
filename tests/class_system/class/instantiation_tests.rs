@@ -653,3 +653,11 @@ fn test_error_when_calling_class_with_wrong_argument_count() {
     let err_msg = result.unwrap_err().to_string();
     assert!(err_msg.contains("wrong number of arguments (given 1, expected 0)"));
 }
+
+/// macOS malloc serves a block of 769 to 896 bytes from its 896-byte size
+/// class, and the next one up is 1024.
+#[test]
+fn a_class_with_its_reference_counts_fits_in_896_bytes() {
+    let counts = 2 * std::mem::size_of::<usize>();
+    assert!(std::mem::size_of::<metorex::class::Class>() + counts <= 896);
+}

@@ -14,34 +14,6 @@ impl VirtualMachine {
         singleton_class: Option<&str>,
         end_line: usize,
     ) -> Result<ControlFlow, MetorexError> {
-        // Extract positional parameter names (exclude named keyword and block params)
-        let param_names: Vec<String> = parameters
-            .iter()
-            .filter(|p| !p.is_named_keyword && !p.is_keyword && !p.is_block)
-            .map(|p| p.name.clone())
-            .collect();
-
-        // Extract named keyword parameters
-        let keyword_parameters: Vec<(String, Option<crate::ast::Expression>)> = parameters
-            .iter()
-            .filter(|p| p.is_named_keyword)
-            .map(|p| (p.name.clone(), p.default_value.clone()))
-            .collect();
-
-        // Extract block parameter name
-        let block_parameter = parameters
-            .iter()
-            .find(|p| p.is_block)
-            .map(|p| p.name.clone());
-
-        // Extract positional default values
-        let default_parameters: Vec<(usize, crate::ast::Expression)> = parameters
-            .iter()
-            .filter(|p| !p.is_named_keyword && !p.is_keyword && !p.is_block)
-            .enumerate()
-            .filter_map(|(i, p)| p.default_value.clone().map(|dv| (i, dv)))
-            .collect();
-
         // Create source location from position, naming the file the `def` was
         // read from the way that file names itself. Code handed to `eval`
         // with a name of its own reports that name rather than whatever is
@@ -57,32 +29,15 @@ impl VirtualMachine {
                     .map(|file| file.display().to_string())
             });
 
-        // Extract variadic parameter info
-        let variadic_param = parameters
-            .iter()
-            .filter(|p| !p.is_named_keyword && !p.is_keyword && !p.is_block)
-            .enumerate()
-            .find(|(_, p)| p.is_variadic)
-            .map(|(i, p)| (i, p.name.clone()));
-
-        // Create a Method object to represent the function
-        let mut function = Method::with_source_location(
+        let mut function = build_method_from_params(
             name.to_string(),
-            param_names,
+            parameters,
             body.to_vec(),
-            source_location,
+            self.snapshot_active_refinements(),
+            self.def_nesting(),
         );
+        function.source_location = Some(source_location);
         function.end_line = Some(end_line);
-        function.default_parameters = default_parameters;
-        function.keyword_parameters = keyword_parameters;
-        function.keyword_rest_parameter = parameters
-            .iter()
-            .find(|p| p.is_keyword)
-            .map(|p| p.name.clone());
-        function.block_parameter = block_parameter;
-        function.variadic_param = variadic_param;
-        function.captured_refinements = self.snapshot_active_refinements();
-        function.captured_nesting = self.def_nesting().into();
         // A method defined outside every class is Object's, and a `def` run
         // while it runs installs on Object too.
         function.definee = self

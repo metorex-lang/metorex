@@ -1,6 +1,7 @@
 // Building a Method from the parameter list it was written with.
 
 use super::*;
+use crate::object::{Seldom, Signature};
 
 /// Build a Method from a parameter list, handling positional, variadic,
 /// keyword, block, and default parameters. Shared by the FunctionDef arms in
@@ -11,7 +12,7 @@ pub(crate) fn build_method_from_params(
     parameters: &[crate::ast::Parameter],
     body: impl Into<crate::ast::Body>,
     refinements: Vec<(Rc<Class>, Vec<String>)>,
-    nesting: Vec<Rc<Class>>,
+    nesting: crate::object::Nesting,
 ) -> Method {
     let param_names: Vec<String> = parameters
         .iter()
@@ -40,15 +41,19 @@ pub(crate) fn build_method_from_params(
         .find(|(_, p)| p.is_variadic)
         .map(|(i, p)| (i, p.name.clone()));
     let mut m = Method::new(name, param_names, body);
-    m.default_parameters = default_parameters;
-    m.keyword_parameters = keyword_parameters;
-    m.keyword_rest_parameter = parameters
-        .iter()
-        .find(|p| p.is_keyword)
-        .map(|p| p.name.clone());
-    m.block_parameter = block_parameter;
-    m.variadic_param = variadic_param;
-    m.captured_refinements = refinements;
-    m.captured_nesting = nesting.into();
+    m.signature = Seldom::holding(Signature {
+        default_parameters,
+        keyword_parameters,
+        keyword_rest_parameter: parameters
+            .iter()
+            .find(|p| p.is_keyword)
+            .map(|p| p.name.clone()),
+        block_parameter,
+        variadic_param,
+    });
+    if !refinements.is_empty() {
+        m.provenance.captured_refinements = refinements;
+    }
+    m.captured_nesting = nesting;
     m
 }

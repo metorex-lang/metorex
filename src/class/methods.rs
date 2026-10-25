@@ -409,14 +409,16 @@ impl Class {
     pub fn alias_method(self: &Rc<Class>, new_name: &str, old_name: &str) -> bool {
         if let Some(method) = self.find_method(old_name) {
             let mut aliased = (*method).clone();
-            aliased.original_name = Some(
+            aliased.provenance.original_name = Some(
                 method
+                    .provenance
                     .original_name
                     .clone()
                     .unwrap_or_else(|| method.name.clone()),
             );
             aliased.name = new_name.to_string();
-            aliased.alias_origin = method
+            aliased.provenance.alias_origin = method
+                .provenance
                 .alias_origin
                 .clone()
                 .or_else(|| method.owner_class.clone());

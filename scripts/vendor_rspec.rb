@@ -101,7 +101,7 @@ LIBRARIES.each do |library, (lib, patterns, skipped)|
     FileUtils.mkdir_p(File.dirname(destination))
     File.write(destination, text)
     feature = path.delete_suffix(".rb")
-    entries << %(    ("#{ENTRY_FILES.fetch(feature, feature)}", include_str!("rspec_vendor/#{library}/#{path}")),\n)
+    entries << %(    ("#{ENTRY_FILES.fetch(feature, feature)}", carried_source!("rspec_vendor/#{library}/#{path}")),\n)
   end
   FileUtils.cp(LICENSES.fetch(library), File.join(vendor, library))
 end

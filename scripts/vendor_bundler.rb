@@ -24,7 +24,7 @@ entries = files.map do |path|
   destination = File.join(stdlib, path)
   FileUtils.mkdir_p(File.dirname(destination))
   File.write(destination, text)
-  %(    ("#{path.delete_suffix(".rb")}", include_str!("#{path}")),\n)
+  %(    ("#{path.delete_suffix(".rb")}", carried_source!("#{path}")),\n)
 end
 
 # Bundler names its own executable for the processes it starts. The one
@@ -39,7 +39,7 @@ File.write(helpers, text.sub(looked_up, %(exe_file = "<metorex>/bundler/metorex/
 executable = File.join(stdlib, "bundler", "metorex", "bundle.rb")
 FileUtils.mkdir_p(File.dirname(executable))
 File.write(executable, File.read(release.path("libexec", "bundle")))
-entries << %(    ("bundler/metorex/bundle", include_str!("bundler/metorex/bundle.rb")),\n)
+entries << %(    ("bundler/metorex/bundle", carried_source!("bundler/metorex/bundle.rb")),\n)
 
 File.write(File.join(stdlib, "bundler_libraries.rs"), <<~RUST)
   // Written by scripts/vendor_bundler.rb from Bundler #{version} as Ruby #{release.version} ships it.

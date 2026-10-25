@@ -29,8 +29,8 @@ fn enumeratorize(
     ));
     if !size_function.is_null() {
         let mut sizing = Method::new("size".to_string(), Vec::new(), Vec::new());
-        sizing.bound_self = Some(Box::new(enumerator.clone()));
-        sizing.c_function = Some(CFunction {
+        sizing.provenance.bound_self = Some(Box::new(enumerator.clone()));
+        sizing.provenance.c_function = Some(CFunction {
             address: size_function as usize,
             arity: ENUMERATOR_SIZE_ARITY,
             data: 0,

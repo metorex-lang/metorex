@@ -451,7 +451,7 @@ pub fn init_object_methods(object_class: &Class) {
         vec!["arguments".to_string()],
         vec![],
     );
-    respond_to_method.variadic_param = Some((0, "arguments".to_string()));
+    respond_to_method.signature.variadic_param = Some((0, "arguments".to_string()));
     object_class.define_method("respond_to?", Rc::new(respond_to_method));
 
     // Object#instance_of? - check exact class match
@@ -489,7 +489,7 @@ pub fn init_string_methods(string_class: &Class) {
             vec![crate::object::UNNAMED_PARAMETER.to_string()],
             vec![],
         );
-        stub.variadic_param = Some((0, crate::object::UNNAMED_PARAMETER.to_string()));
+        stub.signature.variadic_param = Some((0, crate::object::UNNAMED_PARAMETER.to_string()));
         string_class.define_method(*name, Rc::new(stub));
     }
 
@@ -539,7 +539,7 @@ pub fn init_string_methods(string_class: &Class) {
     // counts rather than adding.
     for name in ["succ", "next"] {
         let mut stub = Method::new(name.to_string(), vec![], vec![]);
-        stub.native_alias = Some(name.to_string());
+        stub.provenance.native_alias = Some(name.to_string());
         string_class.define_method(name, Rc::new(stub));
     }
 }
@@ -549,7 +549,7 @@ pub fn init_string_methods(string_class: &Class) {
 pub fn init_symbol_methods(symbol_class: &Class) {
     for name in ["succ", "next"] {
         let mut stub = Method::new(name.to_string(), vec![], vec![]);
-        stub.native_alias = Some(name.to_string());
+        stub.provenance.native_alias = Some(name.to_string());
         symbol_class.define_method(name, Rc::new(stub));
     }
 }
@@ -631,7 +631,7 @@ pub fn init_integer_methods(integer_class: &Class) {
             vec![crate::object::UNNAMED_PARAMETER.to_string()],
             vec![],
         );
-        stub.native_alias = Some(name.to_string());
+        stub.provenance.native_alias = Some(name.to_string());
         integer_class.define_method(name, Rc::new(stub));
     }
 }
@@ -656,7 +656,7 @@ pub fn init_array_methods(array_class: &Class) {
         vec![crate::object::UNNAMED_PARAMETER.to_string()],
         vec![],
     );
-    pop_stub.variadic_param = Some((0, crate::object::UNNAMED_PARAMETER.to_string()));
+    pop_stub.signature.variadic_param = Some((0, crate::object::UNNAMED_PARAMETER.to_string()));
     array_class.define_method("pop", Rc::new(pop_stub));
 
     // Array#append (alias for push)

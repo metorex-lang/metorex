@@ -245,7 +245,7 @@ pub(crate) fn same_core_method(left: &super::Method, right: &super::Method) -> b
 /// as `Class#` or `Class.`. None for a method written outside the core and
 /// the standard libraries.
 fn core_definition(method: &super::Method) -> Option<(String, Vec<String>)> {
-    if method.c_function.is_some() {
+    if method.provenance.c_function.is_some() {
         return None;
     }
     let written_in_core = method.source_location.as_ref().is_none_or(|location| {
@@ -258,6 +258,7 @@ fn core_definition(method: &super::Method) -> Option<(String, Vec<String>)> {
         return None;
     }
     let name = method
+        .provenance
         .original_name
         .clone()
         .unwrap_or_else(|| method.name.clone());

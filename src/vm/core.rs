@@ -599,6 +599,9 @@ pub struct VirtualMachine {
     /// The lexical nesting captured by each method currently on the call
     /// stack, so `Module.nesting` inside a body reports the definition site.
     pub(crate) method_nesting_stack: Vec<crate::object::Nesting>,
+    /// The nesting the last `def` captured, which the next one shares when
+    /// it is written among the same modules.
+    pub(crate) last_def_nesting: std::cell::RefCell<crate::object::Nesting>,
     /// The depths of `method_nesting_stack` whose entry belongs to a block
     /// written at the top level, where an empty nesting means no module is
     /// open rather than that none was recorded.
@@ -832,6 +835,7 @@ impl VirtualMachine {
             embedded_sources_run: std::collections::HashSet::new(),
             method_owner_stack: Vec::new(),
             method_nesting_stack: Vec::new(),
+            last_def_nesting: std::cell::RefCell::new(crate::object::no_nesting()),
             top_level_block_depths: Vec::new(),
             catch_tags: Vec::new(),
             autoload_reload_depth: 0,
@@ -1104,20 +1108,31 @@ impl VirtualMachine {
     /// The modules a `def` written here reads constants through. In a block
     /// run as a class body, as `class_exec` runs one, those are the ones the
     /// block was written in, without the class it runs on.
-    pub(crate) fn def_nesting(&self) -> Vec<Rc<crate::class::Class>> {
-        if self.applying_constant_home().is_none() {
-            return self.snapshot_lexical_nesting();
-        }
-        match self.method_nesting_stack.last() {
-            Some(written_in) => written_in.to_vec(),
-            None => self
-                .def_scope_stack
+    pub(crate) fn def_nesting(&self) -> crate::object::Nesting {
+        let nesting = if self.applying_constant_home().is_none() {
+            self.snapshot_lexical_nesting()
+        } else {
+            match self.method_nesting_stack.last() {
+                Some(written_in) => return Rc::clone(written_in),
+                None => self
+                    .def_scope_stack
+                    .iter()
+                    .rev()
+                    .skip(1)
+                    .map(Rc::clone)
+                    .collect(),
+            }
+        };
+        let mut last = self.last_def_nesting.borrow_mut();
+        let same = last.len() == nesting.len()
+            && last
                 .iter()
-                .rev()
-                .skip(1)
-                .map(Rc::clone)
-                .collect(),
+                .zip(&nesting)
+                .all(|(held, open)| Rc::ptr_eq(held, open));
+        if !same {
+            *last = nesting.into();
         }
+        Rc::clone(&last)
     }
 
     pub(crate) fn snapshot_active_refinements(

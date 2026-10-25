@@ -490,7 +490,9 @@ impl VirtualMachine {
             && self.class_method_of(module_rc, method_name).is_none()
             && self
                 .lookup_method(&Object::Module(Rc::clone(module_rc)), method_name)
-                .is_none_or(|(_, found)| found.body.is_empty() && found.captured_vars.is_none())
+                .is_none_or(|(_, found)| {
+                    found.body.is_empty() && found.provenance.captured_vars.is_none()
+                })
         {
             return Ok(Some(Object::Nil));
         }
@@ -827,7 +829,7 @@ impl VirtualMachine {
                 let mut copied = (*method).clone();
                 copied.owner = Some(refinement.name().to_string());
                 copied.owner_class = Some(Rc::clone(refinement));
-                copied.captured_refinements = refinements.clone();
+                copied.provenance.captured_refinements = refinements.clone();
                 refinement.define_method(name.clone(), Rc::new(copied));
                 if module.is_method_private(&name) {
                     refinement.set_method_private(name);

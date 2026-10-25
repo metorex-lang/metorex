@@ -32,8 +32,8 @@ pub(super) fn block_function(function: *const (), data: Value) -> CFunction {
 /// A Method that runs the block function `function`.
 pub(super) fn method_for_block_function(function: CFunction) -> Object {
     let mut method = Method::new("call".to_string(), vec!["values".to_string()], Vec::new());
-    method.variadic_param = Some((0, "values".to_string()));
-    method.c_function = Some(function);
+    method.signature.variadic_param = Some((0, "values".to_string()));
+    method.provenance.c_function = Some(function);
     Object::Method(Rc::new(method))
 }
 

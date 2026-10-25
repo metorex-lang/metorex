@@ -51,7 +51,7 @@ end
 
 entries = sources.map do |path|
   feature = path.delete_suffix(".rb")
-  %(    ("#{feature}", include_str!("prism/#{path}")),\n)
+  %(    ("#{feature}", carried_source!("prism/#{path}")),\n)
 end
 File.write(File.join(root, "src", "vm", "stdlib", "prism_libraries.rs"), <<~RUST)
   // Written by scripts/vendor_prism.rb from prism #{version} as Ruby #{release.version} ships it.
