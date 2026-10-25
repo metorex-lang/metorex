@@ -194,11 +194,11 @@ impl VirtualMachine {
         // A constant in the body is looked up through the modules the block
         // was written in, as it is while the block runs as a block.
         method.captured_nesting = block.captured_nesting.clone();
-        method.captured_vars = Some(if block.captured_vars.is_empty() {
+        method.captured_vars = Some(Box::new(if block.captured_vars.is_empty() {
             self.environment().current_scope_var_refs()
         } else {
             (*block.captured_vars).clone()
-        });
+        }));
         method
     }
 

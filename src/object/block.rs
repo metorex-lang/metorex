@@ -54,7 +54,7 @@ pub struct BlockStatement {
     /// `parameters` (e.g. `{ |a, b = 1| }` records `(1, <1>)`).
     pub parameter_defaults: Vec<(usize, crate::ast::Expression)>,
     /// Block body (AST statements), shared by every block a literal makes.
-    pub body: Rc<[Statement]>,
+    pub body: crate::ast::Body,
     /// Captured variables from outer scope (shared mutable references),
     /// shared by every call of the block rather than copied into each.
     pub captured_vars: Rc<indexmap::IndexMap<String, Rc<RefCell<Object>>>>,
@@ -186,7 +186,7 @@ impl BlockStatement {
     pub fn with_def_scope(
         parameters: Vec<String>,
         parameter_defaults: Vec<(usize, crate::ast::Expression)>,
-        body: Rc<[Statement]>,
+        body: crate::ast::Body,
         captured_vars: indexmap::IndexMap<String, Rc<RefCell<Object>>>,
         captured_def_scope: Vec<Rc<Class>>,
         defining_method: Option<(Rc<str>, Rc<str>)>,

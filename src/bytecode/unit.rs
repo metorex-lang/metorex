@@ -153,7 +153,7 @@ pub enum Receiver {
 /// A block literal's body and what it compiles to.
 #[derive(Debug, Clone)]
 pub struct SharedBody {
-    pub body: std::rc::Rc<[crate::ast::Statement]>,
+    pub body: crate::ast::Body,
     pub unit: crate::vm::units::UnitSlot,
     pub kept: std::rc::Rc<crate::vm::block_reuse::KeptBlock>,
     /// The locals of the scope the literal was written in that its body
@@ -592,8 +592,8 @@ impl Unit {
         let (body, outer_locals) = match &literal {
             crate::ast::Expression::Lambda {
                 body, outer_locals, ..
-            } => (std::rc::Rc::clone(body), outer_locals.clone()),
-            _ => (std::rc::Rc::from([]), Vec::new()),
+            } => (body.clone(), outer_locals.clone()),
+            _ => (crate::ast::Body::from([]), Vec::new()),
         };
         self.block_bodies.push(SharedBody {
             body,

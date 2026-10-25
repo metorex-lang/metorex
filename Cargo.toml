@@ -32,6 +32,11 @@ rmp-serde = "1.3"
 # A release build that keeps line tables, so a sampling profiler names the
 # file and line each sample was taken in. `cargo build --profile profiling`
 # puts it in target/profiling.
+# One unit optimized whole, which leaves less code for a start to touch.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+
 [profile.profiling]
 inherits = "release"
 debug = "line-tables-only"
@@ -43,3 +48,5 @@ debug = "line-tables-only"
 inherits = "release"
 opt-level = 1
 incremental = true
+lto = false
+codegen-units = 256

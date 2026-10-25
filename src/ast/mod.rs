@@ -7,6 +7,6 @@ pub mod scope_locals;
 
 pub use node::{
     BinaryOp, Body, ElsifBranch, Expression, HashPatternRest, InterpolationPart, MatchCase,
-    MatchPattern, Parameter, RescueClause, Statement, UnaryOp,
+    MatchPattern, Parameter, RescueClause, Statement, UnaryOp, decode_held, encode_held,
 };
 pub use scope_locals::collect_assigned_locals;

@@ -78,32 +78,46 @@ pub struct StringValue {
     /// back. Ruby refuses a singleton class on one of those, since the same
     /// string stands for every use of that text.
     deduplicated: Cell<bool>,
-    /// The warning a change to this string prints, for one Ruby hands back
-    /// with notice that it will be frozen in a later release. Cleared once
-    /// the warning has been given, so it is printed only the first time.
-    chilled: RefCell<Option<String>>,
-    /// The pointer a `pack` with 'P' or 'p' left on the string it built, which
-    /// names the string those directives wrote the address of. Zero where the
-    /// string carries none, which is every string but a packed one.
-    pointer: Cell<u64>,
-    /// Where the literal that made this string was written, as `file:line`.
-    /// Only `--debug-frozen-string-literal` records it, and everything else
-    /// leaves it empty.
-    created_at: RefCell<Option<String>>,
+    /// What a few strings carry beside their text, made the first time one
+    /// is given any of it.
+    notes: RefCell<Option<Box<Notes>>>,
     /// Whether the bytes are all ASCII, worked out the first time it is
     /// asked and forgotten whenever the bytes change.
     ascii: Cell<Option<bool>>,
+    /// What the text was read as, made the first time a reading is asked
+    /// for and emptied whenever the text changes.
+    readings: RefCell<Option<Box<Readings>>>,
+}
+
+#[derive(Debug, Default, Clone)]
+struct Notes {
+    /// The warning a change to this string prints, for one Ruby hands back
+    /// with notice that it will be frozen in a later release. Cleared once
+    /// the warning has been given, so it is printed only the first time.
+    chilled: Option<String>,
+    /// The pointer a `pack` with 'P' or 'p' left on the string it built, which
+    /// names the string those directives wrote the address of. Zero where the
+    /// string carries none, which is every string but a packed one.
+    pointer: u64,
+    /// Where the literal that made this string was written, as `file:line`.
+    /// Only `--debug-frozen-string-literal` records it, and everything else
+    /// leaves it empty.
+    created_at: Option<String>,
+}
+
+#[derive(Debug, Default)]
+struct Readings {
     /// The text of a string read one character per byte that holds a byte
     /// above 0x7F, built the first time it is asked for and forgotten
     /// whenever the bytes or the way they are read change.
-    spelled: RefCell<Option<String>>,
+    spelled: Option<String>,
     /// Where every `CHARACTERS_PER_MARK`th character starts, built the first
     /// time a character is looked up by position and forgotten whenever the
     /// text changes.
-    character_marks: RefCell<Option<Rc<CharacterMarks>>>,
+    character_marks: Option<Rc<CharacterMarks>>,
     /// The text's Rust characters, which a pattern is matched over, built
     /// the first time a match asks and forgotten whenever the text changes.
-    letters: RefCell<Option<Rc<[char]>>>,
+    letters: Option<Rc<[char]>>,
 }
 
 /// How many characters apart the byte offsets in `CharacterMarks` are.
@@ -164,14 +178,26 @@ impl StringValue {
             holds_bytes: Cell::new(holds_bytes),
             borrowed: Cell::new(false),
             deduplicated: Cell::new(false),
-            chilled: RefCell::new(None),
-            pointer: Cell::new(0),
-            created_at: RefCell::new(None),
+            notes: RefCell::new(None),
             ascii: Cell::new(None),
-            spelled: RefCell::new(None),
-            character_marks: RefCell::new(None),
-            letters: RefCell::new(None),
+            readings: RefCell::new(None),
         }
+    }
+
+    fn note(&self, change: impl FnOnce(&mut Notes)) {
+        change(self.notes.borrow_mut().get_or_insert_with(Box::default));
+    }
+
+    fn noted<T>(&self, read: impl FnOnce(&Notes) -> T) -> Option<T> {
+        self.notes.borrow().as_deref().map(read)
+    }
+
+    fn reading<T: Clone>(&self, read: impl FnOnce(&Readings) -> Option<&T>) -> Option<T> {
+        self.readings.borrow().as_deref().and_then(read).cloned()
+    }
+
+    fn keep_reading(&self, keep: impl FnOnce(&mut Readings)) {
+        keep(self.readings.borrow_mut().get_or_insert_with(Box::default));
     }
 
     /// Text tagged with the encoding a literal carries.
@@ -335,12 +361,19 @@ impl StringValue {
                 std::str::from_utf8_unchecked(held)
             });
         }
-        if self.spelled.borrow().is_none() {
+        let spelled = self
+            .readings
+            .borrow()
+            .as_deref()
+            .is_some_and(|readings| readings.spelled.is_some());
+        if !spelled {
             let text = characters_of_bytes(&self.bytes.borrow());
-            *self.spelled.borrow_mut() = Some(text);
+            self.keep_reading(|readings| readings.spelled = Some(text));
         }
-        Ref::map(self.spelled.borrow(), |held| {
-            held.as_deref().unwrap_or_default()
+        Ref::map(self.readings.borrow(), |held| {
+            held.as_deref()
+                .and_then(|readings| readings.spelled.as_deref())
+                .unwrap_or_default()
         })
     }
 
@@ -365,27 +398,27 @@ impl StringValue {
 
     fn forget_readings(&self) {
         self.ascii.set(None);
-        *self.spelled.borrow_mut() = None;
-        *self.character_marks.borrow_mut() = None;
-        *self.letters.borrow_mut() = None;
+        if let Some(readings) = self.readings.borrow_mut().as_deref_mut() {
+            *readings = Readings::default();
+        }
     }
 
     /// The text's Rust characters, in order.
     pub fn letters(&self) -> Rc<[char]> {
-        if let Some(letters) = self.letters.borrow().as_ref() {
-            return Rc::clone(letters);
+        if let Some(letters) = self.reading(|readings| readings.letters.as_ref()) {
+            return letters;
         }
         let letters: Rc<[char]> = self.as_str().chars().collect();
-        *self.letters.borrow_mut() = Some(Rc::clone(&letters));
+        self.keep_reading(|readings| readings.letters = Some(Rc::clone(&letters)));
         letters
     }
 
     fn character_marks(&self) -> Rc<CharacterMarks> {
-        if let Some(marks) = self.character_marks.borrow().as_ref() {
-            return Rc::clone(marks);
+        if let Some(marks) = self.reading(|readings| readings.character_marks.as_ref()) {
+            return marks;
         }
         let marks = Rc::new(CharacterMarks::of(&self.as_str()));
-        *self.character_marks.borrow_mut() = Some(Rc::clone(&marks));
+        self.keep_reading(|readings| readings.character_marks = Some(Rc::clone(&marks)));
         marks
     }
 
@@ -464,39 +497,42 @@ impl StringValue {
     /// Give the string notice that it will be frozen in a later release, so
     /// the first change made to it says so.
     pub fn chill(&self, warning: String) {
-        *self.chilled.borrow_mut() = Some(warning);
+        self.note(|notes| notes.chilled = Some(warning));
     }
 
     /// The pointer `pack` left on this string, or zero where it left none.
     pub fn pointer(&self) -> u64 {
-        self.pointer.get()
+        self.noted(|notes| notes.pointer).unwrap_or(0)
     }
 
     /// Mark this string as naming the run of text a pointer stands for.
     pub fn set_pointer(&self, named: u64) {
-        self.pointer.set(named);
+        self.note(|notes| notes.pointer = named);
     }
 
     /// Whether the string carries notice that it will be frozen in a later
     /// release.
     pub fn is_chilled(&self) -> bool {
-        self.chilled.borrow().is_some()
+        self.noted(|notes| notes.chilled.is_some()).unwrap_or(false)
     }
 
     /// The notice a change to this string prints, taken so it prints once.
     pub fn take_chill(&self) -> Option<String> {
-        self.chilled.borrow_mut().take()
+        self.notes
+            .borrow_mut()
+            .as_deref_mut()
+            .and_then(|notes| notes.chilled.take())
     }
 
     /// Record where the literal that made this string was written.
     pub fn set_created_at(&self, written_at: String) {
-        *self.created_at.borrow_mut() = Some(written_at);
+        self.note(|notes| notes.created_at = Some(written_at));
     }
 
     /// Where the literal that made this string was written, for a run that
     /// asked to be told.
     pub fn created_at(&self) -> Option<String> {
-        self.created_at.borrow().clone()
+        self.noted(|notes| notes.created_at.clone()).flatten()
     }
 
     /// Whether the string is one of the interned copies `String#-@` answers.
@@ -546,11 +582,19 @@ impl Clone for StringValue {
             self.encoding.borrow().clone(),
             self.holds_bytes.get(),
         );
-        copy.pointer.set(self.pointer.get());
-        *copy.created_at.borrow_mut() = self.created_at.borrow().clone();
+        if let Some(notes) = self.notes.borrow().as_deref() {
+            copy.note(|copied| {
+                copied.pointer = notes.pointer;
+                copied.created_at = notes.created_at.clone();
+            });
+        }
         copy.ascii.set(self.ascii.get());
-        *copy.character_marks.borrow_mut() = self.character_marks.borrow().clone();
-        *copy.letters.borrow_mut() = self.letters.borrow().clone();
+        if let Some(readings) = self.readings.borrow().as_deref() {
+            copy.keep_reading(|copied| {
+                copied.character_marks = readings.character_marks.clone();
+                copied.letters = readings.letters.clone();
+            });
+        }
         copy
     }
 }

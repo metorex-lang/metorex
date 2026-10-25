@@ -2,6 +2,7 @@ mod ast_method_call_test;
 mod case_expression_nodes_test;
 mod control_flow_statement_test;
 mod expression_nodes_test;
+mod held_body_test;
 mod helpers;
 mod lambda_block_test;
 mod nested_expression_test;

@@ -863,7 +863,7 @@ impl VirtualMachine {
             // Skip `self` — the method receiver should always be the method's
             // `self_value`, not the captured `self` from where the block was created.
             if let Some(captured) = &method.captured_vars {
-                for (name, value_ref) in captured {
+                for (name, value_ref) in captured.iter() {
                     if name == "self" {
                         continue;
                     }
@@ -1321,7 +1321,7 @@ impl VirtualMachine {
         let slot = usize::from(on_a_module);
         let cacheable = method.alias_origin.is_none() && method.owner.is_some();
         if cacheable
-            && let Some((callee, frame_name, defined)) = &method.frame_names.0.borrow()[slot]
+            && let Some((callee, frame_name, defined)) = &method.frame_names.slots().borrow()[slot]
             && **callee == *method_name
         {
             return (Rc::clone(callee), Rc::clone(frame_name), Rc::clone(defined));
@@ -1347,7 +1347,7 @@ impl VirtualMachine {
         let frame_name: Rc<str> = format!("{owning_class_name}{separator}{defined}").into();
         let callee: Rc<str> = method_name.into();
         if cacheable {
-            method.frame_names.0.borrow_mut()[slot] = Some((
+            method.frame_names.slots().borrow_mut()[slot] = Some((
                 Rc::clone(&callee),
                 Rc::clone(&frame_name),
                 Rc::clone(&defined),

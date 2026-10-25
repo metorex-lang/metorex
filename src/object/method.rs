@@ -12,7 +12,15 @@ use super::Object;
 /// 0 for an object, 1 for a class or module. A copy starts empty, since a
 /// copy is usually renamed or moved to another owner.
 #[derive(Debug, Default)]
-pub struct FrameNames(pub RefCell<[Option<CachedFrameName>; 2]>);
+pub struct FrameNames(std::cell::OnceCell<Box<RefCell<[Option<CachedFrameName>; 2]>>>);
+
+impl FrameNames {
+    /// The names kept so far, made the first time a call asks, since most
+    /// methods are never called.
+    pub fn slots(&self) -> &RefCell<[Option<CachedFrameName>; 2]> {
+        self.0.get_or_init(Box::default)
+    }
+}
 
 /// One cached frame name: the name the method was called by, the frame name,
 /// and the name it was defined as.
@@ -152,7 +160,7 @@ pub struct Method {
     /// names when the body runs to its end.
     pub end_line: Option<usize>,
     /// Captured closure variables (from define_method blocks)
-    pub captured_vars: Option<indexmap::IndexMap<String, Rc<RefCell<Object>>>>,
+    pub captured_vars: Option<Box<indexmap::IndexMap<String, Rc<RefCell<Object>>>>>,
     /// True if this method was undefined via undef_method (calling it raises an error)
     pub is_undefined: bool,
     /// Lexical class/module nesting captured from the Proc this method was

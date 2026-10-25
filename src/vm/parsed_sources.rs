@@ -31,11 +31,10 @@ pub(crate) fn library(source: &str) -> Option<Vec<Statement>> {
         .map(|(_, _, parsed)| decode(parsed))
 }
 
-fn decode(parsed: &[u8]) -> Vec<Statement> {
+fn decode(parsed: &'static [u8]) -> Vec<Statement> {
     let _counted =
         crate::vm::memory_report::attribute(crate::vm::memory_report::Category::SyntaxTree);
-    let (statements, symbols): (Vec<Statement>, Vec<String>) =
-        rmp_serde::from_slice(parsed).expect("the build script wrote this copy");
+    let (statements, symbols): (Vec<Statement>, Vec<String>) = crate::ast::decode_held(parsed);
     for name in &symbols {
         crate::symbol_registry::record(name);
     }

@@ -96,8 +96,7 @@ fn write_parsed(source: String, prelude: bool, written: PathBuf) -> std::thread:
                 .unwrap_or_else(|errors| {
                     panic!("{} failed to parse: {errors:?}", written.display())
                 });
-            let parsed = rmp_serde::to_vec(&(statements, symbol_registry::all()))
-                .expect("statements serialize");
+            let parsed = ast::encode_held(&(statements, symbol_registry::all()));
             std::fs::write(&written, parsed).expect("OUT_DIR is writable");
         })
         .expect("a thread starts")

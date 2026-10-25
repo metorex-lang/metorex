@@ -202,40 +202,46 @@ writes a report to standard error at exit, from `src/vm/memory_report.rs`.
   and the capacities of what it holds, by class.
 
 The headers take memory of their own, so a run with the report peaks
-higher: `ruby-json` peaked at 323 MB without it and 375 MB with it.
+higher: `ruby-json` peaked at 333 MB without it and 414 MB with it.
 
-The reports of 2026-10-20 on macOS, with the ruby-bench rows run for one
+The core library and the libraries a default start loads are held in the
+binary as they were parsed when it was built, with each method, block,
+class, and module body encoded after the statements around it. A body is
+decoded the first time something reads it, so a method that never runs
+keeps no syntax tree and leaves its bytes in the binary unread. The
+libraries' sources sit in a section of the binary of their own, apart from
+the table of their names a `require` reads.
+
+The reports of 2026-10-24 on macOS, with the ruby-bench rows run for one
 warmup iteration and two more, and `rex_suite` run with `metorex spec`, in
 MB. Where a row has two numbers, the first is startup's and the second the
 program's.
 
 | Row | Peak resident | Syntax tree | Compiled units | JIT compiling | Other heap blocks | Headers | malloc's other pages | Machine code | Files | Stack | Accounted for |
 | :-- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |
-| empty | 36.1 | 9.6, 0.0 | 1.0, 0.0 | 0.0 | 5.2, 0.0 | 1.8 | 3.2 | 0.0 | 13.9 | 0.2 | 97% |
-| rex_suite | 301.3 | 9.6, 11.6 | 1.0, 14.8 | 0.7 | 8.2, 112.5 | 24.1 | 101.7 | 0.4 | 15.0 | 0.4 | 100% |
-| 30k_ifelse | 657.4 | 9.6, 300.5 | 1.0, 69.0 | 9.5 | 8.0, 138.0 | 38.4 | 61.2 | 5.8 | 14.5 | 0.3 | 100% |
-| ruby-json | 375.2 | 9.6, 2.1 | 1.0, 2.2 | 0.0 | 5.4, 197.4 | 41.9 | 99.6 | 0.0 | 14.5 | 0.2 | 100% |
+| empty | 22.5 | 0.6, 0.0 | 1.0, 0.0 | 0.0 | 5.0, 0.0 | 0.9 | 3.1 | 0.0 | 10.0 | 0.2 | 93% |
+| rex_suite | 279.1 | 0.6, 13.1 | 1.0, 14.5 | 0.7 | 7.9, 117.5 | 23.4 | 85.9 | 0.4 | 12.2 | 0.4 | 99% |
+| 30k_ifelse | 631.6 | 0.6, 297.7 | 1.0, 67.6 | 9.5 | 7.7, 130.7 | 38.6 | 59.8 | 5.8 | 10.9 | 0.4 | 100% |
+| ruby-json | 413.9 | 0.6, 2.6 | 1.0, 2.5 | 0.0 | 5.1, 216.7 | 51.1 | 121.8 | 0.0 | 11.0 | 0.2 | 100% |
 
 The objects the last walk found:
 
 | Row | Objects' bytes | Largest classes |
 | :-- | --: | :-- |
-| empty | 0.8 | 442 classes and modules, 0.5 MB, and 719 Strings, 0.2 MB |
-| rex_suite | 46.9 | 38,766 Strings, 12.6 MB, 13,981 Hashes, 10.1 MB, 13,045 Procs, 5.3 MB, and 4,622 classes and modules, 4.7 MB |
-| 30k_ifelse | 23.9 | 30,200 method definitions, 23.0 MB |
-| ruby-json | 1.6 | 1,861 Strings, 0.6 MB |
+| empty | 0.8 | 445 classes and modules, 0.5 MB, and 728 Strings, 0.2 MB |
+| rex_suite | 44.7 | 37,244 Strings, 12.2 MB, 12,847 Hashes, 9.8 MB, and 12,907 Procs, 5.3 MB |
+| 30k_ifelse | 19.3 | 30,200 method definitions, 18.4 MB |
+| ruby-json | 1.8 | 2,343 Strings, 0.8 MB |
 
-- Startup holds 9.6 MB of syntax tree: the trees of the core library and
-  the default libraries stay after they run.
-- In `30k_ifelse` the program's syntax tree is 300.5 MB, and it stays after
+- In `empty` the binary's pages and the system libraries' are 10.0 MB, the
+  largest part. Most of them are the code a start runs.
+- In `30k_ifelse` the program's syntax tree is 297.7 MB, and it stays after
   its units are compiled.
-- In `ruby-json` 197.4 MB of the program's heap blocks are in neither the
-  syntax tree nor the compiled units, and the objects alive hold 1.6 MB of
+- In `ruby-json` 216.7 MB of the program's heap blocks are in neither the
+  syntax tree nor the compiled units, and the objects alive hold 1.8 MB of
   them.
-- In the three rows that run a program, malloc keeps 61 to 102 MB resident
+- In the three rows that run a program, malloc keeps 60 to 122 MB resident
   in pages that hold no block in use.
-- The binary's pages and the system libraries' take 14 to 15 MB in every
-  row.
 
 ## Threads
 

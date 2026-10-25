@@ -71,7 +71,7 @@ fn memory_report_counts_the_core_library_syntax_tree_under_startup() {
     let [startup, _program] = megabytes(&reported, "the syntax tree")[..] else {
         panic!("two columns on the syntax tree line in:\n{reported}");
     };
-    assert!(startup > 1.0, "{reported}");
+    assert!(startup > 0.0, "{reported}");
 }
 
 #[test]

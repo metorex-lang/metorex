@@ -5,500 +5,510 @@
 pub(crate) const RSPEC_LIBRARIES: &[(&str, &str)] = &[
     (
         "rex/rspec/support",
-        include_str!("rspec_vendor/rspec-support/rspec/support.rb"),
+        carried_source!("rspec_vendor/rspec-support/rspec/support.rb"),
     ),
     (
         "rspec/support/comparable_version",
-        include_str!("rspec_vendor/rspec-support/rspec/support/comparable_version.rb"),
+        carried_source!("rspec_vendor/rspec-support/rspec/support/comparable_version.rb"),
     ),
     (
         "rspec/support/differ",
-        include_str!("rspec_vendor/rspec-support/rspec/support/differ.rb"),
+        carried_source!("rspec_vendor/rspec-support/rspec/support/differ.rb"),
     ),
     (
         "rspec/support/directory_maker",
-        include_str!("rspec_vendor/rspec-support/rspec/support/directory_maker.rb"),
+        carried_source!("rspec_vendor/rspec-support/rspec/support/directory_maker.rb"),
     ),
     (
         "rspec/support/encoded_string",
-        include_str!("rspec_vendor/rspec-support/rspec/support/encoded_string.rb"),
+        carried_source!("rspec_vendor/rspec-support/rspec/support/encoded_string.rb"),
     ),
     (
         "rspec/support/fuzzy_matcher",
-        include_str!("rspec_vendor/rspec-support/rspec/support/fuzzy_matcher.rb"),
+        carried_source!("rspec_vendor/rspec-support/rspec/support/fuzzy_matcher.rb"),
     ),
     (
         "rspec/support/hunk_generator",
-        include_str!("rspec_vendor/rspec-support/rspec/support/hunk_generator.rb"),
+        carried_source!("rspec_vendor/rspec-support/rspec/support/hunk_generator.rb"),
     ),
     (
         "rspec/support/matcher_definition",
-        include_str!("rspec_vendor/rspec-support/rspec/support/matcher_definition.rb"),
+        carried_source!("rspec_vendor/rspec-support/rspec/support/matcher_definition.rb"),
     ),
     (
         "rspec/support/method_signature_verifier",
-        include_str!("rspec_vendor/rspec-support/rspec/support/method_signature_verifier.rb"),
+        carried_source!("rspec_vendor/rspec-support/rspec/support/method_signature_verifier.rb"),
     ),
     (
         "rspec/support/mutex",
-        include_str!("rspec_vendor/rspec-support/rspec/support/mutex.rb"),
+        carried_source!("rspec_vendor/rspec-support/rspec/support/mutex.rb"),
     ),
     (
         "rspec/support/object_formatter",
-        include_str!("rspec_vendor/rspec-support/rspec/support/object_formatter.rb"),
+        carried_source!("rspec_vendor/rspec-support/rspec/support/object_formatter.rb"),
     ),
     (
         "rspec/support/recursive_const_methods",
-        include_str!("rspec_vendor/rspec-support/rspec/support/recursive_const_methods.rb"),
+        carried_source!("rspec_vendor/rspec-support/rspec/support/recursive_const_methods.rb"),
     ),
     (
         "rspec/support/reentrant_mutex",
-        include_str!("rspec_vendor/rspec-support/rspec/support/reentrant_mutex.rb"),
+        carried_source!("rspec_vendor/rspec-support/rspec/support/reentrant_mutex.rb"),
     ),
     (
         "rspec/support/ruby_features",
-        include_str!("rspec_vendor/rspec-support/rspec/support/ruby_features.rb"),
+        carried_source!("rspec_vendor/rspec-support/rspec/support/ruby_features.rb"),
     ),
     (
         "rspec/support/source",
-        include_str!("rspec_vendor/rspec-support/rspec/support/source.rb"),
+        carried_source!("rspec_vendor/rspec-support/rspec/support/source.rb"),
     ),
     (
         "rspec/support/source/location",
-        include_str!("rspec_vendor/rspec-support/rspec/support/source/location.rb"),
+        carried_source!("rspec_vendor/rspec-support/rspec/support/source/location.rb"),
     ),
     (
         "rspec/support/source/node",
-        include_str!("rspec_vendor/rspec-support/rspec/support/source/node.rb"),
+        carried_source!("rspec_vendor/rspec-support/rspec/support/source/node.rb"),
     ),
     (
         "rspec/support/source/token",
-        include_str!("rspec_vendor/rspec-support/rspec/support/source/token.rb"),
+        carried_source!("rspec_vendor/rspec-support/rspec/support/source/token.rb"),
     ),
     (
         "rspec/support/version",
-        include_str!("rspec_vendor/rspec-support/rspec/support/version.rb"),
+        carried_source!("rspec_vendor/rspec-support/rspec/support/version.rb"),
     ),
     (
         "rspec/support/warnings",
-        include_str!("rspec_vendor/rspec-support/rspec/support/warnings.rb"),
+        carried_source!("rspec_vendor/rspec-support/rspec/support/warnings.rb"),
     ),
     (
         "rspec/support/with_keywords_when_needed",
-        include_str!("rspec_vendor/rspec-support/rspec/support/with_keywords_when_needed.rb"),
+        carried_source!("rspec_vendor/rspec-support/rspec/support/with_keywords_when_needed.rb"),
     ),
     (
         "rex/rspec/expectations",
-        include_str!("rspec_vendor/rspec-expectations/rspec/expectations.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/expectations.rb"),
     ),
     (
         "rspec/expectations/block_snippet_extractor",
-        include_str!(
+        carried_source!(
             "rspec_vendor/rspec-expectations/rspec/expectations/block_snippet_extractor.rb"
         ),
     ),
     (
         "rspec/expectations/configuration",
-        include_str!("rspec_vendor/rspec-expectations/rspec/expectations/configuration.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/expectations/configuration.rb"),
     ),
     (
         "rspec/expectations/expectation_target",
-        include_str!("rspec_vendor/rspec-expectations/rspec/expectations/expectation_target.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/expectations/expectation_target.rb"),
     ),
     (
         "rspec/expectations/fail_with",
-        include_str!("rspec_vendor/rspec-expectations/rspec/expectations/fail_with.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/expectations/fail_with.rb"),
     ),
     (
         "rspec/expectations/failure_aggregator",
-        include_str!("rspec_vendor/rspec-expectations/rspec/expectations/failure_aggregator.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/expectations/failure_aggregator.rb"),
     ),
     (
         "rspec/expectations/handler",
-        include_str!("rspec_vendor/rspec-expectations/rspec/expectations/handler.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/expectations/handler.rb"),
     ),
     (
         "rspec/expectations/minitest_integration",
-        include_str!("rspec_vendor/rspec-expectations/rspec/expectations/minitest_integration.rb"),
+        carried_source!(
+            "rspec_vendor/rspec-expectations/rspec/expectations/minitest_integration.rb"
+        ),
     ),
     (
         "rspec/expectations/syntax",
-        include_str!("rspec_vendor/rspec-expectations/rspec/expectations/syntax.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/expectations/syntax.rb"),
     ),
     (
         "rspec/expectations/version",
-        include_str!("rspec_vendor/rspec-expectations/rspec/expectations/version.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/expectations/version.rb"),
     ),
     (
         "rex/rspec/matchers",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers.rb"),
     ),
     (
         "rspec/matchers/aliased_matcher",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/aliased_matcher.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/aliased_matcher.rb"),
     ),
     (
         "rspec/matchers/built_in",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in.rb"),
     ),
     (
         "rspec/matchers/built_in/all",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/all.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/all.rb"),
     ),
     (
         "rspec/matchers/built_in/base_matcher",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/base_matcher.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/base_matcher.rb"),
     ),
     (
         "rspec/matchers/built_in/be",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/be.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/be.rb"),
     ),
     (
         "rspec/matchers/built_in/be_between",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/be_between.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/be_between.rb"),
     ),
     (
         "rspec/matchers/built_in/be_instance_of",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/be_instance_of.rb"),
+        carried_source!(
+            "rspec_vendor/rspec-expectations/rspec/matchers/built_in/be_instance_of.rb"
+        ),
     ),
     (
         "rspec/matchers/built_in/be_kind_of",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/be_kind_of.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/be_kind_of.rb"),
     ),
     (
         "rspec/matchers/built_in/be_within",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/be_within.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/be_within.rb"),
     ),
     (
         "rspec/matchers/built_in/change",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/change.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/change.rb"),
     ),
     (
         "rspec/matchers/built_in/compound",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/compound.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/compound.rb"),
     ),
     (
         "rspec/matchers/built_in/contain_exactly",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/contain_exactly.rb"),
+        carried_source!(
+            "rspec_vendor/rspec-expectations/rspec/matchers/built_in/contain_exactly.rb"
+        ),
     ),
     (
         "rspec/matchers/built_in/count_expectation",
-        include_str!(
+        carried_source!(
             "rspec_vendor/rspec-expectations/rspec/matchers/built_in/count_expectation.rb"
         ),
     ),
     (
         "rspec/matchers/built_in/cover",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/cover.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/cover.rb"),
     ),
     (
         "rspec/matchers/built_in/eq",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/eq.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/eq.rb"),
     ),
     (
         "rspec/matchers/built_in/eql",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/eql.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/eql.rb"),
     ),
     (
         "rspec/matchers/built_in/equal",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/equal.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/equal.rb"),
     ),
     (
         "rspec/matchers/built_in/exist",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/exist.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/exist.rb"),
     ),
     (
         "rspec/matchers/built_in/has",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/has.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/has.rb"),
     ),
     (
         "rspec/matchers/built_in/have_attributes",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/have_attributes.rb"),
+        carried_source!(
+            "rspec_vendor/rspec-expectations/rspec/matchers/built_in/have_attributes.rb"
+        ),
     ),
     (
         "rspec/matchers/built_in/include",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/include.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/include.rb"),
     ),
     (
         "rspec/matchers/built_in/match",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/match.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/match.rb"),
     ),
     (
         "rspec/matchers/built_in/operators",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/operators.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/operators.rb"),
     ),
     (
         "rspec/matchers/built_in/output",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/output.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/output.rb"),
     ),
     (
         "rspec/matchers/built_in/raise_error",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/raise_error.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/raise_error.rb"),
     ),
     (
         "rspec/matchers/built_in/respond_to",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/respond_to.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/respond_to.rb"),
     ),
     (
         "rspec/matchers/built_in/satisfy",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/satisfy.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/satisfy.rb"),
     ),
     (
         "rspec/matchers/built_in/start_or_end_with",
-        include_str!(
+        carried_source!(
             "rspec_vendor/rspec-expectations/rspec/matchers/built_in/start_or_end_with.rb"
         ),
     ),
     (
         "rspec/matchers/built_in/throw_symbol",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/throw_symbol.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/throw_symbol.rb"),
     ),
     (
         "rspec/matchers/built_in/yield",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/yield.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/built_in/yield.rb"),
     ),
     (
         "rspec/matchers/composable",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/composable.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/composable.rb"),
     ),
     (
         "rspec/matchers/dsl",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/dsl.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/dsl.rb"),
     ),
     (
         "rspec/matchers/english_phrasing",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/english_phrasing.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/english_phrasing.rb"),
     ),
     (
         "rspec/matchers/fail_matchers",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/fail_matchers.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/fail_matchers.rb"),
     ),
     (
         "rspec/matchers/generated_descriptions",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/generated_descriptions.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/generated_descriptions.rb"),
     ),
     (
         "rspec/matchers/matcher_delegator",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/matcher_delegator.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/matcher_delegator.rb"),
     ),
     (
         "rspec/matchers/matcher_protocol",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/matcher_protocol.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/matcher_protocol.rb"),
     ),
     (
         "rspec/matchers/multi_matcher_diff",
-        include_str!("rspec_vendor/rspec-expectations/rspec/matchers/multi_matcher_diff.rb"),
+        carried_source!("rspec_vendor/rspec-expectations/rspec/matchers/multi_matcher_diff.rb"),
     ),
     (
         "rex/rspec/mocks",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks.rb"),
     ),
     (
         "rspec/mocks/any_instance",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/any_instance.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/any_instance.rb"),
     ),
     (
         "rspec/mocks/any_instance/chain",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/any_instance/chain.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/any_instance/chain.rb"),
     ),
     (
         "rspec/mocks/any_instance/error_generator",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/any_instance/error_generator.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/any_instance/error_generator.rb"),
     ),
     (
         "rspec/mocks/any_instance/expect_chain_chain",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/any_instance/expect_chain_chain.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/any_instance/expect_chain_chain.rb"),
     ),
     (
         "rspec/mocks/any_instance/expectation_chain",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/any_instance/expectation_chain.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/any_instance/expectation_chain.rb"),
     ),
     (
         "rspec/mocks/any_instance/message_chains",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/any_instance/message_chains.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/any_instance/message_chains.rb"),
     ),
     (
         "rspec/mocks/any_instance/proxy",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/any_instance/proxy.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/any_instance/proxy.rb"),
     ),
     (
         "rspec/mocks/any_instance/recorder",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/any_instance/recorder.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/any_instance/recorder.rb"),
     ),
     (
         "rspec/mocks/any_instance/stub_chain",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/any_instance/stub_chain.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/any_instance/stub_chain.rb"),
     ),
     (
         "rspec/mocks/any_instance/stub_chain_chain",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/any_instance/stub_chain_chain.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/any_instance/stub_chain_chain.rb"),
     ),
     (
         "rspec/mocks/argument_list_matcher",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/argument_list_matcher.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/argument_list_matcher.rb"),
     ),
     (
         "rspec/mocks/argument_matchers",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/argument_matchers.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/argument_matchers.rb"),
     ),
     (
         "rspec/mocks/configuration",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/configuration.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/configuration.rb"),
     ),
     (
         "rspec/mocks/error_generator",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/error_generator.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/error_generator.rb"),
     ),
     (
         "rspec/mocks/example_methods",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/example_methods.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/example_methods.rb"),
     ),
     (
         "rspec/mocks/instance_method_stasher",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/instance_method_stasher.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/instance_method_stasher.rb"),
     ),
     (
         "rspec/mocks/marshal_extension",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/marshal_extension.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/marshal_extension.rb"),
     ),
     (
         "rspec/mocks/matchers/expectation_customization",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/matchers/expectation_customization.rb"),
+        carried_source!(
+            "rspec_vendor/rspec-mocks/rspec/mocks/matchers/expectation_customization.rb"
+        ),
     ),
     (
         "rspec/mocks/matchers/have_received",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/matchers/have_received.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/matchers/have_received.rb"),
     ),
     (
         "rspec/mocks/matchers/receive",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/matchers/receive.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/matchers/receive.rb"),
     ),
     (
         "rspec/mocks/matchers/receive_message_chain",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/matchers/receive_message_chain.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/matchers/receive_message_chain.rb"),
     ),
     (
         "rspec/mocks/matchers/receive_messages",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/matchers/receive_messages.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/matchers/receive_messages.rb"),
     ),
     (
         "rspec/mocks/message_chain",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/message_chain.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/message_chain.rb"),
     ),
     (
         "rspec/mocks/message_expectation",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/message_expectation.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/message_expectation.rb"),
     ),
     (
         "rspec/mocks/method_double",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/method_double.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/method_double.rb"),
     ),
     (
         "rspec/mocks/method_reference",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/method_reference.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/method_reference.rb"),
     ),
     (
         "rspec/mocks/minitest_integration",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/minitest_integration.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/minitest_integration.rb"),
     ),
     (
         "rspec/mocks/mutate_const",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/mutate_const.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/mutate_const.rb"),
     ),
     (
         "rspec/mocks/object_reference",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/object_reference.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/object_reference.rb"),
     ),
     (
         "rspec/mocks/order_group",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/order_group.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/order_group.rb"),
     ),
     (
         "rspec/mocks/proxy",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/proxy.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/proxy.rb"),
     ),
     (
         "rspec/mocks/space",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/space.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/space.rb"),
     ),
     (
         "rspec/mocks/standalone",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/standalone.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/standalone.rb"),
     ),
     (
         "rspec/mocks/syntax",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/syntax.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/syntax.rb"),
     ),
     (
         "rspec/mocks/targets",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/targets.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/targets.rb"),
     ),
     (
         "rspec/mocks/test_double",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/test_double.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/test_double.rb"),
     ),
     (
         "rspec/mocks/verifying_double",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/verifying_double.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/verifying_double.rb"),
     ),
     (
         "rspec/mocks/verifying_message_expectation",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/verifying_message_expectation.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/verifying_message_expectation.rb"),
     ),
     (
         "rspec/mocks/verifying_proxy",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/verifying_proxy.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/verifying_proxy.rb"),
     ),
     (
         "rspec/mocks/version",
-        include_str!("rspec_vendor/rspec-mocks/rspec/mocks/version.rb"),
+        carried_source!("rspec_vendor/rspec-mocks/rspec/mocks/version.rb"),
     ),
     (
         "diff/lcs",
-        include_str!("rspec_vendor/diff-lcs/diff/lcs.rb"),
+        carried_source!("rspec_vendor/diff-lcs/diff/lcs.rb"),
     ),
     (
         "diff/lcs/array",
-        include_str!("rspec_vendor/diff-lcs/diff/lcs/array.rb"),
+        carried_source!("rspec_vendor/diff-lcs/diff/lcs/array.rb"),
     ),
     (
         "diff/lcs/backports",
-        include_str!("rspec_vendor/diff-lcs/diff/lcs/backports.rb"),
+        carried_source!("rspec_vendor/diff-lcs/diff/lcs/backports.rb"),
     ),
     (
         "diff/lcs/block",
-        include_str!("rspec_vendor/diff-lcs/diff/lcs/block.rb"),
+        carried_source!("rspec_vendor/diff-lcs/diff/lcs/block.rb"),
     ),
     (
         "diff/lcs/callbacks",
-        include_str!("rspec_vendor/diff-lcs/diff/lcs/callbacks.rb"),
+        carried_source!("rspec_vendor/diff-lcs/diff/lcs/callbacks.rb"),
     ),
     (
         "diff/lcs/change",
-        include_str!("rspec_vendor/diff-lcs/diff/lcs/change.rb"),
+        carried_source!("rspec_vendor/diff-lcs/diff/lcs/change.rb"),
     ),
     (
         "diff/lcs/htmldiff",
-        include_str!("rspec_vendor/diff-lcs/diff/lcs/htmldiff.rb"),
+        carried_source!("rspec_vendor/diff-lcs/diff/lcs/htmldiff.rb"),
     ),
     (
         "diff/lcs/hunk",
-        include_str!("rspec_vendor/diff-lcs/diff/lcs/hunk.rb"),
+        carried_source!("rspec_vendor/diff-lcs/diff/lcs/hunk.rb"),
     ),
     (
         "diff/lcs/internals",
-        include_str!("rspec_vendor/diff-lcs/diff/lcs/internals.rb"),
+        carried_source!("rspec_vendor/diff-lcs/diff/lcs/internals.rb"),
     ),
     (
         "diff/lcs/ldiff",
-        include_str!("rspec_vendor/diff-lcs/diff/lcs/ldiff.rb"),
+        carried_source!("rspec_vendor/diff-lcs/diff/lcs/ldiff.rb"),
     ),
     (
         "diff/lcs/string",
-        include_str!("rspec_vendor/diff-lcs/diff/lcs/string.rb"),
+        carried_source!("rspec_vendor/diff-lcs/diff/lcs/string.rb"),
     ),
     (
         "diff/lcs/version",
-        include_str!("rspec_vendor/diff-lcs/diff/lcs/version.rb"),
+        carried_source!("rspec_vendor/diff-lcs/diff/lcs/version.rb"),
     ),
 ];

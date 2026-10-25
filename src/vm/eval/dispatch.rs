@@ -67,7 +67,7 @@ impl VirtualMachine {
         let mut block = BlockStatement::with_def_scope(
             parameters.clone(),
             parameter_defaults.clone(),
-            Rc::clone(&shared.body),
+            shared.body.clone(),
             captured,
             self.def_scope_stack.clone(),
             self.enclosing_method_names(),
