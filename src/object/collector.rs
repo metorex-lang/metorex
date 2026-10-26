@@ -307,12 +307,9 @@ impl Node {
     }
 }
 
-/// The singleton class an instance holds through a slot no other instance
-/// shares, which is the one reference the instance has to it.
+/// The singleton class an instance holds, which is the one reference the
+/// instance has to it.
 fn owned_singleton_class(instance: &Instance) -> Option<Rc<crate::class::Class>> {
-    if Rc::strong_count(&instance.singleton_class) != 1 {
-        return None;
-    }
     instance.singleton_class.try_borrow().ok()?.clone()
 }
 

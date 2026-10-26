@@ -408,3 +408,10 @@ fn two_symbols_with_one_name_hold_the_same_bits() {
         Object::symbol("retry_after").bits()
     );
 }
+
+#[test]
+fn an_instance_and_its_cell_fit_the_112_byte_size_class() {
+    let counts = 2 * std::mem::size_of::<usize>();
+    let borrow_flag = std::mem::size_of::<usize>();
+    assert!(std::mem::size_of::<metorex::object::Instance>() + counts + borrow_flag <= 112);
+}

@@ -699,7 +699,10 @@ impl VirtualMachine {
             Object::array(arguments.to_vec()),
         );
         if let Some((file, line)) = written_at {
-            held.set_var("__thread_source".to_string(), Object::string(file));
+            held.set_var(
+                "__thread_source".to_string(),
+                Object::string(file.to_string()),
+            );
             held.set_var("__thread_line".to_string(), Object::Int(line as i64));
         }
     }

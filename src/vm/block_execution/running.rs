@@ -495,13 +495,13 @@ impl VirtualMachine {
     /// in it read in that file's encoding. Answers the file and encoding it
     /// replaced, or None when the block was written in the running file.
     fn enter_block_file(&mut self, block: &BlockStatement) -> Option<SavedFile> {
-        let written_in = block.source_file.as_ref()?;
-        if self.current_source_file.as_ref() == Some(written_in) {
+        let written_in = block.source_file.as_deref()?;
+        if self.current_source_file.as_deref() == Some(written_in) {
             return None;
         }
         let encoding = self.file_encodings.get(written_in).cloned();
         Some((
-            self.current_source_file.replace(written_in.clone()),
+            self.current_source_file.replace(written_in.to_string()),
             std::mem::replace(&mut self.current_source_encoding, encoding),
         ))
     }

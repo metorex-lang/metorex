@@ -225,7 +225,13 @@ A method definition and a class fit the malloc size classes of 320 and 896
 bytes, which tests check. The fields most methods leave unset, the
 parameters past the plain positional ones and what an alias,
 `define_method`, `Method#to_proc`, or a C extension records, are kept in two
-boxes made when one of them is first written.
+boxes made when one of them is first written. An instance and its cell fit
+the 112-byte size class, with its singleton methods and the lists of the
+variables it hides or shows kept in a box made when one is first written. A
+class's method cache is keyed by names every class's cache shares, and
+counts the walks a name took in its own entry. The blocks one literal makes
+share the local names they can see and the file they were written in while
+those stay the same.
 
 A program's syntax tree stays alive as long as its methods do, since each
 method keeps its body. A position is 16 bytes, a token 56, an expression 88,

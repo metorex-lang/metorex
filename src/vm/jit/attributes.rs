@@ -185,10 +185,10 @@ impl VirtualMachine {
         let unlisted = write
             .listed
             .as_ref()
-            .is_some_and(|name| !instance.program_dunder_names.contains(name));
+            .is_some_and(|name| !instance.program_assigned_dunder(name));
         // A variable the core library gave the object becomes the program's
         // once the program writes it, which the slow path records.
-        if instance.frozen || unlisted || !instance.interpreter_names.is_empty() {
+        if instance.frozen || unlisted || instance.has_interpreter_vars() {
             return false;
         }
         instance

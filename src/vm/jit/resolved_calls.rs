@@ -48,13 +48,12 @@ impl VirtualMachine {
         }
         let class = {
             let held = instance.borrow();
-            let singleton_methods = held.singleton_methods.borrow();
-            if singleton_methods.contains_key(name) {
+            if held.find_singleton_method(name).is_some() {
                 return None;
             }
             match held.singleton_class.borrow().as_ref() {
                 Some(singleton) => Rc::clone(singleton),
-                None if !singleton_methods.is_empty() => Rc::clone(&held.class),
+                None if held.has_singleton_methods() => Rc::clone(&held.class),
                 None => return None,
             }
         };

@@ -606,7 +606,7 @@ impl VirtualMachine {
                         return Ok(Some(Object::Nil));
                     };
                     return Ok(Some(Object::array(vec![
-                        Object::string(file.clone()),
+                        Object::string(file.to_string()),
                         Object::Int(line as i64),
                     ])));
                 }

@@ -61,7 +61,6 @@ impl Class {
             const_locations: RefCell::default(),
             method_cache: RefCell::new(crate::fast_hash::NameMap::default()),
             linear_mixins_cache: RefCell::new(None),
-            method_walks: RefCell::new(crate::fast_hash::NameMap::default()),
             holds_class_methods: std::cell::Cell::new(false),
             holds_extended_copies: std::cell::Cell::new(false),
         }

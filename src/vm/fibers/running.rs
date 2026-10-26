@@ -16,7 +16,7 @@ impl VirtualMachine {
         let handle = self.fibers.len();
         let owner = self.thread_current_stack.last().cloned();
         let opened = match (&block.source_file, block.opened_at) {
-            (Some(file), Some(line)) => Some((file.clone(), line)),
+            (Some(file), Some(line)) => Some((file.to_string(), line)),
             _ => None,
         };
         // A fiber runs the interpreter, which nests a frame per call, so it

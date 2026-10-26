@@ -41,8 +41,18 @@ impl VirtualMachine {
         }
         let captures_everything = captured_vars.as_ref().is_none_or(|names| names.is_empty());
         let closure = closure.filter(|closure| captures_everything && !closure.gave_up());
-        let kept = closure.and_then(|closure| self.kept_closure(closure));
+        let kept = closure
+            .and_then(|closure| self.kept_closure(closure))
+            .or_else(|| {
+                captures_everything
+                    .then(|| self.kept_closure(&self.closure_here))
+                    .flatten()
+            });
         let mut captured = indexmap::IndexMap::new();
+        let shared_here = kept.is_some();
+        if shared_here {
+            crate::vm::counters::count_closure_shared();
+        }
         if kept.is_some() {
         } else if let Some(names) = captured_vars {
             if names.is_empty() {
@@ -98,11 +108,28 @@ impl VirtualMachine {
                 block.reserved_names = reserved;
             }
             None => {
-                block.reserved_names = Rc::new(self.visible_local_names());
+                let names = self.visible_local_names();
+                let mut last = shared.reserved_names.borrow_mut();
+                block.reserved_names = match last.as_ref() {
+                    Some(held) if **held == names => Rc::clone(held),
+                    _ => {
+                        let made = Rc::new(names);
+                        *last = Some(Rc::clone(&made));
+                        made
+                    }
+                };
+                drop(last);
                 if let Some(closure) = closure {
                     self.keep_closure(closure, &block.captured_vars, &block.reserved_names);
                 }
             }
+        }
+        if captures_everything && !shared_here {
+            self.keep_closure(
+                &self.closure_here,
+                &block.captured_vars,
+                &block.reserved_names,
+            );
         }
         // The block's body belongs to the file it was written in,
         // wherever it is later called from.
@@ -111,9 +138,20 @@ impl VirtualMachine {
         if !position.prelude {
             // The main script is named the way it was given, as
             // `__FILE__` names it.
-            block.source_file = self.current_source_file.clone().or_else(|| {
+            let file = self.current_source_file.clone().or_else(|| {
                 self.reported_current_file()
                     .map(|path| path.display().to_string())
+            });
+            block.source_file = file.map(|file| {
+                let mut last = shared.file.borrow_mut();
+                match last.as_ref() {
+                    Some(held) if **held == *file => Rc::clone(held),
+                    _ => {
+                        let made: Rc<str> = file.into();
+                        *last = Some(Rc::clone(&made));
+                        made
+                    }
+                }
             });
             // Where the block was opened, which is the line
             // `source_location` names however far down the body starts.

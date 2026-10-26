@@ -1,9 +1,6 @@
 // Type System Tests - hash() method
 
 use metorex::object::{Class, Instance, Object};
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::rc::Rc;
 
 #[test]
 fn test_hash_nil() {
@@ -64,15 +61,7 @@ fn test_hash_non_hashable() {
     assert!(dict.hash().is_none());
 
     let class = Class::new("Test", None);
-    let inst = Object::Instance(Rc::new(RefCell::new(Instance {
-        class,
-        instance_vars: Default::default(),
-        singleton_methods: Rc::new(RefCell::new(HashMap::new())),
-        singleton_class: Rc::new(RefCell::new(None)),
-        frozen: false,
-        program_dunder_names: std::collections::HashSet::new(),
-        interpreter_names: std::collections::HashSet::new(),
-    })));
+    let inst = Object::Instance(Instance::new(class));
     assert!(inst.hash().is_none());
 }
 

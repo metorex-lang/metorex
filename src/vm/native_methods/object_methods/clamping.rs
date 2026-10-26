@@ -177,7 +177,7 @@ impl VirtualMachine {
                     }
                     let held = inst_rc.borrow();
                     *held.singleton_class.borrow_mut() = None;
-                    held.singleton_methods.borrow_mut().clear();
+                    held.clear_singleton_methods();
                 }
                 Ok(Some(receiver.clone()))
             }

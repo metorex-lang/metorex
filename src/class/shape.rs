@@ -3,7 +3,9 @@
 use super::*;
 
 /// A method lookup's answer, with the method state it was found under.
-pub(crate) type CachedLookup = (u64, Option<Rc<Method>>);
+/// What a lookup found, the method state it held under, and how many times
+/// the ancestry was walked for the name rather than the cache answering.
+pub(crate) type CachedLookup = (u64, Option<Rc<Method>>, u32);
 
 /// The modules mixed into a class in lookup order, with the method state they
 /// were worked out under.
@@ -92,13 +94,12 @@ pub struct Class {
     pub(crate) const_locations: RefCell<crate::fast_hash::NameMap<String, (String, i64)>>,
     /// What `find_method` found for each name, with the method state it was
     /// found under. An entry from an earlier state is looked up again.
-    pub(crate) method_cache: RefCell<crate::fast_hash::NameMap<String, CachedLookup>>,
+    /// What each name's lookup found, keyed by the name as every class's
+    /// cache shares it.
+    pub(crate) method_cache: RefCell<crate::fast_hash::NameMap<Rc<str>, CachedLookup>>,
     /// What `linear_mixins` answered, with the method state it was worked
     /// out under, which a change to any mixin chain moves on.
     pub(crate) linear_mixins_cache: RefCell<Option<LinearMixins>>,
-    /// How many times `find_method` walked the ancestry for each name rather
-    /// than answering from the cache.
-    pub(crate) method_walks: RefCell<crate::fast_hash::NameMap<String, u64>>,
     /// Whether the method table holds a `def self.name`, kept under a
     /// `__class__` name, which spares a lookup of one building that name
     /// when there is none.

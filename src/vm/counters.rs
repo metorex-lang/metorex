@@ -15,6 +15,7 @@ static ENABLED: AtomicBool = AtomicBool::new(false);
 static ALLOCATIONS: AtomicU64 = AtomicU64::new(0);
 static ALLOCATED_BYTES: AtomicU64 = AtomicU64::new(0);
 static BLOCKS_BUILT: AtomicU64 = AtomicU64::new(0);
+static CLOSURES_SHARED: AtomicU64 = AtomicU64::new(0);
 static UNITS_COMPILED_TO_MACHINE_CODE: AtomicU64 = AtomicU64::new(0);
 static MACHINE_CODE_BYTES: AtomicU64 = AtomicU64::new(0);
 static DEOPTIMIZATIONS: AtomicU64 = AtomicU64::new(0);
@@ -134,6 +135,13 @@ pub fn count_block_built() {
     }
 }
 
+/// Count a block built that shares the cells an earlier block closed over.
+pub fn count_closure_shared() {
+    if enabled() {
+        CLOSURES_SHARED.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
 /// Count a unit compiled to `bytes` of machine code.
 pub fn count_unit_compiled_to_machine_code(bytes: usize) {
     if enabled() {
@@ -196,6 +204,10 @@ pub fn report(out: &mut dyn Write) {
     text.push_str(&format!(
         "blocks built: {}\n",
         BLOCKS_BUILT.load(Ordering::Relaxed)
+    ));
+    text.push_str(&format!(
+        "blocks sharing the cells an earlier block closed over: {}\n",
+        CLOSURES_SHARED.load(Ordering::Relaxed)
     ));
     text.push_str(&format!(
         "units compiled to machine code: {}\n",

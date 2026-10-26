@@ -94,7 +94,7 @@ pub struct BlockStatement {
     pub is_lambda: bool,
     /// The file the block was written in, which a backtrace entry for a call
     /// made from its body has to name.
-    pub source_file: Option<String>,
+    pub source_file: Option<Rc<str>>,
     /// The method invocation this block was written inside. A `return` in the
     /// body unwinds to that invocation, however many other methods the block
     /// travels through first. None for a block created outside any method.

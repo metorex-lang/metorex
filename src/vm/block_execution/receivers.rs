@@ -216,7 +216,8 @@ impl VirtualMachine {
         let frame = self.block_frame_at(block, position);
         let body_source_file = block
             .source_file
-            .clone()
+            .as_deref()
+            .map(str::to_string)
             .or_else(|| self.current_source_file.clone());
         let saved_source_file = std::mem::replace(&mut self.current_source_file, body_source_file);
         // A literal in the body is written in the encoding the block's own

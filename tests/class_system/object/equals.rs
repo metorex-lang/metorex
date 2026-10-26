@@ -140,25 +140,9 @@ fn test_equals_dict_nested() {
 fn test_equals_instance() {
     let class = Class::new("TestClass", None);
 
-    let inst1 = Rc::new(RefCell::new(Instance {
-        class: Rc::clone(&class),
-        instance_vars: Default::default(),
-        singleton_methods: Rc::new(RefCell::new(HashMap::new())),
-        singleton_class: Rc::new(RefCell::new(None)),
-        frozen: false,
-        program_dunder_names: std::collections::HashSet::new(),
-        interpreter_names: std::collections::HashSet::new(),
-    }));
+    let inst1 = Instance::new(Rc::clone(&class));
     let inst2 = Rc::clone(&inst1);
-    let inst3 = Rc::new(RefCell::new(Instance {
-        class: Rc::clone(&class),
-        instance_vars: Default::default(),
-        singleton_methods: Rc::new(RefCell::new(HashMap::new())),
-        singleton_class: Rc::new(RefCell::new(None)),
-        frozen: false,
-        program_dunder_names: std::collections::HashSet::new(),
-        interpreter_names: std::collections::HashSet::new(),
-    }));
+    let inst3 = Instance::new(Rc::clone(&class));
 
     let obj1 = Object::Instance(inst1);
     let obj2 = Object::Instance(inst2);

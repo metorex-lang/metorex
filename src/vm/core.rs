@@ -402,6 +402,9 @@ pub struct VirtualMachine {
     /// body is running. A block written inside another belongs to the method
     /// the outer one was written in, not to whatever method is running it.
     pub(crate) lexical_home_frame: Option<Option<u64>>,
+    /// What the last block written closed over, which a block written in
+    /// the same scopes after it shares, whichever literal it is.
+    pub(crate) closure_here: crate::vm::block_reuse::ClosureCache,
     /// The scope the main script's own top level runs in. TOPLEVEL_BINDING
     /// stands over it, so the locals it names are whatever that scope holds
     /// when it is asked.
@@ -770,6 +773,7 @@ impl VirtualMachine {
             random_seed: Object::Int(seed_from_clock() as i64),
             rendering_frozen_error: false,
             lexical_home_frame: None,
+            closure_here: Default::default(),
             main_script_scope: None,
             deconstructed_values: Vec::new(),
             pattern_failure: None,

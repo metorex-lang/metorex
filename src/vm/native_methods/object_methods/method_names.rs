@@ -194,8 +194,8 @@ impl VirtualMachine {
         let mut names: Vec<String> = Vec::new();
         // `def obj.name` records the method on the instance itself.
         if let View::Instance(inst) = receiver.view() {
-            for name in inst.borrow().singleton_methods.borrow().keys() {
-                names.push(name.clone());
+            for (name, _) in inst.borrow().singleton_methods() {
+                names.push(name);
             }
         }
         let singleton = match receiver.view() {

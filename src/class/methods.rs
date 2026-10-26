@@ -275,29 +275,31 @@ impl Class {
     /// chain has changed since the name was last looked up here.
     pub fn find_method(&self, name: &str) -> Option<Rc<Method>> {
         let state = method_state();
-        if let Some((cached_under, found)) = self.method_cache.borrow().get(name)
+        if let Some((cached_under, found, _)) = self.method_cache.borrow().get(name)
             && *cached_under == state
         {
             return found.clone();
         }
-        *self
-            .method_walks
-            .borrow_mut()
-            .entry(name.to_string())
-            .or_insert(0) += 1;
         let found = self.walk_for_method(name);
         // A lookup runs no program code, so the state it started under is the
         // one the answer holds for.
-        self.method_cache
-            .borrow_mut()
-            .insert(name.to_string(), (state, found.clone()));
+        let mut cache = self.method_cache.borrow_mut();
+        match cache.get_mut(name) {
+            Some(held) => *held = (state, found.clone(), held.2 + 1),
+            None => {
+                cache.insert(shared_name(name), (state, found.clone(), 1));
+            }
+        }
         found
     }
 
     /// How many times `find_method` walked the ancestry for `name` rather than
     /// answering from the cache.
     pub fn method_lookup_walks(&self, name: &str) -> u64 {
-        self.method_walks.borrow().get(name).copied().unwrap_or(0)
+        self.method_cache
+            .borrow()
+            .get(name)
+            .map_or(0, |held| u64::from(held.2))
     }
 
     fn walk_for_method(&self, name: &str) -> Option<Rc<Method>> {
@@ -524,4 +526,23 @@ impl Class {
         names.sort();
         names
     }
+}
+
+thread_local! {
+    /// The names method caches are keyed by, each held once.
+    static CACHED_NAMES: RefCell<crate::fast_hash::NameSet<Rc<str>>> =
+        RefCell::new(crate::fast_hash::NameSet::default());
+}
+
+/// `name` as the method caches hold it.
+fn shared_name(name: &str) -> Rc<str> {
+    CACHED_NAMES.with(|names| {
+        let mut names = names.borrow_mut();
+        if let Some(held) = names.get(name) {
+            return Rc::clone(held);
+        }
+        let held: Rc<str> = name.into();
+        names.insert(Rc::clone(&held));
+        held
+    })
 }

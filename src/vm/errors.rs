@@ -156,7 +156,7 @@ fn receiver_wording(receiver: &Object) -> String {
             // An object carrying methods of its own is named as itself, since
             // its class is a singleton the program never wrote down.
             if instance.borrow().singleton_class.borrow().is_some()
-                || !instance.borrow().singleton_methods.borrow().is_empty()
+                || instance.borrow().has_singleton_methods()
             {
                 return receiver.to_string();
             }
@@ -224,7 +224,7 @@ impl crate::vm::VirtualMachine {
             View::Class(class) | View::Module(class) => self.written_class_name(class, position),
             View::Instance(instance) => {
                 let has_singleton = instance.borrow().singleton_class.borrow().is_some()
-                    || !instance.borrow().singleton_methods.borrow().is_empty();
+                    || instance.borrow().has_singleton_methods();
                 if has_singleton {
                     None
                 } else {

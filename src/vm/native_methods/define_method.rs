@@ -63,7 +63,7 @@ impl VirtualMachine {
                 // `source_location` reports for one built this way.
                 let mut written = self.source_location_for(position);
                 if let Some(named) = &block.source_file {
-                    written.filename = Some(named.clone());
+                    written.filename = Some(named.to_string());
                 }
                 made.source_location = Some(written);
                 // The method belongs to the class it was defined on, which is

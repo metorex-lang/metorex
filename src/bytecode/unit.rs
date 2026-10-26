@@ -366,6 +366,12 @@ pub struct SharedBody {
     /// the places of the code it was made in and its file, which the next
     /// block made in the same code shares.
     pub places: std::cell::RefCell<Option<KeptPlaces>>,
+    /// The local names the last block the literal made could see, which the
+    /// next block shares when it sees the same ones.
+    pub reserved_names: std::cell::RefCell<Option<std::rc::Rc<Vec<String>>>>,
+    /// The file the last block the literal made was written in, which the
+    /// next block written there shares.
+    pub file: std::cell::RefCell<Option<std::rc::Rc<str>>>,
 }
 
 /// The places a block was written within, kept with what they were made
@@ -842,6 +848,8 @@ impl Unit {
             kept: Default::default(),
             outer_locals: std::rc::Rc::new(outer_locals),
             places: Default::default(),
+            reserved_names: Default::default(),
+            file: Default::default(),
         });
         self.blocks.push(literal);
         self.blocks.len() - 1

@@ -246,9 +246,7 @@ impl VirtualMachine {
             return None;
         }
         let instance = instance.borrow();
-        if !instance.singleton_methods.borrow().is_empty()
-            || instance.singleton_class.borrow().is_some()
-        {
+        if instance.has_singleton_methods() || instance.singleton_class.borrow().is_some() {
             return None;
         }
         Some(Rc::clone(&instance.class))

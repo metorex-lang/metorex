@@ -1264,7 +1264,7 @@ fn native_answer_follows_class(
     };
     let instance = instance.borrow();
     std::rc::Rc::ptr_eq(&instance.class, class)
-        && instance.singleton_methods.borrow().is_empty()
+        && !instance.has_singleton_methods()
         && instance.singleton_class.borrow().is_none()
         && !class.is_singleton_class()
         && class.superclass.as_ref().is_some_and(|parent| {

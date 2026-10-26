@@ -87,8 +87,7 @@ impl VirtualMachine {
                         };
                         new_inst.borrow_mut().set_var(k.clone(), held);
                     }
-                    new_inst.borrow_mut().program_dunder_names = inst.program_dunder_names.clone();
-                    new_inst.borrow_mut().interpreter_names = inst.interpreter_names.clone();
+                    new_inst.borrow().take_names_listed_by(&inst);
                     Object::Instance(new_inst)
                 };
                 // The copy gets `initialize_copy` with the original, so
@@ -313,13 +312,9 @@ impl VirtualMachine {
                 copied_singleton.take_ownership_of_methods_from(&singleton);
                 *copied.borrow().singleton_class.borrow_mut() = Some(copied_singleton);
             }
-            let methods = original.borrow().singleton_methods.borrow().clone();
+            let methods = original.borrow().singleton_methods();
             for (name, method) in methods {
-                copied
-                    .borrow_mut()
-                    .singleton_methods
-                    .borrow_mut()
-                    .insert(name, method);
+                copied.borrow().define_singleton_method(name, method);
             }
         }
         // A collection keeps its singleton methods against its address, so
