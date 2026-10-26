@@ -236,14 +236,26 @@ its length from one, where a `Vec` of elements that size starts with room
 for four, so a body of one statement holds one. A compiled unit gives back
 the room its tables grew into once it is compiled, by moving each into a
 block of its own length, since macOS keeps a block of 16 KB or more whole
-when `realloc` asks for less. A unit records an error spot where the spot
-changes rather than for each instruction. The main script's methods are
-encoded as the parser reads each one, the way the carried libraries' are,
-and decoded when first called, so a method that never runs holds no tree.
-Their bytes last the whole run, which is why only the main script, read
-once, is kept this way. The main script is
-checked against prism after Metorex's parser frees its tokens, so prism's
-tree takes the blocks they held.
+when `realloc` asks for less. A unit records an error spot for each run of
+instructions that share one, with the names the spots hold kept once in the
+unit, and each instruction's position in 12 bytes, with the prelude flag in
+the offset's top bit. A Symbol's name is kept once in the table of ids,
+which a lookup reads without copying the name. The main script's methods are
+encoded as the parser reads each one, the way the carried libraries' are.
+A method's body and a class or module body are decoded only to compile or
+run them and their trees are freed after, so an encoded body keeps no tree.
+A body records its statement count and whether the program rather than the
+prelude wrote its first statement, which the calls that ask answer without
+decoding it. The main script's bytes last the whole run, which is why only
+the main script, read once, is kept this way. The parser reads the
+main script's tokens from the lexer as it reaches them, in chunks of 4,096,
+and frees the chunks before the top-level statement it is reading, so the
+900,013 tokens of `30k_ifelse` are never held at once. The main script is
+checked against prism before the VM starts. During the check prism's
+blocks come from mapped chunks that are unmapped when it ends, where
+blocks freed one by one left 62 MB of `30k_ifelse` resident in pages the
+rest of the run did not reuse. A parameter is 56 bytes, with its default
+value in a box, and a parameter list starts with room for one.
 
 The reports on macOS, of 2026-10-25 for `empty` and 2026-10-24 for the
 rest, with the ruby-bench rows run for one warmup iteration and two more,

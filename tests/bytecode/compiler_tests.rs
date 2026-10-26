@@ -69,7 +69,7 @@ fn a_capitalized_name_is_read_as_a_constant() {
 #[test]
 fn each_statement_starts_at_its_first_instruction() {
     let unit = unit_of("first = 1\nsecond = 2\n");
-    let starts: Vec<(usize, Option<usize>, u32)> = unit
+    let starts: Vec<(usize, Option<u32>, u32)> = unit
         .statement_starts
         .iter()
         .enumerate()
@@ -108,9 +108,9 @@ fn an_integer_past_sixteen_bits_is_a_constant() {
 #[test]
 fn a_call_is_pointed_at_by_its_receiver_and_method_name() {
     let unit = unit_of("\n  held.missing");
-    let spot = unit.error_spots[1].clone().expect("no spot");
+    let spot = unit.error_spots.get(1).expect("no spot");
     assert_eq!((spot.start.line, spot.start.column), (2, 3));
-    assert_eq!(spot.name.as_deref(), Some("missing"));
+    assert_eq!(unit.error_spots.name_of(&spot), Some("missing"));
 }
 
 #[test]

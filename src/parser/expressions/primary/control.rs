@@ -6,7 +6,7 @@ use crate::error::MetorexError;
 use crate::lexer::{Position, TokenKind};
 use crate::parser::Parser;
 
-impl Parser {
+impl Parser<'_> {
     /// Parse a case expression (pattern matching in expression context)
     ///
     /// Supports two syntaxes:
@@ -314,7 +314,7 @@ impl Parser {
     }
 }
 
-impl crate::parser::Parser {
+impl crate::parser::Parser<'_> {
     /// A loop read for its value. The loop stays a statement, held in a body
     /// so what surrounds it can chain onto what the loop answered.
     /// `for ... end` read as an expression, which is what a call written on

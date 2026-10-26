@@ -7,7 +7,7 @@ use crate::error::MetorexError;
 use crate::lexer::TokenKind;
 use crate::parser::Parser;
 
-impl Parser {
+impl Parser<'_> {
     /// A whole `in` clause's pattern. Written without brackets, a run of
     /// comma-separated patterns is an array pattern, so `in a, b` reads the
     /// same as `in [a, b]`.
@@ -521,7 +521,7 @@ impl Parser {
     }
 }
 
-impl Parser {
+impl Parser<'_> {
     /// Say that a pattern binds this name, so the rest of its scope reads it
     /// as a local rather than as a call.
     pub(crate) fn note_bound_name(&mut self, name: &str) -> Result<(), MetorexError> {

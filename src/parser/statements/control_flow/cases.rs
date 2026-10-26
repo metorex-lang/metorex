@@ -2,7 +2,7 @@
 
 use super::*;
 
-impl Parser {
+impl Parser<'_> {
     /// Parse a case statement (Ruby-style case/when)
     /// Syntax:
     ///   case expression

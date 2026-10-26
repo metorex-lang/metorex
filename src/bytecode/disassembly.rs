@@ -16,7 +16,7 @@ pub fn disassemble(unit: &Unit, file: &str, source: Option<&str>) -> String {
     let mut text = format!("== {file}\n");
     let mut line_written = None;
     for (at, instruction) in unit.instructions.iter().enumerate() {
-        let line = unit.positions[at].line as usize;
+        let line = unit.positions.at(at).line as usize;
         // A body with no statements has no line of its own.
         if line > 0 && line_written != Some(line) {
             line_written = Some(line);
@@ -128,7 +128,7 @@ pub fn listing(unit: &Unit) -> Vec<Listed> {
             instruction: *instruction,
             name: instruction.name(),
             operands: operands(instruction),
-            line: (unit.positions[at].line as usize),
+            line: (unit.positions.at(at).line as usize),
             line_event: unit
                 .statement_starts
                 .get(at)

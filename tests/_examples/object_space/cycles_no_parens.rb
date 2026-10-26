@@ -30,6 +30,9 @@ def make_holder
   nil
 end
 
+# A collection here leaves what startup made out of the count toward the
+# next automatic one, so none runs before the GC.start below.
+GC.start
 make_pair
 make_holder
 puts "before"

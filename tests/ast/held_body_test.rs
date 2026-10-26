@@ -95,3 +95,68 @@ fn an_expression_takes_88_bytes() {
 fn a_statement_takes_120_bytes() {
     assert_eq!(std::mem::size_of::<Statement>(), 120);
 }
+
+fn answer_at(position: metorex::lexer::Position) -> Statement {
+    Statement::Expression {
+        expression: Expression::IntLiteral {
+            value: 42,
+            position,
+        },
+        position,
+    }
+}
+
+#[test]
+fn a_held_body_reads_once_without_keeping_its_tree() {
+    let body = Body::held(vec![answer_at(pos(2, 3))]);
+
+    let read = body.read_once(<[Statement]>::to_vec);
+
+    assert_eq!(
+        (read, body.is_decoded()),
+        (vec![answer_at(pos(2, 3))], false)
+    );
+}
+
+#[test]
+fn a_held_body_says_the_program_wrote_it_without_being_decoded() {
+    let body = Body::held(vec![answer_at(pos(2, 3))]);
+
+    assert_eq!(
+        (body.opens_in_the_program(), body.is_decoded()),
+        (true, false)
+    );
+}
+
+#[test]
+fn a_body_opening_in_the_prelude_says_the_program_did_not_write_it() {
+    let mut position = pos(2, 3);
+    position.prelude = true;
+
+    assert!(!Body::held(vec![answer_at(position)]).opens_in_the_program());
+}
+
+#[test]
+fn an_empty_body_says_the_program_did_not_write_it() {
+    assert!(!Body::from(Vec::new()).opens_in_the_program());
+}
+
+#[test]
+fn a_held_copy_keeps_whether_the_program_wrote_a_method_body() {
+    let held: &'static [u8] = Vec::leak(encode_held(&vec![method_returning(42)]));
+
+    let decoded: Vec<Statement> = decode_held(held);
+
+    let Statement::MethodDef { body, .. } = &decoded[0] else {
+        panic!("a method definition");
+    };
+    assert_eq!(
+        (body.opens_in_the_program(), body.is_decoded()),
+        (true, false)
+    );
+}
+
+#[test]
+fn a_parameter_takes_56_bytes() {
+    assert_eq!(std::mem::size_of::<metorex::ast::Parameter>(), 56);
+}

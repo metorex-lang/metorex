@@ -203,3 +203,9 @@ fn an_identity_hash_takes_a_basic_object_key() {
         "true\n1\n\"undefined method 'hash' for an instance of Bare\"\n"
     );
 }
+
+#[test]
+fn an_identity_hash_finds_a_binary_string_by_the_object() {
+    let output = run_example("hash_methods/identity_lookups_of_binary_strings.rb");
+    assert_eq!(output, "true\nfalse\nnil\nstored\n1\n");
+}

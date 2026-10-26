@@ -2,7 +2,7 @@
 
 use super::*;
 
-impl Parser {
+impl Parser<'_> {
     /// Parse a single pattern for `case/in`, supporting `pattern => name` binding
     /// at the top level and inside array patterns.
     pub(crate) fn parse_case_in_pattern(&mut self) -> Result<MatchPattern, MetorexError> {

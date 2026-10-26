@@ -708,14 +708,13 @@ pub(crate) fn nearest_core_owner(owners: &[String], name: &str) -> Option<&'stat
 /// place in the source, a C function, or a method it stands for, as one made
 /// from a Method object does.
 pub(crate) fn written_by_program(method: &crate::object::Method) -> bool {
-    match method.body.first() {
-        Some(statement) => !statement.position().prelude,
-        None => {
-            method.source_location.is_some()
-                || method.provenance.c_function.is_some()
-                || method.provenance.native_alias.is_some()
-                || method.provenance.original_name.is_some()
-        }
+    if method.body.is_empty() {
+        method.source_location.is_some()
+            || method.provenance.c_function.is_some()
+            || method.provenance.native_alias.is_some()
+            || method.provenance.original_name.is_some()
+    } else {
+        method.body.opens_in_the_program()
     }
 }
 

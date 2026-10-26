@@ -3,7 +3,7 @@
 
 use super::*;
 
-impl Parser {
+impl Parser<'_> {
     /// Parse function calls and method calls
     pub(crate) fn parse_call(&mut self) -> Result<Expression, MetorexError> {
         let primary = self.parse_primary()?;

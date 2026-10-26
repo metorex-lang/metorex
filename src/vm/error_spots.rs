@@ -43,11 +43,12 @@ impl VirtualMachine {
         &mut self,
         error: &MetorexError,
         spot: &crate::bytecode::unit::ErrorSpot,
+        name: Option<&str>,
     ) {
         let MetorexError::UncaughtException { exception, .. } = error else {
             return;
         };
-        self.record_spot_hint(exception, spot.start, spot.name.clone());
+        self.record_spot_hint(exception, spot.start, name.map(str::to_string));
     }
 
     /// Record on the exception a `raise` statement raises the place of the

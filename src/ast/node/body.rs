@@ -12,6 +12,10 @@ pub struct Body(Rc<Statements>);
 
 struct Statements {
     decoded: OnceCell<Box<[Statement]>>,
+    /// Whether the first statement was written by the program rather than
+    /// in the prelude.
+    opens_in_the_program: bool,
+    count: u32,
     /// The bodies of the copy this one was read from, and its own bytes
     /// among them.
     encoded: Cell<Option<(&'static HeldAreas, &'static [u8])>>,
@@ -116,16 +120,66 @@ impl Body {
     /// freed, so this is for code read once a run, such as the main
     /// script's methods.
     pub fn held(statements: Vec<Statement>) -> Self {
-        let (areas, outer) = held_areas(Vec::leak(encode_held(&statements)));
+        let (opens_in_the_program, count) = (opens_in_the_program(&statements), count(&statements));
+        // A copy of the bytes takes a block of their own length, where the
+        // encoding grew into more.
+        let bytes: Box<[u8]> = encode_held(&statements).as_slice().into();
+        let (areas, outer) = held_areas(Box::leak(bytes));
         drop(statements);
         Body(Rc::new(Statements {
             decoded: OnceCell::new(),
+            opens_in_the_program,
+            count,
             encoded: Cell::new(Some((areas, outer))),
         }))
     }
 
+    /// Read the statements with `read`. A body still encoded is decoded for
+    /// this read alone and its tree freed after, for what is read once,
+    /// such as a method's body as it compiles.
+    pub fn read_once<R>(&self, read: impl FnOnce(&[Statement]) -> R) -> R {
+        match (self.0.decoded.get(), self.0.encoded.get()) {
+            (None, Some((areas, encoded))) => {
+                let statements: Box<[Statement]> = {
+                    let _counted = crate::memory_category::attribute(
+                        crate::memory_category::Category::SyntaxTree,
+                    );
+                    decode_among(areas, encoded)
+                };
+                read(&statements)
+            }
+            _ => read(self),
+        }
+    }
+
+    /// Whether there is a first statement and the program wrote it rather
+    /// than the prelude, which a body still encoded answers without being
+    /// decoded.
+    pub fn opens_in_the_program(&self) -> bool {
+        self.0.opens_in_the_program
+    }
+
+    /// How many statements there are, which a body still encoded answers
+    /// without being decoded.
+    pub fn len(&self) -> usize {
+        self.0.count as usize
+    }
+
+    /// Whether there are no statements, which a body still encoded answers
+    /// without being decoded.
+    pub fn is_empty(&self) -> bool {
+        self.0.count == 0
+    }
+
+    /// Whether the statements have been decoded and are kept.
+    pub fn is_decoded(&self) -> bool {
+        self.0.decoded.get().is_some()
+    }
+
     fn decoded(statements: Box<[Statement]>) -> Self {
         Body(Rc::new(Statements {
+            opens_in_the_program: opens_in_the_program(&statements),
+            count: count(&statements),
             decoded: OnceCell::from(statements),
             encoded: Cell::new(None),
         }))
@@ -175,8 +229,19 @@ impl std::fmt::Debug for Body {
     }
 }
 
+fn count(statements: &[Statement]) -> u32 {
+    u32::try_from(statements.len()).expect("a body holds fewer than four billion statements")
+}
+
+fn opens_in_the_program(statements: &[Statement]) -> bool {
+    statements
+        .first()
+        .is_some_and(|statement| !statement.position().prelude)
+}
+
 /// A body is written as which area its bytes are in, where they start
-/// there, and how many there are.
+/// there, how many there are, whether the program wrote its first
+/// statement, and how many statements it holds.
 impl serde::Serialize for Body {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let encoded = rmp_serde::to_vec(&**self).map_err(serde::ser::Error::custom)?;
@@ -196,13 +261,21 @@ impl serde::Serialize for Body {
             Ok(start)
         })?;
         let place = |at: usize| u32::try_from(at).map_err(serde::ser::Error::custom);
-        (when_called, place(start)?, place(encoded.len())?).serialize(serializer)
+        (
+            when_called,
+            place(start)?,
+            place(encoded.len())?,
+            self.opens_in_the_program(),
+            self.0.count,
+        )
+            .serialize(serializer)
     }
 }
 
 impl<'de> serde::Deserialize<'de> for Body {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let (when_called, start, length) = <(bool, u32, u32)>::deserialize(deserializer)?;
+        let (when_called, start, length, opens_in_the_program, count) =
+            <(bool, u32, u32, bool, u32)>::deserialize(deserializer)?;
         let areas = DECODING
             .get()
             .ok_or_else(|| serde::de::Error::custom("a body decoded outside decode_held"))?;
@@ -216,6 +289,8 @@ impl<'de> serde::Deserialize<'de> for Body {
             .ok_or_else(|| serde::de::Error::custom("a body outside the copy being decoded"))?;
         Ok(Body(Rc::new(Statements {
             decoded: OnceCell::new(),
+            opens_in_the_program,
+            count,
             encoded: Cell::new(Some((areas, encoded))),
         })))
     }

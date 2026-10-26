@@ -29,9 +29,9 @@ use error::ErrorHandler;
 use token_stream::TokenStream;
 
 /// The parser converts a token stream into an AST
-pub struct Parser {
+pub struct Parser<'source> {
     /// Token stream for navigation
-    stream: TokenStream,
+    stream: TokenStream<'source>,
     /// Error handler for reporting and recovery
     error_handler: ErrorHandler,
     /// Track if we're currently parsing inside a class body
@@ -247,7 +247,7 @@ pub(crate) fn named_groups(pattern: &str) -> Vec<String> {
         .collect()
 }
 
-impl Parser {
+impl<'source> Parser<'source> {
     /// Whether `name` is a local variable where the walk stands: bound by a
     /// pattern already, or bound before this point anywhere but inside a
     /// block that has closed since.
@@ -434,7 +434,7 @@ impl Parser {
 
     /// A parser for code written inside this one, such as an interpolated
     /// `#{}`, which reads in the method and blocks this one is inside.
-    pub(crate) fn nested_parser(&self, tokens: Vec<Token>) -> Parser {
+    pub(crate) fn nested_parser(&self, tokens: Vec<Token>) -> Parser<'static> {
         let mut nested = Parser::new(tokens);
         nested.inherited_locals = self
             .bound_name_tokens
@@ -460,8 +460,18 @@ impl Parser {
     }
 
     pub fn new(tokens: Vec<Token>) -> Self {
+        Self::reading(TokenStream::new(tokens))
+    }
+
+    /// A parser reading its tokens from `lexer` as it reaches them, which
+    /// keeps only the tokens of the statement it is reading.
+    pub fn lexing(lexer: crate::lexer::Lexer<'source>) -> Self {
+        Self::reading(TokenStream::lexing(lexer))
+    }
+
+    fn reading(stream: TokenStream<'source>) -> Self {
         Self {
-            stream: TokenStream::new(tokens),
+            stream,
             error_handler: ErrorHandler::new(),
             in_class_body: false,
             ternary_depth: 0,
@@ -609,7 +619,7 @@ impl Parser {
     }
 
     /// Get a reference to the token stream for advanced operations
-    pub(crate) fn stream(&self) -> &TokenStream {
+    pub(crate) fn stream(&self) -> &TokenStream<'source> {
         &self.stream
     }
 
@@ -736,6 +746,9 @@ impl Parser {
                 break;
             }
 
+            // No statement reads back into the ones before it.
+            let at = self.stream.current_position();
+            self.stream.release_before(at.saturating_sub(1));
             let statement_start = self.peek().position.offset;
             match self.parse_statement().and_then(|stmt| {
                 self.refuse_unlooped_jumps_after(statement_start)

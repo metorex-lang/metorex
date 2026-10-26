@@ -5,7 +5,7 @@ use crate::error::MetorexError;
 use crate::lexer::{Position, TokenKind};
 use crate::parser::Parser;
 
-impl Parser {
+impl Parser<'_> {
     /// Parse a `super` call after the `super` keyword has been consumed.
     ///
     /// Three forms:

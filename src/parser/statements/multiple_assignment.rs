@@ -2,7 +2,7 @@
 
 use super::*;
 
-impl Parser {
+impl Parser<'_> {
     /// Look ahead to check if this is a multiple assignment (a, b = ...)
     /// by scanning comma-separated identifiers until we find = or something else.
     pub(crate) fn scans_assignment_targets(&self, mut offset: usize, had_first: bool) -> bool {

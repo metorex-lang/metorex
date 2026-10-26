@@ -5,7 +5,7 @@ use crate::error::MetorexError;
 use crate::lexer::{Position, TokenKind};
 use crate::parser::Parser;
 
-impl Parser {
+impl Parser<'_> {
     /// Parse a `lambda { ... }` / `lambda do ... end` literal after the
     /// `lambda` keyword has been consumed.
     pub(super) fn parse_lambda_literal(

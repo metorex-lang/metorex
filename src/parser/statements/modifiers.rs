@@ -3,7 +3,7 @@
 
 use super::*;
 
-impl Parser {
+impl Parser<'_> {
     /// Check for postfix if/unless modifiers and wrap the statement.
     /// Only matches if the modifier is on the same line (no newline before it).
     /// A control-flow form read as a statement, unless a `.` follows its

@@ -479,10 +479,7 @@ impl VirtualMachine {
 /// Whether a trace reports `method` as one Ruby writes in C: one the core
 /// library writes, or one an attribute call made.
 pub(crate) fn reported_as_c(method: &crate::object::Method) -> bool {
-    method
-        .body
-        .first()
-        .is_some_and(|held| held.position().prelude)
+    (!method.body.is_empty() && !method.body.opens_in_the_program())
         || made_by_an_attribute_call(method)
 }
 

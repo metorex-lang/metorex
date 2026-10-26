@@ -3,7 +3,7 @@
 
 use super::*;
 
-impl Parser {
+impl Parser<'_> {
     pub(crate) fn can_start_argument_for_call(&mut self, _callee: &Expression) -> bool {
         // A name the program has bound is a variable, so a sign after it
         // carries on the arithmetic rather than opening an argument.
@@ -585,7 +585,7 @@ impl Parser {
     }
 }
 
-impl Parser {
+impl Parser<'_> {
     /// The value of a `name:` argument written without parentheses: what
     /// follows it, or the local or method `name` when nothing does, which is
     /// the shorthand `call bar:, val:`.

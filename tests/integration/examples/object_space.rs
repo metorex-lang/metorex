@@ -141,3 +141,9 @@ fn an_object_with_a_singleton_class_is_collected_once_nothing_holds_it() {
     let output = run_example("object_space/objects_with_singleton_classes_are_collected.rb");
     assert_eq!(output, "1\n0\ntrue\n");
 }
+
+#[test]
+fn a_weak_key_map_asks_only_the_key_looked_up_for_its_hash() {
+    let output = run_example("object_space/weak_key_map_lookups.rb");
+    assert_eq!(output, "300\n1\ntrue\n14\nfalse\n6\nfalse\n");
+}

@@ -861,9 +861,9 @@ fn plan(vm: &VirtualMachine, unit: &Unit) -> (Vec<Planned>, Vec<Option<SlotRead>
                             .is_none_or(|index| i32::try_from(index).is_ok()) =>
                 {
                     Start::Inline {
-                        live: statement.live as u32,
+                        live: statement.live,
                         count: unit.register_count as u32,
-                        index: statement.index.map(|index| index as u32),
+                        index: statement.index,
                         checks: match statement.kind {
                             StartKind::Statement { .. } => true,
                             StartKind::BodyStatement { runs } => runs,

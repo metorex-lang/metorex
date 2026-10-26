@@ -22,7 +22,7 @@ pub(crate) fn build_method_from_params(
     let keyword_parameters: Vec<(String, Option<Expression>)> = parameters
         .iter()
         .filter(|p| p.is_named_keyword)
-        .map(|p| (p.name.clone(), p.default_value.clone()))
+        .map(|p| (p.name.clone(), p.default_value.as_deref().cloned()))
         .collect();
     let block_parameter = parameters
         .iter()
@@ -32,7 +32,7 @@ pub(crate) fn build_method_from_params(
         .iter()
         .filter(|p| !p.is_named_keyword && !p.is_keyword && !p.is_block)
         .enumerate()
-        .filter_map(|(i, p)| p.default_value.clone().map(|dv| (i, dv)))
+        .filter_map(|(i, p)| p.default_value.as_deref().cloned().map(|dv| (i, dv)))
         .collect();
     let variadic_param = parameters
         .iter()

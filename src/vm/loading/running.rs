@@ -157,6 +157,7 @@ impl VirtualMachine {
                     main_script: false,
                     partial_script: false,
                     scopes: None,
+                    whole_file: true,
                 },
             );
         if refused {

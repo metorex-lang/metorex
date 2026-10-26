@@ -2,7 +2,7 @@
 
 use super::*;
 
-impl Parser {
+impl Parser<'_> {
     /// Parse an if statement
     pub(crate) fn parse_if_statement(&mut self) -> Result<Statement, MetorexError> {
         let start_pos = self.expect(TokenKind::If, "Expected 'if'")?.position;

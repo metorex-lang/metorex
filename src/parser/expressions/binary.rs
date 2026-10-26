@@ -6,7 +6,7 @@ use crate::error::MetorexError;
 use crate::lexer::TokenKind;
 use crate::parser::Parser;
 
-impl Parser {
+impl Parser<'_> {
     /// Parse logical OR (||)
     ///
     /// `or` tests what `||` tests, but it binds more loosely than a paren-less

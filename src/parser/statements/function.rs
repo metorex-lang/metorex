@@ -18,7 +18,7 @@ pub(crate) const ANONYMOUS_BLOCK: &str = "__anon_block";
 pub(crate) const ANONYMOUS_SPLAT: &str = "__anon_splat";
 pub(crate) const ANONYMOUS_KWREST: &str = "__anon_kwrest";
 
-impl Parser {
+impl Parser<'_> {
     /// Parse the method name that follows the `.` of a singleton definition
     /// (`def obj.name`). Accepts plain identifiers, operator method names,
     /// `[]` / `[]=`, and the keywords Ruby also allows as method names
@@ -558,19 +558,25 @@ impl Parser {
                     }
                     _ => return Err(self.error_at_previous("Expected parameter name after '&'")),
                 };
-                params.push(Parameter::block(name, param_pos));
+                crate::parser::push_tight(&mut params, Parameter::block(name, param_pos));
             } else if self.match_token(&[TokenKind::StarStar]) {
                 self.skip_parameter_newlines();
                 if self.check(&[TokenKind::Comma, TokenKind::Semicolon]) {
-                    params.push(Parameter::keyword(ANONYMOUS_KWREST.to_string(), param_pos));
+                    crate::parser::push_tight(
+                        &mut params,
+                        Parameter::keyword(ANONYMOUS_KWREST.to_string(), param_pos),
+                    );
                 } else if self.match_token(&[TokenKind::Nil]) {
                     // `**nil` says the method takes no keyword arguments at
                     // all. It is recorded so the method can report it, and
                     // nothing is ever bound under the name.
-                    params.push(Parameter::keyword(
-                        crate::ast::parameter_marks::NO_KEYWORDS_PARAM.to_string(),
-                        param_pos,
-                    ));
+                    crate::parser::push_tight(
+                        &mut params,
+                        Parameter::keyword(
+                            crate::ast::parameter_marks::NO_KEYWORDS_PARAM.to_string(),
+                            param_pos,
+                        ),
+                    );
                 } else {
                     let name = match self.advance().kind {
                         TokenKind::Ident(name) => {
@@ -583,12 +589,15 @@ impl Parser {
                             );
                         }
                     };
-                    params.push(Parameter::keyword(name, param_pos));
+                    crate::parser::push_tight(&mut params, Parameter::keyword(name, param_pos));
                 }
             } else if self.match_token(&[TokenKind::Star]) {
                 self.skip_parameter_newlines();
                 if self.check(&[TokenKind::Comma, TokenKind::Semicolon]) {
-                    params.push(Parameter::variadic(ANONYMOUS_SPLAT.to_string(), param_pos));
+                    crate::parser::push_tight(
+                        &mut params,
+                        Parameter::variadic(ANONYMOUS_SPLAT.to_string(), param_pos),
+                    );
                 } else {
                     let name = match self.advance().kind {
                         TokenKind::Ident(name) => {
@@ -599,20 +608,23 @@ impl Parser {
                             return Err(self.error_at_previous("Expected parameter name after '*'"));
                         }
                     };
-                    params.push(Parameter::variadic(name, param_pos));
+                    crate::parser::push_tight(&mut params, Parameter::variadic(name, param_pos));
                 }
             } else if self.match_token(&[TokenKind::LParen]) {
                 // `def f((a, b))` spreads one array argument across the names
                 // in the group, which the binder undoes by the marker.
                 let names = self.read_parameter_group()?;
-                params.push(Parameter::simple(
-                    format!(
-                        "{}{}",
-                        crate::ast::parameter_marks::DESTRUCTURED_GROUP_PREFIX,
-                        names
+                crate::parser::push_tight(
+                    &mut params,
+                    Parameter::simple(
+                        format!(
+                            "{}{}",
+                            crate::ast::parameter_marks::DESTRUCTURED_GROUP_PREFIX,
+                            names
+                        ),
+                        param_pos,
                     ),
-                    param_pos,
-                ));
+                );
             } else {
                 let name = match crate::parser::method_name_as_identifier(self.advance().kind) {
                     TokenKind::Ident(name) => {
@@ -638,14 +650,20 @@ impl Parser {
                     } else {
                         Some(self.parse_expression()?)
                     };
-                    params.push(Parameter::named_keyword(name, default, param_pos));
+                    crate::parser::push_tight(
+                        &mut params,
+                        Parameter::named_keyword(name, default, param_pos),
+                    );
                 } else if self.match_token(&[TokenKind::Equal]) {
                     // `def foo(a = b = c = {})` sets all three to the one
                     // value, so a default reads an assignment of its own.
                     let default = self.parse_expression_with_assignment()?;
-                    params.push(Parameter::with_default(name, default, param_pos));
+                    crate::parser::push_tight(
+                        &mut params,
+                        Parameter::with_default(name, default, param_pos),
+                    );
                 } else {
-                    params.push(Parameter::simple(name, param_pos));
+                    crate::parser::push_tight(&mut params, Parameter::simple(name, param_pos));
                 }
             }
 
@@ -677,9 +695,18 @@ impl Parser {
             // `def foo(...)` forwards every argument, which is the three
             // anonymous parameters taken together.
             if self.match_token(&[TokenKind::DotDotDot]) {
-                params.push(Parameter::variadic(ANONYMOUS_SPLAT.to_string(), param_pos));
-                params.push(Parameter::keyword(ANONYMOUS_KWREST.to_string(), param_pos));
-                params.push(Parameter::block(ANONYMOUS_BLOCK.to_string(), param_pos));
+                crate::parser::push_tight(
+                    &mut params,
+                    Parameter::variadic(ANONYMOUS_SPLAT.to_string(), param_pos),
+                );
+                crate::parser::push_tight(
+                    &mut params,
+                    Parameter::keyword(ANONYMOUS_KWREST.to_string(), param_pos),
+                );
+                crate::parser::push_tight(
+                    &mut params,
+                    Parameter::block(ANONYMOUS_BLOCK.to_string(), param_pos),
+                );
                 self.skip_whitespace();
                 if !self.match_token(&[TokenKind::Comma]) {
                     break;
@@ -690,7 +717,10 @@ impl Parser {
             // an anonymous block parameter, forwarded on by a bare `&`.
             if self.match_token(&[TokenKind::Ampersand]) {
                 if self.check(&[TokenKind::Comma, TokenKind::RParen]) {
-                    params.push(Parameter::block(ANONYMOUS_BLOCK.to_string(), param_pos));
+                    crate::parser::push_tight(
+                        &mut params,
+                        Parameter::block(ANONYMOUS_BLOCK.to_string(), param_pos),
+                    );
                 } else {
                     let name = match self.advance().kind {
                         TokenKind::Ident(name) => {
@@ -701,22 +731,28 @@ impl Parser {
                             return Err(self.error_at_previous("Expected parameter name after '&'"));
                         }
                     };
-                    params.push(Parameter::block(name, param_pos));
+                    crate::parser::push_tight(&mut params, Parameter::block(name, param_pos));
                 }
             }
             // Check for variadic parameter (*args). A bare `*` with no name is
             // an anonymous splat, which discards the remaining positional args.
             else if self.match_token(&[TokenKind::StarStar]) {
                 if self.check(&[TokenKind::Comma, TokenKind::RParen, TokenKind::Pipe]) {
-                    params.push(Parameter::keyword(ANONYMOUS_KWREST.to_string(), param_pos));
+                    crate::parser::push_tight(
+                        &mut params,
+                        Parameter::keyword(ANONYMOUS_KWREST.to_string(), param_pos),
+                    );
                 } else if self.match_token(&[TokenKind::Nil]) {
                     // `**nil` says the method takes no keyword arguments at
                     // all. It is recorded so the method can report it, and
                     // nothing is ever bound under the name.
-                    params.push(Parameter::keyword(
-                        crate::ast::parameter_marks::NO_KEYWORDS_PARAM.to_string(),
-                        param_pos,
-                    ));
+                    crate::parser::push_tight(
+                        &mut params,
+                        Parameter::keyword(
+                            crate::ast::parameter_marks::NO_KEYWORDS_PARAM.to_string(),
+                            param_pos,
+                        ),
+                    );
                 } else {
                     let name = match self.advance().kind {
                         TokenKind::Ident(name) => {
@@ -729,14 +765,17 @@ impl Parser {
                             );
                         }
                     };
-                    params.push(Parameter::keyword(name, param_pos));
+                    crate::parser::push_tight(&mut params, Parameter::keyword(name, param_pos));
                 }
             }
             // Check for variadic parameter (*args). A bare `*` with no name is
             // an anonymous splat, which discards the remaining positional args.
             else if self.match_token(&[TokenKind::Star]) {
                 if self.check(&[TokenKind::Comma, TokenKind::RParen, TokenKind::Pipe]) {
-                    params.push(Parameter::variadic(ANONYMOUS_SPLAT.to_string(), param_pos));
+                    crate::parser::push_tight(
+                        &mut params,
+                        Parameter::variadic(ANONYMOUS_SPLAT.to_string(), param_pos),
+                    );
                 } else {
                     let name = match self.advance().kind {
                         TokenKind::Ident(name) => {
@@ -747,20 +786,23 @@ impl Parser {
                             return Err(self.error_at_previous("Expected parameter name after '*'"));
                         }
                     };
-                    params.push(Parameter::variadic(name, param_pos));
+                    crate::parser::push_tight(&mut params, Parameter::variadic(name, param_pos));
                 }
             } else if self.match_token(&[TokenKind::LParen]) {
                 // `def f((a, b))` spreads one array argument across the names
                 // in the group, which the binder undoes by the marker.
                 let names = self.read_parameter_group()?;
-                params.push(Parameter::simple(
-                    format!(
-                        "{}{}",
-                        crate::ast::parameter_marks::DESTRUCTURED_GROUP_PREFIX,
-                        names
+                crate::parser::push_tight(
+                    &mut params,
+                    Parameter::simple(
+                        format!(
+                            "{}{}",
+                            crate::ast::parameter_marks::DESTRUCTURED_GROUP_PREFIX,
+                            names
+                        ),
+                        param_pos,
                     ),
-                    param_pos,
-                ));
+                );
             } else {
                 let name = match crate::parser::method_name_as_identifier(self.advance().kind) {
                     TokenKind::Ident(name) => {
@@ -786,15 +828,21 @@ impl Parser {
                         } else {
                             Some(self.parse_expression()?)
                         };
-                    params.push(Parameter::named_keyword(name, default, param_pos));
+                    crate::parser::push_tight(
+                        &mut params,
+                        Parameter::named_keyword(name, default, param_pos),
+                    );
                 // Check for positional default value
                 } else if self.match_token(&[TokenKind::Equal]) {
                     // `def foo(a = b = c = {})` sets all three to the one
                     // value, so a default reads an assignment of its own.
                     let default = self.parse_expression_with_assignment()?;
-                    params.push(Parameter::with_default(name, default, param_pos));
+                    crate::parser::push_tight(
+                        &mut params,
+                        Parameter::with_default(name, default, param_pos),
+                    );
                 } else {
-                    params.push(Parameter::simple(name, param_pos));
+                    crate::parser::push_tight(&mut params, Parameter::simple(name, param_pos));
                 }
             }
 

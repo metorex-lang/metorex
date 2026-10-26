@@ -5,7 +5,7 @@ use crate::error::MetorexError;
 use crate::lexer::{Position, TokenKind};
 use crate::parser::Parser;
 
-impl Parser {
+impl Parser<'_> {
     /// Parse a parenthesized expression after the opening `(` has been consumed.
     /// Also handles parenthesized assignment: `(x = 5)`, `(@x = 5)`, etc.
     pub(super) fn parse_paren_group(

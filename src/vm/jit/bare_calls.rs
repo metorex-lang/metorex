@@ -110,7 +110,7 @@ impl VirtualMachine {
         if site.gave_up() {
             return None;
         }
-        let position = unit.positions[at];
+        let position = unit.positions.at(at);
         let (called_on, method, receiver) = match self.environment().get(name) {
             Some(held) => {
                 let Some(method) = self.definition_bound(site, name, &held) else {

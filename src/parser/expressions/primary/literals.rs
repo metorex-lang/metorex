@@ -5,7 +5,7 @@ use crate::error::MetorexError;
 use crate::lexer::{InterpolationPart, Lexer, Position, TokenKind};
 use crate::parser::Parser;
 
-impl Parser {
+impl Parser<'_> {
     /// Parse a `%w[a b c]` percent-word array literal token into an `Array` of `StringLiteral`s.
     pub(super) fn primary_percent_w(
         &self,
@@ -90,7 +90,7 @@ impl Parser {
     }
 }
 
-impl Parser {
+impl Parser<'_> {
     /// The code inside `#{...}`, which is a run of statements whose value is
     /// the last one's, so a modifier or a semicolon there means what it
     /// does anywhere else.
@@ -182,7 +182,7 @@ pub(super) fn regex_literal(pattern: String, flags: String, position: Position) 
     }
 }
 
-impl Parser {
+impl Parser<'_> {
     /// Build the expression for a regex literal. A pattern carrying `#{}`
     /// interpolations becomes `Regexp.new(<interpolated source>, flags)`, so
     /// the pattern is assembled where the literal is evaluated.
@@ -376,7 +376,7 @@ fn quoted_percent_word(word: &str) -> String {
     out
 }
 
-impl Parser {
+impl Parser<'_> {
     /// One word of a percent list. A `%W` or `%I` word reads its `#{}` parts the
     /// way a double-quoted string does.
     fn percent_word(&self, word: &str, filled: bool, position: Position) -> Expression {

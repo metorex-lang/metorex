@@ -288,6 +288,8 @@ fn archive(out: &Path, name: &str, objects: &[PathBuf]) {
 }
 
 const PRISM: &str = "vendor/prism";
+/// Where the header naming the allocator prism calls is.
+const PRISM_XALLOCATOR: &str = "build/prism";
 
 fn c_sources_under(directory: &Path, found: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(directory) else {
@@ -308,6 +310,7 @@ fn c_sources_under(directory: &Path, found: &mut Vec<PathBuf>) {
 /// in as a static library.
 fn compile_prism() {
     println!("cargo:rerun-if-changed={PRISM}");
+    println!("cargo:rerun-if-changed={PRISM_XALLOCATOR}");
     let out = PathBuf::from(std::env::var("OUT_DIR").expect("cargo sets OUT_DIR"));
     let compiler = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
     let include = format!("{PRISM}/include");
@@ -328,6 +331,7 @@ fn compile_prism() {
             let child = std::process::Command::new(&compiler)
                 .args(["-std=c99", "-O2", "-fPIC", "-fvisibility=hidden", "-I"])
                 .arg(&include)
+                .args(["-DPRISM_XALLOCATOR", "-I", PRISM_XALLOCATOR])
                 .arg("-c")
                 .arg(source)
                 .arg("-o")

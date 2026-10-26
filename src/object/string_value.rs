@@ -306,6 +306,11 @@ impl StringValue {
         self.encoding.get().to_string()
     }
 
+    /// The name of the encoding the string is tagged with, held for the run.
+    pub fn shared_encoding_name(&self) -> &'static str {
+        self.encoding.get()
+    }
+
     /// Tag the string as being in another encoding, keeping the text it
     /// reads as. Every reference to the same string sees the new tag.
     pub fn set_encoding(&self, encoding: impl Into<String>) {

@@ -7,7 +7,6 @@
 use super::utils::*;
 use super::{CallFrame, VirtualMachine};
 use crate::ast::{Expression, Statement};
-use crate::callable::Callable;
 use crate::class::Class;
 use crate::error::{MetorexError, StackFrame};
 use crate::lexer::Position;
@@ -943,7 +942,7 @@ impl VirtualMachine {
                     .define(block_param.clone(), Object::Nil);
             }
 
-            self.run_compiled_method_body(&method.unit, method.body(), method.lambda_body)
+            self.run_compiled_method_body(&method.unit, &method.body, method.lambda_body)
         })();
 
         // An error the interpreter raised in the body takes its backtrace
@@ -1080,7 +1079,7 @@ impl VirtualMachine {
                     .define(block_param.clone(), Object::Nil);
             }
 
-            self.run_compiled_method_body(&function.unit, function.body(), false)
+            self.run_compiled_method_body(&function.unit, &function.body, false)
         })();
 
         self.current_method_frame = saved_frame;
@@ -1286,10 +1285,7 @@ fn backs_a_core_value(receiver: &crate::object::Object) -> bool {
 /// library. A library `def self.name` stays behind the native table, where
 /// one a program writes stands in front of it.
 pub(crate) fn written_by_the_program(method: &std::rc::Rc<crate::object::Method>) -> bool {
-    method
-        .body
-        .first()
-        .is_some_and(|statement| !statement.position().prelude)
+    method.body.opens_in_the_program()
 }
 
 /// `**nil` says a method takes no keyword arguments, so a call that passes

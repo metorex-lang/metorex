@@ -12,7 +12,7 @@ pub struct Unit {
     pub jit: crate::vm::jit::JitSlot,
     /// The source position of each instruction, which backtraces,
     /// `error_highlight`, and line events read.
-    pub positions: Vec<Position>,
+    pub positions: Positions,
     /// The statement each instruction starts, if it starts one. A line event
     /// fires there and the interpreter checks for signals, thread switches,
     /// and collections, as it does before each statement it walks.
@@ -79,12 +79,12 @@ pub struct Unit {
 pub struct StatementStart {
     /// The statement's place in the body, counting from 0, for a statement
     /// of the body itself rather than one inside a branch or a loop.
-    pub index: Option<usize>,
+    pub index: Option<u32>,
     /// The statement's own position, which its line event reports.
     pub position: Position,
     /// The registers below this one hold values the statement is part of
     /// computing, and the ones from here on hold nothing yet.
-    pub live: usize,
+    pub live: u32,
     pub kind: StartKind,
 }
 
@@ -102,19 +102,68 @@ pub enum StartKind {
     /// An expression statement in a branch of an `if` written as an
     /// expression: the line's coverage when it is not the line the branch
     /// belongs to.
-    InBranch { enclosing_line: usize },
+    InBranch { enclosing_line: u32 },
     /// A statement of a class or module body: the line's coverage, and when
     /// `runs`, what an ordinary statement does as it starts.
     BodyStatement { runs: bool },
 }
 
+/// The source position of each instruction, as its line, its column, and
+/// its offset with whether it is the prelude's in the offset's top bit.
+#[derive(Debug, Default)]
+pub struct Positions(Vec<[u32; 3]>);
+
+/// The bit of a held offset that says the position is the prelude's.
+const PRELUDE_BIT: u32 = 1 << 31;
+
+/// A position as its line, its column, and its offset with the prelude bit.
+fn packed(position: Position) -> [u32; 3] {
+    assert!(
+        position.offset < PRELUDE_BIT,
+        "a source under two gigabytes"
+    );
+    let prelude = if position.prelude { PRELUDE_BIT } else { 0 };
+    [position.line, position.column, position.offset | prelude]
+}
+
+fn unpacked([line, column, offset]: [u32; 3]) -> Position {
+    Position {
+        line,
+        column,
+        offset: offset & !PRELUDE_BIT,
+        prelude: offset & PRELUDE_BIT != 0,
+    }
+}
+
+impl Positions {
+    /// The position of the instruction at `at`.
+    pub fn at(&self, at: usize) -> Position {
+        unpacked(self.0[at])
+    }
+
+    pub fn push(&mut self, position: Position) {
+        self.0.push(packed(position));
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
 /// The place in the source an error is pointed at, and the method or
-/// variable name there.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// variable name there, which `ErrorSpots::name_of` reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ErrorSpot {
     pub start: Position,
-    pub name: Option<String>,
+    name: u32,
 }
+
+/// What an `ErrorSpot` with no name holds for one.
+const NO_NAME: u32 = u32::MAX;
 
 /// The statement each instruction starts, kept for the instructions that
 /// start one, which are a few of them.
@@ -191,53 +240,82 @@ fn tighten<T>(list: &mut Vec<T>) {
 /// instructions that have a spot, in the order of the instructions.
 #[derive(Debug, Default)]
 pub struct ErrorSpots {
-    /// Where the spot changes, in order: from each instruction on until the
-    /// next entry, the instructions have the spot it holds. Most of an
-    /// expression's instructions share its spot, so they share one entry.
-    changes: Vec<(u32, Option<ErrorSpot>)>,
+    /// The runs of instructions that share a spot, in order. An instruction
+    /// in no run has no spot.
+    runs: Vec<SpotRun>,
     /// How many instructions have had their spot set.
     covered: u32,
+    /// The names the spots hold, each once.
+    names: Vec<Box<str>>,
+    /// Where each name is in `names`, while the unit is compiled.
+    named: std::collections::HashMap<Box<str>, u32>,
+}
+
+/// The instructions from `from` up to `to`, and the spot they share, with
+/// its position held as `Positions` holds one.
+#[derive(Debug, Clone, Copy)]
+struct SpotRun {
+    from: u32,
+    to: u32,
+    start: [u32; 3],
+    name: u32,
 }
 
 impl ErrorSpots {
+    /// A spot at `start` naming `name`, held among these spots' names.
+    pub fn spot(&mut self, start: Position, name: Option<&str>) -> ErrorSpot {
+        let name = match name {
+            None => NO_NAME,
+            Some(name) => match self.named.get(name) {
+                Some(&held) => held,
+                None => {
+                    let held = self.names.len() as u32;
+                    self.names.push(name.into());
+                    self.named.insert(name.into(), held);
+                    held
+                }
+            },
+        };
+        ErrorSpot { start, name }
+    }
+
+    /// The method or variable name `spot` points at.
+    pub fn name_of(&self, spot: &ErrorSpot) -> Option<&str> {
+        self.names.get(spot.name as usize).map(|name| &**name)
+    }
+
+    /// Give the instruction at `at`, the one after the last given one, its
+    /// spot.
     pub fn set(&mut self, at: usize, spot: Option<ErrorSpot>) {
         let at = at as u32;
-        let was_covered = self.covered;
-        self.covered = self.covered.max(at + 1);
-        if self[at as usize] == spot {
+        assert_eq!(at, self.covered, "spots are given in instruction order");
+        self.covered = at + 1;
+        let Some(spot) = spot else {
             return;
-        }
-        // An instruction after this one keeps the spot it had.
-        let after = (at + 1 < was_covered).then(|| self[at as usize + 1].clone());
-        match self
-            .changes
-            .binary_search_by_key(&at, |(held_at, _)| *held_at)
-        {
-            Ok(place) => self.changes[place].1 = spot,
-            Err(place) => self.changes.insert(place, (at, spot)),
-        }
-        if let Some(after) = after
-            && let Err(place) = self
-                .changes
-                .binary_search_by_key(&(at + 1), |(held_at, _)| *held_at)
-        {
-            self.changes.insert(place, (at + 1, after));
+        };
+        let start = packed(spot.start);
+        match self.runs.last_mut() {
+            Some(run) if run.to == at && run.start == start && run.name == spot.name => {
+                run.to = at + 1;
+            }
+            _ => self.runs.push(SpotRun {
+                from: at,
+                to: at + 1,
+                start,
+                name: spot.name,
+            }),
         }
     }
-}
 
-impl std::ops::Index<usize> for ErrorSpots {
-    type Output = Option<ErrorSpot>;
-
-    fn index(&self, at: usize) -> &Option<ErrorSpot> {
+    /// The spot of the instruction at `at`.
+    pub fn get(&self, at: usize) -> Option<ErrorSpot> {
         let at = at as u32;
-        if at >= self.covered {
-            return &None;
-        }
-        match self.changes.partition_point(|(held_at, _)| *held_at <= at) {
-            0 => &None,
-            place => &self.changes[place - 1].1,
-        }
+        let place = self.runs.partition_point(|run| run.from <= at);
+        let run = self.runs.get(place.checked_sub(1)?)?;
+        (at < run.to).then(|| ErrorSpot {
+            start: unpacked(run.start),
+            name: run.name,
+        })
     }
 }
 
@@ -594,10 +672,12 @@ impl Unit {
     /// Give back the room the tables grew into while the unit was compiled.
     pub fn shrink_to_fit(&mut self) {
         tighten(&mut self.instructions);
-        tighten(&mut self.positions);
+        tighten(&mut self.positions.0);
         tighten(&mut self.statement_starts.places);
         tighten(&mut self.statement_starts.starts);
-        tighten(&mut self.error_spots.changes);
+        tighten(&mut self.error_spots.runs);
+        tighten(&mut self.error_spots.names);
+        self.error_spots.named = std::collections::HashMap::new();
         tighten(&mut self.constants);
         tighten(&mut self.names);
         tighten(&mut self.constant_caches);
@@ -646,7 +726,7 @@ impl Unit {
         self.statement_starts.set(
             at,
             StatementStart {
-                index: Some(index),
+                index: Some(index as u32),
                 position,
                 live: 1,
                 kind: StartKind::Statement { line_event: true },
@@ -670,7 +750,7 @@ impl Unit {
             StatementStart {
                 index: None,
                 position,
-                live,
+                live: live as u32,
                 kind: StartKind::Statement { line_event: true },
             },
         );
@@ -681,7 +761,7 @@ impl Unit {
         self.statement_starts
             .starts
             .iter()
-            .find(|(_, start)| start.is_some_and(|start| start.index == Some(index)))
+            .find(|(_, start)| start.is_some_and(|start| start.index == Some(index as u32)))
             .map(|(at, _)| *at as usize)
     }
 

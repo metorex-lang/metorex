@@ -230,7 +230,7 @@ impl VirtualMachine {
     ) -> Result<Next, MetorexError> {
         let unit = run.unit;
         let instruction = unit.instructions[at];
-        let position = unit.positions[at];
+        let position = unit.positions.at(at);
         if crate::vm::counters::enabled() {
             crate::vm::counters::count_instruction(instruction.name());
         }
@@ -280,11 +280,11 @@ impl VirtualMachine {
     ) -> Result<(), MetorexError> {
         // No temporary lives from one statement to the next, and one left
         // holding a value would keep it from being freed.
-        for register in registers.iter_mut().skip(statement.live) {
+        for register in registers.iter_mut().skip(statement.live as usize) {
             *register = Object::Nil;
         }
         if let Some(index) = statement.index {
-            self.mark_statement(index);
+            self.mark_statement(index as usize);
         }
         self.start_statement(statement)
     }
@@ -301,8 +301,8 @@ impl VirtualMachine {
         match ran {
             Err(error) => {
                 let unit = run.unit;
-                if let Some(spot) = &unit.error_spots[at] {
-                    self.note_compiled_error_spot(&error, spot);
+                if let Some(spot) = unit.error_spots.get(at) {
+                    self.note_compiled_error_spot(&error, &spot, unit.error_spots.name_of(&spot));
                 }
                 match self.handle_error(unit, at, error, run.registers, run.state, run.base)? {
                     Some(target) => Ok(Next::JumpTo(target)),
@@ -344,7 +344,7 @@ impl VirtualMachine {
             run.state,
             unit.instructions[at],
             Extension::default(),
-            unit.positions[at],
+            unit.positions.at(at),
         );
         self.settle_instruction(run, at, ran)
     }
@@ -407,7 +407,7 @@ impl VirtualMachine {
         if let Instruction::GetIdentifier { to, name } = run.unit.instructions[at] {
             let name = &run.unit.names[usize::from(name)].text;
             let ran = self
-                .read_identifier(name, run.unit.positions[at])
+                .read_identifier(name, run.unit.positions.at(at))
                 .map(|value| {
                     run.registers[usize::from(to)] = value;
                     Next::Step
@@ -432,7 +432,7 @@ impl VirtualMachine {
                     run.state,
                     usize::from(base),
                     usize::from(site),
-                    run.unit.positions[at],
+                    run.unit.positions.at(at),
                     None,
                 )
                 .map(|()| Next::Step);
@@ -478,7 +478,7 @@ impl VirtualMachine {
         let Instruction::CallResolved { base, site } = run.unit.instructions[at] else {
             return self.step_instruction(run, at);
         };
-        let position = run.unit.positions[at];
+        let position = run.unit.positions.at(at);
         let known = match run.state.routes.last() {
             Some((CallRoute::OnSelf, _)) => {
                 reached(self, &run.unit.call_sites[usize::from(site)].name, position)
@@ -559,7 +559,7 @@ impl VirtualMachine {
         at: usize,
     ) -> Result<Next, MetorexError> {
         let ran = self
-            .pass_checkpoint(run.unit.positions[at])
+            .pass_checkpoint(run.unit.positions.at(at))
             .map(|()| Next::Step);
         self.settle_instruction(run, at, ran)
     }
@@ -1497,14 +1497,16 @@ impl VirtualMachine {
                     },
                 namespace,
                 superclass: superclass_value,
-            } => self.define_class(
-                name,
-                namespace.map(|held| registers[held].clone()),
-                superclass.as_deref(),
-                superclass_value.map(|held| registers[held].clone()),
-                body,
-                *position,
-            )?,
+            } => body.read_once(|statements| {
+                self.define_class(
+                    name,
+                    namespace.map(|held| registers[held].clone()),
+                    superclass.as_deref(),
+                    superclass_value.map(|held| registers[held].clone()),
+                    statements,
+                    *position,
+                )
+            })?,
             Definition::Module {
                 statement:
                     Statement::ModuleDef {
@@ -1514,23 +1516,27 @@ impl VirtualMachine {
                         ..
                     },
                 namespace,
-            } => self.define_module(
-                name,
-                namespace.map(|held| registers[held].clone()),
-                body,
-                *position,
-            )?,
+            } => body.read_once(|statements| {
+                self.define_module(
+                    name,
+                    namespace.map(|held| registers[held].clone()),
+                    statements,
+                    *position,
+                )
+            })?,
             Definition::SingletonClass {
                 target,
                 body,
                 position,
             } => {
-                return self.open_singleton_class(
-                    registers[*target].clone(),
-                    None,
-                    body,
-                    *position,
-                );
+                return body.read_once(|statements| {
+                    self.open_singleton_class(
+                        registers[*target].clone(),
+                        None,
+                        statements,
+                        *position,
+                    )
+                });
             }
             Definition::Attributes {
                 method,
@@ -1672,7 +1678,7 @@ impl VirtualMachine {
                 Ok(())
             }
             StartKind::InBranch { enclosing_line } => {
-                if self.coverage.is_some() && line != enclosing_line {
+                if self.coverage.is_some() && line != enclosing_line as usize {
                     self.coverage_count(line);
                 }
                 Ok(())
@@ -1787,7 +1793,7 @@ impl VirtualMachine {
         };
         let site = &unit.call_sites[usize::from(site)];
         let base = usize::from(base);
-        let position = unit.positions[at];
+        let position = unit.positions.at(at);
         let receiver = run.registers[base].clone();
         let (arguments, block) = call_inputs(site, base, run.registers, run.state);
         let ran = crate::vm::program::enter_nesting(position).and_then(|()| {

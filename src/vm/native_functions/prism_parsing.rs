@@ -298,6 +298,9 @@ pub struct PrismReading<'a> {
     pub main_script: bool,
     pub partial_script: bool,
     pub scopes: Option<&'a [String]>,
+    /// Whether the source is a whole file, which prism checks in mapped
+    /// chunks it gives back when the check ends.
+    pub whole_file: bool,
 }
 
 /// The options prism reads, laid out the way its Ruby library's
@@ -349,9 +352,16 @@ pub fn prism_refuses(source: &str, reading: &PrismReading) -> bool {
     let options = serialized_options(reading);
     let bytes = crate::file_loader::escaped_source_bytes(source)
         .unwrap_or_else(|| source.as_bytes().to_vec());
-    // SAFETY: the source and the options live for the call, which reads
-    // them and keeps neither.
-    !unsafe { pm_parse_success_p(bytes.as_ptr(), bytes.len(), options_pointer(&options)) }
+    let parse = || {
+        // SAFETY: the source and the options live for the call, which reads
+        // them and keeps neither.
+        unsafe { pm_parse_success_p(bytes.as_ptr(), bytes.len(), options_pointer(&options)) }
+    };
+    if reading.whole_file {
+        !super::prism_arena::in_an_arena(parse)
+    } else {
+        !parse()
+    }
 }
 
 impl VirtualMachine {
@@ -366,6 +376,7 @@ impl VirtualMachine {
                 main_script: true,
                 partial_script: false,
                 scopes: None,
+                whole_file: true,
             },
         )
     }

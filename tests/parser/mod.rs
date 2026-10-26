@@ -11,6 +11,7 @@ mod function_def_tests;
 mod interpolated_statement_tests;
 mod keyword_method_tests;
 mod lambda_block_tests;
+mod lexing_tests;
 mod local_name_call_tests;
 mod operator_method_tests;
 mod stabby_lambda_postfix_tests;

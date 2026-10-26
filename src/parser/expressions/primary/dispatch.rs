@@ -8,7 +8,7 @@ use crate::parser::Parser;
 
 use super::literals;
 
-impl Parser {
+impl Parser<'_> {
     /// Parse primary expressions (literals, identifiers, groups).
     pub(crate) fn parse_primary(&mut self) -> Result<Expression, MetorexError> {
         // A definition already read stands where the next primary would, so

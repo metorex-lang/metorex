@@ -2,7 +2,7 @@
 
 use super::*;
 
-impl Parser {
+impl Parser<'_> {
     /// Parse function/method arguments (with parentheses)
     pub(crate) fn parse_arguments(&mut self) -> Result<Vec<Expression>, MetorexError> {
         // `held.name (value rescue other)` writes the parentheses apart from

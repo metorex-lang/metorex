@@ -144,14 +144,33 @@ impl crate::vm::VirtualMachine {
             Some(slot) => slot.compiled(|| self.compile_body(body, kind)),
             None => Rc::new(self.compile_body(body, kind)),
         };
-        match &*compiled {
+        self.run_compiled(&compiled, || first_position(body))
+    }
+
+    /// Run a method's `body` through what it compiled to, answering how it
+    /// ended. The body's tree is read only to compile it.
+    fn run_compiled_method_unit(
+        &mut self,
+        slot: &UnitSlot,
+        body: &crate::ast::Body,
+    ) -> Result<ControlFlow, MetorexError> {
+        let compiled = slot.compiled(|| {
+            body.read_once(|statements| self.compile_body(statements, UnitKind::Method))
+        });
+        self.run_compiled(&compiled, || body.read_once(first_position))
+    }
+
+    fn run_compiled(
+        &mut self,
+        compiled: &Compiled,
+        refused_at: impl FnOnce() -> crate::lexer::Position,
+    ) -> Result<ControlFlow, MetorexError> {
+        match compiled {
             Compiled::Unit(unit) => {
                 self.hoist_unit_locals(unit);
                 self.run_unit_flow(unit)
             }
-            Compiled::Refused(_) => Err(too_deep(
-                body.first().map(Statement::position).unwrap_or_default(),
-            )),
+            Compiled::Refused(_) => Err(too_deep(refused_at())),
         }
     }
 
@@ -230,11 +249,11 @@ impl crate::vm::VirtualMachine {
     pub(crate) fn run_compiled_method_body(
         &mut self,
         slot: &UnitSlot,
-        body: &[Statement],
+        body: &crate::ast::Body,
         lambda_semantics: bool,
     ) -> Result<Object, MetorexError> {
         loop {
-            let ran = self.run_compiled_unit(Some(slot), body, UnitKind::Method);
+            let ran = self.run_compiled_method_unit(slot, body);
             if let Ok(ControlFlow::Return { .. }) = &ran
                 && let Some(running) = self.running_code.last_mut()
             {
@@ -384,4 +403,9 @@ fn method_body_answer(flow: ControlFlow, lambda_semantics: bool) -> Result<Objec
             location: position_to_location(position),
         }),
     }
+}
+
+/// Where the first of `body`'s statements is written.
+fn first_position(body: &[Statement]) -> crate::lexer::Position {
+    body.first().map(Statement::position).unwrap_or_default()
 }

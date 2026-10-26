@@ -301,15 +301,13 @@ fn real_main_after_inline(cli: Cli) {
     if cli.debug {
         eprintln!("[debug] File: {}", absolute_path.display());
         eprintln!("[debug] Source length: {} bytes", source.len());
+        eprintln!("[debug] Tokens: {}", Lexer::new(&source).tokenize().len());
     }
 
-    // Tokenize
-    let lexer = Lexer::new(&source);
-    let tokens = lexer.tokenize();
-
-    if cli.debug {
-        eprintln!("[debug] Tokens: {}", tokens.len());
-    }
+    // Prism checks the script before the VM comes up and the script is
+    // parsed, so the chunks its check maps come on top of little more than
+    // the source.
+    let prism_refused = prism_refuses_main_script(&source, &cli);
 
     // The VM comes up before the script is parsed so that a library named by
     // `-r` is loaded either way, and the `at_exit` handlers it registered run
@@ -318,13 +316,11 @@ fn real_main_after_inline(cli: Cli) {
     apply_cli_flags(&mut vm, &cli);
 
     // Parse
-    let mut parser = Parser::new(tokens);
+    let mut parser = Parser::lexing(Lexer::new(&source));
     parser.hold_method_bodies();
     let parsed = parser.parse();
     let warnings = parser.default_warnings().to_vec();
-    // The parser holds the tokens, which take more memory than the program.
     drop(parser);
-    let prism_refused = prism_refuses_main_script(&source, &cli);
     let errors = parsed.as_ref().err().cloned().unwrap_or_default();
     if let Some(messages) =
         refused_program_messages(&mut vm, &source, filename, prism_refused, &errors)

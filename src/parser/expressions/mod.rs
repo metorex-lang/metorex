@@ -15,7 +15,7 @@ use crate::parser::Parser;
 /// paired with default-value expressions keyed by parameter index.
 type BlockParams = (Vec<String>, Vec<(usize, Expression)>);
 
-impl Parser {
+impl Parser<'_> {
     /// The names inside a destructuring group, written back out so the binder
     /// can walk them. A group may hold groups of its own, and one name in it
     /// may take whatever the others leave.
@@ -757,7 +757,7 @@ impl Parser {
     /// blocks written inside it, which take numbered parameters of their own.
     fn mentions_a_numbered_parameter(&self, opened_at: usize, closed_at: usize) -> Option<usize> {
         let tokens = self.stream.tokens();
-        for (offset, token) in tokens[opened_at..closed_at].iter().enumerate() {
+        for (offset, token) in tokens.between(opened_at, closed_at).enumerate() {
             let at = opened_at + offset;
             let TokenKind::Ident(name) = &token.kind else {
                 continue;
@@ -782,7 +782,7 @@ impl Parser {
     /// this block's body. Ruby names whichever came first in the refusal.
     fn numbered_parameter_comes_first(&self, opened_at: usize, closed_at: usize) -> bool {
         let tokens = self.stream.tokens();
-        for (offset, token) in tokens[opened_at..closed_at].iter().enumerate() {
+        for (offset, token) in tokens.between(opened_at, closed_at).enumerate() {
             let at = opened_at + offset;
             if self.inside_a_nested_block(at, opened_at, closed_at) {
                 continue;
@@ -858,8 +858,10 @@ impl Parser {
                 highest = highest.max(place as usize);
             }
         };
-        for (offset, token) in self.stream.tokens()[opened_at..closed_at]
-            .iter()
+        for (offset, token) in self
+            .stream
+            .tokens()
+            .between(opened_at, closed_at)
             .enumerate()
         {
             // A block written inside this one reads its own numbered
@@ -911,16 +913,14 @@ impl Parser {
         let tokens = self.stream.tokens();
         // An assignment to `it` makes it a local from there on, so only a
         // mention ahead of the first one is the implicit parameter.
-        let first_assignment = tokens[opened_at..closed_at]
-            .windows(2)
-            .enumerate()
-            .find(|(offset, pair)| {
-                matches!(&pair[0].kind, TokenKind::Ident(name) if name == "it")
-                    && matches!(pair[1].kind, TokenKind::Equal)
-                    && !self.inside_a_nested_block(opened_at + offset, opened_at, closed_at)
+        let first_assignment = (opened_at..closed_at.saturating_sub(1))
+            .find(|&at| {
+                matches!(&tokens[at].kind, TokenKind::Ident(name) if name == "it")
+                    && matches!(tokens[at + 1].kind, TokenKind::Equal)
+                    && !self.inside_a_nested_block(at, opened_at, closed_at)
             })
-            .map_or(closed_at, |(offset, _)| opened_at + offset);
-        for (offset, token) in tokens[opened_at..first_assignment].iter().enumerate() {
+            .unwrap_or(closed_at);
+        for (offset, token) in tokens.between(opened_at, first_assignment).enumerate() {
             // `"#{it}!"` reads the parameter inside the string.
             if let TokenKind::InterpolatedString(parts) | TokenKind::CommandString(parts) =
                 &token.kind

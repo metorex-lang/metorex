@@ -5,7 +5,7 @@ use crate::error::{MetorexError, SourceLocation};
 use crate::lexer::TokenKind;
 use crate::parser::Parser;
 
-impl Parser {
+impl Parser<'_> {
     /// Parse a begin...rescue...else...ensure...end statement
     pub(crate) fn parse_begin_statement(&mut self) -> Result<Statement, MetorexError> {
         let start_pos = self.expect(TokenKind::Begin, "Expected 'begin'")?.position;
@@ -133,7 +133,7 @@ pub(crate) struct BeginParts {
     ensure_block: Option<Vec<Statement>>,
 }
 
-impl Parser {
+impl Parser<'_> {
     // Sentinel impl to keep the file's `Parser` impl block contiguous —
     // helpers added below.
 

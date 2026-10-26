@@ -28,6 +28,7 @@ mod math;
 mod method_objects;
 mod output;
 mod output_support;
+mod prism_arena;
 mod prism_parsing;
 pub(crate) use prism_parsing::{PrismReading, prism_refuses};
 mod processes;

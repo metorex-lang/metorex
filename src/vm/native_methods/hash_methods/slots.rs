@@ -251,6 +251,10 @@ impl VirtualMachine {
         if dict_rc.borrow().contains_key(&slot) {
             return Ok((slot.clone(), Some(slot)));
         }
+        // A hash comparing by identity places every key by its object id.
+        if dict_rc.borrow().contains_key(BY_IDENTITY_KEY) {
+            return Ok((slot, None));
+        }
         // A hash built outside the program, such as the environment, holds
         // keys placed by how they render rather than by `#hash`, and the
         // environment places one by the text it names. Those are found by

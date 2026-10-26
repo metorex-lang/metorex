@@ -6,7 +6,7 @@ use crate::error::MetorexError;
 use crate::lexer::TokenKind;
 use crate::parser::Parser;
 
-impl Parser {
+impl Parser<'_> {
     /// Parse unary operators (+, -, !, *splat)
     pub(crate) fn parse_unary(&mut self) -> Result<Expression, MetorexError> {
         if self.check(&[TokenKind::Tilde]) {

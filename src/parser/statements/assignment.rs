@@ -2,7 +2,7 @@
 
 use super::*;
 
-impl Parser {
+impl Parser<'_> {
     /// Parse the right-hand side of an assignment, supporting chained assignments
     /// like `@a = @b = value`.
     /// `x = 1 and y = 2` assigns each side in turn, since `and` and `or`

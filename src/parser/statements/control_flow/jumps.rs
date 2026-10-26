@@ -2,7 +2,7 @@
 
 use super::*;
 
-impl Parser {
+impl Parser<'_> {
     /// Parse a break statement, optionally with a value (e.g. `break 42`).
     pub(crate) fn parse_break_statement(&mut self) -> Result<Statement, MetorexError> {
         let pos = self.expect(TokenKind::Break, "Expected 'break'")?.position;

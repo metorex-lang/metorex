@@ -2,7 +2,7 @@
 
 use super::*;
 
-impl Parser {
+impl Parser<'_> {
     /// Parse a single statement
     pub(crate) fn parse_statement(&mut self) -> Result<Statement, MetorexError> {
         // A statement is never itself part of a paren-less argument list or

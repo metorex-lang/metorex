@@ -28,7 +28,9 @@ const SYMBOL_SHIFT: u32 = 8;
 #[derive(Default)]
 struct Symbols {
     names: Vec<&'static Rc<crate::object::StringValue>>,
-    ids: std::collections::HashMap<(String, String), u64>,
+    /// The ids by encoding and name, with the encoding empty for an ASCII
+    /// name, so a name already given an id is found without a copy of it.
+    ids: std::collections::HashMap<&'static str, std::collections::HashMap<Box<str>, u64>>,
 }
 
 thread_local! {
@@ -39,24 +41,22 @@ thread_local! {
 /// ASCII name is one Symbol whatever ASCII-compatible encoding it was
 /// spelled in.
 fn symbol_id(name: Rc<crate::object::StringValue>) -> u64 {
-    let named = name.encoding_name();
+    let named = name.shared_encoding_name();
     let spelled_in_ascii = name.as_str().is_ascii()
-        && crate::vm::native_methods::string_methods::encoding_is_ascii_compatible(&named)
-        && !crate::vm::native_methods::class_methods::is_dummy_encoding(&named);
-    let encoding = if spelled_in_ascii {
-        String::new()
-    } else {
-        named
-    };
-    let key = (name.as_str().to_string(), encoding);
+        && crate::vm::native_methods::string_methods::encoding_is_ascii_compatible(named)
+        && !crate::vm::native_methods::class_methods::is_dummy_encoding(named);
+    let encoding = if spelled_in_ascii { "" } else { named };
     SYMBOLS.with(|symbols| {
         let mut symbols = symbols.borrow_mut();
-        if let Some(id) = symbols.ids.get(&key) {
+        let text = name.as_str();
+        if let Some(id) = symbols.ids.get(encoding).and_then(|ids| ids.get(&*text)) {
             return *id;
         }
+        let key: Box<str> = (*text).into();
+        drop(text);
         let id = symbols.names.len() as u64;
         symbols.names.push(Box::leak(Box::new(name)));
-        symbols.ids.insert(key, id);
+        symbols.ids.entry(encoding).or_default().insert(key, id);
         id
     })
 }

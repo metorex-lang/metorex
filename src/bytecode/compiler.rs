@@ -264,7 +264,7 @@ impl Compiler {
         let at = self.unit.emit(instruction, position);
         self.unit
             .error_spots
-            .set(at, self.spots.iter().rev().flatten().next().cloned());
+            .set(at, self.spots.iter().rev().flatten().next().copied());
         at
     }
 
@@ -744,8 +744,12 @@ impl Compiler {
             if let (Some(enclosing_line), Statement::Expression { .. }) =
                 (enclosing_line, statement)
             {
-                self.unit
-                    .set_start_kind(start, StartKind::InBranch { enclosing_line });
+                self.unit.set_start_kind(
+                    start,
+                    StartKind::InBranch {
+                        enclosing_line: enclosing_line as u32,
+                    },
+                );
             }
         }
         Ok(())
@@ -762,15 +766,9 @@ impl Compiler {
             } => {
                 // An error the assignment raises with no spot of its own is
                 // pointed at the setter or `[]=` it called.
-                self.spots
-                    .push(
-                        crate::vm::error_spots::assignment_spot(target).map(|(start, name)| {
-                            ErrorSpot {
-                                start,
-                                name: Some(name),
-                            }
-                        }),
-                    );
+                let spot = crate::vm::error_spots::assignment_spot(target)
+                    .map(|(start, name)| self.unit.error_spots.spot(start, Some(&name)));
+                self.spots.push(spot);
                 // Ruby's parser introduces the local where the assignment is
                 // written, ahead of the value, so a block on the right-hand
                 // side closes over the name being assigned. That is what
@@ -2608,10 +2606,9 @@ impl Compiler {
 
     /// Compile `expression` to leave its value in register `to`.
     fn expression(&mut self, expression: &Expression, to: usize) -> Result<(), &'static str> {
-        self.spots.push(
-            crate::vm::error_spots::spot_of(expression)
-                .map(|(start, name)| ErrorSpot { start, name }),
-        );
+        let spot = crate::vm::error_spots::spot_of(expression)
+            .map(|(start, name)| self.unit.error_spots.spot(start, name.as_deref()));
+        self.spots.push(spot);
         let held = self.next_register;
         let compiled = self
             .expression_in_place(expression, to)

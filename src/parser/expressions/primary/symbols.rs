@@ -102,7 +102,7 @@ pub(crate) fn starts_operator_symbol(kind: &TokenKind) -> bool {
     )
 }
 
-impl Parser {
+impl Parser<'_> {
     /// Parse a symbol literal after a leading `:` token has been consumed.
     pub(crate) fn parse_symbol_literal(
         &mut self,

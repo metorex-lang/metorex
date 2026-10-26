@@ -236,7 +236,13 @@ module ObjectSpace
   # references, and an entry goes once its key is freed.
   class WeakKeyMap
     def initialize
-      @entries = []
+      # Each key's hash as it was stored, to the entries of the keys with
+      # that hash.
+      @buckets = {}
+      # The entries stored since the dead were last dropped from them all,
+      # and how many were left then.
+      @stored = 0
+      @settled = 0
     end
 
     # What an object calls its class, asked without going through the object
@@ -265,52 +271,62 @@ module ObjectSpace
         raise NoMethodError,
               "undefined method 'hash' for an instance of #{ObjectSpace::WeakKeyMap.named(key)}"
       end
-      place = place_of(key)
-      if place.nil?
-        @entries.push([__weak_reference__(key), value])
+      wanted = key.__send__(:hash)
+      entry = entry_in(wanted, key)
+      if entry.nil?
+        (@buckets[wanted] ||= []).push([__weak_reference__(key), value])
+        @stored += 1
+        settle if @stored > 2 * @settled + 16
       else
-        @entries[place][1] = value
+        entry[1] = value
       end
       value
     end
 
     def [](key)
       return nil unless collectable?(key)
-      place = place_of(key)
-      place.nil? ? nil : @entries[place][1]
+      entry = entry_in(key.__send__(:hash), key)
+      entry.nil? ? nil : entry[1]
     end
 
     def delete(key)
-      place = collectable?(key) ? place_of(key) : nil
-      if place.nil?
+      wanted = collectable?(key) ? key.__send__(:hash) : nil
+      entry = wanted.nil? ? nil : entry_in(wanted, key)
+      if entry.nil?
         return yield(key) if block_given?
         return nil
       end
-      entry = @entries.delete_at(place)
+      bucket = @buckets[wanted]
+      bucket.delete_if { |held| held.equal?(entry) }
+      @buckets.delete(wanted) if bucket.empty?
       __weak_release__(entry[0])
       entry[1]
     end
 
     def getkey(key)
       return nil unless collectable?(key)
-      place = place_of(key)
-      place.nil? ? nil : __weak_target__(@entries[place][0])
+      entry = entry_in(key.__send__(:hash), key)
+      entry.nil? ? nil : __weak_target__(entry[0])
     end
 
     def key?(key)
       return false unless collectable?(key)
-      !place_of(key).nil?
+      !entry_in(key.__send__(:hash), key).nil?
     end
 
     def clear
-      @entries.each { |entry| __weak_release__(entry[0]) }
-      @entries = []
+      @buckets.each_value do |bucket|
+        bucket.each { |entry| __weak_release__(entry[0]) }
+      end
+      @buckets = {}
+      @stored = 0
+      @settled = 0
       self
     end
 
     def size
       settle
-      @entries.size
+      @settled
     end
 
     def length
@@ -336,33 +352,40 @@ module ObjectSpace
     end
     private :collectable?
 
-    # Drop the entries whose key was freed.
+    # Drop the entries whose key was freed from every bucket.
     def settle
-      kept = []
-      @entries.each do |entry|
-        if __weak_alive__(entry[0])
-          kept.push(entry)
-        else
-          __weak_release__(entry[0])
-        end
+      @settled = 0
+      @buckets.delete_if do |_, bucket|
+        drop_dead(bucket)
+        @settled += bucket.size
+        bucket.empty?
       end
-      @entries = kept
+      @stored = @settled
     end
     private :settle
 
-    # Where a key sits. The hash decides which entries are worth comparing,
-    # and the same object is its own match however its `eql?` answers.
-    def place_of(key)
-      settle
-      wanted = key.__send__(:hash)
-      @entries.each_with_index do |entry, place|
+    def drop_dead(bucket)
+      bucket.delete_if do |entry|
+        next false if __weak_alive__(entry[0])
+        __weak_release__(entry[0])
+        true
+      end
+    end
+    private :drop_dead
+
+    # The entry of a key whose hash is `wanted`. The same object is its own
+    # match however its `eql?` answers.
+    def entry_in(wanted, key)
+      bucket = @buckets[wanted]
+      return nil if bucket.nil?
+      drop_dead(bucket)
+      bucket.each do |entry|
         held = __weak_target__(entry[0])
-        next unless held.__send__(:hash) == wanted
-        return place if held.equal?(key) || key.__send__(:eql?, held)
+        return entry if held.equal?(key) || key.__send__(:eql?, held)
       end
       nil
     end
-    private :place_of
+    private :entry_in
   end
 end
 

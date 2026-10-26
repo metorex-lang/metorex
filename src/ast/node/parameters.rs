@@ -20,7 +20,7 @@ impl Parameter {
     pub fn with_default(name: String, default_value: Expression, position: Position) -> Self {
         Parameter {
             name,
-            default_value: Some(default_value),
+            default_value: Some(Box::new(default_value)),
             is_variadic: false,
             is_keyword: false,
             is_named_keyword: false,
@@ -63,7 +63,7 @@ impl Parameter {
     ) -> Self {
         Parameter {
             name,
-            default_value,
+            default_value: default_value.map(Box::new),
             is_variadic: false,
             is_keyword: false,
             is_named_keyword: true,

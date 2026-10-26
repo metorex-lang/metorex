@@ -5,7 +5,7 @@ use crate::error::MetorexError;
 use crate::lexer::TokenKind;
 use crate::parser::Parser;
 
-impl Parser {
+impl Parser<'_> {
     /// Parse attr_reader statement: attr_reader :name1, :name2, ...
     pub(crate) fn parse_attr_reader(&mut self) -> Result<Statement, MetorexError> {
         let start_pos = self

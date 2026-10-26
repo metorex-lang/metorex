@@ -148,10 +148,10 @@ pub struct ElsifBranch {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Parameter {
     pub name: String,
-    pub default_value: Option<Expression>, // Default value for the parameter
-    pub is_variadic: bool,                 // True if this is a *args parameter
-    pub is_keyword: bool,                  // True if this is a **kwargs parameter
-    pub is_named_keyword: bool,            // True if this is a name: style keyword parameter
-    pub is_block: bool,                    // True if this is a &block parameter
+    pub default_value: Option<Box<Expression>>, // Default value for the parameter
+    pub is_variadic: bool,                      // True if this is a *args parameter
+    pub is_keyword: bool,                       // True if this is a **kwargs parameter
+    pub is_named_keyword: bool,                 // True if this is a name: style keyword parameter
+    pub is_block: bool,                         // True if this is a &block parameter
     pub position: Position,
 }

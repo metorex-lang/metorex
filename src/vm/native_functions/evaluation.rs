@@ -168,6 +168,7 @@ impl VirtualMachine {
                         main_script: false,
                         partial_script: true,
                         scopes: Some(&parser.inherited_local_names()),
+                        whole_file: false,
                     },
                 ) =>
             {

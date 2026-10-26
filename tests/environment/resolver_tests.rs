@@ -704,7 +704,7 @@ fn resolver_other_assignment_target() {
 fn resolver_function_def_with_default_param() {
     let mut r = Resolver::new();
     let mut param = Parameter::simple("x".to_string(), pos());
-    param.default_value = Some(int_lit(42));
+    param.default_value = Some(Box::new(int_lit(42)));
     let stmt = Statement::FunctionDef {
         name: "f".to_string(),
         parameters: vec![param],
@@ -721,7 +721,7 @@ fn resolver_function_def_with_default_param() {
 fn resolver_method_def_with_default_param() {
     let mut r = Resolver::new();
     let mut param = Parameter::simple("x".to_string(), pos());
-    param.default_value = Some(int_lit(0));
+    param.default_value = Some(Box::new(int_lit(0)));
     let stmt = Statement::MethodDef {
         is_class_method: false,
         name: "greet".to_string(),

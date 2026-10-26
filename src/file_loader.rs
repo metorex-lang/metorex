@@ -320,14 +320,7 @@ pub fn parse_file_with_warnings(
     source: &str,
     filename: &str,
 ) -> Result<(Vec<Statement>, ParseWarnings), MetorexError> {
-    // Create lexer from source
-    let lexer = Lexer::new(source);
-
-    // Tokenize source code
-    let tokens = lexer.tokenize();
-
-    // Create parser from tokens
-    let mut parser = Parser::new(tokens);
+    let mut parser = Parser::lexing(Lexer::new(source));
 
     // Parse and return AST, converting parse errors to MetorexError
     let parsed = parser.parse();

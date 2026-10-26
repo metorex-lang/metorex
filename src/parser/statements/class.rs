@@ -5,7 +5,7 @@ use crate::error::MetorexError;
 use crate::lexer::{Position, TokenKind};
 use crate::parser::Parser;
 
-impl Parser {
+impl Parser<'_> {
     /// Parse a class definition, whose body is a scope of its own that sees
     /// no local written outside it.
     pub(crate) fn parse_class_def(&mut self) -> Result<Statement, MetorexError> {
