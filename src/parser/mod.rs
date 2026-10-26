@@ -80,6 +80,9 @@ pub struct Parser {
     /// How deep the walk is inside a `def` body, where an `END` block is
     /// registered once for every call rather than once for the program.
     pub(crate) def_body_depth: usize,
+    /// Whether the bodies of the methods read are kept encoded until first
+    /// called. Their bytes last the whole run.
+    pub(crate) hold_method_bodies: bool,
     /// How many block bodies the parser sits inside. `BEGIN` belongs to the
     /// top level of a code unit, so one written inside a block is refused.
     pub(crate) block_body_depth: usize,
@@ -450,6 +453,12 @@ impl Parser {
         nested
     }
 
+    /// Keep the bodies of the methods read encoded until each is first
+    /// called, for code read once a run.
+    pub fn hold_method_bodies(&mut self) {
+        self.hold_method_bodies = true;
+    }
+
     pub fn new(tokens: Vec<Token>) -> Self {
         Self {
             stream: TokenStream::new(tokens),
@@ -467,6 +476,7 @@ impl Parser {
             assignment_rhs_depth: 0,
             dict_literal_depth: 0,
             def_body_depth: 0,
+            hold_method_bodies: false,
             block_body_depth: 0,
             refuse_pattern_test: 0,
             pattern_names: std::collections::HashSet::new(),

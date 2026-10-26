@@ -176,28 +176,52 @@ impl std::ops::Index<usize> for StatementStarts {
     }
 }
 
+/// Copy `list` into a block of its own length. `shrink_to_fit` asks
+/// `realloc` for less, and macOS keeps a block of 16 KB or more where it
+/// is, whole, when asked for a smaller one.
+fn tighten<T>(list: &mut Vec<T>) {
+    if list.capacity() > list.len() {
+        let mut exact = Vec::with_capacity(list.len());
+        exact.append(list);
+        *list = exact;
+    }
+}
+
 /// Where an error each instruction raises is pointed at, kept for the
 /// instructions that have a spot, in the order of the instructions.
 #[derive(Debug, Default)]
 pub struct ErrorSpots {
-    spots: Vec<(u32, Option<ErrorSpot>)>,
+    /// Where the spot changes, in order: from each instruction on until the
+    /// next entry, the instructions have the spot it holds. Most of an
+    /// expression's instructions share its spot, so they share one entry.
+    changes: Vec<(u32, Option<ErrorSpot>)>,
+    /// How many instructions have had their spot set.
+    covered: u32,
 }
 
 impl ErrorSpots {
     pub fn set(&mut self, at: usize, spot: Option<ErrorSpot>) {
         let at = at as u32;
+        let was_covered = self.covered;
+        self.covered = self.covered.max(at + 1);
+        if self[at as usize] == spot {
+            return;
+        }
+        // An instruction after this one keeps the spot it had.
+        let after = (at + 1 < was_covered).then(|| self[at as usize + 1].clone());
         match self
-            .spots
+            .changes
             .binary_search_by_key(&at, |(held_at, _)| *held_at)
         {
-            Ok(place) => match spot {
-                Some(_) => self.spots[place].1 = spot,
-                None => {
-                    self.spots.remove(place);
-                }
-            },
-            Err(place) if spot.is_some() => self.spots.insert(place, (at, spot)),
-            Err(_) => {}
+            Ok(place) => self.changes[place].1 = spot,
+            Err(place) => self.changes.insert(place, (at, spot)),
+        }
+        if let Some(after) = after
+            && let Err(place) = self
+                .changes
+                .binary_search_by_key(&(at + 1), |(held_at, _)| *held_at)
+        {
+            self.changes.insert(place, (at + 1, after));
         }
     }
 }
@@ -206,12 +230,13 @@ impl std::ops::Index<usize> for ErrorSpots {
     type Output = Option<ErrorSpot>;
 
     fn index(&self, at: usize) -> &Option<ErrorSpot> {
-        match self
-            .spots
-            .binary_search_by_key(&(at as u32), |(held_at, _)| *held_at)
-        {
-            Ok(place) => &self.spots[place].1,
-            Err(_) => &None,
+        let at = at as u32;
+        if at >= self.covered {
+            return &None;
+        }
+        match self.changes.partition_point(|(held_at, _)| *held_at <= at) {
+            0 => &None,
+            place => &self.changes[place - 1].1,
         }
     }
 }
@@ -568,35 +593,35 @@ impl Unit {
 
     /// Give back the room the tables grew into while the unit was compiled.
     pub fn shrink_to_fit(&mut self) {
-        self.instructions.shrink_to_fit();
-        self.positions.shrink_to_fit();
-        self.statement_starts.places.shrink_to_fit();
-        self.statement_starts.starts.shrink_to_fit();
-        self.error_spots.spots.shrink_to_fit();
-        self.constants.shrink_to_fit();
-        self.names.shrink_to_fit();
-        self.constant_caches.shrink_to_fit();
-        self.slot_caches.shrink_to_fit();
-        self.symbol_caches.shrink_to_fit();
-        self.locals.shrink_to_fit();
-        self.call_sites.shrink_to_fit();
-        self.regexes.shrink_to_fit();
-        self.hashes.shrink_to_fit();
-        self.interpolations.shrink_to_fit();
-        self.targets.shrink_to_fit();
-        self.multiple_assignments.shrink_to_fit();
-        self.defined.shrink_to_fit();
-        self.blocks.shrink_to_fit();
-        self.block_bodies.shrink_to_fit();
-        self.body_statements.shrink_to_fit();
-        self.definitions.shrink_to_fit();
-        self.case_arms.shrink_to_fit();
-        self.pattern_arms.shrink_to_fit();
-        self.when_lists.shrink_to_fit();
-        self.flip_flops.shrink_to_fit();
-        self.patterns.shrink_to_fit();
-        self.handlers.shrink_to_fit();
-        self.rescue_clauses.shrink_to_fit();
+        tighten(&mut self.instructions);
+        tighten(&mut self.positions);
+        tighten(&mut self.statement_starts.places);
+        tighten(&mut self.statement_starts.starts);
+        tighten(&mut self.error_spots.changes);
+        tighten(&mut self.constants);
+        tighten(&mut self.names);
+        tighten(&mut self.constant_caches);
+        tighten(&mut self.slot_caches);
+        tighten(&mut self.symbol_caches);
+        tighten(&mut self.locals);
+        tighten(&mut self.call_sites);
+        tighten(&mut self.regexes);
+        tighten(&mut self.hashes);
+        tighten(&mut self.interpolations);
+        tighten(&mut self.targets);
+        tighten(&mut self.multiple_assignments);
+        tighten(&mut self.defined);
+        tighten(&mut self.blocks);
+        tighten(&mut self.block_bodies);
+        tighten(&mut self.body_statements);
+        tighten(&mut self.definitions);
+        tighten(&mut self.case_arms);
+        tighten(&mut self.pattern_arms);
+        tighten(&mut self.when_lists);
+        tighten(&mut self.flip_flops);
+        tighten(&mut self.patterns);
+        tighten(&mut self.handlers);
+        tighten(&mut self.rescue_clauses);
     }
 
     /// Add an instruction, answering where it is.

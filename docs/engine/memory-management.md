@@ -234,7 +234,14 @@ a method call keep their rarer lists in boxes, and the larger statement
 variants keep their expressions in boxes. A list of statements grows by half
 its length from one, where a `Vec` of elements that size starts with room
 for four, so a body of one statement holds one. A compiled unit gives back
-the room its tables grew into once it is compiled. The main script is
+the room its tables grew into once it is compiled, by moving each into a
+block of its own length, since macOS keeps a block of 16 KB or more whole
+when `realloc` asks for less. A unit records an error spot where the spot
+changes rather than for each instruction. The main script's methods are
+encoded as the parser reads each one, the way the carried libraries' are,
+and decoded when first called, so a method that never runs holds no tree.
+Their bytes last the whole run, which is why only the main script, read
+once, is kept this way. The main script is
 checked against prism after Metorex's parser frees its tokens, so prism's
 tree takes the blocks they held.
 

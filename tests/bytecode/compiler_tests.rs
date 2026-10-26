@@ -495,3 +495,21 @@ fn a_while_loop_answers_what_break_carries() {
         Object::Int(30)
     );
 }
+
+#[test]
+fn a_method_of_many_locals_names_each_local_once() {
+    let source = std::fs::read_to_string("tests/_examples/bytecode/many_locals_method.rb")
+        .expect("the example is there");
+    let statements = Parser::new(Lexer::new(&source).tokenize())
+        .parse()
+        .expect("parse failed");
+    let metorex::ast::Statement::FunctionDef { body, .. } = &statements[0] else {
+        panic!("the example opens with a method");
+    };
+    let unit = metorex::bytecode::compiler::compile_as(
+        body,
+        metorex::bytecode::compiler::UnitKind::Method,
+    )
+    .expect("the method compiles");
+    assert_eq!((unit.locals.len(), unit.names.len()), (100, 1));
+}

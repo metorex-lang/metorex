@@ -69,6 +69,13 @@ pub fn encode_held<T: serde::Serialize>(value: &T) -> Vec<u8> {
 /// Decode `held`, which `encode_held` wrote and the binary holds, with each
 /// body in it left encoded until something reads it.
 pub fn decode_held<T: serde::de::DeserializeOwned>(held: &'static [u8]) -> T {
+    let (areas, outer) = held_areas(held);
+    decode_among(areas, outer)
+}
+
+/// The areas of the bodies in `held`, which `encode_held` wrote, and the
+/// bytes of what holds them.
+fn held_areas(held: &'static [u8]) -> (&'static HeldAreas, &'static [u8]) {
     let length =
         |at: usize| u32::from_le_bytes(held[at..at + 4].try_into().expect("four bytes")) as usize;
     let (outer_length, at_load_length) = (length(0), length(4));
@@ -79,7 +86,7 @@ pub fn decode_held<T: serde::de::DeserializeOwned>(held: &'static [u8]) -> T {
         at_load,
         when_called,
     }));
-    decode_among(areas, outer)
+    (areas, outer)
 }
 
 fn decode_among<T: serde::de::DeserializeOwned>(
@@ -105,6 +112,18 @@ pub(super) fn serialize_called<S: serde::Serializer>(
 }
 
 impl Body {
+    /// A body kept encoded until something reads it. Its bytes are never
+    /// freed, so this is for code read once a run, such as the main
+    /// script's methods.
+    pub fn held(statements: Vec<Statement>) -> Self {
+        let (areas, outer) = held_areas(Vec::leak(encode_held(&statements)));
+        drop(statements);
+        Body(Rc::new(Statements {
+            decoded: OnceCell::new(),
+            encoded: Cell::new(Some((areas, outer))),
+        }))
+    }
+
     fn decoded(statements: Box<[Statement]>) -> Self {
         Body(Rc::new(Statements {
             decoded: OnceCell::from(statements),

@@ -358,7 +358,7 @@ impl Parser {
                 return Ok(Statement::MethodDef {
                     name,
                     parameters,
-                    body: body.into(),
+                    body: self.method_body(body),
                     is_class_method: _singleton_receiver.is_some(),
                     position: start_pos,
                     // An endless definition closes where its body does.
@@ -369,7 +369,7 @@ impl Parser {
                 Statement::FunctionDef {
                     name,
                     parameters,
-                    body: body.into(),
+                    body: self.method_body(body),
                     position: start_pos,
                     singleton_class: _singleton_receiver,
                     end_position: self.previous().position,
@@ -430,7 +430,7 @@ impl Parser {
             Ok(Statement::MethodDef {
                 name,
                 parameters,
-                body: body.into(),
+                body: self.method_body(body),
                 is_class_method,
                 position: start_pos,
                 end_position: closing,
@@ -440,7 +440,7 @@ impl Parser {
                 Statement::FunctionDef {
                     name,
                     parameters,
-                    body: body.into(),
+                    body: self.method_body(body),
                     position: start_pos,
                     singleton_class: _singleton_receiver,
                     end_position: closing,
@@ -448,6 +448,16 @@ impl Parser {
                 receiver_setup,
                 start_pos,
             ))
+        }
+    }
+
+    /// The body of a method just read, kept encoded until the method is
+    /// first called when the parser was asked to and no method encloses it.
+    fn method_body(&self, body: Vec<Statement>) -> crate::ast::Body {
+        if self.hold_method_bodies && self.def_body_depth == 0 {
+            crate::ast::Body::held(body)
+        } else {
+            body.into()
         }
     }
 

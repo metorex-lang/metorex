@@ -319,6 +319,7 @@ fn real_main_after_inline(cli: Cli) {
 
     // Parse
     let mut parser = Parser::new(tokens);
+    parser.hold_method_bodies();
     let parsed = parser.parse();
     let warnings = parser.default_warnings().to_vec();
     // The parser holds the tokens, which take more memory than the program.
