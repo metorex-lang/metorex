@@ -115,7 +115,7 @@ Metorex's peak memory is above 1.5× CRuby's on 46 of the 50 rows of the README'
 - [x] Where the memory goes: `METOREX_MEMORY_REPORT=1` writes, at exit, the peak bytes held by objects by class, by compiled units and their tables, by the syntax tree, by the JIT's code, and by the libraries loaded at startup, and `docs/engine/memory-management.md` records the report for `empty`, `rex_suite`, `30k_ifelse`, and `ruby-json`
   - Acceptance: the four reports' categories add up to within 10% of each run's peak resident set size
 - [x] Startup: `empty` peaks at no more than CRuby's
-- [ ] Every row of the table peaks at no more than 1.5× CRuby's, with no row's time made more than 5% slower
+- [x] Every row of the table peaks at no more than 1.5× CRuby's, with no row's time made more than 5% slower
   - Acceptance: `ruby benchmarks/compare.rb` prints the table, and the README records it
 
 ## Ruby 4.0.7

@@ -775,6 +775,7 @@ impl Compiler {
                 // lets `walk = -> { walk.call }` call itself.
                 if let Expression::Identifier { name, .. } = &**target
                     && self.assigned.contains(name)
+                    && !self.cannot_see_locals(value, name)
                 {
                     let slot = wide(Some(self.unit.local(name)))?;
                     self.emit(Instruction::Unhoist { slot }, *position);
@@ -3570,6 +3571,34 @@ impl Compiler {
             return Err(expression.kind_name());
         }
         Ok(register)
+    }
+
+    /// Whether `value` is literals, instance variables, and locals other
+    /// than `assigned` read through operators, which no block, binding, or
+    /// call that sees the scope's locals is part of, so the local being
+    /// assigned need not be introduced ahead of it.
+    fn cannot_see_locals(&self, value: &Expression, assigned: &str) -> bool {
+        match value {
+            Expression::IntLiteral { .. }
+            | Expression::FloatLiteral { .. }
+            | Expression::BigIntLiteral { .. }
+            | Expression::StringLiteral { .. }
+            | Expression::BoolLiteral { .. }
+            | Expression::NilLiteral { .. }
+            | Expression::Symbol { .. }
+            | Expression::InstanceVariable { .. } => true,
+            Expression::Identifier { name, .. } => {
+                name != assigned
+                    && self.assigned.contains(name)
+                    && self.unit.locals.iter().any(|held| held.text == *name)
+            }
+            Expression::BinaryOp { left, right, .. } => {
+                self.cannot_see_locals(left, assigned) && self.cannot_see_locals(right, assigned)
+            }
+            Expression::UnaryOp { operand, .. } => self.cannot_see_locals(operand, assigned),
+            Expression::Grouped { expression, .. } => self.cannot_see_locals(expression, assigned),
+            _ => false,
+        }
     }
 
     fn identifier(&mut self, name: &str, to: u8) -> Result<Instruction, &'static str> {

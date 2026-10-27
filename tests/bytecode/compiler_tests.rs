@@ -39,15 +39,30 @@ fn locals_are_numbered_in_the_order_the_body_assigns_them() {
     assert_eq!(
         unit.instructions,
         vec![
-            Unhoist { slot: 0 },
             LoadInteger { to: 0, value: 1 },
             SetLocal { from: 0, slot: 0 },
-            Unhoist { slot: 1 },
             GetLocal { to: 0, slot: 0 },
             SetLocal { from: 0, slot: 1 },
             Return { from: 0 },
         ]
     );
+}
+
+#[test]
+fn a_local_is_introduced_ahead_of_a_value_a_block_could_close_over_it_in() {
+    let unit = unit_of("walk = -> { walk }
+steps = walk
+later = (steps + 1) * 2
+");
+    let unhoisted: Vec<u16> = unit
+        .instructions
+        .iter()
+        .filter_map(|instruction| match instruction {
+            Unhoist { slot } => Some(*slot),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(unhoisted, vec![0]);
 }
 
 #[test]
@@ -75,7 +90,7 @@ fn each_statement_starts_at_its_first_instruction() {
         .enumerate()
         .filter_map(|(at, start)| start.map(|start| (at, start.index, start.position.line)))
         .collect();
-    assert_eq!(starts, vec![(0, Some(0), 1), (3, Some(1), 2)]);
+    assert_eq!(starts, vec![(0, Some(0), 1), (2, Some(1), 2)]);
 }
 
 #[test]
@@ -224,15 +239,14 @@ fn disassembly_notes_what_each_side_table_operand_names() {
         concat!(
             "== notes.rb\n",
             "    1 | held = 100000\n",
-            "        0000  Unhoist { slot: 0 }  ; held\n",
-            "        0001  LoadConstant { to: 0, constant: 0 }  ; 100000\n",
-            "        0002  SetLocal { from: 0, slot: 0 }  ; held\n",
+            "        0000  LoadConstant { to: 0, constant: 0 }  ; 100000\n",
+            "        0001  SetLocal { from: 0, slot: 0 }  ; held\n",
             "    2 | $total = held\n",
-            "        0003  GetLocal { to: 0, slot: 0 }  ; held\n",
-            "        0004  SetGlobal { from: 0, name: 0 }  ; $total\n",
+            "        0002  GetLocal { to: 0, slot: 0 }  ; held\n",
+            "        0003  SetGlobal { from: 0, name: 0 }  ; $total\n",
             "    3 | :done\n",
-            "        0005  LoadSymbol { to: 0, name: 1 }  ; :done\n",
-            "        0006  Return { from: 0 }\n",
+            "        0004  LoadSymbol { to: 0, name: 1 }  ; :done\n",
+            "        0005  Return { from: 0 }\n",
         )
     );
 }

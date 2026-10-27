@@ -1729,9 +1729,7 @@ impl VirtualMachine {
         slot: usize,
     ) -> Option<Object> {
         let held = self.environment().get("self")?;
-        let View::Instance(instance) = held.view() else {
-            return None;
-        };
+        let instance = held.as_instance()?;
         let instance = instance.borrow();
         let variables = &instance.instance_vars;
         std::ptr::eq(Rc::as_ptr(variables.shape()), shape).then(|| variables.slot(slot).clone())
@@ -1739,9 +1737,7 @@ impl VirtualMachine {
 
     fn read_slot(&self, name: &str, cache: &SlotCache) -> Option<Object> {
         let held = self.environment().get("self")?;
-        let View::Instance(instance) = held.view() else {
-            return None;
-        };
+        let instance = held.as_instance()?;
         let instance = instance.borrow();
         let variables = &instance.instance_vars;
         Some(match cache.slot_in(variables, name) {
@@ -1757,7 +1753,7 @@ impl VirtualMachine {
         let Some(held) = self.environment().get("self") else {
             return Some(value);
         };
-        let View::Instance(instance) = held.view() else {
+        let Some(instance) = held.as_instance() else {
             return Some(value);
         };
         let mut instance = instance.borrow_mut();

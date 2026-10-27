@@ -190,6 +190,16 @@ impl Object {
         self.bits & 7 == 0 && self.bits > NIL
     }
 
+    /// The instance the value is, when it is one, read without matching
+    /// every kind of value as `view` does.
+    #[inline]
+    pub(crate) fn as_instance(&self) -> Option<&Rc<RefCell<Instance>>> {
+        match self.body() {
+            Some(Body::Instance(instance)) => Some(instance),
+            _ => None,
+        }
+    }
+
     fn body(&self) -> Option<&Body> {
         if !self.is_pointer() {
             return None;
@@ -321,7 +331,7 @@ impl Object {
     }
 
     /// The value's parts, for matching on.
-    #[inline]
+    #[inline(always)]
     pub fn view(&self) -> View<'_> {
         let bits = self.bits;
         if bits & 1 == 1 {

@@ -646,12 +646,23 @@ impl VirtualMachine {
             return run(self);
         }
         let caller = self.last_match_frame();
-        let (held_match, held_line) = self.take_last_match_and_line();
+        // With neither set, nil is what is put aside, and nil is in force
+        // already for the method.
+        let (held_match, held_line) = if self.globals().holds_last_match_or_line() {
+            self.take_last_match_and_line()
+        } else {
+            (Object::Nil, Object::Nil)
+        };
         self.parked_last_matches
             .push((caller, held_match, held_line));
         let answered = run(self);
         if let Some((_, held_match, held_line)) = self.parked_last_matches.pop() {
-            self.put_last_match_and_line(held_match, held_line);
+            let all_nil = matches!(held_match.view(), View::Nil)
+                && matches!(held_line.view(), View::Nil)
+                && !self.globals().holds_last_match_or_line();
+            if !all_nil {
+                self.put_last_match_and_line(held_match, held_line);
+            }
         }
         answered
     }

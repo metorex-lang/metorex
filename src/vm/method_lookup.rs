@@ -1602,8 +1602,14 @@ pub(crate) fn class_level_method(
     class_rc: &Rc<Class>,
     method_name: &str,
 ) -> Option<(Rc<Class>, Rc<Method>)> {
-    if let Some(method) = class_rc
-        .find_own_method(&format!("__class__{}", method_name))
+    let class_level_name = std::cell::OnceCell::new();
+    let own_class_level_method = |class: &Rc<Class>| {
+        if !class.holds_class_methods.get() {
+            return None;
+        }
+        class.find_own_method(class_level_name.get_or_init(|| format!("__class__{}", method_name)))
+    };
+    if let Some(method) = own_class_level_method(class_rc)
         .or_else(|| module_extended_method(class_rc, method_name))
     {
         return Some((Rc::clone(class_rc), method));
@@ -1618,7 +1624,7 @@ pub(crate) fn class_level_method(
         {
             return Some((singleton, method));
         }
-        if let Some(method) = current.find_own_method(&format!("__class__{}", method_name)) {
+        if let Some(method) = own_class_level_method(&current) {
             return Some((Rc::clone(class_rc), method));
         }
         if let Some(found) = extended_method(&current, method_name) {

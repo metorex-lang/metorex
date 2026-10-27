@@ -294,6 +294,12 @@ fn the_last_match_belongs_to_the_method_frame_that_set_it() {
 }
 
 #[test]
+fn a_block_sets_the_last_match_of_the_frame_it_was_written_in_while_a_method_runs_it() {
+    let output = run_example("regexp/last_match_set_by_a_block_inside_a_call.rb");
+    assert_eq!(output, "nil\n\"42\"\n\"A7\"\n\"9\"\n");
+}
+
+#[test]
 fn a_unicode_escape_may_list_several_code_points() {
     let output = run_example("regexp/unicode_escape_with_several_code_points.rb");
     assert_eq!(

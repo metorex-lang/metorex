@@ -653,60 +653,60 @@ Every file's counts match MRI's. net-imap's `test_stringprep_tables.rb` runs und
 
 `ruby benchmarks/compare.rb`, run with a release build, times Metorex, with its JIT and with `METOREX_JIT=0`, beside CRuby with and without `--yjit` and prints this table. `--without-no-jit` leaves out the `METOREX_JIT=0` column, for a build from before the JIT. It covers startup, the scripts in `benchmarks/workloads` and `benchmarks/memory`, every benchmark in the [ruby-bench](https://github.com/ruby/ruby-bench) suite (the `benchmarks/ruby-bench` submodule) in its headline, other, and micro categories that needs no gems, and the Rex suite. Startup, workload, and Rex suite times are the fastest of three whole runs. A ruby-bench time is the mean of one iteration after the warmup ones, under ruby-bench's own harness: CRuby runs the harness's defaults, as ruby-bench's runner does, and Metorex runs one warmup iteration and two timed ones. Peak memory is the largest resident set size of the run.
 
-On arm64, Metorex 0.1.0 built with rustc 1.96.0, and ruby 4.0.6:
+On arm64, Metorex 0.1.0 built with rustc 1.96.0, and ruby 4.0.7:
 
 | Benchmark | CRuby | CRuby --yjit | Metorex | Metorex, no JIT | Metorex ÷ CRuby | Metorex ÷ YJIT | Metorex ÷ no JIT | CRuby peak | YJIT peak | Metorex peak | Metorex, no JIT peak |
 | :-- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |
-| empty | 29.0 ms | 28.0 ms | 26.3 ms | 26.0 ms | 0.9× | 0.9× | 1.01 | 19 MB | 19 MB | 33 MB | 33 MB |
-| block_calls | 35.4 ms | 35.4 ms | 223.2 ms | 247.0 ms | 6.3× | 6.3× | 0.90 | 19 MB | 19 MB | 33 MB | 33 MB |
-| hash_access | 47.7 ms | 45.9 ms | 268.9 ms | 276.8 ms | 5.6× | 5.9× | 0.97 | 28 MB | 29 MB | 76 MB | 76 MB |
-| method_calls | 31.5 ms | 29.1 ms | 211.6 ms | 222.0 ms | 6.7× | 7.3× | 0.95 | 19 MB | 19 MB | 33 MB | 33 MB |
-| object_allocation | 37.4 ms | 33.7 ms | 579.7 ms | 593.9 ms | 15.5× | 17.2× | 0.98 | 19 MB | 19 MB | 34 MB | 34 MB |
-| string_building | 45.2 ms | 42.1 ms | 194.9 ms | 201.4 ms | 4.3× | 4.6× | 0.97 | 25 MB | 26 MB | 71 MB | 74 MB |
-| cycles | 50.9 ms | 49.5 ms | 599.3 ms | 587.0 ms | 11.8× | 12.1× | 1.02 | 19 MB | 20 MB | 35 MB | 36 MB |
-| no_cycles | 34.9 ms | 32.8 ms | 347.7 ms | 344.0 ms | 9.9× | 10.6× | 1.01 | 19 MB | 19 MB | 34 MB | 34 MB |
-| 30k_ifelse | 300.1 ms | 79.7 ms | 6.20 s | 5.84 s | 20.7× | 77.8× | 1.06 | 117 MB | 159 MB | 604 MB | 590 MB |
-| 30k_methods | 252.1 ms | 48.8 ms | 3.53 s | 3.40 s | 14.0× | 72.2× | 1.04 | 66 MB | 77 MB | 193 MB | 192 MB |
-| 30k_variables | 407.6 ms | 1.14 s | 16.34 s | 18.07 s | 40.1× | 14.3× | 0.90 | 41 MB | 171 MB | 248 MB | 227 MB |
-| attr_accessor | 83.4 ms | 11.6 ms | 5.22 s | 5.48 s | 62.5× | 450.9× | 0.95 | 20 MB | 21 MB | 39 MB | 39 MB |
-| binarytrees | 151.9 ms | 71.1 ms | 6.51 s | 6.76 s | 42.9× | 91.5× | 0.96 | 27 MB | 28 MB | 129 MB | 140 MB |
-| block_methods | 1.20 s | 269.6 ms | 27.48 s | 31.27 s | 22.8× | 101.9× | 0.88 | 93 MB | 88 MB | 42 MB | 41 MB |
-| blurhash | 164.9 ms | 62.1 ms | 3.85 s | 4.09 s | 23.3× | 62.0× | 0.94 | 21 MB | 22 MB | 44 MB | 44 MB |
-| cfunc_itself | 39.6 ms | 9.7 ms | 749.5 ms | 761.5 ms | 18.9× | 77.5× | 0.98 | 20 MB | 21 MB | 39 MB | 38 MB |
-| etanni | 145.6 ms | 125.0 ms | 2.42 s | 2.45 s | 16.6× | 19.4× | 0.99 | 28 MB | 25 MB | 66 MB | 66 MB |
-| fannkuchredux | 230.9 ms | 83.9 ms | 3.34 s | 3.98 s | 14.5× | 39.8× | 0.84 | 20 MB | 21 MB | 39 MB | 39 MB |
-| fib | 98.4 ms | 16.3 ms | 4.54 s | 4.98 s | 46.1× | 277.9× | 0.91 | 20 MB | 21 MB | 39 MB | 39 MB |
-| getivar | 55.2 ms | 8.5 ms | 230.7 ms | 550.0 ms | 4.2× | 27.1× | 0.42 | 20 MB | 21 MB | 39 MB | 39 MB |
-| getivar-module | 110.8 ms | 34.8 ms | 1.42 s | 1.97 s | 12.8× | 40.7× | 0.72 | 20 MB | 21 MB | 39 MB | 39 MB |
-| keyword_args | 85.9 ms | 15.0 ms | 9.99 s | 10.14 s | 116.3× | 664.6× | 0.98 | 20 MB | 21 MB | 39 MB | 39 MB |
-| knucleotide | 16.0 ms | 15.7 ms | 308.0 ms | 328.1 ms | 19.2× | 19.7× | 0.94 | 22 MB | 23 MB | 39 MB | 39 MB |
-| loops-times | 470.3 ms | 135.3 ms | 12.17 s | 13.14 s | 25.9× | 90.0× | 0.93 | 22 MB | 27 MB | 39 MB | 39 MB |
-| matmul | 228.4 ms | 98.3 ms | 5.01 s | 5.74 s | 21.9× | 50.9× | 0.87 | 26 MB | 27 MB | 41 MB | 41 MB |
-| nbody | 42.7 ms | 18.2 ms | 1.44 s | 1.55 s | 33.8× | 79.1× | 0.93 | 20 MB | 21 MB | 39 MB | 39 MB |
-| nqueens | 106.4 ms | 25.0 ms | 1.98 s | 2.33 s | 18.6× | 79.3× | 0.85 | 20 MB | 22 MB | 39 MB | 39 MB |
-| object-new | 30.8 ms | 14.6 ms | 912.8 ms | 1.01 s | 29.6× | 62.5× | 0.91 | 20 MB | 21 MB | 39 MB | 39 MB |
-| object-new-initialize | 55.3 ms | 17.8 ms | 2.38 s | 2.49 s | 43.1× | 134.0× | 0.96 | 20 MB | 21 MB | 39 MB | 39 MB |
-| object-new-no-escape | 98.4 ms | 35.5 ms | 5.39 s | 5.55 s | 54.8× | 151.9× | 0.97 | 20 MB | 21 MB | 39 MB | 39 MB |
-| protoboeuf | 71.3 ms | 14.1 ms | 2.84 s | 3.11 s | 39.8× | 201.6× | 0.91 | 43 MB | 48 MB | 162 MB | 155 MB |
-| protoboeuf-encode | 63.0 ms | 15.2 ms | 21.95 s | 22.22 s | 348.6× | 1447.8× | 0.99 | 860 MB | 3343 MB | 377 MB | 371 MB |
-| respond_to | 96.4 ms | 6.8 ms | 4.50 s | 4.50 s | 46.7× | 661.2× | 1.00 | 20 MB | 21 MB | 39 MB | 39 MB |
-| ruby-json | 100.1 ms | 84.6 ms | 18.06 s | 18.47 s | 180.4× | 213.6× | 0.98 | 21 MB | 22 MB | 335 MB | 320 MB |
-| ruby-xor | 57.3 ms | 10.9 ms | 1.96 s | 2.12 s | 34.2× | 180.0× | 0.92 | 21 MB | 22 MB | 39 MB | 39 MB |
-| send_bmethod | 93.7 ms | 4.3 ms | 6.32 s | 6.38 s | 67.4× | 1463.0× | 0.99 | 20 MB | 21 MB | 39 MB | 39 MB |
-| send_cfunc_block | 119.0 ms | 40.8 ms | 9.01 s | 8.87 s | 75.7× | 220.6× | 1.02 | 20 MB | 21 MB | 39 MB | 40 MB |
-| send_rubyfunc_block | 59.3 ms | 11.7 ms | 5.33 s | 5.42 s | 90.0× | 457.3× | 0.98 | 20 MB | 21 MB | 39 MB | 39 MB |
-| send_rubyfunc_inline | 367.7 ms | 51.7 ms | 8.66 s | 10.87 s | 23.6× | 167.5× | 0.80 | 20 MB | 21 MB | 39 MB | 39 MB |
-| setivar | 30.1 ms | 4.6 ms | 198.7 ms | 337.8 ms | 6.6× | 43.6× | 0.59 | 20 MB | 21 MB | 39 MB | 39 MB |
-| setivar_object | 53.5 ms | 19.8 ms | 349.7 ms | 491.2 ms | 6.5× | 17.7× | 0.71 | 20 MB | 21 MB | 39 MB | 39 MB |
-| setivar_young | 53.9 ms | 19.5 ms | 399.0 ms | 494.7 ms | 7.4× | 20.5× | 0.81 | 20 MB | 21 MB | 39 MB | 38 MB |
-| splay | 46.0 ms | 31.1 ms | 2.05 s | 2.07 s | 44.5× | 65.9× | 0.99 | 906 MB | 1022 MB | 883 MB | 883 MB |
-| str_concat | 39.5 ms | 13.0 ms | 990.9 ms | 1.11 s | 25.1× | 76.5× | 0.89 | 81 MB | 94 MB | 39 MB | 39 MB |
-| struct-new-no-escape | 62.9 ms | 35.3 ms | 2.22 s | 2.37 s | 35.3× | 62.8× | 0.93 | 20 MB | 21 MB | 39 MB | 39 MB |
-| structaref | 86.8 ms | 11.2 ms | 3.29 s | 3.71 s | 38.0× | 293.2× | 0.89 | 20 MB | 21 MB | 39 MB | 39 MB |
-| structaset | 73.5 ms | 28.7 ms | 8.31 s | 8.47 s | 113.1× | 289.9× | 0.98 | 20 MB | 21 MB | 39 MB | 39 MB |
-| sudoku | 270.0 ms | 64.0 ms | 5.12 s | 6.02 s | 19.0× | 80.0× | 0.85 | 20 MB | 21 MB | 40 MB | 41 MB |
-| throw | 9.0 ms | 6.7 ms | 417.9 ms | 407.7 ms | 46.4× | 61.9× | 1.02 | 20 MB | 21 MB | 39 MB | 39 MB |
-| rex_suite | 293.6 ms | 364.3 ms | 4.82 s | 4.81 s | 16.4× | 13.2× | 1.00 | 55 MB | 61 MB | 304 MB | 303 MB |
+| empty | 26.0 ms | 26.0 ms | 20.3 ms | 18.9 ms | 0.8× | 0.8× | 1.07 | 19 MB | 19 MB | 17 MB | 17 MB |
+| block_calls | 34.8 ms | 33.5 ms | 192.5 ms | 205.9 ms | 5.5× | 5.7× | 0.93 | 19 MB | 19 MB | 17 MB | 17 MB |
+| hash_access | 48.2 ms | 46.0 ms | 177.9 ms | 182.4 ms | 3.7× | 3.9× | 0.98 | 27 MB | 29 MB | 30 MB | 30 MB |
+| method_calls | 32.0 ms | 29.5 ms | 137.3 ms | 144.5 ms | 4.3× | 4.7× | 0.95 | 19 MB | 19 MB | 17 MB | 18 MB |
+| object_allocation | 37.7 ms | 32.4 ms | 362.4 ms | 447.9 ms | 9.6× | 11.2× | 0.81 | 19 MB | 20 MB | 17 MB | 17 MB |
+| string_building | 39.5 ms | 37.9 ms | 116.4 ms | 147.4 ms | 2.9× | 3.1× | 0.79 | 25 MB | 26 MB | 28 MB | 28 MB |
+| cycles | 49.2 ms | 45.7 ms | 392.0 ms | 387.7 ms | 8.0× | 8.6× | 1.01 | 19 MB | 20 MB | 19 MB | 18 MB |
+| no_cycles | 33.2 ms | 31.8 ms | 276.8 ms | 285.3 ms | 8.3× | 8.7× | 0.97 | 19 MB | 20 MB | 17 MB | 17 MB |
+| 30k_ifelse | 298.7 ms | 75.7 ms | 4.08 s | 5.12 s | 13.6× | 53.9× | 0.80 | 115 MB | 152 MB | 155 MB | 140 MB |
+| 30k_methods | 253.9 ms | 47.5 ms | 2.14 s | 2.29 s | 8.4× | 45.0× | 0.93 | 66 MB | 75 MB | 97 MB | 92 MB |
+| 30k_variables | 416.3 ms | 1.14 s | 14.15 s | 14.68 s | 34.0× | 12.4× | 0.96 | 41 MB | 171 MB | 56 MB | 48 MB |
+| attr_accessor | 80.2 ms | 11.7 ms | 504.4 ms | 3.80 s | 6.3× | 43.3× | 0.13 | 20 MB | 21 MB | 21 MB | 21 MB |
+| binarytrees | 152.3 ms | 70.7 ms | 4.63 s | 5.51 s | 30.4× | 65.5× | 0.84 | 27 MB | 28 MB | 32 MB | 31 MB |
+| block_methods | 1.19 s | 274.9 ms | 23.29 s | 24.68 s | 19.5× | 84.7× | 0.94 | 87 MB | 99 MB | 23 MB | 22 MB |
+| blurhash | 164.6 ms | 61.9 ms | 3.04 s | 3.47 s | 18.5× | 49.1× | 0.88 | 21 MB | 22 MB | 24 MB | 24 MB |
+| cfunc_itself | 39.5 ms | 9.7 ms | 733.8 ms | 734.8 ms | 18.6× | 75.9× | 1.00 | 20 MB | 21 MB | 21 MB | 20 MB |
+| etanni | 141.0 ms | 121.7 ms | 1.66 s | 1.89 s | 11.8× | 13.7× | 0.88 | 24 MB | 25 MB | 28 MB | 29 MB |
+| fannkuchredux | 230.6 ms | 83.6 ms | 2.39 s | 2.95 s | 10.4× | 28.6× | 0.81 | 20 MB | 21 MB | 21 MB | 21 MB |
+| fib | 98.3 ms | 16.3 ms | 3.21 s | 4.37 s | 32.6× | 196.3× | 0.74 | 20 MB | 21 MB | 21 MB | 21 MB |
+| getivar | 55.4 ms | 8.5 ms | 251.3 ms | 525.6 ms | 4.5× | 29.6× | 0.48 | 20 MB | 21 MB | 21 MB | 21 MB |
+| getivar-module | 110.7 ms | 35.6 ms | 1.45 s | 1.92 s | 13.1× | 40.8× | 0.76 | 20 MB | 21 MB | 21 MB | 21 MB |
+| keyword_args | 84.8 ms | 15.2 ms | 7.76 s | 8.47 s | 91.5× | 511.4× | 0.92 | 20 MB | 21 MB | 21 MB | 21 MB |
+| knucleotide | 15.7 ms | 15.7 ms | 114.1 ms | 111.3 ms | 7.3× | 7.3× | 1.03 | 22 MB | 23 MB | 21 MB | 21 MB |
+| loops-times | 461.9 ms | 137.0 ms | 7.06 s | 7.59 s | 15.3× | 51.5× | 0.93 | 22 MB | 27 MB | 21 MB | 21 MB |
+| matmul | 239.8 ms | 97.6 ms | 2.46 s | 3.08 s | 10.3× | 25.2× | 0.80 | 26 MB | 27 MB | 23 MB | 23 MB |
+| nbody | 42.6 ms | 17.8 ms | 882.9 ms | 1.17 s | 20.7× | 49.5× | 0.75 | 20 MB | 21 MB | 21 MB | 21 MB |
+| nqueens | 107.3 ms | 24.8 ms | 1.16 s | 1.70 s | 10.9× | 46.9× | 0.68 | 20 MB | 22 MB | 21 MB | 21 MB |
+| object-new | 34.5 ms | 15.2 ms | 911.1 ms | 965.0 ms | 26.4× | 59.9× | 0.94 | 20 MB | 21 MB | 21 MB | 21 MB |
+| object-new-initialize | 53.8 ms | 17.9 ms | 1.70 s | 2.04 s | 31.6× | 95.3× | 0.83 | 20 MB | 21 MB | 21 MB | 21 MB |
+| object-new-no-escape | 98.6 ms | 34.4 ms | 3.32 s | 4.31 s | 33.6× | 96.4× | 0.77 | 20 MB | 21 MB | 21 MB | 21 MB |
+| protoboeuf | 70.7 ms | 14.2 ms | 1.82 s | 2.31 s | 25.8× | 128.2× | 0.79 | 43 MB | 48 MB | 60 MB | 55 MB |
+| protoboeuf-encode | 61.3 ms | 15.1 ms | 20.14 s | 20.77 s | 328.5× | 1335.8× | 0.97 | 880 MB | 3361 MB | 117 MB | 113 MB |
+| respond_to | 94.2 ms | 6.8 ms | 3.27 s | 3.41 s | 34.7× | 479.0× | 0.96 | 20 MB | 21 MB | 21 MB | 20 MB |
+| ruby-json | 102.5 ms | 82.6 ms | 13.97 s | 14.14 s | 136.3× | 169.1× | 0.99 | 21 MB | 21 MB | 22 MB | 22 MB |
+| ruby-xor | 55.9 ms | 11.3 ms | 982.7 ms | 1.64 s | 17.6× | 86.8× | 0.60 | 21 MB | 22 MB | 21 MB | 21 MB |
+| send_bmethod | 93.5 ms | 4.3 ms | 4.25 s | 4.92 s | 45.4× | 983.1× | 0.86 | 20 MB | 21 MB | 21 MB | 21 MB |
+| send_cfunc_block | 117.0 ms | 39.8 ms | 2.95 s | 3.52 s | 25.2× | 74.0× | 0.84 | 20 MB | 21 MB | 21 MB | 21 MB |
+| send_rubyfunc_block | 59.7 ms | 11.5 ms | 2.17 s | 2.17 s | 36.4× | 189.5× | 1.00 | 20 MB | 21 MB | 21 MB | 21 MB |
+| send_rubyfunc_inline | 371.2 ms | 49.8 ms | 6.03 s | 8.65 s | 16.2× | 121.1× | 0.70 | 20 MB | 21 MB | 21 MB | 21 MB |
+| setivar | 31.4 ms | 4.6 ms | 188.0 ms | 301.6 ms | 6.0× | 41.0× | 0.62 | 20 MB | 21 MB | 21 MB | 21 MB |
+| setivar_object | 48.9 ms | 16.8 ms | 425.1 ms | 474.5 ms | 8.7× | 25.3× | 0.90 | 20 MB | 21 MB | 21 MB | 20 MB |
+| setivar_young | 49.1 ms | 19.1 ms | 411.2 ms | 448.2 ms | 8.4× | 21.5× | 0.92 | 20 MB | 21 MB | 21 MB | 21 MB |
+| splay | 45.9 ms | 30.5 ms | 977.5 ms | 1.55 s | 21.3× | 32.0× | 0.63 | 921 MB | 1020 MB | 280 MB | 280 MB |
+| str_concat | 39.6 ms | 12.1 ms | 496.0 ms | 817.4 ms | 12.5× | 40.9× | 0.61 | 79 MB | 91 MB | 21 MB | 21 MB |
+| struct-new-no-escape | 58.6 ms | 34.2 ms | 1.62 s | 2.37 s | 27.6× | 47.4× | 0.68 | 20 MB | 20 MB | 21 MB | 21 MB |
+| structaref | 86.6 ms | 11.0 ms | 547.7 ms | 4.23 s | 6.3× | 49.7× | 0.13 | 20 MB | 21 MB | 21 MB | 21 MB |
+| structaset | 67.2 ms | 28.7 ms | 462.3 ms | 4.26 s | 6.9× | 16.1× | 0.11 | 20 MB | 21 MB | 21 MB | 21 MB |
+| sudoku | 272.6 ms | 64.3 ms | 2.95 s | 3.75 s | 10.8× | 46.0× | 0.79 | 20 MB | 21 MB | 21 MB | 21 MB |
+| throw | 8.9 ms | 6.8 ms | 274.5 ms | 300.5 ms | 30.9× | 40.1× | 0.91 | 20 MB | 21 MB | 21 MB | 21 MB |
+| rex_suite | 278.8 ms | 342.1 ms | 3.94 s | 3.95 s | 14.1× | 11.5× | 1.00 | 53 MB | 61 MB | 77 MB | 75 MB |
 
 #### The bytecode baseline
 

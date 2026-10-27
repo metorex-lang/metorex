@@ -178,10 +178,10 @@ impl Instance {
         }
     }
 
-    /// Whether the core library written in Ruby gave the object any
-    /// variable of its own.
-    pub fn has_interpreter_vars(&self) -> bool {
-        self.read_extras(|extras| !extras.interpreter_names.is_empty())
+    /// Whether the core library written in Ruby gave the object the
+    /// variable `name` and the program has not assigned it since.
+    pub fn holds_interpreter_var(&self, name: &str) -> bool {
+        self.read_extras(|extras| extras.interpreter_names.contains(name))
             .unwrap_or(false)
     }
 

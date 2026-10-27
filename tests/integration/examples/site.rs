@@ -94,12 +94,11 @@ fn test_site_differences_description_names_metorex_and_the_followed_release() {
 fn test_site_differences_disasm_lists_instructions() {
     let expected = concat!(
         "== disasm: #<ISeq:<compiled>@<compiled>:1 (1,0)-(1,13)>\n",
-        "0000 Unhoist slot: 0  ; total               (   1)[Li]\n",
-        "0001 LoadInteger to: 0, value: 2            (   1)\n",
-        "0002 LoadInteger to: 1, value: 3            (   1)\n",
-        "0003 Add to: 0, left: 0, right: 1           (   1)\n",
-        "0004 SetLocal from: 0, slot: 0  ; total     (   1)\n",
-        "0005 Return from: 0                         (   1)\n",
+        "0000 LoadInteger to: 0, value: 2            (   1)[Li]\n",
+        "0001 LoadInteger to: 1, value: 3            (   1)\n",
+        "0002 Add to: 0, left: 0, right: 1           (   1)\n",
+        "0003 SetLocal from: 0, slot: 0  ; total     (   1)\n",
+        "0004 Return from: 0                         (   1)\n",
     );
     let output = run_example("site/differences_disasm.rb");
     assert_eq!(output, expected);

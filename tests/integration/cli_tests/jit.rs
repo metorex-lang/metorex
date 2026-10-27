@@ -175,6 +175,32 @@ fn machine_code_writes_through_writers_as_the_interpreter_calls_them() {
     assert_eq!(compiled, interpreted);
 }
 
+/// How many calls the report counted from `caller` to `callee`, made in
+/// Ruby rather than natively.
+fn calls_counted(report: &str, caller: &str, callee: &str) -> u64 {
+    let path = format!("{caller} -> {callee}");
+    report
+        .lines()
+        .find_map(|line| {
+            let mut fields = line.split_whitespace();
+            let calls = fields.next()?.parse().ok()?;
+            fields.next()?;
+            (fields.collect::<Vec<_>>().join(" ") == path).then_some(calls)
+        })
+        .unwrap_or(0)
+}
+
+#[test]
+fn machine_code_writes_struct_members_into_their_slots_without_calling_the_writer() {
+    let script = "jit/struct_member_writes.rb";
+    let (interpreted, interpreted_report) = run_example(script, &[("METOREX_JIT", "0")]);
+    let (compiled, compiled_report) = run_example(script, &EVERY_UNIT);
+    assert_eq!(interpreted, "[:north, 999]\n[]\nFrozenError\n");
+    assert_eq!(compiled, interpreted);
+    assert_eq!(calls_counted(&interpreted_report, "Object#record", "#level="), 1001);
+    assert!(calls_counted(&compiled_report, "Object#record", "#level=") <= 2);
+}
+
 #[test]
 fn machine_code_reads_through_readers_as_the_interpreter_calls_them() {
     let (interpreted, compiled) = interpreted_and_compiled("attribute_reads");

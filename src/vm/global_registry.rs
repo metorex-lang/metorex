@@ -14,6 +14,10 @@ pub struct GlobalRegistry {
     /// The subset of names that are Ruby global variables rather than
     /// constants, classes, or native functions, which share this registry.
     variable_names: BTreeSet<String>,
+    /// Whether `$~` and `$_` hold anything but nil, which a method call
+    /// reads to skip putting them aside when neither does.
+    last_match_held: bool,
+    last_line_held: bool,
 }
 
 impl GlobalRegistry {
@@ -29,6 +33,7 @@ impl GlobalRegistry {
         if names_a_constant(&name) {
             constant_state_changed();
         }
+        self.note_last_match_or_line(&name, &object);
         self.objects.insert(name, object);
     }
 
@@ -40,7 +45,22 @@ impl GlobalRegistry {
             constant_state_changed();
         }
         self.variable_names.insert(name.clone());
+        self.note_last_match_or_line(&name, &object);
         self.objects.insert(name, object);
+    }
+
+    fn note_last_match_or_line(&mut self, name: &str, object: &Object) {
+        let held = !matches!(object.view(), crate::object::View::Nil);
+        match name {
+            crate::vm::native_methods::regexp_methods::LAST_MATCH => self.last_match_held = held,
+            "_" => self.last_line_held = held,
+            _ => {}
+        }
+    }
+
+    /// Whether `$~` or `$_` holds anything but nil.
+    pub fn holds_last_match_or_line(&self) -> bool {
+        self.last_match_held || self.last_line_held
     }
 
     /// The object a bare constant name stands for. A global variable is held
@@ -64,6 +84,7 @@ impl GlobalRegistry {
         if names_a_constant(name) {
             constant_state_changed();
         }
+        self.note_last_match_or_line(name, &Object::Nil);
         self.objects.remove(name)
     }
 

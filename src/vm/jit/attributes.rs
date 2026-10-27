@@ -29,13 +29,16 @@ pub(super) struct AttributeWriteSite {
 /// The slot the writer found on instances of `class` with `shape` writes,
 /// under `method_state`. `listed` holds the variable's name when the
 /// interpreter records it among the names the program wrote, which the
-/// instance must hold already.
+/// instance must hold already. `claimed` holds it when the program's own
+/// writer makes it the program's, which the instance must have done already
+/// if the core library gave the variable first.
 struct AttributeWrite {
     class: Weak<Class>,
     shape: Rc<Shape>,
     method_state: u64,
     slot: usize,
     listed: Option<String>,
+    claimed: Option<String>,
 }
 
 impl AttributeWrite {
@@ -188,7 +191,11 @@ impl VirtualMachine {
             .is_some_and(|name| !instance.program_assigned_dunder(name));
         // A variable the core library gave the object becomes the program's
         // once the program writes it, which the slow path records.
-        if instance.frozen || unlisted || instance.has_interpreter_vars() {
+        let unclaimed = write
+            .claimed
+            .as_ref()
+            .is_some_and(|name| instance.holds_interpreter_var(name));
+        if instance.frozen || unlisted || unclaimed {
             return false;
         }
         instance
@@ -216,6 +223,8 @@ impl VirtualMachine {
             return None;
         }
         let (variable, prelude) = plain_writer(&method)?;
+        // Struct writes a member's slot with no record of who wrote it.
+        let member = crate::vm::native_methods::struct_methods::is_member_slot(variable);
         if shape.slot_of(ARRAY_SUBCLASS_VAR).is_some() || shape.slot_of(HASH_SUBCLASS_VAR).is_some()
         {
             return None;
@@ -225,7 +234,9 @@ impl VirtualMachine {
             shape: Rc::clone(shape),
             method_state: method_state(),
             slot: shape.slot_of(variable)?,
-            listed: (variable.starts_with("__") && !prelude).then(|| variable.to_string()),
+            listed: (variable.starts_with("__") && !prelude && !member)
+                .then(|| variable.to_string()),
+            claimed: (!prelude && !member).then(|| variable.to_string()),
         })
     }
 }
