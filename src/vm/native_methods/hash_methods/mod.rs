@@ -10,7 +10,6 @@ pub(crate) use crate::object::Object;
 pub(crate) use crate::vm::VirtualMachine;
 pub(crate) use crate::vm::errors::*;
 pub(in crate::vm) use crate::vm::utils::position_to_location;
-pub(crate) use indexmap::IndexMap;
 pub(crate) use std::cell::RefCell;
 pub(crate) use std::rc::Rc;
 

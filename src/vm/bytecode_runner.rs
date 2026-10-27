@@ -1272,9 +1272,8 @@ impl VirtualMachine {
                 let arguments = registers[block + 1..block + 1 + usize::from(count)].to_vec();
                 let made = registers[block].clone();
                 if let View::Block(held) = made.view() {
-                    held.attached_call_running.set(true);
-                    self.attached_block_flags
-                        .push(Rc::clone(&held.attached_call_running));
+                    held.flags.attached_call_running.set(true);
+                    self.attached_block_flags.push(Rc::clone(&held.flags));
                 }
                 registers[register(to)] =
                     self.class_body_define_method(&body.class, &arguments, made, position)?;
@@ -1338,9 +1337,8 @@ impl VirtualMachine {
             }
             Instruction::AttachSuperBlock { from } => {
                 if let View::Block(held) = registers[register(from)].view() {
-                    held.attached_call_running.set(true);
-                    self.attached_block_flags
-                        .push(Rc::clone(&held.attached_call_running));
+                    held.flags.attached_call_running.set(true);
+                    self.attached_block_flags.push(Rc::clone(&held.flags));
                 }
             }
             Instruction::ClearSuperBlock { written } => {

@@ -8,7 +8,7 @@ class Time
 
   def self.now(**options)
     counted = Time.__now__
-    made = from_exact(counted[0].to_r + Rational(counted[1], NANOSECONDS_IN_SECOND), false, nil)
+    made = from_parts(counted[0], counted[1], false, nil)
     zone = options[:in]
     return made if zone.nil?
     return made.utc if names_utc?(zone)
@@ -101,9 +101,21 @@ class Time
   def self.from_exact(total, utc, offset)
     exact = total.to_r
     whole = exact.floor
+    fraction = exact - whole
+    nanoseconds = fraction * NANOSECONDS_IN_SECOND
+    from_parts(whole, nanoseconds.denominator == 1 ? nanoseconds.to_i : fraction, utc, offset)
+  end
+
+  # A time `whole` seconds since the epoch and `part` more: a count of
+  # nanoseconds when an Integer, and a fraction of a second when not.
+  def self.from_parts(whole, part, utc, offset)
     made = allocate
     made.instance_variable_set(:@seconds, whole)
-    made.instance_variable_set(:@fraction, exact - whole)
+    if part.is_a?(Integer)
+      made.instance_variable_set(:@nanoseconds, part)
+    else
+      made.instance_variable_set(:@fraction, part)
+    end
     made.instance_variable_set(:@utc, utc)
     made.instance_variable_set(:@offset, offset)
     # A time reading in the zone the program runs in reads it now, since that
@@ -343,10 +355,10 @@ class Time
     end
   end
 
-  # Read the calendar fields now and keep them, so a later change to the zone
-  # the program runs in does not reach a time already read.
+  # Read what the zone the program runs in says of this time now and keep
+  # it, so a later change to that zone does not reach a time already read.
   def __read_calendar__
-    calendar
+    @local_offset, @local_dst, @local_zone = Time.__zone_reading__(@seconds)
     nil
   end
   private :__read_calendar__
@@ -361,10 +373,16 @@ class Time
   # The calendar fields this time stands for, read once and kept.
   def calendar
     return @calendar unless @calendar.nil?
-    @calendar = if @offset.nil?
-      Time.__breakdown__(@seconds, @utc)
-    else
+    @calendar = if !@offset.nil?
       Time.__breakdown__((@seconds + @offset).floor, true)
+    elsif !@utc && !@local_offset.nil?
+      fields = Time.__breakdown__(@seconds + @local_offset, true)
+      fields[8] = @local_dst
+      fields[9] = @local_offset
+      fields[10] = @local_zone
+      fields
+    else
+      Time.__breakdown__(@seconds, @utc)
     end
   end
   private :calendar
@@ -435,11 +453,11 @@ class Time
   # of the program is written in.
   def zone
     return @zone_object unless @zone_object.nil?
-    return @zone_name unless @zone_name.nil?
+    return @zone_name.dup unless @zone_name.nil?
     return nil unless @offset.nil?
     return "UTC".force_encoding(Encoding::US_ASCII) if @utc
     named = calendar[10]
-    named.nil? ? nil : named.force_encoding(Encoding::US_ASCII)
+    named.nil? ? nil : named.dup
   end
 
   def sunday?
@@ -482,15 +500,23 @@ class Time
     to_r.to_f
   end
 
+  # The part of a second past `to_i`, exact.
+  def __fraction__
+    return @fraction unless @fraction.nil?
+    @nanoseconds == 0 ? 0 : Rational(@nanoseconds, NANOSECONDS_IN_SECOND)
+  end
+  private :__fraction__
+
   def to_r
-    @seconds.to_r + @fraction
+    @seconds.to_r + __fraction__
   end
 
   def subsec
-    @fraction == 0 ? 0 : @fraction
+    __fraction__
   end
 
   def usec
+    return @nanoseconds / 1000 if @fraction.nil?
     (@fraction * MICROSECONDS_IN_SECOND).to_i
   end
 
@@ -499,6 +525,7 @@ class Time
   end
 
   def nsec
+    return @nanoseconds if @fraction.nil?
     (@fraction * NANOSECONDS_IN_SECOND).to_i
   end
 

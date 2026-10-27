@@ -539,7 +539,7 @@ impl VirtualMachine {
                         );
                         return Ok(Some(receiver.clone()));
                     }
-                    block_obj.ruby2_keywords.set(true);
+                    block_obj.flags.ruby2_keywords.set(true);
                     return Ok(Some(receiver.clone()));
                 }
                 // The locals of the scope the block was written in that its
@@ -588,7 +588,7 @@ impl VirtualMachine {
                 "__with_self__" => {
                     let mut copied = (**block_obj).clone();
                     Rc::make_mut(&mut copied.captured_vars).insert(
-                        "self".to_string(),
+                        "self",
                         Rc::new(std::cell::RefCell::new(
                             arguments.first().cloned().unwrap_or(Object::Nil),
                         )),

@@ -37,29 +37,21 @@ impl Class {
         Self {
             name: name.into(),
             assigned_name: RefCell::new(None),
-            temporary_name: RefCell::new(None),
             instance_of: RefCell::new(None),
             superclass,
             methods: RefCell::new(crate::fast_hash::NameMap::default()),
             instance_variables: RefCell::default(),
             class_variables: RefCell::new(crate::fast_hash::NameIndexMap::default()),
             mixins: RefCell::new(Vec::new()),
-            prepends: RefCell::new(Vec::new()),
-            private_method_names: RefCell::default(),
-            protected_method_names: RefCell::default(),
             public_overrides: RefCell::default(),
             singleton_class: RefCell::new(None),
             subclasses: RefCell::new(Vec::new()),
             module_flag: std::cell::Cell::new(false),
             frozen: std::cell::Cell::new(false),
-            current_visibility: RefCell::new("public".to_string()),
-            autoloads: RefCell::default(),
-            unrealized_autoloads: RefCell::default(),
-            private_constants: RefCell::default(),
-            deprecated_constants: RefCell::default(),
-            autoload_locations: RefCell::default(),
+            current_visibility: std::cell::Cell::new("public"),
             const_locations: RefCell::default(),
-            method_cache: RefCell::new(crate::fast_hash::NameMap::default()),
+            rare: std::cell::OnceCell::new(),
+            method_cache: RefCell::new(MethodCache::default()),
             linear_mixins_cache: RefCell::new(None),
             holds_class_methods: std::cell::Cell::new(false),
             holds_extended_copies: std::cell::Cell::new(false),
@@ -86,14 +78,15 @@ impl Class {
     /// Record where an autoload was registered (for
     /// `Module#const_source_location`).
     pub fn set_autoload_location(&self, name: impl Into<String>, file: String, line: i64) {
-        self.autoload_locations
+        self.rare_for_writing()
+            .autoload_locations
             .borrow_mut()
             .insert(name.into(), (file, line));
     }
 
     /// Source location of an autoload registration, if any.
     pub fn get_autoload_location(&self, name: &str) -> Option<(String, i64)> {
-        self.autoload_locations.borrow().get(name).cloned()
+        self.rare().autoload_locations.borrow().get(name).cloned()
     }
 
     /// Record where a constant was actually defined (for
@@ -119,58 +112,79 @@ impl Class {
     /// Mark `name` as a private constant — qualified access from outside
     /// the class raises NameError /private constant/.
     pub fn mark_private_constant(&self, name: impl Into<String>) {
-        self.private_constants.borrow_mut().insert(name.into());
+        self.rare_for_writing()
+            .private_constants
+            .borrow_mut()
+            .insert(name.into());
     }
 
     /// Whether `name` is marked private on this class.
     pub fn is_private_constant(&self, name: &str) -> bool {
-        self.private_constants.borrow().contains(name)
+        self.rare().private_constants.borrow().contains(name)
     }
 
     /// Remove the private flag from `name` (the inverse of
     /// `mark_private_constant`). Used by `Module#public_constant`.
     pub fn unmark_private_constant(&self, name: &str) {
-        self.private_constants.borrow_mut().remove(name);
+        if let Some(parts) = self.rare_given() {
+            parts.private_constants.borrow_mut().remove(name);
+        }
     }
 
     /// Mark `name` as deprecated — reading it warns but still returns the
     /// value.
     pub fn mark_deprecated_constant(&self, name: impl Into<String>) {
-        self.deprecated_constants.borrow_mut().insert(name.into());
+        self.rare_for_writing()
+            .deprecated_constants
+            .borrow_mut()
+            .insert(name.into());
     }
 
     /// Whether `name` is marked deprecated on this class.
     pub fn is_deprecated_constant(&self, name: &str) -> bool {
-        self.deprecated_constants.borrow().contains(name)
+        self.rare().deprecated_constants.borrow().contains(name)
     }
 
     /// Mark `name` as an autoload that fired, loaded its file, and didn't
     /// produce the constant. MRI keeps the name in `#constants` afterward.
     pub fn mark_unrealized_autoload(&self, name: impl Into<String>) {
-        self.unrealized_autoloads.borrow_mut().insert(name.into());
+        self.rare_for_writing()
+            .unrealized_autoloads
+            .borrow_mut()
+            .insert(name.into());
     }
 
     /// Names of unrealized autoloads on this class.
     pub fn unrealized_autoload_names(&self) -> Vec<String> {
-        self.unrealized_autoloads.borrow().iter().cloned().collect()
+        self.rare()
+            .unrealized_autoloads
+            .borrow()
+            .iter()
+            .cloned()
+            .collect()
     }
 
     /// Drop the unrealized-autoload bookkeeping for `name`.
     pub fn clear_unrealized_autoload(&self, name: &str) {
         constant_state_changed();
-        self.unrealized_autoloads.borrow_mut().remove(name);
+        if let Some(parts) = self.rare_given() {
+            parts.unrealized_autoloads.borrow_mut().remove(name);
+        }
     }
 
     /// Register an autoload mapping. `path` is stored verbatim (Ruby's
     /// `autoload?` returns whatever was passed in).
     pub fn set_autoload(&self, name: impl Into<String>, path: impl Into<String>) {
         constant_state_changed();
-        self.autoloads.borrow_mut().insert(name.into(), path.into());
+        self.rare_for_writing()
+            .autoloads
+            .borrow_mut()
+            .insert(name.into(), path.into());
     }
 
     /// Return the autoload path registered on *this* class (no recursion).
     pub fn get_autoload(&self, name: &str) -> Option<String> {
-        self.autoloads.borrow().get(name).cloned()
+        self.rare().autoloads.borrow().get(name).cloned()
     }
 
     /// Look up an autoload across this class and its ancestor chain
@@ -193,12 +207,13 @@ impl Class {
     /// Remove the autoload entry for `name`, returning the previous path.
     pub fn remove_autoload(&self, name: &str) -> Option<String> {
         constant_state_changed();
-        self.autoloads.borrow_mut().remove(name)
+        self.rare_given()
+            .and_then(|parts| parts.autoloads.borrow_mut().remove(name))
     }
 
     /// All autoload-registered names on this class (no recursion). Listed by
     /// `Module#constants` even before the autoload fires, per Ruby semantics.
     pub fn autoload_names(&self) -> Vec<String> {
-        self.autoloads.borrow().keys().cloned().collect()
+        self.rare().autoloads.borrow().keys().cloned().collect()
     }
 }

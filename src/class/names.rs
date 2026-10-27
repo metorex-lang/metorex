@@ -13,7 +13,7 @@ impl Class {
     /// empty string for truly-anonymous classes. The `name` native method
     /// maps this to `nil` for anonymous classes.
     pub fn ruby_name(&self) -> String {
-        if let Some(temporary) = self.temporary_name.borrow().as_ref() {
+        if let Some(temporary) = self.rare().temporary_name.borrow().as_ref() {
             return temporary.clone();
         }
         if let Some(assigned) = self.assigned_name.borrow().as_ref() {
@@ -24,7 +24,7 @@ impl Class {
 
     /// Run `read` over what `ruby_name` answers, without copying the name.
     pub fn with_ruby_name<R>(&self, read: impl FnOnce(&str) -> R) -> R {
-        if let Some(temporary) = self.temporary_name.borrow().as_ref() {
+        if let Some(temporary) = self.rare().temporary_name.borrow().as_ref() {
             return read(temporary);
         }
         if let Some(assigned) = self.assigned_name.borrow().as_ref() {
@@ -35,7 +35,7 @@ impl Class {
 
     /// Whether `ruby_name` answers `wanted`, without copying the name.
     pub fn ruby_name_is(&self, wanted: &str) -> bool {
-        if let Some(temporary) = self.temporary_name.borrow().as_ref() {
+        if let Some(temporary) = self.rare().temporary_name.borrow().as_ref() {
             return temporary == wanted;
         }
         if let Some(assigned) = self.assigned_name.borrow().as_ref() {
@@ -73,7 +73,14 @@ impl Class {
     /// Clearing also drops the derived `#<Module:0x…>::N` form, leaving the
     /// module with no name at all.
     pub fn set_temporary_name(&self, name: Option<String>) {
-        *self.temporary_name.borrow_mut() = name.clone();
+        match &name {
+            Some(_) => *self.rare_for_writing().temporary_name.borrow_mut() = name.clone(),
+            None => {
+                if let Some(parts) = self.rare_given() {
+                    *parts.temporary_name.borrow_mut() = None;
+                }
+            }
+        }
         if name.is_none() {
             let derived = matches!(
                 self.assigned_name.borrow().as_ref(),
@@ -134,7 +141,7 @@ impl Class {
             return;
         }
         // A temporary name gives way to a permanent one.
-        let current = match self.temporary_name.borrow().as_ref() {
+        let current = match self.rare().temporary_name.borrow().as_ref() {
             Some(_) => String::new(),
             None => self.ruby_name(),
         };
@@ -142,7 +149,9 @@ impl Class {
             return;
         }
         // A permanent name supersedes any temporary one.
-        *self.temporary_name.borrow_mut() = None;
+        if let Some(parts) = self.rare_given() {
+            *parts.temporary_name.borrow_mut() = None;
+        }
         *self.assigned_name.borrow_mut() = Some(new_name.to_string());
         for (key, val) in self.class_variables.borrow().iter() {
             if !key.chars().next().is_some_and(|c| c.is_uppercase()) {
@@ -165,7 +174,7 @@ impl Class {
         self.methods.borrow_mut().clear();
         self.class_variables.borrow_mut().clear();
         self.mixins.borrow_mut().clear();
-        self.prepends.borrow_mut().clear();
+        self.rare_for_writing().prepends.borrow_mut().clear();
         *self.singleton_class.borrow_mut() = None;
     }
 

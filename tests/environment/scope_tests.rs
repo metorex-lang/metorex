@@ -341,8 +341,8 @@ fn test_collect_all_var_refs_with_parent() {
     let all_refs = child.collect_all_var_refs();
     assert!(all_refs.contains_key("x"));
     assert!(all_refs.contains_key("y"));
-    assert_eq!(*all_refs["x"].borrow(), Object::Int(10));
-    assert_eq!(*all_refs["y"].borrow(), Object::Int(20));
+    assert_eq!(*all_refs.get("x").unwrap().borrow(), Object::Int(10));
+    assert_eq!(*all_refs.get("y").unwrap().borrow(), Object::Int(20));
 }
 
 // ── Default impl (scope.rs lines 176-177) ──
@@ -355,8 +355,7 @@ fn test_scope_default() {
 
 /// A scope a block runs in, reading through the names the block closed over.
 fn scope_with_captured(name: &str, cell: Rc<RefCell<Object>>) -> Scope {
-    let mut captured = indexmap::IndexMap::new();
-    captured.insert(name.to_string(), cell);
+    let captured = metorex::scope::Captures::new(vec![(name.into(), cell)]);
     let mut scope = Scope::new();
     scope.attach_captured(Rc::new(captured));
     scope

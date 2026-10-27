@@ -67,7 +67,9 @@ impl VirtualMachine {
                     .borrow_mut()
                     .shift_remove(crate::vm::param_binding::KWARGS_MARKER);
                 copied.borrow_mut().insert(
-                    crate::vm::native_methods::hash_methods::RUBY2_KEYWORDS_KEY.to_string(),
+                    crate::vm::native_methods::hash_methods::RUBY2_KEYWORDS_KEY
+                        .to_string()
+                        .into(),
                     Object::Bool(true),
                 );
             }
@@ -159,7 +161,7 @@ impl VirtualMachine {
             }
             // Each key is stored as `[]=` stores one, beside the object it
             // stands for.
-            let built = Rc::new(std::cell::RefCell::new(indexmap::IndexMap::new()));
+            let built = Rc::new(std::cell::RefCell::new(Default::default()));
             for (key, value) in entries {
                 self.hash_store(&built, &key, value, position)?;
             }

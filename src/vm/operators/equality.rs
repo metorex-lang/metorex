@@ -239,13 +239,13 @@ impl VirtualMachine {
             if Rc::ptr_eq(one, other) {
                 return Ok(Object::Bool(true));
             }
-            let held: Vec<(String, Object)> = one
+            let held: Vec<(crate::object::Slot, Object)> = one
                 .borrow()
                 .iter()
                 .filter(|(key, _)| !key.starts_with("__MX_"))
                 .map(|(key, value)| (key.clone(), value.clone()))
                 .collect();
-            let against: Vec<(String, Object)> = other
+            let against: Vec<(crate::object::Slot, Object)> = other
                 .borrow()
                 .iter()
                 .filter(|(key, _)| !key.starts_with("__MX_"))

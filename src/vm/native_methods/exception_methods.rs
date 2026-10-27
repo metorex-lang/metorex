@@ -43,9 +43,9 @@ impl VirtualMachine {
             // nothing to report.
             return Some(String::new());
         }
-        let mut keywords = indexmap::IndexMap::new();
-        keywords.insert("__MX_KWARGS__".to_string(), Object::Bool(true));
-        keywords.insert(":highlight".to_string(), Object::Bool(false));
+        let mut keywords: crate::object::HashEntries = Default::default();
+        keywords.insert("__MX_KWARGS__".into(), Object::Bool(true));
+        keywords.insert(":highlight".into(), Object::Bool(false));
         let arguments = vec![Object::Dict(Rc::new(RefCell::new(keywords)))];
         match self
             .send_to_object(
@@ -73,9 +73,9 @@ impl VirtualMachine {
         else {
             return plain;
         };
-        let mut keywords = indexmap::IndexMap::new();
-        keywords.insert("__MX_KWARGS__".to_string(), Object::Bool(true));
-        keywords.insert(":highlight".to_string(), Object::Bool(false));
+        let mut keywords: crate::object::HashEntries = Default::default();
+        keywords.insert("__MX_KWARGS__".into(), Object::Bool(true));
+        keywords.insert(":highlight".into(), Object::Bool(false));
         let arguments = vec![Object::Dict(Rc::new(RefCell::new(keywords)))];
         match self
             .send_to_object(
@@ -138,7 +138,7 @@ impl VirtualMachine {
                         details.message_given = true;
                         details
                             .instance_vars
-                            .insert(crate::vm::MESSAGE_STRING_KEY.to_string(), given.to_object());
+                            .insert(crate::vm::MESSAGE_STRING_KEY.into(), given.to_object());
                     }
                     _ => {
                         details.message = String::new();
@@ -160,7 +160,7 @@ impl VirtualMachine {
                 exception
                     .borrow_mut()
                     .instance_vars
-                    .insert(key.to_string(), value);
+                    .insert(key.to_string().into(), value);
                 Ok(Some(Object::Nil))
             }
             "__restore_cause__" => {
@@ -277,7 +277,7 @@ impl VirtualMachine {
             "exit_value" | "reason" => {
                 let details = exception.borrow();
                 let key = format!("@{}", method_name);
-                Ok(details.instance_vars.get(&key).cloned())
+                Ok(details.instance_vars.get(key.as_str()).cloned())
             }
             // NoMatchingPatternKeyError#matchee — the hash the missing key was
             // looked for in.
@@ -515,8 +515,8 @@ impl VirtualMachine {
                 // decides how its own message reads. Every keyword this call
                 // was given is handed on, `order:` aside, with `highlight:`
                 // settled first.
-                let mut keywords = indexmap::IndexMap::new();
-                keywords.insert("__MX_KWARGS__".to_string(), Object::Bool(true));
+                let mut keywords: crate::object::HashEntries = Default::default();
+                keywords.insert("__MX_KWARGS__".into(), Object::Bool(true));
                 if let Some(View::Dict(given)) = arguments.last().view() {
                     for (name, value) in given.borrow().iter() {
                         if name == "__MX_KWARGS__" || name == ":order" || name == ":highlight" {
@@ -525,7 +525,7 @@ impl VirtualMachine {
                         keywords.insert(name.clone(), value.clone());
                     }
                 }
-                keywords.insert(":highlight".to_string(), Object::Bool(highlight));
+                keywords.insert(":highlight".into(), Object::Bool(highlight));
                 let detail_arguments = vec![Object::Dict(Rc::new(RefCell::new(keywords)))];
                 // An exception that answers no `detailed_message`, or answers
                 // nil, is named by its class the way Ruby names it.
@@ -991,7 +991,7 @@ fn keyword_argument(arguments: &[Object], name: &str) -> Option<Object> {
     let Some(View::Dict(entries)) = arguments.last().view() else {
         return None;
     };
-    entries.borrow().get(&format!(":{}", name)).cloned()
+    entries.borrow().get(format!(":{}", name).as_str()).cloned()
 }
 
 /// A backtrace path as an absolute one, which `Location#absolute_path` answers

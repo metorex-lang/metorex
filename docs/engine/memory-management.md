@@ -12,8 +12,11 @@ counting cannot.
   references other listed objects hold to it, and keeps every object left
   above zero and everything those reach. The rest are cycles nothing outside
   them refers to, and they are freed.
-- A collection runs when the list has doubled since the last one left it, and
-  when the program calls `GC.start`.
+- A collection runs once the program has made 2,048 objects, or a
+  thirty-second as many as earlier collections left alive when that is more,
+  and when the program calls `GC.start`.
+  It looks only at the objects made since the last one, until the objects
+  left alive have grown eightfold since a collection last covered them all.
 
 ## Why not a tracing collector
 
@@ -221,17 +224,24 @@ coverage counters. The names in it hold hashes of the compiler's version and
 the package's, so the script is run again after either changes, and a
 release build warns until it is.
 
-A method definition and a class fit the malloc size classes of 320 and 896
-bytes, which tests check. The fields most methods leave unset, the
+A method definition and a class fit the malloc size classes of 320 and 512
+bytes, which tests check, with the parts few classes are given kept in a
+box made when one is first written. The fields most methods leave unset, the
 parameters past the plain positional ones and what an alias,
 `define_method`, `Method#to_proc`, or a C extension records, are kept in two
 boxes made when one of them is first written. An instance and its cell fit
-the 112-byte size class, with its singleton methods and the lists of the
-variables it hides or shows kept in a box made when one is first written. A
-class's method cache is keyed by names every class's cache shares, and
-counts the walks a name took in its own entry. The blocks one literal makes
-share the local names they can see and the file they were written in while
-those stay the same.
+the 80-byte size class, with its singleton class, its singleton methods and
+the lists of the variables it hides or shows kept in a box made when one is
+first written. A String fits the 80-byte size class too, with its encoding
+named by its place in a table of names and its flags in one byte. A class's
+method cache is keyed by names every class's cache shares, records the
+method state once for the whole cache, and counts the walks a name took in
+its own entry. A block holds the cells it closes over in a list of shared
+names and cells, and shares what it was written as and where with the other
+blocks its literal made in the same place. The methods defined with one body
+share what it compiles to. A Hash keeps a key of up to 15 bytes in the entry
+itself, and a Symbol key's slot is made once, which every Hash keyed by it
+shares.
 
 A program's syntax tree stays alive as long as its methods do, since each
 method keeps its body. A position is 16 bytes, a token 56, an expression 88,
@@ -241,19 +251,20 @@ variants keep their expressions in boxes. A list of statements grows by half
 its length from one, where a `Vec` of elements that size starts with room
 for four, so a body of one statement holds one. A compiled unit gives back
 the room its tables grew into once it is compiled, by moving each into a
-block of its own length, since macOS keeps a block of 16 KB or more whole
-when `realloc` asks for less. A unit records an error spot for each run of
+block of its own length, since macOS keeps a block where it is, at more
+than the size asked for, when `realloc` asks for less. A unit records an error spot for each run of
 instructions that share one, with the names the spots hold kept once in the
 unit, and each instruction's position in 12 bytes, with the prelude flag in
 the offset's top bit. A Symbol's name is kept once in the table of ids,
-which a lookup reads without copying the name. The main script's methods are
-encoded as the parser reads each one, the way the carried libraries' are.
+which a lookup reads without copying the name. The main script's methods,
+and those of a library carried as source, such as Rex, are encoded as the
+parser reads each one, the way the libraries held parsed in the binary are.
 A method's body and a class or module body are decoded only to compile or
 run them and their trees are freed after, so an encoded body keeps no tree.
 A body records its statement count and whether the program rather than the
 prelude wrote its first statement, which the calls that ask answer without
-decoding it. The main script's bytes last the whole run, which is why only
-the main script, read once, is kept this way. The parser reads the
+decoding it. The encoded bytes last the whole run, which is why only code
+read once, the main script and a carried library, is kept this way. The parser reads the
 main script's tokens from the lexer as it reaches them, in chunks of 4,096,
 and frees the chunks before the top-level statement it is reading, so the
 900,013 tokens of `30k_ifelse` are never held at once. The main script is

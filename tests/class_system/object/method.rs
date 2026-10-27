@@ -98,7 +98,7 @@ fn test_block_closure_callable_trait() {
     use metorex::object::Callable;
 
     let params = vec!["x".to_string()];
-    let block = BlockStatement::new(params.clone(), vec![], indexmap::IndexMap::new());
+    let block = BlockStatement::new(params.clone(), vec![], Default::default());
 
     assert_eq!(block.name(), "<block>");
     assert_eq!(block.parameters(), &params[..]);
@@ -110,11 +110,12 @@ fn test_block_closure_callable_trait() {
 fn test_block_closure_captured_vars() {
     use std::cell::RefCell;
 
-    let mut captured = indexmap::IndexMap::new();
-    captured.insert("outer".to_string(), Rc::new(RefCell::new(Object::Int(10))));
-    captured.insert("count".to_string(), Rc::new(RefCell::new(Object::Int(0))));
+    let captured = metorex::scope::Captures::new(vec![
+        ("outer".into(), Rc::new(RefCell::new(Object::Int(10)))),
+        ("count".into(), Rc::new(RefCell::new(Object::Int(0)))),
+    ]);
 
-    let block = BlockStatement::new(vec![], vec![], captured.clone());
+    let block = BlockStatement::new(vec![], vec![], captured);
 
     assert_eq!(block.captured_vars().len(), 2);
     assert_eq!(
@@ -129,7 +130,7 @@ fn test_block_closure_captured_vars() {
 
 #[test]
 fn test_block_closure_empty_captures() {
-    let block = BlockStatement::new(vec!["x".to_string()], vec![], indexmap::IndexMap::new());
+    let block = BlockStatement::new(vec!["x".to_string()], vec![], Default::default());
 
     assert!(block.captured_vars().is_empty());
 }

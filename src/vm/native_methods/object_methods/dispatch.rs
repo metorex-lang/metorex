@@ -144,7 +144,7 @@ impl VirtualMachine {
                 }
                 "to_h" => {
                     return Ok(Some(Object::Dict(std::rc::Rc::new(
-                        std::cell::RefCell::new(indexmap::IndexMap::new()),
+                        std::cell::RefCell::new(Default::default()),
                     ))));
                 }
                 // One string that never changes, so asking twice answers the

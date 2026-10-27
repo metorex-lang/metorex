@@ -4,8 +4,8 @@
 
 use crate::error::SourceLocation;
 use crate::lexer::Position;
-use crate::object::Object;
 use crate::object::View;
+use crate::object::{Object, Slot};
 
 /// Convert a lexer position into a runtime source location.
 pub(super) fn position_to_location(position: Position) -> SourceLocation {
@@ -29,25 +29,44 @@ pub(super) fn format_exception(exception: &Object) -> String {
 }
 
 /// Convert an object into a dictionary key string representation.
-pub(super) fn object_to_dict_key(value: &Object) -> Option<String> {
-    match value.view() {
+pub(super) fn object_to_dict_key(value: &Object) -> Option<Slot> {
+    Some(match value.view() {
         // A String that reads as a number, a boolean or nil takes a slot of
         // its own, so `"1"` and `1` are different keys, as `eql?` makes
         // them. The key object kept beside the entry reads it back.
         View::String(s) if reads_as_another_kind(&s.as_str()) => {
-            Some(format!("{AMBIGUOUS_STRING_PREFIX}{}", s.as_str()))
+            format!("{AMBIGUOUS_STRING_PREFIX}{}", s.as_str()).into()
         }
-        View::String(s) => Some(s.as_str().to_string()),
-        View::Symbol(s) => Some(format!(":{}", s)),
-        View::Int(i) => Some(i.to_string()),
+        View::String(s) => (&*s.as_str()).into(),
+        View::Symbol(s) => symbol_slot(&s.as_str()),
+        View::Int(i) => i.to_string().into(),
         // A Float key keeps its fraction, so 4.0 and 4 are different keys the
         // way Ruby's `eql?` makes them.
-        View::Float(f) if f.fract() == 0.0 && f.is_finite() => Some(format!("{:.1}", f)),
-        View::Float(f) => Some(f.to_string()),
-        View::Bool(b) => Some(b.to_string()),
-        View::Nil => Some("nil".to_string()),
-        other => Some(format!("{}", other)),
-    }
+        View::Float(f) if f.fract() == 0.0 && f.is_finite() => format!("{:.1}", f).into(),
+        View::Float(f) => f.to_string().into(),
+        View::Bool(b) => b.to_string().into(),
+        View::Nil => "nil".into(),
+        other => format!("{}", other).into(),
+    })
+}
+
+thread_local! {
+    /// The slot each Symbol named so far takes as a key, which every Hash
+    /// keyed by it shares.
+    static SYMBOL_SLOTS: std::cell::RefCell<crate::fast_hash::NameMap<Box<str>, Slot>> =
+        std::cell::RefCell::new(crate::fast_hash::NameMap::default());
+}
+
+/// The slot the Symbol `name` takes as a key.
+fn symbol_slot(name: &str) -> Slot {
+    SYMBOL_SLOTS.with(|slots| {
+        if let Some(held) = slots.borrow().get(name) {
+            return held.clone();
+        }
+        let made: Slot = format!(":{name}").into();
+        slots.borrow_mut().insert(name.into(), made.clone());
+        made
+    })
 }
 
 /// What starts the slot of a String key that reads as another kind.

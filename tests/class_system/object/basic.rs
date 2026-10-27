@@ -1,6 +1,5 @@
 // Basic Object Tests - creation, type checking, variables, and ObjectHash
 
-use indexmap::IndexMap;
 use metorex::object::View;
 use metorex::object::{BlockStatement, Class, Method, Object, ObjectHash};
 use std::collections::HashMap;
@@ -67,9 +66,9 @@ fn test_empty_array() {
 
 #[test]
 fn test_dict_object() {
-    let mut map = IndexMap::new();
-    map.insert("x".to_string(), Object::Int(1));
-    map.insert("y".to_string(), Object::Int(2));
+    let mut map = metorex::object::HashEntries::default();
+    map.insert("x".into(), Object::Int(1));
+    map.insert("y".into(), Object::Int(2));
     let obj = Object::dict(map);
     assert_eq!(obj.type_name(), "Dict");
     assert!(obj.is_truthy());
@@ -154,7 +153,7 @@ fn test_method_type_name() {
 
 #[test]
 fn test_block_type_name() {
-    let block = BlockStatement::new(vec![], vec![], indexmap::IndexMap::new());
+    let block = BlockStatement::new(vec![], vec![], Default::default());
     let obj = Object::Block(Rc::new(block));
     assert_eq!(obj.type_name(), "Block");
 }
@@ -315,9 +314,9 @@ fn an_object_is_eight_bytes() {
 }
 
 #[test]
-fn a_string_fits_the_112_byte_malloc_size_class() {
+fn a_string_fits_the_80_byte_malloc_size_class() {
     let counts = 2 * std::mem::size_of::<usize>();
-    assert!(std::mem::size_of::<metorex::object::StringValue>() + counts <= 112);
+    assert!(std::mem::size_of::<metorex::object::StringValue>() + counts <= 80);
 }
 
 #[test]
@@ -410,8 +409,20 @@ fn two_symbols_with_one_name_hold_the_same_bits() {
 }
 
 #[test]
-fn an_instance_and_its_cell_fit_the_112_byte_size_class() {
+fn an_instance_and_its_cell_fit_the_80_byte_size_class() {
     let counts = 2 * std::mem::size_of::<usize>();
     let borrow_flag = std::mem::size_of::<usize>();
-    assert!(std::mem::size_of::<metorex::object::Instance>() + counts + borrow_flag <= 112);
+    assert!(std::mem::size_of::<metorex::object::Instance>() + counts + borrow_flag <= 80);
+}
+
+#[test]
+fn a_block_and_its_counts_fit_the_80_byte_size_class() {
+    let counts = 2 * std::mem::size_of::<usize>();
+    assert!(std::mem::size_of::<BlockStatement>() + counts <= 80);
+}
+
+#[test]
+fn a_class_and_its_counts_fit_the_512_byte_size_class() {
+    let counts = 2 * std::mem::size_of::<usize>();
+    assert!(std::mem::size_of::<Class>() + counts <= 512);
 }

@@ -51,7 +51,7 @@ impl VirtualMachine {
         // `class << obj` with `private`, and the modules `extend` attached.
         let singleton = match receiver.view() {
             View::Class(c) | View::Module(c) => c.singleton_class_slot().clone(),
-            View::Instance(inst) => inst.borrow().singleton_class.borrow().clone(),
+            View::Instance(inst) => inst.borrow().singleton_class(),
             _ => None,
         };
         if let Some(singleton_class) = singleton {
@@ -151,7 +151,7 @@ impl VirtualMachine {
         }
         let singleton = match receiver.view() {
             View::Class(c) | View::Module(c) => c.singleton_class_slot().clone(),
-            View::Instance(inst) => inst.borrow().singleton_class.borrow().clone(),
+            View::Instance(inst) => inst.borrow().singleton_class(),
             _ => None,
         }?;
         if let Some(found) = singleton.find_own_method(name)
@@ -200,7 +200,7 @@ impl VirtualMachine {
         }
         let singleton = match receiver.view() {
             View::Class(c) | View::Module(c) => c.singleton_class_slot().clone(),
-            View::Instance(inst) => inst.borrow().singleton_class.borrow().clone(),
+            View::Instance(inst) => inst.borrow().singleton_class(),
             _ => self.existing_singleton_class(receiver),
         };
         let Some(singleton_class) = singleton else {

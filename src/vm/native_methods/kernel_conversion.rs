@@ -7,7 +7,6 @@ use crate::object::Object;
 use crate::object::{OptionView, View};
 use crate::vm::VirtualMachine;
 use crate::vm::utils::position_to_location;
-use indexmap::IndexMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -47,24 +46,19 @@ impl VirtualMachine {
 /// Split the parser-marked keyword hash off the end of an argument list.
 pub(crate) fn split_conversion_keywords(
     arguments: &[Object],
-) -> (Vec<Object>, IndexMap<String, Object>) {
+) -> (Vec<Object>, crate::object::HashEntries) {
     if let Some(View::Dict(dict_rc)) = arguments.last().view() {
         let dict = dict_rc.borrow();
         if dict.contains_key("__MX_KWARGS__") {
             let keywords = dict
                 .iter()
                 .filter(|(key, _)| key.as_str() != "__MX_KWARGS__")
-                .map(|(key, value)| {
-                    (
-                        key.strip_prefix(':').unwrap_or(key).to_string(),
-                        value.clone(),
-                    )
-                })
+                .map(|(key, value)| (key.strip_prefix(':').unwrap_or(key).into(), value.clone()))
                 .collect();
             return (arguments[..arguments.len() - 1].to_vec(), keywords);
         }
     }
-    (arguments.to_vec(), IndexMap::new())
+    (arguments.to_vec(), Default::default())
 }
 
 /// Whether `error` is one of the conversion failures `exception: false` turns
@@ -819,7 +813,7 @@ impl VirtualMachine {
                 position,
             ));
         }
-        let empty = || Object::Dict(Rc::new(RefCell::new(IndexMap::new())));
+        let empty = || Object::Dict(Rc::new(RefCell::new(Default::default())));
         match arguments[0].view() {
             View::Nil => Ok(empty()),
             View::Array(elements) if elements.borrow().is_empty() => Ok(empty()),

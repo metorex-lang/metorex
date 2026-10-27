@@ -59,10 +59,10 @@ pub(crate) struct FiberContext {
     pub(crate) lexical_home_frame: Option<Option<u64>>,
     /// The running flags of the blocks attached to calls this fiber has in
     /// progress, which a call on another fiber must not clear.
-    pub(crate) attached_block_flags: Vec<std::rc::Rc<std::cell::Cell<bool>>>,
+    pub(crate) attached_block_flags: Vec<std::rc::Rc<crate::object::BlockFlags>>,
     /// The block bodies and loops this fiber is inside, which say what a
     /// `break` written here returns from.
-    pub(crate) running_block_breaks: Vec<Option<std::rc::Rc<std::cell::Cell<bool>>>>,
+    pub(crate) running_block_breaks: Vec<Option<std::rc::Rc<crate::object::BlockFlags>>>,
     /// The classes the methods this fiber is running were found on, which
     /// `super` reads to know where to look next.
     pub(crate) method_owner_stack: Vec<Option<std::rc::Rc<crate::class::Class>>>,

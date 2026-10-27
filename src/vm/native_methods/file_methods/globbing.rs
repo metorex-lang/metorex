@@ -49,7 +49,7 @@ impl VirtualMachine {
                 }
                 View::Int(held) if index > 0 => flags = held,
                 View::Dict(held) if names_keywords(argument) || method_name == "glob" => {
-                    let entries: Vec<(String, Object)> = held
+                    let entries: Vec<(crate::object::Slot, Object)> = held
                         .borrow()
                         .iter()
                         .map(|(key, value)| (key.clone(), value.clone()))

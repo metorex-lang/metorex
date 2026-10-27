@@ -276,8 +276,6 @@ pub struct VirtualMachine {
     /// fiber rather than one the program made, so the names it keeps under
     /// `Thread#[]` are the thread's own.
     pub(crate) thread_body_fibers: Vec<usize>,
-    /// Every mutex a lock has been taken on, so the locks a thread still
-    /// holds can be let go when the thread ends.
     /// Whether the fiber that just handed control back did so because it is
     /// waiting on something rather than because it yielded a value. Waiting
     /// inside a fiber holds up the whole thread, so whoever resumed it waits
@@ -297,7 +295,9 @@ pub struct VirtualMachine {
     /// What a thread that asked for its exceptions to take the program down
     /// died of, waiting to be raised where the program next waits.
     pub(crate) thread_abort: Option<Object>,
-    pub(crate) taken_mutexes: Vec<Rc<std::cell::RefCell<crate::object::Instance>>>,
+    /// The mutexes locked and not yet seen unlocked, so the locks a thread
+    /// still holds can be let go when the thread ends.
+    pub(crate) taken_mutexes: Vec<std::rc::Weak<std::cell::RefCell<crate::object::Instance>>>,
     /// Stack of canonical paths whose body is *currently executing* via
     /// `execute_file`. The path joins this stack on entry (after the
     /// `$"` mark goes in) and leaves on exit. Distinct from `$"` because
@@ -335,7 +335,7 @@ pub struct VirtualMachine {
     pub(crate) recording_call_cache: Option<Rc<crate::bytecode::call_cache::CallCache>>,
     /// The running flags of the blocks attached to the calls now in
     /// progress, innermost last. Each is cleared when its call returns.
-    pub(crate) attached_block_flags: Vec<Rc<std::cell::Cell<bool>>>,
+    pub(crate) attached_block_flags: Vec<Rc<crate::object::BlockFlags>>,
     /// Whether a method defined in top-level code is public, which a bare
     /// `public` or `private` there sets. Each file starts private.
     pub(crate) toplevel_public: bool,
@@ -384,7 +384,7 @@ pub struct VirtualMachine {
     /// For each block body now running, innermost last, the flag saying
     /// whether its call is still running. None for a lambda, where `break`
     /// ends the lambda itself.
-    pub(crate) running_block_breaks: Vec<Option<Rc<std::cell::Cell<bool>>>>,
+    pub(crate) running_block_breaks: Vec<Option<Rc<crate::object::BlockFlags>>>,
     /// The object a `&` handed over as the block, where it was already a
     /// callable. `Proc.new(&callable)` answers that same callable.
     pub(crate) pending_block_source: Option<Object>,
@@ -1534,7 +1534,7 @@ impl Drop for VirtualMachine {
 pub(crate) enum WeakTarget {
     Instance(std::rc::Weak<RefCell<crate::object::Instance>>),
     Array(std::rc::Weak<RefCell<Vec<Object>>>),
-    Dict(std::rc::Weak<RefCell<indexmap::IndexMap<String, Object>>>),
+    Dict(std::rc::Weak<RefCell<crate::object::HashEntries>>),
     String(std::rc::Weak<crate::object::StringValue>),
     Set(std::rc::Weak<RefCell<indexmap::IndexSet<crate::object::ObjectHash>>>),
     Exception(std::rc::Weak<RefCell<crate::object::Exception>>),

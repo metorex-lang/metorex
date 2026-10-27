@@ -126,9 +126,9 @@ impl VirtualMachine {
         if let Some(found) = held {
             return found;
         }
-        let made = Object::Dict(std::rc::Rc::new(std::cell::RefCell::new(
-            indexmap::IndexMap::new(),
-        )));
+        let made = Object::Dict(std::rc::Rc::new(
+            std::cell::RefCell::new(Default::default()),
+        ));
         self.fiber_set_storage(handle, Some(made.clone()));
         made
     }

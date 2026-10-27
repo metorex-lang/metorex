@@ -10,7 +10,7 @@ impl VirtualMachine {
     pub(crate) fn call_hash_comparing_method(
         &mut self,
         receiver: &Object,
-        dict_rc: &Rc<RefCell<IndexMap<String, Object>>>,
+        dict_rc: &Rc<RefCell<crate::object::HashEntries>>,
         method_name: &str,
         arguments: &[Object],
         position: Position,
@@ -25,7 +25,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let mut inverted = indexmap::IndexMap::new();
+                let mut inverted = Default::default();
                 for (key, value) in self.hash_pairs(dict_rc) {
                     let rendered = crate::vm::utils::object_to_dict_key(&value).unwrap_or_default();
                     if !crate::vm::utils::is_primitive_key(&value) {
@@ -59,11 +59,11 @@ impl VirtualMachine {
                 // A hash comparing keys by identity is not equal to one that
                 // compares them by value, unless neither holds a key.
                 let by_identity = |held: &Rc<RefCell<_>>| {
-                    let held: &RefCell<indexmap::IndexMap<String, Object>> = held;
+                    let held: &RefCell<crate::object::HashEntries> = held;
                     held.borrow().contains_key(super::BY_IDENTITY_KEY)
                 };
                 let holds_keys = |held: &Rc<RefCell<_>>| {
-                    let held: &RefCell<indexmap::IndexMap<String, Object>> = held;
+                    let held: &RefCell<crate::object::HashEntries> = held;
                     held.borrow().keys().any(|key| !super::is_internal_key(key))
                 };
                 if by_identity(dict_rc) != by_identity(other_rc)
@@ -106,17 +106,17 @@ impl VirtualMachine {
                         .map(|(slot, value)| (reconstruct_key(&dict, slot), value.clone()))
                         .collect()
                 };
-                let carried: Vec<(String, Object)> = {
+                let carried: Vec<(crate::object::Slot, Object)> = {
                     let dict = dict_rc.borrow();
                     dict.iter()
                         .filter(|(slot, _)| is_internal_key(slot) && *slot != KEY_OBJECTS_KEY)
                         .map(|(slot, value)| (slot.clone(), value.clone()))
                         .collect()
                 };
-                let mut rebuilt = indexmap::IndexMap::new();
+                let mut rebuilt = Default::default();
                 for (key, value) in held {
                     let slot = self.dict_slot_in(&rebuilt, &key, by_identity, position)?;
-                    if !rebuilt.contains_key(&slot) {
+                    if !rebuilt.contains_key(slot.as_str()) {
                         remember_key_object(&mut rebuilt, &slot, &key);
                     }
                     rebuilt.insert(slot, value);

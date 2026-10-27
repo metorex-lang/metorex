@@ -2,10 +2,21 @@
 
 use super::*;
 
-/// A method lookup's answer, with the method state it was found under.
-/// What a lookup found, the method state it held under, and how many times
-/// the ancestry was walked for the name rather than the cache answering.
-pub(crate) type CachedLookup = (u64, Option<Rc<Method>>, u32);
+/// What a lookup found, and how many times the ancestry was walked for the
+/// name rather than the cache answering, with `STALE_LOOKUP` added once the
+/// method state has moved on from the one it was found under.
+pub(crate) type CachedLookup = (Option<Rc<Method>>, u32);
+
+/// The mark on the walk count of a lookup found under an earlier state.
+pub(crate) const STALE_LOOKUP: u32 = 1 << 31;
+
+/// What each name's lookup found, keyed by the name as every class's cache
+/// shares it, and the method state the entries not marked stale hold under.
+#[derive(Debug, Default)]
+pub(crate) struct MethodCache {
+    pub(crate) state: u64,
+    pub(crate) entries: crate::fast_hash::NameMap<Rc<str>, CachedLookup>,
+}
 
 /// The modules mixed into a class in lookup order, with the method state they
 /// were worked out under.
@@ -18,9 +29,6 @@ pub struct Class {
     /// to a constant. `name()` still returns the original (immutable) name —
     /// use `ruby_name()` to pick up the assigned override.
     pub(crate) assigned_name: RefCell<Option<String>>,
-    /// Name set by `Module#set_temporary_name`. It takes precedence over the
-    /// assigned name until the module gains a permanent one.
-    pub(crate) temporary_name: RefCell<Option<String>>,
     /// The subclass of Module this module was made from, for a module
     /// `new` made on one, which is what its `class` answers.
     pub(crate) instance_of: RefCell<Option<Rc<Class>>>,
@@ -33,21 +41,6 @@ pub struct Class {
         RefCell<crate::fast_hash::NameIndexMap<String, crate::object::Object>>,
     /// Included modules, in reverse inclusion order (last included = first searched).
     pub(crate) mixins: RefCell<Vec<Rc<Class>>>,
-    /// Prepended modules, in reverse prepend order. These sit ahead of the
-    /// class's own methods, so one of them shadows a same-named method here
-    /// and the class's copy is what `super` reaches from it.
-    pub(crate) prepends: RefCell<Vec<Rc<Class>>>,
-    /// Names of methods whose visibility has been set to private.
-    pub(crate) private_method_names: RefCell<crate::fast_hash::NameSet<String>>,
-    /// Names of methods whose visibility has been set to protected. Like
-    /// private, these cannot be called with an explicit receiver from
-    /// outside, but they are reported as instance methods rather than
-    /// private ones.
-    pub(crate) protected_method_names: RefCell<crate::fast_hash::NameSet<String>>,
-    /// Methods explicitly marked public on this class via `public :name` —
-    /// distinct from "no entry" so we can override an inherited private
-    /// without adding the method itself to this class's method table.
-    pub(crate) public_overrides: RefCell<crate::fast_hash::NameSet<String>>,
     /// Lazily-allocated singleton class attached to *this class object* — the
     /// thing `class << SomeClass; end` opens. Holds class-level (def self.x)
     /// methods once we start tracking them as a real class.
@@ -64,7 +57,51 @@ pub struct Class {
     /// Current visibility state set by bare `private`/`public`/`protected`
     /// inside the class body. Methods defined while this is `private` are
     /// auto-marked as private. `protected` is treated like `private` for now.
-    pub(crate) current_visibility: RefCell<String>,
+    pub(crate) current_visibility: std::cell::Cell<&'static str>,
+    /// Source location (file, line) of each constant assignment that
+    /// produced a class_var on this class — `class Foo; X = 1; end`,
+    /// `class Foo; class Bar; end; end`, etc. Returned by
+    /// `Module#const_source_location` once the constant is bound.
+    pub(crate) const_locations: RefCell<crate::fast_hash::NameMap<String, (String, i64)>>,
+    /// What `find_method` found for each name. An entry from an earlier
+    /// state is looked up again.
+    pub(crate) method_cache: RefCell<MethodCache>,
+    /// What `linear_mixins` answered, with the method state it was worked
+    /// out under, which a change to any mixin chain moves on.
+    pub(crate) linear_mixins_cache: RefCell<Option<LinearMixins>>,
+    /// Whether the method table holds a `def self.name`, kept under a
+    /// `__class__` name, which spares a lookup of one building that name
+    /// when there is none.
+    pub(crate) holds_class_methods: std::cell::Cell<bool>,
+    /// Whether a module this extended left a copy of one of its methods
+    /// here, under an `__ext__` name.
+    pub(crate) holds_extended_copies: std::cell::Cell<bool>,
+    /// Methods explicitly marked public on this class via `public :name` —
+    /// distinct from "no entry" so we can override an inherited private
+    /// without adding the method itself to this class's method table.
+    pub(crate) public_overrides: RefCell<crate::fast_hash::NameSet<String>>,
+    /// What few classes and modules are given, made the first time one of
+    /// its parts is written.
+    pub(crate) rare: std::cell::OnceCell<Box<RareParts>>,
+}
+
+/// The parts of a class or module few of them are given.
+#[derive(Debug, Default, Clone)]
+pub(crate) struct RareParts {
+    /// Prepended modules, in reverse prepend order. These sit ahead of the
+    /// class's own methods, so one of them shadows a same-named method here
+    /// and the class's copy is what `super` reaches from it.
+    pub(crate) prepends: RefCell<Vec<Rc<Class>>>,
+    /// Names of methods whose visibility has been set to private.
+    pub(crate) private_method_names: RefCell<crate::fast_hash::NameSet<String>>,
+    /// Name set by `Module#set_temporary_name`. It takes precedence over the
+    /// assigned name until the module gains a permanent one.
+    pub(crate) temporary_name: RefCell<Option<String>>,
+    /// Names of methods whose visibility has been set to protected. Like
+    /// private, these cannot be called with an explicit receiver from
+    /// outside, but they are reported as instance methods rather than
+    /// private ones.
+    pub(crate) protected_method_names: RefCell<crate::fast_hash::NameSet<String>>,
     /// `autoload :Const, "path"` registry. Maps constant name → unresolved
     /// path string (the value Ruby's `autoload?` returns verbatim).
     pub(crate) autoloads: RefCell<crate::fast_hash::NameMap<String, String>>,
@@ -87,26 +124,44 @@ pub struct Class {
     /// Returned by `Module#const_source_location` when an autoload is
     /// pending or when another thread asks during a load.
     pub(crate) autoload_locations: RefCell<crate::fast_hash::NameMap<String, (String, i64)>>,
-    /// Source location (file, line) of each constant assignment that
-    /// produced a class_var on this class — `class Foo; X = 1; end`,
-    /// `class Foo; class Bar; end; end`, etc. Returned by
-    /// `Module#const_source_location` once the constant is bound.
-    pub(crate) const_locations: RefCell<crate::fast_hash::NameMap<String, (String, i64)>>,
-    /// What `find_method` found for each name, with the method state it was
-    /// found under. An entry from an earlier state is looked up again.
-    /// What each name's lookup found, keyed by the name as every class's
-    /// cache shares it.
-    pub(crate) method_cache: RefCell<crate::fast_hash::NameMap<Rc<str>, CachedLookup>>,
-    /// What `linear_mixins` answered, with the method state it was worked
-    /// out under, which a change to any mixin chain moves on.
-    pub(crate) linear_mixins_cache: RefCell<Option<LinearMixins>>,
-    /// Whether the method table holds a `def self.name`, kept under a
-    /// `__class__` name, which spares a lookup of one building that name
-    /// when there is none.
-    pub(crate) holds_class_methods: std::cell::Cell<bool>,
-    /// Whether a module this extended left a copy of one of its methods
-    /// here, under an `__ext__` name.
-    pub(crate) holds_extended_copies: std::cell::Cell<bool>,
+}
+
+thread_local! {
+    /// The parts a class or module given none of them reads.
+    static NO_RARE_PARTS: &'static RareParts = Box::leak(Box::default());
+}
+
+impl Class {
+    /// The parts few classes are given, read from an empty set for a class
+    /// given none of them. Nothing may be written through this.
+    pub(crate) fn rare(&self) -> &RareParts {
+        match self.rare.get() {
+            Some(parts) => parts,
+            None => NO_RARE_PARTS.with(|parts| *parts),
+        }
+    }
+
+    /// The parts few classes are given, when this class was given any.
+    pub(crate) fn rare_given(&self) -> Option<&RareParts> {
+        self.rare.get().map(|parts| &**parts)
+    }
+
+    /// The parts few classes are given, made for writing.
+    pub(crate) fn rare_for_writing(&self) -> &RareParts {
+        self.rare.get_or_init(Box::default)
+    }
+
+    /// A copy of the parts few classes are given, for a copy of the class,
+    /// which takes no temporary name.
+    pub(crate) fn rare_copy(&self) -> std::cell::OnceCell<Box<RareParts>> {
+        let copy = std::cell::OnceCell::new();
+        if let Some(parts) = self.rare.get() {
+            let copied = (**parts).clone();
+            *copied.temporary_name.borrow_mut() = None;
+            let _ = copy.set(Box::new(copied));
+        }
+        copy
+    }
 }
 
 /// A class is written out by name alone. Following what it holds would go on

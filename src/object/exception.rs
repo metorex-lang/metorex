@@ -56,7 +56,7 @@ pub struct Exception {
     /// class itself is kept when one is known.
     pub class: Option<std::rc::Rc<crate::class::Class>>,
     /// Instance variables a user-defined subclass set on itself.
-    pub instance_vars: indexmap::IndexMap<String, Object>,
+    pub instance_vars: crate::object::HashEntries,
     /// Whether a message was supplied. An exception built without one reports
     /// its class name instead, which an explicitly empty message does not.
     pub message_given: bool,
@@ -99,7 +99,7 @@ impl Exception {
             site_columns: Vec::new(),
             backtrace_locations_array: None,
             class: None,
-            instance_vars: indexmap::IndexMap::new(),
+            instance_vars: Default::default(),
             message_given: true,
             cause_settled: false,
         }
@@ -121,7 +121,7 @@ impl Exception {
             site_columns: Vec::new(),
             backtrace_locations_array: None,
             class: None,
-            instance_vars: indexmap::IndexMap::new(),
+            instance_vars: Default::default(),
             message_given: true,
             cause_settled: false,
         }
@@ -147,7 +147,7 @@ impl Exception {
             site_columns: Vec::new(),
             backtrace_locations_array: None,
             class: None,
-            instance_vars: indexmap::IndexMap::new(),
+            instance_vars: Default::default(),
             message_given: true,
             cause_settled: false,
         }
@@ -169,7 +169,7 @@ impl Exception {
             site_columns: Vec::new(),
             backtrace_locations_array: None,
             class: None,
-            instance_vars: indexmap::IndexMap::new(),
+            instance_vars: Default::default(),
             message_given: true,
             cause_settled: false,
         }
@@ -197,7 +197,7 @@ impl Exception {
             site_columns: Vec::new(),
             backtrace_locations_array: None,
             class: None,
-            instance_vars: indexmap::IndexMap::new(),
+            instance_vars: Default::default(),
             message_given: true,
             cause_settled: false,
         }

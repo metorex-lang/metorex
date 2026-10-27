@@ -4,6 +4,7 @@ mod hash;
 mod instance;
 mod live_objects;
 mod method;
+mod slot;
 mod struct_tests;
 mod to_string;
 mod type_display_ops_tests;

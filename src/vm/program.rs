@@ -33,7 +33,7 @@ fn symbol_to_proc_block(sym: &str) -> BlockStatement {
         },
         position: pos,
     }];
-    let mut made = BlockStatement::new(vec!["x".to_string()], body, indexmap::IndexMap::new());
+    let mut made = BlockStatement::new(vec!["x".to_string()], body, Default::default());
     // What the callable stands for, which is what it says of itself in place
     // of a file and a line.
     made.from_symbol = Some(sym.to_string());
@@ -121,7 +121,7 @@ fn method_to_proc_block(target: &Object, position: Position) -> BlockStatement {
             expression: call,
             position,
         }],
-        indexmap::IndexMap::new(),
+        Default::default(),
     );
     made.parameter_defaults = parameter_defaults;
     // A Method takes its arguments exactly, so the block standing for one is
@@ -168,10 +168,10 @@ pub(crate) fn proc_for_c_function(target: Object) -> Object {
             expression: call,
             position,
         }],
-        indexmap::IndexMap::new(),
+        Default::default(),
     );
     std::rc::Rc::make_mut(&mut made.captured_vars).insert(
-        "__method_proc_target".to_string(),
+        "__method_proc_target",
         std::rc::Rc::new(std::cell::RefCell::new(target)),
     );
     Object::Block(std::rc::Rc::new(made))
@@ -182,7 +182,7 @@ pub(crate) fn proc_for_c_function(target: Object) -> Object {
 pub(crate) fn block_for_method(target: Object, position: Position) -> Object {
     let mut block = method_to_proc_block(&target, position);
     std::rc::Rc::make_mut(&mut block.captured_vars).insert(
-        "__method_proc_target".to_string(),
+        "__method_proc_target",
         std::rc::Rc::new(std::cell::RefCell::new(target)),
     );
     Object::Block(std::rc::Rc::new(block))
@@ -616,7 +616,7 @@ impl ArgumentList {
                     return Ok(());
                 }
                 let mut keywords = entries.borrow().clone();
-                keywords.insert("__MX_KWARGS__".to_string(), Object::Bool(true));
+                keywords.insert("__MX_KWARGS__".into(), Object::Bool(true));
                 self.args
                     .push(Object::Dict(std::rc::Rc::new(std::cell::RefCell::new(
                         keywords,
@@ -747,7 +747,7 @@ impl ArgumentList {
                 .borrow()
                 .contains_key(crate::vm::native_methods::hash_methods::RUBY2_KEYWORDS_KEY)
         {
-            let mut keywords: indexmap::IndexMap<String, Object> = entries
+            let mut keywords: crate::object::HashEntries = entries
                 .borrow()
                 .iter()
                 .filter(|(key, _)| {
@@ -755,7 +755,7 @@ impl ArgumentList {
                 })
                 .map(|(key, value)| (key.clone(), value.clone()))
                 .collect();
-            keywords.insert("__MX_KWARGS__".to_string(), Object::Bool(true));
+            keywords.insert("__MX_KWARGS__".into(), Object::Bool(true));
             self.args.pop();
             self.args
                 .push(Object::Dict(std::rc::Rc::new(std::cell::RefCell::new(

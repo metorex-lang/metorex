@@ -567,7 +567,7 @@ pub(crate) fn is_native_kernel_method(name: &str) -> bool {
 /// instance of the subclass when the call was made on one.
 pub(crate) fn hash_of_class(
     class_rc: &Rc<crate::class::Class>,
-    entries: indexmap::IndexMap<String, Object>,
+    entries: crate::object::HashEntries,
 ) -> Object {
     let held = Object::Dict(Rc::new(std::cell::RefCell::new(entries)));
     if class_rc.name() == "Hash" {

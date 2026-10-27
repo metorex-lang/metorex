@@ -83,7 +83,7 @@ impl VirtualMachine {
             details
                 .borrow_mut()
                 .instance_vars
-                .insert(SPOT_HINT_KEY.to_string(), Object::Nil);
+                .insert(SPOT_HINT_KEY.into(), Object::Nil);
             return;
         }
         if !SPOTTED_ERRORS
@@ -101,7 +101,7 @@ impl VirtualMachine {
         details
             .borrow_mut()
             .instance_vars
-            .insert(SPOT_HINT_KEY.to_string(), hint);
+            .insert(SPOT_HINT_KEY.into(), hint);
     }
 }
 

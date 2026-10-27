@@ -8,7 +8,7 @@ impl VirtualMachine {
     pub(crate) fn call_hash_rebuilding_method(
         &mut self,
         receiver: &Object,
-        dict_rc: &Rc<RefCell<IndexMap<String, Object>>>,
+        dict_rc: &Rc<RefCell<crate::object::HashEntries>>,
         method_name: &str,
         arguments: &[Object],
         position: Position,
@@ -26,7 +26,7 @@ impl VirtualMachine {
                 if self.object_is_frozen(receiver) {
                     return Err(self.frozen_modification_error(receiver, position));
                 }
-                let kept: Vec<(String, Object)> = dict_rc
+                let kept: Vec<(crate::object::Slot, Object)> = dict_rc
                     .borrow()
                     .iter()
                     .filter(|(key, _)| is_internal_key(key))
@@ -55,7 +55,7 @@ impl VirtualMachine {
                     return Err(self.frozen_modification_error(receiver, position));
                 }
                 let pairs = self.hash_pairs(dict_rc);
-                let dropped: Vec<String> = pairs
+                let dropped: Vec<crate::object::Slot> = pairs
                     .iter()
                     .filter(|(_, value)| matches!(value.view(), View::Nil))
                     .map(|(key, _)| crate::vm::utils::object_to_dict_key(key).unwrap_or_default())
@@ -65,7 +65,7 @@ impl VirtualMachine {
                 }
                 let mut dict = dict_rc.borrow_mut();
                 for key in dropped {
-                    dict.shift_remove(&key);
+                    dict.shift_remove(key.as_str());
                 }
                 drop(dict);
                 Ok(Some(receiver.clone()))
@@ -79,12 +79,12 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let mut kept = indexmap::IndexMap::new();
+                let mut kept: crate::object::HashEntries = Default::default();
                 // `compact` keeps the default and the default proc, which the
                 // other derived hashes leave behind.
                 for sentinel in [DEFAULT_VALUE_KEY, DEFAULT_PROC_KEY] {
                     if let Some(value) = dict_rc.borrow().get(sentinel) {
-                        kept.insert(sentinel.to_string(), value.clone());
+                        kept.insert(sentinel.to_string().into(), value.clone());
                     }
                 }
                 for (key, value) in self.hash_pairs(dict_rc) {
@@ -106,7 +106,7 @@ impl VirtualMachine {
                     named.push(crate::vm::utils::object_to_dict_key(argument).unwrap_or_default());
                 }
                 let pairs = self.hash_pairs(dict_rc);
-                let mut kept = indexmap::IndexMap::new();
+                let mut kept = Default::default();
                 // `slice` answers the pairs in the order they were asked for,
                 // while `except` keeps the hash's own order.
                 if method_name == "slice" {
@@ -146,7 +146,7 @@ impl VirtualMachine {
                 let mut picked = Vec::with_capacity(arguments.len());
                 for argument in arguments {
                     let found = match self.hash_find_key(dict_rc, argument, position)? {
-                        Some(slot) => dict_rc.borrow().get(&slot).cloned(),
+                        Some(slot) => dict_rc.borrow().get(slot.as_str()).cloned(),
                         None => None,
                     };
                     match found {

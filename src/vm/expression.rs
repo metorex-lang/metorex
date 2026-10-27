@@ -11,7 +11,6 @@ use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
 use crate::object::{OptionView, View};
-use indexmap::IndexMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -468,7 +467,7 @@ impl VirtualMachine {
                 let key_string = held.unwrap_or(fresh);
 
                 let dict = dict_rc.borrow();
-                if let Some(value) = dict.get(&key_string) {
+                if let Some(value) = dict.get(key_string.as_str()) {
                     Ok(value.clone())
                 } else if let Some(default) = dict.get("__MX_DEFAULT__") {
                     // `Hash.new(default)` answers that value for a key it has
@@ -487,7 +486,7 @@ impl VirtualMachine {
                         self.execute_block_callable(&block, vec![hash_obj, key.clone()], position)?;
                     // The block may have set the key directly (h[k] = val), or
                     // returned a value. Check the hash first, fall back to block result.
-                    let stored = dict_rc.borrow().get(&key_string).cloned();
+                    let stored = dict_rc.borrow().get(key_string.as_str()).cloned();
                     if let Some(value) = stored {
                         Ok(value)
                     } else {
@@ -748,7 +747,7 @@ impl VirtualMachine {
 /// Whether a key is written out in the literal itself, which is what Ruby
 /// checks for a duplicate rather than what the key evaluates to.
 /// The pairs a Hash holds, shared with every reference to it.
-type SharedPairs = Rc<RefCell<IndexMap<String, Object>>>;
+type SharedPairs = Rc<RefCell<crate::object::HashEntries>>;
 
 /// The pairs of a Hash literal with each `**{...}` literal written inside it
 /// spread in place, since its keys count as written in the outer literal.
@@ -781,8 +780,8 @@ pub(crate) struct WrittenPair {
 /// A Hash literal as its pairs are added.
 #[derive(Default)]
 pub(crate) struct HashLiteral {
-    map: IndexMap<String, Object>,
-    key_objs: IndexMap<String, Object>,
+    map: crate::object::HashEntries,
+    key_objs: crate::object::HashEntries,
     // A key that came in through `**held` was not written twice, so writing
     // it again is not the duplicate Ruby reports.
     spread_names: std::collections::HashSet<String>,
@@ -791,7 +790,7 @@ pub(crate) struct HashLiteral {
 /// A key of a Hash literal, ready for its value.
 pub(crate) struct HashKey {
     value: Object,
-    slot: String,
+    slot: crate::object::Slot,
 }
 
 impl HashLiteral {
@@ -819,7 +818,7 @@ impl HashLiteral {
                 continue;
             }
             self.map.insert(name.clone(), held.clone());
-            self.spread_names.insert(name.clone());
+            self.spread_names.insert(name.to_string());
         }
         Ok(())
     }
@@ -852,7 +851,7 @@ impl HashLiteral {
             probe.entry(slot.clone()).or_insert_with(|| held.clone());
         }
         probe.insert(
-            "__MX_KEY_OBJECTS__".to_string(),
+            "__MX_KEY_OBJECTS__".into(),
             Object::Dict(Rc::new(RefCell::new(self.key_objs.clone()))),
         );
         let slot = vm.dict_slot_in(&probe, &key_value, false, key_position)?;
@@ -875,8 +874,8 @@ impl HashLiteral {
         value: Object,
         written: &WrittenPair,
     ) -> Result<(), MetorexError> {
-        if self.map.contains_key(&key.slot)
-            && !self.spread_names.contains(&key.slot)
+        if self.map.contains_key(key.slot.as_str())
+            && !self.spread_names.contains(key.slot.as_str())
             && written.literal_key
         {
             vm.warn_duplicated_key(&key.value, written)?;
@@ -903,7 +902,7 @@ impl HashLiteral {
         let mut map = self.map;
         if !self.key_objs.is_empty() {
             map.insert(
-                "__MX_KEY_OBJECTS__".to_string(),
+                "__MX_KEY_OBJECTS__".into(),
                 Object::Dict(Rc::new(RefCell::new(self.key_objs))),
             );
         }

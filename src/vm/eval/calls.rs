@@ -444,9 +444,9 @@ impl VirtualMachine {
             return;
         };
         if let View::Block(held) = block.view() {
-            held.attached_call_running.set(true);
+            held.flags.attached_call_running.set(true);
             self.attached_block_flags
-                .push(std::rc::Rc::clone(&held.attached_call_running));
+                .push(std::rc::Rc::clone(&held.flags));
         }
         self.pending_block = Some(block);
         self.pending_block_from_ampersand = false;

@@ -215,7 +215,7 @@ pub struct Provenance {
     /// the object the Method was extracted from.
     pub bound_self: Option<Box<Object>>,
     /// Captured closure variables (from define_method blocks)
-    pub captured_vars: Option<Box<indexmap::IndexMap<String, Rc<RefCell<Object>>>>>,
+    pub captured_vars: Option<crate::scope::CapturedNames>,
     /// Lexical class/module nesting captured from the Proc this method was
     /// built from. Restored while the body runs so a nested `def` lands in the
     /// Proc's default definee rather than the receiving class.
@@ -317,11 +317,13 @@ pub struct Method {
 impl Method {
     /// Create a new method
     pub fn new(name: String, parameters: Vec<String>, body: impl Into<crate::ast::Body>) -> Self {
+        let body: crate::ast::Body = body.into();
         Self {
             name,
             parameters,
             signature: Seldom::default(),
-            body: body.into(),
+            unit: crate::vm::units::UnitSlot::for_methods_of(&body),
+            body,
             receiver: None,
             owner: None,
             owner_class: None,
@@ -338,7 +340,6 @@ impl Method {
             captured_nesting: crate::object::no_nesting(),
             ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
             definee: None,
-            unit: Default::default(),
         }
     }
 

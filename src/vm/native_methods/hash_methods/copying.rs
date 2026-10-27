@@ -42,7 +42,7 @@ impl VirtualMachine {
             details.receiver = Some(Box::new(receiver.clone()));
             details
                 .instance_vars
-                .insert(crate::vm::KEY_ERROR_KEY.to_string(), key.clone());
+                .insert(crate::vm::KEY_ERROR_KEY.into(), key.clone());
         }
         MetorexError::UncaughtException {
             exception,
@@ -55,11 +55,11 @@ impl VirtualMachine {
 /// A hash derived from `source` keeps its compare-by-identity setting, which
 /// Ruby carries into `slice`, `merge`, `select`, and the rest.
 pub(crate) fn carry_identity(
-    source: &Rc<RefCell<indexmap::IndexMap<String, Object>>>,
-    mut built: indexmap::IndexMap<String, Object>,
+    source: &Rc<RefCell<crate::object::HashEntries>>,
+    mut built: crate::object::HashEntries,
 ) -> Object {
     if source.borrow().contains_key(BY_IDENTITY_KEY) {
-        built.insert(BY_IDENTITY_KEY.to_string(), Object::Bool(true));
+        built.insert(BY_IDENTITY_KEY.into(), Object::Bool(true));
     }
     Object::Dict(Rc::new(RefCell::new(built)))
 }

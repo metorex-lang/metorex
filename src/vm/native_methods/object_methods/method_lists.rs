@@ -275,7 +275,7 @@ impl VirtualMachine {
                 }
                 let singleton = match receiver.view() {
                     View::Class(c) | View::Module(c) => c.singleton_class_slot().clone(),
-                    View::Instance(inst) => inst.borrow().singleton_class.borrow().clone(),
+                    View::Instance(inst) => inst.borrow().singleton_class(),
                     _ => None,
                 };
                 if let Some(singleton_class) = singleton {

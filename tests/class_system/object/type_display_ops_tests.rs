@@ -1,7 +1,6 @@
 // Coverage tests for Object::type_name, Display, operations (equals, hash, is_truthy),
 // constructors, and lib::version
 
-use indexmap::IndexMap;
 use metorex::object::View;
 use metorex::object::{Class, Method, Object, ObjectHash};
 use std::cell::RefCell;
@@ -85,11 +84,7 @@ fn type_name_method() {
 #[test]
 fn type_name_block() {
     use metorex::object::BlockStatement;
-    let b = Rc::new(BlockStatement::new(
-        vec![],
-        vec![],
-        indexmap::IndexMap::new(),
-    ));
+    let b = Rc::new(BlockStatement::new(vec![], vec![], Default::default()));
     assert_eq!(Object::Block(b).type_name(), "Block");
 }
 
@@ -191,8 +186,8 @@ fn display_dict_empty() {
 
 #[test]
 fn display_dict_elements() {
-    let mut m = IndexMap::new();
-    m.insert("a".to_string(), Object::Int(1));
+    let mut m = metorex::object::HashEntries::default();
+    m.insert("a".into(), Object::Int(1));
     let d = Object::dict(m);
     let s = format!("{}", d);
     assert!(s.contains("\"a\" => 1"));
@@ -230,11 +225,7 @@ fn display_method() {
 #[test]
 fn display_block() {
     use metorex::object::BlockStatement;
-    let b = Rc::new(BlockStatement::new(
-        vec![],
-        vec![],
-        indexmap::IndexMap::new(),
-    ));
+    let b = Rc::new(BlockStatement::new(vec![], vec![], Default::default()));
     assert!(format!("{}", Object::Block(b)).starts_with("#<Proc:0x"));
 }
 
@@ -366,12 +357,12 @@ fn equals_array() {
 
 #[test]
 fn equals_dict() {
-    let mut m1 = IndexMap::new();
-    m1.insert("x".to_string(), Object::Int(1));
-    let mut m2 = IndexMap::new();
-    m2.insert("x".to_string(), Object::Int(1));
-    let mut m3 = IndexMap::new();
-    m3.insert("y".to_string(), Object::Int(1));
+    let mut m1 = metorex::object::HashEntries::default();
+    m1.insert("x".into(), Object::Int(1));
+    let mut m2 = metorex::object::HashEntries::default();
+    m2.insert("x".into(), Object::Int(1));
+    let mut m3 = metorex::object::HashEntries::default();
+    m3.insert("y".into(), Object::Int(1));
     assert!(Object::dict(m1.clone()).equals(&Object::dict(m2)));
     assert!(!Object::dict(m1).equals(&Object::dict(m3)));
 }
@@ -520,8 +511,8 @@ fn constructor_empty_dict() {
 
 #[test]
 fn constructor_dict() {
-    let mut m = IndexMap::new();
-    m.insert("k".to_string(), Object::Int(1));
+    let mut m = metorex::object::HashEntries::default();
+    m.insert("k".into(), Object::Int(1));
     let d = Object::dict(m);
     if let View::Dict(d) = d.view() {
         assert_eq!(d.borrow().len(), 1);

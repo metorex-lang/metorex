@@ -537,9 +537,9 @@ impl VirtualMachine {
             // A local the code named that the binding did not have is
             // added to it, which is how `eval("x = 1", b)` leaves `x`
             // behind for the next look through `b`.
-            for (name, cell) in self.environment().current_scope_var_refs() {
-                if !held.has(&name) {
-                    held.set(&name, cell);
+            for (name, cell) in self.environment().current_scope_var_refs().iter() {
+                if !held.has(name) {
+                    held.set(name, Rc::clone(cell));
                 }
             }
             // A name the code only assigns to on a line that never

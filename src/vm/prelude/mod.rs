@@ -140,7 +140,7 @@ impl VirtualMachine {
         let Some(crate::object::View::Instance(main)) = main.view() else {
             return;
         };
-        let Some(singleton) = main.borrow().singleton_class.borrow().clone() else {
+        let Some(singleton) = main.borrow().singleton_class() else {
             return;
         };
         for name in [

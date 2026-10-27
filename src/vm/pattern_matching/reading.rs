@@ -153,7 +153,7 @@ impl VirtualMachine {
         wanted: &[String],
         rest: &crate::ast::HashPatternRest,
         position: Position,
-    ) -> Result<Option<indexmap::IndexMap<String, Object>>, MetorexError> {
+    ) -> Result<Option<crate::object::HashEntries>, MetorexError> {
         if !self.answers_to_pattern_method(value, "deconstruct_keys", position)? {
             let written = self.written_out(value, position);
             self.note_pattern_failure(PatternFailure::Detail(format!(

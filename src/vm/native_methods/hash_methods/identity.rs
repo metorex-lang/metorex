@@ -9,7 +9,7 @@ impl VirtualMachine {
     pub(crate) fn call_hash_identity_method(
         &mut self,
         receiver: &Object,
-        dict_rc: &Rc<RefCell<IndexMap<String, Object>>>,
+        dict_rc: &Rc<RefCell<crate::object::HashEntries>>,
         method_name: &str,
         arguments: &[Object],
         position: Position,
@@ -31,7 +31,7 @@ impl VirtualMachine {
                 }
                 dict_rc
                     .borrow_mut()
-                    .insert(BY_IDENTITY_KEY.to_string(), Object::Bool(true));
+                    .insert(BY_IDENTITY_KEY.into(), Object::Bool(true));
                 // Entries already held were placed by value, so they are put
                 // back where their identity belongs.
                 self.call_hash_method(receiver, "rehash", &[], position)?;

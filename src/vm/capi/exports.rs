@@ -81,7 +81,7 @@ impl VirtualMachine {
     /// The singleton class `object` already has, without making one.
     pub(super) fn held_singleton_class(&self, object: &Object) -> Option<Rc<Class>> {
         match object.view() {
-            View::Instance(instance) => instance.borrow().singleton_class.borrow().clone(),
+            View::Instance(instance) => instance.borrow().singleton_class(),
             _ => self.existing_singleton_class(object),
         }
     }

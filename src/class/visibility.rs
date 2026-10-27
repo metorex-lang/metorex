@@ -6,13 +6,19 @@ impl Class {
     /// Set the default visibility for subsequent method definitions in this
     /// class body. Called by bare `private`/`public`/`protected` directives.
     pub fn set_current_visibility(&self, v: impl Into<String>) {
-        *self.current_visibility.borrow_mut() = v.into();
+        let named: String = v.into();
+        let held = ["public", "private", "protected"]
+            .into_iter()
+            .chain([crate::vm::native_methods::MODULE_FUNCTION_VISIBILITY])
+            .find(|known| *known == named)
+            .unwrap_or_else(|| String::leak(named));
+        self.current_visibility.set(held);
     }
 
     /// Read the current visibility (used by `define_method` to auto-mark new
     /// methods as private when the body has switched to that mode).
     pub fn current_visibility(&self) -> String {
-        self.current_visibility.borrow().clone()
+        self.current_visibility.get().to_string()
     }
 
     /// Mark this class/module as frozen.
@@ -59,8 +65,13 @@ impl Class {
         let name = name.into();
         super::methods::method_named_changed(&name);
         self.public_overrides.borrow_mut().remove(&name);
-        self.protected_method_names.borrow_mut().remove(&name);
-        self.private_method_names.borrow_mut().insert(name);
+        if let Some(parts) = self.rare_given() {
+            parts.protected_method_names.borrow_mut().remove(&name);
+        }
+        self.rare_for_writing()
+            .private_method_names
+            .borrow_mut()
+            .insert(name);
     }
 
     /// Mark a method name as protected on this class, clearing any earlier
@@ -69,18 +80,24 @@ impl Class {
         let name = name.into();
         super::methods::method_named_changed(&name);
         self.public_overrides.borrow_mut().remove(&name);
-        self.private_method_names.borrow_mut().remove(&name);
-        self.protected_method_names.borrow_mut().insert(name);
+        if let Some(parts) = self.rare_given() {
+            parts.private_method_names.borrow_mut().remove(&name);
+        }
+        self.rare_for_writing()
+            .protected_method_names
+            .borrow_mut()
+            .insert(name);
     }
 
     /// Check if a method is marked protected on this class (own table only).
     pub fn is_method_protected(&self, name: &str) -> bool {
-        self.protected_method_names.borrow().contains(name)
+        self.rare().protected_method_names.borrow().contains(name)
     }
 
     /// The protected method names defined directly on this class.
     pub fn protected_method_names(&self) -> Vec<String> {
         let mut names = self
+            .rare()
             .protected_method_names
             .borrow()
             .iter()
@@ -93,8 +110,8 @@ impl Class {
     /// Whether this class records a visibility of its own for `name`, set by
     /// `private`/`protected`/`public` naming a method it may only inherit.
     pub fn has_visibility_marking(&self, name: &str) -> bool {
-        self.private_method_names.borrow().contains(name)
-            || self.protected_method_names.borrow().contains(name)
+        self.rare().private_method_names.borrow().contains(name)
+            || self.rare().protected_method_names.borrow().contains(name)
             || self.public_overrides.borrow().contains(name)
     }
 
@@ -102,10 +119,11 @@ impl Class {
     /// Ruby reports among its own instance methods.
     pub fn visibility_marked_names(&self) -> Vec<String> {
         let mut names: Vec<String> = self
+            .rare()
             .private_method_names
             .borrow()
             .iter()
-            .chain(self.protected_method_names.borrow().iter())
+            .chain(self.rare().protected_method_names.borrow().iter())
             .chain(self.public_overrides.borrow().iter())
             .cloned()
             .collect();
@@ -118,8 +136,12 @@ impl Class {
     /// method does when the enclosing body's default visibility is public.
     pub fn clear_method_visibility(&self, name: &str) {
         super::methods::method_named_changed(name);
-        self.private_method_names.borrow_mut().remove(name);
-        self.protected_method_names.borrow_mut().remove(name);
+        if let Some(parts) = self.rare_given() {
+            parts.private_method_names.borrow_mut().remove(name);
+        }
+        if let Some(parts) = self.rare_given() {
+            parts.protected_method_names.borrow_mut().remove(name);
+        }
     }
 
     /// Whether `name` may not be called with an explicit receiver from
@@ -133,8 +155,12 @@ impl Class {
     /// shadowed).
     pub fn set_method_public(&self, name: &str) {
         super::methods::method_named_changed(name);
-        self.private_method_names.borrow_mut().remove(name);
-        self.protected_method_names.borrow_mut().remove(name);
+        if let Some(parts) = self.rare_given() {
+            parts.private_method_names.borrow_mut().remove(name);
+        }
+        if let Some(parts) = self.rare_given() {
+            parts.protected_method_names.borrow_mut().remove(name);
+        }
         self.public_overrides.borrow_mut().insert(name.to_string());
     }
 
@@ -146,12 +172,13 @@ impl Class {
 
     /// Check if a method is marked private on this class (own table only).
     pub fn is_method_private(&self, name: &str) -> bool {
-        self.private_method_names.borrow().contains(name)
+        self.rare().private_method_names.borrow().contains(name)
     }
 
     /// Return the list of private method names defined directly on this class.
     pub fn private_method_names(&self) -> Vec<String> {
         let mut names = self
+            .rare()
             .private_method_names
             .borrow()
             .iter()

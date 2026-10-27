@@ -265,9 +265,9 @@ impl crate::vm::VirtualMachine {
 
     /// `Signal.list` — every known signal name mapped to its number.
     pub(crate) fn signal_list(&self) -> Object {
-        let mut entries = indexmap::IndexMap::new();
+        let mut entries: crate::object::HashEntries = Default::default();
         for (name, number) in signal_table() {
-            entries.insert(name.to_string(), Object::Int(number as i64));
+            entries.insert(name.to_string().into(), Object::Int(number as i64));
         }
         Object::Dict(std::rc::Rc::new(std::cell::RefCell::new(entries)))
     }
@@ -526,7 +526,7 @@ impl crate::vm::VirtualMachine {
             details.message_given = !message.is_empty();
             details
                 .instance_vars
-                .insert(SIGNO_KEY.to_string(), Object::Int(number as i64));
+                .insert(SIGNO_KEY.into(), Object::Int(number as i64));
         }
         // The signal was sent from somewhere, and that is where a report says
         // the program was when it arrived.

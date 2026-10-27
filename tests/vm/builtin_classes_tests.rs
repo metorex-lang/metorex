@@ -1,6 +1,5 @@
 // Coverage tests for builtin_classes.rs uncovered paths
 
-use indexmap::IndexMap;
 use metorex::builtin_classes::BuiltinClasses;
 use metorex::object::Object;
 use metorex::object::ObjectHash;
@@ -62,7 +61,9 @@ fn class_of_array() {
 #[test]
 fn class_of_dict() {
     let builtins = BuiltinClasses::new();
-    let class = builtins.class_of(&Object::Dict(Rc::new(RefCell::new(IndexMap::new()))));
+    let class = builtins.class_of(&Object::Dict(Rc::new(RefCell::new(
+        metorex::object::HashEntries::default(),
+    ))));
     assert_eq!(class.name(), "Hash");
 }
 
@@ -112,33 +113,11 @@ fn class_of_method_with_no_receiver() {
 fn class_of_block() {
     let builtins = BuiltinClasses::new();
     use metorex::object::BlockStatement;
-    let block = Object::Block(Rc::new(BlockStatement {
-        outer_locals: Rc::default(),
-        parameters: vec![],
-        parameter_defaults: Vec::new(),
-        body: vec![].into(),
-        captured_vars: Rc::default(),
-        reserved_names: Rc::default(),
-        captured_def_scope: vec![],
-        captured_constant_home: None,
-        class_var_home: None,
-        captured_nesting: metorex::object::no_nesting(),
-        defining_method: None,
-        defining_owner: None,
-        defining_class: None,
-        is_lambda: false,
-        source_file: None,
-        home_frame: None,
-        opened_at: None,
-        opened_column: None,
-        from_symbol: None,
-        written_in: None,
-        written_depth: None,
-        written_within: Rc::default(),
-        ruby2_keywords: std::rc::Rc::new(std::cell::Cell::new(false)),
-        attached_call_running: std::rc::Rc::new(std::cell::Cell::new(true)),
-        unit: Default::default(),
-    }));
+    let block = Object::Block(Rc::new(BlockStatement::new(
+        vec![],
+        vec![],
+        Default::default(),
+    )));
     let class = builtins.class_of(&block);
     assert_eq!(class.name(), "Proc");
 }

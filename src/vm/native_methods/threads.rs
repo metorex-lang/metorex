@@ -162,7 +162,10 @@ impl VirtualMachine {
                 let locals = inst.borrow().get_var(&store).cloned();
                 if let Some(View::Dict(held)) = locals.view() {
                     return Ok(Some(
-                        held.borrow().get(&key_str).cloned().unwrap_or(Object::Nil),
+                        held.borrow()
+                            .get(key_str.as_str())
+                            .cloned()
+                            .unwrap_or(Object::Nil),
                     ));
                 }
                 Ok(Some(Object::Nil))
@@ -179,7 +182,7 @@ impl VirtualMachine {
                 let key_str = self.thread_local_name(&arguments[0], position)?;
                 let store = self.thread_local_store(method_name, receiver);
                 let locals = inst.borrow().get_var(&store).cloned();
-                let held = matches!(locals.view(), Some(View::Dict(names)) if names.borrow().contains_key(&key_str));
+                let held = matches!(locals.view(), Some(View::Dict(names)) if names.borrow().contains_key(key_str.as_str()));
                 Ok(Some(Object::Bool(held)))
             }
             "keys" | "thread_variables" => {
@@ -225,7 +228,7 @@ impl VirtualMachine {
                 let dict = match existing.view() {
                     Some(View::Dict(held)) => held.clone(),
                     _ => {
-                        let held = Rc::new(std::cell::RefCell::new(indexmap::IndexMap::new()));
+                        let held = Rc::new(std::cell::RefCell::new(Default::default()));
                         inst.borrow_mut()
                             .set_var(store.clone(), Object::Dict(Rc::clone(&held)));
                         held
@@ -235,9 +238,10 @@ impl VirtualMachine {
                 // nil, so the thread stops naming it among its variables.
                 if method_name == "thread_variable_set" && matches!(arguments[1].view(), View::Nil)
                 {
-                    dict.borrow_mut().shift_remove(&key_str);
+                    dict.borrow_mut().shift_remove(key_str.as_str());
                 } else {
-                    dict.borrow_mut().insert(key_str, arguments[1].clone());
+                    dict.borrow_mut()
+                        .insert(key_str.into(), arguments[1].clone());
                 }
                 Ok(Some(arguments[1].clone()))
             }
@@ -606,9 +610,16 @@ impl VirtualMachine {
             held.set_var("__mutex_thread".to_string(), holder);
             held.set_var("__mutex_fiber".to_string(), Object::Int(fiber));
         }
-        if !self.taken_mutexes.iter().any(|seen| Rc::ptr_eq(seen, inst)) {
-            self.taken_mutexes.push(Rc::clone(inst));
-        }
+        self.taken_mutexes.retain(|seen| {
+            seen.upgrade().is_some_and(|mutex| {
+                !Rc::ptr_eq(&mutex, inst)
+                    && matches!(
+                        mutex.borrow().get_var("__mutex_locked").view(),
+                        Some(View::Bool(true))
+                    )
+            })
+        });
+        self.taken_mutexes.push(Rc::downgrade(inst));
     }
 
     /// Whether the thread and fiber running now are the ones holding the

@@ -205,13 +205,12 @@ impl VirtualMachine {
         // else may.
         let unshared = Rc::strong_count(block) == 1
             && Rc::weak_count(block) <= 1
-            && Rc::strong_count(&block.attached_call_running) == 1
-            && Rc::strong_count(&block.ruby2_keywords) == 1;
+            && Rc::strong_count(&block.flags) == 1;
         if !unshared || !self.built_here(built) {
             return None;
         }
         // A block starts out attached to the call it is written on.
-        block.attached_call_running.set(true);
+        block.flags.attached_call_running.set(true);
         Some(Rc::clone(block))
     }
 
@@ -272,7 +271,7 @@ struct KeptClosure {
     reserved: Rc<Vec<String>>,
 }
 
-type CapturedCells = indexmap::IndexMap<String, Rc<RefCell<crate::object::Object>>>;
+type CapturedCells = crate::scope::Captures;
 
 impl VirtualMachine {
     /// The cells and local names `cache` keeps, when the scopes open here

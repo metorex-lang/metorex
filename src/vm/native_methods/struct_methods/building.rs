@@ -239,12 +239,7 @@ impl VirtualMachine {
             keywords = held
                 .borrow()
                 .iter()
-                .map(|(key, value)| {
-                    (
-                        key.strip_prefix(':').unwrap_or(key).to_string(),
-                        value.clone(),
-                    )
-                })
+                .map(|(key, value)| (key.strip_prefix(':').unwrap_or(key).into(), value.clone()))
                 .collect();
             positional.clear();
         }
@@ -265,11 +260,11 @@ impl VirtualMachine {
             // The Hash keeps its keys as they were written, Strings included.
             let mut held = match arguments.last().view() {
                 Some(View::Dict(given)) => given.borrow().clone(),
-                _ => IndexMap::new(),
+                _ => Default::default(),
             };
             held.shift_remove("__MX_KWARGS__");
             positional.push(Object::Dict(Rc::new(RefCell::new(held))));
-            keywords = IndexMap::new();
+            keywords = Default::default();
         }
         let by_keyword = named_only || alone;
 
@@ -279,7 +274,7 @@ impl VirtualMachine {
             let unknown: Vec<String> = keywords
                 .keys()
                 .filter(|name| !members.iter().any(|member| &member == name))
-                .cloned()
+                .map(|name| name.to_string())
                 .collect();
             if !unknown.is_empty() {
                 return Err(argument_error(

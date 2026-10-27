@@ -162,7 +162,7 @@ impl BuiltinClasses {
             return true;
         }
         let singleton = match obj.view() {
-            View::Instance(inst_rc) => inst_rc.borrow().singleton_class.borrow().clone(),
+            View::Instance(inst_rc) => inst_rc.borrow().singleton_class(),
             // A class or module extended with a module carries it on its own
             // singleton class, the same as any other object.
             View::Class(c) | View::Module(c) => c.singleton_class_slot().clone(),

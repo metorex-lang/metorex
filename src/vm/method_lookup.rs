@@ -120,7 +120,7 @@ pub(crate) fn singleton_answers(receiver: &Object, name: &str) -> bool {
     let View::Instance(inst) = receiver.view() else {
         return false;
     };
-    let held = inst.borrow().singleton_class.borrow().clone();
+    let held = inst.borrow().singleton_class();
     held.is_some_and(|singleton| {
         singleton
             .find_own_method(name)
@@ -246,7 +246,7 @@ impl VirtualMachine {
             return None;
         }
         let instance = instance.borrow();
-        if instance.has_singleton_methods() || instance.singleton_class.borrow().is_some() {
+        if instance.has_singleton_methods() || instance.has_singleton_class() {
             return None;
         }
         Some(Rc::clone(&instance.class))
@@ -1072,7 +1072,7 @@ impl VirtualMachine {
                 .or_else(|| self.object_table_method(name).map(|(owner, _)| owner));
         };
         let instance_ref = instance_rc.borrow();
-        let singleton = instance_ref.singleton_class.borrow().clone();
+        let singleton = instance_ref.singleton_class();
         let class = Rc::clone(&instance_ref.class);
         drop(instance_ref);
         // A name the object answers natively has no table entry, so the
@@ -1155,7 +1155,7 @@ impl VirtualMachine {
     /// public method of its own, as Binding does `eval`.
     fn public_in_chain(&self, receiver: &Object, name: &str, by_program: bool) -> bool {
         let singleton = match receiver.view() {
-            View::Instance(instance) => instance.borrow().singleton_class.borrow().clone(),
+            View::Instance(instance) => instance.borrow().singleton_class(),
             _ => None,
         };
         let class = match receiver.view() {
@@ -1199,7 +1199,7 @@ impl VirtualMachine {
         let marks = |held: &Rc<Class>| {
             held.has_public_override(method_name) || held.is_method_restricted(method_name)
         };
-        let singleton = instance.borrow().singleton_class.borrow().clone();
+        let singleton = instance.borrow().singleton_class();
         let mut owner = singleton.filter(|held| marks(held));
         let mut cursor = Some(Rc::clone(&instance.borrow().class));
         while owner.is_none()
@@ -1369,7 +1369,7 @@ impl VirtualMachine {
                 if let Some(sing) = instance_ref.find_singleton_method(method_name) {
                     return Some((class, sing));
                 }
-                if let Some(sc) = instance_ref.singleton_class.borrow().clone()
+                if let Some(sc) = instance_ref.singleton_class()
                     && let Some(method) = sc.find_method(method_name)
                 {
                     return Some((sc, method));

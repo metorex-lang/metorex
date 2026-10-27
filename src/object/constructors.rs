@@ -2,7 +2,6 @@
 
 use crate::class::Class;
 use crate::object::View;
-use indexmap::IndexMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -62,11 +61,11 @@ impl Object {
 
     /// Create an empty dictionary
     pub fn empty_dict() -> Self {
-        Object::Dict(Rc::new(RefCell::new(IndexMap::new())))
+        Object::Dict(Rc::new(RefCell::new(Default::default())))
     }
 
     /// Create a dictionary from an ordered map
-    pub fn dict(map: IndexMap<String, Object>) -> Self {
+    pub fn dict(map: crate::object::HashEntries) -> Self {
         Object::Dict(Rc::new(RefCell::new(map)))
     }
 

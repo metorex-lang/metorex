@@ -32,7 +32,7 @@ pub(crate) fn is_internal_key(key: &str) -> bool {
 
 /// Reconstruct the original key Object from its string key, using the sentinel
 /// __MX_KEY_OBJECTS__ sub-map if present for non-primitive keys.
-pub(crate) fn reconstruct_key(dict: &indexmap::IndexMap<String, Object>, key_str: &str) -> Object {
+pub(crate) fn reconstruct_key(dict: &crate::object::HashEntries, key_str: &str) -> Object {
     if let Some(View::Dict(key_objs)) = dict.get(KEY_OBJECTS_KEY).view()
         && let Some(obj) = key_objs.borrow().get(key_str)
     {

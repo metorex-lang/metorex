@@ -306,11 +306,11 @@ impl VirtualMachine {
         // A singleton class travels with a clone, so a method defined on the
         // original answers on the copy too.
         if let (View::Instance(original), View::Instance(copied)) = (receiver.view(), copy.view()) {
-            let singleton = original.borrow().singleton_class.borrow().clone();
+            let singleton = original.borrow().singleton_class();
             if let Some(singleton) = singleton {
                 let copied_singleton = std::rc::Rc::new(crate::class::Class::duplicate(&singleton));
                 copied_singleton.take_ownership_of_methods_from(&singleton);
-                *copied.borrow().singleton_class.borrow_mut() = Some(copied_singleton);
+                copied.borrow().set_singleton_class(Some(copied_singleton));
             }
             let methods = original.borrow().singleton_methods();
             for (name, method) in methods {

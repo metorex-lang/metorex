@@ -115,7 +115,7 @@ impl VirtualMachine {
             let mut rest = arguments[..arguments.len() - 1].to_vec();
             if named_anything_else {
                 let held = pairs.borrow().clone();
-                let carried: indexmap::IndexMap<String, Object> = held
+                let carried: crate::object::HashEntries = held
                     .into_iter()
                     .filter(|(key, _)| key != ":cause" && key != "__MX_KWARGS__")
                     .collect();
@@ -804,7 +804,7 @@ fn runtime_error_from(given: &Object) -> Object {
         details
             .borrow_mut()
             .instance_vars
-            .insert(crate::vm::MESSAGE_STRING_KEY.to_string(), given.clone());
+            .insert(crate::vm::MESSAGE_STRING_KEY.into(), given.clone());
     }
     made
 }

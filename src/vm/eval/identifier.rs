@@ -64,7 +64,7 @@ impl VirtualMachine {
             if let Some(locals) = locals {
                 details
                     .instance_vars
-                    .insert(crate::vm::LOCAL_VARIABLES_KEY.to_string(), locals);
+                    .insert(crate::vm::LOCAL_VARIABLES_KEY.into(), locals);
             }
         }
         error

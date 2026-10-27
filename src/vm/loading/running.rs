@@ -418,16 +418,18 @@ fn parse_embedded_library(
 ) -> Result<Vec<crate::ast::Statement>, MetorexError> {
     crate::vm::counters::count_library_parsed(name);
     let tokens = crate::lexer::Lexer::for_embedded_library(source).tokenize();
-    crate::parser::Parser::new(tokens)
-        .parse()
-        .map_err(|errors| {
-            let first = errors
-                .first()
-                .map(|error| error.to_string())
-                .unwrap_or_default();
-            MetorexError::runtime_error(
-                format!("require('{}') reports {}", name, first),
-                SourceLocation::new(0, 0, 0),
-            )
-        })
+    // A carried library runs once, so its methods' bodies are kept encoded
+    // until a call reads them, as the main script's are.
+    let mut parser = crate::parser::Parser::new(tokens);
+    parser.hold_method_bodies();
+    parser.parse().map_err(|errors| {
+        let first = errors
+            .first()
+            .map(|error| error.to_string())
+            .unwrap_or_default();
+        MetorexError::runtime_error(
+            format!("require('{}') reports {}", name, first),
+            SourceLocation::new(0, 0, 0),
+        )
+    })
 }

@@ -147,7 +147,7 @@ impl VirtualMachine {
         let singleton = self.singleton_class_of(&stand_in);
         // What main says of itself, which the copy says too, and whatever
         // main was extended with, which the copy carries after the wrapper.
-        let main_singleton = main.borrow().singleton_class.borrow().clone();
+        let main_singleton = main.borrow().singleton_class();
         if let Some(held) = main_singleton {
             for name in held.method_names() {
                 if let Some(method) = held.find_own_method(&name) {

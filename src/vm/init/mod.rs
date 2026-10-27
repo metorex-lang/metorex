@@ -7,7 +7,6 @@ pub(crate) use crate::class::Class;
 pub(crate) use crate::environment::Environment;
 pub(crate) use crate::object::{Binding, Object};
 pub(in crate::vm) use crate::vm::GlobalRegistry;
-pub(crate) use indexmap::IndexMap;
 pub(crate) use std::cell::RefCell;
 pub(crate) use std::collections::HashMap;
 pub(crate) use std::rc::Rc;

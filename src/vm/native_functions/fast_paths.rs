@@ -110,7 +110,7 @@ impl VirtualMachine {
             return None;
         };
         let slot = crate::vm::utils::object_to_dict_key(name)?;
-        slots.borrow().get(&slot).cloned()
+        slots.borrow().get(slot.as_str()).cloned()
     }
 }
 
@@ -177,8 +177,8 @@ impl VirtualMachine {
             return Ok(Object::Bool(false));
         }
         let slot = |name: &str| format!(":{name}");
-        let user_slots: Vec<String> = user_metadata.borrow().keys().cloned().collect();
-        let reserved_slots: Vec<String> = reserved
+        let user_slots: Vec<crate::object::Slot> = user_metadata.borrow().keys().cloned().collect();
+        let reserved_slots: Vec<crate::object::Slot> = reserved
             .borrow()
             .iter()
             .filter_map(crate::vm::utils::object_to_dict_key)
@@ -199,15 +199,15 @@ impl VirtualMachine {
             Some(View::Symbol(name)) => Object::string(name.to_string()),
             Some(_) => return Ok(Object::Bool(false)),
         };
-        let group = match metadata.borrow().get(&slot("example_group")).view() {
+        let group = match metadata.borrow().get(slot("example_group").as_str()).view() {
             Some(View::Dict(group)) => Rc::clone(group),
             _ => return Ok(Object::Bool(false)),
         };
         let (group_description, described_class) = {
             let group = group.borrow();
             match (
-                group.get(&slot("full_description")).view(),
-                group.get(&slot("described_class")),
+                group.get(slot("full_description").as_str()).view(),
+                group.get(slot("described_class").as_str()),
             ) {
                 (Some(View::String(text)), Some(described)) => {
                     (text.as_str().to_string(), described.clone())
@@ -261,12 +261,12 @@ impl VirtualMachine {
             return Ok(Object::Bool(false));
         };
         let location = Object::string(format!("{}:{line_number}", relative_text.as_str()));
-        let scoped_id = match metadata.borrow().get(&slot("scoped_id")).view() {
+        let scoped_id = match metadata.borrow().get(slot("scoped_id").as_str()).view() {
             Some(View::String(parent)) => Object::string(format!("{}:{index}", parent.as_str())),
             Some(_) => return Ok(Object::Bool(false)),
             None => Object::string(index),
         };
-        let rerun_file_path = match metadata.borrow().get(&slot("rerun_file_path")) {
+        let rerun_file_path = match metadata.borrow().get(slot("rerun_file_path").as_str()) {
             Some(existing) if existing.is_truthy() => existing.clone(),
             _ => relative.clone(),
         };
@@ -290,6 +290,17 @@ impl VirtualMachine {
         for (key, value) in self.hash_pairs(user_metadata) {
             self.hash_store(metadata, &key, value, position)?;
         }
+        // `Example#initialize` stores `:last_run_status` next, which the
+        // entries are left room for. They are moved to a block of that size,
+        // since shrinking the one they grew into leaves it larger than asked
+        // for.
+        let mut entries = metadata.borrow_mut();
+        let mut rebuilt = crate::object::HashEntries::with_capacity_and_hasher(
+            entries.len() + 1,
+            Default::default(),
+        );
+        rebuilt.extend(entries.drain(..));
+        *entries = rebuilt;
         Ok(Object::Bool(true))
     }
 }

@@ -49,7 +49,7 @@ pub(crate) fn sample_of_class(named: &str) -> Option<Object> {
         "Symbol" => Some(Object::symbol("held")),
         "Array" => Some(Object::array(Vec::new())),
         "Hash" => Some(Object::Dict(Rc::new(std::cell::RefCell::new(
-            indexmap::IndexMap::new(),
+            Default::default(),
         )))),
         "NilClass" => Some(Object::Nil),
         "TrueClass" => Some(Object::Bool(true)),

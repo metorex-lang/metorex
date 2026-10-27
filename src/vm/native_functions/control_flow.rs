@@ -184,9 +184,9 @@ impl VirtualMachine {
                 let mut details = details.borrow_mut();
                 details
                     .instance_vars
-                    .insert(crate::vm::THROW_TAG_KEY.to_string(), tag);
+                    .insert(crate::vm::THROW_TAG_KEY.into(), tag);
                 details.instance_vars.insert(
-                    crate::vm::THROW_VALUE_KEY.to_string(),
+                    crate::vm::THROW_VALUE_KEY.into(),
                     arguments.get(1).cloned().unwrap_or(Object::Nil),
                 );
             }

@@ -245,7 +245,7 @@ impl VirtualMachine {
     /// mutexes when it ends, so a lock its body never unlocked stops blocking
     /// whoever waits for it next.
     pub(crate) fn release_locks_held_by(&mut self, thread: &Object) {
-        for mutex in &self.taken_mutexes {
+        for mutex in self.taken_mutexes.iter().filter_map(std::rc::Weak::upgrade) {
             let holder = mutex.borrow().get_var("__mutex_thread").cloned();
             let held = matches!(
                 mutex.borrow().get_var("__mutex_locked").view(),

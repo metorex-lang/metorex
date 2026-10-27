@@ -143,7 +143,7 @@ impl VirtualMachine {
                     .view()
                 {
                     View::Dict(entries) => entries.borrow().clone(),
-                    _ => indexmap::IndexMap::new(),
+                    _ => Default::default(),
                 },
             };
             environment = Some(entries);
@@ -626,14 +626,14 @@ impl VirtualMachine {
     fn system_through_spawn(
         &mut self,
         arguments: &[Object],
-        options: &indexmap::IndexMap<String, Object>,
+        options: &crate::object::HashEntries,
         program: &str,
         position: Position,
     ) -> Result<Object, MetorexError> {
         let raises = options
             .iter()
             .any(|(name, value)| name.trim_start_matches(':') == "exception" && value.is_truthy());
-        let settings: indexmap::IndexMap<String, Object> = options
+        let settings: crate::object::HashEntries = options
             .iter()
             .filter(|(name, _)| name.trim_start_matches(':') != "exception")
             .map(|(name, value)| (name.clone(), value.clone()))
@@ -911,7 +911,7 @@ impl VirtualMachine {
     /// option, and anything else names streams of the child to redirect.
     fn spawn_settings(
         &mut self,
-        entries: &indexmap::IndexMap<String, Object>,
+        entries: &crate::object::HashEntries,
         position: Position,
     ) -> Result<SpawnSettings, MetorexError> {
         let mut settings = SpawnSettings::default();

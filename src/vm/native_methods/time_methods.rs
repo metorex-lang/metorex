@@ -15,6 +15,27 @@ unsafe extern "C" {
     fn tzset();
 }
 
+thread_local! {
+    /// One frozen String for each zone name a breakdown has read, shared by
+    /// every time read in that zone.
+    static ZONE_NAMES: std::cell::RefCell<std::collections::HashMap<String, Object>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// The frozen String a breakdown names the zone `named` by.
+fn zone_name(named: &str) -> Object {
+    ZONE_NAMES.with(|names| {
+        if let Some(held) = names.borrow().get(named) {
+            return held.clone();
+        }
+        let text = crate::object::StringValue::with_encoding(named, "US-ASCII");
+        text.freeze();
+        let held = Object::String(std::rc::Rc::new(text));
+        names.borrow_mut().insert(named.to_string(), held.clone());
+        held
+    })
+}
+
 /// Days from 1970-01-01 to the given calendar date, which holds for any year
 /// rather than only the span the C library covers.
 fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
@@ -179,7 +200,7 @@ impl VirtualMachine {
                         Object::Int(fields[7]),
                         Object::Bool(false),
                         Object::Int(0),
-                        Object::string("UTC"),
+                        zone_name("UTC"),
                     ])));
                 }
                 let (parts, zone) = broken_down(seconds, utc);
@@ -194,7 +215,21 @@ impl VirtualMachine {
                     Object::Int(parts.tm_yday as i64 + 1),
                     Object::Bool(parts.tm_isdst > 0),
                     Object::Int(parts.tm_gmtoff),
-                    Object::string(zone),
+                    zone_name(&zone),
+                ])))
+            }
+            // What the zone the program runs in says of a second count: how
+            // far it stands from UTC, whether daylight saving is in force,
+            // and the zone's name.
+            "__zone_reading__" => {
+                let Some(View::Int(seconds)) = arguments.first().view() else {
+                    return Ok(None);
+                };
+                let (parts, zone) = broken_down(seconds, false);
+                Ok(Some(Object::array(vec![
+                    Object::Int(parts.tm_gmtoff),
+                    Object::Bool(parts.tm_isdst > 0),
+                    zone_name(&zone),
                 ])))
             }
             // The whole seconds a set of calendar fields stands for.

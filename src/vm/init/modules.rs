@@ -240,7 +240,7 @@ pub(crate) fn register_builtin_modules(globals: &mut GlobalRegistry, builtins: &
     // A program reads its environment in the encoding the locale names, and
     // bytes that do not fit that encoding stand for themselves.
     let charmap = crate::vm::locale_charmap_name();
-    let mut env_map = IndexMap::new();
+    let mut env_map: crate::object::HashEntries = Default::default();
     for (k, v) in std::env::vars() {
         let named = match charmap.as_str() {
             "" => "UTF-8".to_string(),
@@ -249,7 +249,7 @@ pub(crate) fn register_builtin_modules(globals: &mut GlobalRegistry, builtins: &
             other => other.to_string(),
         };
         env_map.insert(
-            k,
+            k.into(),
             Object::String(Rc::new(crate::object::StringValue::with_encoding(v, named))),
         );
     }

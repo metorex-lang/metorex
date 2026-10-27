@@ -12,7 +12,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexSet;
 
 use super::live;
 use super::{Binding, BlockStatement, Exception, Instance, Method, Object, ObjectHash, View};
@@ -26,7 +26,7 @@ enum Node {
     /// The cell a pointer value points at, which its copies share.
     Cell(Object),
     Array(Rc<RefCell<Vec<Object>>>),
-    Hash(Rc<RefCell<IndexMap<String, Object>>>),
+    Hash(Rc<RefCell<crate::object::HashEntries>>),
     Set(Rc<RefCell<IndexSet<ObjectHash>>>),
     Instance(Rc<RefCell<Instance>>),
     Exception(Rc<RefCell<Exception>>),
@@ -34,7 +34,7 @@ enum Node {
     Method(Rc<Method>),
     Binding(Rc<Binding>),
     /// The local variables a block closes over.
-    Captured(Rc<IndexMap<String, Variable>>),
+    Captured(Rc<crate::scope::Captures>),
     Variable(Variable),
     /// The singleton class of an object, which holds that object as the one
     /// it is attached to.
@@ -198,7 +198,7 @@ impl Node {
                     value(boxed, found);
                 }
                 if let Some(captured) = &held.provenance.captured_vars {
-                    variables(captured.values(), found);
+                    variables(captured.iter().map(|(_, cell)| cell), found);
                 }
             }
             Node::Binding(held) => {
@@ -214,7 +214,7 @@ impl Node {
                     value(receiver, found);
                 }
             }
-            Node::Captured(held) => variables(held.values(), found),
+            Node::Captured(held) => variables(held.iter().map(|(_, cell)| cell), found),
             Node::Variable(held) => {
                 let Ok(object) = held.try_borrow() else {
                     return false;
@@ -259,8 +259,7 @@ impl Node {
                 if let Ok(mut instance) = held.try_borrow_mut() {
                     dropped.extend(std::mem::take(&mut instance.instance_vars).into_values());
                     if owned_singleton_class(&instance).is_some()
-                        && let Ok(mut slot) = instance.singleton_class.try_borrow_mut()
-                        && let Some(singleton) = slot.take()
+                        && let Some(singleton) = instance.take_singleton_class()
                     {
                         dropped.push(Object::Class(singleton));
                     }
@@ -310,7 +309,7 @@ impl Node {
 /// The singleton class an instance holds, which is the one reference the
 /// instance has to it.
 fn owned_singleton_class(instance: &Instance) -> Option<Rc<crate::class::Class>> {
-    instance.singleton_class.try_borrow().ok()?.clone()
+    instance.singleton_class_unless_changing()
 }
 
 /// The listed objects that can hold references, as nodes: every one when

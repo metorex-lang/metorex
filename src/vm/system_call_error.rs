@@ -99,7 +99,7 @@ impl VirtualMachine {
             details.class = Some(class);
             details
                 .instance_vars
-                .insert(ERRNO_VALUE_KEY.to_string(), Object::Int(number));
+                .insert(ERRNO_VALUE_KEY.into(), Object::Int(number));
         }
         exception
     }

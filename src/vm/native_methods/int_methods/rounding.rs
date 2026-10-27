@@ -148,7 +148,7 @@ pub(crate) fn split_rounding_mode(arguments: &[Object]) -> (&[Object], Option<Ob
         return (arguments, None);
     };
     let entries = entries.borrow();
-    let named: Vec<&String> = entries
+    let named: Vec<&crate::object::Slot> = entries
         .keys()
         .filter(|key| key.as_str() != crate::vm::param_binding::KWARGS_MARKER)
         .collect();

@@ -204,7 +204,7 @@ impl VirtualMachine {
         } else if descends("Hash") {
             Some((
                 crate::vm::native_methods::HASH_SUBCLASS_VAR,
-                Object::Dict(Rc::new(std::cell::RefCell::new(indexmap::IndexMap::new()))),
+                Object::Dict(Rc::new(std::cell::RefCell::new(Default::default()))),
             ))
         } else {
             None

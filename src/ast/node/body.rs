@@ -19,6 +19,9 @@ struct Statements {
     /// The bodies of the copy this one was read from, and its own bytes
     /// among them.
     encoded: Cell<Option<(&'static HeldAreas, &'static [u8])>>,
+    /// What every method defined with the statements shares, which is
+    /// where they keep what the statements compile to.
+    shared_by_methods: OnceCell<Rc<dyn std::any::Any>>,
 }
 
 /// The bodies being written for `encode_held`, in the two areas of
@@ -131,12 +134,22 @@ impl Body {
             opens_in_the_program,
             count,
             encoded: Cell::new(Some((areas, outer))),
+            shared_by_methods: OnceCell::new(),
         }))
     }
 
     /// Read the statements with `read`. A body still encoded is decoded for
     /// this read alone and its tree freed after, for what is read once,
     /// such as a method's body as it compiles.
+    /// What every method defined with these statements shares, made by
+    /// `make` the first time it is asked for.
+    pub fn shared_by_methods<T: 'static>(&self, make: impl FnOnce() -> Rc<T>) -> Rc<T> {
+        let held = self.0.shared_by_methods.get_or_init(|| make());
+        Rc::clone(held)
+            .downcast::<T>()
+            .expect("the methods of a body share one kind of value")
+    }
+
     pub fn read_once<R>(&self, read: impl FnOnce(&[Statement]) -> R) -> R {
         match (self.0.decoded.get(), self.0.encoded.get()) {
             (None, Some((areas, encoded))) => {
@@ -182,6 +195,7 @@ impl Body {
             count: count(&statements),
             decoded: OnceCell::from(statements),
             encoded: Cell::new(None),
+            shared_by_methods: OnceCell::new(),
         }))
     }
 }
@@ -200,7 +214,8 @@ impl std::ops::Deref for Body {
 }
 
 impl From<Vec<Statement>> for Body {
-    fn from(statements: Vec<Statement>) -> Self {
+    fn from(mut statements: Vec<Statement>) -> Self {
+        crate::parser::tighten(&mut statements);
         Body::decoded(statements.into_boxed_slice())
     }
 }
@@ -292,6 +307,7 @@ impl<'de> serde::Deserialize<'de> for Body {
             opens_in_the_program,
             count,
             encoded: Cell::new(Some((areas, encoded))),
+            shared_by_methods: OnceCell::new(),
         })))
     }
 }

@@ -87,14 +87,14 @@ impl VirtualMachine {
         match receiver.view() {
             View::Instance(inst_rc) => {
                 let inst = inst_rc.borrow();
-                if let Some(existing) = inst.singleton_class.borrow().clone() {
+                if let Some(existing) = inst.singleton_class() {
                     return existing;
                 }
                 let superclass = Some(Rc::clone(&inst.class));
                 let sc = Class::new(singleton_class_display_name(receiver), superclass);
                 sc.set_class_var("__singleton__", Object::Bool(true));
                 sc.set_class_var("__attached__", receiver.clone());
-                *inst.singleton_class.borrow_mut() = Some(Rc::clone(&sc));
+                inst.set_singleton_class(Some(Rc::clone(&sc)));
                 sc
             }
             View::Class(class_rc) | View::Module(class_rc) => {
@@ -183,7 +183,7 @@ impl VirtualMachine {
     /// Whether `receiver` was given a singleton class, without making one.
     pub(crate) fn singleton_given(&self, receiver: &Object) -> bool {
         match receiver.view() {
-            View::Instance(held) => held.borrow().singleton_class.borrow().is_some(),
+            View::Instance(held) => held.borrow().has_singleton_class(),
             View::Class(held) | View::Module(held) => held.singleton_class_slot().is_some(),
             _ => self.existing_singleton_class(receiver).is_some(),
         }

@@ -211,9 +211,10 @@ impl VirtualMachine {
                     View::Class(class_rc) | View::Module(class_rc) => {
                         class_rc.remove_class_var(&format!("@{}", var_name))
                     }
-                    View::Exception(details) => {
-                        details.borrow_mut().instance_vars.shift_remove(&var_name)
-                    }
+                    View::Exception(details) => details
+                        .borrow_mut()
+                        .instance_vars
+                        .shift_remove(var_name.as_str()),
                     _ => Self::collection_address(receiver).and_then(|address| {
                         self.collection_variables
                             .get_mut(&address)
@@ -289,7 +290,7 @@ impl VirtualMachine {
                         details
                             .borrow_mut()
                             .instance_vars
-                            .insert(var_name, value.clone());
+                            .insert(var_name.into(), value.clone());
                         Ok(Some(value))
                     }
                     // A collection has nowhere of its own to keep an instance

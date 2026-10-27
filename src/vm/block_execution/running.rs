@@ -336,7 +336,9 @@ impl VirtualMachine {
                 home_frame: None,
                 location,
                 ..
-            }) if !block.attached_call_running.get() => Err(break_from_proc_closure(location)),
+            }) if !block.flags.attached_call_running.get() => {
+                Err(break_from_proc_closure(location))
+            }
             Err(MetorexError::BlockBreak {
                 value,
                 location,
@@ -633,8 +635,8 @@ fn break_from_proc_closure(location: crate::error::SourceLocation) -> MetorexErr
 }
 
 /// The flag a `break` in this block consults, which a lambda has none of.
-fn running_break_flag(block: &BlockStatement) -> Option<std::rc::Rc<std::cell::Cell<bool>>> {
-    (!block.is_lambda).then(|| std::rc::Rc::clone(&block.attached_call_running))
+fn running_break_flag(block: &BlockStatement) -> Option<std::rc::Rc<crate::object::BlockFlags>> {
+    (!block.is_lambda).then(|| std::rc::Rc::clone(&block.flags))
 }
 
 /// The class or module a class variable in a block's body belongs to: the

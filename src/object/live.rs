@@ -5,7 +5,7 @@
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexSet;
 
 use crate::class::Class;
 
@@ -17,20 +17,23 @@ use super::{
 const FIRST_COLLECTION_AT: usize = 2048;
 
 /// The share of the objects that survived earlier collections that a
-/// collection waits for the program to make before it runs: a fourth.
-const OLD_ENTRIES_PER_YOUNG_ONE: usize = 4;
+/// collection waits for the program to make before it runs: a thirty-second.
+const OLD_ENTRIES_PER_YOUNG_ONE: usize = 32;
 
 /// How much the objects that survived collections grow before a collection
 /// covers them too, rather than only the objects made since the last one.
 const OLD_GROWTH_BEFORE_A_WHOLE_COLLECTION: usize = 8;
 
 /// The share of the live entries that dead ones reach before they are
-/// cleared out between collections: a sixteenth. A dead entry's weak
+/// cleared out between collections: a sixty-fourth. A dead entry's weak
 /// reference keeps the object's allocation.
-const LIVE_ENTRIES_PER_DEAD_ONE: usize = 16;
+const LIVE_ENTRIES_PER_DEAD_ONE: usize = 64;
 
 /// The fewest new entries between two clearings.
 const FEWEST_ENTRIES_BETWEEN_CLEARINGS: usize = 1024;
+
+/// The fewest entries a list makes room for when it grows.
+const FEWEST_ENTRIES_ADDED: usize = 64;
 
 /// Weak references to what was made, in the order it was made. A reference
 /// keeps only its allocation, not the object, so the dead ones are cleared
@@ -50,6 +53,12 @@ impl<T> Registry<T> {
     }
 
     fn record(&mut self, made: &Rc<T>) {
+        // A list holds an entry for every object of its kind, so it grows by
+        // a quarter rather than doubling.
+        if self.held.len() == self.held.capacity() {
+            self.held
+                .reserve_exact((self.held.len() / 4).max(FEWEST_ENTRIES_ADDED));
+        }
         self.held.push(Rc::downgrade(made));
     }
 
@@ -101,7 +110,7 @@ pub(crate) struct Lists {
     pub(crate) classes: Registry<Class>,
     pub(crate) strings: Registry<StringValue>,
     pub(crate) arrays: Registry<RefCell<Vec<Object>>>,
-    pub(crate) hashes: Registry<RefCell<IndexMap<String, Object>>>,
+    pub(crate) hashes: Registry<RefCell<crate::object::HashEntries>>,
     pub(crate) sets: Registry<RefCell<IndexSet<ObjectHash>>>,
     pub(crate) exceptions: Registry<RefCell<Exception>>,
     pub(crate) blocks: Registry<BlockStatement>,
@@ -238,12 +247,13 @@ fn walk_for_memory_report() {
         for held in lists.hashes.alive() {
             let held_bytes = held.try_borrow().map_or(0, |entries| {
                 entries.capacity()
-                    * (std::mem::size_of::<(u64, String, Object)>() + std::mem::size_of::<usize>())
-                    + entries.keys().map(String::capacity).sum::<usize>()
+                    * (std::mem::size_of::<(u64, super::Slot, Object)>()
+                        + std::mem::size_of::<usize>())
+                    + entries.keys().map(|slot| slot.len()).sum::<usize>()
             });
             count(
                 "Hash",
-                listed_bytes::<RefCell<IndexMap<String, Object>>>() + held_bytes,
+                listed_bytes::<RefCell<crate::object::HashEntries>>() + held_bytes,
             );
         }
         for held in lists.sets.alive() {
@@ -304,7 +314,7 @@ recorder!(record_instance, instances, RefCell<Instance>);
 recorder!(record_class, classes, Class);
 recorder!(record_string, strings, StringValue);
 recorder!(record_array, arrays, RefCell<Vec<Object>>);
-recorder!(record_hash, hashes, RefCell<IndexMap<String, Object>>);
+recorder!(record_hash, hashes, RefCell<crate::object::HashEntries>);
 recorder!(record_set, sets, RefCell<IndexSet<ObjectHash>>);
 recorder!(record_exception, exceptions, RefCell<Exception>);
 recorder!(record_block, blocks, BlockStatement);

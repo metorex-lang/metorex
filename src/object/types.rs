@@ -1,7 +1,6 @@
 // The 8-byte runtime value, and the view of its parts that code matches on
 
 use crate::class::Class;
-use indexmap::IndexMap;
 use std::cell::RefCell;
 use std::fmt;
 use std::marker::PhantomData;
@@ -86,7 +85,7 @@ enum Body {
     Float(f64),
     String(Rc<crate::object::StringValue>),
     Array(Rc<RefCell<Vec<Object>>>),
-    Dict(Rc<RefCell<IndexMap<String, Object>>>),
+    Dict(Rc<RefCell<crate::object::HashEntries>>),
     Instance(Rc<RefCell<Instance>>),
     Class(Rc<Class>),
     Module(Rc<Class>),
@@ -134,7 +133,7 @@ pub enum View<'a> {
     Symbol(&'a Rc<crate::object::StringValue>),
     Array(&'a Rc<RefCell<Vec<Object>>>),
     /// A Hash, backed by an `IndexMap` so entries iterate in insertion order.
-    Dict(&'a Rc<RefCell<IndexMap<String, Object>>>),
+    Dict(&'a Rc<RefCell<crate::object::HashEntries>>),
     Instance(&'a Rc<RefCell<Instance>>),
     Class(&'a Rc<Class>),
     Module(&'a Rc<Class>),
@@ -258,7 +257,7 @@ impl Object {
         Object::on_heap(Body::Array(elements))
     }
 
-    pub fn Dict(entries: Rc<RefCell<IndexMap<String, Object>>>) -> Object {
+    pub fn Dict(entries: Rc<RefCell<crate::object::HashEntries>>) -> Object {
         list_once(&entries, super::live::record_hash);
         Object::on_heap(Body::Dict(entries))
     }

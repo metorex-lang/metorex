@@ -417,7 +417,7 @@ impl VirtualMachine {
         // receiver's singleton class comes ahead of its class in the chain.
         let mut chain = Vec::new();
         let class_ancestors = walk_ancestors(instance_class);
-        let singleton = instance_borrowed.singleton_class.borrow().clone();
+        let singleton = instance_borrowed.singleton_class();
         if let Some(singleton) = &singleton {
             // The modules prepended to the singleton class stand ahead of it,
             // and the ones the object was extended with, or that its
@@ -845,7 +845,7 @@ impl VirtualMachine {
         }
         // The keyword rest goes first and the named keywords after it, the
         // order Ruby hands them on in.
-        let mut keywords = indexmap::IndexMap::new();
+        let mut keywords: crate::object::HashEntries = Default::default();
         if let Some(rest) = &method.signature.keyword_rest_parameter
             && let Some(View::Dict(held)) = self.environment().get(rest).view()
         {
@@ -857,7 +857,7 @@ impl VirtualMachine {
         }
         for (name, _) in &method.signature.keyword_parameters {
             let value = self.environment().get(name).unwrap_or(Object::Nil);
-            keywords.insert(format!(":{name}"), value);
+            keywords.insert(format!(":{name}").into(), value);
         }
         // A hash `ruby2_keywords` marked, last among what the rest parameter
         // gathered, goes on as the keywords it was gathered from.
@@ -881,7 +881,7 @@ impl VirtualMachine {
         if !keywords.is_empty() {
             keywords.shift_insert(
                 0,
-                crate::vm::param_binding::KWARGS_MARKER.to_string(),
+                crate::vm::param_binding::KWARGS_MARKER.into(),
                 Object::Bool(true),
             );
             handed.push(Object::Dict(Rc::new(std::cell::RefCell::new(keywords))));
@@ -1050,7 +1050,7 @@ impl VirtualMachine {
                         held.message = String::new();
                         held.message_given = true;
                         held.instance_vars
-                            .insert(crate::vm::MESSAGE_OBJECT_KEY.to_string(), given.to_object());
+                            .insert(crate::vm::MESSAGE_OBJECT_KEY.into(), given.to_object());
                         return Ok(Object::Nil);
                     }
                     Err(error) => return Err(error),
@@ -1060,7 +1060,7 @@ impl VirtualMachine {
                 held.message_given = true;
                 if matches!(given, View::String(_)) {
                     held.instance_vars
-                        .insert(crate::vm::MESSAGE_STRING_KEY.to_string(), given.to_object());
+                        .insert(crate::vm::MESSAGE_STRING_KEY.into(), given.to_object());
                 }
             }
         }
@@ -1158,7 +1158,7 @@ impl VirtualMachine {
             Some(View::Instance(instance)) => {
                 let borrowed = instance.borrow();
                 let mut chain = Vec::new();
-                if let Some(singleton) = borrowed.singleton_class.borrow().clone() {
+                if let Some(singleton) = borrowed.singleton_class() {
                     chain.push(singleton);
                 }
                 for ancestor in walk_ancestors(&borrowed.class) {

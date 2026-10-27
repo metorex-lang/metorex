@@ -253,16 +253,16 @@ impl VirtualMachine {
         position: Position,
         extra: &[(&str, Object)],
     ) -> Object {
-        let mut entries = indexmap::IndexMap::new();
-        entries.insert("event".to_string(), Object::symbol(event.to_string()));
-        entries.insert("lineno".to_string(), Object::Int(position.line as i64));
-        entries.insert("path".to_string(), Object::string(self.traced_path()));
+        let mut entries = crate::object::HashEntries::default();
+        entries.insert("event".into(), Object::symbol(event.to_string()));
+        entries.insert("lineno".into(), Object::Int(position.line as i64));
+        entries.insert("path".into(), Object::string(self.traced_path()));
         entries.insert(
-            "self".to_string(),
+            "self".into(),
             self.environment().get("self").unwrap_or(Object::Nil),
         );
         for (name, value) in extra {
-            entries.insert((*name).to_string(), value.clone());
+            entries.insert(((*name).to_string()).into(), value.clone());
         }
         // Code written in Ruby is read through a binding of the scope it
         // runs in, which a C method has none of.
@@ -270,7 +270,7 @@ impl VirtualMachine {
             && !matches!(event, "c_call" | "c_return")
             && let Ok(binding) = self.kernel_binding(position)
         {
-            entries.insert("binding".to_string(), binding);
+            entries.insert("binding".into(), binding);
         }
         // A line or a raise inside a method names that method and the class
         // it was written on.
@@ -278,12 +278,12 @@ impl VirtualMachine {
             && !entries.contains_key("method_id")
             && let Some((callee, defined)) = self.enclosing_method_names()
         {
-            entries.insert("method_id".to_string(), Object::symbol(&*defined));
-            entries.insert("callee_id".to_string(), Object::symbol(&*callee));
+            entries.insert("method_id".into(), Object::symbol(&*defined));
+            entries.insert("callee_id".into(), Object::symbol(&*callee));
             if let Some((Some(owner), _)) = self.enclosing_method_owner()
                 && let Some(class) = self.resolve_qualified_constant(&owner)
             {
-                entries.insert("defined_class".to_string(), class);
+                entries.insert("defined_class".into(), class);
             }
         }
         let within = self
@@ -302,7 +302,7 @@ impl VirtualMachine {
                     .collect()
             })
             .unwrap_or_default();
-        entries.insert("__within__".to_string(), Object::array(within));
+        entries.insert("__within__".into(), Object::array(within));
         Object::Dict(Rc::new(std::cell::RefCell::new(entries)))
     }
 

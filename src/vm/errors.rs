@@ -91,7 +91,7 @@ pub(super) fn invalid_name_error(
         let mut details = details.borrow_mut();
         details
             .instance_vars
-            .insert(crate::vm::NAME_ERROR_NAME_KEY.to_string(), name.clone());
+            .insert(crate::vm::NAME_ERROR_NAME_KEY.into(), name.clone());
         details.receiver = Some(Box::new(receiver.clone()));
     }
     MetorexError::UncaughtException {
@@ -155,8 +155,7 @@ fn receiver_wording(receiver: &Object) -> String {
         View::Instance(instance) => {
             // An object carrying methods of its own is named as itself, since
             // its class is a singleton the program never wrote down.
-            if instance.borrow().singleton_class.borrow().is_some()
-                || instance.borrow().has_singleton_methods()
+            if instance.borrow().has_singleton_class() || instance.borrow().has_singleton_methods()
             {
                 return receiver.to_string();
             }
@@ -205,13 +204,13 @@ impl crate::vm::VirtualMachine {
         let locals = self.local_variable_names(Vec::new(), position).ok();
         let mut details = details.borrow_mut();
         details.instance_vars.insert(
-            crate::vm::PRIVATE_CALL_KEY.to_string(),
+            crate::vm::PRIVATE_CALL_KEY.into(),
             Object::Bool(private_call),
         );
         if let Some(locals) = locals {
             details
                 .instance_vars
-                .entry(crate::vm::LOCAL_VARIABLES_KEY.to_string())
+                .entry(crate::vm::LOCAL_VARIABLES_KEY.into())
                 .or_insert(locals);
         }
     }
@@ -223,7 +222,7 @@ impl crate::vm::VirtualMachine {
         let named = match receiver.view() {
             View::Class(class) | View::Module(class) => self.written_class_name(class, position),
             View::Instance(instance) => {
-                let has_singleton = instance.borrow().singleton_class.borrow().is_some()
+                let has_singleton = instance.borrow().has_singleton_class()
                     || instance.borrow().has_singleton_methods();
                 if has_singleton {
                     None
@@ -295,7 +294,7 @@ pub(super) fn no_method_error(
         details.name = Some(method.to_string());
         details.receiver = Some(Box::new(receiver.clone()));
         details.instance_vars.insert(
-            crate::vm::NO_METHOD_ARGS_KEY.to_string(),
+            crate::vm::NO_METHOD_ARGS_KEY.into(),
             Object::array(args.to_vec()),
         );
     }
@@ -542,7 +541,7 @@ pub(crate) fn load_error(message: String, feature: &str) -> Object {
     let exception = Object::exception("LoadError", message);
     if let View::Exception(details) = exception.view() {
         details.borrow_mut().instance_vars.insert(
-            crate::vm::EXCEPTION_PATH_KEY.to_string(),
+            crate::vm::EXCEPTION_PATH_KEY.into(),
             Object::string(feature),
         );
     }
@@ -564,10 +563,10 @@ pub(super) fn syntax_error(
 ) -> MetorexError {
     let exception = Object::exception("SyntaxError", message.clone());
     if let (View::Exception(details), Some(path)) = (exception.view(), path) {
-        details.borrow_mut().instance_vars.insert(
-            crate::vm::EXCEPTION_PATH_KEY.to_string(),
-            Object::string(path),
-        );
+        details
+            .borrow_mut()
+            .instance_vars
+            .insert(crate::vm::EXCEPTION_PATH_KEY.into(), Object::string(path));
     }
     MetorexError::UncaughtException {
         exception,
@@ -626,7 +625,7 @@ pub(crate) fn errno_naming_path(
     let exception = Object::exception(class_name, message.clone());
     if let crate::object::View::Exception(held) = exception.view() {
         held.borrow_mut().instance_vars.insert(
-            crate::vm::MESSAGE_STRING_KEY.to_string(),
+            crate::vm::MESSAGE_STRING_KEY.into(),
             Object::String(std::rc::Rc::new(written)),
         );
     }

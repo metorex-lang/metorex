@@ -780,7 +780,7 @@ impl VirtualMachine {
             set_rc.borrow().get(&probe).map(|held| held.value.clone())
         })?;
         Ok(Some(ObjectHash {
-            hash_value: slot,
+            hash_value: slot.to_string(),
             value: object.clone(),
         }))
     }

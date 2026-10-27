@@ -48,6 +48,13 @@ pub use crate::bytecode::unit::Unit;
 pub struct UnitSlot(Rc<OnceCell<Rc<Compiled>>>);
 
 impl UnitSlot {
+    /// The slot every method whose body is `body` shares.
+    pub fn for_methods_of(body: &crate::ast::Body) -> Self {
+        UnitSlot(body.shared_by_methods(|| Rc::new(OnceCell::new())))
+    }
+}
+
+impl UnitSlot {
     /// What the body compiles to, compiling it with `compile` the first
     /// time.
     pub fn compiled(&self, compile: impl FnOnce() -> Compiled) -> Rc<Compiled> {

@@ -10,7 +10,7 @@ impl VirtualMachine {
     pub(crate) fn call_hash_digging_method(
         &mut self,
         receiver: &Object,
-        dict_rc: &Rc<RefCell<IndexMap<String, Object>>>,
+        dict_rc: &Rc<RefCell<crate::object::HashEntries>>,
         method_name: &str,
         arguments: &[Object],
         position: Position,
@@ -27,7 +27,7 @@ impl VirtualMachine {
                 };
                 // A key the hash holds nothing for reads as the default,
                 // since `dig` goes through `[]` the way Ruby's does.
-                let found = dict_rc.borrow().get(&key_str).cloned();
+                let found = dict_rc.borrow().get(key_str.as_str()).cloned();
                 let value = match found {
                     Some(held) => held,
                     None => {
@@ -64,7 +64,7 @@ impl VirtualMachine {
                 };
                 let found = self.hash_find_key(dict_rc, &arguments[0], position)?;
                 if let Some(key) = found {
-                    let value = dict_rc.borrow().get(&key).cloned();
+                    let value = dict_rc.borrow().get(key.as_str()).cloned();
                     if let Some(value) = value {
                         if block.is_some() && arguments.len() == 2 {
                             self.warn_hash_block_supersedes(position)?;
@@ -134,7 +134,7 @@ impl VirtualMachine {
                     let View::Dict(other_rc) = other.view() else {
                         continue;
                     };
-                    let incoming: Vec<(String, Object)> = other_rc
+                    let incoming: Vec<(crate::object::Slot, Object)> = other_rc
                         .borrow()
                         .iter()
                         .map(|(key, value)| (key.clone(), value.clone()))
@@ -143,7 +143,7 @@ impl VirtualMachine {
                         if is_internal_key(&key) {
                             continue;
                         }
-                        let settled = match (&block, merged.get(&key).cloned()) {
+                        let settled = match (&block, merged.get(key.as_str()).cloned()) {
                             (Some(block), Some(existing)) => {
                                 let key_object = reconstruct_key(&merged, &key);
                                 self.execute_block_callable(
@@ -159,20 +159,20 @@ impl VirtualMachine {
                     // The key objects the other hash recorded travel with it,
                     // and so does its note of keys placed by how they render.
                     if other_rc.borrow().contains_key(RENDERED_OBJECTS_KEY) {
-                        merged.insert(RENDERED_OBJECTS_KEY.to_string(), Object::Bool(true));
+                        merged.insert(RENDERED_OBJECTS_KEY.into(), Object::Bool(true));
                     }
                     if let Some(View::Dict(other_keys)) =
                         other_rc.borrow().get(KEY_OBJECTS_KEY).view()
                     {
                         let mut ours = match merged.get(KEY_OBJECTS_KEY).view() {
                             Some(View::Dict(existing)) => existing.borrow().clone(),
-                            _ => indexmap::IndexMap::new(),
+                            _ => Default::default(),
                         };
                         for (key, object) in other_keys.borrow().iter() {
                             ours.insert(key.clone(), object.clone());
                         }
                         merged.insert(
-                            KEY_OBJECTS_KEY.to_string(),
+                            KEY_OBJECTS_KEY.into(),
                             Object::Dict(Rc::new(RefCell::new(ours))),
                         );
                     }

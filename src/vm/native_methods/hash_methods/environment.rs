@@ -67,7 +67,7 @@ impl VirtualMachine {
     /// Put one variable into the environment, where the C library sees it too.
     pub(crate) fn store_variable(
         &mut self,
-        dict_rc: &Rc<RefCell<indexmap::IndexMap<String, Object>>>,
+        dict_rc: &Rc<RefCell<crate::object::HashEntries>>,
         key: String,
         value: String,
     ) {
@@ -80,16 +80,16 @@ impl VirtualMachine {
         // the entry, so `ENV["1"]` stays a name rather than a number.
         if !crate::vm::utils::is_primitive_key(&named) {
             let slot = "__MX_KEY_OBJECTS__".to_string();
-            let mut objects = match dict_rc.borrow().get(&slot).view() {
+            let mut objects = match dict_rc.borrow().get(slot.as_str()).view() {
                 Some(View::Dict(held)) => held.borrow().clone(),
-                _ => indexmap::IndexMap::new(),
+                _ => Default::default(),
             };
-            objects.insert(key.clone(), named.clone());
+            objects.insert(key.clone().into(), named.clone());
             dict_rc
                 .borrow_mut()
-                .insert(slot, Object::Dict(Rc::new(RefCell::new(objects))));
+                .insert(slot.into(), Object::Dict(Rc::new(RefCell::new(objects))));
         }
-        dict_rc.borrow_mut().insert(key, held.clone());
+        dict_rc.borrow_mut().insert(key.into(), held.clone());
         self.record_environment_change(dict_rc, &named, &held);
     }
 
@@ -97,7 +97,7 @@ impl VirtualMachine {
     /// differently on.
     pub(crate) fn dict_is_environment(
         &self,
-        dict_rc: &Rc<RefCell<indexmap::IndexMap<String, Object>>>,
+        dict_rc: &Rc<RefCell<crate::object::HashEntries>>,
     ) -> bool {
         matches!(self.globals().get("ENV").view(), Some(View::Dict(held)) if Rc::ptr_eq(held, dict_rc))
     }
@@ -107,7 +107,7 @@ impl VirtualMachine {
     /// what the program set.
     pub(crate) fn record_environment_change(
         &mut self,
-        dict_rc: &Rc<RefCell<indexmap::IndexMap<String, Object>>>,
+        dict_rc: &Rc<RefCell<crate::object::HashEntries>>,
         key: &Object,
         value: &Object,
     ) {
@@ -129,7 +129,7 @@ impl VirtualMachine {
         if matches!(value.view(), View::Nil) {
             let mut held = dict_rc.borrow_mut();
             if let Some(key_text) = crate::vm::utils::object_to_dict_key(key) {
-                held.shift_remove(&key_text);
+                held.shift_remove(key_text.as_str());
             }
         }
         unsafe {

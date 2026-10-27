@@ -142,7 +142,7 @@ pub(crate) fn range_values(
 /// A hash key that is not a primitive is recorded in the sentinel sub-map, so
 /// the original object comes back when the hash is walked.
 pub(crate) fn remember_key_object(
-    pairs: &mut IndexMap<String, Object>,
+    pairs: &mut crate::object::HashEntries,
     rendered: &str,
     key: &Object,
 ) {
@@ -169,24 +169,19 @@ pub(crate) fn name_error(message: String, position: Position) -> MetorexError {
 /// list, leaving the positional arguments behind.
 pub(crate) fn take_keyword_arguments(
     arguments: &[Object],
-) -> (Vec<Object>, IndexMap<String, Object>) {
+) -> (Vec<Object>, crate::object::HashEntries) {
     if let Some(View::Dict(dict_rc)) = arguments.last().view() {
         let dict = dict_rc.borrow();
         if dict.contains_key("__MX_KWARGS__") {
             let keywords = dict
                 .iter()
                 .filter(|(key, _)| !crate::vm::native_methods::hash_methods::is_internal_key(key))
-                .map(|(key, value)| {
-                    (
-                        key.strip_prefix(':').unwrap_or(key).to_string(),
-                        value.clone(),
-                    )
-                })
+                .map(|(key, value)| (key.strip_prefix(':').unwrap_or(key).into(), value.clone()))
                 .collect();
             return (arguments[..arguments.len() - 1].to_vec(), keywords);
         }
     }
-    (arguments.to_vec(), IndexMap::new())
+    (arguments.to_vec(), Default::default())
 }
 
 /// The value stored for `member` on a struct instance.

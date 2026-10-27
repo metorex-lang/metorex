@@ -56,7 +56,7 @@ impl VirtualMachine {
         &mut self,
         entries: &[(String, Option<crate::ast::MatchPattern>)],
         rest: &crate::ast::HashPatternRest,
-        held: &indexmap::IndexMap<String, Object>,
+        held: &crate::object::HashEntries,
         bindings: &mut HashMap<String, Object>,
         position: Position,
     ) -> Result<bool, MetorexError> {
@@ -71,7 +71,7 @@ impl VirtualMachine {
         for (key, pattern) in entries {
             // A hash holds its symbol keys under the name with the colon in
             // front, and a pattern names symbol keys alone.
-            let Some(value) = held.get(&format!(":{}", key)) else {
+            let Some(value) = held.get(format!(":{}", key).as_str()) else {
                 self.note_pattern_failure(PatternFailure::MissingKey {
                     matchee: Object::Dict(Rc::new(RefCell::new(held.clone()))),
                     key: key.clone(),
@@ -94,9 +94,9 @@ impl VirtualMachine {
             entries.iter().map(|(key, _)| format!(":{}", key)).collect();
         match rest {
             crate::ast::HashPatternRest::Refused => {
-                let left: indexmap::IndexMap<String, Object> = held
+                let left: crate::object::HashEntries = held
                     .iter()
-                    .filter(|(key, _)| !named.contains(*key))
+                    .filter(|(key, _)| !named.contains(key.as_str()))
                     .map(|(key, value)| (key.clone(), value.clone()))
                     .collect();
                 if !left.is_empty() {
@@ -109,9 +109,9 @@ impl VirtualMachine {
                 }
             }
             crate::ast::HashPatternRest::Named(name) => {
-                let left: indexmap::IndexMap<String, Object> = held
+                let left: crate::object::HashEntries = held
                     .iter()
-                    .filter(|(key, _)| !named.contains(*key))
+                    .filter(|(key, _)| !named.contains(key.as_str()))
                     .map(|(key, value)| (key.clone(), value.clone()))
                     .collect();
                 bindings.insert(name.clone(), Object::Dict(Rc::new(RefCell::new(left))));
@@ -203,13 +203,13 @@ impl VirtualMachine {
     pub(crate) fn match_object_pattern(
         &mut self,
         key_patterns: &[(String, crate::ast::MatchPattern)],
-        dict: &indexmap::IndexMap<String, Object>,
+        dict: &crate::object::HashEntries,
         bindings: &mut HashMap<String, Object>,
         position: Position,
     ) -> Result<bool, MetorexError> {
         // Each key must exist in the dictionary and match its pattern
         for (key, pattern) in key_patterns {
-            match dict.get(key) {
+            match dict.get(key.as_str()) {
                 Some(value) => {
                     if !self.match_pattern(pattern, value, bindings, position)? {
                         return Ok(false);

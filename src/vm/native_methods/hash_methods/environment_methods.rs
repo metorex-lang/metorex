@@ -9,7 +9,7 @@ impl VirtualMachine {
     pub(crate) fn call_environment_hash_method(
         &mut self,
         receiver: &Object,
-        dict_rc: &Rc<RefCell<IndexMap<String, Object>>>,
+        dict_rc: &Rc<RefCell<crate::object::HashEntries>>,
         method_name: &str,
         arguments: &[Object],
         position: Position,
@@ -136,27 +136,26 @@ impl VirtualMachine {
                 // objects it was handed.
                 "slice" => {
                     let named = self.environment_reading_encoding();
-                    let mut made: indexmap::IndexMap<String, Object> = indexmap::IndexMap::new();
+                    let mut made: crate::object::HashEntries = Default::default();
                     let mut keyed: Vec<(String, Object)> = Vec::new();
                     for argument in arguments {
                         let key = self.environment_text(argument, position)?;
-                        let Some(value) = dict_rc.borrow().get(&key).cloned() else {
+                        let Some(value) = dict_rc.borrow().get(key.as_str()).cloned() else {
                             continue;
                         };
                         let Some(slot) = crate::vm::utils::object_to_dict_key(argument) else {
                             continue;
                         };
                         made.insert(slot.clone(), retagged(value, &named));
-                        keyed.push((slot, argument.clone()));
+                        keyed.push((slot.to_string(), argument.clone()));
                     }
                     if !keyed.is_empty() {
-                        let mut objects: indexmap::IndexMap<String, Object> =
-                            indexmap::IndexMap::new();
+                        let mut objects: crate::object::HashEntries = Default::default();
                         for (slot, held) in keyed {
-                            objects.insert(slot, held);
+                            objects.insert(slot.into(), held);
                         }
                         made.insert(
-                            "__MX_KEY_OBJECTS__".to_string(),
+                            "__MX_KEY_OBJECTS__".into(),
                             Object::Dict(Rc::new(RefCell::new(objects))),
                         );
                     }
@@ -177,7 +176,7 @@ impl VirtualMachine {
                         ])));
                     }
                     let key = self.environment_text(&arguments[0], position)?;
-                    let held = dict_rc.borrow().get(&key).cloned();
+                    let held = dict_rc.borrow().get(key.as_str()).cloned();
                     return Ok(Some(match held {
                         // A value read out of the environment is frozen, so
                         // changing what was handed back cannot reach the
@@ -228,7 +227,7 @@ impl VirtualMachine {
                         self.refuse_bad_variable_name(&key, position)?;
                         // A block settles a name both sides hold.
                         if let Some(View::Block(block)) = block.view()
-                            && let Some(held) = dict_rc.borrow().get(&key).cloned()
+                            && let Some(held) = dict_rc.borrow().get(key.as_str()).cloned()
                         {
                             let given = vec![Object::string(key.clone()), held, value];
                             value = self.execute_block_callable(block, given, position)?;

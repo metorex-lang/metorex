@@ -48,7 +48,7 @@ impl VirtualMachine {
                     .then(|| self.kept_closure(&self.closure_here))
                     .flatten()
             });
-        let mut captured = indexmap::IndexMap::new();
+        let mut captured = crate::scope::Captures::default();
         let shared_here = kept.is_some();
         if shared_here {
             crate::vm::counters::count_closure_shared();
@@ -61,11 +61,16 @@ impl VirtualMachine {
                 captured = self.environment().current_scope_var_refs();
             } else {
                 // Explicit list of variables to capture
+                let mut listed: Vec<(Rc<str>, _)> = Vec::new();
                 for name in names.iter() {
+                    if listed.iter().any(|(held, _)| **held == **name) {
+                        continue;
+                    }
                     if let Some(value_ref) = self.environment().get_ref(name) {
-                        captured.insert(name.clone(), value_ref);
+                        listed.push((crate::fast_hash::shared_name(name), value_ref));
                     }
                 }
+                captured = crate::scope::Captures::new(listed);
             }
         }
         // If captured_vars is None, capture all current scope variables
@@ -74,22 +79,8 @@ impl VirtualMachine {
         if kept.is_none() && captured.is_empty() && captured_vars.is_none() {
             captured = self.environment().current_scope_var_refs();
         }
-        let mut block = BlockStatement::with_def_scope(
-            parameters.clone(),
-            (**parameter_defaults).clone(),
-            shared.body.clone(),
-            captured,
-            self.def_scope_stack.clone(),
-            self.enclosing_method_names(),
-            *is_lambda,
-        );
-        block.unit = shared.unit.clone();
-        block.captured_constant_home = self.applying_constant_home().map(|home| home.cloned());
-        block.defining_owner = self.enclosing_method_owner().and_then(|(owner, _)| owner);
-        if block.defining_method.is_some() {
-            block.defining_class = self.method_owner_stack.last().cloned().flatten();
-        }
-        block.outer_locals = Rc::clone(&shared.outer_locals);
+        let origin = self.block_origin(parameters, parameter_defaults, shared, *position);
+        let mut block = BlockStatement::from_origin(origin, Rc::new(captured), *is_lambda);
         match kept {
             Some((captured, reserved)) => {
                 debug_assert!(
@@ -131,18 +122,45 @@ impl VirtualMachine {
                 &block.reserved_names,
             );
         }
+        block.home_frame = self.lexical_home_frame.unwrap_or(self.current_method_frame);
+        let block = Rc::new(block);
+        crate::vm::counters::count_block_built();
+        self.keep_block(&shared.kept, &block);
+        Ok(Object::Block(block))
+    }
+
+    /// The origin of a block the literal `shared` belongs to makes here,
+    /// which is the one its last block was given when that block was made
+    /// in the same place.
+    fn block_origin(
+        &self,
+        parameters: &[String],
+        parameter_defaults: &[(usize, Expression)],
+        shared: &crate::bytecode::unit::SharedBody,
+        position: crate::lexer::Position,
+    ) -> Rc<crate::object::BlockOrigin> {
+        let defining_method = self.enclosing_method_names();
+        let defining_class = if defining_method.is_some() {
+            self.method_owner_stack.last().cloned().flatten()
+        } else {
+            None
+        };
+        let captured_constant_home = self.applying_constant_home().map(|home| home.cloned());
+        let defining_owner = self.enclosing_method_owner().and_then(|(owner, _)| owner);
         // The block's body belongs to the file it was written in,
         // wherever it is later called from.
         // A block the core library opens stands in for Ruby's C code,
         // which names no source location at all.
-        if !position.prelude {
+        let source_file = if position.prelude {
+            None
+        } else {
             // The main script is named the way it was given, as
             // `__FILE__` names it.
             let file = self.current_source_file.clone().or_else(|| {
                 self.reported_current_file()
                     .map(|path| path.display().to_string())
             });
-            block.source_file = file.map(|file| {
+            file.map(|file| {
                 let mut last = shared.file.borrow_mut();
                 match last.as_ref() {
                     Some(held) if **held == *file => Rc::clone(held),
@@ -152,29 +170,74 @@ impl VirtualMachine {
                         made
                     }
                 }
-            });
-            // Where the block was opened, which is the line
-            // `source_location` names however far down the body starts.
-            block.opened_at = Some(position.line as usize);
-            block.opened_column = Some(position.column.saturating_sub(1) as usize);
-            if let Some(file) = &block.source_file {
-                block.written_within = self.places_within(shared, file, position.line as usize);
+            })
+        };
+        let written_within = match &source_file {
+            Some(file) => self.places_within(shared, file, position.line as usize),
+            None => crate::object::BlockOrigin::no_places(),
+        };
+        let class_var_home = Some(self.class_var_cref_stack.last().cloned().flatten());
+        let written_in = Some(self.enclosing_scope_label());
+        let written_depth = Some(self.block_nesting_depth());
+        let method_nesting = self.method_nesting_stack.last();
+        if let Some(last) = shared.origin.borrow().as_ref()
+            && same_classes(&last.captured_def_scope, self.def_scope_stack.iter())
+            && match method_nesting {
+                Some(nesting) => Rc::ptr_eq(nesting, &last.captured_nesting),
+                None => same_classes(&last.captured_nesting, self.def_scope_stack.iter().rev()),
             }
+            && last.defining_method == defining_method
+            && same_home(&last.defining_class, &defining_class)
+            && match (&last.captured_constant_home, &captured_constant_home) {
+                (Some(held), Some(home)) => same_home(held, home),
+                (None, None) => true,
+                _ => false,
+            }
+            && match (&last.class_var_home, &class_var_home) {
+                (Some(held), Some(home)) => same_home(held, home),
+                (None, None) => true,
+                _ => false,
+            }
+            && last.defining_owner == defining_owner
+            && last.source_file == source_file
+            && Rc::ptr_eq(&last.written_within, &written_within)
+            && last.written_in == written_in
+            && last.written_depth == written_depth
+        {
+            return Rc::clone(last);
         }
         // The scopes open here are what the body reads its own
         // lexical nesting as, whatever scope it is later called from.
-        block.captured_nesting = match self.method_nesting_stack.last() {
+        let captured_nesting = match method_nesting {
             Some(captured) => captured.clone(),
             None => self.snapshot_lexical_nesting().into(),
         };
-        block.class_var_home = Some(self.class_var_cref_stack.last().cloned().flatten());
-        block.home_frame = self.lexical_home_frame.unwrap_or(self.current_method_frame);
-        block.written_in = Some(self.enclosing_scope_label());
-        block.written_depth = Some(self.block_nesting_depth());
-        let block = Rc::new(block);
-        crate::vm::counters::count_block_built();
-        self.keep_block(&shared.kept, &block);
-        Ok(Object::Block(block))
+        let made = Rc::new(crate::object::BlockOrigin {
+            parameters: parameters.to_vec(),
+            outer_locals: Rc::clone(&shared.outer_locals),
+            parameter_defaults: parameter_defaults.to_vec(),
+            body: shared.body.clone(),
+            captured_def_scope: self.def_scope_stack.clone(),
+            captured_constant_home,
+            class_var_home,
+            captured_nesting,
+            defining_method,
+            defining_owner,
+            defining_class,
+            // Where the block was opened, which is the line
+            // `source_location` names however far down the body starts.
+            opened_at: (!position.prelude).then_some(position.line as usize),
+            opened_column: (!position.prelude)
+                .then_some(position.column.saturating_sub(1) as usize),
+            source_file,
+            from_symbol: None,
+            written_in,
+            written_depth,
+            written_within,
+            unit: shared.unit.clone(),
+        });
+        *shared.origin.borrow_mut() = Some(Rc::clone(&made));
+        made
     }
 
     /// The places a block written at `line` of `file`, in the code running
@@ -221,9 +284,8 @@ impl VirtualMachine {
     ) -> Result<Object, MetorexError> {
         let block = self.evaluate_expression(block_expr)?;
         if let View::Block(held) = block.view() {
-            held.attached_call_running.set(true);
-            self.attached_block_flags
-                .push(Rc::clone(&held.attached_call_running));
+            held.flags.attached_call_running.set(true);
+            self.attached_block_flags.push(Rc::clone(&held.flags));
         }
         Ok(block)
     }
@@ -237,7 +299,7 @@ impl VirtualMachine {
         location: crate::error::SourceLocation,
     ) -> MetorexError {
         if let Some(Some(running)) = self.running_block_breaks.last()
-            && !running.get()
+            && !running.attached_call_running.get()
         {
             let message = "break from proc-closure".to_string();
             return MetorexError::UncaughtException {
@@ -258,7 +320,7 @@ impl VirtualMachine {
     pub(crate) fn release_attached_blocks(&mut self, depth: usize) {
         while self.attached_block_flags.len() > depth {
             if let Some(flag) = self.attached_block_flags.pop() {
-                flag.set(false);
+                flag.attached_call_running.set(false);
             }
         }
     }
@@ -679,4 +741,28 @@ pub(crate) fn literal_range_end(end: &Expression) -> bool {
             | Expression::StringLiteral { .. }
             | Expression::NilLiteral { .. }
     )
+}
+
+/// Whether `held` lists the classes `open` does, one for one.
+fn same_classes<'a>(
+    held: &[Rc<crate::class::Class>],
+    open: impl ExactSizeIterator<Item = &'a Rc<crate::class::Class>>,
+) -> bool {
+    held.len() == open.len()
+        && held
+            .iter()
+            .zip(open)
+            .all(|(one, other)| Rc::ptr_eq(one, other))
+}
+
+/// Whether two optional classes are the same class, or both none.
+fn same_home(
+    held: &Option<Rc<crate::class::Class>>,
+    other: &Option<Rc<crate::class::Class>>,
+) -> bool {
+    match (held, other) {
+        (Some(one), Some(other)) => Rc::ptr_eq(one, other),
+        (None, None) => true,
+        _ => false,
+    }
 }

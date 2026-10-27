@@ -133,7 +133,7 @@ impl VirtualMachine {
         block: Option<Rc<crate::object::BlockStatement>>,
         position: Position,
     ) -> Result<Vec<Object>, MetorexError> {
-        let mut seen: indexmap::IndexMap<String, Object> = indexmap::IndexMap::new();
+        let mut seen: crate::object::HashEntries = Default::default();
         let mut unique = Vec::new();
         let mut index = 0usize;
         loop {
@@ -147,7 +147,7 @@ impl VirtualMachine {
                 }
             };
             let slot = self.dict_slot_in(&seen, &key, false, position)?;
-            if !seen.contains_key(&slot) {
+            if !seen.contains_key(slot.as_str()) {
                 crate::vm::native_methods::remember_key_object(&mut seen, &slot, &key);
                 seen.insert(slot, Object::Nil);
                 unique.push(element);

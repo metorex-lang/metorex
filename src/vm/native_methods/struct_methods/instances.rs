@@ -85,7 +85,7 @@ impl VirtualMachine {
                     Some(View::Block(block)) => Some(block),
                     _ => None,
                 };
-                let mut pairs = IndexMap::new();
+                let mut pairs = crate::object::HashEntries::default();
                 for member in members {
                     let value = member_value(receiver, member);
                     let (key, value) = match &block {
@@ -379,11 +379,14 @@ impl VirtualMachine {
         keys: &Object,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        let mut pairs = IndexMap::new();
+        let mut pairs = crate::object::HashEntries::default();
         let requested = match keys.view() {
             View::Nil => {
                 for member in members {
-                    pairs.insert(format!(":{}", member), member_value(receiver, member));
+                    pairs.insert(
+                        format!(":{}", member).into(),
+                        member_value(receiver, member),
+                    );
                 }
                 return Ok(Object::Dict(Rc::new(RefCell::new(pairs))));
             }

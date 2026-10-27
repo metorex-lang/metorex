@@ -32,27 +32,27 @@ unsafe fn passwd_dict(entry: *const libc::passwd) -> Object {
         return Object::Nil;
     }
     let held = unsafe { &*entry };
-    let mut fields: indexmap::IndexMap<String, Object> = indexmap::IndexMap::new();
+    let mut fields: crate::object::HashEntries = Default::default();
     fields.insert(
-        ":name".to_string(),
+        ":name".into(),
         Object::string(unsafe { text_at(held.pw_name) }),
     );
     fields.insert(
-        ":passwd".to_string(),
+        ":passwd".into(),
         Object::string(unsafe { text_at(held.pw_passwd) }),
     );
-    fields.insert(":uid".to_string(), Object::Int(held.pw_uid as i64));
-    fields.insert(":gid".to_string(), Object::Int(held.pw_gid as i64));
+    fields.insert(":uid".into(), Object::Int(held.pw_uid as i64));
+    fields.insert(":gid".into(), Object::Int(held.pw_gid as i64));
     fields.insert(
-        ":gecos".to_string(),
+        ":gecos".into(),
         Object::string(unsafe { text_at(held.pw_gecos) }),
     );
     fields.insert(
-        ":dir".to_string(),
+        ":dir".into(),
         Object::string(unsafe { text_at(held.pw_dir) }),
     );
     fields.insert(
-        ":shell".to_string(),
+        ":shell".into(),
         Object::string(unsafe { text_at(held.pw_shell) }),
     );
     Object::dict(fields)
@@ -85,17 +85,17 @@ unsafe fn group_dict(entry: *const libc::group) -> Object {
             walked = unsafe { walked.add(1) };
         }
     }
-    let mut fields: indexmap::IndexMap<String, Object> = indexmap::IndexMap::new();
+    let mut fields: crate::object::HashEntries = Default::default();
     fields.insert(
-        ":name".to_string(),
+        ":name".into(),
         Object::string(unsafe { text_at(held.gr_name) }),
     );
     fields.insert(
-        ":passwd".to_string(),
+        ":passwd".into(),
         Object::string(unsafe { text_at(held.gr_passwd) }),
     );
-    fields.insert(":gid".to_string(), Object::Int(held.gr_gid as i64));
-    fields.insert(":mem".to_string(), Object::array(members));
+    fields.insert(":gid".into(), Object::Int(held.gr_gid as i64));
+    fields.insert(":mem".into(), Object::array(members));
     Object::dict(fields)
 }
 
@@ -208,10 +208,10 @@ impl VirtualMachine {
                 if unsafe { libc::uname(&mut held) } != 0 {
                     return Ok(Some(Object::Nil));
                 }
-                let mut fields: indexmap::IndexMap<String, Object> = indexmap::IndexMap::new();
+                let mut fields: crate::object::HashEntries = Default::default();
                 let mut record = |name: &str, field: &[libc::c_char]| {
                     fields.insert(
-                        format!(":{name}"),
+                        format!(":{name}").into(),
                         Object::string(unsafe { text_at(field.as_ptr()) }),
                     );
                 };
@@ -266,9 +266,9 @@ impl VirtualMachine {
                 Ok(Some(Object::string(unsafe { text_at(held.as_ptr()) })))
             }
             "__config_names__" => {
-                let mut fields: indexmap::IndexMap<String, Object> = indexmap::IndexMap::new();
+                let mut fields: crate::object::HashEntries = Default::default();
                 for (name, value) in configuration_names() {
-                    fields.insert(name.to_string(), Object::Int(value));
+                    fields.insert(name.to_string().into(), Object::Int(value));
                 }
                 Ok(Some(Object::dict(fields)))
             }

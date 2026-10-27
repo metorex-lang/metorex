@@ -489,15 +489,15 @@ pub extern "C-unwind" fn rb_str_encode(
 ) -> Value {
     const INVALID_REPLACE: i32 = 0x02;
     const UNDEF_REPLACE: i32 = 0x20;
-    let mut keywords: indexmap::IndexMap<String, Object> = match to_object(options).view() {
+    let mut keywords: crate::object::HashEntries = match to_object(options).view() {
         View::Dict(pairs) => pairs.borrow().clone(),
-        _ => indexmap::IndexMap::new(),
+        _ => Default::default(),
     };
     if flags & INVALID_REPLACE != 0 {
-        keywords.insert(":invalid".to_string(), Object::symbol("replace"));
+        keywords.insert(":invalid".into(), Object::symbol("replace"));
     }
     if flags & UNDEF_REPLACE != 0 {
-        keywords.insert(":undef".to_string(), Object::symbol("replace"));
+        keywords.insert(":undef".into(), Object::symbol("replace"));
     }
     let mut arguments = vec![
         to_object(encoding),

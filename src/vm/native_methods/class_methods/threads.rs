@@ -267,7 +267,7 @@ impl VirtualMachine {
                     let Some(View::Dict(held)) = viewed.view() else {
                         return Ok(Answered(Object::Nil));
                     };
-                    let found = held.borrow().get(&named).cloned();
+                    let found = held.borrow().get(named.as_str()).cloned();
                     return Ok(Answered(found.unwrap_or(Object::Nil)));
                 }
                 "[]=" if arguments.len() == 2 => {
@@ -279,9 +279,9 @@ impl VirtualMachine {
                     };
                     // A name given nil is dropped rather than kept as nil.
                     if matches!(arguments[1].view(), View::Nil) {
-                        held.borrow_mut().shift_remove(&named);
+                        held.borrow_mut().shift_remove(named.as_str());
                     } else {
-                        held.borrow_mut().insert(named, arguments[1].clone());
+                        held.borrow_mut().insert(named.into(), arguments[1].clone());
                     }
                     return Ok(Answered(arguments[1].clone()));
                 }

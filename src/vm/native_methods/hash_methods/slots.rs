@@ -11,17 +11,20 @@ impl VirtualMachine {
     /// object id instead, so two equal strings stay two entries.
     pub(crate) fn dict_slot_in(
         &mut self,
-        pairs: &indexmap::IndexMap<String, Object>,
+        pairs: &crate::object::HashEntries,
         key: &Object,
         by_identity: bool,
         position: Position,
-    ) -> Result<String, MetorexError> {
+    ) -> Result<crate::object::Slot, MetorexError> {
         if by_identity {
             let id = self.object_identity(key, position)?;
-            return Ok(format!("{HASHED_SLOT_PREFIX}i{id}"));
+            return Ok(format!("{HASHED_SLOT_PREFIX}i{id}").into());
         }
         if !self.key_hashes_for_itself(key) {
-            return Ok(crate::vm::utils::object_to_dict_key(key).unwrap_or_default());
+            return Ok((crate::vm::utils::object_to_dict_key(key)
+                .unwrap_or_default()
+                .to_string())
+            .into());
         }
         self.hashed_slot(key, position, |candidate| {
             pairs
@@ -38,7 +41,7 @@ impl VirtualMachine {
         key: &Object,
         position: Position,
         stored_at: impl Fn(&str) -> Option<Object>,
-    ) -> Result<String, MetorexError> {
+    ) -> Result<crate::object::Slot, MetorexError> {
         let hashed = match self
             .send_to_object(key.clone(), "hash", vec![], position)?
             .view()
@@ -50,18 +53,18 @@ impl VirtualMachine {
         loop {
             let candidate = format!("{HASHED_SLOT_PREFIX}h{hashed}#{slot}");
             let Some(stored) = stored_at(&candidate) else {
-                return Ok(candidate);
+                return Ok(candidate.into());
             };
             // A key looks itself up without being asked, so a class whose
             // `#eql?` refuses its own object still finds its entry.
             if crate::vm::native_methods::object_methods::same_object(&stored, key) {
-                return Ok(candidate);
+                return Ok(candidate.into());
             }
             let same = self
                 .send_to_object(key.clone(), "eql?", vec![stored], position)?
                 .is_truthy();
             if same {
-                return Ok(candidate);
+                return Ok(candidate.into());
             }
             slot += 1;
         }
@@ -71,13 +74,13 @@ impl VirtualMachine {
     /// identity setting.
     pub(crate) fn dict_slot_for(
         &mut self,
-        dict_rc: &Rc<RefCell<indexmap::IndexMap<String, Object>>>,
+        dict_rc: &Rc<RefCell<crate::object::HashEntries>>,
         key: &Object,
         position: Position,
-    ) -> Result<String, MetorexError> {
+    ) -> Result<crate::object::Slot, MetorexError> {
         let by_identity = dict_rc.borrow().contains_key(BY_IDENTITY_KEY);
         if by_identity || !self.key_hashes_for_itself(key) {
-            return self.dict_slot_in(&indexmap::IndexMap::new(), key, by_identity, position);
+            return self.dict_slot_in(&Default::default(), key, by_identity, position);
         }
         // `#hash` and `#eql?` run program code that may change the hash, so
         // each slot is read under a borrow of its own.
@@ -134,8 +137,8 @@ impl VirtualMachine {
     /// compared the strict way for `eql?` and the ordinary way for `==`.
     pub(crate) fn hash_entries_match(
         &mut self,
-        dict_rc: &Rc<RefCell<indexmap::IndexMap<String, Object>>>,
-        other_rc: &Rc<RefCell<indexmap::IndexMap<String, Object>>>,
+        dict_rc: &Rc<RefCell<crate::object::HashEntries>>,
+        other_rc: &Rc<RefCell<crate::object::HashEntries>>,
         method_name: &str,
         position: Position,
     ) -> Result<bool, MetorexError> {
@@ -149,7 +152,7 @@ impl VirtualMachine {
             let Some(slot) = self.hash_find_key(other_rc, &key, position)? else {
                 return Ok(false);
             };
-            let Some(held) = other_rc.borrow().get(&slot).cloned() else {
+            let Some(held) = other_rc.borrow().get(slot.as_str()).cloned() else {
                 return Ok(false);
             };
             let same = self
@@ -165,14 +168,14 @@ impl VirtualMachine {
     /// The key and value of every entry, with the sentinels left out.
     pub(crate) fn hash_pairs_for_digest(
         &self,
-        dict_rc: &Rc<RefCell<indexmap::IndexMap<String, Object>>>,
+        dict_rc: &Rc<RefCell<crate::object::HashEntries>>,
     ) -> Vec<(Object, Object)> {
         self.hash_pairs(dict_rc)
     }
 
     pub(crate) fn hash_pairs(
         &self,
-        dict_rc: &Rc<RefCell<indexmap::IndexMap<String, Object>>>,
+        dict_rc: &Rc<RefCell<crate::object::HashEntries>>,
     ) -> Vec<(Object, Object)> {
         let dict = dict_rc.borrow();
         dict.iter()
@@ -184,7 +187,7 @@ impl VirtualMachine {
     /// The value of every entry, with the sentinels left out.
     pub(crate) fn hash_values(
         &self,
-        dict_rc: &Rc<RefCell<indexmap::IndexMap<String, Object>>>,
+        dict_rc: &Rc<RefCell<crate::object::HashEntries>>,
     ) -> Vec<Object> {
         dict_rc
             .borrow()
@@ -199,14 +202,14 @@ impl VirtualMachine {
     /// time, which is what `keys` reports afterwards.
     pub(crate) fn hash_store(
         &mut self,
-        dict_rc: &Rc<RefCell<indexmap::IndexMap<String, Object>>>,
+        dict_rc: &Rc<RefCell<crate::object::HashEntries>>,
         key: &Object,
         value: Object,
         position: Position,
     ) -> Result<(), MetorexError> {
         let rendered = self.dict_slot_for(dict_rc, key, position)?;
         let mut dict = dict_rc.borrow_mut();
-        let already_held = dict.contains_key(&rendered);
+        let already_held = dict.contains_key(rendered.as_str());
         if !already_held {
             // A hash comparing by identity keeps the key it was handed, since
             // a copy would be a different object and never found again.
@@ -231,7 +234,7 @@ impl VirtualMachine {
     /// matches one: same `hash`, then `eql?`.
     pub(crate) fn hash_find_key(
         &mut self,
-        dict_rc: &Rc<RefCell<indexmap::IndexMap<String, Object>>>,
+        dict_rc: &Rc<RefCell<crate::object::HashEntries>>,
         wanted: &Object,
         position: Position,
     ) -> Result<Option<String>, MetorexError> {
@@ -243,35 +246,35 @@ impl VirtualMachine {
     /// `#hash` once per lookup.
     pub(crate) fn hash_locate_key(
         &mut self,
-        dict_rc: &Rc<RefCell<indexmap::IndexMap<String, Object>>>,
+        dict_rc: &Rc<RefCell<crate::object::HashEntries>>,
         wanted: &Object,
         position: Position,
     ) -> Result<(String, Option<String>), MetorexError> {
         let slot = self.dict_slot_for(dict_rc, wanted, position)?;
-        if dict_rc.borrow().contains_key(&slot) {
-            return Ok((slot.clone(), Some(slot)));
+        if dict_rc.borrow().contains_key(slot.as_str()) {
+            return Ok((slot.clone().to_string(), Some(slot.to_string())));
         }
         // A hash comparing by identity places every key by its object id.
         if dict_rc.borrow().contains_key(BY_IDENTITY_KEY) {
-            return Ok((slot, None));
+            return Ok((slot.to_string(), None));
         }
         // A hash built outside the program, such as the environment, holds
         // keys placed by how they render rather than by `#hash`, and the
         // environment places one by the text it names. Those are found by
         // walking the keys the hash recorded.
         let rendered = crate::vm::utils::object_to_dict_key(wanted).unwrap_or_default();
-        if dict_rc.borrow().contains_key(&rendered) {
-            return Ok((slot, Some(rendered)));
+        if dict_rc.borrow().contains_key(rendered.as_str()) {
+            return Ok((slot.to_string(), Some(rendered.to_string())));
         }
         if crate::vm::utils::is_primitive_key(wanted) {
-            return Ok((slot, None));
+            return Ok((slot.to_string(), None));
         }
         // Every key that is not a primitive was placed by its `#hash`, so
         // the slots under that hash were the only places it could be.
         if !dict_rc.borrow().contains_key(RENDERED_OBJECTS_KEY) {
-            return Ok((slot, None));
+            return Ok((slot.to_string(), None));
         }
-        let stored: Vec<(String, Object)> = {
+        let stored: Vec<(crate::object::Slot, Object)> = {
             let dict = dict_rc.borrow();
             dict.keys()
                 .filter(|slot| !is_internal_key(slot) && !slot.starts_with(HASHED_SLOT_PREFIX))
@@ -280,7 +283,7 @@ impl VirtualMachine {
         };
         for (held, candidate) in stored {
             if crate::vm::native_methods::object_methods::same_object(&candidate, wanted) {
-                return Ok((slot.clone(), Some(held)));
+                return Ok((slot.clone().to_string(), Some(held.to_string())));
             }
             if crate::vm::utils::is_primitive_key(&candidate) {
                 continue;
@@ -289,10 +292,10 @@ impl VirtualMachine {
                 .send_to_object(wanted.clone(), "eql?", vec![candidate], position)?
                 .is_truthy();
             if same {
-                return Ok((slot.clone(), Some(held)));
+                return Ok((slot.clone().to_string(), Some(held.to_string())));
             }
         }
-        Ok((slot, None))
+        Ok((slot.to_string(), None))
     }
 }
 
@@ -320,12 +323,12 @@ const HASHED_SLOT_PREFIX: char = '\u{1}';
 /// A hash key that is not a primitive is recorded in the sentinel sub-map, so
 /// the original object comes back when the hash is walked.
 pub(crate) fn remember_key_object(
-    pairs: &mut indexmap::IndexMap<String, Object>,
+    pairs: &mut crate::object::HashEntries,
     rendered: &str,
     key: &Object,
 ) {
     if !rendered.starts_with(HASHED_SLOT_PREFIX) && !crate::vm::utils::is_primitive_key(key) {
-        pairs.insert(RENDERED_OBJECTS_KEY.to_string(), Object::Bool(true));
+        pairs.insert(RENDERED_OBJECTS_KEY.into(), Object::Bool(true));
     }
     // A copy of a hash shares the record with the hash it came from, so a
     // shared record is copied before it changes, and one held by this hash
@@ -336,23 +339,23 @@ pub(crate) fn remember_key_object(
     {
         existing
             .borrow_mut()
-            .insert(rendered.to_string(), key.clone());
+            .insert(rendered.to_string().into(), key.clone());
         return;
     }
     let mut objects = match pairs.get(KEY_OBJECTS_KEY).view() {
         Some(View::Dict(existing)) => existing.borrow().clone(),
-        _ => indexmap::IndexMap::new(),
+        _ => Default::default(),
     };
-    objects.insert(rendered.to_string(), key.clone());
+    objects.insert(rendered.to_string().into(), key.clone());
     pairs.insert(
-        KEY_OBJECTS_KEY.to_string(),
+        KEY_OBJECTS_KEY.into(),
         Object::Dict(Rc::new(RefCell::new(objects))),
     );
 }
 
 /// Drop the key object recorded for `slot`. A record shared with a copy of
 /// the hash is copied first, so the copy keeps its keys.
-pub(crate) fn forget_key_object(pairs: &mut indexmap::IndexMap<String, Object>, slot: &str) {
+pub(crate) fn forget_key_object(pairs: &mut crate::object::HashEntries, slot: &str) {
     let Some(record) = pairs.get(KEY_OBJECTS_KEY) else {
         return;
     };
@@ -366,18 +369,14 @@ pub(crate) fn forget_key_object(pairs: &mut indexmap::IndexMap<String, Object>, 
     let mut objects = existing.borrow().clone();
     objects.shift_remove(slot);
     pairs.insert(
-        KEY_OBJECTS_KEY.to_string(),
+        KEY_OBJECTS_KEY.into(),
         Object::Dict(Rc::new(RefCell::new(objects))),
     );
 }
 
 /// Record one entry in a hash being rebuilt, keeping the key object beside it
 /// when the key does not read back from its rendering.
-pub(crate) fn keep_pair(
-    built: &mut indexmap::IndexMap<String, Object>,
-    key: Object,
-    value: Object,
-) {
+pub(crate) fn keep_pair(built: &mut crate::object::HashEntries, key: Object, value: Object) {
     let rendered = crate::vm::utils::object_to_dict_key(&key).unwrap_or_default();
     if !crate::vm::utils::is_primitive_key(&key) {
         remember_key_object(built, &rendered, &key);

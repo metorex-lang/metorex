@@ -1,6 +1,5 @@
 // Type System Tests - equals() method
 
-use indexmap::IndexMap;
 use metorex::object::{BlockStatement, Class, Exception, Instance, Method, Object, ObjectHash};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -91,18 +90,18 @@ fn test_equals_array_nested() {
 
 #[test]
 fn test_equals_dict_simple() {
-    let mut map1 = IndexMap::new();
-    map1.insert("x".to_string(), Object::Int(10));
-    map1.insert("y".to_string(), Object::Int(20));
+    let mut map1 = metorex::object::HashEntries::default();
+    map1.insert("x".into(), Object::Int(10));
+    map1.insert("y".into(), Object::Int(20));
     let dict1 = Object::Dict(Rc::new(RefCell::new(map1)));
 
-    let mut map2 = IndexMap::new();
-    map2.insert("x".to_string(), Object::Int(10));
-    map2.insert("y".to_string(), Object::Int(20));
+    let mut map2 = metorex::object::HashEntries::default();
+    map2.insert("x".into(), Object::Int(10));
+    map2.insert("y".into(), Object::Int(20));
     let dict2 = Object::Dict(Rc::new(RefCell::new(map2)));
 
-    let mut map3 = IndexMap::new();
-    map3.insert("x".to_string(), Object::Int(10));
+    let mut map3 = metorex::object::HashEntries::default();
+    map3.insert("x".into(), Object::Int(10));
     let dict3 = Object::Dict(Rc::new(RefCell::new(map3)));
 
     assert!(dict1.equals(&dict2));
@@ -111,25 +110,25 @@ fn test_equals_dict_simple() {
 
 #[test]
 fn test_equals_dict_nested() {
-    let mut inner1 = IndexMap::new();
-    inner1.insert("a".to_string(), Object::Int(1));
+    let mut inner1 = metorex::object::HashEntries::default();
+    inner1.insert("a".into(), Object::Int(1));
 
-    let mut map1 = IndexMap::new();
-    map1.insert("x".to_string(), Object::Dict(Rc::new(RefCell::new(inner1))));
+    let mut map1 = metorex::object::HashEntries::default();
+    map1.insert("x".into(), Object::Dict(Rc::new(RefCell::new(inner1))));
     let dict1 = Object::Dict(Rc::new(RefCell::new(map1)));
 
-    let mut inner2 = IndexMap::new();
-    inner2.insert("a".to_string(), Object::Int(1));
+    let mut inner2 = metorex::object::HashEntries::default();
+    inner2.insert("a".into(), Object::Int(1));
 
-    let mut map2 = IndexMap::new();
-    map2.insert("x".to_string(), Object::Dict(Rc::new(RefCell::new(inner2))));
+    let mut map2 = metorex::object::HashEntries::default();
+    map2.insert("x".into(), Object::Dict(Rc::new(RefCell::new(inner2))));
     let dict2 = Object::Dict(Rc::new(RefCell::new(map2)));
 
-    let mut inner3 = IndexMap::new();
-    inner3.insert("a".to_string(), Object::Int(2));
+    let mut inner3 = metorex::object::HashEntries::default();
+    inner3.insert("a".into(), Object::Int(2));
 
-    let mut map3 = IndexMap::new();
-    map3.insert("x".to_string(), Object::Dict(Rc::new(RefCell::new(inner3))));
+    let mut map3 = metorex::object::HashEntries::default();
+    map3.insert("x".into(), Object::Dict(Rc::new(RefCell::new(inner3))));
     let dict3 = Object::Dict(Rc::new(RefCell::new(map3)));
 
     assert!(dict1.equals(&dict2));
@@ -197,64 +196,16 @@ fn test_equals_method() {
 
 #[test]
 fn test_equals_block() {
-    let block1 = Rc::new(BlockStatement {
-        outer_locals: Rc::default(),
-        parameters: vec![],
-        parameter_defaults: Vec::new(),
-        body: vec![].into(),
-        captured_vars: Rc::default(),
-        reserved_names: Rc::default(),
-        captured_def_scope: vec![],
-        captured_constant_home: None,
-        class_var_home: None,
-        captured_nesting: metorex::object::no_nesting(),
-        defining_method: None,
-        defining_owner: None,
-        defining_class: None,
-        is_lambda: false,
-        source_file: None,
-        home_frame: None,
-        opened_at: None,
-        opened_column: None,
-        from_symbol: None,
-        written_in: None,
-        written_depth: None,
-        written_within: Rc::default(),
-        ruby2_keywords: std::rc::Rc::new(std::cell::Cell::new(false)),
-        attached_call_running: Rc::new(std::cell::Cell::new(true)),
-        unit: Default::default(),
-    });
+    let block1 = Rc::new(BlockStatement::new(vec![], vec![], Default::default()));
     let block2 = Rc::clone(&block1);
     // A block written differently is a different block. Two written the same
     // way, closing over the same cells, are a copy of one another, which is
     // what Ruby calls equal.
-    let block3 = Rc::new(BlockStatement {
-        outer_locals: Rc::default(),
-        parameters: vec!["held".to_string()],
-        parameter_defaults: Vec::new(),
-        body: vec![].into(),
-        captured_vars: Rc::default(),
-        reserved_names: Rc::default(),
-        captured_def_scope: vec![],
-        captured_constant_home: None,
-        class_var_home: None,
-        captured_nesting: metorex::object::no_nesting(),
-        defining_method: None,
-        defining_owner: None,
-        defining_class: None,
-        is_lambda: false,
-        source_file: None,
-        home_frame: None,
-        opened_at: None,
-        opened_column: None,
-        from_symbol: None,
-        written_in: None,
-        written_depth: None,
-        written_within: Rc::default(),
-        ruby2_keywords: std::rc::Rc::new(std::cell::Cell::new(false)),
-        attached_call_running: Rc::new(std::cell::Cell::new(true)),
-        unit: Default::default(),
-    });
+    let block3 = Rc::new(BlockStatement::new(
+        vec!["held".to_string()],
+        vec![],
+        Default::default(),
+    ));
     let block4 = Rc::new((*block1).clone());
 
     let obj1 = Object::Block(block1);

@@ -223,9 +223,7 @@ impl Environment {
 
     /// Collects all variable references from the current scope chain
     /// This is used for lambda closure capture with mutable closures
-    pub fn current_scope_var_refs(
-        &self,
-    ) -> indexmap::IndexMap<String, std::rc::Rc<std::cell::RefCell<Object>>> {
+    pub fn current_scope_var_refs(&self) -> crate::scope::Captures {
         self.current_scope().borrow().collect_all_var_refs()
     }
 

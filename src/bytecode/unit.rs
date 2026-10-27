@@ -3,6 +3,7 @@
 use crate::bytecode::instruction::Instruction;
 use crate::lexer::Position;
 use crate::object::Object;
+use crate::parser::tighten;
 
 /// A compiled body.
 #[derive(Debug, Default)]
@@ -225,17 +226,6 @@ impl std::ops::Index<usize> for StatementStarts {
     }
 }
 
-/// Copy `list` into a block of its own length. `shrink_to_fit` asks
-/// `realloc` for less, and macOS keeps a block of 16 KB or more where it
-/// is, whole, when asked for a smaller one.
-fn tighten<T>(list: &mut Vec<T>) {
-    if list.capacity() > list.len() {
-        let mut exact = Vec::with_capacity(list.len());
-        exact.append(list);
-        *list = exact;
-    }
-}
-
 /// Where an error each instruction raises is pointed at, kept for the
 /// instructions that have a spot, in the order of the instructions.
 #[derive(Debug, Default)]
@@ -372,6 +362,9 @@ pub struct SharedBody {
     /// The file the last block the literal made was written in, which the
     /// next block written there shares.
     pub file: std::cell::RefCell<Option<std::rc::Rc<str>>>,
+    /// The origin of the last block the literal made, which the next block
+    /// made in the same place shares.
+    pub origin: std::cell::RefCell<Option<std::rc::Rc<crate::object::BlockOrigin>>>,
 }
 
 /// The places a block was written within, kept with what they were made
@@ -850,6 +843,7 @@ impl Unit {
             places: Default::default(),
             reserved_names: Default::default(),
             file: Default::default(),
+            origin: Default::default(),
         });
         self.blocks.push(literal);
         self.blocks.len() - 1

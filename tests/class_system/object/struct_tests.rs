@@ -299,7 +299,7 @@ fn block_statement_callable_trait() {
     let block = BlockStatement::new(
         vec!["x".to_string(), "y".to_string()],
         vec![],
-        indexmap::IndexMap::new(),
+        Default::default(),
     );
     assert_eq!(block.name(), "<block>");
     assert_eq!(block.parameters().len(), 2);
@@ -309,8 +309,8 @@ fn block_statement_callable_trait() {
 
 #[test]
 fn block_statement_captured_vars() {
-    let mut vars = indexmap::IndexMap::new();
-    vars.insert("z".to_string(), Rc::new(RefCell::new(Object::Int(99))));
+    let vars =
+        metorex::scope::Captures::new(vec![("z".into(), Rc::new(RefCell::new(Object::Int(99))))]);
     let block = BlockStatement::new(vec![], vec![], vars);
     let captured = block.captured_vars();
     assert!(captured.contains_key("z"));

@@ -8,7 +8,7 @@ impl VirtualMachine {
     pub(crate) fn call_hash_transforming_method(
         &mut self,
         receiver: &Object,
-        dict_rc: &Rc<RefCell<IndexMap<String, Object>>>,
+        dict_rc: &Rc<RefCell<crate::object::HashEntries>>,
         method_name: &str,
         arguments: &[Object],
         position: Position,
@@ -44,7 +44,7 @@ impl VirtualMachine {
                     Some(View::Block(block)) => Some(block),
                     _ => None,
                 };
-                let replacements: indexmap::IndexMap<String, Object> = match &mapping {
+                let replacements: crate::object::HashEntries = match &mapping {
                     Some(given) => self
                         .hash_pairs(given)
                         .into_iter()
@@ -55,9 +55,9 @@ impl VirtualMachine {
                             )
                         })
                         .collect(),
-                    None => indexmap::IndexMap::new(),
+                    None => Default::default(),
                 };
-                let mut built = indexmap::IndexMap::new();
+                let mut built = Default::default();
                 let mut broke_with = None;
                 // The pair the block broke out of, plus the ones it never
                 // reached. They keep the keys they already had.
@@ -67,7 +67,7 @@ impl VirtualMachine {
                 for (key, value) in walked.by_ref() {
                     let (key, value) = (key.clone(), value.clone());
                     let rendered = crate::vm::utils::object_to_dict_key(&key).unwrap_or_default();
-                    let new_key = match replacements.get(&rendered) {
+                    let new_key = match replacements.get(rendered.as_str()) {
                         Some(named) => named.clone(),
                         None => match &block {
                             Some(block) => {
@@ -100,7 +100,7 @@ impl VirtualMachine {
                     for (key, value) in left_as_written {
                         let rendered =
                             crate::vm::utils::object_to_dict_key(&key).unwrap_or_default();
-                        if built.contains_key(&rendered) {
+                        if built.contains_key(rendered.as_str()) {
                             continue;
                         }
                         keep_pair(&mut built, key, value);
@@ -111,7 +111,7 @@ impl VirtualMachine {
                     // however the receiver compares its own.
                     return Ok(Some(Object::Dict(Rc::new(RefCell::new(built)))));
                 }
-                let sentinels: Vec<(String, Object)> = dict_rc
+                let sentinels: Vec<(crate::object::Slot, Object)> = dict_rc
                     .borrow()
                     .iter()
                     .filter(|(key, _)| is_internal_key(key))
@@ -135,7 +135,7 @@ impl VirtualMachine {
                         .map(Some);
                 };
                 let transforming_values = method_name == "transform_values";
-                let mut built = indexmap::IndexMap::new();
+                let mut built = Default::default();
                 for (key, value) in self.hash_pairs(dict_rc) {
                     let subject = if transforming_values {
                         value.clone()
@@ -180,7 +180,7 @@ impl VirtualMachine {
                         .map(Some);
                 };
                 let rejecting = matches!(method_name, "reject" | "delete_if" | "reject!");
-                let mut kept = indexmap::IndexMap::new();
+                let mut kept = Default::default();
                 for (key, value) in self.hash_pairs(dict_rc) {
                     let verdict = self.execute_block_callable(
                         block,
@@ -205,7 +205,7 @@ impl VirtualMachine {
                     .filter(|key| !is_internal_key(key))
                     .count();
                 let changed = kept.len() != before;
-                let sentinels: Vec<(String, Object)> = dict_rc
+                let sentinels: Vec<(crate::object::Slot, Object)> = dict_rc
                     .borrow()
                     .iter()
                     .filter(|(key, _)| is_internal_key(key))

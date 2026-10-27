@@ -17,7 +17,7 @@ impl Parser<'_> {
             self.call_argument_depth -= 1;
         }
         read.map(|mut arguments| {
-            arguments.shrink_to_fit();
+            crate::parser::tighten(&mut arguments);
             arguments
         })
     }

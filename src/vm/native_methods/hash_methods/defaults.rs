@@ -8,7 +8,7 @@ impl VirtualMachine {
     pub(crate) fn call_hash_default_method(
         &mut self,
         receiver: &Object,
-        dict_rc: &Rc<RefCell<IndexMap<String, Object>>>,
+        dict_rc: &Rc<RefCell<crate::object::HashEntries>>,
         method_name: &str,
         arguments: &[Object],
         position: Position,
@@ -80,7 +80,7 @@ impl VirtualMachine {
                         // A hash answers with a default value or a default
                         // block, never both.
                         dict.shift_remove(DEFAULT_VALUE_KEY);
-                        dict.insert(DEFAULT_PROC_KEY.to_string(), held);
+                        dict.insert(DEFAULT_PROC_KEY.into(), held);
                     }
                 }
                 Ok(Some(arguments[0].clone()))

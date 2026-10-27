@@ -393,7 +393,7 @@ module Marshal
 
   # The instance variables a Time keeps its own state in, which its bytes and
   # the offset and zone written beside them already carry.
-  TIME_STATE = [:@seconds, :@fraction, :@utc, :@offset, :@calendar, :@zone, :@zone_name, :@zone_object]
+  TIME_STATE = [:@seconds, :@nanoseconds, :@fraction, :@utc, :@offset, :@calendar, :@local_offset, :@local_dst, :@local_zone, :@zone, :@zone_name, :@zone_object]
 
   # The classes whose objects hold what cannot be written as bytes.
   def self.__unwritable_classes__

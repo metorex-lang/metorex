@@ -158,9 +158,12 @@ fn self_seconds(value: &Object) -> Option<f64> {
         Some(View::Float(held)) => held,
         _ => return None,
     };
-    let fraction = match instance.instance_vars.get("fraction").view() {
-        Some(View::Int(held)) => held as f64,
-        Some(View::Float(held)) => held,
+    let fraction = match (
+        instance.instance_vars.get("nanoseconds").view(),
+        instance.instance_vars.get("fraction").view(),
+    ) {
+        (Some(View::Int(nanoseconds)), _) => nanoseconds as f64 / 1e9,
+        (_, Some(View::Float(held))) => held,
         _ => 0.0,
     };
     Some(whole + fraction)

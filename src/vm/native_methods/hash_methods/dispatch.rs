@@ -9,7 +9,7 @@ use crate::object::View;
 type HashMethodStep = fn(
     &mut VirtualMachine,
     &Object,
-    &Rc<RefCell<IndexMap<String, Object>>>,
+    &Rc<RefCell<crate::object::HashEntries>>,
     &str,
     &[Object],
     Position,
@@ -56,15 +56,19 @@ impl VirtualMachine {
         }
         // A name a method takes out of ENV leaves the process environment
         // too, so a child process started later does not see it.
-        let named_before: Option<Vec<String>> = self
-            .dict_is_environment(dict_rc)
-            .then(|| dict_rc.borrow().keys().cloned().collect());
+        let named_before: Option<Vec<String>> = self.dict_is_environment(dict_rc).then(|| {
+            dict_rc
+                .borrow()
+                .keys()
+                .map(|slot| slot.to_string())
+                .collect()
+        });
         for step in STEPS {
             if let Some(result) = step(self, receiver, dict_rc, method_name, arguments, position)? {
                 if let Some(named_before) = named_before {
                     let removed: Vec<String> = named_before
                         .into_iter()
-                        .filter(|name| !dict_rc.borrow().contains_key(name))
+                        .filter(|name| !dict_rc.borrow().contains_key(name.as_str()))
                         .collect();
                     for name in removed {
                         let key = crate::vm::utils::dict_key_to_object(&name);

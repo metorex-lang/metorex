@@ -26,12 +26,14 @@ pub(crate) fn method_named_changed(name: &str) {
 }
 
 /// `method_state_changed`, for `module` joining a mixin or prepend chain.
-/// A module answering one of the operators moves the JIT's epoch too.
+/// A module answering one of the operators moves the JIT's epoch too. The
+/// module's ancestry is walked rather than its cache filled, since most
+/// modules answer none of them and would keep an entry for each.
 fn module_joined(module: &Class) {
     method_state_changed();
     if crate::vm::specialized::OPERATOR_NAMES
         .iter()
-        .any(|name| module.find_method(name).is_some())
+        .any(|name| module.walk_for_method(name).is_some())
     {
         crate::vm::jit::assumptions_changed();
     }
@@ -130,17 +132,20 @@ impl Class {
     /// Add a prepended module, ahead of the class's own method table.
     pub fn add_prepend(&self, module: Rc<Class>) {
         module_joined(&module);
-        self.prepends.borrow_mut().insert(0, module);
+        self.rare_for_writing()
+            .prepends
+            .borrow_mut()
+            .insert(0, module);
     }
 
     /// Whether any module is prepended to this class or module.
     pub fn has_prepends(&self) -> bool {
-        !self.prepends.borrow().is_empty()
+        !self.rare().prepends.borrow().is_empty()
     }
 
     /// Snapshot of the prepend chain (most-recently-prepended first).
     pub fn prepend_chain(&self) -> Vec<Rc<Class>> {
-        self.prepends.borrow().clone()
+        self.rare().prepends.borrow().clone()
     }
 
     /// The prepend chain expanded through each prepended module's own
@@ -175,7 +180,8 @@ impl Class {
 
     /// True when `module` has already been prepended here.
     pub fn has_prepend(&self, module: &Rc<Class>) -> bool {
-        self.prepends
+        self.rare()
+            .prepends
             .borrow()
             .iter()
             .any(|prepended| Rc::ptr_eq(prepended, module))
@@ -275,19 +281,31 @@ impl Class {
     /// chain has changed since the name was last looked up here.
     pub fn find_method(&self, name: &str) -> Option<Rc<Method>> {
         let state = method_state();
-        if let Some((cached_under, found, _)) = self.method_cache.borrow().get(name)
-            && *cached_under == state
         {
-            return found.clone();
+            let cache = self.method_cache.borrow();
+            if cache.state == state
+                && let Some((found, walks)) = cache.entries.get(name)
+                && walks & STALE_LOOKUP == 0
+            {
+                return found.clone();
+            }
         }
         let found = self.walk_for_method(name);
         // A lookup runs no program code, so the state it started under is the
         // one the answer holds for.
         let mut cache = self.method_cache.borrow_mut();
-        match cache.get_mut(name) {
-            Some(held) => *held = (state, found.clone(), held.2 + 1),
+        if cache.state != state {
+            for (_, walks) in cache.entries.values_mut() {
+                *walks |= STALE_LOOKUP;
+            }
+            cache.state = state;
+        }
+        match cache.entries.get_mut(name) {
+            Some(held) => *held = (found.clone(), (held.1 & !STALE_LOOKUP) + 1),
             None => {
-                cache.insert(shared_name(name), (state, found.clone(), 1));
+                cache
+                    .entries
+                    .insert(crate::fast_hash::shared_name(name), (found.clone(), 1));
             }
         }
         found
@@ -298,12 +316,13 @@ impl Class {
     pub fn method_lookup_walks(&self, name: &str) -> u64 {
         self.method_cache
             .borrow()
+            .entries
             .get(name)
-            .map_or(0, |held| u64::from(held.2))
+            .map_or(0, |held| u64::from(held.1 & !STALE_LOOKUP))
     }
 
     fn walk_for_method(&self, name: &str) -> Option<Rc<Method>> {
-        for prepended in self.prepends.borrow().iter() {
+        for prepended in self.rare().prepends.borrow().iter() {
             if let Some(method) = prepended.find_method(name) {
                 return Some(method);
             }
@@ -344,7 +363,7 @@ impl Class {
     /// Look up a method the same way `find_method` does, returning the module
     /// that actually defines it alongside the method itself.
     pub fn find_method_with_owner(self: &Rc<Class>, name: &str) -> Option<(Rc<Class>, Rc<Method>)> {
-        for prepended in self.prepends.borrow().iter() {
+        for prepended in self.rare().prepends.borrow().iter() {
             if let Some(found) = prepended.find_method_with_owner(name) {
                 return Some(found);
             }
@@ -381,7 +400,7 @@ impl Class {
         if Rc::ptr_eq(self, other) {
             return true;
         }
-        for prepended in self.prepends.borrow().iter() {
+        for prepended in self.rare().prepends.borrow().iter() {
             if prepended.has_ancestor(other) {
                 return true;
             }
@@ -526,23 +545,4 @@ impl Class {
         names.sort();
         names
     }
-}
-
-thread_local! {
-    /// The names method caches are keyed by, each held once.
-    static CACHED_NAMES: RefCell<crate::fast_hash::NameSet<Rc<str>>> =
-        RefCell::new(crate::fast_hash::NameSet::default());
-}
-
-/// `name` as the method caches hold it.
-fn shared_name(name: &str) -> Rc<str> {
-    CACHED_NAMES.with(|names| {
-        let mut names = names.borrow_mut();
-        if let Some(held) = names.get(name) {
-            return Rc::clone(held);
-        }
-        let held: Rc<str> = name.into();
-        names.insert(Rc::clone(&held));
-        held
-    })
 }

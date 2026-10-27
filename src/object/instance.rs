@@ -1,32 +1,55 @@
 // Instance struct - represents an instance of a class
 
 use crate::class::Class;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use super::{Method, Object};
 
 /// Instance of a class with instance variables
-#[derive(Debug, PartialEq)]
 pub struct Instance {
     /// Reference to the class this is an instance of
     pub class: Rc<Class>,
     /// Instance variables (@variable), in the order they were first assigned
     /// so `instance_variables` reports Ruby's declaration order.
     pub instance_vars: super::shape::InstanceVariables,
-    /// Lazily-allocated singleton class for this instance (Ruby semantics:
-    /// every object conceptually has one, but we only materialize on demand).
-    pub singleton_class: RefCell<Option<Rc<Class>>>,
     /// Whether `freeze` has been called. Subsequent ivar assignments / setter
     /// invocations must raise FrozenError.
     pub frozen: bool,
-    /// What few instances carry, made the first time one is given any of it.
-    extras: RefCell<Option<Box<Extras>>>,
+    /// What few instances carry, made the first time one is given any of it,
+    /// and taken out while it is read or changed.
+    extras: Cell<Option<Box<Extras>>>,
+}
+
+impl std::fmt::Debug for Instance {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("Instance")
+            .field("class", &self.class)
+            .field("instance_vars", &self.instance_vars)
+            .field("frozen", &self.frozen)
+            .finish()
+    }
+}
+
+impl PartialEq for Instance {
+    fn eq(&self, other: &Self) -> bool {
+        self.class == other.class
+            && self.instance_vars == other.instance_vars
+            && self.frozen == other.frozen
+            && match self.read_extras(|mine| other.read_extras(|theirs| mine == theirs)) {
+                Some(compared) => compared.unwrap_or(false),
+                None => !other.has_extras(),
+            }
+    }
 }
 
 #[derive(Debug, Default, PartialEq)]
 struct Extras {
+    /// The instance's singleton class, made the first time one is asked
+    /// for. Ruby gives every object one, and few objects use theirs.
+    singleton_class: Option<Rc<Class>>,
     /// Singleton methods defined directly on this instance (def obj.method).
     singleton_methods: HashMap<String, Rc<Method>>,
     /// The variables starting with `__` the program assigned, which it
@@ -43,20 +66,63 @@ impl Instance {
         let made = Rc::new(RefCell::new(Self {
             class,
             instance_vars: Default::default(),
-            singleton_class: RefCell::new(None),
             frozen: false,
-            extras: RefCell::new(None),
+            extras: Cell::new(None),
         }));
         super::live::record_instance(&made);
         made
     }
 
+    fn has_extras(&self) -> bool {
+        self.read_extras(|_| ()).is_some()
+    }
+
     fn read_extras<R>(&self, read: impl FnOnce(&Extras) -> R) -> Option<R> {
-        self.extras.borrow().as_deref().map(read)
+        let extras = self.extras.take();
+        let answer = extras.as_deref().map(read);
+        self.extras.set(extras);
+        answer
     }
 
     fn change_extras<R>(&self, change: impl FnOnce(&mut Extras) -> R) -> R {
-        change(self.extras.borrow_mut().get_or_insert_with(Box::default))
+        let mut extras = self.extras.take().unwrap_or_default();
+        let answer = change(&mut extras);
+        self.extras.set(Some(extras));
+        answer
+    }
+
+    /// The instance's singleton class, when one was made.
+    pub fn singleton_class(&self) -> Option<Rc<Class>> {
+        self.read_extras(|extras| extras.singleton_class.clone())
+            .flatten()
+    }
+
+    /// Whether a singleton class was made for the instance.
+    pub fn has_singleton_class(&self) -> bool {
+        self.read_extras(|extras| extras.singleton_class.is_some())
+            .unwrap_or(false)
+    }
+
+    /// The instance's singleton class, which is what the collector reads.
+    pub(crate) fn singleton_class_unless_changing(&self) -> Option<Rc<Class>> {
+        self.singleton_class()
+    }
+
+    /// Take the instance's singleton class away, as the collector does when
+    /// it frees a cycle through it.
+    pub(crate) fn take_singleton_class(&mut self) -> Option<Rc<Class>> {
+        self.extras
+            .get_mut()
+            .as_deref_mut()
+            .and_then(|extras| extras.singleton_class.take())
+    }
+
+    /// Give the instance a singleton class, or take it away.
+    pub fn set_singleton_class(&self, class: Option<Rc<Class>>) {
+        if class.is_none() && !self.has_extras() {
+            return;
+        }
+        self.change_extras(|extras| extras.singleton_class = class);
     }
 
     /// Attach a singleton method to this instance.
@@ -90,8 +156,8 @@ impl Instance {
 
     /// Drop the instance's own singleton methods.
     pub fn clear_singleton_methods(&self) {
-        if let Some(extras) = self.extras.borrow_mut().as_deref_mut() {
-            extras.singleton_methods.clear();
+        if self.has_extras() {
+            self.change_extras(|extras| extras.singleton_methods.clear());
         }
     }
 

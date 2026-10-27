@@ -364,7 +364,7 @@ impl Parser<'_> {
         self.paren_less_arg_depth -= 1;
         self.command_arguments_end = self.stream.current_position();
         result.map(|mut arguments| {
-            arguments.shrink_to_fit();
+            crate::parser::tighten(&mut arguments);
             arguments
         })
     }

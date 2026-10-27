@@ -333,7 +333,7 @@ impl VirtualMachine {
             held_cell.receiver = Some(Box::new(held));
             held_cell
                 .instance_vars
-                .insert(crate::vm::KEY_ERROR_KEY.to_string(), Object::symbol(name));
+                .insert(crate::vm::KEY_ERROR_KEY.into(), Object::symbol(name));
         }
         Err(MetorexError::UncaughtException {
             exception: trouble,

@@ -203,7 +203,11 @@ impl VirtualMachine {
                         })
                         .unwrap_or(Object::Nil);
                     let binding = crate::object::Binding::with_receiver(
-                        block.captured_vars().clone().into_iter().collect(),
+                        block
+                            .captured_vars()
+                            .iter()
+                            .map(|(name, cell)| (name.to_string(), Rc::clone(cell)))
+                            .collect(),
                         receiver,
                     );
                     return Ok(Some(Object::Binding(Rc::new(binding))));

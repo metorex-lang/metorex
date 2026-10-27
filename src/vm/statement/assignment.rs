@@ -535,7 +535,7 @@ impl VirtualMachine {
                         details
                             .borrow_mut()
                             .instance_vars
-                            .insert(name.clone(), value);
+                            .insert(name.clone().into(), value);
                         Ok(())
                     }
                     Some(View::Class(class)) => {
@@ -673,9 +673,7 @@ impl VirtualMachine {
                         .find_singleton_method("[]=")
                         .or_else(|| {
                             instance
-                                .singleton_class
-                                .borrow()
-                                .as_ref()
+                                .singleton_class()
                                 .and_then(|singleton| singleton.find_method("[]="))
                         })
                         .or_else(|| class.find_method("[]="))
@@ -817,9 +815,7 @@ impl VirtualMachine {
                     let on_the_object =
                         instance.find_singleton_method(&setter_method).or_else(|| {
                             instance
-                                .singleton_class
-                                .borrow()
-                                .as_ref()
+                                .singleton_class()
                                 .and_then(|singleton| singleton.find_method(&setter_method))
                         });
                     let written_on_the_object = on_the_object.is_some();

@@ -3,7 +3,6 @@
 
 // Tests for the Metorex REPL
 
-use indexmap::IndexMap;
 use metorex::object::Object;
 use metorex::repl::{CommandResult, LineResult, Repl, ReplCore};
 use std::cell::RefCell;
@@ -364,8 +363,8 @@ fn format_object_nested_array() {
 
 #[test]
 fn format_object_dict() {
-    let mut map = indexmap::IndexMap::new();
-    map.insert("a".to_string(), Object::Int(1));
+    let mut map = metorex::object::HashEntries::default();
+    map.insert("a".into(), Object::Int(1));
     let dict = Object::Dict(Rc::new(RefCell::new(map)));
     assert_eq!(ReplCore::format_object(&dict), "{\"a\" => 1}");
 }
@@ -402,33 +401,11 @@ fn format_object_native_function() {
 fn format_object_block() {
     // Block variant — just check it doesn't panic
     use metorex::object::BlockStatement;
-    let block = Object::Block(Rc::new(BlockStatement {
-        outer_locals: Rc::default(),
-        parameters: vec![],
-        parameter_defaults: Vec::new(),
-        body: vec![].into(),
-        captured_vars: Rc::default(),
-        reserved_names: Rc::default(),
-        captured_def_scope: vec![],
-        captured_constant_home: None,
-        class_var_home: None,
-        captured_nesting: metorex::object::no_nesting(),
-        defining_method: None,
-        defining_owner: None,
-        defining_class: None,
-        is_lambda: false,
-        source_file: None,
-        home_frame: None,
-        opened_at: None,
-        opened_column: None,
-        from_symbol: None,
-        written_in: None,
-        written_depth: None,
-        written_within: Rc::default(),
-        ruby2_keywords: std::rc::Rc::new(std::cell::Cell::new(false)),
-        attached_call_running: Rc::new(std::cell::Cell::new(true)),
-        unit: Default::default(),
-    }));
+    let block = Object::Block(Rc::new(BlockStatement::new(
+        vec![],
+        vec![],
+        Default::default(),
+    )));
     assert_eq!(ReplCore::format_object(&block), "<Block>");
 }
 
@@ -790,9 +767,9 @@ fn format_object_float_nan() {
 
 #[test]
 fn format_object_dict_multiple_entries() {
-    let mut map = IndexMap::new();
-    map.insert("x".to_string(), Object::Int(1));
-    map.insert("y".to_string(), Object::Int(2));
+    let mut map = metorex::object::HashEntries::default();
+    map.insert("x".into(), Object::Int(1));
+    map.insert("y".into(), Object::Int(2));
     let dict = Object::Dict(Rc::new(RefCell::new(map)));
     let formatted = ReplCore::format_object(&dict);
     assert!(formatted.contains("\"x\" => 1"), "Got: {}", formatted);

@@ -138,7 +138,7 @@ impl VirtualMachine {
             return;
         };
         details.borrow_mut().instance_vars.insert(
-            crate::vm::signals::SIGNO_KEY.to_string(),
+            crate::vm::signals::SIGNO_KEY.into(),
             Object::Int(libc::SIGINT as i64),
         );
     }
@@ -218,7 +218,7 @@ impl VirtualMachine {
             details.class = Some(Rc::clone(class));
             details.message_given = true;
             details.instance_vars.insert(
-                crate::vm::signals::SIGNO_KEY.to_string(),
+                crate::vm::signals::SIGNO_KEY.into(),
                 Object::Int(number as i64),
             );
         }
@@ -349,7 +349,7 @@ impl VirtualMachine {
                     .borrow()
                     .keys()
                     .filter(|key| key.as_str() != crate::vm::param_binding::KWARGS_MARKER)
-                    .cloned()
+                    .map(|key| key.to_string())
                     .collect();
                 if entries
                     .borrow()
@@ -386,12 +386,12 @@ impl VirtualMachine {
                     position,
                 ));
             }
-            let mut map = indexmap::IndexMap::new();
+            let mut map: crate::object::HashEntries = Default::default();
             if let Some(block_obj) = block {
-                map.insert("__MX_DEFAULT_PROC__".to_string(), block_obj);
+                map.insert("__MX_DEFAULT_PROC__".into(), block_obj);
             }
             if let Some(default) = arguments.first() {
-                map.insert("__MX_DEFAULT__".to_string(), default.clone());
+                map.insert("__MX_DEFAULT__".into(), default.clone());
             }
             return Ok(Object::Dict(Rc::new(RefCell::new(map))));
         }
@@ -481,7 +481,7 @@ impl VirtualMachine {
         // reaches the hash the instance is backed by.
         if descends_from(&class, "Hash") && class.name() != "Hash" {
             let instance = crate::object::Instance::new(Rc::clone(&class));
-            let mut entries = indexmap::IndexMap::new();
+            let mut entries: crate::object::HashEntries = Default::default();
             // The default and the block are Hash's own `initialize`'s to take,
             // so a subclass that writes one of its own takes them only by
             // handing them on with `super`.
@@ -490,10 +490,10 @@ impl VirtualMachine {
                 .is_some_and(|initialize| !initialize.is_undefined && !initialize.body.is_empty());
             if !own_initialize {
                 if let Some(block) = self.pending_block.take() {
-                    entries.insert("__MX_DEFAULT_PROC__".to_string(), block);
+                    entries.insert("__MX_DEFAULT_PROC__".into(), block);
                 }
                 if let Some(default) = arguments.first() {
-                    entries.insert("__MX_DEFAULT__".to_string(), default.clone());
+                    entries.insert("__MX_DEFAULT__".into(), default.clone());
                 }
             }
             instance.borrow_mut().set_var(
@@ -760,12 +760,12 @@ impl VirtualMachine {
                 {
                     details
                         .instance_vars
-                        .insert(crate::vm::MESSAGE_STRING_KEY.to_string(), given.to_object());
+                        .insert(crate::vm::MESSAGE_STRING_KEY.into(), given.to_object());
                 }
                 if let Some(given) = message_object {
                     details
                         .instance_vars
-                        .insert(crate::vm::MESSAGE_OBJECT_KEY.to_string(), given);
+                        .insert(crate::vm::MESSAGE_OBJECT_KEY.into(), given);
                 }
                 if let Some(value) = named_receiver {
                     details.receiver = Some(Box::new(value));
@@ -773,27 +773,27 @@ impl VirtualMachine {
                 if let Some(value) = named_key {
                     details
                         .instance_vars
-                        .insert(crate::vm::KEY_ERROR_KEY.to_string(), value);
+                        .insert(crate::vm::KEY_ERROR_KEY.into(), value);
                 }
                 if let Some(value) = named_name {
                     details
                         .instance_vars
-                        .insert(crate::vm::NAME_ERROR_NAME_KEY.to_string(), value);
+                        .insert(crate::vm::NAME_ERROR_NAME_KEY.into(), value);
                 }
                 if let Some(value) = named_args {
                     details
                         .instance_vars
-                        .insert(crate::vm::NO_METHOD_ARGS_KEY.to_string(), value);
+                        .insert(crate::vm::NO_METHOD_ARGS_KEY.into(), value);
                 }
                 if let Some(locals) = creating_frame_locals {
                     details
                         .instance_vars
-                        .insert(crate::vm::LOCAL_VARIABLES_KEY.to_string(), locals);
+                        .insert(crate::vm::LOCAL_VARIABLES_KEY.into(), locals);
                 }
                 if let Some(value) = named_private_call {
                     details
                         .instance_vars
-                        .insert(crate::vm::PRIVATE_CALL_KEY.to_string(), value);
+                        .insert(crate::vm::PRIVATE_CALL_KEY.into(), value);
                 }
             }
             Self::record_signal_state(&class, &exception);

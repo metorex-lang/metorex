@@ -7,7 +7,6 @@ use crate::ast::Expression;
 use crate::error::MetorexError;
 use crate::object::Object;
 use crate::object::{OptionView, View};
-use indexmap::IndexMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -215,7 +214,7 @@ pub(crate) fn bind_params(
 pub(crate) fn split_keyword_args(
     arguments: Vec<Object>,
     has_keyword_params: bool,
-) -> (Vec<Object>, IndexMap<String, Object>) {
+) -> (Vec<Object>, crate::object::HashEntries) {
     split_keyword_args_for(arguments, has_keyword_params, false)
 }
 
@@ -226,14 +225,14 @@ pub(crate) fn split_keyword_args_for(
     mut arguments: Vec<Object>,
     has_keyword_params: bool,
     keeps_keywords: bool,
-) -> (Vec<Object>, IndexMap<String, Object>) {
+) -> (Vec<Object>, crate::object::HashEntries) {
     // Only split if the trailing dict carries the parser-emitted kwargs marker.
     if let Some(View::Dict(dict_rc)) = arguments.last().view() {
         let dict = dict_rc.borrow();
         if dict.contains_key("__MX_KWARGS__") {
             if !has_keyword_params {
                 // Promote the kwargs dict to a regular Hash positional arg.
-                let mut cleaned: IndexMap<String, Object> = dict
+                let mut cleaned: crate::object::HashEntries = dict
                     .iter()
                     .filter(|(k, _)| {
                         !matches!(
@@ -246,18 +245,20 @@ pub(crate) fn split_keyword_args_for(
                     .collect();
                 if keeps_keywords {
                     cleaned.insert(
-                        crate::vm::native_methods::hash_methods::RUBY2_KEYWORDS_KEY.to_string(),
+                        crate::vm::native_methods::hash_methods::RUBY2_KEYWORDS_KEY
+                            .to_string()
+                            .into(),
                         Object::Bool(true),
                     );
                 }
                 drop(dict);
                 arguments.pop();
                 arguments.push(Object::Dict(Rc::new(RefCell::new(cleaned))));
-                return (arguments, IndexMap::new());
+                return (arguments, Default::default());
             }
             // The table of key objects travels with the keys that are not
             // Symbols, so a `**` parameter gives back the objects they were.
-            let kwargs: IndexMap<String, Object> = dict
+            let kwargs: crate::object::HashEntries = dict
                 .iter()
                 .filter(|(k, _)| {
                     !matches!(
@@ -275,7 +276,7 @@ pub(crate) fn split_keyword_args_for(
                     } else {
                         format!("{NON_SYMBOL_KEY_MARK}{k}")
                     };
-                    (name, v.clone())
+                    (name.into(), v.clone())
                 })
                 .collect();
             drop(dict);
@@ -283,5 +284,5 @@ pub(crate) fn split_keyword_args_for(
             return (arguments, kwargs);
         }
     }
-    (arguments, IndexMap::new())
+    (arguments, Default::default())
 }

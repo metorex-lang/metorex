@@ -74,10 +74,8 @@ impl VirtualMachine {
             let mut details = details.borrow_mut();
             details
                 .instance_vars
-                .insert(crate::vm::KEY_ERROR_KEY.to_string(), key);
-            details
-                .instance_vars
-                .insert(MATCHEE_KEY.to_string(), matchee);
+                .insert(crate::vm::KEY_ERROR_KEY.into(), key);
+            details.instance_vars.insert(MATCHEE_KEY.into(), matchee);
         }
         raised
     }

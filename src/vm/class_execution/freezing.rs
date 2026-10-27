@@ -144,7 +144,7 @@ impl VirtualMachine {
                 inst.borrow_mut().frozen = true;
                 // Freezing an object freezes its singleton class, so
                 // no singleton method can be added afterwards.
-                let singleton = inst.borrow().singleton_class.borrow().clone();
+                let singleton = inst.borrow().singleton_class();
                 if let Some(sc) = singleton {
                     sc.freeze();
                 }

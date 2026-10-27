@@ -10,7 +10,6 @@ use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::object::Object;
 use crate::vm::VirtualMachine;
-use indexmap::IndexMap;
 
 /// One measurement run: the lines of each file it has seen, counted where a
 /// line carries something to run and left out where it does not.
@@ -260,7 +259,7 @@ impl VirtualMachine {
     /// lines are countable.
     pub(crate) fn coverage_report(&mut self, clear: bool) -> Result<Object, MetorexError> {
         let Some(run) = self.coverage.as_mut() else {
-            return Ok(Object::dict(IndexMap::new()));
+            return Ok(Object::dict(Default::default()));
         };
         let by_mode = run.by_mode;
         let modes = run.modes.clone();
@@ -301,7 +300,7 @@ impl VirtualMachine {
             }
         }
 
-        let mut answer = IndexMap::new();
+        let mut answer: crate::object::HashEntries = Default::default();
         for (path, lines) in &counts {
             let counted = Object::array(
                 lines
@@ -313,20 +312,20 @@ impl VirtualMachine {
                     .collect(),
             );
             let value = if by_mode {
-                let mut held = IndexMap::new();
+                let mut held: crate::object::HashEntries = Default::default();
                 for mode in &modes {
                     let named = format!(":{mode}");
                     match mode.as_str() {
-                        "lines" => held.insert(named, counted.clone()),
-                        "methods" => held.insert(named, self.methods_in(&defined, path)?),
-                        _ => held.insert(named, Object::dict(IndexMap::new())),
+                        "lines" => held.insert(named.into(), counted.clone()),
+                        "methods" => held.insert(named.into(), self.methods_in(&defined, path)?),
+                        _ => held.insert(named.into(), Object::dict(Default::default())),
                     };
                 }
                 Object::dict(held)
             } else {
                 counted
             };
-            answer.insert(path.clone(), value);
+            answer.insert(path.clone().into(), value);
         }
         Ok(Object::dict(answer))
     }
@@ -338,8 +337,8 @@ impl VirtualMachine {
         defined: &[(String, Object, String, [usize; 4], u64)],
         path: &str,
     ) -> Result<Object, MetorexError> {
-        let mut entries: IndexMap<String, Object> = IndexMap::new();
-        let mut key_objects: IndexMap<String, Object> = IndexMap::new();
+        let mut entries: crate::object::HashEntries = Default::default();
+        let mut key_objects: crate::object::HashEntries = Default::default();
         for (_, owner, name, span, calls) in defined.iter().filter(|held| held.0 == path) {
             let key = Object::array(vec![
                 owner.clone(),
@@ -357,7 +356,7 @@ impl VirtualMachine {
             // An Array key is not read back from its text, so the key object
             // itself travels beside the entry.
             entries.insert(
-                "__MX_KEY_OBJECTS__".to_string(),
+                "__MX_KEY_OBJECTS__".into(),
                 Object::Dict(std::rc::Rc::new(std::cell::RefCell::new(key_objects))),
             );
         }

@@ -178,7 +178,7 @@ pub(crate) fn bind_block_params(
                 arguments.pop();
                 taken
             }
-            _ => indexmap::IndexMap::new(),
+            _ => Default::default(),
         };
         if let Some(rest_name) = &keyword_rest
             && !rest_name.is_empty()
@@ -194,10 +194,10 @@ pub(crate) fn bind_block_params(
                     )
                 })
                 .collect();
-            let rest: indexmap::IndexMap<String, Object> = named
+            let rest: crate::object::HashEntries = named
                 .iter()
                 .filter(|(name, _)| {
-                    !declared.contains(*name)
+                    !declared.contains(name.as_str())
                         && name.as_str() != crate::vm::param_binding::KWARGS_MARKER
                 })
                 .map(|(name, value)| (name.clone(), value.clone()))
@@ -213,8 +213,8 @@ pub(crate) fn bind_block_params(
                 .unwrap_or(param)
                 .to_string();
             let given = named
-                .get(&format!(":{}", name))
-                .or_else(|| named.get(&name))
+                .get(format!(":{}", name).as_str())
+                .or_else(|| named.get(name.as_str()))
                 .cloned();
             let value = match given {
                 Some(value) => value,
@@ -610,7 +610,7 @@ pub(crate) fn marked_keyword_tail(
     block: &BlockStatement,
     mut arguments: Vec<Object>,
 ) -> Vec<Object> {
-    if !block.ruby2_keywords.get() {
+    if !block.flags.ruby2_keywords.get() {
         return arguments;
     }
     let Some(View::Dict(entries)) = arguments.last().view() else {
@@ -622,14 +622,16 @@ pub(crate) fn marked_keyword_tail(
     {
         return arguments;
     }
-    let mut marked: indexmap::IndexMap<String, Object> = entries
+    let mut marked: crate::object::HashEntries = entries
         .borrow()
         .iter()
         .filter(|(key, _)| key.as_str() != crate::vm::param_binding::KWARGS_MARKER)
         .map(|(key, value)| (key.clone(), value.clone()))
         .collect();
     marked.insert(
-        crate::vm::native_methods::hash_methods::RUBY2_KEYWORDS_KEY.to_string(),
+        crate::vm::native_methods::hash_methods::RUBY2_KEYWORDS_KEY
+            .to_string()
+            .into(),
         Object::Bool(true),
     );
     arguments.pop();
@@ -642,7 +644,7 @@ pub(crate) fn marked_keyword_tail(
 /// Whether a hash reached the block as keywords: written as keywords at the
 /// call, or marked by `ruby2_keywords` to be passed on as them.
 fn passed_as_keywords(
-    entries: &std::rc::Rc<std::cell::RefCell<indexmap::IndexMap<String, Object>>>,
+    entries: &std::rc::Rc<std::cell::RefCell<crate::object::HashEntries>>,
 ) -> bool {
     let held = entries.borrow();
     held.contains_key(crate::vm::param_binding::KWARGS_MARKER)
@@ -652,7 +654,7 @@ fn passed_as_keywords(
 /// Whether a keyword hash names no keyword, once its own bookkeeping entries
 /// are left out.
 fn keyword_entries_are_empty(
-    entries: &std::rc::Rc<std::cell::RefCell<indexmap::IndexMap<String, Object>>>,
+    entries: &std::rc::Rc<std::cell::RefCell<crate::object::HashEntries>>,
 ) -> bool {
     entries.borrow().keys().all(|key| {
         matches!(

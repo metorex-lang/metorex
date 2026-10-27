@@ -116,9 +116,9 @@ pub extern "C-unwind" fn rb_error_frozen_object(object: Value) -> ! {
     {
         message.push_str(&format!(", created at {}", written_at));
     }
-    let mut keywords = indexmap::IndexMap::new();
-    keywords.insert("__MX_KWARGS__".to_string(), Object::Bool(true));
-    keywords.insert(":receiver".to_string(), to_object(object));
+    let mut keywords: crate::object::HashEntries = Default::default();
+    keywords.insert("__MX_KWARGS__".into(), Object::Bool(true));
+    keywords.insert(":receiver".into(), to_object(object));
     let arguments = vec![
         Object::string(message),
         Object::Dict(std::rc::Rc::new(RefCell::new(keywords))),

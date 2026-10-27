@@ -214,9 +214,9 @@ impl VirtualMachine {
                 } else {
                     "file"
                 };
-                let mut fields: indexmap::IndexMap<String, Object> = indexmap::IndexMap::new();
+                let mut fields: crate::object::HashEntries = Default::default();
                 let mut record = |name: &str, value: Object| {
-                    fields.insert(format!(":{name}"), value);
+                    fields.insert(format!(":{name}").into(), value);
                 };
                 record("dev", Object::Int(held.dev() as i64));
                 record("ino", Object::Int(held.ino() as i64));

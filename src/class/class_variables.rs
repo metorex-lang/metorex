@@ -17,7 +17,9 @@ impl Class {
     pub fn set_class_var(&self, name: impl Into<String>, value: Object) {
         let key: String = name.into();
         if super::names_a_constant(&key) {
-            self.unrealized_autoloads.borrow_mut().remove(&key);
+            if let Some(parts) = self.rare_given() {
+                parts.unrealized_autoloads.borrow_mut().remove(&key);
+            }
             super::constant_state_changed();
         }
         // A singleton class answers for the class it is attached to, which
@@ -26,7 +28,7 @@ impl Class {
         // has answered no lookup of its own no cached answer depends on it.
         // The mark that says a class is a singleton, set before what it is
         // attached to, likewise changes nothing a lookup has answered yet.
-        let answered_nothing = self.method_cache.borrow().is_empty();
+        let answered_nothing = self.method_cache.borrow().entries.is_empty();
         let changes_lookups = match key.as_str() {
             "__attached__" => !(matches!(value.view(), View::Instance(_)) && answered_nothing),
             "__singleton__" => !answered_nothing,
@@ -152,7 +154,6 @@ impl Class {
         let copy = Class {
             name: String::new(),
             assigned_name: RefCell::new(None),
-            temporary_name: RefCell::new(None),
             instance_of: RefCell::new(None),
             superclass: source.superclass.clone(),
             methods: RefCell::new(source.methods.borrow().clone()),
@@ -169,22 +170,15 @@ impl Class {
                     .collect(),
             ),
             mixins: RefCell::new(source.mixins.borrow().clone()),
-            prepends: RefCell::new(source.prepends.borrow().clone()),
             module_flag: std::cell::Cell::new(source.module_flag.get()),
-            private_method_names: RefCell::new(source.private_method_names.borrow().clone()),
-            protected_method_names: RefCell::new(source.protected_method_names.borrow().clone()),
             public_overrides: RefCell::new(source.public_overrides.borrow().clone()),
             singleton_class: RefCell::new(None),
             subclasses: RefCell::new(Vec::new()),
             frozen: std::cell::Cell::new(false),
-            current_visibility: RefCell::new("public".to_string()),
-            autoloads: RefCell::new(source.autoloads.borrow().clone()),
-            unrealized_autoloads: RefCell::new(source.unrealized_autoloads.borrow().clone()),
-            private_constants: RefCell::new(source.private_constants.borrow().clone()),
-            deprecated_constants: RefCell::new(source.deprecated_constants.borrow().clone()),
-            autoload_locations: RefCell::new(source.autoload_locations.borrow().clone()),
+            current_visibility: std::cell::Cell::new("public"),
             const_locations: RefCell::new(source.const_locations.borrow().clone()),
-            method_cache: RefCell::new(crate::fast_hash::NameMap::default()),
+            rare: source.rare_copy(),
+            method_cache: RefCell::new(MethodCache::default()),
             linear_mixins_cache: RefCell::new(None),
             holds_class_methods: std::cell::Cell::new(false),
             holds_extended_copies: std::cell::Cell::new(false),
@@ -205,7 +199,6 @@ impl Class {
             let sc_copy = Rc::new(Class {
                 name: format!("#<Class:{}>", self.inspect_name()),
                 assigned_name: RefCell::new(None),
-                temporary_name: RefCell::new(None),
                 instance_of: RefCell::new(None),
                 superclass: src_sc.superclass.clone(),
                 methods: RefCell::new(src_sc.methods.borrow().clone()),
@@ -220,24 +213,15 @@ impl Class {
                         .collect(),
                 ),
                 mixins: RefCell::new(src_sc.mixins.borrow().clone()),
-                prepends: RefCell::new(src_sc.prepends.borrow().clone()),
                 module_flag: std::cell::Cell::new(src_sc.module_flag.get()),
-                private_method_names: RefCell::new(src_sc.private_method_names.borrow().clone()),
-                protected_method_names: RefCell::new(
-                    src_sc.protected_method_names.borrow().clone(),
-                ),
                 public_overrides: RefCell::new(src_sc.public_overrides.borrow().clone()),
                 singleton_class: RefCell::new(None),
                 subclasses: RefCell::new(Vec::new()),
                 frozen: std::cell::Cell::new(false),
-                current_visibility: RefCell::new("public".to_string()),
-                autoloads: RefCell::new(src_sc.autoloads.borrow().clone()),
-                unrealized_autoloads: RefCell::new(src_sc.unrealized_autoloads.borrow().clone()),
-                private_constants: RefCell::new(src_sc.private_constants.borrow().clone()),
-                deprecated_constants: RefCell::new(src_sc.deprecated_constants.borrow().clone()),
-                autoload_locations: RefCell::new(src_sc.autoload_locations.borrow().clone()),
+                current_visibility: std::cell::Cell::new("public"),
                 const_locations: RefCell::new(src_sc.const_locations.borrow().clone()),
-                method_cache: RefCell::new(crate::fast_hash::NameMap::default()),
+                rare: src_sc.rare_copy(),
+                method_cache: RefCell::new(MethodCache::default()),
                 linear_mixins_cache: RefCell::new(None),
                 holds_class_methods: std::cell::Cell::new(false),
                 holds_extended_copies: std::cell::Cell::new(false),
@@ -254,29 +238,21 @@ impl Clone for Class {
         Self {
             name: self.name.clone(),
             assigned_name: RefCell::new(self.assigned_name.borrow().clone()),
-            temporary_name: RefCell::new(self.temporary_name.borrow().clone()),
             instance_of: RefCell::new(self.instance_of.borrow().clone()),
             superclass: self.superclass.clone(),
             methods: RefCell::new(self.methods.borrow().clone()),
             instance_variables: RefCell::new(self.instance_variables.borrow().clone()),
             class_variables: RefCell::new(self.class_variables.borrow().clone()),
             mixins: RefCell::new(self.mixins.borrow().clone()),
-            prepends: RefCell::new(self.prepends.borrow().clone()),
             module_flag: std::cell::Cell::new(self.module_flag.get()),
-            private_method_names: RefCell::new(self.private_method_names.borrow().clone()),
-            protected_method_names: RefCell::new(self.protected_method_names.borrow().clone()),
             public_overrides: RefCell::new(self.public_overrides.borrow().clone()),
             singleton_class: RefCell::new(self.singleton_class.borrow().clone()),
             subclasses: RefCell::new(self.subclasses.borrow().clone()),
             frozen: std::cell::Cell::new(self.frozen.get()),
-            current_visibility: RefCell::new(self.current_visibility.borrow().clone()),
-            autoloads: RefCell::new(self.autoloads.borrow().clone()),
-            unrealized_autoloads: RefCell::new(self.unrealized_autoloads.borrow().clone()),
-            private_constants: RefCell::new(self.private_constants.borrow().clone()),
-            deprecated_constants: RefCell::new(self.deprecated_constants.borrow().clone()),
-            autoload_locations: RefCell::new(self.autoload_locations.borrow().clone()),
+            current_visibility: std::cell::Cell::new(self.current_visibility.get()),
             const_locations: RefCell::new(self.const_locations.borrow().clone()),
-            method_cache: RefCell::new(crate::fast_hash::NameMap::default()),
+            rare: self.rare.clone(),
+            method_cache: RefCell::new(MethodCache::default()),
             linear_mixins_cache: RefCell::new(None),
             holds_class_methods: std::cell::Cell::new(self.holds_class_methods.get()),
             holds_extended_copies: std::cell::Cell::new(self.holds_extended_copies.get()),

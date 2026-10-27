@@ -75,7 +75,101 @@ pub struct Scope {
 
 /// The names a block closes over, each with the cell it shares with the
 /// scope it was written in.
-pub type CapturedNames = Rc<indexmap::IndexMap<String, Rc<RefCell<Object>>>>;
+pub type CapturedNames = Rc<Captures>;
+
+/// One closed-over name and the cell it shares with its scope.
+pub type Capture = (Rc<str>, Rc<RefCell<Object>>);
+
+/// How many closed-over names a lookup reads through in order before it
+/// reads them through an index instead.
+const NAMES_FOUND_IN_ORDER: usize = 16;
+
+/// Closed-over names in the order `local_variables` lists them, each with
+/// the cell it shares with the scope it was written in.
+#[derive(Debug, Default)]
+pub struct Captures {
+    entries: Box<[Capture]>,
+    /// Where each name sits, made the first time a name is looked up among
+    /// more than `NAMES_FOUND_IN_ORDER`.
+    places: std::cell::OnceCell<Box<crate::fast_hash::NameMap<Rc<str>, u32>>>,
+}
+
+impl Captures {
+    /// Names and cells with no name given twice.
+    pub fn new(mut entries: Vec<Capture>) -> Self {
+        crate::parser::tighten(&mut entries);
+        Captures {
+            entries: entries.into_boxed_slice(),
+            places: std::cell::OnceCell::new(),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    /// Where `name` sits among the names.
+    pub fn get_index_of(&self, name: &str) -> Option<usize> {
+        if self.entries.len() <= NAMES_FOUND_IN_ORDER {
+            return self.entries.iter().position(|(held, _)| &**held == name);
+        }
+        let places = self.places.get_or_init(|| {
+            Box::new(
+                self.entries
+                    .iter()
+                    .enumerate()
+                    .map(|(at, (held, _))| (Rc::clone(held), at as u32))
+                    .collect(),
+            )
+        });
+        places.get(name).map(|&at| at as usize)
+    }
+
+    /// The name at `at` and its cell.
+    pub fn get_index(&self, at: usize) -> Option<(&str, &Rc<RefCell<Object>>)> {
+        self.entries.get(at).map(|(name, cell)| (&**name, cell))
+    }
+
+    pub fn get(&self, name: &str) -> Option<&Rc<RefCell<Object>>> {
+        self.get_index_of(name).map(|at| &self.entries[at].1)
+    }
+
+    pub fn contains_key(&self, name: &str) -> bool {
+        self.get_index_of(name).is_some()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &Rc<RefCell<Object>>)> {
+        self.entries.iter().map(|(name, cell)| (&**name, cell))
+    }
+
+    /// Bind `name` to `cell`, in its place when it is one of the names and
+    /// after them when not.
+    pub fn insert(&mut self, name: &str, cell: Rc<RefCell<Object>>) {
+        if let Some(at) = self.get_index_of(name) {
+            self.entries[at].1 = cell;
+            return;
+        }
+        let mut entries = std::mem::take(&mut self.entries).into_vec();
+        entries.push((crate::fast_hash::shared_name(name), cell));
+        *self = Captures::new(entries);
+    }
+}
+
+impl Clone for Captures {
+    fn clone(&self) -> Self {
+        Captures::new(self.entries.to_vec())
+    }
+}
+
+impl PartialEq for Captures {
+    fn eq(&self, other: &Self) -> bool {
+        self.entries == other.entries
+    }
+}
 
 impl Scope {
     /// The number the names this scope binds were last changed to.
@@ -434,7 +528,7 @@ impl Scope {
         }
         if let Some(captured) = &self.captured {
             for (name, value_ref) in captured.iter() {
-                all_vars.insert(name.clone(), value_ref.borrow().clone());
+                all_vars.insert(name.to_string(), value_ref.borrow().clone());
             }
         }
 
@@ -543,10 +637,10 @@ impl Scope {
                 if !self.variables.contains_key(name)
                     && !self.hidden_names.contains(name)
                     && !names_a_definition_under(name, &value.borrow())
-                    && !names.contains(name)
-                    && !closed_over.contains(name)
+                    && !names.iter().any(|listed| listed == name)
+                    && !closed_over.iter().any(|listed| listed == name)
                 {
-                    closed_over.push(name.clone());
+                    closed_over.push(name.to_string());
                 }
             }
         }
@@ -584,31 +678,44 @@ impl Scope {
         self.parent.is_none()
     }
 
-    /// Collects all variable references from the entire scope chain
-    /// Returns a HashMap with shared references to all visible variables
-    /// Used for closure capture to enable mutable closures
-    pub fn collect_all_var_refs(&self) -> indexmap::IndexMap<String, Rc<RefCell<Object>>> {
-        let mut all_vars = indexmap::IndexMap::new();
+    /// The cells of every name the scope chain shows, closer scopes first,
+    /// for a block written here to close over.
+    pub fn collect_all_var_refs(&self) -> Captures {
+        let mut gathered = Vec::new();
+        let mut seen = crate::fast_hash::NameSet::default();
+        self.gather_var_refs(&mut gathered, &mut seen);
+        Captures::new(gathered)
+    }
 
+    fn gather_var_refs(
+        &self,
+        gathered: &mut Vec<Capture>,
+        seen: &mut crate::fast_hash::NameSet<Rc<str>>,
+    ) {
+        let mut take = |name: &str, cell: &Rc<RefCell<Object>>| {
+            if seen.contains(name) {
+                return;
+            }
+            let shared = crate::fast_hash::shared_name(name);
+            seen.insert(Rc::clone(&shared));
+            gathered.push((shared, Rc::clone(cell)));
+        };
         // This scope's own variables come first, in the order they were
         // bound, then what it closed over, then what encloses it. A name
         // already taken stays with the closer scope, and the order is the
         // order `local_variables` reports them in.
-        let bound_in_order = self.ordered_names();
-        for name in bound_in_order {
+        for name in self.ordered_names() {
             // A name the program never declared is not one a block closes
             // over: a block reading `it` takes the argument it was handed
             // rather than the `it` of the block around it.
             if self.hoisted_names.contains(name) || self.hidden_names.contains(name) {
                 continue;
             }
-            all_vars.insert(name.clone(), self.variables[name].clone());
+            take(name, &self.variables[name]);
         }
         if let Some(captured) = &self.captured {
-            for (name, value_ref) in captured.iter() {
-                all_vars
-                    .entry(name.clone())
-                    .or_insert_with(|| value_ref.clone());
+            for (name, cell) in captured.iter() {
+                take(name, cell);
             }
         }
         // A method body ends the walk: the scope above it holds the program's
@@ -617,12 +724,8 @@ impl Scope {
         if !self.is_method_boundary
             && let Some(parent) = &self.parent
         {
-            for (name, value_ref) in parent.borrow().collect_all_var_refs() {
-                all_vars.entry(name).or_insert(value_ref);
-            }
+            parent.borrow().gather_var_refs(gathered, seen);
         }
-
-        all_vars
     }
 }
 

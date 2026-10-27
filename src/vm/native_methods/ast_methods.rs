@@ -5,14 +5,13 @@
 
 use crate::ast::{BinaryOp, Expression, Statement, UnaryOp};
 use crate::object::Object;
-use indexmap::IndexMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 
 fn make_dict(entries: Vec<(&str, Object)>) -> Object {
-    let mut map = IndexMap::new();
+    let mut map: crate::object::HashEntries = Default::default();
     for (k, v) in entries {
-        map.insert(k.to_string(), v);
+        map.insert(k.to_string().into(), v);
     }
     Object::Dict(Rc::new(RefCell::new(map)))
 }

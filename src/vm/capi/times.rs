@@ -66,9 +66,9 @@ pub extern "C-unwind" fn rb_time_nano_new(seconds: i64, nanoseconds: i64) -> Val
 pub extern "C-unwind" fn rb_time_num_new(seconds: Value, offset: Value) -> Value {
     let mut arguments = vec![to_object(seconds)];
     if offset != QNIL {
-        let mut keywords = indexmap::IndexMap::new();
-        keywords.insert("__MX_KWARGS__".to_string(), Object::Bool(true));
-        keywords.insert(":in".to_string(), to_object(offset));
+        let mut keywords: crate::object::HashEntries = Default::default();
+        keywords.insert("__MX_KWARGS__".into(), Object::Bool(true));
+        keywords.insert(":in".into(), to_object(offset));
         arguments.push(Object::Dict(std::rc::Rc::new(std::cell::RefCell::new(
             keywords,
         ))));

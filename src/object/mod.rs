@@ -19,22 +19,28 @@ pub mod live;
 mod method;
 mod operations;
 pub mod shape;
+mod slot;
 mod types;
 
 // Re-export core types and traits
 pub use binding::Binding;
 pub use block::{
-    BLOCK_LOCAL_PREFIX, BlockStatement, CodePlaces, DESTRUCTURED_GROUP_PREFIX, IMPLICIT_IT_PARAM,
-    KEYWORD_PARAM_PREFIX, NO_KEYWORDS_PARAM, TRAILING_COMMA_PARAM, UNNAMED_PARAMETER,
+    BLOCK_LOCAL_PREFIX, BlockFlags, BlockOrigin, BlockStatement, CodePlaces,
+    DESTRUCTURED_GROUP_PREFIX, IMPLICIT_IT_PARAM, KEYWORD_PARAM_PREFIX, NO_KEYWORDS_PARAM,
+    TRAILING_COMMA_PARAM, UNNAMED_PARAMETER,
 };
 pub use exception::{Exception, SourceLocation};
 pub use hash::ObjectHash;
 pub use instance::Instance;
 pub use method::{Method, Provenance, Seldom, Signature};
+pub use slot::Slot;
 
 /// The classes and modules lexically open where a method or block was
 /// written, innermost first, shared by every frame that runs it.
 pub type Nesting = std::rc::Rc<[std::rc::Rc<Class>]>;
+
+/// The entries of a Hash, each under the slot its key takes.
+pub type HashEntries = indexmap::IndexMap<Slot, Object, crate::fast_hash::ProgramHashing>;
 
 /// The nesting of code written outside any class or module, shared so that
 /// making one allocates nothing.

@@ -111,8 +111,9 @@ pub(super) const SOURCE: &str = r##"
     made.instance_variable_set(:@zone_object, @zone_object) unless @zone_object.nil?
     # A time read in the zone the program was running in keeps that zone's
     # name, which a later change to the zone does not reach.
-    if @offset.nil? && !@utc && !@calendar.nil?
-      made.instance_variable_set(:@zone_name, @calendar[10])
+    if @offset.nil? && !@utc
+      read = @calendar.nil? ? @local_zone : @calendar[10]
+      made.instance_variable_set(:@zone_name, read) unless read.nil?
     end
     made
   end
@@ -381,14 +382,14 @@ pub(super) const SOURCE: &str = r##"
   # The fraction of a second, written to the given number of digits, rounded
   # rather than cut down.
   def fraction_digits(places)
-    scaled = (@fraction * 10 ** places).round.to_i
+    scaled = (__fraction__ * 10 ** places).round.to_i
     scaled.to_s.rjust(places, "0")
   end
   private :fraction_digits
 
   # The fraction of a second, written to the number of places asked for.
   def __fraction_text__(places)
-    scaled = (@fraction * 10 ** places).to_i
+    scaled = (__fraction__ * 10 ** places).to_i
     scaled.to_s.rjust(places, "0")
   end
   private :__fraction_text__
@@ -471,7 +472,7 @@ pub(super) const SOURCE: &str = r##"
   # The fraction of a second a rendering shows, with the trailing zeros left
   # off and nothing at all for a whole second.
   def fraction_label
-    return "" if @fraction == 0
+    return "" if __fraction__ == 0
     digits = fraction_digits(9).sub(/0+\z/, "")
     ".#{digits}"
   end

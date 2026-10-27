@@ -51,8 +51,8 @@ impl VirtualMachine {
             if held.find_singleton_method(name).is_some() {
                 return None;
             }
-            match held.singleton_class.borrow().as_ref() {
-                Some(singleton) => Rc::clone(singleton),
+            match held.singleton_class() {
+                Some(singleton) => singleton,
                 None if held.has_singleton_methods() => Rc::clone(&held.class),
                 None => return None,
             }

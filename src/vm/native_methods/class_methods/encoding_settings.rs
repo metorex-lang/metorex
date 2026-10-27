@@ -169,7 +169,7 @@ impl VirtualMachine {
         // The names that stand for an encoding already listed under another
         // name, each paired with the name it stands for.
         if class_rc.name() == "Encoding" && method_name == "aliases" {
-            let mut pairs: indexmap::IndexMap<String, Object> = indexmap::IndexMap::new();
+            let mut pairs: crate::object::HashEntries = Default::default();
             let keep = crate::vm::native_methods::hash_methods::keep_pair;
             for (alias, display) in crate::vm::init::ENCODING_ALIASES {
                 keep(

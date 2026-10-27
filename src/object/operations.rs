@@ -114,7 +114,7 @@ impl Object {
                 // and its identity setting are bookkeeping, not contents.
                 let dict_a = a.borrow();
                 let dict_b = b.borrow();
-                let entries = |dict: &indexmap::IndexMap<String, Object>| {
+                let entries = |dict: &crate::object::HashEntries| {
                     dict.iter()
                         .filter(|(key, _)| !key.starts_with("__MX_"))
                         .map(|(key, value)| (key.clone(), value.clone()))

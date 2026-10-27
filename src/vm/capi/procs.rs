@@ -44,7 +44,7 @@ pub(super) fn pass_last_as_keywords(arguments: &mut Vec<Object>) {
     let spread = super::or_raise(interpreter().hash_for_splat(last, called_from()));
     if let Some(pairs) = spread {
         let mut marked = pairs.borrow().clone();
-        marked.insert("__MX_KWARGS__".to_string(), Object::Bool(true));
+        marked.insert("__MX_KWARGS__".into(), Object::Bool(true));
         arguments.push(Object::Dict(std::rc::Rc::new(std::cell::RefCell::new(
             marked,
         ))));

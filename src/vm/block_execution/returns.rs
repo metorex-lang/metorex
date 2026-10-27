@@ -55,10 +55,11 @@ pub(crate) fn escaped_return_error(
         let mut details = details.borrow_mut();
         details
             .instance_vars
-            .insert("@exit_value".to_string(), value);
-        details
-            .instance_vars
-            .insert("@reason".to_string(), Object::symbol("return".to_string()));
+            .insert(("@exit_value".to_string()).into(), value);
+        details.instance_vars.insert(
+            ("@reason".to_string()).into(),
+            Object::symbol("return".to_string()),
+        );
     }
     MetorexError::UncaughtException {
         exception,
@@ -76,10 +77,11 @@ pub(crate) fn orphaned_return_error(value: Object, position: Position) -> Metore
         let mut details = details.borrow_mut();
         details
             .instance_vars
-            .insert("@exit_value".to_string(), value);
-        details
-            .instance_vars
-            .insert("@reason".to_string(), Object::symbol("return".to_string()));
+            .insert(("@exit_value".to_string()).into(), value);
+        details.instance_vars.insert(
+            ("@reason".to_string()).into(),
+            Object::symbol("return".to_string()),
+        );
     }
     MetorexError::UncaughtException {
         exception,

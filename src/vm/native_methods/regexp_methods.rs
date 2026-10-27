@@ -322,15 +322,15 @@ impl VirtualMachine {
         }
         // A name written more than once reports the farthest group under it
         // that matched, and the first one when none did.
-        let mut names = indexmap::IndexMap::new();
+        let mut names: crate::object::HashEntries = Default::default();
         for (name_index, (group, name)) in named.iter().enumerate() {
             let slot = Object::Int(name_index as i64 + 1);
             let name = original_group_name(name).to_string();
             let matched = found.get(*group).is_some();
-            match names.get(&name) {
+            match names.get(name.as_str()) {
                 Some(_) if !matched => {}
                 _ => {
-                    names.insert(name, slot);
+                    names.insert(name.into(), slot);
                 }
             }
         }
@@ -537,14 +537,16 @@ impl VirtualMachine {
             // Each name answers the numbers of the groups written with it, in
             // the order they appear.
             "named_captures" => {
-                let mut captures: indexmap::IndexMap<String, Object> = indexmap::IndexMap::new();
+                let mut captures: crate::object::HashEntries = Default::default();
                 for (slot, name) in named_groups(pattern, flags) {
                     let number = Object::Int(slot as i64);
-                    match captures.get(&name).view() {
+                    match captures.get(name.as_str()).view() {
                         Some(View::Array(existing)) => existing.borrow_mut().push(number),
                         _ => {
-                            captures
-                                .insert(name, Object::Array(Rc::new(RefCell::new(vec![number]))));
+                            captures.insert(
+                                name.into(),
+                                Object::Array(Rc::new(RefCell::new(vec![number]))),
+                            );
                         }
                     }
                 }

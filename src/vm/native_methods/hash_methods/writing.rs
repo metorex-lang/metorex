@@ -8,7 +8,7 @@ impl VirtualMachine {
     pub(crate) fn call_hash_writing_method(
         &mut self,
         receiver: &Object,
-        dict_rc: &Rc<RefCell<IndexMap<String, Object>>>,
+        dict_rc: &Rc<RefCell<crate::object::HashEntries>>,
         method_name: &str,
         arguments: &[Object],
         position: Position,
@@ -87,7 +87,7 @@ impl VirtualMachine {
                 let Some(View::Block(block)) = viewed.view() else {
                     return Ok(Some(receiver.clone()));
                 };
-                let mut built = indexmap::IndexMap::new();
+                let mut built = Default::default();
                 for (key, value) in self.hash_pairs(dict_rc) {
                     let produced =
                         self.execute_block_callable(block, vec![key, value], position)?;
@@ -167,7 +167,7 @@ impl VirtualMachine {
                     return Err(self.frozen_modification_error(receiver, position));
                 }
                 let transforming_values = method_name == "transform_values!";
-                let mut built = indexmap::IndexMap::new();
+                let mut built = Default::default();
                 // A `break` out of the block keeps what was transformed so
                 // far and leaves the rest of the entries as they were.
                 let mut broke_with = None;
@@ -204,7 +204,7 @@ impl VirtualMachine {
                         keep_pair(&mut built, key.clone(), value.clone());
                     }
                 }
-                let sentinels: Vec<(String, Object)> = dict_rc
+                let sentinels: Vec<(crate::object::Slot, Object)> = dict_rc
                     .borrow()
                     .iter()
                     .filter(|(key, _)| is_internal_key(key))

@@ -66,6 +66,7 @@ pub enum MatchPattern {
         prefix: Vec<MatchPattern>,
         /// `Some(None)` for a bare `*`, `Some(Some(name))` for `*name`, and
         /// None where the pattern names every element.
+        #[serde(with = "rest_encoding")]
         rest: Option<Option<String>>,
         suffix: Vec<MatchPattern>,
     },
@@ -154,4 +155,27 @@ pub struct Parameter {
     pub is_named_keyword: bool,                 // True if this is a name: style keyword parameter
     pub is_block: bool,                         // True if this is a &block parameter
     pub position: Position,
+}
+
+/// An array pattern's rest as an encoded body holds it: a list of no names
+/// for an anonymous `*` and of one for `*name`. A nil inside a `Some`, which
+/// the encoding would write for the anonymous rest, reads back as no rest.
+mod rest_encoding {
+    use serde::{Deserialize, Serialize};
+
+    pub fn serialize<S: serde::Serializer>(
+        rest: &Option<Option<String>>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        rest.as_ref()
+            .map(|named| named.as_ref().map_or(&[][..], std::slice::from_ref))
+            .serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<Option<String>>, D::Error> {
+        let names = Option::<Vec<String>>::deserialize(deserializer)?;
+        Ok(names.map(|names| names.into_iter().next()))
+    }
 }

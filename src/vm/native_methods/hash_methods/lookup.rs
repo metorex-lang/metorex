@@ -8,7 +8,7 @@ impl VirtualMachine {
     pub(crate) fn call_hash_lookup_method(
         &mut self,
         receiver: &Object,
-        dict_rc: &Rc<RefCell<IndexMap<String, Object>>>,
+        dict_rc: &Rc<RefCell<crate::object::HashEntries>>,
         method_name: &str,
         arguments: &[Object],
         position: Position,
@@ -108,7 +108,7 @@ impl VirtualMachine {
                     };
                 };
                 let mut dict = dict_rc.borrow_mut();
-                let removed = dict.shift_remove(&key_str).unwrap_or(Object::Nil);
+                let removed = dict.shift_remove(key_str.as_str()).unwrap_or(Object::Nil);
                 // Also remove from key objects sentinel if present
                 forget_key_object(&mut dict, &key_str);
                 Ok(Some(removed))
@@ -152,7 +152,7 @@ impl VirtualMachine {
                 // hash answers with one or the other.
                 let mut dict = dict_rc.borrow_mut();
                 dict.shift_remove(DEFAULT_PROC_KEY);
-                dict.insert(DEFAULT_VALUE_KEY.to_string(), arguments[0].clone());
+                dict.insert(DEFAULT_VALUE_KEY.into(), arguments[0].clone());
                 drop(dict);
                 Ok(Some(arguments[0].clone()))
             }

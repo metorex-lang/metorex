@@ -46,65 +46,94 @@ pub fn bytes_of_characters(text: &str) -> Vec<u8> {
     bytes
 }
 
-/// The one copy of an encoding's name every string tagged with it shares.
-/// The names are the encodings Ruby knows and the few a program adds, so
-/// each is kept for the life of the process.
-fn shared_encoding_name(name: String) -> &'static str {
-    thread_local! {
-        static NAMES: RefCell<std::collections::HashSet<&'static str>> =
-            RefCell::new([DEFAULT_ENCODING, "ASCII-8BIT", "US-ASCII"].into_iter().collect());
-    }
-    NAMES.with(|names| {
-        if let Some(shared) = names.borrow().get(name.as_str()) {
-            return *shared;
+thread_local! {
+    /// The name of every encoding a string on this thread was tagged with,
+    /// which a string names by its place. The names are the encodings Ruby
+    /// knows and the few a program adds, so each is kept for the life of the
+    /// process.
+    static ENCODING_NAMES: RefCell<Vec<&'static str>> =
+        RefCell::new(vec![DEFAULT_ENCODING, BINARY_ENCODING]);
+}
+
+/// The place of `DEFAULT_ENCODING` among the encoding names.
+const DEFAULT_ENCODING_PLACE: u16 = 0;
+
+/// The name binary strings are tagged with, and its place.
+const BINARY_ENCODING: &str = "ASCII-8BIT";
+const BINARY_ENCODING_PLACE: u16 = 1;
+
+/// The place of the encoding named `name` among the encoding names.
+fn encoding_place(name: &str) -> u16 {
+    ENCODING_NAMES.with(|names| {
+        if let Some(place) = names.borrow().iter().position(|held| *held == name) {
+            return place as u16;
         }
-        let shared: &'static str = String::leak(name);
-        names.borrow_mut().insert(shared);
-        shared
+        let mut names = names.borrow_mut();
+        names.push(String::leak(name.to_string()));
+        (names.len() - 1) as u16
     })
 }
+
+/// The name of the encoding at `place` among the encoding names.
+fn encoding_at(place: u16) -> &'static str {
+    ENCODING_NAMES.with(|names| names.borrow()[usize::from(place)])
+}
+
+/// Whether the string refuses to change. `freeze` sets it, and every method
+/// that would change the bytes checks it first.
+const FROZEN: u8 = 1;
+/// Whether the bytes are read one character per byte under a text encoding.
+/// A run of bytes read off a file or unpacked from a format is built this
+/// way, and keeps saying so after it is tagged with a text encoding.
+const HOLDS_BYTES: u8 = 1 << 1;
+/// Whether something else is reading the string right now and refuses to
+/// have it changed underneath. An IO::Buffer over a string sets this for as
+/// long as it is in use.
+const BORROWED: u8 = 1 << 2;
+/// Whether the string is one of the interned copies `String#-@` hands back.
+/// Ruby refuses a singleton class on one of those, since the same string
+/// stands for every use of that text.
+const DEDUPLICATED: u8 = 1 << 3;
+/// Whether the encoding the string is tagged with reads each byte as a
+/// character of its own.
+const ENCODING_READS_BYTES: u8 = 1 << 4;
 
 /// The text of bytes read one character per byte.
 fn characters_of_bytes(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| *byte as char).collect()
 }
 
-#[derive(Debug)]
 pub struct StringValue {
     /// What the string holds. Ruby lets a string change what it holds while
     /// every reference to it sees the change, so the bytes sit behind a cell
     /// rather than being fixed when the string is made.
     bytes: RefCell<Vec<u8>>,
-    encoding: Cell<&'static str>,
-    /// The id this string answers, handed out the first time one is asked
-    /// for. A counter rather than an address, since an address a dropped
-    /// string leaves behind can be handed to the next one.
-    object_id: Cell<u64>,
-    /// Whether the string refuses to change. `freeze` sets it, and every
-    /// method that would change the bytes checks it first.
-    frozen: Cell<bool>,
-    /// Whether the bytes are read one character per byte under a text
-    /// encoding. A run of bytes read off a file or unpacked from a format is
-    /// built this way, and keeps saying so after it is tagged with a text
-    /// encoding.
-    holds_bytes: Cell<bool>,
-    /// Whether something else is reading the string right now and refuses to
-    /// have it changed underneath. An IO::Buffer over a string sets this for
-    /// as long as it is in use.
-    borrowed: Cell<bool>,
-    /// Whether the string is one of the interned copies `String#-@` hands
-    /// back. Ruby refuses a singleton class on one of those, since the same
-    /// string stands for every use of that text.
-    deduplicated: Cell<bool>,
-    /// What a few strings carry beside their text, made the first time one
-    /// is given any of it.
-    notes: RefCell<Option<Box<Notes>>>,
-    /// Whether the bytes are all ASCII, worked out the first time it is
-    /// asked and forgotten whenever the bytes change.
-    ascii: Cell<Option<bool>>,
     /// What the text was read as, made the first time a reading is asked
     /// for and emptied whenever the text changes.
     readings: RefCell<Option<Box<Readings>>>,
+    /// What a few strings carry beside their text, made the first time one
+    /// is given any of it, and taken out while it is read or changed.
+    notes: Cell<Option<Box<Notes>>>,
+    /// The place of the encoding the string is tagged with among the
+    /// encoding names.
+    encoding: Cell<u16>,
+    /// `FROZEN`, `HOLDS_BYTES`, `BORROWED`, `DEDUPLICATED` and
+    /// `ENCODING_READS_BYTES`, each set or not.
+    marks: Cell<u8>,
+    /// Whether the bytes are all ASCII, worked out the first time it is
+    /// asked and forgotten whenever the bytes change.
+    ascii: Cell<Option<bool>>,
+}
+
+impl std::fmt::Debug for StringValue {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("StringValue")
+            .field("bytes", &self.bytes)
+            .field("encoding", &self.shared_encoding_name())
+            .field("marks", &self.marks.get())
+            .finish()
+    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -121,6 +150,10 @@ struct Notes {
     /// Only `--debug-frozen-string-literal` records it, and everything else
     /// leaves it empty.
     created_at: Option<String>,
+    /// The id this string answers, handed out the first time one is asked
+    /// for. A counter rather than an address, since an address a dropped
+    /// string leaves behind can be handed to the next one.
+    object_id: u64,
 }
 
 #[derive(Debug, Default)]
@@ -185,27 +218,51 @@ impl StringValue {
 }
 
 impl StringValue {
-    fn built(bytes: Vec<u8>, encoding: String, holds_bytes: bool) -> Self {
-        Self {
+    fn built(bytes: Vec<u8>, encoding: u16, holds_bytes: bool) -> Self {
+        let made = Self {
             bytes: RefCell::new(bytes),
-            encoding: Cell::new(shared_encoding_name(encoding)),
-            object_id: Cell::new(0),
-            frozen: Cell::new(false),
-            holds_bytes: Cell::new(holds_bytes),
-            borrowed: Cell::new(false),
-            deduplicated: Cell::new(false),
-            notes: RefCell::new(None),
-            ascii: Cell::new(None),
             readings: RefCell::new(None),
-        }
+            notes: Cell::new(None),
+            encoding: Cell::new(DEFAULT_ENCODING_PLACE),
+            marks: Cell::new(0),
+            ascii: Cell::new(None),
+        };
+        made.set_encoding_place(encoding);
+        made.set_mark(HOLDS_BYTES, holds_bytes);
+        made
+    }
+
+    fn has_mark(&self, mark: u8) -> bool {
+        self.marks.get() & mark != 0
+    }
+
+    fn set_mark(&self, mark: u8, set: bool) {
+        let marks = self.marks.get();
+        self.marks
+            .set(if set { marks | mark } else { marks & !mark });
+    }
+
+    fn set_encoding_place(&self, place: u16) {
+        self.encoding.set(place);
+        let reads_bytes = match place {
+            DEFAULT_ENCODING_PLACE => false,
+            BINARY_ENCODING_PLACE => true,
+            _ => encoding_reads_bytes(encoding_at(place)),
+        };
+        self.set_mark(ENCODING_READS_BYTES, reads_bytes);
     }
 
     fn note(&self, change: impl FnOnce(&mut Notes)) {
-        change(self.notes.borrow_mut().get_or_insert_with(Box::default));
+        let mut notes = self.notes.take().unwrap_or_default();
+        change(&mut notes);
+        self.notes.set(Some(notes));
     }
 
     fn noted<T>(&self, read: impl FnOnce(&Notes) -> T) -> Option<T> {
-        self.notes.borrow().as_deref().map(read)
+        let notes = self.notes.take();
+        let answer = notes.as_deref().map(read);
+        self.notes.set(notes);
+        answer
     }
 
     fn reading<T: Clone>(&self, read: impl FnOnce(&Readings) -> Option<&T>) -> Option<T> {
@@ -218,11 +275,7 @@ impl StringValue {
 
     /// Text tagged with the encoding a literal carries.
     pub fn new(text: impl Into<String>) -> Self {
-        Self::built(
-            text.into().into_bytes(),
-            DEFAULT_ENCODING.to_string(),
-            false,
-        )
+        Self::built(text.into().into_bytes(), DEFAULT_ENCODING_PLACE, false)
     }
 
     /// Text tagged with an encoding named outright. Under an encoding that
@@ -235,38 +288,38 @@ impl StringValue {
         } else {
             text.into_bytes()
         };
-        Self::built(bytes, encoding, false)
+        Self::built(bytes, encoding_place(&encoding), false)
     }
 
     /// Text whose characters stand for the bytes they were read from.
     pub fn from_bytes(text: impl Into<String>) -> Self {
         Self::built(
             bytes_of_characters(&text.into()),
-            "ASCII-8BIT".to_string(),
+            BINARY_ENCODING_PLACE,
             true,
         )
     }
 
     /// Bytes tagged binary.
     pub fn binary(bytes: Vec<u8>) -> Self {
-        Self::built(bytes, "ASCII-8BIT".to_string(), true)
+        Self::built(bytes, BINARY_ENCODING_PLACE, true)
     }
 
     /// Bytes tagged with the named encoding. Bytes that are not UTF-8 are
     /// read one character per byte.
     pub fn of_bytes(bytes: Vec<u8>, encoding: impl Into<String>) -> Self {
         let holds_bytes = std::str::from_utf8(&bytes).is_err();
-        Self::built(bytes, encoding.into(), holds_bytes)
+        Self::built(bytes, encoding_place(&encoding.into()), holds_bytes)
     }
 
     /// Whether each byte reads as a character of its own.
     pub fn reads_bytes(&self) -> bool {
-        self.holds_bytes.get() || encoding_reads_bytes(self.encoding.get())
+        self.has_mark(HOLDS_BYTES | ENCODING_READS_BYTES)
     }
 
     /// Whether the string is marked as holding bytes under a text encoding.
     pub fn holds_bytes(&self) -> bool {
-        self.holds_bytes.get()
+        self.has_mark(HOLDS_BYTES)
     }
 
     /// Change how the bytes are read, keeping the text they read as.
@@ -292,30 +345,30 @@ impl StringValue {
     /// Say that the characters stand for bytes, which is what a copy built
     /// from one that does has to carry.
     pub fn mark_bytes(&self) {
-        self.reread(|| self.holds_bytes.set(true));
+        self.reread(|| self.set_mark(HOLDS_BYTES, true));
     }
 
     /// Say that the characters stand for text again, which is what reading a
     /// run of bytes back through an encoding that spells them leaves.
     pub fn clear_bytes(&self) {
-        self.reread(|| self.holds_bytes.set(false));
+        self.reread(|| self.set_mark(HOLDS_BYTES, false));
     }
 
     /// The name of the encoding this string says it is in.
     pub fn encoding_name(&self) -> String {
-        self.encoding.get().to_string()
+        self.shared_encoding_name().to_string()
     }
 
     /// The name of the encoding the string is tagged with, held for the run.
     pub fn shared_encoding_name(&self) -> &'static str {
-        self.encoding.get()
+        encoding_at(self.encoding.get())
     }
 
     /// Tag the string as being in another encoding, keeping the text it
     /// reads as. Every reference to the same string sees the new tag.
     pub fn set_encoding(&self, encoding: impl Into<String>) {
-        let encoding = shared_encoding_name(encoding.into());
-        self.reread(|| self.encoding.set(encoding));
+        let encoding = encoding_place(&encoding.into());
+        self.reread(|| self.set_encoding_place(encoding));
     }
 
     /// Tag the string as being in another encoding, keeping its bytes, which
@@ -330,8 +383,8 @@ impl StringValue {
         } else {
             broken || self.reads_bytes() || encoding_reads_bytes(&encoding)
         };
-        self.encoding.set(shared_encoding_name(encoding));
-        self.holds_bytes.set(holds_bytes);
+        self.set_encoding_place(encoding_place(&encoding));
+        self.set_mark(HOLDS_BYTES, holds_bytes);
         self.forget_readings();
     }
 
@@ -368,7 +421,7 @@ impl StringValue {
     fn settle(&self) {
         self.forget_readings();
         if !self.reads_bytes() && std::str::from_utf8(&self.bytes.borrow()).is_err() {
-            self.holds_bytes.set(true);
+            self.set_mark(HOLDS_BYTES, true);
         }
     }
 
@@ -507,12 +560,12 @@ impl StringValue {
 
     /// Whether something else is reading the string and refuses a change.
     pub fn is_borrowed(&self) -> bool {
-        self.borrowed.get()
+        self.has_mark(BORROWED)
     }
 
     /// Say that something else is reading the string, or that it is done.
     pub fn set_borrowed(&self, borrowed: bool) {
-        self.borrowed.set(borrowed);
+        self.set_mark(BORROWED, borrowed);
     }
 
     /// Give the string notice that it will be frozen in a later release, so
@@ -539,10 +592,10 @@ impl StringValue {
 
     /// The notice a change to this string prints, taken so it prints once.
     pub fn take_chill(&self) -> Option<String> {
-        self.notes
-            .borrow_mut()
-            .as_deref_mut()
-            .and_then(|notes| notes.chilled.take())
+        let mut notes = self.notes.take();
+        let chilled = notes.as_deref_mut().and_then(|notes| notes.chilled.take());
+        self.notes.set(notes);
+        chilled
     }
 
     /// Record where the literal that made this string was written.
@@ -558,39 +611,42 @@ impl StringValue {
 
     /// Whether the string is one of the interned copies `String#-@` answers.
     pub fn is_deduplicated(&self) -> bool {
-        self.deduplicated.get()
+        self.has_mark(DEDUPLICATED)
     }
 
     /// Say the string is one of the interned copies.
     pub fn mark_deduplicated(&self) {
-        self.deduplicated.set(true);
-        self.frozen.set(true);
+        self.set_mark(DEDUPLICATED | FROZEN, true);
     }
 
     /// Whether the string refuses to change.
     pub fn is_frozen(&self) -> bool {
-        self.frozen.get()
+        self.has_mark(FROZEN)
     }
 
     /// Refuse every change from here on. Every reference to the same string
     /// sees it, which is what Ruby's `freeze` does.
     pub fn freeze(&self) {
-        self.frozen.set(true);
+        self.set_mark(FROZEN, true);
     }
 
     /// Let the string change again, which C does by clearing the FREEZE
     /// flag in its `RBasic`.
     pub fn thaw(&self) {
-        self.frozen.set(false);
+        self.set_mark(FROZEN, false);
     }
 
     /// The id this string answers. The first ask takes the next one from the
     /// counter handed in, and every ask after answers the same.
     pub fn object_id(&self, next: impl FnOnce() -> u64) -> u64 {
-        if self.object_id.get() == 0 {
-            self.object_id.set(next());
+        match self.noted(|notes| notes.object_id) {
+            Some(id) if id != 0 => id,
+            _ => {
+                let id = next();
+                self.note(|notes| notes.object_id = id);
+                id
+            }
         }
-        self.object_id.get()
     }
 }
 
@@ -600,13 +656,16 @@ impl Clone for StringValue {
     fn clone(&self) -> Self {
         let copy = Self::built(
             self.bytes.borrow().clone(),
-            self.encoding.get().to_string(),
-            self.holds_bytes.get(),
+            self.encoding.get(),
+            self.has_mark(HOLDS_BYTES),
         );
-        if let Some(notes) = self.notes.borrow().as_deref() {
+        if let Some((pointer, created_at)) =
+            self.noted(|notes| (notes.pointer, notes.created_at.clone()))
+            && (pointer != 0 || created_at.is_some())
+        {
             copy.note(|copied| {
-                copied.pointer = notes.pointer;
-                copied.created_at = notes.created_at.clone();
+                copied.pointer = pointer;
+                copied.created_at = created_at;
             });
         }
         copy.ascii.set(self.ascii.get());

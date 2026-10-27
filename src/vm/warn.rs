@@ -300,9 +300,9 @@ impl VirtualMachine {
         };
         let mut arguments = vec![Object::string(text.clone())];
         if warning_warn_takes_keywords(&warning) {
-            let mut keywords = indexmap::IndexMap::new();
-            keywords.insert("__MX_KWARGS__".to_string(), Object::Bool(true));
-            keywords.insert(":category".to_string(), category);
+            let mut keywords: crate::object::HashEntries = Default::default();
+            keywords.insert("__MX_KWARGS__".into(), Object::Bool(true));
+            keywords.insert(":category".into(), category);
             arguments.push(Object::Dict(Rc::new(RefCell::new(keywords))));
         }
         self.send_to_object(warning, "warn", arguments, position)
@@ -373,7 +373,7 @@ fn keyword_value(keywords: &Option<Object>, name: &str) -> Option<Object> {
     let Some(View::Dict(entries)) = keywords.view() else {
         return None;
     };
-    entries.borrow().get(&format!(":{}", name)).cloned()
+    entries.borrow().get(format!(":{}", name).as_str()).cloned()
 }
 
 /// An Array argument warns with each element on its own line.

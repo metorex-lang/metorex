@@ -13,6 +13,17 @@ mod token_stream;
 
 use crate::ast::Statement;
 
+/// Copy `list` into a block of its own length. `shrink_to_fit` asks
+/// `realloc` for less, and macOS keeps a block where it is when asked for a
+/// smaller one, at more than the size asked for.
+pub(crate) fn tighten<T>(list: &mut Vec<T>) {
+    if list.capacity() > list.len() {
+        let mut exact = Vec::with_capacity(list.len());
+        exact.append(list);
+        *list = exact;
+    }
+}
+
 /// Push `item`, growing `list` by half its length when it is full. A `Vec`
 /// of elements this size starts with room for four, and most bodies hold
 /// one statement.

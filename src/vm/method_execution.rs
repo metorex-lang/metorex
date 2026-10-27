@@ -12,7 +12,6 @@ use crate::error::{MetorexError, StackFrame};
 use crate::lexer::Position;
 use crate::object::{Method, Object};
 use crate::object::{OptionView, View};
-use indexmap::IndexMap;
 use std::rc::Rc;
 
 use super::param_binding::{bind_params, positional_arg_count_for, split_keyword_args};
@@ -872,7 +871,7 @@ impl VirtualMachine {
                         continue;
                     }
                     self.environment_mut()
-                        .define_shared(name.clone(), value_ref.clone());
+                        .define_shared(name.to_string(), value_ref.clone());
                 }
             }
 
@@ -1162,7 +1161,7 @@ impl VirtualMachine {
         &mut self,
         keyword_parameters: &[(String, Option<Expression>)],
         keyword_rest_parameter: Option<&str>,
-        kwargs: IndexMap<String, Object>,
+        kwargs: crate::object::HashEntries,
     ) -> Result<(), MetorexError> {
         // A default that assigns a local, as `default: (unset = true)` does,
         // names that local for the whole body whether or not the default is
@@ -1185,7 +1184,9 @@ impl VirtualMachine {
         // message rather than one message for the first.
         let missing: Vec<&String> = keyword_parameters
             .iter()
-            .filter(|(name, default_expr)| default_expr.is_none() && !kwargs.contains_key(name))
+            .filter(|(name, default_expr)| {
+                default_expr.is_none() && !kwargs.contains_key(name.as_str())
+            })
             .map(|(name, _)| name)
             .collect();
         if !missing.is_empty() {
@@ -1206,7 +1207,7 @@ impl VirtualMachine {
             ));
         }
         for (name, default_expr) in keyword_parameters {
-            let value = if let Some(v) = kwargs.get(name) {
+            let value = if let Some(v) = kwargs.get(name.as_str()) {
                 v.clone()
             } else if let Some(expr) = default_expr {
                 self.evaluate_expression(expr)?
@@ -1227,14 +1228,14 @@ impl VirtualMachine {
                 .iter()
                 .map(|(name, _)| name.as_str())
                 .collect();
-            let rest: IndexMap<String, Object> = kwargs
+            let rest: crate::object::HashEntries = kwargs
                 .iter()
                 .filter(|(name, _)| !declared.contains(name.as_str()))
                 .map(|(name, value)| {
                     let key = match name.strip_prefix(crate::vm::param_binding::NON_SYMBOL_KEY_MARK)
                     {
-                        Some(key) => key.to_string(),
-                        None => format!(":{}", name),
+                        Some(key) => key.into(),
+                        None => format!(":{}", name).into(),
                     };
                     (key, value.clone())
                 })
@@ -1265,7 +1266,7 @@ fn native_answer_follows_class(
     let instance = instance.borrow();
     std::rc::Rc::ptr_eq(&instance.class, class)
         && !instance.has_singleton_methods()
-        && instance.singleton_class.borrow().is_none()
+        && !instance.has_singleton_class()
         && !class.is_singleton_class()
         && class.superclass.as_ref().is_some_and(|parent| {
             parent.name() == "Object"
@@ -1292,7 +1293,7 @@ pub(crate) fn written_by_the_program(method: &std::rc::Rc<crate::object::Method>
 /// any is refused.
 fn refuse_keywords_for_none_declared(
     keyword_rest_parameter: Option<&str>,
-    kwargs: &IndexMap<String, Object>,
+    kwargs: &crate::object::HashEntries,
 ) -> Result<(), MetorexError> {
     if keyword_rest_parameter == Some(crate::object::NO_KEYWORDS_PARAM) && !kwargs.is_empty() {
         return Err(crate::vm::errors::simple_exception(

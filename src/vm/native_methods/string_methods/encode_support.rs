@@ -45,7 +45,10 @@ pub(crate) fn encode_options(arguments: &[Object]) -> (&[Object], EncodeOptions)
         .filter(|named| !matches!(named.view(), View::Nil))
         .cloned();
     for flag in ["universal_newline", "crlf_newline", "cr_newline"] {
-        if held.get(&format!(":{flag}")).is_some_and(Object::is_truthy) {
+        if held
+            .get(format!(":{flag}").as_str())
+            .is_some_and(Object::is_truthy)
+        {
             options.newline_flags.push(flag);
         }
     }
@@ -153,7 +156,7 @@ pub(crate) fn set_exception_attribute(error: &MetorexError, name: &str, value: O
         details
             .borrow_mut()
             .instance_vars
-            .insert(name.to_string(), value);
+            .insert(name.to_string().into(), value);
     }
 }
 

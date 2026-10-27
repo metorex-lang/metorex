@@ -6,7 +6,6 @@ use crate::class::Class;
 use crate::error::MetorexError;
 use crate::lexer::Position;
 use crate::vm::VirtualMachine;
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use super::Object;
@@ -43,9 +42,49 @@ fn no_places() -> CodePlaces {
     NO_PLACES.with(Rc::clone)
 }
 
-/// Block/lambda/closure with captured variables
+/// Block/lambda/closure with captured variables. What it shares with the
+/// other blocks its literal made in the same place is read through it from
+/// its `BlockOrigin`, which a change copies first when another block holds
+/// it too.
 #[derive(Debug, Clone)]
 pub struct BlockStatement {
+    origin: Rc<BlockOrigin>,
+    /// Captured variables from outer scope (shared mutable references),
+    /// shared by every call of the block rather than copied into each.
+    pub captured_vars: crate::scope::CapturedNames,
+    /// The locals listed where the block was written, in the order listed
+    /// there, including the ones assigned after the block, which
+    /// `local_variables` in the block lists though the block cannot read them.
+    pub reserved_names: Rc<Vec<String>>,
+    /// True for `-> {}` and `lambda {}`, false for `proc {}` and every
+    /// ordinary block. Lambdas check arity strictly; procs pad missing
+    /// arguments with nil and drop extras.
+    pub is_lambda: bool,
+    /// The method invocation this block was written inside. A `return` in the
+    /// body unwinds to that invocation, however many other methods the block
+    /// travels through first. None for a block created outside any method.
+    pub home_frame: Option<u64>,
+    /// What every copy of the block shares and any of them changes.
+    pub flags: Rc<BlockFlags>,
+}
+
+/// The state every copy of a block shares, so a change made through one
+/// copy reaches a `dup` of it.
+#[derive(Debug)]
+pub struct BlockFlags {
+    /// Whether the call the block was attached to is still running. A
+    /// `break` returns from that call, so once it has returned a `break`
+    /// raises LocalJumpError.
+    pub attached_call_running: std::cell::Cell<bool>,
+    /// Whether `ruby2_keywords` was called on the Proc this block stands for,
+    /// so a trailing keyword hash gathered into its splat is marked.
+    pub ruby2_keywords: std::cell::Cell<bool>,
+}
+
+/// What a block was written as and where it was made, which the blocks a
+/// literal makes in the same place share.
+#[derive(Debug, Clone)]
+pub struct BlockOrigin {
     /// Parameter names
     pub parameters: Vec<String>,
     /// The locals of the scope the block was written in that its body names.
@@ -55,13 +94,6 @@ pub struct BlockStatement {
     pub parameter_defaults: Vec<(usize, crate::ast::Expression)>,
     /// Block body (AST statements), shared by every block a literal makes.
     pub body: crate::ast::Body,
-    /// Captured variables from outer scope (shared mutable references),
-    /// shared by every call of the block rather than copied into each.
-    pub captured_vars: Rc<indexmap::IndexMap<String, Rc<RefCell<Object>>>>,
-    /// The locals listed where the block was written, in the order listed
-    /// there, including the ones assigned after the block, which
-    /// `local_variables` in the block lists though the block cannot read them.
-    pub reserved_names: Rc<Vec<String>>,
     /// Lexical class/module nesting at the moment the block was defined.
     /// Restored during invocation so a bare `Foo = 1` inside the body lands
     /// on the same enclosing module that an unbroken straight-line statement
@@ -88,17 +120,9 @@ pub struct BlockStatement {
     /// The class or module the enclosing method was defined on, which is
     /// where a `super` in the block starts from.
     pub defining_class: Option<Rc<Class>>,
-    /// True for `-> {}` and `lambda {}`, false for `proc {}` and every
-    /// ordinary block. Lambdas check arity strictly; procs pad missing
-    /// arguments with nil and drop extras.
-    pub is_lambda: bool,
     /// The file the block was written in, which a backtrace entry for a call
     /// made from its body has to name.
     pub source_file: Option<Rc<str>>,
-    /// The method invocation this block was written inside. A `return` in the
-    /// body unwinds to that invocation, however many other methods the block
-    /// travels through first. None for a block created outside any method.
-    pub home_frame: Option<u64>,
     /// The line the block was opened on, which is where `source_location`
     /// says it was written even when its body starts further down.
     pub opened_at: Option<usize>,
@@ -119,16 +143,22 @@ pub struct BlockStatement {
     /// trace aimed at a method or a block fires for the blocks written
     /// inside it by finding the target among these.
     pub written_within: CodePlaces,
-    /// Whether the call the block was attached to is still running. A
-    /// `break` returns from that call, so once it has returned a `break`
-    /// raises LocalJumpError. Shared by every copy of the block.
-    pub attached_call_running: Rc<std::cell::Cell<bool>>,
-    /// Whether `ruby2_keywords` was called on the Proc this block stands for,
-    /// so a trailing keyword hash gathered into its splat is marked. The flag
-    /// is shared with every copy, which is what makes it reach a `dup`.
-    pub ruby2_keywords: Rc<std::cell::Cell<bool>>,
     /// What the body compiled to, once it has run on the bytecode engine.
     pub unit: crate::vm::units::UnitSlot,
+}
+
+impl std::ops::Deref for BlockStatement {
+    type Target = BlockOrigin;
+
+    fn deref(&self) -> &BlockOrigin {
+        &self.origin
+    }
+}
+
+impl std::ops::DerefMut for BlockStatement {
+    fn deref_mut(&mut self) -> &mut BlockOrigin {
+        Rc::make_mut(&mut self.origin)
+    }
 }
 
 /// Two blocks are the same when they were written the same way. The captured
@@ -144,40 +174,60 @@ impl PartialEq for BlockStatement {
     }
 }
 
+impl BlockOrigin {
+    /// The places of a block written nowhere in the program.
+    pub fn no_places() -> CodePlaces {
+        no_places()
+    }
+
+    /// An origin naming no place, for a block no literal made.
+    pub fn unplaced(
+        parameters: Vec<String>,
+        parameter_defaults: Vec<(usize, crate::ast::Expression)>,
+        body: crate::ast::Body,
+        captured_def_scope: Vec<Rc<Class>>,
+        defining_method: Option<(Rc<str>, Rc<str>)>,
+    ) -> Self {
+        Self {
+            parameters,
+            outer_locals: no_outer_locals(),
+            parameter_defaults,
+            body,
+            captured_def_scope,
+            captured_constant_home: None,
+            class_var_home: None,
+            captured_nesting: crate::object::no_nesting(),
+            defining_method,
+            defining_owner: None,
+            defining_class: None,
+            source_file: None,
+            opened_at: None,
+            opened_column: None,
+            from_symbol: None,
+            written_in: None,
+            written_depth: None,
+            written_within: no_places(),
+            unit: Default::default(),
+        }
+    }
+}
+
 impl BlockStatement {
     /// Create a new block closure
     pub fn new(
         parameters: Vec<String>,
         body: Vec<Statement>,
-        captured_vars: indexmap::IndexMap<String, Rc<RefCell<Object>>>,
+        captured_vars: crate::scope::Captures,
     ) -> Self {
-        Self {
+        Self::with_def_scope(
             parameters,
-            parameter_defaults: Vec::new(),
-            body: body.into(),
-            captured_vars: Rc::new(captured_vars),
-            reserved_names: no_names(),
-            captured_def_scope: Vec::new(),
-            captured_constant_home: None,
-            class_var_home: None,
-            captured_nesting: crate::object::no_nesting(),
-            defining_method: None,
-            defining_owner: None,
-            defining_class: None,
-            is_lambda: false,
-            source_file: None,
-            home_frame: None,
-            opened_at: None,
-            opened_column: None,
-            outer_locals: no_outer_locals(),
-            from_symbol: None,
-            written_in: None,
-            written_depth: None,
-            written_within: no_places(),
-            ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
-            attached_call_running: Rc::new(std::cell::Cell::new(true)),
-            unit: Default::default(),
-        }
+            Vec::new(),
+            body.into(),
+            captured_vars,
+            Vec::new(),
+            None,
+            false,
+        )
     }
 
     /// Create a new block closure with a captured lexical scope. Used by
@@ -187,42 +237,42 @@ impl BlockStatement {
         parameters: Vec<String>,
         parameter_defaults: Vec<(usize, crate::ast::Expression)>,
         body: crate::ast::Body,
-        captured_vars: indexmap::IndexMap<String, Rc<RefCell<Object>>>,
+        captured_vars: crate::scope::Captures,
         captured_def_scope: Vec<Rc<Class>>,
         defining_method: Option<(Rc<str>, Rc<str>)>,
         is_lambda: bool,
     ) -> Self {
-        Self {
+        let origin = BlockOrigin::unplaced(
             parameters,
             parameter_defaults,
             body,
-            captured_vars: Rc::new(captured_vars),
-            reserved_names: no_names(),
             captured_def_scope,
-            captured_constant_home: None,
-            class_var_home: None,
-            captured_nesting: crate::object::no_nesting(),
             defining_method,
-            defining_owner: None,
-            defining_class: None,
+        );
+        Self::from_origin(Rc::new(origin), Rc::new(captured_vars), is_lambda)
+    }
+
+    /// A block made from `origin`, closing over `captured_vars`.
+    pub fn from_origin(
+        origin: Rc<BlockOrigin>,
+        captured_vars: crate::scope::CapturedNames,
+        is_lambda: bool,
+    ) -> Self {
+        Self {
+            origin,
+            captured_vars,
+            reserved_names: no_names(),
             is_lambda,
-            source_file: None,
             home_frame: None,
-            opened_at: None,
-            opened_column: None,
-            outer_locals: no_outer_locals(),
-            from_symbol: None,
-            written_in: None,
-            written_depth: None,
-            written_within: no_places(),
-            ruby2_keywords: Rc::new(std::cell::Cell::new(false)),
-            attached_call_running: Rc::new(std::cell::Cell::new(true)),
-            unit: Default::default(),
+            flags: Rc::new(BlockFlags {
+                attached_call_running: std::cell::Cell::new(true),
+                ruby2_keywords: std::cell::Cell::new(false),
+            }),
         }
     }
 
     /// Get the captured variables
-    pub fn captured_vars(&self) -> &indexmap::IndexMap<String, Rc<RefCell<Object>>> {
+    pub fn captured_vars(&self) -> &crate::scope::Captures {
         &self.captured_vars
     }
 

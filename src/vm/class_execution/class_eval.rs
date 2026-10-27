@@ -120,7 +120,7 @@ impl VirtualMachine {
             });
             if self.environment().get(name).is_none() || held_only_globally {
                 self.environment_mut()
-                    .define_shared(name.clone(), cell.clone());
+                    .define_shared(name.to_string(), cell.clone());
             }
         }
         // Bind the block's first parameter to the class/module, matching Ruby:

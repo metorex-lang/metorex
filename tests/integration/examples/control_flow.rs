@@ -22,6 +22,12 @@ fn test_control_flow_case_array_destructure_execution() {
 }
 
 #[test]
+fn an_array_pattern_ending_in_a_bare_rest_matches_longer_arrays_in_a_method() {
+    let output = run_example("control_flow/array_pattern_rest_in_a_method.rb");
+    assert_eq!(output, "1\n3\n[4, 5]\n:none\n");
+}
+
+#[test]
 fn test_control_flow_case_object_destructure_execution() {
     let expected = "Point at (10, 20)\nName: Alice, Age: 30\nAlice is 30 years old\n";
     let output = run_example("control_flow/case_object_destructure.rb");
