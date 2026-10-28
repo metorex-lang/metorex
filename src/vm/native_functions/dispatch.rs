@@ -178,9 +178,9 @@ impl VirtualMachine {
             "__math_function__" => self.apply_math_function(&arguments, position),
             // The binary running this program, which is what `RbConfig.ruby`
             // names for starting another one.
-            "__interpreter_path__" => Ok(match std::env::current_exe() {
-                Ok(path) => Object::string(path.display().to_string()),
-                Err(_) => Object::Nil,
+            "__interpreter_path__" => Ok(match crate::interpreter_path::interpreter_path() {
+                Some(path) => Object::string(path.display().to_string()),
+                None => Object::Nil,
             }),
             // Where the headers a C extension is compiled against live.
             "__header_directory__" => Ok(Object::string(crate::vm::capi::HEADER_DIRECTORY)),

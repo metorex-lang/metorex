@@ -4,6 +4,9 @@
 
 module RbConfig
   major, minor, teeny = RUBY_VERSION.split "."
+  # The name the binary was started through, so one linked in as `ruby`
+  # starts others as `ruby`.
+  install_name = File.basename(__interpreter_path__() || "metorex")
   cpu, os = RUBY_PLATFORM.split "-", 2
 
   CONFIG = {
@@ -13,9 +16,9 @@ module RbConfig
     "PATCHLEVEL" => RUBY_PATCHLEVEL.to_s,
     "ruby_version" => "#{major}.#{minor}.0",
     "RUBY_PROGRAM_VERSION" => RUBY_VERSION.dup,
-    "RUBY_INSTALL_NAME" => "metorex",
+    "RUBY_INSTALL_NAME" => install_name,
     "RUBY_BASE_NAME" => "metorex",
-    "ruby_install_name" => "metorex",
+    "ruby_install_name" => install_name,
     "arch" => RUBY_PLATFORM.dup,
     "host" => RUBY_PLATFORM.dup,
     "host_cpu" => cpu,

@@ -10,6 +10,7 @@ pub mod environment;
 pub mod error;
 pub mod fast_hash;
 pub mod file_loader;
+pub mod interpreter_path;
 pub mod lexer;
 pub mod memory_category;
 pub mod object;

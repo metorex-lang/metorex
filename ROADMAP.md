@@ -139,8 +139,8 @@ Rex runs RSpec 3.13.6's own specs with `scripts/run_rspec_suite.sh`. Parity is t
   - Acceptance: the file lists every spec file the script runs, and the README's table is built from it
 - [x] rspec-expectations: every file's counts match MRI's (2438 pass under Metorex and under MRI, of 2455)
 - [x] rspec-mocks: every file's counts match MRI's (1794 pass under Metorex and under MRI, of 1806)
-- [ ] rspec-core: every file's counts match MRI's (2238 pass under Metorex and 2239 under MRI, of 2258). The one example left is in `bisect/shell_command_spec.rb`, which expects the interpreter's path to contain `ruby`
-- [ ] CI fails when any file's counts differ from MRI's
+- [x] rspec-core: every file's counts match MRI's (2239 pass under Metorex and under MRI, of 2258)
+- [x] CI fails when any file's counts differ from MRI's
 - [ ] shoulda-matchers carried in the binary, as RSpec's libraries are: `require "shoulda-matchers"` loads it with no gems installed, and `Shoulda::Matchers.configure` wires it into Rex. Its ActiveModel, ActiveRecord, and ActionController matchers need the Rails item under Popular gems first
   - Acceptance: a fixture under `tests/_examples/rex` that uses its independent matchers (`delegate_method`) prints what RSpec with shoulda-matchers prints under MRI 4.0.7, and shoulda-matchers' own suite's counts match MRI's file by file
 

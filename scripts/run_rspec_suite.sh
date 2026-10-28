@@ -22,7 +22,8 @@
 # its four libraries on the load path, in place of Rex. With RECORD=1 the
 # counts each file reached are stored as that engine's in
 # scripts/rspec_suite_results.tsv. A Metorex run then lists the files whose
-# counts differ from MRI's there.
+# counts differ from MRI's there, and with CHECK=1 it fails when there are
+# any.
 #
 # Needs MRI, and the gems the suites load, which
 # scripts/install_rspec_suite_gems.sh installs.
@@ -114,6 +115,11 @@ HELPERS_DIR="$WORK_DIR/support_spec_helpers/lib"
 mkdir -p "$HELPERS_DIR/rspec/support"
 cp -R "$RSPEC_SOURCE/rspec-support/lib/rspec/support/spec" \
   "$RSPEC_SOURCE/rspec-support/lib/rspec/support/spec.rb" "$HELPERS_DIR/rspec/support/"
+# Metorex starts through a link named `ruby`, as an installed one would, since
+# rspec-core's bisect specs expect the interpreter's path to contain `ruby`.
+mkdir -p "$WORK_DIR/bin"
+ln -s "$(cd "$(dirname "$METOREX")" && pwd -P)/$(basename "$METOREX")" "$WORK_DIR/bin/ruby"
+METOREX="$WORK_DIR/bin/ruby"
 
 TOTAL_FILES=0
 TOTAL_EXAMPLES=0
@@ -409,9 +415,12 @@ fi
 if [ -n "${RECORD:-}" ]; then
   ruby "$REPO_ROOT/scripts/suite_results.rb" record "$ENGINE" "$RESULTS"
 fi
+checked=0
 if [ "$ENGINE" = "metorex" ]; then
   echo "Files whose counts differ from MRI's:"
-  ruby "$REPO_ROOT/scripts/suite_results.rb" differences "$RESULTS" || true
+  if ! ruby "$REPO_ROOT/scripts/suite_results.rb" differences "$RESULTS" && [ -n "${CHECK:-}" ]; then
+    checked=1
+  fi
 fi
 
 while IFS=$'\t' read -r path summary; do
@@ -435,3 +444,4 @@ while IFS=$'\t' read -r path summary; do
     printf '%s: %s\n' "$path" "$summary"
   fi
 done < <(sort "$RESULTS")
+exit "$checked"

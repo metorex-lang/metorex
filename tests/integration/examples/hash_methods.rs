@@ -209,3 +209,12 @@ fn an_identity_hash_finds_a_binary_string_by_the_object() {
     let output = run_example("hash_methods/identity_lookups_of_binary_strings.rb");
     assert_eq!(output, "true\nfalse\nnil\nstored\n1\n");
 }
+
+#[test]
+fn keys_merged_into_or_out_of_an_identity_hash_are_found() {
+    let output = run_example("hash_methods/merging_into_an_identity_hash.rb");
+    assert_eq!(
+        output,
+        "\"constant\"\ntrue\n\"keyword\"\n\"constant again\"\n3\ntrue\n\"comment\"\n\"constant again\"\n4\n"
+    );
+}

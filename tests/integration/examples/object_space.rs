@@ -143,6 +143,12 @@ fn an_object_with_a_singleton_class_is_collected_once_nothing_holds_it() {
 }
 
 #[test]
+fn freeing_a_method_object_leaves_the_variables_its_method_closes_over() {
+    let output = run_example("object_space/methods_sharing_a_blocks_variables.rb");
+    assert_eq!(output, "\"kept name\"\n");
+}
+
+#[test]
 fn a_weak_key_map_asks_only_the_key_looked_up_for_its_hash() {
     let output = run_example("object_space/weak_key_map_lookups.rb");
     assert_eq!(output, "300\n1\ntrue\n14\nfalse\n6\nfalse\n");

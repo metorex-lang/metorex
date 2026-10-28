@@ -691,3 +691,61 @@ fn id2ref_warns_where_it_was_called_when_deprecation_warnings_are_on() {
         "-e:1: warning: ObjectSpace._id2ref is deprecated\n"
     );
 }
+
+// ============================================================================
+// The name the binary was started through
+// ============================================================================
+
+/// A directory of its own under the temporary directory holding a link named
+/// `ruby` to the binary.
+fn linked_as_ruby(directory_name: &str) -> std::path::PathBuf {
+    let directory = std::env::temp_dir().join(format!("{directory_name}_{}", std::process::id()));
+    std::fs::create_dir_all(&directory).expect("the temporary directory is writable");
+    let link = directory.join("ruby");
+    if std::fs::symlink_metadata(&link).is_err() {
+        std::os::unix::fs::symlink(env!("CARGO_BIN_EXE_metorex"), &link).expect("the link is made");
+    }
+    directory
+}
+
+const PRINTS_THE_INSTALL_NAME_AND_PATH: &str =
+    "require 'rbconfig'\n$0 = 'renamed'\nputs RbConfig::CONFIG['ruby_install_name'], RbConfig.ruby";
+
+#[test]
+fn cli_a_binary_started_through_a_link_named_ruby_names_itself_ruby() {
+    let directory = linked_as_ruby("metorex_linked_by_path");
+    let output = Command::new(directory.join("ruby"))
+        .args(["-e", PRINTS_THE_INSTALL_NAME_AND_PATH])
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        format!("ruby\n{}\n", directory.join("ruby").display())
+    );
+}
+
+#[test]
+fn cli_a_binary_started_by_a_bare_name_on_the_path_names_the_file_found_there() {
+    let directory = linked_as_ruby("metorex_linked_on_path");
+    let output = Command::new("ruby")
+        .env("PATH", &directory)
+        .args(["-e", PRINTS_THE_INSTALL_NAME_AND_PATH])
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        format!("ruby\n{}\n", directory.join("ruby").display())
+    );
+}
+
+#[test]
+fn cli_a_binary_started_by_its_own_name_names_itself_metorex() {
+    let output = metorex_cmd()
+        .args(["-e", "require 'rbconfig'\nputs RbConfig::CONFIG['ruby_install_name']"])
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8(output.stdout).unwrap(), "metorex\n");
+}

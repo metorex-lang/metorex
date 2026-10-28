@@ -253,11 +253,13 @@ pipeline {
         }
       }
       // The suites run on the `suites` build, which runs them about ten
-      // times as fast as a debug build does.
+      // times as fast as a debug build does. A spec file whose counts
+      // differ from MRI's in scripts/rspec_suite_results.tsv fails the stage.
       environment {
         CARGO_TARGET_DIR = '/cache/target-rspec'
         METOREX = '/cache/target-rspec/suites/metorex'
         JOBS = '8'
+        CHECK = '1'
       }
       steps {
         catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {

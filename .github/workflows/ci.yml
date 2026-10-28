@@ -127,8 +127,10 @@ jobs:
       - name: Install the gems the RSpec suites load
         run: scripts/install_rspec_suite_gems.sh
 
-      - name: Compare the RSpec suites with fast paths on and off
+      - name: Compare the RSpec suites with fast paths on and off, and with MRI's counts
         run: scripts/compare_fast_paths.sh
+        env:
+          CHECK: "1"
 
   coverage:
     name: Code Coverage

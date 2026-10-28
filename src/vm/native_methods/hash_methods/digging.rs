@@ -139,10 +139,26 @@ impl VirtualMachine {
                         .iter()
                         .map(|(key, value)| (key.clone(), value.clone()))
                         .collect();
+                    // A key the other hash placed by a rule the receiver does
+                    // not use is placed again by the receiver's.
+                    let by_identity = merged.contains_key(BY_IDENTITY_KEY);
+                    let placed_alike =
+                        by_identity == other_rc.borrow().contains_key(BY_IDENTITY_KEY);
                     for (key, value) in incoming {
                         if is_internal_key(&key) {
                             continue;
                         }
+                        let key = if placed_alike {
+                            key
+                        } else {
+                            let key_object = reconstruct_key(&other_rc.borrow(), &key);
+                            let slot =
+                                self.dict_slot_in(&merged, &key_object, by_identity, position)?;
+                            if !merged.contains_key(slot.as_str()) {
+                                remember_key_object(&mut merged, &slot, &key_object);
+                            }
+                            slot
+                        };
                         let settled = match (&block, merged.get(key.as_str()).cloned()) {
                             (Some(block), Some(existing)) => {
                                 let key_object = reconstruct_key(&merged, &key);
@@ -161,8 +177,9 @@ impl VirtualMachine {
                     if other_rc.borrow().contains_key(RENDERED_OBJECTS_KEY) {
                         merged.insert(RENDERED_OBJECTS_KEY.into(), Object::Bool(true));
                     }
-                    if let Some(View::Dict(other_keys)) =
-                        other_rc.borrow().get(KEY_OBJECTS_KEY).view()
+                    if placed_alike
+                        && let Some(View::Dict(other_keys)) =
+                            other_rc.borrow().get(KEY_OBJECTS_KEY).view()
                     {
                         let mut ours = match merged.get(KEY_OBJECTS_KEY).view() {
                             Some(View::Dict(existing)) => existing.borrow().clone(),

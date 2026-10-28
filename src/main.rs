@@ -14,6 +14,7 @@ const PROGRAM_STACK_BYTES: usize = 64 * 1024 * 1024;
 
 fn main() {
     metorex::standard_streams::close_the_ones_closed_at_start();
+    metorex::interpreter_path::interpreter_path();
     run_with_program_stack(real_main);
 }
 

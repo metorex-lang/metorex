@@ -8,7 +8,8 @@
 # in the middle of.
 # So is the `fast_paths: false` an inspected configuration shows in the second
 # run, and the backtrace lines in Rex's own files and the RSpec files Rex
-# carries are left out. Exits 1 when any file printed something different.
+# carries are left out. Exits 1 when any file printed something different,
+# and with CHECK=1 when either run has a file whose counts differ from MRI's.
 #
 #   scripts/compare_fast_paths.sh [SUITE...]
 #

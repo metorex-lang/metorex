@@ -163,7 +163,8 @@ zero. The specs under `core/gc` check what these methods answer and that
   which is when its `Rc` has no weak reference yet.
 - `src/object/collector.rs` runs trial deletion. The nodes it counts are the
   listed objects and the parts they share: the cell a pointer value points
-  at, which the value's copies share, the locals a block closes over, and
+  at, which the value's copies share, the locals a block closes over, which
+  the methods `define_method` makes from it share with it, and
   each local's cell. Each node reports the references it holds, one per
   reference.
 - A node borrowed for writing when the collector reads it is in use, so it

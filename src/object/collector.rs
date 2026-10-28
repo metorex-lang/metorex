@@ -198,7 +198,7 @@ impl Node {
                     value(boxed, found);
                 }
                 if let Some(captured) = &held.provenance.captured_vars {
-                    variables(captured.iter().map(|(_, cell)| cell), found);
+                    found.push(Node::Captured(captured.clone()));
                 }
             }
             Node::Binding(held) => {
