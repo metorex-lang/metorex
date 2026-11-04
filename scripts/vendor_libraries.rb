@@ -1,6 +1,6 @@
 # Copies the default gems MRI writes in Ruby that metorex carries unchanged,
-# erb, net-http, net-protocol, optparse, psych, uri, yaml, and openssl's
-# buffering.rb, into
+# erb, json, net-http, net-protocol, optparse, psych, uri, yaml, and
+# openssl's buffering.rb, into
 # src/vm/stdlib, where
 # `require` finds each file by feature name through the table in
 # src/vm/stdlib/mod.rs.
@@ -24,10 +24,12 @@ GEMS = {
   "yaml" => %w[yaml.rb yaml/*.rb]
 }.freeze
 
-# Psych and OpenSSL keep their Ruby halves beside their C extensions, whose
-# parts src/vm/stdlib/psych_native.rb and src/vm/stdlib/openssl.rb play.
+# Psych, OpenSSL, and json keep their Ruby halves beside their C extensions.
+# src/vm/stdlib/psych_native.rb and src/vm/stdlib/openssl.rb play the parts
+# of the first two, and json's is compiled into the binary from vendor/json.
 EXTENSION_GEMS = {
   "psych" => ["ext/psych/lib", %w[psych.rb psych/*.rb psych/**/*.rb]],
+  "json" => ["ext/json/lib", %w[json.rb json/*.rb json/**/*.rb]],
   "openssl" => ["ext/openssl/lib", %w[openssl/buffering.rb]]
 }.freeze
 

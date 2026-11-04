@@ -197,7 +197,10 @@ fn machine_code_writes_struct_members_into_their_slots_without_calling_the_write
     let (compiled, compiled_report) = run_example(script, &EVERY_UNIT);
     assert_eq!(interpreted, "[:north, 999]\n[]\nFrozenError\n");
     assert_eq!(compiled, interpreted);
-    assert_eq!(calls_counted(&interpreted_report, "Object#record", "#level="), 1001);
+    assert_eq!(
+        calls_counted(&interpreted_report, "Object#record", "#level="),
+        1001
+    );
     assert!(calls_counted(&compiled_report, "Object#record", "#level=") <= 2);
 }
 

@@ -94,6 +94,7 @@ impl Parser<'_> {
                 TokenKind::LogicalOrAssign,
                 TokenKind::LogicalAndAssign,
                 TokenKind::Question,
+                TokenKind::Colon,
                 TokenKind::Dot,
                 TokenKind::ColonColon,
                 TokenKind::DotDot,

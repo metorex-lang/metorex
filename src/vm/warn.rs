@@ -52,7 +52,7 @@ impl VirtualMachine {
             Some(View::Nil) | None => String::new(),
             Some(value) => {
                 let level = self.coerce_uplevel(&value.to_object(), position)?;
-                self.warning_prefix(level, position)
+                self.uplevel_prefix(level, position)
             }
         };
 
@@ -183,6 +183,50 @@ impl VirtualMachine {
             }
         }
         Ok(None)
+    }
+
+    /// The `path:line: warning: ` of `warn` with `uplevel: level`, counted
+    /// over the frames `caller` lists, the C methods running among them. A
+    /// level past the top of the stack leaves only the `warning: ` part.
+    fn uplevel_prefix(&mut self, level: i64, position: Position) -> String {
+        if level == 0 {
+            return self.warning_prefix(0, position);
+        }
+        let warn_frame_listed = self
+            .native_frames
+            .last()
+            .is_some_and(|native| &*native.name == "warn" && native.depth == self.call_stack.len());
+        let mut sites: Vec<(String, usize)> = self
+            .running_backtrace_sites(position)
+            .into_iter()
+            .skip(usize::from(warn_frame_listed))
+            .map(|((file, line, _), _)| (file, line))
+            .collect();
+        // A backtrace leaves out the prelude's frames, so a `warn` the
+        // prelude calls stands in for its own at the place it was called from.
+        if position.prelude
+            && let Some(called_from) = sites.first().cloned()
+        {
+            sites.insert(0, called_from);
+        }
+        // A frame in the core library's own source stands where the program
+        // called into it, as MRI reports it.
+        let mut outer: Option<(String, usize)> = None;
+        for site in sites.iter_mut().rev() {
+            if site.0.starts_with(crate::vm::INTERNAL_FILE_PREFIX) {
+                if let Some(called_from) = &outer {
+                    *site = called_from.clone();
+                }
+            } else {
+                outer = Some(site.clone());
+            }
+        }
+        match sites.get(level as usize) {
+            Some((file, line)) if !file.starts_with(crate::vm::INTERNAL_FILE_PREFIX) => {
+                format!("{file}:{line}: warning: ")
+            }
+            _ => "warning: ".to_string(),
+        }
     }
 
     /// The `path:line: warning: ` a message with `uplevel:` carries. Level 0

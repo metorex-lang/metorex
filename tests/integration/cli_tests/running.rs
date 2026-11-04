@@ -743,7 +743,10 @@ fn cli_a_binary_started_by_a_bare_name_on_the_path_names_the_file_found_there() 
 #[test]
 fn cli_a_binary_started_by_its_own_name_names_itself_metorex() {
     let output = metorex_cmd()
-        .args(["-e", "require 'rbconfig'\nputs RbConfig::CONFIG['ruby_install_name']"])
+        .args([
+            "-e",
+            "require 'rbconfig'\nputs RbConfig::CONFIG['ruby_install_name']",
+        ])
         .output()
         .expect("failed to execute");
     assert!(output.status.success());

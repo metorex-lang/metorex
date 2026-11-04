@@ -63,6 +63,8 @@ unsafe extern "C-unwind" {
     fn Init_nkf();
     fn Init_rbs_extension();
     fn Init_debug();
+    fn Init_parser();
+    fn Init_generator();
 }
 
 /// The C extensions build.rs compiles into the binary, by the feature name
@@ -71,6 +73,8 @@ const STATIC_EXTENSIONS: &[(&str, unsafe extern "C-unwind" fn())] = &[
     ("nkf", Init_nkf),
     ("rbs_extension", Init_rbs_extension),
     ("debug/debug", Init_debug),
+    ("json/ext/parser", Init_parser),
+    ("json/ext/generator", Init_generator),
 ];
 
 /// The `Init` function of a C extension compiled into the binary, for a

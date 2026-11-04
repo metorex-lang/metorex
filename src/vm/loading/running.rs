@@ -408,6 +408,17 @@ impl VirtualMachine {
         }
         Some(named)
     }
+
+    /// The encoding a literal whose escapes name bytes is written in. The
+    /// source's own, except that US-ASCII holds no byte past 0x7f, so a
+    /// literal escaping one in a US-ASCII source is BINARY.
+    pub(crate) fn escaped_literal_encoding(&self, only_ascii: bool) -> Option<String> {
+        let named = self.source_literal_encoding()?;
+        if named == "US-ASCII" && !only_ascii {
+            return Some("ASCII-8BIT".to_string());
+        }
+        Some(named)
+    }
 }
 
 /// The statements of a library metorex carries that the binary does not

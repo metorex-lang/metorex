@@ -49,6 +49,7 @@ fn main() {
     compile_nkf();
     compile_rbs();
     compile_debug();
+    compile_json();
     parse_carried_sources();
 }
 
@@ -220,6 +221,28 @@ fn compile_debug() {
             "-DHAVE_RB_ISEQ_PARAMETERS",
             "-DHAVE_RB_ISEQ_CODE_LOCATION",
             "-DHAVE_RB_ISEQ_TYPE",
+        ],
+    );
+}
+
+/// json's parser and generator, which `require "json/ext/parser"` and
+/// `require "json/ext/generator"` start with `Init_parser` and
+/// `Init_generator`. The functions its extconf.rb checks for are ones
+/// Metorex has.
+fn compile_json() {
+    compile_extension(
+        "json",
+        vec![
+            PathBuf::from("vendor/json/parser/parser.c"),
+            PathBuf::from("vendor/json/generator/generator.c"),
+        ],
+        &[],
+        &[
+            "-std=c99",
+            "-DHAVE_RB_ENC_INTERNED_STR",
+            "-DHAVE_RB_STR_TO_INTERNED_STR",
+            "-DHAVE_RB_HASH_NEW_CAPA",
+            "-DHAVE_RB_HASH_BULK_INSERT",
         ],
     );
 }

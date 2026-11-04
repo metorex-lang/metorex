@@ -119,6 +119,7 @@ pub(crate) fn unpin(value: Value) {
         pinned.by_identity.remove(&key);
         Some(released)
     });
+    super::strings::forget(value);
     drop(released);
 }
 
@@ -127,15 +128,21 @@ pub(crate) fn unpin(value: Value) {
 pub(crate) fn unpin_all_but(kept: &HashSet<Value>) -> usize {
     let released: Vec<Object> = PINNED.with(|pinned| {
         let mut pinned = pinned.borrow_mut();
+        // Extensions keep the classes and modules they define in C statics
+        // they do not register, as MRI never frees a class a constant names,
+        // so a class stays pinned once handed over.
         let unreached: Vec<Value> = pinned
             .by_value
-            .keys()
-            .filter(|value| !kept.contains(value))
-            .copied()
+            .iter()
+            .filter(|(value, object)| {
+                !kept.contains(value) && !matches!(object.view(), View::Class(_) | View::Module(_))
+            })
+            .map(|(value, _)| *value)
             .collect();
         unreached
             .into_iter()
             .filter_map(|value| {
+                super::strings::forget(value);
                 let released = pinned.by_value.remove(&value)?;
                 let key = identity(&released);
                 pinned.by_identity.remove(&key);

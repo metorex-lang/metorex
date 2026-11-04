@@ -189,9 +189,10 @@ pub(crate) fn enter<T>(
     let outer_keywords = KEYWORDS_GIVEN.with(|held| held.replace(caller.keywords_given));
     let outer_method = RUNNING_METHOD.with(|held| held.replace(caller.method));
     C_FRAMES.with(|frames| frames.set(frames.get() + 1));
+    strings::enter_frame();
     let answered = std::panic::catch_unwind(std::panic::AssertUnwindSafe(call));
     C_FRAMES.with(|frames| frames.set(frames.get() - 1));
-    strings::carry_writes_back();
+    strings::leave_frame();
     arrays::carry_element_writes_back();
     flags::carry_flag_writes_back();
     CALLED_WITH_BLOCK.with(|held| held.replace(outer_block));

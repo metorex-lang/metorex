@@ -1,4 +1,4 @@
-// Written by scripts/vendor_gems.rb from csv 3.3.5, debug 1.11.1, drb 2.2.3, irb 1.16.0, minitest 6.0.0, mutex_m 0.3.0, net-imap 0.6.4.1, net-pop 0.1.2, net-smtp 0.5.1, nkf 0.2.0, power_assert 3.0.1, racc 1.8.1, rake 13.3.1, rbs 3.10.0, rdoc 7.0.4, readline 0.0.4, reline 0.6.3, repl_type_completor 0.1.12, resolv-replace 0.1.1, rexml 3.4.4, rinda 0.2.0, rss 0.3.2, test-unit 3.7.5, typeprof 0.31.1 as Ruby 4.0.7 ships them.
+// Written by scripts/vendor_gems.rb from csv 3.3.5, debug 1.11.1, drb 2.2.3, irb 1.16.0, minitest 6.0.0, mutex_m 0.3.0, net-imap 0.6.4.1, net-pop 0.1.2, net-smtp 0.5.1, nkf 0.2.0, ostruct 0.6.3, power_assert 3.0.1, racc 1.8.1, rake 13.3.1, rbs 3.10.0, rdoc 7.0.4, readline 0.0.4, reline 0.6.3, repl_type_completor 0.1.12, resolv-replace 0.1.1, rexml 3.4.4, rinda 0.2.0, rss 0.3.2, test-unit 3.7.5, typeprof 0.31.1 as Ruby 4.0.7 ships them.
 
 /// The files of the bundled gems metorex carries, by the feature name each
 /// is required as, with the directory of the gem each belongs to.
@@ -970,6 +970,11 @@ pub(crate) const GEM_LIBRARIES: &[(&str, &str, &str)] = &[
     ),
     ("kconv", "nkf-0.2.0", carried_source!("gems/nkf/kconv.rb")),
     ("nkf", "nkf-0.2.0", carried_source!("gems/nkf/nkf.rb")),
+    (
+        "ostruct",
+        "ostruct-0.6.3",
+        carried_source!("gems/ostruct/ostruct.rb"),
+    ),
     (
         "power_assert",
         "power_assert-3.0.1",

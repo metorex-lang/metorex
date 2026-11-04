@@ -190,7 +190,6 @@ fn kept_by_c() -> std::collections::HashSet<Value> {
     super::flags::named_values(&mut kept);
     super::io::named_values(&mut kept);
     super::arrays::named_values(&mut kept);
-    super::strings::named_values(&mut kept);
     super::sequences::named_values(&mut kept);
     super::string_functions::named_values(&mut kept);
     super::digests::named_values(&mut kept);

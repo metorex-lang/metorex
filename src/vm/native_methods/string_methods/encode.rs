@@ -125,6 +125,23 @@ impl VirtualMachine {
                         }
                         crate::vm::native_methods::euc_jp_table::euc_jp_text(&bytes)
                     }
+                    None if held == "US-ASCII" => {
+                        let bytes = binary_bytes(string_value);
+                        match bytes.iter().find(|byte| !byte.is_ascii()) {
+                            Some(byte) if !options.invalid_replace => {
+                                let error =
+                                    invalid_bytes_error(&[*byte], None, false, &held, position);
+                                return Err(self.with_conversion_ends(error, &held, &wanted));
+                            }
+                            _ => bytes
+                                .iter()
+                                .map(|byte| match byte.is_ascii() {
+                                    true => (*byte as char).to_string(),
+                                    false => replacement.clone(),
+                                })
+                                .collect(),
+                        }
+                    }
                     None => {
                         let bytes = binary_bytes(string_value);
                         match undefined_single_byte(&bytes, &held) {

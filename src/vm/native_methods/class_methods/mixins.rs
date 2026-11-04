@@ -1,9 +1,22 @@
 // Including and prepending modules.
 
 use super::*;
-use crate::object::View;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
+    /// Whether Ruby code defined `hook` on Module or Class themselves, which
+    /// every module or class then hears in place of the default.
+    pub(crate) fn core_hook_redefined(&self, hook: &str) -> bool {
+        ["Module", "Class"].iter().any(|name| {
+            if let Some(View::Class(core)) = self.globals().get(name).view()
+                && let Some((owner, method)) = core.find_method_with_owner(hook)
+            {
+                return Rc::ptr_eq(&owner, core) && !method.is_undefined;
+            }
+            false
+        })
+    }
+
     /// Mixing a module into a class, and asking which modules a class holds.
     pub(crate) fn call_mixin_class_methods(
         &mut self,
@@ -29,6 +42,7 @@ impl VirtualMachine {
                 | "prepended"
         ) && arguments.len() == 1
             && !has_user_defined_method(class_rc, method_name)
+            && !self.core_hook_redefined(method_name)
         {
             return Ok(Answered(Object::Nil));
         }

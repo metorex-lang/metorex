@@ -209,3 +209,9 @@ fn test_metaprogramming_instance_exec_defines_execution() {
     let output = run_example("metaprogramming/instance_exec_defines.rb");
     assert_eq!(output, "[[], [:shout, :yell], \"A\"]\n");
 }
+
+#[test]
+fn module_included_can_be_aliased_removed_and_redefined() {
+    let output = run_example("metaprogramming/redefine_module_included.rb");
+    assert_eq!(output, "true\ntrue\n[\"Visitor\"]\n[\"Visitor\"]\ntrue\n");
+}

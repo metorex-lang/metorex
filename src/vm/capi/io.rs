@@ -298,6 +298,11 @@ pub extern "C-unwind" fn rb_io_write(io: Value, string: Value) -> Value {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_io_flush(io: Value) -> Value {
+    send(io, "flush", Vec::new())
+}
+
+#[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_io_close(io: Value) -> Value {
     send(io, "close", Vec::new())
 }

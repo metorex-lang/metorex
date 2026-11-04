@@ -162,15 +162,16 @@ impl Interpolation {
         // string stand for bytes, and every other piece is written out in the
         // bytes its own encoding spells it with.
         if any_bytes {
+            let only_ascii = raw.is_ascii();
             let spelled = crate::object::StringValue::binary(raw);
             match &carried {
                 Some((encoding, _)) => spelled.set_encoding(encoding.clone()),
                 // Bytes the literal itself escaped are written in the
                 // encoding its source is written in.
                 None if escaped_bytes_written => {
-                    spelled.set_encoding(vm.source_literal_encoding().unwrap_or_else(|| {
-                        crate::object::string_value::DEFAULT_ENCODING.to_string()
-                    }))
+                    spelled.set_encoding(vm.escaped_literal_encoding(only_ascii).unwrap_or_else(
+                        || crate::object::string_value::DEFAULT_ENCODING.to_string(),
+                    ))
                 }
                 None => {}
             }

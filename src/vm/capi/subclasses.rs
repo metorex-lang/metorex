@@ -234,6 +234,7 @@ const T_CLASS: i32 = 0x02;
 const T_MODULE: i32 = 0x03;
 const T_FLOAT: i32 = 0x04;
 const T_STRING: i32 = 0x05;
+const T_REGEXP: i32 = 0x06;
 const T_ARRAY: i32 = 0x07;
 const T_HASH: i32 = 0x08;
 const T_STRUCT: i32 = 0x09;
@@ -276,14 +277,17 @@ pub extern "C-unwind" fn rb_type(object: Value) -> i32 {
         View::Class(_) => T_CLASS,
         View::Module(_) => T_MODULE,
         View::Range { .. } => T_STRUCT,
+        View::Regex(..) => T_REGEXP,
+        // MRI keeps the state of a Proc, a Method and a Binding in C.
+        View::Block(_) | View::Method(_) | View::Binding(_) => T_DATA,
         _ => instance_type(held.clone()),
     }
 }
 
 /// The tag of an object of a class Ruby code can define: the tag of the
 /// core class an Array, String or Hash subclass descends from, `T_FILE`
-/// for an IO, `T_DATA` for a Time, whose state MRI keeps in C, and
-/// `T_OBJECT` for the rest.
+/// for an IO, `T_DATA` for a Time, whose state MRI keeps in C, `T_STRUCT`
+/// for a Struct or a Data, and `T_OBJECT` for the rest.
 fn instance_type(object: Object) -> i32 {
     let is_a = |name: &str| {
         super::calls::call(
@@ -303,6 +307,8 @@ fn instance_type(object: Object) -> i32 {
         T_FILE
     } else if is_a("Time") {
         T_DATA
+    } else if is_a("Struct") || is_a("Data") {
+        T_STRUCT
     } else {
         T_OBJECT
     }

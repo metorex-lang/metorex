@@ -8,9 +8,10 @@ use super::calls::{call, class_name_of};
 use super::values::{QNIL, Value, objects_from, to_object, to_value};
 use super::{called_from, raise};
 use crate::object::Object;
-use crate::object::View;
+use crate::object::{OptionView, View};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 /// The VALUEs handed to C for one Array, and the VALUEs they were when C
 /// was last handed them or last left, which tell a write of C's apart.
@@ -38,32 +39,54 @@ pub(super) fn carry_element_writes_back() {
             .collect()
     });
     for (array, values) in written {
-        if let View::Array(elements) = to_object(array).view() {
+        if let Some(elements) = held_elements(&to_object(array)) {
             *elements.borrow_mut() = values.into_iter().map(to_object).collect();
         }
+    }
+}
+
+/// The elements of an Array, or of the one an instance of an Array
+/// subclass holds, or None for any other object.
+fn held_elements(object: &Object) -> Option<Rc<RefCell<Vec<Object>>>> {
+    if let View::Array(elements) = object.view() {
+        return Some(elements.clone());
+    }
+    match crate::vm::native_methods::array_subclass_value(object)
+        .as_ref()
+        .view()
+    {
+        Some(View::Array(elements)) => Some(elements.clone()),
+        _ => None,
     }
 }
 
 /// The VALUEs of the elements of the Array a VALUE C code handed over
 /// stands for.
 fn element_values(array: Value) -> Vec<Value> {
-    match to_object(array).view() {
-        View::Array(elements) => elements.borrow().iter().map(to_value).collect(),
-        other => raise(crate::vm::errors::simple_exception(
-            "TypeError",
-            &format!(
-                "wrong argument type {} (expected Array)",
-                class_name_of(other.to_object())
-            ),
-            super::called_from(),
-        )),
+    with_elements(array, |elements| elements.iter().map(to_value).collect())
+}
+
+/// Runs `with` on the elements of the Array a VALUE C code handed over
+/// stands for.
+fn with_elements<T>(array: Value, with: impl FnOnce(&[Object]) -> T) -> T {
+    let object = to_object(array);
+    if let Some(elements) = held_elements(&object) {
+        return with(&elements.borrow());
     }
+    raise(crate::vm::errors::simple_exception(
+        "TypeError",
+        &format!(
+            "wrong argument type {} (expected Array)",
+            class_name_of(object)
+        ),
+        super::called_from(),
+    ))
 }
 
 /// The Array `object` converts to through `to_ary`, as `rb_check_array_type`
 /// finds it, or None for an object that has no `to_ary`.
 pub(super) fn array_of(object: Object) -> Option<Vec<Object>> {
-    if let View::Array(elements) = object.view() {
+    if let Some(elements) = held_elements(&object) {
         return Some(elements.borrow().clone());
     }
     if !super::calls::answers(&object, "to_ary") {
@@ -106,23 +129,24 @@ pub extern "C-unwind" fn rb_rarray_ptr(array: Value) -> *mut Value {
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_rarray_len(array: Value) -> i64 {
     carry_element_writes_back();
-    element_values(array).len() as i64
+    with_elements(array, |elements| elements.len() as i64)
 }
 
 /// The element at `offset`, counted from the end when negative, or nil past
 /// either end.
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_ary_entry(array: Value, offset: i64) -> Value {
-    let values = element_values(array);
-    let index = if offset < 0 {
-        offset + values.len() as i64
-    } else {
-        offset
-    };
-    usize::try_from(index)
-        .ok()
-        .and_then(|index| values.get(index).copied())
-        .unwrap_or(QNIL)
+    let element = with_elements(array, |elements| {
+        let index = if offset < 0 {
+            offset + elements.len() as i64
+        } else {
+            offset
+        };
+        usize::try_from(index)
+            .ok()
+            .and_then(|index| elements.get(index).cloned())
+    });
+    element.map_or(QNIL, |element| to_value(&element))
 }
 
 #[unsafe(no_mangle)]
@@ -310,7 +334,7 @@ pub extern "C-unwind" fn rb_ary_subseq(array: Value, start: i64, length: i64) ->
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_ary_to_ary(object: Value) -> Value {
     let held = to_object(object);
-    if matches!(held.view(), View::Array(_)) {
+    if held_elements(&held).is_some() {
         return object;
     }
     let elements = array_of(held.clone()).unwrap_or_else(|| vec![held]);

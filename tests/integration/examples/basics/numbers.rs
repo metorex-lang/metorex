@@ -581,7 +581,7 @@ fn test_basics_complex_protocol_execution() {
         "true\n",
         "false\n",
         "false\n",
-        "undefined method 'new' for class 'Float'\n",
+        "undefined method 'new' for class Float\n",
         "can't unfreeze Integer\n",
         "3\n",
         "2\n"
@@ -603,7 +603,7 @@ fn test_basics_complex_protocol_parens_execution() {
         "true\n",
         "false\n",
         "false\n",
-        "undefined method 'new' for class 'Float'\n",
+        "undefined method 'new' for class Float\n",
         "can't unfreeze Integer\n",
         "3\n",
         "2\n"

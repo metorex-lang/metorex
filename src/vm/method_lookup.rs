@@ -537,7 +537,8 @@ impl VirtualMachine {
             self.kernel_function_receiver = held;
             return answered;
         }
-        if written.names_self() && crate::vm::native_methods::is_kernel_private_function(method_name)
+        if written.names_self()
+            && crate::vm::native_methods::is_kernel_private_function(method_name)
         {
             let native = match self.globals().get(method_name).view() {
                 Some(View::NativeFunction(native)) => native.to_string(),
@@ -1617,8 +1618,8 @@ pub(crate) fn class_level_method(
         }
         class.find_own_method(class_level_name.get_or_init(|| format!("__class__{}", method_name)))
     };
-    if let Some(method) = own_class_level_method(class_rc)
-        .or_else(|| module_extended_method(class_rc, method_name))
+    if let Some(method) =
+        own_class_level_method(class_rc).or_else(|| module_extended_method(class_rc, method_name))
     {
         return Some((Rc::clone(class_rc), method));
     }

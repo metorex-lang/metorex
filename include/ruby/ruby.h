@@ -47,10 +47,13 @@ extern "C" {
 #define SIZEOF_VOIDP __SIZEOF_POINTER__
 #define SIZEOF_SIZE_T __SIZEOF_SIZE_T__
 #define SIZEOF_DOUBLE __SIZEOF_DOUBLE__
+#define SIZEOF_UINT64_T 8
 #define SIZEOF_TIME_T __SIZEOF_LONG__
 #define SIZEOF_VALUE SIZEOF_VOIDP
 #define HAVE_LONG_LONG 1
 #define HAVE_UNISTD_H 1
+#define HAVE_STDBOOL_H 1
+#define RUBY_INTEGER_UNIFICATION 1
 #define LONG_LONG long long
 
 typedef uintptr_t VALUE;
@@ -71,6 +74,11 @@ typedef intptr_t SIGNED_VALUE;
 
 #define RUBY_FIXNUM_FLAG 0x01
 #define FIXNUM_P(v) ((((SIGNED_VALUE)(v)) & RUBY_FIXNUM_FLAG) != 0)
+#define RB_FIXNUM_P(v) FIXNUM_P(v)
+#define RB_FLONUM_P(v) ((((VALUE)(v)) & 3) == 2)
+#define FLONUM_P(v) RB_FLONUM_P(v)
+#define RB_STATIC_SYM_P(v) ((((VALUE)(v)) & 0xff) == 0x0c)
+#define STATIC_SYM_P(v) RB_STATIC_SYM_P(v)
 #define INT2FIX(i) ((((VALUE)(SIGNED_VALUE)(i)) << 1) | RUBY_FIXNUM_FLAG)
 #define LONG2FIX(i) INT2FIX(i)
 #define FIX2LONG(v) ((long)(((SIGNED_VALUE)(v)) >> 1))
@@ -430,6 +438,8 @@ void rb_obj_call_init(VALUE object, int count, const VALUE *values);
 VALUE rb_obj_class(VALUE object);
 const char *rb_obj_classname(VALUE object);
 VALUE rb_obj_freeze(VALUE object);
+#define RB_OBJ_FREEZE(v) rb_obj_freeze((VALUE)(v))
+#define OBJ_FREEZE(v) RB_OBJ_FREEZE(v)
 VALUE rb_obj_frozen_p(VALUE object);
 void rb_check_frozen(VALUE object);
 VALUE rb_obj_id(VALUE object);
@@ -467,9 +477,12 @@ void rb_ivar_foreach(VALUE object, int (*function)(ID name, VALUE value, VALUE d
 void rb_copy_generic_ivar(VALUE clone, VALUE object);
 void rb_free_generic_ivar(VALUE object);
 #define BUILTIN_TYPE(v) rb_type((VALUE)(v))
+#define RB_BUILTIN_TYPE(v) BUILTIN_TYPE(v)
 #define FL_ABLE(v) (!RB_SPECIAL_CONST_P(v))
 #define RB_OBJ_FROZEN(v) (RB_SPECIAL_CONST_P(v) || RB_FL_TEST((v), RUBY_FL_FREEZE))
 #define OBJ_FROZEN(v) RB_OBJ_FROZEN(v)
+VALUE rb_io_write(VALUE io, VALUE string);
+VALUE rb_io_flush(VALUE io);
 VALUE rb_marshal_dump(VALUE object, VALUE port);
 VALUE rb_marshal_load(VALUE port);
 VALUE rb_define_finalizer(VALUE object, VALUE finalizer);
@@ -481,6 +494,7 @@ long rb_rstring_len(VALUE string);
 #define RSTRING_END(v) (RSTRING_PTR(v) + RSTRING_LEN(v))
 #define RSTRING_LEN(v) rb_rstring_len((VALUE)(v))
 #define RSTRING_LENINT(v) ((int)RSTRING_LEN(v))
+#define RSTRING_GETMEM(v, pointer, length) ((pointer) = RSTRING_PTR(v), (length) = RSTRING_LEN(v))
 #define SafeStringValue(v) StringValue(v)
 #define ST2FIX(h) LONG2FIX((long)(h))
 #define PRINTF_ARGS(declaration, format_index, first_index) declaration
@@ -546,6 +560,7 @@ st_index_t rb_str_hash(VALUE string);
 VALUE rb_str2inum(VALUE string, int base);
 VALUE rb_cstr2inum(const char *text, int base);
 VALUE rb_cstr_to_inum(const char *text, int base, int strict);
+double rb_cstr_to_dbl(const char *text, int bad_check);
 VALUE rb_str_encode(VALUE string, VALUE encoding, int flags, VALUE options);
 VALUE rb_str_export(VALUE string);
 VALUE rb_str_export_locale(VALUE string);
@@ -779,6 +794,8 @@ VALUE rb_struct_members(VALUE instance);
 VALUE rb_struct_size(VALUE instance);
 VALUE rb_struct_aref(VALUE instance, VALUE key);
 VALUE rb_struct_aset(VALUE instance, VALUE key, VALUE value);
+#define RSTRUCT_GET(v, index) rb_struct_aref((VALUE)(v), LONG2FIX(index))
+#define RSTRUCT_SET(v, index, value) rb_struct_aset((VALUE)(v), LONG2FIX(index), (VALUE)(value))
 VALUE rb_struct_getmember(VALUE instance, ID name);
 VALUE rb_struct_initialize(VALUE instance, VALUE values);
 
@@ -906,6 +923,20 @@ static inline void ruby_xfree(void *held) { free(held); }
 #define MEMCPY(destination, source, type, count) memcpy((destination), (source), sizeof(type) * (size_t)(count))
 #define MEMMOVE(destination, source, type, count) memmove((destination), (source), sizeof(type) * (size_t)(count))
 #define MEMCMP(first, second, type, count) memcmp((first), (second), sizeof(type) * (size_t)(count))
+/* The buffer's address is kept in `v`, which is all ALLOCV_END is handed
+   to free it by. */
+#define RB_ALLOCV_N(type, v, count) ((type *)((v) = (VALUE)ruby_xmalloc2((count), sizeof(type))))
+#define RB_ALLOCV_END(v) ruby_xfree((void *)(v))
+#define ALLOCV_N(type, v, count) RB_ALLOCV_N(type, v, count)
+#define ALLOCV_END(v) RB_ALLOCV_END(v)
+static inline int rb_isalpha(int c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); }
+static inline int rb_isdigit(int c) { return c >= '0' && c <= '9'; }
+static inline int rb_isupper(int c) { return c >= 'A' && c <= 'Z'; }
+static inline int rb_islower(int c) { return c >= 'a' && c <= 'z'; }
+static inline int rb_isalnum(int c) { return rb_isalpha(c) || rb_isdigit(c); }
+static inline int rb_isspace(int c) { return c == ' ' || (c >= '\t' && c <= '\r'); }
+static inline int rb_tolower(int c) { return rb_isupper(c) ? c + ('a' - 'A') : c; }
+static inline int rb_toupper(int c) { return rb_islower(c) ? c - ('a' - 'A') : c; }
 VALUE rb_gc_location(VALUE object);
 void rb_gc_unregister_address(VALUE *address);
 void rb_global_variable(VALUE *address);
@@ -991,6 +1022,10 @@ void rb_set_foreach(VALUE set, int (*function)(VALUE element, VALUE data), VALUE
 
 #define UNLIMITED_ARGUMENTS (-1)
 NORETURN(void rb_error_arity(int given, int min, int max));
+static inline int rb_check_arity(int given, int min, int max) {
+  if (given < min || (max != UNLIMITED_ARGUMENTS && given > max)) rb_error_arity(given, min, max);
+  return given;
+}
 NORETURN(void rb_scan_args_bad_format(const char *format));
 
 int rb_keyword_given_p(void);
@@ -1011,6 +1046,8 @@ VALUE rb_hash_fetch(VALUE hash, VALUE key);
 VALUE rb_hash_lookup(VALUE hash, VALUE key);
 VALUE rb_hash_lookup2(VALUE hash, VALUE key, VALUE missing);
 VALUE rb_hash_size(VALUE hash);
+size_t rb_hash_size_num(VALUE hash);
+#define RHASH_SIZE(v) rb_hash_size_num((VALUE)(v))
 VALUE rb_hash_set_ifnone(VALUE hash, VALUE default_value);
 void rb_hash_bulk_insert(long count, const VALUE *pairs, VALUE hash);
 void rb_hash_foreach(VALUE hash, int (*function)(VALUE key, VALUE value, VALUE argument), VALUE argument);

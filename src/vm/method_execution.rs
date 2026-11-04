@@ -591,7 +591,7 @@ impl VirtualMachine {
                         .iter()
                         .any(|prepended| Rc::ptr_eq(prepended, owner))
             });
-        let overrides_builtin = !method.body.is_empty()
+        let overrides_builtin = (!method.body.is_empty() || written_by_the_program(method))
             && (stands_on_a_core_class
                 || (backs_a_core_value(receiver) && written_by_the_program(method))
                 || stands_in_an_extended_module
@@ -1297,7 +1297,16 @@ fn backs_a_core_value(receiver: &crate::object::Object) -> bool {
 /// library. A library `def self.name` stays behind the native table, where
 /// one a program writes stands in front of it.
 pub(crate) fn written_by_the_program(method: &std::rc::Rc<crate::object::Method>) -> bool {
-    method.body.opens_in_the_program()
+    if !method.body.is_empty() {
+        return method.body.opens_in_the_program();
+    }
+    // An empty body has no statement to place, so its definition's place
+    // tells it apart from a stub standing for a native method.
+    method
+        .source_location
+        .as_ref()
+        .and_then(|written| written.filename.as_deref())
+        .is_some_and(|file| !file.starts_with(crate::vm::INTERNAL_FILE_PREFIX))
 }
 
 /// `**nil` says a method takes no keyword arguments, so a call that passes

@@ -49,6 +49,9 @@ int rb_enc_str_asciionly_p(VALUE string);
 int rb_enc_get_index(VALUE object);
 void rb_enc_set_index(VALUE object, int index);
 #define ENCODING_GET(object) rb_enc_get_index(object)
+#define RB_ENCODING_GET(object) ENCODING_GET(object)
+#define RB_ENCODING_GET_INLINED(object) ENCODING_GET(object)
+#define ENCODING_GET_INLINED(object) ENCODING_GET(object)
 #define ENCODING_SET(object, index) rb_enc_set_index((object), (index))
 VALUE rb_enc_associate(VALUE object, rb_encoding *encoding);
 VALUE rb_enc_associate_index(VALUE object, int index);
@@ -104,6 +107,15 @@ static inline void rb_enc_raise(rb_encoding *encoding, VALUE klass, const char *
   VALUE message = rb_vsprintf(format, arguments);
   va_end(arguments);
   rb_metorex_enc_raise(encoding, klass, message);
+}
+
+static inline VALUE rb_enc_sprintf(rb_encoding *encoding, const char *format, ...) {
+  va_list arguments;
+  va_start(arguments, format);
+  VALUE made = rb_vsprintf(format, arguments);
+  va_end(arguments);
+  rb_enc_associate(made, encoding);
+  return made;
 }
 
 typedef unsigned char OnigUChar;

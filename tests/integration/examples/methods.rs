@@ -1033,3 +1033,9 @@ fn a_call_written_through_self_reaches_private_methods_and_kernel_functions() {
         )
     );
 }
+
+#[test]
+fn an_empty_method_reopened_onto_a_core_class_replaces_the_native_one() {
+    let output = run_example("methods/empty_redefinition_of_core_method.rb");
+    assert_eq!(output, "nil\nnil\nnil\n");
+}

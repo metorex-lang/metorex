@@ -75,7 +75,8 @@ impl VirtualMachine {
                     // that the lookup reads as undefined.
                     let removed = removed
                         || (crate::vm::native_methods::is_native_kernel_method(&name)
-                            || name == "method_missing")
+                            || name == "method_missing"
+                            || core_class_defines(class_rc, &name))
                             && {
                                 let sentinel = Method::undefined(name.clone());
                                 class_rc.define_method(&name, Rc::new(sentinel));
@@ -220,7 +221,14 @@ impl VirtualMachine {
                         message: msg,
                     });
                 }
+                // A private method the interpreter answers natively keeps its
+                // visibility in the copy.
+                let natively_private = class_rc.find_method(&old_name).is_none()
+                    && core_class_defines_privately(class_rc, &old_name);
                 self.install_alias(class_rc, &new_name, &old_name, position)?;
+                if natively_private {
+                    class_rc.set_method_private(new_name.clone());
+                }
                 if matches!(
                     new_name.as_str(),
                     "initialize"
@@ -298,4 +306,31 @@ fn answers_natively_as_class_method(class_rc: &Rc<Class>, name: &str) -> bool {
         cursor = current.superclass();
     }
     false
+}
+
+/// Whether `class` is a core class or module whose own instance methods,
+/// which the interpreter answers natively, include `name`.
+fn core_class_defines(class: &Rc<crate::class::Class>, name: &str) -> bool {
+    core_method_rows(class).any(|row| {
+        row.public
+            .iter()
+            .chain(row.private)
+            .chain(row.protected)
+            .any(|defined| *defined == name)
+    })
+}
+
+/// Whether `class` is a core class or module with a private instance method
+/// `name` of its own.
+fn core_class_defines_privately(class: &Rc<crate::class::Class>, name: &str) -> bool {
+    core_method_rows(class).any(|row| row.private.contains(&name))
+}
+
+fn core_method_rows(
+    class: &Rc<crate::class::Class>,
+) -> impl Iterator<Item = &'static crate::vm::native_methods::core_method_names::CoreMethods> {
+    let owner = class.ruby_name();
+    crate::vm::native_methods::core_method_names::CORE_METHODS
+        .iter()
+        .filter(move |row| row.owner == owner)
 }

@@ -538,3 +538,20 @@ fn test_builtins_kernel_argument_checks_no_parens_execution() {
     let output = run_example("builtins/kernel_argument_checks_no_parens.rb");
     assert_eq!(output, KERNEL_ARGUMENT_CHECKS_OUTPUT);
 }
+
+#[test]
+fn core_classes_made_from_literals_answer_no_new() {
+    let output = run_example("builtins/core_classes_without_new.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "Float false\nInteger false\nSymbol false\nNilClass false\n",
+            "TrueClass false\nFalseClass false\nRational false\nComplex false\n",
+            "Method false\nUnboundMethod false\nBinding false\nEncoding false\n",
+            "false\nfalse\ntrue\n",
+            "undefined method 'new' for class Encoding\n",
+            "undefined method 'allocate' for class Complex\n",
+            "true\n",
+        )
+    );
+}

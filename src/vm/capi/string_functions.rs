@@ -467,6 +467,20 @@ pub extern "C-unwind" fn rb_cstr_to_inum(text: *const c_char, base: i32, strict:
     to_value(&call(spelled, "to_i", vec![Object::Int(i64::from(base))]))
 }
 
+/// The Float the text at `text` spells. With `bad_check`, text that spells
+/// none is the ArgumentError `Float()` raises, and otherwise the number the
+/// text starts with is read.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_cstr_to_dbl(text: *const c_char, bad_check: i32) -> f64 {
+    let spelled = to_object(rb_str_new_cstr(text));
+    let read = if bad_check != 0 {
+        call(top_level_module("Kernel"), "Float", vec![spelled])
+    } else {
+        call(spelled, "to_f", Vec::new())
+    };
+    super::bignums::rb_num2dbl(to_value(&read))
+}
+
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_cstr2inum(text: *const c_char, base: i32) -> Value {
     rb_cstr_to_inum(text, base, (base == 0) as i32)

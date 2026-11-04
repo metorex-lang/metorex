@@ -41,36 +41,13 @@ impl VirtualMachine {
                 position,
             ));
         }
-        // A number is not built by hand: `Float.new`, `Rational.new` and
-        // `Complex.new` do not exist, and `allocate` has nothing to allocate.
-        if matches!(
-            class_rc.name(),
-            "Float" | "Rational" | "Complex" | "Integer"
-        ) && matches!(method_name, "new" | "allocate")
-        {
-            let message = format!(
-                "undefined method '{}' for class '{}'",
-                method_name,
-                class_rc.name()
-            );
-            let exception = if method_name == "allocate" {
-                Object::exception(
-                    "TypeError",
-                    format!("allocator undefined for {}", class_rc.name()),
-                )
-            } else {
-                crate::vm::errors::no_method_error(
-                    &message,
-                    method_name,
-                    &Object::Class(Rc::clone(class_rc)),
-                    arguments,
-                )
-            };
-            return Err(MetorexError::UncaughtException {
-                exception,
-                location: position_to_location(position),
-                message,
-            });
+        // A number has nothing for `allocate` to allocate.
+        if matches!(class_rc.name(), "Float" | "Integer") && method_name == "allocate" {
+            return Err(crate::vm::errors::simple_exception(
+                "TypeError",
+                &format!("allocator undefined for {}", class_rc.name()),
+                position,
+            ));
         }
         // A Thread has nothing to be without the block that gives it something
         // to run, so Ruby refuses to hand back an uninitialized one.

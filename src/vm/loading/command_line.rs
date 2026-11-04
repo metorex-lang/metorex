@@ -247,6 +247,14 @@ impl VirtualMachine {
         let named = Object::string(as_given.display().to_string());
         self.globals_mut().set_variable("0", named.clone());
         self.globals_mut().set_variable("PROGRAM_NAME", named);
+        // A method the script defines is written in the script's encoding
+        // when it is called, whichever name it was defined under.
+        if let Some(encoding) = &self.current_source_encoding {
+            for name in [&canonical, &as_given] {
+                self.file_encodings
+                    .insert(name.display().to_string(), encoding.clone());
+            }
+        }
         self.script_path = Some((canonical, as_given));
         // The scope in force here is the one the script's own top level runs
         // in, which is what TOPLEVEL_BINDING stands over.

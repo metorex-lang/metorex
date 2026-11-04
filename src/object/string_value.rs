@@ -6,8 +6,9 @@
 //! with that code point, so its text is never anything but a spelling of its
 //! bytes.
 
-use std::cell::{Cell, Ref, RefCell};
+use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::rc::Rc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// The encoding a string literal carries.
 pub const DEFAULT_ENCODING: &str = "UTF-8";
@@ -101,6 +102,15 @@ const ENCODING_READS_BYTES: u8 = 1 << 4;
 /// The text of bytes read one character per byte.
 fn characters_of_bytes(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| *byte as char).collect()
+}
+
+/// How many times any string's bytes have changed, which tells C's copies
+/// of strings whether Ruby code changed one of them while it ran.
+static CHANGES_MADE: AtomicU64 = AtomicU64::new(0);
+
+/// How many times any string's bytes have changed so far.
+pub fn string_changes_made() -> u64 {
+    CHANGES_MADE.load(Ordering::Relaxed)
 }
 
 pub struct StringValue {
@@ -338,7 +348,7 @@ impl StringValue {
                 characters_of_bytes(&bytes).into_bytes()
             }
         };
-        *self.bytes.borrow_mut() = respelled;
+        *self.bytes_to_change() = respelled;
         self.forget_readings();
     }
 
@@ -393,6 +403,12 @@ impl StringValue {
         Ref::map(self.bytes.borrow(), |held| held.as_slice())
     }
 
+    /// The bytes, counted as changed.
+    fn bytes_to_change(&self) -> RefMut<'_, Vec<u8>> {
+        CHANGES_MADE.store(CHANGES_MADE.load(Ordering::Relaxed) + 1, Ordering::Relaxed);
+        self.bytes.borrow_mut()
+    }
+
     /// How many bytes the string holds.
     pub fn byte_len(&self) -> usize {
         self.bytes.borrow().len()
@@ -400,19 +416,19 @@ impl StringValue {
 
     /// Replace the bytes the string holds.
     pub fn replace_bytes(&self, bytes: Vec<u8>) {
-        *self.bytes.borrow_mut() = bytes;
+        *self.bytes_to_change() = bytes;
         self.settle();
     }
 
     /// Replace the byte at `index`, which is within the string.
     pub fn set_byte(&self, index: usize, byte: u8) {
-        self.bytes.borrow_mut()[index] = byte;
+        self.bytes_to_change()[index] = byte;
         self.settle();
     }
 
     /// Add bytes to the end of the string.
     pub fn append_bytes(&self, extra: &[u8]) {
-        self.bytes.borrow_mut().extend_from_slice(extra);
+        self.bytes_to_change().extend_from_slice(extra);
         self.settle();
     }
 
@@ -537,7 +553,7 @@ impl StringValue {
     /// sees the new text, which is what Ruby's in-place methods do.
     pub fn replace_text(&self, text: impl Into<String>) {
         let bytes = self.spell(&text.into());
-        *self.bytes.borrow_mut() = bytes;
+        *self.bytes_to_change() = bytes;
         self.forget_readings();
     }
 
@@ -545,7 +561,7 @@ impl StringValue {
     pub fn append_text(&self, extra: &str) {
         let ascii = self.ascii.get();
         let bytes = self.spell(extra);
-        self.bytes.borrow_mut().extend_from_slice(&bytes);
+        self.bytes_to_change().extend_from_slice(&bytes);
         self.forget_readings();
         if ascii == Some(true) && extra.is_ascii() {
             self.ascii.set(Some(true));

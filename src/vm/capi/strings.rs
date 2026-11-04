@@ -10,13 +10,13 @@
 use super::calls::{answers, call, class_name_of};
 use super::values::{Value, to_object, to_value};
 use super::{interpreter, raise};
-use crate::object::View;
 use crate::object::{Object, StringValue};
+use crate::object::{OptionView, View};
 use crate::vm::native_methods::string_methods::{
     binary_bytes, bytes_are_characters, wide_encoding,
 };
-use std::cell::RefCell;
-use std::collections::HashMap;
+use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, HashSet};
 use std::ffi::c_char;
 use std::rc::Rc;
 
@@ -69,26 +69,83 @@ impl Buffer {
 
 thread_local! {
     static BUFFERS: RefCell<HashMap<Value, Buffer>> = RefCell::new(HashMap::new());
+    /// The strings whose buffers C was handed since control last crossed
+    /// from C into Ruby, which are the ones C has written into since then
+    /// unless it kept a pointer from before.
+    static HANDED_SINCE_CROSSING: RefCell<HashSet<Value>> = RefCell::new(HashSet::new());
+    /// For each call into C running, the strings whose buffers it was
+    /// handed, which are compared with their strings when it returns.
+    static HANDED_IN_FRAME: RefCell<Vec<HashSet<Value>>> = const { RefCell::new(Vec::new()) };
+    /// How many changes to strings the buffers had seen when they were last
+    /// brought up to date with their strings.
+    static CHANGES_SEEN: Cell<u64> = const { Cell::new(0) };
+}
+
+/// Let go of the buffer of a string C no longer reaches.
+pub(super) fn forget(string: Value) {
+    BUFFERS.with(|held| held.borrow_mut().remove(&string));
+    HANDED_SINCE_CROSSING.with(|held| held.borrow_mut().remove(&string));
+    HANDED_IN_FRAME.with(|held| {
+        for frame in held.borrow_mut().iter_mut() {
+            frame.remove(&string);
+        }
+    });
+}
+
+/// Start counting the buffers a call into C is handed.
+pub(super) fn enter_frame() {
+    HANDED_IN_FRAME.with(|held| held.borrow_mut().push(HashSet::new()));
+}
+
+/// Carry back what C wrote into the buffers the call into C returning now
+/// was handed, and into those handed since the last crossing into Ruby.
+pub(super) fn leave_frame() {
+    carry_writes_back();
+    let handed = HANDED_IN_FRAME.with(|held| held.borrow_mut().pop().unwrap_or_default());
+    BUFFERS.with(|buffers| {
+        let mut buffers = buffers.borrow_mut();
+        for value in handed {
+            if let Some(buffer) = buffers.get_mut(&value) {
+                carry_write_back(value, buffer);
+            }
+        }
+    });
+}
+
+/// The String a VALUE stands for, or the one an instance of a String
+/// subclass holds, or None for any other object.
+fn held_string(object: &Object) -> Option<Rc<StringValue>> {
+    if let View::String(held) = object.view() {
+        return Some(held.clone());
+    }
+    match crate::vm::native_methods::string_subclass_value(object)
+        .as_ref()
+        .view()
+    {
+        Some(View::String(held)) => Some(held.clone()),
+        _ => None,
+    }
 }
 
 /// The String a VALUE C code handed over stands for.
 pub(super) fn string_from(value: Value) -> Rc<StringValue> {
-    match to_object(value).view() {
-        View::String(held) => held.clone(),
-        other => raise(crate::vm::errors::simple_exception(
-            "TypeError",
-            &format!(
-                "wrong argument type {} (expected String)",
-                class_name_of(other.to_object())
-            ),
-            super::called_from(),
-        )),
+    let object = to_object(value);
+    if let Some(held) = held_string(&object) {
+        return held;
     }
+    raise(crate::vm::errors::simple_exception(
+        "TypeError",
+        &format!(
+            "wrong argument type {} (expected String)",
+            class_name_of(object)
+        ),
+        super::called_from(),
+    ))
 }
 
 /// The String `object` converts to through `to_str`, as `StringValue` does.
 pub(super) fn string_value(object: Object) -> Object {
-    if let View::String(_) = object.view() {
+    if held_string(&object).is_some() {
         return object;
     }
     if !answers(&object, "to_str") {
@@ -121,7 +178,7 @@ pub(super) fn string_value(object: Object) -> Object {
 /// `object` as a String when it is one or converts through `to_str`, as
 /// `rb_check_string_type` finds it, or None when it has no `to_str`.
 pub(super) fn check_string(object: Object) -> Option<Object> {
-    if matches!(object.view(), View::String(_)) || answers(&object, "to_str") {
+    if held_string(&object).is_some() || answers(&object, "to_str") {
         return Some(string_value(object));
     }
     None
@@ -144,32 +201,65 @@ fn store_bytes(string: &StringValue, bytes: &[u8]) {
     }
 }
 
-/// Carries what C wrote into each buffer back into its string.
+/// Carries what C wrote into the buffers it was handed since control last
+/// crossed into Ruby back into their strings.
 pub(super) fn carry_writes_back() {
+    let handed: Vec<Value> = HANDED_SINCE_CROSSING.with(|held| held.borrow_mut().drain().collect());
     BUFFERS.with(|buffers| {
-        for (value, buffer) in buffers.borrow_mut().iter_mut() {
-            let length = buffer.handed.len();
-            if buffer.external.is_some() || buffer.area[..length] == buffer.handed[..] {
-                continue;
+        let mut buffers = buffers.borrow_mut();
+        for value in handed {
+            if let Some(buffer) = buffers.get_mut(&value) {
+                carry_write_back(value, buffer);
             }
-            if let View::String(string) = to_object(*value).view() {
-                store_bytes(string, &buffer.area[..length]);
-            }
-            buffer.handed.copy_from_slice(&buffer.area[..length]);
         }
     });
 }
 
+/// Carries what C wrote into the buffer of `string` back into it, leaving
+/// the other buffers for the next crossing into Ruby.
+fn carry_own_writes_back(string: Value) {
+    BUFFERS.with(|buffers| {
+        if let Some(buffer) = buffers.borrow_mut().get_mut(&string) {
+            carry_write_back(string, buffer);
+        }
+    });
+}
+
+fn carry_write_back(value: Value, buffer: &mut Buffer) {
+    let length = buffer.handed.len();
+    if buffer.external.is_some() || buffer.area[..length] == buffer.handed[..] {
+        return;
+    }
+    if let Some(string) = held_string(&to_object(value)) {
+        store_bytes_in_sync(&string, &buffer.area[..length]);
+    }
+    buffer.handed.copy_from_slice(&buffer.area[..length]);
+}
+
+/// Puts what C wrote in `string`, a change its buffer already holds.
+fn store_bytes_in_sync(string: &StringValue, bytes: &[u8]) {
+    let before = crate::object::string_value::string_changes_made();
+    store_bytes(string, bytes);
+    if CHANGES_SEEN.with(Cell::get) == before {
+        CHANGES_SEEN.with(|seen| seen.set(crate::object::string_value::string_changes_made()));
+    }
+}
+
 /// Carries what Ruby code changed in each string into its buffer, once it
-/// has run and control is back with C.
+/// has run and control is back with C. When no string changed while it ran
+/// there is nothing to carry.
 pub(super) fn carry_changes_in() {
+    let changes = crate::object::string_value::string_changes_made();
+    if CHANGES_SEEN.with(Cell::get) == changes {
+        return;
+    }
+    CHANGES_SEEN.with(|seen| seen.set(changes));
     BUFFERS.with(|buffers| {
         for (value, buffer) in buffers.borrow_mut().iter_mut() {
-            if let View::String(string) = to_object(*value).view() {
-                let current = binary_bytes(string);
-                if current != buffer.handed {
-                    buffer.take(current, terminator_length(string));
-                }
+            if let Some(string) = held_string(&to_object(*value))
+                && *string.bytes() != buffer.handed[..]
+            {
+                buffer.take(binary_bytes(&string), terminator_length(&string));
             }
         }
     });
@@ -178,10 +268,16 @@ pub(super) fn carry_changes_in() {
 /// Runs `with` on the buffer of `string`, making one holding its bytes as
 /// they stand when it has none.
 fn with_buffer<T>(string: Value, with: impl FnOnce(&mut Buffer, &StringValue) -> T) -> T {
-    carry_writes_back();
+    carry_own_writes_back(string);
     let held = string_from(string);
     let current = binary_bytes(&held);
     let terminator = terminator_length(&held);
+    HANDED_SINCE_CROSSING.with(|held| held.borrow_mut().insert(string));
+    HANDED_IN_FRAME.with(|held| {
+        if let Some(frame) = held.borrow_mut().last_mut() {
+            frame.insert(string);
+        }
+    });
     BUFFERS.with(|buffers| {
         let mut buffers = buffers.borrow_mut();
         let buffer = buffers
@@ -263,7 +359,7 @@ pub extern "C-unwind" fn rb_str_set_len(string: Value, length: i64) {
         let length = length as usize;
         buffer.area[length..length + terminator].fill(0);
         let kept = buffer.area[..length].to_vec();
-        store_bytes(held, &kept);
+        store_bytes_in_sync(held, &kept);
         buffer.handed = kept;
         buffer.external = None;
     });
@@ -299,7 +395,7 @@ pub(super) fn static_string(text: *const c_char, length: i64, encoding: &str) ->
     held.set_encoding(encoding.to_string());
     let bytes = binary_bytes(&held);
     held.clear_bytes();
-    store_bytes(&held, &bytes);
+    store_bytes_in_sync(&held, &bytes);
     with_buffer(made, |buffer, _| {
         buffer.external = Some(text as *mut c_char)
     });
@@ -319,7 +415,7 @@ pub extern "C-unwind" fn rb_str_buf_new(capacity: i64) -> Value {
 
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_rstring_len(string: Value) -> i64 {
-    carry_writes_back();
+    carry_own_writes_back(string);
     binary_bytes(&string_from(string)).len() as i64
 }
 
@@ -411,9 +507,4 @@ pub extern "C-unwind" fn rb_metorex_adopt_encoding(string: Value, source: Value)
     made.set_encoding(named);
     made.clear_bytes();
     store_bytes(&made, &bytes);
-}
-
-/// The VALUEs this table names, which stay pinned while it does.
-pub(super) fn named_values(found: &mut std::collections::HashSet<Value>) {
-    BUFFERS.with(|held| found.extend(held.borrow().keys().copied()));
 }

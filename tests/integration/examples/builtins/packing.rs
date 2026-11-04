@@ -316,3 +316,12 @@ fn test_builtins_string_variables_after_free_no_parens_execution() {
     let output = run_example("builtins/string_variables_after_free_no_parens.rb");
     assert_eq!(output, STRING_VARIABLES_AFTER_FREE_OUTPUT);
 }
+
+#[test]
+fn strict_base64_refuses_partial_groups_inner_padding_and_stray_bits() {
+    let output = run_example("builtins/strict_base64.rb");
+    assert_eq!(
+        output,
+        "[\"AAAA\", \"\\x00\\x00\\x00\"]\n[\"AAA=\", \"\\x00\\x00\"]\n[\"\", \"\"]\n[\"AA=\", \"invalid base64\"]\n[\"AA==\\n\", \"invalid base64\"]\n[\"AB==\", \"invalid base64\"]\n[\"AAB=\", \"invalid base64\"]\n[\"AA==AAAA\", \"invalid base64\"]\n[\"A===\", \"invalid base64\"]\n[\"====\", \"invalid base64\"]\n"
+    );
+}

@@ -722,3 +722,39 @@ fn a_meta_character_in_a_binary_source_is_binary() {
         "#<Encoding:BINARY (ASCII-8BIT)>\ntrue\n[154]\n#<Encoding:BINARY (ASCII-8BIT)>\n"
     );
 }
+
+#[test]
+fn a_literal_escaping_bytes_past_ascii_in_an_ascii_source_is_binary() {
+    let output = run_example("encodings/escaped_bytes_in_ascii_source.rb");
+    assert_eq!(
+        output,
+        "#<Encoding:BINARY (ASCII-8BIT)>\n#<Encoding:US-ASCII>\n#<Encoding:BINARY (ASCII-8BIT)>\n#<Encoding:US-ASCII>\n"
+    );
+}
+
+#[test]
+fn a_frozen_literal_escaping_bytes_past_ascii_in_an_ascii_source_is_binary() {
+    let output = run_example("encodings/escaped_bytes_in_frozen_ascii_source.rb");
+    assert_eq!(
+        output,
+        "#<Encoding:BINARY (ASCII-8BIT)>\n#<Encoding:US-ASCII>\n"
+    );
+}
+
+#[test]
+fn a_method_in_an_ascii_script_writes_its_literals_in_the_script_encoding() {
+    let output = run_example("encodings/method_in_ascii_script.rb");
+    assert_eq!(
+        output,
+        "#<Encoding:BINARY (ASCII-8BIT)>\n#<Encoding:US-ASCII>\n#<Encoding:BINARY (ASCII-8BIT)>\n#<Encoding:US-ASCII>\n"
+    );
+}
+
+#[test]
+fn encoding_from_us_ascii_refuses_or_replaces_bytes_past_ascii() {
+    let output = run_example("encodings/encode_from_ascii_with_high_bytes.rb");
+    assert_eq!(
+        output,
+        "\"a\u{fffd}b\u{fffd}c\"\n\"a?b?c\"\n\"\\\"\\\\x80\\\" on US-ASCII\"\n\"\\x80\"\n\"US-ASCII\"\n\"UTF-8\"\n#<Encoding:UTF-8>\n"
+    );
+}

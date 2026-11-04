@@ -1873,3 +1873,32 @@ fn rbconfig_names_the_library_directories_under_the_prefix() {
     let output = run_example("stdlib/rbconfig_library_directories.rb");
     assert_eq!(output, "true\ntrue\ntrue\n");
 }
+
+#[test]
+fn bigdecimal_is_made_by_its_kernel_function_and_has_no_new() {
+    let output = run_example("stdlib/bigdecimal_has_no_new.rb");
+    assert_eq!(
+        output,
+        "false\nundefined method 'new' for class BigDecimal\n0.25e1\n"
+    );
+}
+
+#[test]
+fn json_generates_subclasses_fragments_and_coder_output_through_its_c_extension() {
+    let output = run_example("stdlib/json_extension_objects.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"[\\\"a\\\",\\\"b\\\"]\"\n",
+            "\"\\\"name\\\"\"\n",
+            "\"{\\\"theme\\\":\\\"dark\\\"}\"\n",
+            "\"{\\\"retries\\\":3}\"\n",
+            "\"{\\\"raw\\\":[1, 2]}\"\n",
+            "\"\\\"converted\\\"\"\n",
+            "\"[\\\"symbol\\\",\\\"1..2\\\"]\"\n",
+            "248891\n",
+            "true\n",
+            "Float\n",
+        )
+    );
+}

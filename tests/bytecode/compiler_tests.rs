@@ -50,10 +50,12 @@ fn locals_are_numbered_in_the_order_the_body_assigns_them() {
 
 #[test]
 fn a_local_is_introduced_ahead_of_a_value_a_block_could_close_over_it_in() {
-    let unit = unit_of("walk = -> { walk }
+    let unit = unit_of(
+        "walk = -> { walk }
 steps = walk
 later = (steps + 1) * 2
-");
+",
+    );
     let unhoisted: Vec<u16> = unit
         .instructions
         .iter()

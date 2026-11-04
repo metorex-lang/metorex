@@ -83,8 +83,13 @@ impl Class {
     pub fn define_method(&self, name: impl Into<String>, method: Rc<Method>) {
         let name = name.into();
         method_named_changed(&name);
-        if name.starts_with("__class__") {
+        if let Some(plain) = name.strip_prefix("__class__") {
             self.holds_class_methods.set(true);
+            // `def self.name` and a `def name` in `class << self` write the
+            // same method, so the later one replaces the earlier.
+            if let Some(singleton) = self.singleton_class.borrow().as_ref() {
+                singleton.remove_method(plain);
+            }
         }
         self.methods.borrow_mut().insert(name, method);
     }

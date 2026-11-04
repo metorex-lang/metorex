@@ -333,3 +333,17 @@ fn an_exception_s_instance_variables_are_defined_once_assigned() {
     let output = run_example("errors/defined_instance_variable_of_an_exception.rb");
     assert_eq!(output, "1\nnil\n\"instance-variable\"\n");
 }
+
+#[test]
+fn warn_uplevel_names_the_frame_that_many_calls_out() {
+    let output = run_example("errors/warn_uplevel_counts_frames.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "warn_uplevel_counts_frames.rb:10: warning: from inner\n",
+            "warn_uplevel_counts_frames.rb:14: warning: in a block\n",
+            "warning: past the top\n",
+            "warn_uplevel_counts_frames.rb:16: warning: here\n",
+        )
+    );
+}

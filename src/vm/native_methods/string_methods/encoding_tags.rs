@@ -109,10 +109,11 @@ impl VirtualMachine {
             }
             "__holds_bytes__" => {
                 let held = string_value.as_str().to_string();
+                let encoding = self
+                    .escaped_literal_encoding(held.is_ascii())
+                    .unwrap_or_else(|| string_value.encoding_name());
                 let made = crate::object::StringValue::from_bytes(held);
-                // The literal is still written in the source's encoding; only
-                // the characters stand for bytes.
-                made.set_encoding(string_value.encoding_name());
+                made.set_encoding(encoding);
                 Ok(Some(Object::String(Rc::new(made))))
             }
             // A literal in a source written in bytes stands for those bytes.

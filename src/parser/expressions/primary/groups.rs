@@ -306,11 +306,9 @@ impl Parser<'_> {
                 if self.check(&[TokenKind::RBracket]) {
                     break;
                 }
-                match self.parse_implicit_hash_entry()? {
-                    Some(entry) => entries.push(entry),
-                    // An element may be an assignment, which answers what it
-                    // assigned: `[obj = Object.new, "str"]`.
-                    None => elements.push(self.parse_expression_with_assignment()?),
+                match self.parse_array_item()? {
+                    ArrayItem::Pair(key, value) => entries.push((key, value)),
+                    ArrayItem::Element(element) => elements.push(element),
                 }
                 self.skip_whitespace();
 
@@ -336,11 +334,8 @@ impl Parser<'_> {
         })
     }
 
-    /// Parse one `key: value` or `key => value` pair when the next tokens form
-    /// one. Returns `None` (having consumed nothing) for a plain element.
-    fn parse_implicit_hash_entry(
-        &mut self,
-    ) -> Result<Option<(Expression, Expression)>, MetorexError> {
+    /// Parse one `key: value` or `key => value` pair, or a plain element.
+    fn parse_array_item(&mut self) -> Result<ArrayItem, MetorexError> {
         // `ident: value` — the shorthand whose key is a Symbol.
         if matches!(self.peek().kind, TokenKind::Ident(_))
             && matches!(self.peek_ahead(1).kind, TokenKind::Colon)
@@ -355,19 +350,20 @@ impl Parser<'_> {
                 value: name,
                 position: ident_token.position,
             };
-            return Ok(Some((key, self.parse_expression()?)));
+            return Ok(ArrayItem::Pair(key, self.parse_expression()?));
         }
 
-        // `key => value` — parse the key, then commit only if `=>` follows.
-        let saved_position = self.stream().current_position();
-        let key = self.parse_expression()?;
+        let parsed = self.parse_expression()?;
+        let after_parsed = self.stream().current_position();
         self.skip_whitespace();
         if self.match_token(&[TokenKind::FatArrow]) {
             self.skip_whitespace();
-            return Ok(Some((key, self.parse_expression()?)));
+            return Ok(ArrayItem::Pair(parsed, self.parse_expression()?));
         }
-        self.stream.restore_position(saved_position);
-        Ok(None)
+        self.stream.restore_position(after_parsed);
+        // An element may be an assignment, which answers what it assigned:
+        // `[obj = Object.new, "str"]`.
+        Ok(ArrayItem::Element(self.fold_assignment(parsed)?))
     }
 
     /// Parse a hash/dictionary literal after the opening `{` has been consumed.
@@ -573,4 +569,11 @@ pub(crate) fn keyword_symbol_key(kind: &TokenKind) -> Option<&str> {
         TokenKind::AttrAccessor => Some("attr_accessor"),
         _ => None,
     }
+}
+
+/// What one entry of an array literal is.
+enum ArrayItem {
+    /// A `key: value` or `key => value` pair, gathered into the trailing Hash.
+    Pair(Expression, Expression),
+    Element(Expression),
 }

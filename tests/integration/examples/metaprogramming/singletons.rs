@@ -109,3 +109,9 @@ fn test_a_bound_kernel_method_finds_methods_an_object_overrides_method_for() {
     let output = run_example("metaprogramming/bound_kernel_method.rb");
     assert_eq!(output, expected);
 }
+
+#[test]
+fn def_self_and_class_shovel_self_replace_each_other() {
+    let output = run_example("metaprogramming/redefine_singleton_method_both_ways.rb");
+    assert_eq!(output, "from def self\n10\nfrom singleton class body\n");
+}

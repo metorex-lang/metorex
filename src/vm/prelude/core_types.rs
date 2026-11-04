@@ -1,4 +1,12 @@
 pub(super) const SOURCE: &str = r##"
+[Float, Integer, Symbol, NilClass, TrueClass, FalseClass, Rational, Complex,
+ Method, UnboundMethod, Binding, Encoding].each do |made_elsewhere|
+  made_elsewhere.singleton_class.send(:undef_method, :new)
+end
+[Rational, Complex].each do |made_elsewhere|
+  made_elsewhere.singleton_class.send(:undef_method, :allocate)
+end
+
 class Integer
   # `pow` raises the number the way `**` does. Given a modulus as well, it
   # multiplies under that modulus, so a large power stays small.

@@ -3,15 +3,43 @@
 
 use super::*;
 
-/// Read base64, ignoring anything that is not one of its characters.
-/// Whether text holds only what strict base64 allows, which is the alphabet,
-/// its padding, and the line breaks between them.
+/// Whether text is strict base64: whole groups of four characters from the
+/// alphabet, with `=` padding only in the last group, and padding that
+/// leaves no bits of the last character unread.
 pub(crate) fn is_strict_base64(text: &str) -> bool {
-    text.bytes().all(|character| {
-        character.is_ascii_alphanumeric() || matches!(character, b'+' | b'/' | b'=' | b'\n' | b'\r')
+    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let digit = |character: u8| ALPHABET.iter().position(|entry| *entry == character);
+    let bytes = text.as_bytes();
+    if !bytes.len().is_multiple_of(4) {
+        return false;
+    }
+    let group_count = bytes.len() / 4;
+    bytes.chunks(4).enumerate().all(|(index, group)| {
+        let padding = group
+            .iter()
+            .rev()
+            .take_while(|character| **character == b'=')
+            .count();
+        let data = &group[..4 - padding];
+        if padding > 2 || (padding > 0 && index + 1 != group_count) {
+            return false;
+        }
+        let Some(digits) = data
+            .iter()
+            .map(|character| digit(*character))
+            .collect::<Option<Vec<_>>>()
+        else {
+            return false;
+        };
+        match padding {
+            2 => digits[1] & 0xf == 0,
+            1 => digits[2] & 0x3 == 0,
+            _ => true,
+        }
     })
 }
 
+/// Read base64, ignoring anything that is not one of its characters.
 pub(crate) fn decode_base64(text: &str) -> Vec<u8> {
     const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = Vec::new();

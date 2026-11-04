@@ -150,6 +150,11 @@ pub extern "C-unwind" fn rb_hash_size(hash: Value) -> Value {
     to_value(&call(to_object(hash), "size", Vec::new()))
 }
 
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_hash_size_num(hash: Value) -> usize {
+    super::numbers::rb_num2long(rb_hash_size(hash)) as usize
+}
+
 /// Sets the value the Hash answers for a key it does not hold.
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_hash_set_ifnone(hash: Value, default: Value) -> Value {

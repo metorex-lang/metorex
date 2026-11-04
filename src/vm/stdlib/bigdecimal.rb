@@ -30,6 +30,10 @@ class BigDecimal < Numeric
   VERSION = "4.0.1"
   BASE = 10000
 
+  class << self
+    undef_method :new
+  end
+
   # What `BigDecimal.mode` reports for a rule that is off.
   EXCEPTION_UNDERFLOW_MODE = 4
 
@@ -68,7 +72,7 @@ class BigDecimal < Numeric
 
   protected :sign_of, :digits_of, :exponent_of, :special_of
 
-  # Build one from its parts, normalising the digits so a value has one
+  # Build one from its parts, normalizing the digits so a value has one
   # spelling: no leading zero, no trailing zero, and zero has none at all.
   def self.build(sign, digits, exponent, special = nil)
     unless special.nil?

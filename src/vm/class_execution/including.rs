@@ -232,6 +232,10 @@ impl VirtualMachine {
             )?;
             return Ok(true);
         }
+        if self.core_hook_redefined(hook) {
+            self.send_to_object(receiver, hook, vec![argument.clone()], position)?;
+            return Ok(true);
+        }
         Ok(false)
     }
 

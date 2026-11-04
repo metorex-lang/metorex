@@ -41,7 +41,9 @@ fi
 
 # Each gem's test files, as globs under its directory, and the arguments
 # each file runs with: its library and test helpers on the load path, and
-# what its own runner requires ahead of the files. HELPERS holds the
+# what its own runner requires ahead of the files. A fourth field names a
+# script run in the copy of the gem before the file, which writes what the
+# gem's own build would generate. HELPERS holds the
 # assertions Ruby's own repository keeps in tool/lib, which
 # scripts/vendor_gems.rb copies in.
 HELPERS="$REPO_ROOT/scripts/gem_suite/lib"
@@ -55,6 +57,9 @@ SUITES=(
   "net-imap|test/net/imap/test_*.rb|-I lib -I test/lib -I $HELPERS -r helper"
   "net-pop|test/net/pop/test_*.rb|-I lib -I test/lib -r helper"
   "net-smtp|test/net/smtp/test_*.rb|-I lib -I test"
+  "base64|test/base64/test_*.rb|-I lib -I test"
+  "json|test/json/*_test.rb|-I lib -I $HELPERS"
+  "racc|test/test_*.rb|--enable-frozen-string-literal -I lib -I test/lib -I $HELPERS -r helper|$REPO_ROOT/scripts/gem_suite/racc_parser_text.rb"
 )
 
 WANTED=("$@")
@@ -72,7 +77,7 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 QUEUE="$WORK_DIR/queue.tsv"
 : > "$QUEUE"
 for row in "${SUITES[@]}"; do
-  IFS='|' read -r gem patterns arguments <<< "$row"
+  IFS='|' read -r gem patterns arguments prepare <<< "$row"
   wanted "$gem" || continue
   if [ ! -d "$REPO_ROOT/gems/$gem/lib" ]; then
     echo "gems/$gem is missing, run: git submodule update --init gems/$gem" >&2
@@ -80,7 +85,7 @@ for row in "${SUITES[@]}"; do
   fi
   for pattern in $patterns; do
     (cd "$REPO_ROOT/gems/$gem" && compgen -G "$pattern" || true) | sort | while read -r file; do
-      printf '%s\t%s\t%s\n' "$gem" "$file" "$arguments" >> "$QUEUE"
+      printf '%s\t%s\t%s\t%s\n' "$gem" "$file" "$arguments" "$prepare" >> "$QUEUE"
     done
   done
 done
@@ -88,7 +93,7 @@ done
 # Runs one test file in a copy of its gem, writing what it printed next to
 # it, and prints the file's name and its summary line.
 run_one() {
-  local gem="$1" file="$2" arguments="$3"
+  local gem="$1" file="$2" arguments="$3" prepare="$4"
   local name="$gem/$file"
   local log="$WORK_DIR/logs/${name//\//__}.txt"
   local run_dir="$WORK_DIR/runs/${name//\//__}/$gem"
@@ -102,15 +107,19 @@ run_one() {
   fi
   (
     cd "$run_dir"
+    if [ "$prepare" != "$NO_PREPARE" ]; then
+      "${command[@]}" "$prepare" > "$log" 2>&1 < /dev/null
+    fi
     # shellcheck disable=SC2086
-    perl -e 'alarm shift; exec @ARGV' "$FILE_TIMEOUT" "${command[@]}" $arguments "$file" > "$log" 2>&1 < /dev/null
+    perl -e 'alarm shift; exec @ARGV' "$FILE_TIMEOUT" "${command[@]}" $arguments "$file" >> "$log" 2>&1 < /dev/null
   ) || true
   local summary
   summary=$(sed 's/\x1b\[[0-9;]*m//g' "$log" | grep -E '^[0-9]+ (tests|runs), ' | tail -1 || true)
   printf '%s\t%s\n' "$name" "${summary:-did not finish}"
 }
 export -f run_one
-export WORK_DIR REPO_ROOT METOREX FILE_TIMEOUT ENGINE
+NO_PREPARE=none
+export WORK_DIR REPO_ROOT METOREX FILE_TIMEOUT ENGINE NO_PREPARE
 # net-imap's helper measures coverage with SimpleCov unless told not to.
 export SIMPLECOV_DISABLE=1
 # A test that omits itself under CI would count differently there than in
@@ -118,9 +127,11 @@ export SIMPLECOV_DISABLE=1
 unset CI
 
 RESULTS="$WORK_DIR/results.tsv"
-while IFS=$'\t' read -r gem file arguments; do
-  printf '%s\0%s\0%s\0' "$gem" "$file" "$arguments"
-done < "$QUEUE" | xargs -0 -n 3 -P "$JOBS" bash -c 'run_one "$@"' _ > "$RESULTS"
+while IFS=$'\t' read -r gem file arguments prepare; do
+  # BSD xargs drops an empty argument, so a row with no prepare script
+  # passes NO_PREPARE in its place.
+  printf '%s\0%s\0%s\0%s\0' "$gem" "$file" "$arguments" "${prepare:-$NO_PREPARE}"
+done < "$QUEUE" | xargs -0 -n 4 -P "$JOBS" bash -c 'run_one "$@"' _ > "$RESULTS"
 if [ -n "${LOG_DIR:-}" ]; then
   mkdir -p "$LOG_DIR"
   cp "$WORK_DIR"/logs/*.txt "$LOG_DIR/"

@@ -170,6 +170,9 @@ impl VirtualMachine {
             arguments
         };
         let (arguments, keywords_given) = without_keyword_marker(arguments);
+        // MRI lists a C method's frame in a backtrace, at the place it was
+        // called from.
+        let entered = self.enter_native_frame(Some(&receiver), &name, position);
         let method = super::RunningMethod {
             receiver: receiver.clone(),
             name,
@@ -199,8 +202,9 @@ impl VirtualMachine {
         };
         let answered = super::enter(self, caller, || {
             function.call_with_values(receiver, &values, block_argument)
-        })?;
-        Ok(to_object(answered))
+        });
+        self.leave_native_call(entered, position, &answered);
+        Ok(to_object(answered?))
     }
 }
 

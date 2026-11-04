@@ -1,8 +1,8 @@
 # Copies the bundled gems MRI ships that metorex carries into this repository.
 # Each gem's Ruby library goes into src/vm/stdlib/gems, which `require` finds
-# by feature name, and the C extensions of nkf, rbs, and debug into
-# vendor/nkf, vendor/rbs, and vendor/debug, which build.rs compiles into the
-# binary. MRI's resolv.rb, which resolv-replace and rinda's
+# by feature name, and the C extensions of nkf, rbs, debug, and json into
+# vendor/nkf, vendor/rbs, vendor/debug, and vendor/json, which build.rs
+# compiles into the binary. MRI's resolv.rb, which resolv-replace and rinda's
 # ring build on, and its pp.rb and prettyprint.rb, which irb prints with,
 # replace metorex's own.
 #
@@ -16,7 +16,7 @@ require_relative "ruby_release"
 release = RubyRelease.from_arguments("vendor_gems.rb")
 
 GEMS = %w[
-  csv debug drb irb minitest mutex_m net-imap net-pop net-smtp nkf power_assert racc rake rbs rdoc readline
+  csv debug drb irb minitest mutex_m net-imap net-pop net-smtp nkf ostruct power_assert racc rake rbs rdoc readline
   reline repl_type_completor resolv-replace rexml rinda rss test-unit typeprof
 ].freeze
 
@@ -195,6 +195,16 @@ Dir.glob(File.join(debug, "ext", "debug", "*.{c,h}")).each { |path| FileUtils.cp
 File.write(File.join(vendor, "debug_version.h"),
            %(#define RUBY_DEBUG_VERSION "#{release.bundled_gem_version("debug")}"\n))
 FileUtils.cp(File.join(debug, "LICENSE.txt"), vendor)
+
+# json's parser and generator, which Ruby writes in C as a default gem.
+json = release.path("ext", "json")
+vendor = File.join(root, "vendor", "json")
+FileUtils.rm_rf(vendor)
+Dir.glob("{json.h,fbuffer/*.h,parser/*.c,generator/*.c,simd/*.h,vendor/*.{c,h}}", base: json).each do |path|
+  FileUtils.mkdir_p(File.join(vendor, File.dirname(path)))
+  FileUtils.cp(File.join(json, path), File.join(vendor, path))
+end
+%w[BSDL COPYING].each { |file| FileUtils.cp(release.path(file), vendor) }
 
 puts "#{versions.join(", ")}: #{entries.size} Ruby files"
 
