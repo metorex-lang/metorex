@@ -1016,3 +1016,20 @@ fn a_forked_child_runs_the_at_exit_handlers_it_inherited() {
     let output = run_example("io/forked_child_runs_the_at_exit_handlers.rb");
     assert_eq!(output, "0\n0\n");
 }
+
+#[test]
+fn a_call_written_through_self_reaches_private_methods_and_kernel_functions() {
+    let output = run_example("methods/private_methods_called_through_self.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "class body\n",
+            "module body\n",
+            "inside 007\n",
+            "[:route]\n",
+            "[:deliver]\n",
+            "private method 'new' called for class Courier\n",
+            "private method 'puts' called for an instance of Object\n",
+        )
+    );
+}

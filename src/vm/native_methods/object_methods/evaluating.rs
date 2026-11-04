@@ -32,6 +32,8 @@ impl VirtualMachine {
                     )?;
                     return Ok(Some(Object::Bool(!matched.is_truthy())));
                 }
+                let held_text = crate::vm::native_methods::string_subclass_value(receiver);
+                let receiver = held_text.as_ref().unwrap_or(receiver);
                 if matches!(
                     (matchable_text(receiver), matchable_text(&arguments[0])),
                     (Some(MatchSide::Pattern(_, _)), Some(MatchSide::Text(_)))

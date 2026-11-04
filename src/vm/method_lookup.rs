@@ -443,7 +443,7 @@ impl VirtualMachine {
         // `private_class_method :new` refuses an explicit-receiver call the
         // way a table-backed one does.
         if let View::Class(class_rc) | View::Module(class_rc) = receiver.view()
-            && written != WrittenReceiver::SelfKeyword
+            && !written.names_self()
             && self.method_is_restricted(&receiver, method_name)
         {
             let class_rc = Rc::clone(class_rc);
@@ -536,6 +536,14 @@ impl VirtualMachine {
             let answered = self.call_native_function(method_name, arguments, position);
             self.kernel_function_receiver = held;
             return answered;
+        }
+        if written.names_self() && crate::vm::native_methods::is_kernel_private_function(method_name)
+        {
+            let native = match self.globals().get(method_name).view() {
+                Some(View::NativeFunction(native)) => native.to_string(),
+                _ => method_name.to_string(),
+            };
+            return self.call_native_function(&native, arguments, position);
         }
 
         // Try method_missing as a final fallback

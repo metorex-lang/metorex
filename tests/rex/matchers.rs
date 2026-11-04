@@ -56,3 +56,15 @@ fn test_matchers_a_group_defines_and_the_fail_matchers() {
 fn test_contain_exactly_finds_the_pairing_rspec_finds() {
     assert_matches("matchers/contain_exactly", "progress", &[]);
 }
+
+/// The expected file is MRI's run with the gems/shoulda-matchers and
+/// gems/rails/activesupport libraries put on the load path with `-I`, which
+/// Metorex carries.
+#[test]
+fn test_shoulda_matchers_delegate_method_reports_what_it_reports_under_rspec() {
+    assert_matches(
+        "matchers/shoulda",
+        "documentation",
+        &["--format", "documentation"],
+    );
+}

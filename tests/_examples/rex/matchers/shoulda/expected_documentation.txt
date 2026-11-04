@@ -1,0 +1,52 @@
+
+ForwardingCourier
+  is expected to delegate #deliver to the #post_office object
+  is expected not to delegate #ship to the #post_office object
+
+Courier
+  is expected to delegate #deliver to the #post_office object as #ship
+  is expected to delegate #post_office_name to the #post_office object as #name
+  is expected to delegate #branch_title to the #post_office object as #title
+  is expected to delegate #deliver_package to the #post_office object passing arguments [{expedited: true}]
+  where an expectation does not hold
+    is expected to delegate #ship to the #post_office object (FAILED - 1)
+    is expected not to delegate #deliver to the #post_office object as #ship (FAILED - 2)
+
+Account
+  is expected to delegate #name to the #post_office object, allowing #post_office to return nil
+  is expected to delegate #title to the #post_office object privately
+  where an expectation does not hold
+    is expected to delegate #title to the #post_office object (FAILED - 3)
+
+Failures:
+
+  1) Courier where an expectation does not hold is expected to delegate #ship to the #post_office object
+     Failure/Error: it { should delegate_method(:ship).to(:post_office) }
+
+       Expected Courier to delegate #ship to the #post_office object.
+
+       Method calls sent to Courier#post_office: (none)
+     # ./spec/delegate_method_spec.rb:72:in 'block (3 levels) in <top (required)>'
+
+  2) Courier where an expectation does not hold is expected not to delegate #deliver to the #post_office object as #ship
+     Failure/Error: it { should_not delegate_method(:deliver).to(:post_office).as(:ship) }
+       Expected Courier not to delegate #deliver to the #post_office object as #ship, but it did.
+     # ./spec/delegate_method_spec.rb:73:in 'block (3 levels) in <top (required)>'
+
+  3) Account where an expectation does not hold is expected to delegate #title to the #post_office object
+     Failure/Error: it { should delegate_method(:title).to(:post_office) }
+
+       Expected Account to delegate #title to the #post_office object.
+
+       Method calls sent to Account#post_office: (none)
+     # ./spec/delegate_method_spec.rb:82:in 'block (3 levels) in <top (required)>'
+
+Finished in N seconds (files took N seconds to load)
+11 examples, 3 failures
+
+Failed examples:
+
+rspec ./spec/delegate_method_spec.rb:72 # Courier where an expectation does not hold is expected to delegate #ship to the #post_office object
+rspec ./spec/delegate_method_spec.rb:73 # Courier where an expectation does not hold is expected not to delegate #deliver to the #post_office object as #ship
+rspec ./spec/delegate_method_spec.rb:82 # Account where an expectation does not hold is expected to delegate #title to the #post_office object
+exit 1

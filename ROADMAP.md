@@ -141,8 +141,10 @@ Rex runs RSpec 3.13.6's own specs with `scripts/run_rspec_suite.sh`. Parity is t
 - [x] rspec-mocks: every file's counts match MRI's (1794 pass under Metorex and under MRI, of 1806)
 - [x] rspec-core: every file's counts match MRI's (2239 pass under Metorex and under MRI, of 2258)
 - [x] CI fails when any file's counts differ from MRI's
-- [ ] shoulda-matchers carried in the binary, as RSpec's libraries are: `require "shoulda-matchers"` loads it with no gems installed, and `Shoulda::Matchers.configure` wires it into Rex. Its ActiveModel, ActiveRecord, and ActionController matchers need the Rails item under Popular gems first
-  - Acceptance: a fixture under `tests/_examples/rex` that uses its independent matchers (`delegate_method`) prints what RSpec with shoulda-matchers prints under MRI 4.0.7, and shoulda-matchers' own suite's counts match MRI's file by file
+- [x] shoulda-matchers carried in the binary, as RSpec's libraries are: `require "shoulda-matchers"` loads it with no gems installed, and `Shoulda::Matchers.configure` wires it into Rex. It comes from the `gems/shoulda-matchers` submodule at v8.0.1, with the files of ActiveSupport it loads from the `gems/rails` submodule at v8.1.4.1
+  - Acceptance: a fixture under `tests/_examples/rex` that uses its independent matchers (`delegate_method`) prints what RSpec with shoulda-matchers prints under MRI 4.0.7
+- [ ] shoulda-matchers' own suite: every file's counts match MRI's. Its spec helpers build a Rails application and load rspec-rails and pry, even for the independent matchers' specs, so this follows the Rails item under Popular gems, and its ActiveModel, ActiveRecord, and ActionController matchers with it
+  - Acceptance: a script like `scripts/run_rspec_suite.sh` runs the suite under Metorex and MRI 4.0.7 and the counts match file by file
 
 ## Standard library
 

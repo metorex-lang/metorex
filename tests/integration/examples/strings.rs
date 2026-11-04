@@ -735,3 +735,12 @@ fn a_string_io_writes_text_it_cannot_join_as_its_bytes() {
         "#<Encoding:UTF-8>\n54\n#<Encoding:BINARY (ASCII-8BIT)>\n#<Encoding:BINARY (ASCII-8BIT)>\n#<Encoding::CompatibilityError: incompatible character encodings: UTF-8 and BINARY (ASCII-8BIT)>\n#<Encoding:UTF-8>\n"
     );
 }
+
+#[test]
+fn a_string_subclass_instance_matches_a_pattern_as_its_string() {
+    let output = run_example("strings/matching_a_string_subclass.rb");
+    assert_eq!(
+        output,
+        "0\nnil\n2\n2\nfalse\n#<MatchData \"item\">\n5\ntype mismatch: String given\n"
+    );
+}

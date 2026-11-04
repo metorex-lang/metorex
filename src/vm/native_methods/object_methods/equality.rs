@@ -134,6 +134,11 @@ impl VirtualMachine {
             }
             // BasicObject's negation, which every object answers.
             "!" if arguments.is_empty() => Ok(Some(Object::Bool(!receiver.is_truthy()))),
+            "=~" if let Some(text) =
+                crate::vm::native_methods::string_subclass_value(receiver) =>
+            {
+                self.call_object_equality_method(&text, method_name, arguments, position)
+            }
             // Only a String, a Regexp, a Symbol and nil answer `=~`; Ruby no
             // longer gives every object one.
             "=~" if !matches!(

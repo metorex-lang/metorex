@@ -1,6 +1,8 @@
 # Copies RSpec's own rspec-support, rspec-expectations, and rspec-mocks
 # libraries from the gems/rspec submodule, and diff-lcs, which rspec-support diffs with, into
-# src/vm/stdlib/rspec_vendor, and writes src/vm/stdlib/rspec_libraries.rs,
+# src/vm/stdlib/rspec_vendor, with shoulda-matchers from the
+# gems/shoulda-matchers submodule and the files of ActiveSupport it loads
+# from the gems/rails submodule, and writes src/vm/stdlib/rspec_libraries.rs,
 # which carries them in the binary by the feature name each is required as.
 # Their code names Rex where RSpec's names RSpec, so they define their
 # classes on Rex, and src/vm/stdlib/rex/expectation_additions.rb adds what
@@ -13,10 +15,15 @@
 
 require "fileutils"
 require "ripper"
+require_relative "ruby_release"
 
 root = File.expand_path("..", __dir__)
 rspec = File.join(root, "gems", "rspec")
 abort "gems/rspec is missing, run: git submodule update --init gems/rspec" unless File.exist?(File.join(rspec, "rspec-core"))
+shoulda = File.join(root, "gems", "shoulda-matchers")
+abort "gems/shoulda-matchers is missing, run: git submodule update --init gems/shoulda-matchers" unless File.exist?(File.join(shoulda, "lib"))
+rails = File.join(root, "gems", "rails")
+abort "gems/rails is missing, run: git submodule update --init gems/rails" unless File.exist?(File.join(rails, "activesupport"))
 
 lockfile = File.read(File.join(root, "scripts", "rspec_suite", "Gemfile.lock"))
 diff_lcs_version = lockfile[/^    diff-lcs \(([^)]+)\)$/, 1]
@@ -35,14 +42,24 @@ LIBRARIES = {
   "rspec-expectations" => [File.join(rspec, "rspec-expectations", "lib"),
                            %w[rspec/expectations.rb rspec/expectations/**/*.rb rspec/matchers.rb rspec/matchers/**/*.rb], []],
   "rspec-mocks" => [File.join(rspec, "rspec-mocks", "lib"), %w[rspec/mocks.rb rspec/mocks/**/*.rb], []],
-  "diff-lcs" => [File.join(diff_lcs, "lib"), %w[diff/lcs.rb diff/lcs/**/*.rb], []]
+  "diff-lcs" => [File.join(diff_lcs, "lib"), %w[diff/lcs.rb diff/lcs/**/*.rb], []],
+  "shoulda-matchers" => [File.join(shoulda, "lib"), %w[shoulda-matchers.rb shoulda/**/*.rb], []],
+  # The files `require "shoulda-matchers"` loads, for `delegate` and
+  # HashWithIndifferentAccess. ActiveSupport installed as a gem is found on
+  # the load path ahead of them.
+  "activesupport" => [File.join(rails, "activesupport", "lib"),
+                      %w[active_support/delegation.rb active_support/core_ext/module/delegation.rb
+                         active_support/hash_with_indifferent_access.rb
+                         active_support/core_ext/hash/{keys,reverse_merge,except,slice}.rb], []]
 }.freeze
 
 LICENSES = {
   "rspec-support" => File.join(rspec, "rspec-support", "LICENSE.md"),
   "rspec-expectations" => File.join(rspec, "rspec-expectations", "LICENSE.md"),
   "rspec-mocks" => File.join(rspec, "rspec-mocks", "LICENSE.md"),
-  "diff-lcs" => File.join(diff_lcs, "LICENCE.md")
+  "diff-lcs" => File.join(diff_lcs, "LICENCE.md"),
+  "shoulda-matchers" => File.join(shoulda, "LICENSE"),
+  "activesupport" => File.join(rails, "activesupport", "MIT-LICENSE")
 }.freeze
 
 # rspec-support requires the files of each RSpec library with a
@@ -96,6 +113,7 @@ LIBRARIES.each do |library, (lib, patterns, skipped)|
       text = text.sub(REQUIRE_RELATIVE_BRANCH, BY_FEATURE_NAME)
     end
     text = text.gsub(ENTRY_REQUIRE) { %(require "#{ENTRY_FILES.fetch($1)}") } unless PROGRAM_REQUIRED_FILES.include?(path)
+    text = require_by_feature(text, File.dirname(path))
     text = name_rex(text, path) if library.start_with?("rspec-")
     destination = File.join(vendor, library, path)
     FileUtils.mkdir_p(File.dirname(destination))
@@ -110,13 +128,16 @@ versions = {
   "rspec-support" => File.read(File.join(rspec, "rspec-support", "lib", "rspec", "support", "version.rb"))[/STRING = '([^']+)'/, 1],
   "rspec-expectations" => File.read(File.join(rspec, "rspec-expectations", "lib", "rspec", "expectations", "version.rb"))[/STRING = '([^']+)'/, 1],
   "rspec-mocks" => File.read(File.join(rspec, "rspec-mocks", "lib", "rspec", "mocks", "version.rb"))[/STRING = '([^']+)'/, 1],
-  "diff-lcs" => diff_lcs_version
+  "diff-lcs" => diff_lcs_version,
+  "shoulda-matchers" => File.read(File.join(shoulda, "lib", "shoulda", "matchers", "version.rb"))[/VERSION = '([^']+)'/, 1],
+  "activesupport" => File.read(File.join(rails, "RAILS_VERSION")).strip
 }
 
 File.write(File.join(stdlib, "rspec_libraries.rs"), <<~RUST)
   // Written by scripts/vendor_rspec.rb from #{versions.map { |name, version| "#{name} #{version}" }.join(", ")}.
 
-  /// RSpec's own libraries Rex runs, and diff-lcs, by the feature name each
+  /// RSpec's own libraries Rex runs, diff-lcs, shoulda-matchers, and the
+  /// files of ActiveSupport shoulda-matchers loads, by the feature name each
   /// is required as.
   pub(crate) const RSPEC_LIBRARIES: &[(&str, &str)] = &[
   #{entries.join.chomp}

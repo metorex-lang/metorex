@@ -37,3 +37,9 @@
 [submodule "gems/net-smtp"]
 	path = gems/net-smtp
 	url = https://github.com/ruby/net-smtp
+[submodule "gems/shoulda-matchers"]
+	path = gems/shoulda-matchers
+	url = https://github.com/thoughtbot/shoulda-matchers
+[submodule "gems/rails"]
+	path = gems/rails
+	url = https://github.com/rails/rails
