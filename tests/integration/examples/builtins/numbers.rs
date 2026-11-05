@@ -284,3 +284,56 @@ fn test_builtins_numeric_edges_no_parens_execution() {
     let output = run_example("builtins/numeric_edges_no_parens.rb");
     assert_eq!(output, NUMERIC_EDGES_OUTPUT);
 }
+
+#[test]
+fn math_error_and_gamma_functions_answer_the_c_library_digits() {
+    let output = run_example("builtins/math_error_function_digits.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "0.32862675945912734\n3.0577097964381646e-06\n0.0029794666563329845\n-0.0\n",
+            "11.631728396567448\n9.51350769866873\n",
+            "[13.940625219403763, 1]\n[-0.05624371649767412, -1]\n",
+        )
+    );
+}
+
+#[test]
+fn float_divmod_floors_toward_the_divisor_sign_with_infinite_divisors() {
+    let output = run_example("builtins/float_divmod_by_infinity.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[-1, Infinity]\n[0, -4.2]\n[0, 0.0]\n[0, 0.0]\n[0, 4.2]\n[-1, -Infinity]\n",
+            "[0, -0.0]\n[0, -0.0]\n[3, 1.5]\n[-4, 0.5]\n[-4, -0.5]\n[3, 0.10000000000000003]\n",
+            "[0, 6.0]\n\"Infinity\"\n\"NaN\"\n",
+        )
+    );
+}
+
+#[test]
+fn integer_quo_divides_a_rational_by_any_number_and_floats_meet_rationals_as_floats() {
+    let output = run_example("builtins/integer_quo_by_any_number.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "(1/2)\n(0/1)\n(3/590295810358705651712)\n((3/2)-(3/2)*i)\n(7/2)\n3.5\n",
+            "\"divided by 0\"\n\"String can't be coerced into Rational\"\n",
+            "(1.5+0i)\n((3/2)+0i)\n(6.0+0i)\n(1.5+0i)\n(1.5+(1/4)*i)\n",
+            "((3/2)+1i)\n((1/4)-(1/4)*i)\n((3/2)-(3/2)*i)\n(1-(1/4)*i)\n",
+            "1.5\n6.0\n5.0\n1.0\n4.0\n",
+        )
+    );
+}
+
+#[test]
+fn a_negative_base_raised_by_a_half_turn_answers_an_exact_zero_real_part() {
+    let output = run_example("builtins/negative_base_fractional_power.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "(0.0+2.8284271247461903i)\n(0.0-22.627416997969522i)\n(0.0-0.3535533905932738i)\n",
+            "(0.0+32.0i)\n(0.0+2.0i)\n(0.0+2.0i)\n(0.0+34359738368.0i)\n",
+        )
+    );
+}

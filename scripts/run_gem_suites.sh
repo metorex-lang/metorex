@@ -59,6 +59,7 @@ SUITES=(
   "net-smtp|test/net/smtp/test_*.rb|-I lib -I test"
   "base64|test/base64/test_*.rb|-I lib -I test"
   "json|test/json/*_test.rb|-I lib -I $HELPERS"
+  "bigdecimal|test/bigdecimal/test_*.rb|-w -I lib -I test/lib -I $HELPERS -r helper"
   "racc|test/test_*.rb|--enable-frozen-string-literal -I lib -I test/lib -I $HELPERS -r helper|$REPO_ROOT/scripts/gem_suite/racc_parser_text.rb"
 )
 

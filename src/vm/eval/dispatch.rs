@@ -493,9 +493,22 @@ impl VirtualMachine {
             }
         }
         // `1 / 2r` — an Integer or Float on the left of a Rational is
-        // promoted so the Rational's own arithmetic runs.
+        // promoted so the Rational's own arithmetic runs. Float arithmetic
+        // with a Rational answers a Float, which the operator evaluator
+        // gives.
+        let float_arithmetic = matches!(left_value.view(), View::Float(_))
+            && matches!(
+                op,
+                BinaryOp::Add
+                    | BinaryOp::Subtract
+                    | BinaryOp::Multiply
+                    | BinaryOp::Divide
+                    | BinaryOp::Modulo
+                    | BinaryOp::Power
+            );
         if let (Some(op_name), View::Int(_) | View::Float(_)) =
             (binary_op_method_name(op), left_value.view())
+            && !float_arithmetic
             && crate::vm::native_methods::rational_parts(&right_value).is_some()
         {
             let promoted = self.promote_to_rational(&left_value, *position)?;

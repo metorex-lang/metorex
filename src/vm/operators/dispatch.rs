@@ -44,6 +44,18 @@ impl VirtualMachine {
             return result;
         }
 
+        // An object a C extension made answers the operator from the method
+        // the extension defined, as a BigDecimal inside a Complex or at the
+        // end of a Range does.
+        if let Some(name) = crate::vm::eval::binary_op_method_name(op)
+            && matches!(left.view(), View::Instance(_))
+            && let Some((class, method)) = self.lookup_method(&left, name)
+            && !method.is_undefined
+            && method.provenance.c_function.is_some()
+        {
+            return self.invoke_method(class, method, left, vec![right], position);
+        }
+
         // A Complex carries its own arithmetic too, and a real number on the
         // left of one is promoted so that arithmetic runs.
         if let Some(name) = crate::vm::eval::binary_op_method_name(op) {
@@ -128,6 +140,14 @@ impl VirtualMachine {
             } else {
                 self.make_rational(whole, num_bigint::BigInt::from(1), position)
             };
+        }
+        // A Float meets a Rational as the Float the Rational is nearest to.
+        if matches!(op, Add | Subtract | Multiply | Divide | Modulo)
+            && matches!(left.view(), View::Float(_))
+            && crate::vm::native_methods::rational_parts(&right).is_some()
+        {
+            let nearest = self.send_to_object(right.clone(), "to_f", vec![], position)?;
+            return self.evaluate_binary_operation(op, left, nearest, position);
         }
         if let (Some(name), View::Int(_) | View::BigInt(_) | View::Float(_)) =
             (crate::vm::eval::binary_op_method_name(op), left.view())

@@ -230,6 +230,7 @@ impl Parser<'_> {
             };
             self.skip_whitespace();
             let right = self.parse_term()?;
+            let right = self.fold_assignment(right)?;
             expr = Expression::MethodCall {
                 receiver: Box::new(expr),
                 method: method.to_string(),
@@ -355,6 +356,7 @@ impl Parser<'_> {
             // the next one.
             self.skip_whitespace();
             let right = self.parse_factor()?;
+            let right = self.fold_assignment(right)?;
             expr = Expression::BinaryOp {
                 op,
                 left: Box::new(expr),
@@ -382,6 +384,7 @@ impl Parser<'_> {
             // the next one: `"%d runs" %` followed by the values.
             self.skip_whitespace();
             let right = self.parse_unary()?;
+            let right = self.fold_assignment(right)?;
             expr = Expression::BinaryOp {
                 op,
                 left: Box::new(expr),

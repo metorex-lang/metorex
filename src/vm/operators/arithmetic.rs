@@ -149,13 +149,7 @@ impl VirtualMachine {
                     && b.fract() != 0.0
                     && b.is_finite() =>
             {
-                let magnitude = (-big_to_float(a)).powf(b);
-                let angle = std::f64::consts::PI * b;
-                self.make_complex(
-                    Object::Float(magnitude * angle.cos()),
-                    Object::Float(magnitude * angle.sin()),
-                    position,
-                )
+                self.polar_pi((-big_to_float(a)).powf(b), b, position)
             }
             (View::BigInt(a), View::Float(b)) => float_arithmetic(op, big_to_float(a), b, position),
             (View::Float(a), View::BigInt(b)) => float_arithmetic(op, a, big_to_float(b), position),
@@ -170,13 +164,7 @@ impl VirtualMachine {
                 // number has no real root, so the answer is the principal
                 // complex one.
                 BinaryOp::Power if a < 0.0 && b.fract() != 0.0 && b.is_finite() => {
-                    let magnitude = (-a).powf(b);
-                    let angle = std::f64::consts::PI * b;
-                    self.make_complex(
-                        Object::Float(magnitude * angle.cos()),
-                        Object::Float(magnitude * angle.sin()),
-                        position,
-                    )
+                    self.polar_pi((-a).powf(b), b, position)
                 }
                 BinaryOp::Power => Ok(Object::Float(a.powf(b))),
                 _ => unreachable!(),
@@ -190,13 +178,7 @@ impl VirtualMachine {
                 // number has no real root, so the answer is the principal
                 // complex one.
                 BinaryOp::Power if a < 0 && b.fract() != 0.0 && b.is_finite() => {
-                    let magnitude = (-(a as f64)).powf(b);
-                    let angle = std::f64::consts::PI * b;
-                    self.make_complex(
-                        Object::Float(magnitude * angle.cos()),
-                        Object::Float(magnitude * angle.sin()),
-                        position,
-                    )
+                    self.polar_pi((-(a as f64)).powf(b), b, position)
                 }
                 BinaryOp::Power => Ok(Object::Float((a as f64).powf(b))),
                 _ => unreachable!(),
@@ -423,4 +405,71 @@ pub(crate) fn float_modulo(
         return Ok(Object::Float(remainder + right));
     }
     Ok(Object::Float(remainder))
+}
+
+impl VirtualMachine {
+    /// `magnitude` turned through `turns` half turns, as MRI's
+    /// `rb_dbl_complex_new_polar_pi` makes it: a half turn answers a Complex
+    /// whose real part is exactly zero, a whole turn a Float, and any other
+    /// angle the Complex the platform's `cospi` and `sinpi` give.
+    pub(crate) fn polar_pi(
+        &mut self,
+        magnitude: f64,
+        turns: f64,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
+        let whole = turns.trunc();
+        let fraction = turns - whole;
+        let halves = whole / 2.0;
+        let half_fraction = halves - halves.trunc();
+        if fraction == 0.5 || fraction == -0.5 {
+            let positive = fraction == 0.5;
+            let magnitude = if (half_fraction != fraction) ^ positive {
+                -magnitude
+            } else {
+                magnitude
+            };
+            return self.make_complex(Object::Float(0.0), Object::Float(magnitude), position);
+        }
+        if fraction == 0.0 {
+            return Ok(Object::Float(if half_fraction != 0.0 {
+                -magnitude
+            } else {
+                magnitude
+            }));
+        }
+        self.make_complex(
+            Object::Float(magnitude * cos_pi(turns)),
+            Object::Float(magnitude * sin_pi(turns)),
+            position,
+        )
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe extern "C" {
+    fn __cospi(value: f64) -> f64;
+    fn __sinpi(value: f64) -> f64;
+}
+
+#[cfg(target_os = "macos")]
+fn cos_pi(value: f64) -> f64 {
+    // SAFETY: __cospi takes any double.
+    unsafe { __cospi(value) }
+}
+
+#[cfg(target_os = "macos")]
+fn sin_pi(value: f64) -> f64 {
+    // SAFETY: __sinpi takes any double.
+    unsafe { __sinpi(value) }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn cos_pi(value: f64) -> f64 {
+    (value * std::f64::consts::PI).cos()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn sin_pi(value: f64) -> f64 {
+    (value * std::f64::consts::PI).sin()
 }

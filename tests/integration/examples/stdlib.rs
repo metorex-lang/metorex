@@ -1884,6 +1884,12 @@ fn bigdecimal_is_made_by_its_kernel_function_and_has_no_new() {
 }
 
 #[test]
+fn bigdecimal_converts_floats_and_rationals_through_its_c_extension() {
+    let output = run_example("stdlib/bigdecimal_from_float_and_rational.rb");
+    assert_eq!(output, "0.905e1\n0.905e1\n0.3333333333e0\n0.31429e1\n");
+}
+
+#[test]
 fn json_generates_subclasses_fragments_and_coder_output_through_its_c_extension() {
     let output = run_example("stdlib/json_extension_objects.rb");
     assert_eq!(
@@ -1899,6 +1905,39 @@ fn json_generates_subclasses_fragments_and_coder_output_through_its_c_extension(
             "248891\n",
             "true\n",
             "Float\n",
+        )
+    );
+}
+
+#[test]
+fn rbconfig_limits_name_the_pointer_size_and_float_ranges() {
+    let output = run_example("stdlib/rbconfig_pointer_and_float_limits.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "INTPTR_MAX 9223372036854775807\nINTPTR_MIN -9223372036854775808\n",
+            "UINTPTR_MAX 18446744073709551615\nSIZE_MAX 18446744073709551615\n",
+            "PTRDIFF_MIN -9223372036854775808\nINTMAX_MAX 9223372036854775807\n",
+            "UINT_LEAST8_MAX 255\nDBL_MANT_DIG 53\nDBL_EPSILON 2.220446049250313e-16\n",
+            "DBL_TRUE_MIN 5.0e-324\nFLT_DIG 6\nFLT_RADIX 2\n",
+        )
+    );
+}
+
+#[test]
+fn bigdecimal_calls_operators_its_c_code_names_by_character() {
+    let output = run_example("stdlib/bigdecimal_operator_calls.rb");
+    assert_eq!(output, "(3/2)\n(-9/4)\n[3, 0.1e1]\n10\ntrue\n");
+}
+
+#[test]
+fn bigdecimal_orders_in_ranges_and_divides_inside_complex_numbers() {
+    let output = run_example("stdlib/bigdecimal_in_ranges_and_complex.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "0.5e0\ntrue\n\"can't do binary search for BigDecimal\"\n",
+            "(0.0-0.3e1i)\n(0.6e1+0i)\n",
         )
     );
 }

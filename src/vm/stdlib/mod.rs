@@ -75,7 +75,6 @@ const EMBEDDED_LIBRARY_PREFIX: &str = "<metorex>/";
 
 /// The libraries metorex carries that Ruby writes in C, as `ext/` holds them.
 const C_EXTENSIONS: &[&str] = &[
-    "bigdecimal",
     "coverage",
     "date",
     "etc",
@@ -106,10 +105,6 @@ pub(crate) fn written_for_c(file: &str) -> bool {
 /// its source.
 const EMBEDDED_LIBRARIES: &[(&[&str], &str)] = &[
     (&["base64"], carried_source!("base64.rb")),
-    (
-        &["bigdecimal", "bigdecimal/util"],
-        carried_source!("bigdecimal.rb"),
-    ),
     (&["zlib"], carried_source!("zlib.rb")),
     (&["open3"], carried_source!("open3.rb")),
     (&["syslog"], carried_source!("syslog.rb")),

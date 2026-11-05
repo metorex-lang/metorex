@@ -14,6 +14,24 @@ impl VirtualMachine {
         other: &Object,
         position: Position,
     ) -> Result<Object, MetorexError> {
+        // A real operand reaches each part on its own, as MRI's
+        // `rb_complex_mul` and `f_divide` apply it.
+        if complex_parts(other).is_none() && method_name != "+" && method_name != "-" {
+            let (new_real, new_imaginary) = if method_name == "*" {
+                (
+                    self.multiply_part_by(real, other, position)?,
+                    self.multiply_part_by(imaginary, other, position)?,
+                )
+            } else {
+                let new_real = self.quotient_part(real, other, position)?;
+                let new_imaginary = self.quotient_part(imaginary, other, position)?;
+                (
+                    canonical_rational(new_real),
+                    canonical_rational(new_imaginary),
+                )
+            };
+            return self.make_complex(new_real, new_imaginary, position);
+        }
         let (other_real, other_imaginary) = self.complex_operand_parts(other, position)?;
         match method_name {
             "+" | "-" => {
@@ -206,6 +224,53 @@ impl VirtualMachine {
         )
     }
 
+    /// A part times a real number, with the shortcuts MRI's `f_mul` takes:
+    /// an Integer zero on either side of an Integer product is zero, and a
+    /// factor of one leaves the other side as it is.
+    fn multiply_part_by(
+        &mut self,
+        part: &Object,
+        factor: &Object,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
+        let integer = |held: &Object| matches!(held.view(), View::Int(_) | View::BigInt(_));
+        let is_int =
+            |held: &Object, wanted: i64| matches!(held.view(), View::Int(n) if n == wanted);
+        if integer(part) {
+            if is_int(factor, 0) || (is_int(part, 0) && integer(factor)) {
+                return Ok(Object::Int(0));
+            }
+            if is_int(part, 1) {
+                return Ok(factor.clone());
+            }
+        }
+        if is_int(factor, 1) {
+            return Ok(part.clone());
+        }
+        self.multiply_parts(part, factor, position)
+    }
+
+    /// A part divided by a real number as MRI's `f_quo` divides it: a Float
+    /// or a Rational by its division, and anything else by its `quo`.
+    fn quotient_part(
+        &mut self,
+        part: &Object,
+        divisor: &Object,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
+        if matches!(part.view(), View::Float(_))
+            || crate::vm::native_methods::rational_methods::rational_parts(part).is_some()
+        {
+            return self.evaluate_binary_operation(
+                &crate::ast::BinaryOp::Divide,
+                part.clone(),
+                divisor.clone(),
+                position,
+            );
+        }
+        self.send_to_object(part.clone(), "quo", vec![divisor.clone()], position)
+    }
+
     pub(crate) fn multiply_parts(
         &mut self,
         left: &Object,
@@ -256,5 +321,16 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         self.send_to_object(value.clone(), "to_f", vec![], position)
+    }
+}
+
+/// A Rational whose denominator is one as the Integer it stands for, and
+/// anything else as it is.
+fn canonical_rational(value: Object) -> Object {
+    match crate::vm::native_methods::rational_methods::rational_parts(&value) {
+        Some((numerator, denominator)) if denominator == num_bigint::BigInt::from(1) => {
+            Object::integer(numerator)
+        }
+        _ => value,
     }
 }

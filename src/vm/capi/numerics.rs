@@ -54,6 +54,16 @@ pub extern "C-unwind" fn rb_complex_new(real: Value, imaginary: Value) -> Value 
 }
 
 #[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_complex_real(complex: Value) -> Value {
+    to_value(&call(to_object(complex), "real", Vec::new()))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_complex_imag(complex: Value) -> Value {
+    to_value(&call(to_object(complex), "imaginary", Vec::new()))
+}
+
+#[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_Rational(numerator: Value, denominator: Value) -> Value {
     kernel_conversion("Rational", &[numerator, denominator])
 }

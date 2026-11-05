@@ -166,7 +166,7 @@ The 100 most downloaded gems on rubygems.org (`rubygems.org/stats`, read on 2026
   - Acceptance: the script runs one gem's suite under both and the results file lists its files
 - [ ] A `gems` stage in the Jenkinsfile, after `rspec-suites`, on a release build in a pod of its own, with one parallel branch per group below so a failing group shows by name. Each branch runs `scripts/run_gem_suites.sh` for its group under Metorex and compares the counts with the results file, whose MRI counts are recorded once per gem version rather than run on each build. A file whose Metorex counts fall below the recorded ones fails the branch, and one that rises prints the line to update. GitHub CI does not run the gem suites
   - Acceptance: a Jenkins run shows the `gems` stage with a branch per group, and a branch fails when a recorded count is raised by hand above what the run produces
-- [ ] The gems in the list that ship with Ruby and that Metorex carries: json, racc, base64, and bigdecimal
+- [x] The gems in the list that ship with Ruby and that Metorex carries: json, racc, base64, and bigdecimal
 - [ ] Rack and HTTP: rack, rack-test, rack-protection, faraday, faraday-net_http, multipart-post, excon, httpclient, http-cookie, domain_name, connection_pool, and websocket-extensions
 - [ ] Text, data, and time: i18n, tzinfo, multi_json, multi_xml, builder, mime-types, mime-types-data, mini_mime, mail, addressable, public_suffix, jwt, dotenv, netrc, and rubyzip
 - [ ] Command line and developer tools: thor, rainbow, ruby-progressbar, unicode-display_width, parallel, method_source, coderay, pry, simplecov, docile, and mini_portile2

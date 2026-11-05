@@ -30,6 +30,8 @@
 #include "ruby/st.h"
 
 #define NORETURN(x) __attribute__((__noreturn__)) x
+#define PUREFUNC(x) __attribute__((__pure__)) x
+#define CONSTFUNC(x) __attribute__((__const__)) x
 #define UNREACHABLE_RETURN(value) __builtin_unreachable()
 #define UNREACHABLE __builtin_unreachable()
 
@@ -48,6 +50,12 @@ extern "C" {
 #define SIZEOF_SIZE_T __SIZEOF_SIZE_T__
 #define SIZEOF_DOUBLE __SIZEOF_DOUBLE__
 #define SIZEOF_UINT64_T 8
+#ifdef __SIZEOF_INT128__
+#define int128_t __int128
+#define uint128_t unsigned __int128
+#define SIZEOF_INT128_T __SIZEOF_INT128__
+#define SIZEOF_UINT128_T __SIZEOF_INT128__
+#endif
 #define SIZEOF_TIME_T __SIZEOF_LONG__
 #define SIZEOF_VALUE SIZEOF_VOIDP
 #define HAVE_LONG_LONG 1
@@ -631,10 +639,14 @@ int rb_float_type_p(VALUE value);
 #define DBL2NUM(d) rb_float_new(d)
 #define RFLOAT_VALUE(v) rb_float_value((VALUE)(v))
 #define RB_FLOAT_TYPE_P(v) rb_float_type_p((VALUE)(v))
+#define RB_INTEGER_TYPE_P(v) (RB_FIXNUM_P(v) || RB_TYPE_P((v), T_BIGNUM))
+int rb_opts_exception_p(VALUE options, int default_value);
 VALUE rb_Float(VALUE value);
 
 VALUE rb_Complex(VALUE real, VALUE imaginary);
 VALUE rb_complex_new(VALUE real, VALUE imaginary);
+VALUE rb_complex_real(VALUE complex);
+VALUE rb_complex_imag(VALUE complex);
 #define rb_Complex1(x) rb_Complex((x), INT2FIX(0))
 #define rb_Complex2(x, y) rb_Complex((x), (y))
 #define rb_complex_new1(x) rb_complex_new((x), INT2FIX(0))
@@ -865,6 +877,8 @@ VALUE rb_num_coerce_relop(VALUE first, VALUE second, ID name);
 VALUE rb_Integer(VALUE value);
 short rb_num2short(VALUE value);
 #define NUM2SHORT(v) rb_num2short((VALUE)(v))
+unsigned short rb_num2ushort(VALUE value);
+#define NUM2USHORT(v) rb_num2ushort((VALUE)(v))
 char rb_num2char(VALUE value);
 #define NUM2CHR(v) rb_num2char((VALUE)(v))
 #define CHR2FIX(c) INT2FIX((long)((c) & 0xff))
@@ -937,6 +951,14 @@ static inline int rb_isalnum(int c) { return rb_isalpha(c) || rb_isdigit(c); }
 static inline int rb_isspace(int c) { return c == ' ' || (c >= '\t' && c <= '\r'); }
 static inline int rb_tolower(int c) { return rb_isupper(c) ? c + ('a' - 'A') : c; }
 static inline int rb_toupper(int c) { return rb_islower(c) ? c - ('a' - 'A') : c; }
+#define ISALPHA(c) rb_isalpha((unsigned char)(c))
+#define ISDIGIT(c) rb_isdigit((unsigned char)(c))
+#define ISUPPER(c) rb_isupper((unsigned char)(c))
+#define ISLOWER(c) rb_islower((unsigned char)(c))
+#define ISALNUM(c) rb_isalnum((unsigned char)(c))
+#define ISSPACE(c) rb_isspace((unsigned char)(c))
+#define TOLOWER(c) rb_tolower((unsigned char)(c))
+#define TOUPPER(c) rb_toupper((unsigned char)(c))
 VALUE rb_gc_location(VALUE object);
 void rb_gc_unregister_address(VALUE *address);
 void rb_global_variable(VALUE *address);
@@ -1055,6 +1077,7 @@ st_index_t rb_hash_start(st_index_t hash);
 st_index_t rb_hash_uint32(st_index_t hash, uint32_t word);
 st_index_t rb_hash_uint(st_index_t hash, st_index_t word);
 st_index_t rb_hash_end(st_index_t hash);
+st_index_t rb_memhash(const void *bytes, long length);
 
 #define RB_SCAN_ARGS_PASS_CALLED_KEYWORDS 0
 #define RB_SCAN_ARGS_KEYWORDS 1

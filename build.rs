@@ -50,6 +50,7 @@ fn main() {
     compile_rbs();
     compile_debug();
     compile_json();
+    compile_bigdecimal();
     parse_carried_sources();
 }
 
@@ -243,6 +244,37 @@ fn compile_json() {
             "-DHAVE_RB_STR_TO_INTERNED_STR",
             "-DHAVE_RB_HASH_NEW_CAPA",
             "-DHAVE_RB_HASH_BULK_INSERT",
+        ],
+    );
+}
+
+/// bigdecimal's C extension, which `require "bigdecimal.so"` starts with
+/// `Init_bigdecimal`, with the defines its extconf.rb writes for the
+/// headers and functions Metorex has.
+fn compile_bigdecimal() {
+    compile_extension(
+        "bigdecimal",
+        vec![
+            PathBuf::from("vendor/bigdecimal/bigdecimal.c"),
+            PathBuf::from("vendor/bigdecimal/missing.c"),
+        ],
+        &["vendor/bigdecimal"],
+        &[
+            "-DHAVE_BUILTIN___BUILTIN_CLZ",
+            "-DHAVE_BUILTIN___BUILTIN_CLZL",
+            "-DHAVE_BUILTIN___BUILTIN_CLZLL",
+            "-DHAVE_FLOAT_H",
+            "-DHAVE_MATH_H",
+            "-DHAVE_STDBOOL_H",
+            "-DHAVE_STDLIB_H",
+            "-DHAVE_INT64_T",
+            "-DHAVE_INT128_T",
+            "-DHAVE_UINT128_T",
+            "-DHAVE_RB_COMPLEX_REAL",
+            "-DHAVE_RB_COMPLEX_IMAG",
+            "-DHAVE_RB_OPTS_EXCEPTION_P",
+            "-DHAVE_RB_CATEGORY_WARN",
+            "-DHAVE_CONST_RB_WARN_CATEGORY_DEPRECATED",
         ],
     );
 }

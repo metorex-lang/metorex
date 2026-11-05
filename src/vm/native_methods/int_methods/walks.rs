@@ -80,9 +80,8 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                // Dividing by a Float answers a Float, and dividing by a
-                // number too large for a machine word answers one too.
-                if matches!(arguments[0].view(), View::Float(_) | View::BigInt(_)) {
+                // Dividing by a Float answers a Float.
+                if matches!(arguments[0].view(), View::Float(_)) {
                     return self
                         .send_to_object(
                             Object::Float(*n as f64),
@@ -92,23 +91,23 @@ impl VirtualMachine {
                         )
                         .map(Some);
                 }
-                let Some(View::Int(divisor)) = arguments.first().view() else {
-                    return Err(method_argument_type_error(
-                        method_name,
-                        "Integer",
-                        &arguments[0],
-                        position,
-                    ));
+                let (numerator, denominator) = match arguments[0].view() {
+                    View::Int(0) => {
+                        return Err(crate::vm::errors::divide_by_zero_error(position));
+                    }
+                    View::Int(divisor) => {
+                        let (mut numerator, mut denominator) = (*n, divisor);
+                        if denominator < 0 {
+                            numerator = -numerator;
+                            denominator = -denominator;
+                        }
+                        let common = greatest_common_divisor(numerator.abs(), denominator);
+                        (numerator / common, denominator / common)
+                    }
+                    // Anything else divides the Rational the receiver stands
+                    // for, as MRI's `rb_numeric_quo` does.
+                    _ => (*n, 1),
                 };
-                if divisor == 0 {
-                    return Err(crate::vm::errors::divide_by_zero_error(position));
-                }
-                let (mut numerator, mut denominator) = (*n, divisor);
-                if denominator < 0 {
-                    numerator = -numerator;
-                    denominator = -denominator;
-                }
-                let divisor = greatest_common_divisor(numerator.abs(), denominator);
                 let viewed = self.globals().get("Rational");
                 let Some(View::Class(rational_class)) = viewed.view() else {
                     return Ok(None);
@@ -116,12 +115,16 @@ impl VirtualMachine {
                 let instance = crate::object::Instance::new(rational_class.clone());
                 instance
                     .borrow_mut()
-                    .set_var("numerator".to_string(), Object::Int(numerator / divisor));
-                instance.borrow_mut().set_var(
-                    "denominator".to_string(),
-                    Object::Int(denominator / divisor),
-                );
-                Ok(Some(Object::Instance(instance)))
+                    .set_var("numerator".to_string(), Object::Int(numerator));
+                instance
+                    .borrow_mut()
+                    .set_var("denominator".to_string(), Object::Int(denominator));
+                let rational = Object::Instance(instance);
+                if matches!(arguments[0].view(), View::Int(_)) {
+                    return Ok(Some(rational));
+                }
+                self.send_to_object(rational, "/", vec![arguments[0].clone()], position)
+                    .map(Some)
             }
             "upto" | "downto" => {
                 if arguments.len() != 1 {

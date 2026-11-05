@@ -241,6 +241,8 @@ const T_STRUCT: i32 = 0x09;
 const T_BIGNUM: i32 = 0x0a;
 const T_DATA: i32 = 0x0c;
 const T_FILE: i32 = 0x0b;
+const T_COMPLEX: i32 = 0x0e;
+const T_RATIONAL: i32 = 0x0f;
 const T_NIL: i32 = 0x11;
 const T_TRUE: i32 = 0x12;
 const T_FALSE: i32 = 0x13;
@@ -287,7 +289,8 @@ pub extern "C-unwind" fn rb_type(object: Value) -> i32 {
 /// The tag of an object of a class Ruby code can define: the tag of the
 /// core class an Array, String or Hash subclass descends from, `T_FILE`
 /// for an IO, `T_DATA` for a Time, whose state MRI keeps in C, `T_STRUCT`
-/// for a Struct or a Data, and `T_OBJECT` for the rest.
+/// for a Struct or a Data, `T_RATIONAL` and `T_COMPLEX` for the numbers
+/// MRI writes in C, and `T_OBJECT` for the rest.
 fn instance_type(object: Object) -> i32 {
     let is_a = |name: &str| {
         super::calls::call(
@@ -309,6 +312,10 @@ fn instance_type(object: Object) -> i32 {
         T_DATA
     } else if is_a("Struct") || is_a("Data") {
         T_STRUCT
+    } else if is_a("Rational") {
+        T_RATIONAL
+    } else if is_a("Complex") {
+        T_COMPLEX
     } else {
         T_OBJECT
     }

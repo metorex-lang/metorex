@@ -467,13 +467,16 @@ pub extern "C-unwind" fn rb_string_value_cstr(pointer: *mut Value) -> *mut c_cha
 /// MRI's `rb_str_new` makes it.
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_str_new(text: *const u8, length: i64) -> Value {
-    let bytes = if length > 0 && !text.is_null() {
-        // SAFETY: C hands over `length` bytes at `text`.
-        unsafe { std::slice::from_raw_parts(text, length as usize) }
+    let length = usize::try_from(length).unwrap_or(0);
+    // With no text, the String holds `length` zero bytes for C to write
+    // through `RSTRING_PTR`.
+    let characters = if text.is_null() {
+        "\0".repeat(length)
     } else {
-        &[]
+        // SAFETY: C hands over `length` bytes at `text`.
+        let bytes = unsafe { std::slice::from_raw_parts(text, length) };
+        bytes.iter().map(|byte| *byte as char).collect::<String>()
     };
-    let characters = bytes.iter().map(|byte| *byte as char).collect::<String>();
     to_value(&Object::String(Rc::new(StringValue::from_bytes(
         characters,
     ))))

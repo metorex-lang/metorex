@@ -41,7 +41,11 @@ impl VirtualMachine {
 /// Join the two rendered halves the way Ruby does: a sign between them, and a
 /// `*` before the `i` when the imaginary half does not end in a digit.
 pub(crate) fn format_complex_parts(real: &str, imaginary: &str, negative: bool) -> String {
-    let magnitude = imaginary.strip_prefix('-').unwrap_or(imaginary);
+    // A negative Rational inspects as `(-1/4)`, whose magnitude is `(1/4)`.
+    let magnitude = match imaginary.strip_prefix("(-") {
+        Some(rest) => format!("({}", rest),
+        None => imaginary.strip_prefix('-').unwrap_or(imaginary).to_string(),
+    };
     let separator = if negative { "-" } else { "+" };
     let suffix = match magnitude.chars().last() {
         Some(last) if last.is_ascii_digit() => "i",

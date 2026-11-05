@@ -1,0 +1,8 @@
+p Math.erf(0.3)
+p Math.erfc(3.3)
+p Math.erfc(2.1)
+p Math.erf(-0.0)
+p Math.gamma(4.5)
+p Math.gamma(0.1)
+p Math.lgamma(10.5)
+p Math.lgamma(-2.5)

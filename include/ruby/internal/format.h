@@ -18,6 +18,10 @@
 #define PRIiVALUE PRI_VALUE_PREFIX "i"
 #define PRIxVALUE PRI_VALUE_PREFIX "x"
 #define PRI_SIZE_PREFIX "z"
+#define PRIdSIZE PRI_SIZE_PREFIX "d"
+#define PRIiSIZE PRI_SIZE_PREFIX "i"
+#define PRIuSIZE PRI_SIZE_PREFIX "u"
+#define PRIxSIZE PRI_SIZE_PREFIX "x"
 
 /* The text written so far, and the last string a VALUE conversion wrote,
  * whose encoding the result takes when the two are compatible. */
@@ -237,6 +241,19 @@ static inline void rb_category_warn(rb_warning_category_t category, const char *
   VALUE message = rb_vsprintf(format, arguments);
   va_end(arguments);
   rb_metorex_category_warn(category, message);
+}
+
+/* An error inside the interpreter or an extension that it cannot go on
+ * from: the message goes to stderr and the process aborts. */
+NORETURN(static inline void rb_bug(const char *format, ...));
+static inline void rb_bug(const char *format, ...) {
+  va_list arguments;
+  va_start(arguments, format);
+  fputs("[BUG] ", stderr);
+  vfprintf(stderr, format, arguments);
+  fputc('\n', stderr);
+  va_end(arguments);
+  abort();
 }
 
 static inline void rb_warning(const char *format, ...) {

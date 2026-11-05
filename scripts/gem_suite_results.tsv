@@ -1,5 +1,11 @@
 file	mri_examples	mri_failures	mri_pending	metorex_examples	metorex_failures	metorex_pending
 base64/test/base64/test_base64.rb	9	0	0	9	0	0
+bigdecimal/test/bigdecimal/test_bigdecimal.rb	199	0	0	199	0	0
+bigdecimal/test/bigdecimal/test_bigdecimal_util.rb	14	0	0	14	0	0
+bigdecimal/test/bigdecimal/test_bigmath.rb	31	0	0	31	0	0
+bigdecimal/test/bigdecimal/test_jruby.rb	6	0	0	6	0	0
+bigdecimal/test/bigdecimal/test_ractor.rb	1	0	0	1	0	0
+bigdecimal/test/bigdecimal/test_vp_operation.rb	8	0	8	8	0	8
 json/test/json/json_addition_test.rb	13	0	0	13	0	0
 json/test/json/json_coder_test.rb	11	0	0	11	0	0
 json/test/json/json_common_interface_test.rb	29	0	0	29	0	0

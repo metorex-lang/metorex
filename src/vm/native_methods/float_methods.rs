@@ -204,6 +204,24 @@ impl VirtualMachine {
                                 position,
                             ));
                         }
+                        let divisor = match arguments[0].view() {
+                            View::Float(divisor) => Some(divisor),
+                            View::Int(divisor) => Some(divisor as f64),
+                            View::BigInt(divisor) => {
+                                Some(crate::vm::operators::big_to_float(divisor))
+                            }
+                            _ => None,
+                        };
+                        if let Some(divisor) = divisor {
+                            let (quotient, modulus) = floored_division(f, divisor);
+                            let quotient = self.send_to_object(
+                                Object::Float(quotient),
+                                "floor",
+                                vec![],
+                                position,
+                            )?;
+                            return Ok(Some(Object::array(vec![quotient, Object::Float(modulus)])));
+                        }
                         let quotient = self.evaluate_binary_operation(
                             &BinaryOp::Divide,
                             receiver.clone(),
@@ -554,4 +572,29 @@ fn written_with_places(value: &num_bigint::BigInt, places: usize) -> String {
         &digits[..split],
         &digits[split..]
     )
+}
+
+/// The floored quotient and the modulus of `dividend` by a nonzero
+/// `divisor`, computed as MRI's `flodivmod` does: a finite number divided by
+/// an infinite one keeps itself as the modulus, and a modulus whose sign
+/// differs from the divisor's moves the quotient down by one.
+fn floored_division(dividend: f64, divisor: f64) -> (f64, f64) {
+    if divisor.is_nan() {
+        return (divisor, divisor);
+    }
+    let mut modulus = if dividend == 0.0 || (divisor.is_infinite() && !dividend.is_infinite()) {
+        dividend
+    } else {
+        dividend % divisor
+    };
+    let mut quotient = if dividend.is_infinite() && !divisor.is_infinite() {
+        dividend
+    } else {
+        ((dividend - modulus) / divisor).round()
+    };
+    if divisor * modulus < 0.0 {
+        modulus += divisor;
+        quotient -= 1.0;
+    }
+    (quotient, modulus)
 }

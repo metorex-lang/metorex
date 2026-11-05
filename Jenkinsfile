@@ -303,7 +303,7 @@ pipeline {
                 sh 'scripts/run_gem_suites.sh minitest test-unit power_assert rake rexml rss net-imap net-pop net-smtp'
               },
               'gems Ruby ships': {
-                sh 'scripts/run_gem_suites.sh racc base64 json'
+                sh 'scripts/run_gem_suites.sh racc base64 json bigdecimal'
               }
             )
           }

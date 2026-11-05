@@ -65,7 +65,7 @@ pub(super) const BYTE_VIEWS_OUTPUT: &str = concat!(
 pub(super) const ENCODING_CONVERTING_OUTPUT: &str = "\"plain\"\n\"UTF-8\"\n\"US-ASCII\"\n\"\u{8765}\"\n\"UTF-8\"\n\"ISO-8859-1\"\n[241]\n[97]\n\"UTF-8\"\nEncoding\ntrue\n";
 
 /// The expected output of both `builtins/numeric_parts` variants.
-pub(super) const NUMERIC_PARTS_OUTPUT: &str = "(0+3i)\n(3+0i)\n[5, 0]\n[5, 3.141592653589793]\n[5, 0]\ntrue\n0\n0\n9\n(5/2)\n0.8\n1\n-1\n1\n-100\n(1/3)\n(3/10)\n(4806858197361/1421)\n(4+6i)\n(Infinity+Infinity*i)\n(2.0+6.0i)\n((1/1)+(3/1)*i)\n[2, 1024, -1021]\nnil\nnil\n";
+pub(super) const NUMERIC_PARTS_OUTPUT: &str = "(0+3i)\n(3+0i)\n[5, 0]\n[5, 3.141592653589793]\n[5, 0]\ntrue\n0\n0\n9\n(5/2)\n0.8\n1\n-1\n1\n-100\n(1/3)\n(3/10)\n(4806858197361/1421)\n(4+6i)\n(Infinity+Infinity*i)\n(2.0+6.0i)\n(1+3i)\n[2, 1024, -1021]\nnil\nnil\n";
 
 /// The expected output of both `builtins/range_bounds` variants.
 pub(super) const RANGE_BOUNDS_OUTPUT: &str =

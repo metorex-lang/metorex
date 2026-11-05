@@ -399,6 +399,21 @@ impl VirtualMachine {
             return Ok(None);
         };
 
+        // A Complex operand takes the Rational as its real part, and the
+        // Complex arithmetic answers.
+        if let Some(other) = arguments.first()
+            && matches!(method_name, "+" | "-" | "*" | "/" | "quo" | "**")
+            && crate::vm::native_methods::complex_parts(other).is_some()
+        {
+            let promoted = self.make_complex(receiver.clone(), Object::Int(0), position)?;
+            let applied = if method_name == "quo" {
+                "/"
+            } else {
+                method_name
+            };
+            return self.call_complex_method(&promoted, applied, arguments, position);
+        }
+
         match method_name {
             // The unary operators, which a sign in front of a Rational reaches.
             "-@" | "+@" => {
@@ -665,13 +680,7 @@ impl VirtualMachine {
         if base >= 0.0 {
             return Ok(Object::Float(base.powf(exponent)));
         }
-        let size = (-base).powf(exponent);
-        let angle = std::f64::consts::PI * exponent;
-        self.make_complex(
-            Object::Float(size * angle.cos()),
-            Object::Float(size * angle.sin()),
-            position,
-        )
+        self.polar_pi((-base).powf(exponent), exponent, position)
     }
 
     /// Arithmetic and ordering against an Integer, Float, or Rational. A Float

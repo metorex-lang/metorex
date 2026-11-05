@@ -17,10 +17,25 @@ thread_local! {
     static NAMES: RefCell<HashMap<Value, CString>> = RefCell::new(HashMap::new());
 }
 
+/// The characters whose code is the ID of the one-character operator they
+/// spell, as `rb_funcall(number, '*', 1, other)` passes it.
+const OPERATOR_CHARACTERS: &[u8] = b"!%&*+-/<>^|~";
+
+/// The Symbol VALUE an ID stands for: an operator's character code is the
+/// Symbol of that operator, and any other ID is its Symbol already.
+pub(super) fn id_symbol(id: Value) -> Value {
+    match u8::try_from(id) {
+        Ok(code) if OPERATOR_CHARACTERS.contains(&code) => {
+            to_value(&Object::symbol((code as char).to_string()))
+        }
+        _ => id,
+    }
+}
+
 /// The name of the Symbol an ID or a Symbol VALUE stands for, refusing a
 /// VALUE that is no Symbol.
 pub(super) fn symbol_name(value: Value) -> String {
-    match to_object(value).view() {
+    match to_object(id_symbol(value)).view() {
         View::Symbol(name) => name.as_str().to_string(),
         other => raise(crate::vm::errors::simple_exception(
             "TypeError",
@@ -40,7 +55,7 @@ pub extern "C-unwind" fn rb_intern(name: *const c_char) -> Value {
 
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_id2sym(id: Value) -> Value {
-    id
+    id_symbol(id)
 }
 
 #[unsafe(no_mangle)]
@@ -116,7 +131,7 @@ pub extern "C-unwind" fn rb_id2str(id: Value) -> Value {
         return super::values::QFALSE;
     }
     symbol_name(id);
-    to_value(&call(to_object(id), "to_s", Vec::new()))
+    to_value(&call(to_object(id_symbol(id)), "to_s", Vec::new()))
 }
 
 #[unsafe(no_mangle)]

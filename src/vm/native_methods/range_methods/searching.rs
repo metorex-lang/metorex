@@ -365,7 +365,7 @@ impl SearchBounds {
                 View::String(_) => "String",
                 View::Symbol(_) => "Symbol",
                 View::Instance(instance) => {
-                    return refuse_binary_search(instance.borrow().class.name(), position);
+                    return refuse_binary_search(&instance.borrow().class.ruby_name(), position);
                 }
                 other => other.type_name(),
             };

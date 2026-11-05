@@ -151,8 +151,9 @@ impl VirtualMachine {
             }
             "expm1" => first.exp_m1(),
             "hypot" => first.hypot(values.get(1).copied().unwrap_or_default()),
-            "erf" => error_function(first),
-            "erfc" => 1.0 - error_function(first),
+            // SAFETY: erf and erfc take any double.
+            "erf" => unsafe { erf(first) },
+            "erfc" => unsafe { erfc(first) },
             "gamma" => {
                 if first == 0.0 {
                     return Ok(Object::Float(f64::INFINITY * first.signum()));
@@ -166,10 +167,9 @@ impl VirtualMachine {
                 if first < 0.0 && first.fract() == 0.0 {
                     return Err(out_of_domain("gamma"));
                 }
-                // A whole number's gamma is a factorial, and multiplying the
-                // factors keeps every digit a double can hold, which the
-                // series approximation does not.
-                if first > 0.0 && first.fract() == 0.0 && first <= LARGEST_EXACT_FACTORIAL {
+                // A whole number's gamma is a factorial, and up to 22! the
+                // product of the factors is exact in a double.
+                if first.fract() == 0.0 && (1.0..=LARGEST_EXACT_FACTORIAL).contains(&first) {
                     let mut product = 1.0;
                     let mut factor = 2.0;
                     while factor < first {
@@ -178,7 +178,8 @@ impl VirtualMachine {
                     }
                     return Ok(Object::Float(product));
                 }
-                gamma_function(first)
+                // SAFETY: tgamma takes any double.
+                unsafe { tgamma(first) }
             }
             // `ldexp` scales by a power of two, and `frexp` splits a number
             // into the pair that does so.
@@ -216,27 +217,22 @@ impl VirtualMachine {
                         Object::Int(1),
                     ]));
                 }
-                // It has a pole at every whole number at or below zero, so
-                // its magnitude there has no logarithm short of infinity. The
-                // sign alternates from one pole to the next, and negative
-                // zero approaches the pole at zero from the other side.
-                if first <= 0.0 && first.fract() == 0.0 {
-                    let sign = if first == 0.0 {
-                        if first.is_sign_negative() { -1 } else { 1 }
-                    } else if (first / 2.0).fract() != 0.0 {
-                        1
-                    } else {
-                        -1
-                    };
+                // Negative zero approaches the pole at zero from the side
+                // where the gamma function is negative.
+                if first == 0.0 {
+                    let sign = if first.is_sign_negative() { -1 } else { 1 };
                     return Ok(Object::array(vec![
                         Object::Float(f64::INFINITY),
                         Object::Int(sign),
                     ]));
                 }
-                let value = gamma_function(first);
+                let mut sign = 0;
+                // SAFETY: lgamma_r takes any double and writes the sign it
+                // drops through the pointer.
+                let value = unsafe { lgamma_r(first, &mut sign) };
                 return Ok(Object::array(vec![
-                    Object::Float(value.abs().ln()),
-                    Object::Int(if value < 0.0 { -1 } else { 1 }),
+                    Object::Float(value),
+                    Object::Int(i64::from(sign)),
                 ]));
             }
             other => {
@@ -293,55 +289,17 @@ impl VirtualMachine {
     }
 }
 
-/// The error function, by the series that converges quickly for a small
-/// argument and the continued-fraction form beyond it.
-pub(crate) fn error_function(value: f64) -> f64 {
-    if value.is_nan() {
-        return value;
-    }
-    let magnitude = value.abs();
-    if magnitude > 6.0 {
-        return value.signum();
-    }
-    // Abramowitz and Stegun 7.1.26, which is accurate to about 1e-7.
-    let t = 1.0 / (1.0 + 0.3275911 * magnitude);
-    let polynomial = t
-        * (0.254829592
-            + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))));
-    let answer = 1.0 - polynomial * (-magnitude * magnitude).exp();
-    answer * value.signum()
+// The C library's functions MRI's Math.erf, Math.erfc, Math.gamma and
+// Math.lgamma call.
+unsafe extern "C" {
+    fn erf(value: f64) -> f64;
+    fn erfc(value: f64) -> f64;
+    fn tgamma(value: f64) -> f64;
+    fn lgamma_r(value: f64, sign: *mut i32) -> f64;
 }
 
-/// The largest whole number whose factorial a double still holds. Above it
-/// the product overflows to infinity, which is what Ruby answers there too.
-pub(crate) const LARGEST_EXACT_FACTORIAL: f64 = 171.0;
-
-/// The gamma function, by the Lanczos approximation.
-pub(crate) fn gamma_function(value: f64) -> f64 {
-    const COEFFICIENTS: [f64; 9] = [
-        0.999_999_999_999_81,
-        676.520_368_121_885_1,
-        -1_259.139_216_722_402_8,
-        771.323_428_777_653_1,
-        -176.615_029_162_140_6,
-        12.507_343_278_686_905,
-        -0.138_571_095_265_720_12,
-        9.984_369_578_019_572e-6,
-        1.505_632_735_149_311_6e-7,
-    ];
-    if value < 0.5 {
-        // The reflection formula carries a negative argument to a positive one.
-        return std::f64::consts::PI
-            / ((std::f64::consts::PI * value).sin() * gamma_function(1.0 - value));
-    }
-    let value = value - 1.0;
-    let mut series = COEFFICIENTS[0];
-    for (index, coefficient) in COEFFICIENTS.iter().enumerate().skip(1) {
-        series += coefficient / (value + index as f64);
-    }
-    let t = value + 7.5;
-    (2.0 * std::f64::consts::PI).sqrt() * t.powf(value + 0.5) * (-t).exp() * series
-}
+/// The largest whole number whose gamma MRI reads from its factorial table.
+const LARGEST_EXACT_FACTORIAL: f64 = 23.0;
 
 /// A float split into the fraction and the power of two that rebuild it, which
 /// is the pair `frexp` answers.

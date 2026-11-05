@@ -266,3 +266,20 @@ pub extern "C-unwind" fn rb_hash_uint(hash: u64, word: u64) -> u64 {
 pub extern "C-unwind" fn rb_hash_end(hash: u64) -> u64 {
     murmur_finish(hash)
 }
+
+/// A hash of the `length` bytes at `bytes`, salted as `rb_hash_start` is.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_memhash(bytes: *const u8, length: std::ffi::c_long) -> u64 {
+    let held: &[u8] = match usize::try_from(length) {
+        // SAFETY: the caller hands `length` readable bytes at `bytes`.
+        Ok(count) if count > 0 => unsafe { std::slice::from_raw_parts(bytes, count) },
+        _ => &[],
+    };
+    let mut hash = rb_hash_start(held.len() as u64);
+    for chunk in held.chunks(8) {
+        let mut word = [0u8; 8];
+        word[..chunk.len()].copy_from_slice(chunk);
+        hash = murmur_step(hash, u64::from_le_bytes(word));
+    }
+    murmur_finish(hash)
+}

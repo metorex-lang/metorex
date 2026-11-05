@@ -65,6 +65,7 @@ unsafe extern "C-unwind" {
     fn Init_debug();
     fn Init_parser();
     fn Init_generator();
+    fn Init_bigdecimal();
 }
 
 /// The C extensions build.rs compiles into the binary, by the feature name
@@ -75,6 +76,7 @@ const STATIC_EXTENSIONS: &[(&str, unsafe extern "C-unwind" fn())] = &[
     ("debug/debug", Init_debug),
     ("json/ext/parser", Init_parser),
     ("json/ext/generator", Init_generator),
+    ("bigdecimal", Init_bigdecimal),
 ];
 
 /// The `Init` function of a C extension compiled into the binary, for a

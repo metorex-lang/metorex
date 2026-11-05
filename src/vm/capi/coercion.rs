@@ -1,7 +1,8 @@
 //! Comparing and coercing numbers from C, as MRI's numeric functions do:
 //! `rb_cmpint`, `rb_cmperr`, `rb_num_coerce_bin`, `rb_num_coerce_cmp` and
 //! `rb_num_coerce_relop`, with `rb_num_zerodiv`, `rb_Integer`, `NUM2SHORT`,
-//! `NUM2CHR` and `rb_absint_singlebit_p`.
+//! `NUM2USHORT`, `NUM2CHR`, `rb_absint_singlebit_p` and
+//! `rb_opts_exception_p`.
 
 use super::arrays::array_of;
 use super::calls::{answers, call, class_name_of, top_level_module};
@@ -153,6 +154,29 @@ pub extern "C-unwind" fn rb_num2short(value: Value) -> i16 {
     })
 }
 
+/// A number from `SHRT_MIN` to `USHRT_MAX`, as an unsigned short: a
+/// negative one wraps.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_num2ushort(value: Value) -> u16 {
+    let number = long_from(value);
+    if number < i64::from(i16::MIN) {
+        error(
+            "RangeError",
+            format!(
+                "integer {} too small to convert to 'unsigned short'",
+                number
+            ),
+        )
+    }
+    if number > i64::from(u16::MAX) {
+        error(
+            "RangeError",
+            format!("integer {} too big to convert to 'unsigned short'", number),
+        )
+    }
+    number as u16
+}
+
 /// The first byte of a non-empty String, or the low byte of the number
 /// `NUM2INT` reads from anything else.
 #[unsafe(no_mangle)]
@@ -173,4 +197,30 @@ pub extern "C-unwind" fn rb_absint_singlebit_p(value: Value) -> i32 {
     let number = or_raise(interpreter().coerce_integer_argument(&to_object(value), called_from()));
     let magnitude = number.magnitude();
     (magnitude.count_ones() == 1) as i32
+}
+
+/// What the `exception:` option in `options` says: 1 for true, 0 for false,
+/// and `default_value` when the Hash has no such key or holds nil there.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_opts_exception_p(options: Value, default_value: i32) -> i32 {
+    let options = to_object(options);
+    if !matches!(options.view(), View::Dict(_)) {
+        return default_value;
+    }
+    let key = Object::symbol("exception".to_string());
+    if !call(options.clone(), "key?", vec![key.clone()]).is_truthy() {
+        return default_value;
+    }
+    match call(options, "[]", vec![key]).view() {
+        View::Bool(true) => 1,
+        View::Bool(false) => 0,
+        View::Nil => default_value,
+        other => {
+            let shown = call(other.to_object(), "inspect", Vec::new()).to_string();
+            error(
+                "ArgumentError",
+                format!("expected true or false as exception: {}", shown),
+            )
+        }
+    }
 }

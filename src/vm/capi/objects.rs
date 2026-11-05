@@ -3,7 +3,7 @@
 //! including the ones C names without an `@`, which Ruby code cannot see.
 
 use super::calls::{answers, call, class_name_of, kernel_function};
-use super::symbols::symbol_name;
+use super::symbols::{id_symbol, symbol_name};
 use super::values::{QFALSE, QNIL, QTRUE, Value, objects_from, to_object, to_value};
 use super::{called_from, called_with_block, interpreter, raise, running_method};
 use crate::object::Object;
@@ -157,12 +157,16 @@ pub extern "C-unwind" fn rb_obj_is_kind_of(object: Value, klass: Value) -> Value
 
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_obj_method(object: Value, name: Value) -> Value {
-    send(object, "method", vec![to_object(name)])
+    send(object, "method", vec![to_object(id_symbol(name))])
 }
 
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_obj_method_arity(object: Value, name: Value) -> i32 {
-    let method = call(to_object(object), "method", vec![to_object(name)]);
+    let method = call(
+        to_object(object),
+        "method",
+        vec![to_object(id_symbol(name))],
+    );
     super::numbers::rb_num2long(to_value(&call(method, "arity", Vec::new()))) as i32
 }
 
@@ -172,7 +176,10 @@ pub extern "C-unwind" fn rb_obj_respond_to(
     name: Value,
     include_private: i32,
 ) -> i32 {
-    let arguments = vec![to_object(name), Object::Bool(include_private != 0)];
+    let arguments = vec![
+        to_object(id_symbol(name)),
+        Object::Bool(include_private != 0),
+    ];
     call(to_object(object), "respond_to?", arguments).is_truthy() as i32
 }
 
@@ -185,7 +192,7 @@ pub extern "C-unwind" fn rb_respond_to(object: Value, name: Value) -> i32 {
 /// private one when `exclude_private` says so.
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_method_boundp(klass: Value, name: Value, exclude_private: i32) -> i32 {
-    let named = vec![to_object(name)];
+    let named = vec![to_object(id_symbol(name))];
     let klass = to_object(klass);
     let bound = call(klass.clone(), "method_defined?", named.clone()).is_truthy()
         || (exclude_private == 0 && call(klass, "private_method_defined?", named).is_truthy());

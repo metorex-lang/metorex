@@ -128,6 +128,7 @@ impl Parser<'_> {
             // a line carries the expression onto the next one.
             self.skip_whitespace();
             let right = self.parse_unary()?;
+            let right = self.fold_assignment(right)?;
             Ok(Expression::BinaryOp {
                 op: BinaryOp::Power,
                 left: Box::new(left),

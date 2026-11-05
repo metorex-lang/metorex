@@ -196,7 +196,7 @@ z = 3
 #[test]
 fn test_synchronization_at_statement_boundary() {
     let source = r#"
-x = 1 +
+x = 1 + )
 y = 2
 z = 3
 "#;
