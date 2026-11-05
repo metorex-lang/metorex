@@ -333,3 +333,18 @@ fn test_programs_spawn_failures_no_parens_execution() {
     let output = run_example("programs/spawn_failures_no_parens.rb");
     assert_eq!(output, SPAWN_FAILURES_OUTPUT);
 }
+
+#[test]
+fn test_programs_system_environment_with_redirects() {
+    let output = run_example("programs/system_environment_with_redirects.rb");
+    assert_eq!(output, "added=added removed=\nadded=to stdout\n");
+}
+
+#[test]
+fn test_programs_fork_hook_prepended_to_process() {
+    let output = run_example("programs/fork_hook_prepended_to_process.rb");
+    assert_eq!(
+        output,
+        "child saw the hook\nchild saw the hook\nparent done\n"
+    );
+}

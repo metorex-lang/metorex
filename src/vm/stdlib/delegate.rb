@@ -2,18 +2,30 @@
 # what it is asked, so a class can add to an object's behaviour without
 # inheriting from its class.
 
-class Delegator
+# A Delegator descends from BasicObject and takes Kernel's methods, as
+# MRI's does, so a method added to Object afterwards, such as an
+# expectation a test library defines, is passed on to the object behind it
+# rather than answered by the delegator.
+class Delegator < BasicObject
+  include ::Kernel
+
+  # A constant a delegating class's code names is looked for at the top
+  # level, which a class outside Object's line does not reach by itself.
+  def self.const_missing(name)
+    ::Object.const_get(name)
+  end
+
   def initialize(object)
     __setobj__ object
   end
 
   # The object being stood in front of. A subclass says how it is held.
   def __getobj__
-    raise NotImplementedError, "#{self.class} does not implement __getobj__"
+    raise ::NotImplementedError, "#{self.class} does not implement __getobj__"
   end
 
   def __setobj__(_object)
-    raise NotImplementedError, "#{self.class} does not implement __setobj__"
+    raise ::NotImplementedError, "#{self.class} does not implement __setobj__"
   end
 
   def method_missing(name, *arguments, &block)
@@ -64,10 +76,10 @@ class Delegator
   def method(name)
     begin
       super
-    rescue NameError
+    rescue ::NameError
       target = __getobj__
       unless target.respond_to? name
-        raise NameError, "undefined method '#{name}' for #{self.inspect}"
+        raise ::NameError, "undefined method '#{name}' for #{self.inspect}"
       end
       target.method name
     end
@@ -172,13 +184,13 @@ class SimpleDelegator < Delegator
   def __getobj__
     unless defined? @delegate_sd_obj
       return yield if block_given?
-      raise ArgumentError, "not delegated"
+      raise ::ArgumentError, "not delegated"
     end
     @delegate_sd_obj
   end
 
   def __setobj__(object)
-    raise ArgumentError, "cannot delegate to self" if object.equal? self
+    raise ::ArgumentError, "cannot delegate to self" if object.equal? self
     @delegate_sd_obj = object
   end
 end

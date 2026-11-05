@@ -180,6 +180,35 @@ impl VirtualMachine {
                         .map(Some);
                 };
                 let rejecting = matches!(method_name, "reject" | "delete_if" | "reject!");
+                // The in-place forms remove each entry as its verdict comes
+                // in, so a block that raises leaves what it already removed
+                // removed, as Ruby's do.
+                if in_place {
+                    let mut changed = false;
+                    for (key, value) in self.hash_pairs(dict_rc) {
+                        let verdict =
+                            self.execute_block_callable(block, vec![key.clone(), value], position)?;
+                        if verdict.is_truthy() != rejecting {
+                            continue;
+                        }
+                        if let Some(slot) = self.hash_find_key(dict_rc, &key, position)? {
+                            let mut dict = dict_rc.borrow_mut();
+                            dict.shift_remove(slot.as_str());
+                            crate::vm::native_methods::hash_methods::slots::forget_key_object(
+                                &mut dict, &slot,
+                            );
+                            changed = true;
+                        }
+                    }
+                    // The bang forms answer nil when nothing changed, while
+                    // `keep_if` and `delete_if` always answer the hash.
+                    let bang = matches!(method_name, "select!" | "filter!" | "reject!");
+                    return Ok(Some(if bang && !changed {
+                        Object::Nil
+                    } else {
+                        receiver.clone()
+                    }));
+                }
                 let mut kept = Default::default();
                 for (key, value) in self.hash_pairs(dict_rc) {
                     let verdict = self.execute_block_callable(
@@ -196,35 +225,7 @@ impl VirtualMachine {
                     }
                     kept.insert(rendered, value);
                 }
-                if !in_place {
-                    return Ok(Some(carry_identity(dict_rc, kept)));
-                }
-                let before = dict_rc
-                    .borrow()
-                    .keys()
-                    .filter(|key| !is_internal_key(key))
-                    .count();
-                let changed = kept.len() != before;
-                let sentinels: Vec<(crate::object::Slot, Object)> = dict_rc
-                    .borrow()
-                    .iter()
-                    .filter(|(key, _)| is_internal_key(key))
-                    .map(|(key, value)| (key.clone(), value.clone()))
-                    .collect();
-                let mut dict = dict_rc.borrow_mut();
-                dict.clear();
-                for (key, value) in sentinels.into_iter().chain(kept) {
-                    dict.insert(key, value);
-                }
-                drop(dict);
-                // The bang forms answer nil when nothing changed, while
-                // `keep_if` and `delete_if` always answer the hash.
-                let bang = matches!(method_name, "select!" | "filter!" | "reject!");
-                Ok(Some(if bang && !changed {
-                    Object::Nil
-                } else {
-                    receiver.clone()
-                }))
+                Ok(Some(carry_identity(dict_rc, kept)))
             }
             _ => Ok(None),
         }

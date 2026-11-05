@@ -407,6 +407,12 @@ class StringIO
       filled buffer, "" unless buffer.nil?
       return nil
     end
+    # Text that is all ASCII has a byte for each character, so the piece is
+    # the characters themselves.
+    if remaining.ascii_only?
+      @position = @position + remaining.length
+      return filled(buffer, remaining.b)
+    end
     # A count names bytes rather than characters, which is what a stream of
     # text holding multibyte characters reads out one piece at a time.
     taken = StringIO.__first_bytes__ remaining, wanted

@@ -55,3 +55,39 @@
 [submodule "gems/bigdecimal"]
 	path = gems/bigdecimal
 	url = https://github.com/ruby/bigdecimal
+[submodule "gems/rack"]
+	path = gems/rack
+	url = https://github.com/rack/rack
+[submodule "gems/rack-test"]
+	path = gems/rack-test
+	url = https://github.com/rack/rack-test
+[submodule "gems/sinatra"]
+	path = gems/sinatra
+	url = https://github.com/sinatra/sinatra
+[submodule "gems/faraday"]
+	path = gems/faraday
+	url = https://github.com/lostisland/faraday
+[submodule "gems/faraday-net_http"]
+	path = gems/faraday-net_http
+	url = https://github.com/lostisland/faraday-net_http
+[submodule "gems/multipart-post"]
+	path = gems/multipart-post
+	url = https://github.com/socketry/multipart-post
+[submodule "gems/excon"]
+	path = gems/excon
+	url = https://github.com/excon/excon
+[submodule "gems/httpclient"]
+	path = gems/httpclient
+	url = https://github.com/nahi/httpclient
+[submodule "gems/http-cookie"]
+	path = gems/http-cookie
+	url = https://github.com/sparklemotion/http-cookie
+[submodule "gems/domain_name"]
+	path = gems/domain_name
+	url = https://github.com/knu/ruby-domain_name
+[submodule "gems/connection_pool"]
+	path = gems/connection_pool
+	url = https://github.com/mperham/connection_pool
+[submodule "gems/websocket-extensions"]
+	path = gems/websocket-extensions
+	url = https://github.com/faye/websocket-extensions-ruby

@@ -24,7 +24,9 @@ impl VirtualMachine {
                 if block.is_lambda {
                     return Ok(Object::Block(block.clone()));
                 }
-                if from_ampersand {
+                // `lambda(&:name)` hands over a symbol's proc, which Ruby
+                // counts as a lambda already.
+                if from_ampersand && block.from_symbol.is_none() {
                     let msg = "the lambda method requires a literal block";
                     return Err(MetorexError::UncaughtException {
                         exception: Object::exception("ArgumentError", msg.to_string()),

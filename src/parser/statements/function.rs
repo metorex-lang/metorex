@@ -656,7 +656,9 @@ impl Parser<'_> {
                     );
                 } else if self.match_token(&[TokenKind::Equal]) {
                     // `def foo(a = b = c = {})` sets all three to the one
-                    // value, so a default reads an assignment of its own.
+                    // value, so a default reads an assignment of its own. It
+                    // may start on the line after the `=`.
+                    self.skip_whitespace();
                     let default = self.parse_expression_with_assignment()?;
                     crate::parser::push_tight(
                         &mut params,
@@ -835,7 +837,9 @@ impl Parser<'_> {
                 // Check for positional default value
                 } else if self.match_token(&[TokenKind::Equal]) {
                     // `def foo(a = b = c = {})` sets all three to the one
-                    // value, so a default reads an assignment of its own.
+                    // value, so a default reads an assignment of its own. It
+                    // may start on the line after the `=`.
+                    self.skip_whitespace();
                     let default = self.parse_expression_with_assignment()?;
                     crate::parser::push_tight(
                         &mut params,

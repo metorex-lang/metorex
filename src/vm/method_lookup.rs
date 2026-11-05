@@ -509,7 +509,9 @@ impl VirtualMachine {
 
         // Fallback: methods defined on the global Object class (mspec injects
         // describe/it/before/after there).
-        if let Some((object_class, method)) = self.object_table_method(method_name) {
+        if self.class_line_reaches_object(&receiver)
+            && let Some((object_class, method)) = self.object_table_method(method_name)
+        {
             // A private one, as every top-level method is, refuses a call
             // written with a receiver.
             if !written.names_self() && object_class.is_method_private(method_name) {
@@ -1265,6 +1267,23 @@ impl VirtualMachine {
             location: crate::vm::utils::position_to_location(position),
             message: msg,
         }
+    }
+
+    /// Whether a receiver's class line reaches Object, as every value's does
+    /// but an instance of a class descending from BasicObject alone, which
+    /// answers none of Object's methods even when it takes Kernel's.
+    pub(crate) fn class_line_reaches_object(&self, receiver: &Object) -> bool {
+        let View::Instance(instance) = receiver.view() else {
+            return true;
+        };
+        let mut walked = Some(Rc::clone(&instance.borrow().class));
+        while let Some(class) = walked {
+            if class.name() == "Object" {
+                return true;
+            }
+            walked = class.superclass();
+        }
+        false
     }
 
     /// A method written on Object, such as a top-level `def`, which a value

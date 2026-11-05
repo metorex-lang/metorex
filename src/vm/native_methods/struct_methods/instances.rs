@@ -21,7 +21,11 @@ impl VirtualMachine {
         // one the program wrote over it answers in its place.
         // The method running now calling `super` reaches Struct's own, so
         // finding that method again is no reason to step aside.
-        if let Some((_, method)) = self.lookup_method(receiver, method_name)
+        // A call through an alias of Struct's own reaches it however the
+        // program has written the name since.
+        let through_alias = std::mem::take(&mut self.through_native_alias);
+        if !through_alias
+            && let Some((_, method)) = self.lookup_method(receiver, method_name)
             && !method.body.is_empty()
             && !self
                 .method_running_stack

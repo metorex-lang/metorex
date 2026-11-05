@@ -1,0 +1,12 @@
+# The gems domain_name's tests load, which its helper sets up through Bundler.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "domain_name", path: "../../../../gems/domain_name"
+
+group :development do
+  gem "test-unit", SHIPPED_VERSIONS.fetch("test-unit")
+end
+
+shipped "power_assert"

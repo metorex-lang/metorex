@@ -226,7 +226,21 @@ impl VirtualMachine {
                 // may be read and written by, less what the umask takes off.
                 // It is applied once the stream is open, so a file made
                 // read-only is still written through the stream that made it.
-                let allowed = match arguments.get(2).view() {
+                // `perm:` among the options names it the way a third
+                // argument does.
+                let named_permission = arguments.last().and_then(|given| match given.view() {
+                    View::Dict(entries) if names_keywords(given) => entries
+                        .borrow()
+                        .iter()
+                        .find(|(name, _)| name.trim_start_matches(':') == "perm")
+                        .map(|(_, value)| value.clone()),
+                    _ => None,
+                });
+                let permission = match arguments.get(2) {
+                    Some(given) if !names_keywords(given) => Some(given.clone()),
+                    _ => named_permission,
+                };
+                let allowed = match permission.view() {
                     Some(View::Int(wanted)) if !there && creates => {
                         // SAFETY: reading the mask means setting it and
                         // putting it straight back.

@@ -218,3 +218,45 @@ fn keys_merged_into_or_out_of_an_identity_hash_are_found() {
         "\"constant\"\ntrue\n\"keyword\"\n\"constant again\"\n3\ntrue\n\"comment\"\n\"constant again\"\n4\n"
     );
 }
+
+#[test]
+fn a_string_key_starting_with_a_colon_stays_a_string() {
+    let output = run_example("hash_methods/string_keys_starting_with_a_colon.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"::ffff:192.0.2.1\", \":name\", :name]\n",
+            "[String, String, Symbol]\n",
+            ":string\n:symbol\n:address\n",
+            "[\"::ffff:192.0.2.1\", :address]\n",
+            "[\":name\", :string]\n",
+            "[:name, :symbol]\n",
+            "true\nfalse\n",
+        )
+    );
+}
+
+#[test]
+fn removal_mutators_remove_as_they_go_and_enumerators_reach_the_subclass() {
+    let output = run_example("hash_methods/removal_mutators_as_they_go.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[:delete_if, [\"drop\", \"last\"]]\n",
+            "[:reject!, [\"drop\", \"last\"]]\n",
+            "[:keep_if, [\"drop\", \"last\"]]\n",
+            "[:select!, [\"drop\", \"last\"]]\n",
+            "[:filter!, [\"drop\", \"last\"]]\n",
+            "[[\"b\"], 2]\n",
+        )
+    );
+}
+
+#[test]
+fn a_default_proc_answers_the_read_and_a_subclass_answers_itself() {
+    let output = run_example("hash_methods/subclass_default_proc_and_self.rb");
+    assert_eq!(
+        output,
+        "nil\n{a: 1}\nnil\n{\"z\" => 5}\nPlain\nPlain\nPlain\nNilClass\n"
+    );
+}

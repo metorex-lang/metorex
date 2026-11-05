@@ -86,6 +86,14 @@ impl VirtualMachine {
             }
         }
         if class_rc.name() != "File" {
+            // A subclass of File opens a path the way File does, making an
+            // instance of itself, unless it writes its own `initialize`.
+            if matches!(method_name, "new" | "open")
+                && crate::vm::method_invocation::descends_from(class_rc, "File")
+                && !crate::vm::method_invocation::writes_initialize_below_file(class_rc)
+            {
+                return self.call_file_opening_methods(class_rc, method_name, arguments, position);
+            }
             return Ok(None);
         }
         for step in FILE_STEPS {

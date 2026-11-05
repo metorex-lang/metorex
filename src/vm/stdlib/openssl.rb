@@ -1187,8 +1187,16 @@ module OpenSSL
       end
       alias to_s to_pem
 
+      # Two certificates are equal when they encode alike. One never signed
+      # has no encoding to compare, and OpenSSL counts any two such as equal.
       def ==(other)
-        other.is_a?(Certificate) && to_der == other.to_der
+        return false unless other.is_a?(Certificate)
+        return other.__unsigned__? if __unsigned__?
+        !other.__unsigned__? && to_der == other.to_der
+      end
+
+      def __unsigned__?
+        @signature.nil? && @der.nil?
       end
 
       def version=(value)

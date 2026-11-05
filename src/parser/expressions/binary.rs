@@ -7,23 +7,12 @@ use crate::lexer::TokenKind;
 use crate::parser::Parser;
 
 impl Parser<'_> {
-    /// Parse logical OR (||)
-    ///
-    /// `or` tests what `||` tests, but it binds more loosely than a paren-less
-    /// call's arguments: `check x or fallback` calls `check x` and tests what
-    /// it answered, where `check x || fallback` passes the whole test as the
-    /// argument. So an argument list leaves `or` for the call to be folded
-    /// into afterwards.
+    /// Parse logical OR (||). The keyword `or` is read further out, in
+    /// `parse_assignment`.
     pub(crate) fn parse_logical_or(&mut self) -> Result<Expression, MetorexError> {
         let mut expr = self.parse_logical_and()?;
 
-        let keyword_binds_here = self.paren_less_arg_depth == 0
-            && self.assignment_rhs_depth == 0
-            && self.range_operand_depth == 0
-            && self.not_operand_depth == 0;
-        while self.check(&[TokenKind::LogicalOr])
-            || (keyword_binds_here && self.check(&[TokenKind::KeywordOr]))
-        {
+        while self.check(&[TokenKind::LogicalOr]) {
             let op_token = self.advance();
             self.skip_whitespace();
             let right = self.parse_logical_and()?;
@@ -39,18 +28,12 @@ impl Parser<'_> {
         Ok(expr)
     }
 
-    /// Parse logical AND (&&). `and` binds the way `or` does, and stops at
-    /// the edge of a paren-less argument list for the same reason.
+    /// Parse logical AND (&&). The keyword `and` is read further out, in
+    /// `parse_assignment`.
     pub(crate) fn parse_logical_and(&mut self) -> Result<Expression, MetorexError> {
         let mut expr = self.parse_equality()?;
 
-        let keyword_binds_here = self.paren_less_arg_depth == 0
-            && self.assignment_rhs_depth == 0
-            && self.range_operand_depth == 0
-            && self.not_operand_depth == 0;
-        while self.check(&[TokenKind::LogicalAnd])
-            || (keyword_binds_here && self.check(&[TokenKind::KeywordAnd]))
-        {
+        while self.check(&[TokenKind::LogicalAnd]) {
             let op_token = self.advance();
             self.skip_whitespace();
             let right = self.parse_equality()?;

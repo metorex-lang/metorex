@@ -1,0 +1,10 @@
+# The gems http-cookie's tests load. sqlite3 is left out, which a test of the Mozilla cookie store needs, so neither engine runs that test.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "http-cookie", path: "../../../../gems/http-cookie"
+gem "domain_name", path: "../../../../gems/domain_name"
+gem "test-unit", SHIPPED_VERSIONS.fetch("test-unit")
+
+shipped "power_assert"

@@ -396,7 +396,15 @@ impl VirtualMachine {
     /// one `respond_to_missing?` says it answers.
     fn answers_publicly(&mut self, value: &Object, method: &str) -> bool {
         if let Some((owner, found)) = self.lookup_method(value, method) {
-            if found.is_undefined || owner.is_method_private(method) {
+            // A class or module is asked the way a call to it is, which keeps
+            // the public copy `module_function` makes apart from the private
+            // instance method of the same name.
+            let refused = if matches!(value.view(), View::Class(_) | View::Module(_)) {
+                self.method_is_restricted(value, method)
+            } else {
+                owner.is_method_private(method)
+            };
+            if found.is_undefined || refused {
                 return false;
             }
             if owner.is_method_protected(method) {

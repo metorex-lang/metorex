@@ -166,13 +166,16 @@ impl VirtualMachine {
         // name. There is no body to run either way.
         if let Some(target) = method.provenance.native_alias.clone() {
             for owner in [Rc::clone(&class), self.builtins().class_of(&receiver)] {
-                if let Some(result) = self.call_native_method(
+                self.through_native_alias = true;
+                let answered = self.call_native_method(
                     owner.as_ref(),
                     &receiver,
                     &target,
                     &arguments,
                     position,
-                )? {
+                );
+                self.through_native_alias = false;
+                if let Some(result) = answered? {
                     return Ok(result);
                 }
             }

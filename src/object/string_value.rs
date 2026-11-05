@@ -301,6 +301,20 @@ impl StringValue {
         Self::built(bytes, encoding_place(&encoding), false)
     }
 
+    /// Text taken from this string, such as what a pattern matched in it,
+    /// written in its encoding and spelling bytes the way it does.
+    pub fn spelled_like(&self, text: impl Into<String>) -> Self {
+        let text = text.into();
+        let encoding = self.encoding_name();
+        if self.reads_bytes() {
+            let bytes = bytes_of_characters(&text);
+            let holds_bytes = self.holds_bytes() && std::str::from_utf8(&bytes).is_err();
+            Self::built(bytes, encoding_place(&encoding), holds_bytes)
+        } else {
+            Self::with_encoding(text, encoding)
+        }
+    }
+
     /// Text whose characters stand for the bytes they were read from.
     pub fn from_bytes(text: impl Into<String>) -> Self {
         Self::built(

@@ -314,18 +314,19 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<(String, String), MetorexError> {
         let whole = captured.get(0).expect("a match was found");
+        // The matched text is written in the encoding of the String it was
+        // found in.
+        let matched = || match subject_string.view() {
+            View::String(text) => Object::String(Rc::new(text.spelled_like(whole.as_str()))),
+            _ => Object::string(whole.as_str().to_string()),
+        };
         if let Some(block) = block {
-            let _ = subject_string;
-            let answered = self.execute_block_callable(
-                block,
-                vec![Object::string(whole.as_str().to_string())],
-                position,
-            )?;
+            let answered = self.execute_block_callable(block, vec![matched()], position)?;
             return self.text_of(answered, position);
         }
         let held = replacement.expect("a replacement or a block was given");
         if let Some(View::Dict(_)) = crate::vm::native_methods::as_dict(held).view() {
-            let key = Object::string(whole.as_str().to_string());
+            let key = matched();
             let found = self.send_to_object(held.clone(), "[]", vec![key], position)?;
             if matches!(found.view(), View::Nil) {
                 return Ok((

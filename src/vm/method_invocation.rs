@@ -109,7 +109,9 @@ impl VirtualMachine {
         if let Some(result) = self.call_object_method(&receiver, name, &arguments, position)? {
             return Ok(result);
         }
-        if let Some((object_class, method)) = self.object_table_method(name) {
+        if self.class_line_reaches_object(&receiver)
+            && let Some((object_class, method)) = self.object_table_method(name)
+        {
             return self.invoke_method(object_class, method, receiver, arguments, position);
         }
         // A name the object carries no method for reaches `method_missing`,
@@ -473,6 +475,17 @@ impl VirtualMachine {
                 )?;
             }
             return Ok(object);
+        }
+
+        // A subclass of File that writes no `initialize` of its own opens a
+        // path the way File does, as an instance of itself.
+        if descends_from(&class, "File")
+            && class.name() != "File"
+            && !crate::vm::method_invocation::writes_initialize_below_file(&class)
+            && let Some(opened) =
+                self.call_file_opening_methods(&class, "new", &arguments, position)?
+        {
+            return Ok(opened);
         }
 
         // A subclass of Hash holds its entries in an instance variable, since
@@ -1040,6 +1053,25 @@ pub(crate) fn descends_from_class(class: &Rc<Class>, ancestor: &Rc<Class>) -> bo
     let mut cursor = Some(Rc::clone(class));
     while let Some(current) = cursor {
         if Rc::ptr_eq(&current, ancestor) {
+            return true;
+        }
+        cursor = current.superclass();
+    }
+    false
+}
+
+/// Whether a class below File writes an `initialize` of its own, which then
+/// stands in for File's opening of a path.
+pub(crate) fn writes_initialize_below_file(class: &Rc<Class>) -> bool {
+    let mut cursor = Some(Rc::clone(class));
+    while let Some(current) = cursor {
+        if current.name() == "File" {
+            return false;
+        }
+        if current
+            .find_own_method("initialize")
+            .is_some_and(|held| !held.body.is_empty())
+        {
             return true;
         }
         cursor = current.superclass();

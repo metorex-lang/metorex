@@ -553,6 +553,11 @@ impl VirtualMachine {
                 Ok(Some(Object::Dict(Rc::new(RefCell::new(captures)))))
             }
             "match" => {
+                // `match` with a block hands the MatchData to it. The block is
+                // taken before anything else, so a match that never runs it
+                // leaves it to no later call, and building the MatchData,
+                // itself a call, does not consume it.
+                let viewed = self.pending_block.take();
                 if arguments.is_empty() {
                     return Err(crate::vm::errors::method_argument_error(
                         "match", 1, 0, position,
@@ -580,10 +585,6 @@ impl VirtualMachine {
                     self.globals_mut().set(LAST_MATCH, Object::Nil);
                     return Ok(Some(Object::Nil));
                 };
-                // `match` with a block hands the MatchData to it. The block is
-                // taken before the walk, since building the MatchData is
-                // itself a call and would consume it.
-                let viewed = self.pending_block.take();
                 let block = match viewed.view() {
                     Some(View::Block(block)) => Some(block),
                     _ => None,

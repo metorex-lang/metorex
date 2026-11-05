@@ -334,11 +334,10 @@ impl Parser<'_> {
     }
 }
 
-/// The key a `name: value` argument is held under, which is how the runtime
-/// stores a Symbol key.
+/// The Symbol key a `name: value` argument is held under.
 fn symbol_key(name: &str, position: crate::lexer::Position) -> Expression {
-    Expression::StringLiteral {
-        value: format!(":{}", name),
+    Expression::Symbol {
+        value: name.to_string(),
         position,
     }
 }

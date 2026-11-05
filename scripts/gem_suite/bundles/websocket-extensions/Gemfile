@@ -1,0 +1,5 @@
+# The gems websocket-extensions' specs load.
+source "https://rubygems.org"
+
+gem "websocket-extensions", path: "../../../../gems/websocket-extensions"
+gem "rspec"

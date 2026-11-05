@@ -39,6 +39,14 @@ JOBS="${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}"
 # The longest one spec file may run before its process is stopped.
 FILE_TIMEOUT="${FILE_TIMEOUT:-300}"
 ENGINE="${ENGINE:-metorex}"
+# The MRI the checkout names, by the path of its own binary, since each file
+# runs in a directory outside the checkout, where a version manager such as
+# rbenv would choose another.
+MRI="${MRI:-$(cd "$REPO_ROOT" && ruby -e "print RbConfig.ruby")}"
+# A test that starts `ruby` itself reaches the same one.
+if [ "$ENGINE" = "mri" ]; then
+  export PATH="$(dirname "$MRI"):$PATH"
+fi
 case "$ENGINE" in
   metorex | mri) ;;
   *) echo "run_rspec_suite.sh: ENGINE is metorex or mri" >&2; exit 2 ;;
@@ -385,7 +393,7 @@ run_one() {
   cp -R "$WORK_DIR/$suite/." "$run_dir/"
   local command
   if [ "$ENGINE" = "mri" ]; then
-    command=(ruby -I "$RSPEC_SOURCE/rspec/lib" -I "$RSPEC_SOURCE/rspec-core/lib" -I "$RSPEC_SOURCE/rspec-expectations/lib"
+    command=("$MRI" -I "$RSPEC_SOURCE/rspec/lib" -I "$RSPEC_SOURCE/rspec-core/lib" -I "$RSPEC_SOURCE/rspec-expectations/lib"
       -I "$RSPEC_SOURCE/rspec-mocks/lib" -I "$RSPEC_SOURCE/rspec-support/lib"
       "$RSPEC_SOURCE/rspec-core/exe/rspec")
   else
@@ -401,7 +409,7 @@ run_one() {
   printf '%s\t%s\n' "$path" "${summary:-did not finish}"
 }
 export -f run_one
-export WORK_DIR HELPERS_DIR BUNDLE_LOAD_PATH METOREX FILE_TIMEOUT SPEC_ARGS ENGINE RSPEC_SOURCE
+export MRI WORK_DIR HELPERS_DIR BUNDLE_LOAD_PATH METOREX FILE_TIMEOUT SPEC_ARGS ENGINE RSPEC_SOURCE
 
 RESULTS="$WORK_DIR/results.tsv"
 # Each file's result is printed as it finishes, so a run stopped partway

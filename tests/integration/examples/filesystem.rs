@@ -654,3 +654,15 @@ fn set_encoding_with_both_encodings_drops_the_default_internal() {
         "[#<Encoding:UTF-8>, nil]\n[255, 254]\n[#<Encoding:UTF-16LE>, nil]\n[#<Encoding:UTF-16LE>, [60, 0, 97, 0, 62, 0]]\n"
     );
 }
+
+#[test]
+fn test_filesystem_open_with_a_perm_keyword() {
+    let output = run_example("filesystem/open_with_a_perm_keyword.rb");
+    assert_eq!(output, "600\n640\n");
+}
+
+#[test]
+fn test_filesystem_file_subclass_opens_a_path() {
+    let output = run_example("filesystem/file_subclass_opens_a_path.rb");
+    assert_eq!(output, "LoggedFile\ntrue\nFile\nLoggedFile\n\"hi\"\n");
+}

@@ -234,6 +234,7 @@ impl Parser<'_> {
             self.parse_arguments()?
         } else if !self.check(&[
             TokenKind::Newline,
+            TokenKind::Comment(String::new()),
             TokenKind::Semicolon,
             TokenKind::EOF,
             TokenKind::End,

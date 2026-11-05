@@ -86,12 +86,16 @@ impl VirtualMachine {
                         break;
                     }
                     reached.push(whole.start());
+                    // What a match took is written in the encoding of the
+                    // String it was found in.
+                    let piece =
+                        |text: &str| Object::String(Rc::new(string_value.spelled_like(text)));
                     if groups == 0 {
-                        found.push(Object::string(whole.as_str().to_string()));
+                        found.push(piece(whole.as_str()));
                     } else {
                         let taken: Vec<Object> = (1..=groups)
                             .map(|index| match captured.get(index) {
-                                Some(held) => Object::string(held.as_str().to_string()),
+                                Some(held) => piece(held.as_str()),
                                 None => Object::Nil,
                             })
                             .collect();

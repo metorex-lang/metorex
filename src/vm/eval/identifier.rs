@@ -237,6 +237,14 @@ impl VirtualMachine {
         if name.chars().next().is_some_and(|c| c.is_ascii_uppercase())
             && !self.lexical_scope_reaches_top_level()
         {
+            // A method's body reads the scopes open where it was written,
+            // which the class bodies running now need not include.
+            if !self.autoload_pending_in_lexical_scope(name)
+                && let Some(val) = self.constant_before_object(name)
+            {
+                CONSTANT_ANSWER.set(Some(ConstantAnswer::BeforeLocals));
+                return Ok(val);
+            }
             for enclosing in self.def_scope_stack.clone().iter().rev() {
                 if let Some(val) = enclosing.get_class_var(name) {
                     CONSTANT_ANSWER.set(Some(ConstantAnswer::BeforeLocals));
@@ -253,6 +261,16 @@ impl VirtualMachine {
                     CONSTANT_ANSWER.set(Some(ConstantAnswer::BeforeLocals));
                     return Ok(Object::Class(Rc::clone(enclosing)));
                 }
+            }
+            // The class the code was written in is asked through its
+            // `const_missing`, as Delegator answers with Object's constants.
+            if let Some(written_in) = self
+                .method_nesting_stack
+                .last()
+                .and_then(|nesting| nesting.first().cloned())
+                .or_else(|| self.def_scope_stack.last().cloned())
+            {
+                return self.dispatch_const_missing(&written_in, name, position);
             }
             let message = format!("uninitialized constant {}", name);
             return Err(MetorexError::UncaughtException {

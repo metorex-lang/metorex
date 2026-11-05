@@ -1,0 +1,10 @@
+# The gems rack-test's specs load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "rack-test", path: "../../../../gems/rack-test"
+gem "rack", path: "../../../../gems/rack"
+gem "minitest-global_expectations"
+
+shipped "drb", "minitest", "prism"

@@ -155,21 +155,23 @@ impl Parser<'_> {
             self.refuse_paren_less_args -= 1;
             fallback?
         };
-        if !self.check(&[
-            TokenKind::Newline,
-            TokenKind::Semicolon,
-            TokenKind::EOF,
-            TokenKind::RParen,
-            TokenKind::RBrace,
-            TokenKind::RBracket,
-            TokenKind::Comma,
-            TokenKind::End,
-            TokenKind::Dot,
-            TokenKind::Then,
-            TokenKind::Rescue,
-            TokenKind::Ensure,
-            TokenKind::Else,
-        ]) {
+        if !self.is_at_end()
+            && !self.check(&[
+                TokenKind::Newline,
+                TokenKind::Comment(String::new()),
+                TokenKind::Semicolon,
+                TokenKind::RParen,
+                TokenKind::RBrace,
+                TokenKind::RBracket,
+                TokenKind::Comma,
+                TokenKind::End,
+                TokenKind::Dot,
+                TokenKind::Then,
+                TokenKind::Rescue,
+                TokenKind::Ensure,
+                TokenKind::Else,
+            ])
+        {
             return Err(MetorexError::syntax_error(
                 "unexpected argument after a rescue modifier",
                 crate::error::SourceLocation::from(self.peek().position),
@@ -335,7 +337,38 @@ impl Parser<'_> {
         Ok(expr)
     }
 
+    /// `and` and `or`, which bind more loosely than a ternary and share one
+    /// precedence, read from the left: `a or b ? c : d` takes the ternary as
+    /// its right side, and `a or b and c` is `(a or b) and c`. They stop at
+    /// the edge of a paren-less argument list, another assignment's value, a
+    /// range's operand and `not`'s operand.
     pub(crate) fn parse_assignment(&mut self) -> Result<Expression, MetorexError> {
+        let mut expr = self.parse_ternary()?;
+        let keywords_bind = self.paren_less_arg_depth == 0
+            && self.assignment_rhs_depth == 0
+            && self.range_operand_depth == 0
+            && self.not_operand_depth == 0;
+        while keywords_bind && self.check(&[TokenKind::KeywordAnd, TokenKind::KeywordOr]) {
+            let keyword = self.advance();
+            self.skip_whitespace();
+            let op = if matches!(keyword.kind, TokenKind::KeywordAnd) {
+                crate::ast::BinaryOp::And
+            } else {
+                crate::ast::BinaryOp::Or
+            };
+            let right = self.parse_ternary()?;
+            let right = self.fold_assignment(right)?;
+            expr = Expression::BinaryOp {
+                op,
+                left: Box::new(expr),
+                right: Box::new(right),
+                position: keyword.position,
+            };
+        }
+        Ok(expr)
+    }
+
+    fn parse_ternary(&mut self) -> Result<Expression, MetorexError> {
         let expr = self.parse_range()?;
 
         // Note: assignment (`=`) is handled at the statement level.

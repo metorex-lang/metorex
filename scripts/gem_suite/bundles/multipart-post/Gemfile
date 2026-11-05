@@ -1,0 +1,10 @@
+# The gems multipart-post's specs load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "multipart-post", path: "../../../../gems/multipart-post"
+gem "rspec", "~> 3.4"
+gem "covered"
+
+shipped "json"

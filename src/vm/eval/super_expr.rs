@@ -335,7 +335,19 @@ impl VirtualMachine {
                 return self.default_const_missing(&self_class, &name, position);
             }
             // Any other class method the core library writes natively
-            // answers a `super` from an override of it.
+            // answers a `super` from an override of it, and so does a module
+            // method, such as the `Process._fork` a prepended module wraps.
+            if matches!(self_object.view(), View::Module(_))
+                && let Some(result) = self.call_module_methods(
+                    &self_class,
+                    &self_object,
+                    &method_name,
+                    &evaluated_args,
+                    position,
+                )?
+            {
+                return Ok(result);
+            }
             if let Some(result) =
                 self.call_class_methods(&self_class, &method_name, &evaluated_args, position)?
             {

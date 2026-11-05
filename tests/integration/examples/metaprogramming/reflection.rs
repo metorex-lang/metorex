@@ -252,3 +252,9 @@ fn test_metaprogramming_core_method_aliases_no_parens_execution() {
     let output = run_example("metaprogramming/core_method_aliases_no_parens.rb");
     assert_eq!(output, CORE_METHOD_ALIASES_OUTPUT);
 }
+
+#[test]
+fn defined_finds_the_public_copy_module_function_makes() {
+    let output = run_example("metaprogramming/defined_module_function.rb");
+    assert_eq!(output, "\"method\"\n\"method\"\nnil\nfalse\n");
+}

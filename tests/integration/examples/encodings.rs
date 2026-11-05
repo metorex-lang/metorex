@@ -758,3 +758,18 @@ fn encoding_from_us_ascii_refuses_or_replaces_bytes_past_ascii() {
         "\"a\u{fffd}b\u{fffd}c\"\n\"a?b?c\"\n\"\\\"\\\\x80\\\" on US-ASCII\"\n\"\\x80\"\n\"US-ASCII\"\n\"UTF-8\"\n#<Encoding:UTF-8>\n"
     );
 }
+
+#[test]
+fn a_match_keeps_the_encoding_of_the_string_it_was_found_in() {
+    let output = run_example("encodings/matches_keep_the_subject_encoding.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[#<Encoding:ISO-8859-1>, [233], [\"e9\"]]\n",
+            "\"%E9\"\n",
+            "[[#<Encoding:ISO-8859-1>, [233]]]\n",
+            "[[233]]\n",
+            "\"UTF-8b\"\n",
+        )
+    );
+}

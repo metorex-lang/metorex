@@ -72,10 +72,12 @@ fn symbol_slot(name: &str) -> Slot {
 /// What starts the slot of a String key that reads as another kind.
 const AMBIGUOUS_STRING_PREFIX: char = '\u{2}';
 
-/// Whether a string reads back as a number, a boolean, or nil, which is what
-/// makes it ambiguous as a hash key.
+/// Whether a string reads back as a number, a boolean, nil, or a Symbol,
+/// whose slot starts with a colon, which is what makes it ambiguous as a hash
+/// key.
 fn reads_as_another_kind(text: &str) -> bool {
-    text == "nil"
+    text.starts_with(':')
+        || text == "nil"
         || text == "true"
         || text == "false"
         || text.parse::<i64>().is_ok()

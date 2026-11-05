@@ -1,0 +1,12 @@
+# The gems excon's tests load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "excon", path: "../../../../gems/excon"
+gem "rack", path: "../../../../gems/rack"
+gem "rackup"
+gem "webrick"
+gem "puma"
+
+shipped "drb", "minitest", "prism"

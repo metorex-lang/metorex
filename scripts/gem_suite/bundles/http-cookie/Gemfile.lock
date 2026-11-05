@@ -1,0 +1,36 @@
+PATH
+  remote: ../../../../gems/domain_name
+  specs:
+    domain_name (0.7.20261031)
+
+PATH
+  remote: ../../../../gems/http-cookie
+  specs:
+    http-cookie (1.1.6)
+      domain_name (~> 0.5)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    power_assert (3.0.1)
+    test-unit (3.7.5)
+      power_assert
+
+PLATFORMS
+  arm64-darwin-27
+  ruby
+
+DEPENDENCIES
+  domain_name!
+  http-cookie!
+  power_assert (= 3.0.1)
+  test-unit (= 3.7.5)
+
+CHECKSUMS
+  domain_name (0.7.20261031)
+  http-cookie (1.1.6)
+  power_assert (3.0.1) sha256=8ce9876716cc74e863fcd4cdcdc52d792bd983598d1af3447083a3a9a4d34103
+  test-unit (3.7.5) sha256=f36c28b6c13bb974dd3553bb9f2b25534e62baf8e55960d4481b27f2b4d10295
+
+BUNDLED WITH
+  4.0.23

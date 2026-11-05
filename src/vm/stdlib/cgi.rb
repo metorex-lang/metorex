@@ -3,16 +3,13 @@
 # is written into them spelled out.
 
 module CGI
-  # `escape` writes a form value: everything but the unreserved characters is
-  # written as its bytes in hex, and a space is written as a plus.
+  # `escape` writes a form value: every byte but those of the unreserved
+  # characters is written in hex, and a space is written as a plus. What it
+  # writes is in the encoding of the text it was given.
   def self.escape(text)
-    CGI.coerced(text).each_char.map { |held| CGI.escaped_for_form(held) }.join
-  end
-
-  def self.escaped_for_form(held)
-    return held if held =~ /\A[a-zA-Z0-9_\-.~]\z/
-    return "+" if held == " "
-    CGI.hex_bytes held
+    held = CGI.coerced(text)
+    written = held.each_byte.map { |byte| byte == 0x20 ? "+" : CGI.escaped_for_uri(byte) }.join
+    written.force_encoding(held.encoding)
   end
 
   def self.unescape(text, _encoding = nil)
@@ -212,11 +209,6 @@ module CGI
     named = tag.sub("<", "").sub(">", "")
     named = named[1..-1] if named.start_with? "/"
     named.split(/[\s\/]/).first.to_s.downcase
-  end
-
-  # Each byte a character stands for, written as `%` and two hex figures.
-  def self.hex_bytes(held)
-    held.each_byte.map { |byte| "%%%02X" % byte }.join
   end
 
   # Read every `%NN` back into the byte it names.

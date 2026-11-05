@@ -79,8 +79,9 @@ module Zlib
     Zlib.__stream__ "inflate", Zlib.coerce_text(text), 0
   end
 
+  # The header carries the time the text was compressed.
   def gzip(text, level: nil, strategy: nil)
-    Zlib.__stream__ "gzip", Zlib.coerce_text(text), 0
+    Zlib.__stream__ "gzip", Zlib.coerce_text(text), Time.now.to_i
   end
 
   def gunzip(text)
@@ -799,7 +800,9 @@ module Zlib
       @closed = true
       held_time = @mtime
       held_name = @orig_name
+      # A header given no time of its own carries the time it was written.
       stamp = held_time.nil? ? 0 : held_time.to_i
+      stamp = Time.now.to_i if stamp.zero?
       @io.write Zlib.__stream__("gzip", @body, stamp, held_name)
       @io.close if @io.respond_to?(:close) && !@io.is_a?(StringIO)
       @io

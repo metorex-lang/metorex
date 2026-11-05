@@ -105,3 +105,15 @@ fn keywords_beside_values_reach_a_struct_as_a_hash() {
         "Fetched UIDs do not match (54321 != 22222)\n[7, nil]\n{\"UID\" => 5}\n{\"UID\" => 2}\n{\"UID\" => 2}\n{\"UID\" => 2}\n{uid: 2}\n{\"UID\" => 2}\n[[1], {\"UID\" => 2}]\n"
     );
 }
+
+#[test]
+fn aliases_of_struct_brackets_keep_struct_methods_after_a_redefinition() {
+    let output = run_example("struct/aliased_member_writer.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "{\"a\" => 1}\n{\"b\" => 2}\ntrue\n[\"b\", 2]\n3\n",
+            "{\"b\" => 2, \"c\" => 3}\n[:member_get, :member_set]\n",
+        )
+    );
+}

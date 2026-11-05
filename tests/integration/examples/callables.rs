@@ -379,3 +379,12 @@ fn test_callables_forwarded_block_scope_no_parens_execution() {
     let output = run_example("callables/forwarded_block_scope_no_parens.rb");
     assert_eq!(output, FORWARDED_BLOCK_SCOPE_OUTPUT);
 }
+
+#[test]
+fn lambda_takes_a_symbols_proc() {
+    let output = run_example("callables/lambda_from_a_symbol.rb");
+    assert_eq!(
+        output,
+        "true\n\"A\"\n[:a]\n\"the lambda method requires a literal block\"\n"
+    );
+}

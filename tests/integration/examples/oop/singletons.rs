@@ -94,7 +94,7 @@ fn test_oop_basic_object_constants_execution() {
     let expected = concat!(
         "nil\n",
         "Kernel\n",
-        "uninitialized constant Kernel\n",
+        "uninitialized constant Bare::Kernel\n",
         ":value\n",
         "true\n",
         "false\n",
@@ -114,7 +114,7 @@ fn test_oop_basic_object_constants_parens_execution() {
     let expected = concat!(
         "nil\n",
         "Kernel\n",
-        "uninitialized constant Kernel\n",
+        "uninitialized constant Bare::Kernel\n",
         ":value\n",
         "true\n",
         "false\n",

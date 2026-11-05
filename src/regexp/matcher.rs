@@ -141,6 +141,7 @@ impl<'a> Matcher<'a> {
     /// The leftmost match at or after `from`, or None when there is none.
     pub fn search(&mut self, root: &'a Node, from: usize) -> Option<Found> {
         self.search_start = from;
+        let beginnings = root.beginnings();
         let mut at = from;
         loop {
             self.reset();
@@ -157,7 +158,16 @@ impl<'a> Matcher<'a> {
             if at >= self.letters.len() {
                 return None;
             }
-            at += 1;
+            at = match beginnings {
+                crate::regexp::node::Beginnings::Anywhere => at + 1,
+                crate::regexp::node::Beginnings::AtSearchStart => return None,
+                crate::regexp::node::Beginnings::AtLineStarts => {
+                    match self.letters[at..].iter().position(|letter| *letter == '\n') {
+                        Some(offset) => at + offset + 1,
+                        None => return None,
+                    }
+                }
+            };
         }
     }
 

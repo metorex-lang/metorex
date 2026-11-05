@@ -485,6 +485,7 @@ impl VirtualMachine {
         // A leading Hash names what the child's environment adds, or takes
         // away where a name is given nil.
         let mut environment = Vec::new();
+        let with_environment = &arguments[..];
         let mut arguments = &arguments[..];
         if let Some(View::Dict(entries)) = arguments.first().view() {
             for (name, value) in entries.borrow().iter() {
@@ -547,7 +548,7 @@ impl VirtualMachine {
                 )
             })
         {
-            return self.system_through_spawn(arguments, options, &program, position);
+            return self.system_through_spawn(with_environment, options, &program, position);
         }
         let mut redirects: Vec<(i32, String)> = Vec::new();
         if let Some(options) = &options {

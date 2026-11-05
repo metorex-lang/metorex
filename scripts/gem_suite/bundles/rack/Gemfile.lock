@@ -1,0 +1,31 @@
+PATH
+  remote: ../../../../gems/rack
+  specs:
+    rack (3.2.8)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    logger (1.7.0)
+    minitest (5.27.0)
+    minitest-global_expectations (1.0.2)
+      minitest (> 5)
+
+PLATFORMS
+  arm64-darwin-27
+  ruby
+
+DEPENDENCIES
+  logger (= 1.7.0)
+  minitest (~> 5.0)
+  minitest-global_expectations
+  rack!
+
+CHECKSUMS
+  logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
+  minitest (5.27.0) sha256=2d3b17f8a36fe7801c1adcffdbc38233b938eb0b4966e97a6739055a45fa77d5
+  minitest-global_expectations (1.0.2) sha256=b0fda8574322d099d91196c74245ed07a257dbe61e4b6962ec1a71d0cee957e3
+  rack (3.2.8)
+
+BUNDLED WITH
+  4.0.23

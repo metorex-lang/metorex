@@ -1,0 +1,61 @@
+PATH
+  remote: ../../../../gems/httpclient
+  specs:
+    httpclient (2.10.0)
+      mutex_m
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    base64 (0.3.0)
+    domain_name (0.7.20261031)
+    http-cookie (1.1.6)
+      domain_name (~> 0.5)
+    logger (1.7.0)
+    mutex_m (0.3.0)
+    ostruct (0.6.3)
+    power_assert (3.0.1)
+    rack (2.2.25)
+    rack-ntlm-test-service (0.0.1)
+      rubyntlm
+    rubyntlm (0.6.8)
+      base64
+    test-unit (3.7.5)
+      power_assert
+    webrick (1.9.2)
+
+PLATFORMS
+  arm64-darwin-27
+  ruby
+
+DEPENDENCIES
+  base64 (= 0.3.0)
+  http-cookie (= 1.1.6)
+  httpclient!
+  logger (= 1.7.0)
+  mutex_m (= 0.3.0)
+  ostruct (= 0.6.3)
+  power_assert (= 3.0.1)
+  rack (~> 2.2)
+  rack-ntlm-test-service
+  rubyntlm
+  test-unit (= 3.7.5)
+  webrick
+
+CHECKSUMS
+  base64 (0.3.0) sha256=27337aeabad6ffae05c265c450490628ef3ebd4b67be58257393227588f5a97b
+  domain_name (0.7.20261031) sha256=6091f1c2b4781302de49eefef9ebcfbd758b84279898ea8918d0a59fdc5c0cc9
+  http-cookie (1.1.6) sha256=ba4b82be64de61dc281243dac70e3c382c45142f20268ed9276a3670c93feaa9
+  httpclient (2.10.0)
+  logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
+  mutex_m (0.3.0) sha256=cfcb04ac16b69c4813777022fdceda24e9f798e48092a2b817eb4c0a782b0751
+  ostruct (0.6.3) sha256=95a2ed4a4bd1d190784e666b47b2d3f078e4a9efda2fccf18f84ddc6538ed912
+  power_assert (3.0.1) sha256=8ce9876716cc74e863fcd4cdcdc52d792bd983598d1af3447083a3a9a4d34103
+  rack (2.2.25) sha256=a5b3cd8f2df29c36ede21aa797c21e643f06792fae7487926102e06abe6da0b8
+  rack-ntlm-test-service (0.0.1) sha256=c0ca1a0b08181c79a5d34956fed652caef7954d7b2340e9b19adff39eddad0ae
+  rubyntlm (0.6.8) sha256=054aa45ffcae40db4020d3e41da41f40427aa8733181a2b87751f04ba53ca0d5
+  test-unit (3.7.5) sha256=f36c28b6c13bb974dd3553bb9f2b25534e62baf8e55960d4481b27f2b4d10295
+  webrick (1.9.2) sha256=beb4a15fc474defed24a3bda4ffd88a490d517c9e4e6118c3edce59e45864131
+
+BUNDLED WITH
+  4.0.23

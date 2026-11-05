@@ -1,0 +1,11 @@
+# The gems rack-protection's specs load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "rack-protection", path: "../../../../gems/sinatra/rack-protection"
+gem "rack", path: "../../../../gems/rack"
+gem "rack-test", path: "../../../../gems/rack-test"
+gem "rspec", "~> 3"
+
+shipped "base64", "logger"

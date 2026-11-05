@@ -1,0 +1,9 @@
+# The gems rack's tests load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "rack", path: "../../../../gems/rack"
+gem "minitest", "~> 5.0"
+gem "minitest-global_expectations"
+gem "logger", SHIPPED_VERSIONS.fetch("logger")

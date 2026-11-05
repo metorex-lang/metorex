@@ -414,9 +414,20 @@ impl VirtualMachine {
                     )
                     .map(Some);
             }
-            if let Some(result) =
-                self.call_hash_method(&entries, method_name, arguments, position)?
-            {
+            let holder = match entries.view() {
+                View::Dict(backing) => Some((Rc::clone(backing), receiver.clone())),
+                _ => None,
+            };
+            let outer = std::mem::replace(&mut self.hash_subclass_holder, holder);
+            let answered = self.call_hash_method(&entries, method_name, arguments, position);
+            self.hash_subclass_holder = outer;
+            if let Some(result) = answered? {
+                // A method that answers the hash itself answers the instance.
+                if let (View::Dict(answer), View::Dict(backing)) = (result.view(), entries.view())
+                    && Rc::ptr_eq(answer, backing)
+                {
+                    return Ok(Some(receiver.clone()));
+                }
                 // `merge` answers a hash of the receiver's own class, where
                 // the rest of the table answers a plain one.
                 if method_name == "merge"
@@ -428,6 +439,23 @@ impl VirtualMachine {
                     made.borrow_mut()
                         .set_var(HASH_SUBCLASS_VAR.to_string(), result);
                     return Ok(Some(Object::Instance(made)));
+                }
+                // An Enumerator over the backing hash walks the instance, so
+                // its walk reaches a method the subclass wrote over Hash's.
+                if let View::Instance(made) = result.view() {
+                    let walks_backing = {
+                        let held = made.borrow();
+                        held.class.name() == "Enumerator"
+                            && matches!(
+                                (held.get_var("receiver").view(), entries.view()),
+                                (Some(View::Dict(walked)), View::Dict(backing))
+                                    if Rc::ptr_eq(walked, backing)
+                            )
+                    };
+                    if walks_backing {
+                        made.borrow_mut()
+                            .set_var("receiver".to_string(), receiver.clone());
+                    }
                 }
                 return Ok(Some(result));
             }

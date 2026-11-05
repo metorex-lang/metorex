@@ -1,0 +1,12 @@
+# The gems faraday-net_http's specs load, with the adapter specs faraday's repository keeps.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "faraday-net_http", path: "../../../../gems/faraday-net_http"
+gem "faraday", path: "../../../../gems/faraday"
+gem "rspec", "~> 3.0"
+gem "webmock", "~> 3.4"
+gem "socksify", "~> 1.8"
+
+shipped "bigdecimal", "json", "logger", "net-http", "net-protocol", "rexml", "timeout", "uri"

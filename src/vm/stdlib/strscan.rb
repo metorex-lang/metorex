@@ -478,23 +478,13 @@ class StringScanner
     taken.nil? ? nil : taken.getbyte(0)
   end
 
-  # A count of bytes rather than of characters, and never a part of one.
+  # The next `length` bytes, which may end inside a character.
   def peek(length)
     raise ArgumentError, "negative string size (or size too big)" if length < 0
     if length > 9223372036854775807
       raise RangeError, "bignum too big to convert into 'long'"
     end
-    taken = ""
-    at = @position
-    used = 0
-    while at < @string.length
-      width = @string[at].bytesize
-      break if used + width > length
-      taken = taken + @string[at]
-      used = used + width
-      at = at + 1
-    end
-    taken
+    @string.byteslice(pos, length) || ""
   end
 
   def peep(length)

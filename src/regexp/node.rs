@@ -158,7 +158,75 @@ pub enum Node {
     },
 }
 
+/// Where a search may find a match to begin, judged from how the pattern
+/// opens.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Beginnings {
+    /// At any character.
+    Anywhere,
+    /// Only where the search begins: the pattern opens with `.*` under `/m`,
+    /// which from there reaches any later start a match could have.
+    AtSearchStart,
+    /// Where the search begins and just after each newline: the pattern opens
+    /// with `.*`, which reaches as far as the end of a line.
+    AtLineStarts,
+}
+
 impl Node {
+    /// Where a match of this pattern may begin. A pattern that reads a group
+    /// back, calls one, tests one, or names where the search began is tried
+    /// everywhere, since a later start may change what those read.
+    pub fn beginnings(&self) -> Beginnings {
+        if self.depends_on_where_it_starts() {
+            return Beginnings::Anywhere;
+        }
+        match self.opening_any_run() {
+            Some(true) => Beginnings::AtSearchStart,
+            Some(false) => Beginnings::AtLineStarts,
+            None => Beginnings::Anywhere,
+        }
+    }
+
+    /// Whether the pattern opens with `.*` or `.*?`, and if so whether its
+    /// `.` reads a newline.
+    fn opening_any_run(&self) -> Option<bool> {
+        match self {
+            Node::Repeat {
+                node,
+                least: 0,
+                most: None,
+                ..
+            } => match node.as_ref() {
+                Node::AnyChar { newline } => Some(*newline),
+                _ => None,
+            },
+            Node::Concat(pieces) => pieces.first().and_then(Node::opening_any_run),
+            Node::Capture { node, .. } | Node::Group(node) | Node::Atomic(node) => {
+                node.opening_any_run()
+            }
+            _ => None,
+        }
+    }
+
+    fn depends_on_where_it_starts(&self) -> bool {
+        match self {
+            Node::Backreference { .. }
+            | Node::Call(_)
+            | Node::Conditional { .. }
+            | Node::SearchStart
+            | Node::Absent(_) => true,
+            Node::Concat(pieces) | Node::Alternate(pieces) => {
+                pieces.iter().any(Node::depends_on_where_it_starts)
+            }
+            Node::Repeat { node, .. }
+            | Node::Capture { node, .. }
+            | Node::Group(node)
+            | Node::Atomic(node)
+            | Node::Look { node, .. } => node.depends_on_where_it_starts(),
+            _ => false,
+        }
+    }
+
     /// Fold a list of pieces into one, flattening the single-piece cases so a
     /// match does not step through a wrapper that says nothing.
     pub fn concat(mut pieces: Vec<Node>) -> Node {

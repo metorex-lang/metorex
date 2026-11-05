@@ -328,3 +328,21 @@ fn a_pattern_matches_an_object_through_its_to_str() {
     let output = run_example("regexp/match_against_an_object_with_to_str.rb");
     assert_eq!(output, "0\n#<MatchData \"blah\">\ntrue\ntrue\n0\n");
 }
+
+#[test]
+fn match_on_nil_leaves_its_block_to_no_later_call() {
+    let output = run_example("regexp/match_nil_with_a_block.rb");
+    assert_eq!(output, "[nil, true]\n[\"utf-8\", true]\n");
+}
+
+#[test]
+fn a_pattern_opening_with_any_run_finds_the_leftmost_matches() {
+    let output = run_example("regexp/leading_any_run.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"xy\"]\n[\"ab\\ncd\\nxy\"]\n0\n\"line2 key\"\n1\n",
+            "\"start --B\\r\\nhead\\r\\n\"\n0\nnil\nnil\n",
+        )
+    );
+}

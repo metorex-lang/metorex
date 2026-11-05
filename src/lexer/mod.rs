@@ -27,6 +27,17 @@ pub use token::{InterpolationPart, Position, Token, TokenKind};
 use std::iter::Peekable;
 use std::str::Chars;
 
+/// How far a `def`'s parameter list has been read.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum DefParameters {
+    /// No `def` is waiting for its parameters.
+    Idle,
+    /// A `def` was read, and its name may be followed by `(`.
+    AfterDef,
+    /// The parameter list is open, with this many parentheses unclosed.
+    Open(usize),
+}
+
 /// The lexer converts source code into a stream of tokens
 pub struct Lexer<'a> {
     /// Peekable iterator over the characters
@@ -75,6 +86,12 @@ pub struct Lexer<'a> {
     /// How many method names an `alias` has yet to be given, where a `/`
     /// names the division method rather than opening a pattern.
     pub(super) alias_names_left: u8,
+    /// How far a `def`'s parameter list has been read, so the `)` closing it
+    /// can be told from one closing a value.
+    pub(super) def_parameters: DefParameters,
+    /// Whether the last significant token was the `)` closing a `def`'s
+    /// parameter list, after which a `/` opens the body with a pattern.
+    pub(super) closed_def_parameters: bool,
     /// Whether the last significant token was a colon written against the
     /// name before it, which makes the pair a hash key such as `globals:`
     /// rather than the start of a symbol.
@@ -151,6 +168,8 @@ impl<'a> Lexer<'a> {
             prev_significant_end: 0,
             local_names: std::collections::HashSet::new(),
             alias_names_left: 0,
+            def_parameters: DefParameters::Idle,
+            closed_def_parameters: false,
             label_colon: false,
             restore_line: None,
             restore_offset: None,
@@ -219,6 +238,10 @@ impl<'a> Lexer<'a> {
             // literal, not division applied to whatever ended the prior line.
             TokenKind::Newline => {
                 self.prev_significant = None;
+                self.closed_def_parameters = false;
+                if self.def_parameters == DefParameters::AfterDef {
+                    self.def_parameters = DefParameters::Idle;
+                }
             }
             // Comments and EOF leave the previous significant token alone.
             TokenKind::Comment(_) | TokenKind::EOF => {}
@@ -231,6 +254,29 @@ impl<'a> Lexer<'a> {
                 self.alias_names_left = match other {
                     TokenKind::Alias => 2,
                     _ => self.alias_names_left.saturating_sub(1),
+                };
+                let adjacent = token.position.offset as usize == self.prev_significant_end;
+                self.closed_def_parameters = false;
+                self.def_parameters = match (self.def_parameters, other) {
+                    (_, TokenKind::Def) => DefParameters::AfterDef,
+                    (DefParameters::AfterDef, TokenKind::LParen) if adjacent => {
+                        DefParameters::Open(1)
+                    }
+                    (
+                        DefParameters::AfterDef,
+                        TokenKind::LParen | TokenKind::Semicolon | TokenKind::Equal,
+                    ) => DefParameters::Idle,
+                    (DefParameters::Open(depth), TokenKind::LParen) => {
+                        DefParameters::Open(depth + 1)
+                    }
+                    (DefParameters::Open(1), TokenKind::RParen) => {
+                        self.closed_def_parameters = true;
+                        DefParameters::Idle
+                    }
+                    (DefParameters::Open(depth), TokenKind::RParen) => {
+                        DefParameters::Open(depth - 1)
+                    }
+                    (held, _) => held,
                 };
                 self.label_colon = matches!(other, TokenKind::Colon)
                     && matches!(self.prev_significant, Some(TokenKind::Ident(_)))

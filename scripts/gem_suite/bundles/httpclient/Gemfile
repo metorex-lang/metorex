@@ -1,0 +1,20 @@
+# The gems httpclient's tests load. http-cookie is the released gem rather
+# than the submodule, since Bundler reads a path gem's gemspec, which loads
+# http/cookie/version.rb and defines HTTP::Cookie before the autoload
+# http-cookie.rb sets up for it.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "httpclient", path: "../../../../gems/httpclient"
+gem "http-cookie", "1.1.6"
+gem "test-unit", SHIPPED_VERSIONS.fetch("test-unit")
+gem "rack", "~> 2.2"
+gem "rack-ntlm-test-service"
+gem "rubyntlm"
+gem "webrick"
+gem "logger", SHIPPED_VERSIONS.fetch("logger")
+gem "base64", SHIPPED_VERSIONS.fetch("base64")
+gem "ostruct", SHIPPED_VERSIONS.fetch("ostruct")
+
+shipped "mutex_m", "power_assert"

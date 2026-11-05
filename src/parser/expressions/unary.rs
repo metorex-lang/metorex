@@ -86,8 +86,11 @@ impl Parser<'_> {
             // (`--5`). A lone `-` or `+` goes straight to the power level so
             // that `-2**2 == -(2**2)` per Ruby semantics.
             let operand = if op_token.kind == TokenKind::NotKeyword {
+                // `not data = load` negates what the assignment answers.
                 self.not_operand_depth += 1;
-                let read = self.parse_assignment();
+                let read = self
+                    .parse_assignment()
+                    .and_then(|operand| self.fold_assignment(operand));
                 self.not_operand_depth -= 1;
                 read?
             } else if matches!(op, UnaryOp::Not) || self.check(&[TokenKind::Plus, TokenKind::Minus])

@@ -1941,3 +1941,46 @@ fn bigdecimal_orders_in_ranges_and_divides_inside_complex_numbers() {
         )
     );
 }
+
+#[test]
+fn unsigned_certificates_count_as_equal() {
+    let output = run_example("stdlib/openssl_unsigned_certificates_equal.rb");
+    assert_eq!(output, "true\ntrue\ntrue\n");
+}
+
+#[test]
+fn cgi_escape_answers_in_the_encoding_it_was_given() {
+    let output = run_example("stdlib/cgi_escape_keeps_the_encoding.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"%E9\"\n#<Encoding:ISO-8859-1>\n",
+            "\"%80\"\n#<Encoding:BINARY (ASCII-8BIT)>\n",
+            "\"a+b~%C3%A9\"\n#<Encoding:UTF-8>\n",
+        )
+    );
+}
+
+#[test]
+fn string_scanner_peek_answers_bytes() {
+    let output = run_example("stdlib/strscan_peek_bytes.rb");
+    assert_eq!(
+        output,
+        "\"a\\xC3\"\n#<Encoding:UTF-8>\n\"aé\"\n\"aé b\"\n\"\\xC3\"\n\" b\"\n1999999\n"
+    );
+}
+
+#[test]
+fn string_io_read_with_a_length_reads_an_ascii_run_in_one_piece() {
+    let output = run_example("stdlib/stringio_read_ascii_run.rb");
+    assert_eq!(
+        output,
+        "\"ab\"\n\"cd\"\n\"cd\"\n4\n\"ef\"\nnil\n\"\"\n2999999\n2999999\n\"\\x00\"\n"
+    );
+}
+
+#[test]
+fn a_gzip_header_carries_the_time_it_was_written() {
+    let output = run_example("stdlib/gzip_header_time.rb");
+    assert_eq!(output, "true\ntrue\n1700000000\n");
+}

@@ -1,0 +1,15 @@
+# The gems faraday's specs load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "faraday", path: "../../../../gems/faraday"
+gem "faraday-net_http", path: "../../../../gems/faraday-net_http"
+gem "rack", path: "../../../../gems/rack"
+gem "rspec", "~> 3.7"
+gem "webmock", "~> 3.4"
+gem "simplecov"
+gem "coveralls_reborn"
+gem "pry"
+
+shipped "bigdecimal", "date", "erb", "io-console", "irb", "json", "logger", "net-http", "net-protocol", "pp", "prettyprint", "prism", "psych", "rbs", "rdoc", "readline", "reline", "rexml", "stringio", "timeout", "tsort", "uri"

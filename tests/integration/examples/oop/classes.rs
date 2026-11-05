@@ -308,3 +308,18 @@ fn freeze_called_without_a_receiver_freezes_self() {
     let output = run_example("oop/freeze_called_without_a_receiver.rb");
     assert_eq!(output, "true\ntrue\ntrue\nFrozenError\n");
 }
+
+#[test]
+fn a_basic_object_subclass_method_reads_the_constants_around_it() {
+    let output = run_example("oop/constants_inside_a_basic_object_subclass.rb");
+    assert_eq!(output, "true\nfalse\n3\n[2]\n");
+}
+
+#[test]
+fn a_basic_object_subclass_does_not_answer_methods_added_to_object() {
+    let output = run_example("oop/basic_object_subclass_skips_object_methods.rb");
+    assert_eq!(
+        output,
+        "[:missing, :added_to_object]\n:module_answered\n[:missing, :added_to_object]\n"
+    );
+}

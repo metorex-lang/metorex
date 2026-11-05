@@ -109,6 +109,7 @@ impl Parser<'_> {
                 | TokenKind::Defined
                 | TokenKind::Def
                 | TokenKind::Yield
+                | TokenKind::Super
                 | TokenKind::Case
                 | TokenKind::Begin
         ) || (self.peek().kind == TokenKind::Arrow
@@ -262,6 +263,7 @@ impl Parser<'_> {
                     | TokenKind::Def
                     | TokenKind::Arrow
                     | TokenKind::Yield
+                    | TokenKind::Super
                     | TokenKind::Case
                     | TokenKind::Begin
             );
@@ -532,8 +534,8 @@ impl Parser<'_> {
                 .into_iter()
                 .map(|(k, v)| {
                     (
-                        Expression::StringLiteral {
-                            value: format!(":{}", k),
+                        Expression::Symbol {
+                            value: k.to_string(),
                             position,
                         },
                         v,

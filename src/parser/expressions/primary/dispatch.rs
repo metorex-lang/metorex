@@ -273,7 +273,6 @@ impl Parser<'_> {
                 } else if self.check(&[
                     TokenKind::Newline,
                     TokenKind::Semicolon,
-                    TokenKind::EOF,
                     TokenKind::End,
                     TokenKind::RParen,
                     TokenKind::RBrace,
@@ -290,7 +289,8 @@ impl Parser<'_> {
                     TokenKind::Comma,
                     TokenKind::RBracket,
                     TokenKind::Then,
-                ]) || (self.ternary_depth > 0 && self.check(&[TokenKind::Colon]))
+                ]) || self.is_at_end()
+                    || (self.ternary_depth > 0 && self.check(&[TokenKind::Colon]))
                 {
                     Vec::new()
                 } else {

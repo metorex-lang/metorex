@@ -1,0 +1,8 @@
+# The gems connection_pool's tests load, which its helper sets up and requires through Bundler.
+source "https://rubygems.org"
+
+gem "connection_pool", path: "../../../../gems/connection_pool"
+gem "maxitest"
+# The tests stub methods without requiring minitest/mock, which minitest 5
+# loads with the rest of minitest and minitest 6 leaves to that require.
+gem "minitest", "~> 5.0"

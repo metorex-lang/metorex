@@ -482,19 +482,18 @@ impl VirtualMachine {
                     // the value directly in the hash.
                     let block = default_proc.clone();
                     drop(dict);
-                    let hash_obj = Object::Dict(Rc::clone(dict_rc));
-                    let block_result =
-                        self.execute_block_callable(&block, vec![hash_obj, key.clone()], position)?;
-                    // The block may have set the key directly (h[k] = val), or
-                    // returned a value. Check the hash first, fall back to block result.
-                    let stored = dict_rc.borrow().get(key_string.as_str()).cloned();
-                    if let Some(value) = stored {
-                        Ok(value)
-                    } else {
-                        // Ruby keeps nothing for a key the block did not
-                        // store, so the next read calls the block again.
-                        Ok(block_result)
-                    }
+                    // A Hash subclass instance's own hash hands the block the
+                    // instance, so what the block writes reaches its `[]=`.
+                    let hash_obj = match &self.hash_subclass_holder {
+                        Some((backing, instance)) if Rc::ptr_eq(backing, dict_rc) => {
+                            instance.clone()
+                        }
+                        _ => Object::Dict(Rc::clone(dict_rc)),
+                    };
+                    // What the block answers is what the read answers, whether
+                    // or not it stored something under the key as well.
+                    let _ = key_string;
+                    self.execute_block_callable(&block, vec![hash_obj, key.clone()], position)
                 } else {
                     Ok(Object::Nil)
                 }
@@ -833,12 +832,9 @@ impl HashLiteral {
     ) -> Result<HashKey, MetorexError> {
         // A String key is copied and frozen, so changing the String it was
         // written with afterwards leaves the key alone. The interpreter's own
-        // bookkeeping keys are left as they are, and so is a key spelled
-        // `:name`, which is how the parser writes the Symbol keys of the
-        // keywords a call passes.
+        // bookkeeping keys are left as they are.
         let program_string_key = matches!(key_value.view(), View::String(text)
-            if !crate::vm::native_methods::hash_methods::is_internal_key(&text.as_str())
-                && !text.as_str().starts_with(':'));
+            if !crate::vm::native_methods::hash_methods::is_internal_key(&text.as_str()));
         let key_value = match key_value.view() {
             View::String(text) if program_string_key && !text.is_frozen() => {
                 let copy = crate::object::StringValue::clone(text);

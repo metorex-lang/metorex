@@ -1,0 +1,28 @@
+PATH
+  remote: ../../../../gems/connection_pool
+  specs:
+    connection_pool (3.0.2)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    maxitest (6.2.0)
+      minitest (>= 5.20.0, < 5.28.0)
+    minitest (5.27.0)
+
+PLATFORMS
+  arm64-darwin-27
+  ruby
+
+DEPENDENCIES
+  connection_pool!
+  maxitest
+  minitest (~> 5.0)
+
+CHECKSUMS
+  connection_pool (3.0.2)
+  maxitest (6.2.0) sha256=bb66472dd3f6565e4db5246826a05ce9096958d9e26ba9a8fdcae20288be1f4f
+  minitest (5.27.0) sha256=2d3b17f8a36fe7801c1adcffdbc38233b938eb0b4966e97a6739055a45fa77d5
+
+BUNDLED WITH
+  4.0.23

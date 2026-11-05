@@ -83,7 +83,12 @@ pub(crate) fn register_native_functions(globals: &mut GlobalRegistry) {
     globals.set("gets", Object::NativeFunction("gets".to_string()));
     // ARGF — the stream `gets` reads from. An instance rather than a module,
     // so a singleton method can stand in for `gets` during a test.
-    let argf_class = Class::new("ARGF.class", None);
+    use crate::object::OptionView as _;
+    let object_class = match globals.get("Object").view() {
+        Some(crate::object::View::Class(object_class)) => Some(Rc::clone(object_class)),
+        _ => None,
+    };
+    let argf_class = Class::new("ARGF.class", object_class);
     globals.set("ARGF.class", Object::Class(Rc::clone(&argf_class)));
     let argf = Object::instance(argf_class);
     globals.set("ARGF", argf.clone());

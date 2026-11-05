@@ -11,6 +11,10 @@ impl<'a> Lexer<'a> {
         if self.alias_names_left > 0 {
             return false;
         }
+        // `def pattern(text) /#{text}/ end` opens the body with a pattern.
+        if self.closed_def_parameters {
+            return true;
+        }
         // `:/` names the division method. A colon with anything between it and
         // the slash is a ternary or a label, where a regex can follow.
         if matches!(self.prev_significant, Some(TokenKind::Colon))

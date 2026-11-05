@@ -236,6 +236,15 @@ pub struct VirtualMachine {
     /// a native one. A method bound explicitly reaches its native body even
     /// on an object whose class answers nothing of Kernel's.
     pub(crate) bound_stub_depth: usize,
+    /// Whether the native method about to be reached is called through an
+    /// alias of it, which reaches it even where the program has since
+    /// written a method of the same name. The dispatcher it reaches takes
+    /// the flag down, so a call nested inside it is dispatched as usual.
+    pub(crate) through_native_alias: bool,
+    /// The instance of a Hash subclass whose backing hash a native Hash
+    /// method is working on, with that hash, so a default proc it runs is
+    /// handed the instance rather than the hash behind it.
+    pub(crate) hash_subclass_holder: Option<(Rc<RefCell<crate::object::HashEntries>>, Object)>,
     /// The method invocation a block written right now would return from.
     /// A `return` inside a block unwinds to the method that created the
     /// block, so the block records this id and the unwinding stops at the
@@ -728,6 +737,8 @@ impl VirtualMachine {
             thread_schedulers: HashMap::new(),
             scheduler_waiting: HashMap::new(),
             bound_stub_depth: 0,
+            through_native_alias: false,
+            hash_subclass_holder: None,
             current_method_frame: Some(TOP_LEVEL_FRAME),
             iterating_sets: Vec::new(),
             live_frames: vec![TOP_LEVEL_FRAME],
