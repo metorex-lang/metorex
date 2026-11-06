@@ -106,6 +106,7 @@ pub(crate) fn socket_constant(name: &str) -> Option<i64> {
         "IPPROTO_ND" => libc::IPPROTO_ND,
         #[cfg(target_os = "macos")]
         "IPPROTO_XTP" => libc::IPPROTO_XTP,
+        "SOMAXCONN" => libc::SOMAXCONN,
         "SOL_SOCKET" => libc::SOL_SOCKET,
         "SO_DEBUG" => libc::SO_DEBUG,
         "SO_ACCEPTCONN" => libc::SO_ACCEPTCONN,

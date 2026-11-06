@@ -266,6 +266,26 @@ impl ReadSubject {
     pub fn of(subject: &str) -> Self {
         Self(Reading::of(subject))
     }
+
+    /// A subject whose characters are runs of its own, as a Shift_JIS
+    /// string's are: `letters[n]` stands for the run that opens at the
+    /// character `unit_starts[n]` of `subject`.
+    pub fn of_units(subject: &str, letters: Vec<char>, unit_starts: &[usize]) -> Self {
+        let char_offsets: Vec<usize> = subject.char_indices().map(|(at, _)| at).collect();
+        let mut offsets: Vec<usize> = unit_starts
+            .iter()
+            .map(|start| char_offsets.get(*start).copied().unwrap_or(subject.len()))
+            .collect();
+        offsets.push(subject.len());
+        Self(Reading { letters, offsets })
+    }
+
+    /// The byte offset the character after the one at `at` opens.
+    pub fn next_start(&self, at: usize) -> usize {
+        let offsets = &self.0.offsets;
+        let index = offsets.partition_point(|offset| *offset <= at);
+        offsets.get(index).copied().unwrap_or(at + 1)
+    }
 }
 
 struct Reading {

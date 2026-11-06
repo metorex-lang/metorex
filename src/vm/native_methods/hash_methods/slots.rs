@@ -309,11 +309,9 @@ pub(crate) fn stored_key_object(key: &Object) -> Object {
     if text.is_frozen() {
         return key.clone();
     }
-    let copy = Object::string(text.as_str().to_string());
-    if let View::String(copied) = copy.view() {
-        copied.freeze();
-    }
-    copy
+    let copied = crate::object::StringValue::clone(text);
+    copied.freeze();
+    Object::String(Rc::new(copied))
 }
 
 /// The prefix on every slot name a key's own `#hash` produced, chosen from

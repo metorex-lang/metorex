@@ -18,14 +18,29 @@ impl VirtualMachine {
                 crate::vm::method_invocation::descends_from(home, "Object") || home.is_module()
             });
         }
-        let innermost = self.def_scope_stack.last().cloned().or_else(|| {
-            // Inside a method body the lexical chain is the nesting captured
-            // where the method was defined, innermost first.
+        // Inside a method body the lexical chain is the nesting captured
+        // where the method was defined, innermost first. That holds over a
+        // class body the call was made from, unless a class body opened
+        // inside the method since.
+        let method_nesting = || {
             self.method_nesting_stack
                 .last()
                 .and_then(|nesting| nesting.first())
                 .cloned()
-        });
+        };
+        let in_method_body = matches!(
+            self.written_in_method(),
+            Some((depth, _)) if depth == self.def_scope_stack.len()
+        );
+        let innermost = if in_method_body {
+            // A method written at the top level reads the top level.
+            let Some(written_in) = method_nesting() else {
+                return true;
+            };
+            Some(written_in)
+        } else {
+            self.def_scope_stack.last().cloned().or_else(method_nesting)
+        };
         let Some(innermost) = innermost else {
             return true;
         };

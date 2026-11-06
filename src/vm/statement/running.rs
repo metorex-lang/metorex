@@ -127,11 +127,26 @@ impl VirtualMachine {
                 body,
                 is_class_method,
                 position,
-                ..
+                end_position,
             } => {
                 // Run from a method, such as in a default value, it installs
                 // on the class the method was written in.
                 let from_method_body = self.running_method_def_scope();
+                // A `def self.name` run where `self` is an object rather than
+                // a class defines the method on that object alone.
+                if *is_class_method && from_method_body.is_some() {
+                    let running_on = self.eval_self(*position)?;
+                    if !matches!(running_on.view(), View::Class(_) | View::Module(_)) {
+                        return self.execute_function_def(
+                            name,
+                            parameters,
+                            body,
+                            *position,
+                            Some("self"),
+                            end_position.line as usize,
+                        );
+                    }
+                }
                 let Some(target) = from_method_body
                     .clone()
                     .or_else(|| self.def_scope_stack.last().cloned())

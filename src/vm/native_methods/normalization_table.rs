@@ -7895,7 +7895,8 @@ pub(crate) fn composed(points: &[u32]) -> Vec<u32> {
     };
     for point in &points[1..] {
         let held = combining_class(*point) as i16;
-        if last_class < held
+        let adjacent = holder == out.len() - 1;
+        if (adjacent || last_class < held)
             && let Some(joined) = comes_together(out[holder], *point)
         {
             out[holder] = joined;

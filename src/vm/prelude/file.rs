@@ -1,5 +1,12 @@
 pub(super) const SOURCE: &str = r##"
 class File
+  # How many bytes the file holds.
+  def size
+    raise IOError, "closed stream" if closed?
+    __drain__
+    IO.__stream__ "size", __stream_handle__, "", 0
+  end
+
   # Text read from a file named by path. A count and an offset name a run of
   # bytes rather than the whole file, and the options say how the file is
   # opened and what encoding the text is read in.

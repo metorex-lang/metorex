@@ -15,7 +15,7 @@ pub(crate) use crate::vm::native_methods::is_valid_constant_name;
 pub(in crate::vm) use crate::vm::utils::{is_truthy, position_to_location};
 pub(crate) use std::rc::Rc;
 
-mod aliasing;
+pub(crate) mod aliasing;
 mod allocation;
 mod arguments;
 mod attributes;

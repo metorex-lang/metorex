@@ -863,7 +863,11 @@ impl VirtualMachine {
             // the interpreter answers natively, is aliased
             // through the full method so the stub that reaches
             // it is made.
-            if class.alias_method(&new_name, &old_name) {
+            let native =
+                crate::vm::native_methods::class_methods::aliasing::natively_answering_class(
+                    class, &old_name,
+                );
+            if native.is_none() && class.alias_method(&new_name, &old_name) {
                 let hook = Self::method_added_hook_for(class);
                 self.invoke_class_hook(class, hook, &new_name, position)?;
             } else {

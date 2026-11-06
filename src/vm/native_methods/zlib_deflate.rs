@@ -565,6 +565,32 @@ pub(crate) fn deflate(bytes: &[u8], dictionary: &[u8]) -> Vec<u8> {
     Deflater::new(window, dictionary.len()).run()
 }
 
+/// One piece of a DEFLATE stream written in parts: `bytes` compressed with
+/// the input before it, `previous`, in the window, so a match may reach back
+/// into it. A piece that is not the last ends with an empty stored block,
+/// which is what a sync flush writes, and the last ends the stream.
+pub(crate) fn deflate_piece(bytes: &[u8], previous: &[u8], last: bool) -> Vec<u8> {
+    let kept = &previous[previous.len().saturating_sub(W_SIZE)..];
+    let mut window: Vec<u8> = Vec::with_capacity(kept.len() + bytes.len());
+    window.extend_from_slice(kept);
+    window.extend_from_slice(bytes);
+    let mut state = Deflater::new(window, kept.len());
+    let end = state.window.len();
+    while state.strstart < end {
+        state.step(end);
+    }
+    if state.match_available {
+        state.block.tally_literal(state.window[end - 1]);
+    }
+    state.flush_block(last);
+    if !last {
+        let at = state.strstart.min(end);
+        state.stored_block(at, 0, false);
+    }
+    state.writer.align();
+    state.writer.out
+}
+
 struct Deflater {
     window: Vec<u8>,
     head: Vec<u32>,

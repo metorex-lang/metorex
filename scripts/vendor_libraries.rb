@@ -1,6 +1,6 @@
 # Copies the default gems MRI writes in Ruby that metorex carries unchanged,
-# erb, json, net-http, net-protocol, optparse, psych, tempfile, tmpdir, uri,
-# yaml, and openssl's buffering.rb, into
+# erb, json, net-http, net-protocol, open-uri, optparse, psych, tempfile,
+# tmpdir, uri, yaml, and openssl's buffering.rb, into
 # src/vm/stdlib, where
 # `require` finds each file by feature name through the table in
 # src/vm/stdlib/mod.rs.
@@ -19,6 +19,7 @@ GEMS = {
   "erb" => %w[erb.rb erb/*.rb],
   "net-http" => %w[net/http.rb net/https.rb net/http/*.rb],
   "net-protocol" => %w[net/protocol.rb],
+  "open-uri" => %w[open-uri.rb],
   "optparse" => %w[optparse.rb optparse/*.rb],
   "tempfile" => %w[tempfile.rb],
   "tmpdir" => %w[tmpdir.rb],
@@ -35,8 +36,8 @@ EXTENSION_GEMS = {
   "openssl" => ["ext/openssl/lib", %w[openssl/buffering.rb]]
 }.freeze
 
-# uri.rb is carried as uri_vendored.rb.
-RENAMED = { "uri.rb" => "uri_vendored.rb" }.freeze
+# uri.rb is carried as uri_vendored.rb, and open-uri.rb as open_uri.rb.
+RENAMED = { "uri.rb" => "uri_vendored.rb", "open-uri.rb" => "open_uri.rb" }.freeze
 
 sources = GEMS.map { |name, patterns| [name, lib, patterns] } +
           EXTENSION_GEMS.map { |name, (base, patterns)| [name, release.path(base), patterns] }

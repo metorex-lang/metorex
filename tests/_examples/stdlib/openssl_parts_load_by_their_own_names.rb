@@ -1,0 +1,5 @@
+p require("openssl")
+p require("openssl/digest")
+p require("openssl/cipher")
+p require("openssl/x509")
+p OpenSSL::Digest::MD5.hexdigest("abc")

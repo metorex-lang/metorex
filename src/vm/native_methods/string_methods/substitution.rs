@@ -79,8 +79,12 @@ impl VirtualMachine {
                 // Where each match began, so the walk can report it as the
                 // last match while the block runs.
                 let mut reached: Vec<usize> = Vec::new();
+                let read = crate::vm::native_methods::regexp_methods::read_subject(
+                    &subject,
+                    &string_value.encoding_name(),
+                );
                 let mut cursor = 0usize;
-                while let Some(captured) = compiled.captures_at(&subject, cursor) {
+                while let Some(captured) = compiled.captures_in(&read, &subject, cursor) {
                     let Some(whole) = captured.get(0) else { break };
                     if anchored && whole.start() != cursor {
                         break;
@@ -110,10 +114,7 @@ impl VirtualMachine {
                     if whole.end() >= subject.len() {
                         break;
                     }
-                    cursor = whole.end() + 1;
-                    while cursor < subject.len() && !subject.is_char_boundary(cursor) {
-                        cursor += 1;
-                    }
+                    cursor = read.next_start(whole.end());
                 }
                 let last = reached.last().copied();
                 let answer = match self.pending_block.take().view() {

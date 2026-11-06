@@ -113,6 +113,18 @@ impl VirtualMachine {
                         }
                         crate::vm::native_methods::shift_jis_table::shift_jis_text(&bytes)
                     }
+                    None if held == "GBK" && reads_bytes => {
+                        let bytes = binary_bytes(string_value);
+                        if let Some((broken, after, incomplete)) =
+                            crate::vm::native_methods::gbk::gbk_problem(&bytes)
+                            && !options.invalid_replace
+                        {
+                            let error =
+                                invalid_bytes_error(&broken, after, incomplete, &held, position);
+                            return Err(self.with_conversion_ends(error, &held, &wanted));
+                        }
+                        crate::vm::native_methods::gbk::gbk_text(&bytes)
+                    }
                     None if held == "EUC-JP" && reads_bytes && options.invalid_replace => {
                         euc_jp_text_replacing(&binary_bytes(string_value), &replacement)
                     }
@@ -218,6 +230,16 @@ impl VirtualMachine {
                             .map_err(|character| {
                                 self.undefined_conversion_error(character, &held, &wanted, position)
                             })?;
+                    let made = crate::object::StringValue::binary(bytes);
+                    made.set_encoding(wanted);
+                    return Ok(Some(Object::String(Rc::new(made))));
+                }
+                if wanted == "GBK" {
+                    let bytes = crate::vm::native_methods::gbk::gbk_bytes(&reading).map_err(
+                        |character| {
+                            self.undefined_conversion_error(character, &held, &wanted, position)
+                        },
+                    )?;
                     let made = crate::object::StringValue::binary(bytes);
                     made.set_encoding(wanted);
                     return Ok(Some(Object::String(Rc::new(made))));

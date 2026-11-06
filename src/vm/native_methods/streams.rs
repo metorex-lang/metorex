@@ -311,10 +311,9 @@ impl VirtualMachine {
             Some(View::String(held)) => super::file_methods::path_text(held),
             _ => String::new(),
         };
-        // A separator whose characters stand for bytes names those bytes
-        // rather than the ones its text is spelled with.
+        // A string names the bytes it holds, whatever encoding reads them.
         let text_bytes = match arguments.get(2).view() {
-            Some(View::String(held)) if held.holds_bytes() => {
+            Some(View::String(held)) => {
                 crate::vm::native_methods::string_methods::binary_bytes(held)
             }
             _ => text.as_bytes().to_vec(),

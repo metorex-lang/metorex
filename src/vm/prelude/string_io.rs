@@ -165,17 +165,18 @@ class StringIO
   end
 
   def size
-    @string.length
+    @string.bytesize
   end
 
   def length
-    @string.length
+    @string.bytesize
   end
 
   # The cursor is reported in bytes, so a character made of several bytes
   # moves it by that many.
   def pos
     return @wide_position unless @wide_position.nil?
+    return @inside_a_character[1] if inside_a_character?
     return @position if single_byte_characters?
     beyond = @position - @string.length
     beyond = 0 if beyond < 0
@@ -198,8 +199,18 @@ class StringIO
     # An offset that lands inside a character leaves the cursor between
     # two of them, which only a reader of code points minds.
     @misaligned = @string[0, @position].bytesize != offset
+    # The offset is kept for as long as the cursor stays on that character,
+    # so a read of bytes goes on from where the last one stopped.
+    @inside_a_character = @misaligned ? [@position, offset] : nil
     offset
   end
+
+  # Whether the cursor sits part-way through a character, with nothing
+  # having moved it since.
+  def inside_a_character?
+    !@inside_a_character.nil? && @inside_a_character[0] == @position
+  end
+  private :inside_a_character?
 
   # The number of characters standing before a byte offset.
   def characters_before(counted)
@@ -387,6 +398,11 @@ class StringIO
   # a string of its own.
   def read(length = nil, buffer = nil)
     reading_allowed
+    if length.nil? && inside_a_character?
+      remaining = @string.byteslice(@inside_a_character[1], @string.bytesize) || ""
+      self.pos = @string.bytesize
+      return filled(buffer, remaining)
+    end
     if length.nil?
       remaining = @string[@position..-1] || ""
       @position = @string.length
@@ -398,6 +414,16 @@ class StringIO
       taken = @string.byteslice(@wide_position, wanted) || ""
       return nil if taken.empty? && wanted > 0
       self.pos = @wide_position + taken.bytesize
+      return filled(buffer, taken.b)
+    end
+    if inside_a_character?
+      at = @inside_a_character[1]
+      taken = @string.byteslice(at, wanted) || ""
+      if taken.empty? && wanted > 0
+        filled buffer, "" unless buffer.nil?
+        return nil
+      end
+      self.pos = at + taken.bytesize
       return filled(buffer, taken.b)
     end
     # Every character takes at least one byte, so the next `wanted`
@@ -416,7 +442,7 @@ class StringIO
     # A count names bytes rather than characters, which is what a stream of
     # text holding multibyte characters reads out one piece at a time.
     taken = StringIO.__first_bytes__ remaining, wanted
-    @position = @position + StringIO.__characters_for__(remaining, taken.bytesize)
+    self.pos = pos + taken.bytesize
     filled buffer, taken
   end
 
@@ -425,19 +451,6 @@ class StringIO
     listed = text.bytes
     return text.b if listed.size <= wanted
     listed[0, wanted].pack("C*")
-  end
-
-  # How many characters the first so many bytes of some text spell. A count
-  # landing inside a character counts that character as read.
-  def self.__characters_for__(text, counted)
-    used = 0
-    walked = 0
-    text.each_char do |held|
-      break if used >= counted
-      used += held.bytesize
-      walked += 1
-    end
-    walked
   end
 
   # The number an argument stands for, refusing anything that names none.

@@ -186,17 +186,17 @@ fn a_store_names_why_it_refuses_a_certificate() {
         inspected(
             "root_key = OpenSSL::PKey::RSA.new(512)\nleaf_key = OpenSSL::PKey::RSA.new(512)\nnow = Time.now\nroot = certificate('/CN=r', nil, root_key, root_key, now - 60, now + 60)\nleaf = certificate('/CN=l', root.subject, leaf_key, root_key, now - 60, now + 60)\nstore = OpenSSL::X509::Store.new\nresults = []\nresults << [store.verify(root), store.error]\nresults << [store.verify(leaf), store.error]\nresults << [store.verify(leaf, [root]), store.error]\nstore.add_cert(root)\nresults << [store.verify(leaf), store.error, store.chain.size]\nfuture = certificate('/CN=f', nil, root_key, root_key, now + 600, now + 900)\nstore.add_cert(future)\nresults << [store.verify(future), store.error, store.error_string]\nresults"
         ),
-        "[[false, 18], [false, 20], [false, 19], [true, 0, 2], [false, 9, \"certificate is not yet valid or the system clock is incorrect\"]]"
+        "[[false, 18], [false, 20], [false, 19], [false, 79, 2], [false, 9, \"certificate is not yet valid\"]]"
     );
 }
 
 #[test]
-fn a_certificate_signed_by_a_different_key_has_no_issuer_in_the_store() {
+fn a_store_refuses_a_root_without_basic_constraints_as_an_issuer() {
     assert_eq!(
         inspected(
             "root_key = OpenSSL::PKey::RSA.new(512)\nnow = Time.now\nroot = certificate('/CN=r', nil, root_key, root_key, now - 60, now + 60)\nforged = certificate('/CN=l', root.subject, root_key, OpenSSL::PKey::RSA.new(512), now - 60, now + 60)\nstore = OpenSSL::X509::Store.new\nstore.add_cert(root)\n[store.verify(forged), store.error_string]"
         ),
-        "[false, \"unable to get local issuer certificate\"]"
+        "[false, \"invalid CA certificate\"]"
     );
 }
 

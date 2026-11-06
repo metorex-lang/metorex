@@ -72,12 +72,11 @@ impl VirtualMachine {
             ));
         };
         let subject = string_value.as_str().to_string();
-        let mut answer = AnswerText {
-            built: String::new(),
-            encoding: string_value.encoding_name(),
-            holds_only_ascii: true,
-        };
-        let read = crate::regexp::ReadSubject::of(&subject);
+        let mut answer = AnswerText::new(&string_value.encoding_name());
+        let read = crate::vm::native_methods::regexp_methods::read_subject(
+            &subject,
+            &string_value.encoding_name(),
+        );
         let mut cursor = 0usize;
         let mut last: Option<usize> = None;
         while cursor <= subject.len() {
@@ -96,9 +95,10 @@ impl VirtualMachine {
             ) {
                 break;
             }
-            answer.add(
+            answer.add_held(
                 &subject[cursor..whole.start()],
                 &string_value.encoding_name(),
+                string_value.holds_bytes(),
                 position,
             )?;
             // Searching again from where this search began finds this match,
@@ -110,7 +110,7 @@ impl VirtualMachine {
             if block.is_some() || matches!(arguments.get(1).view(), Some(View::Dict(_))) {
                 self.regexp_match_data_in(&source, &flags, &subject, cursor, None, position)?;
             }
-            let (piece, piece_encoding) = self.replacement_text(
+            let (piece, piece_encoding, piece_holds_bytes) = self.replacement_text(
                 receiver,
                 arguments.get(1),
                 block,
@@ -118,7 +118,7 @@ impl VirtualMachine {
                 &captured,
                 position,
             )?;
-            answer.add(&piece, &piece_encoding, position)?;
+            answer.add_held(&piece, &piece_encoding, piece_holds_bytes, position)?;
             if whole.end() > whole.start() {
                 cursor = whole.end();
             } else {
@@ -128,13 +128,11 @@ impl VirtualMachine {
                     cursor = whole.end();
                     break;
                 }
-                let mut next = whole.end() + 1;
-                while next < subject.len() && !subject.is_char_boundary(next) {
-                    next += 1;
-                }
-                answer.add(
+                let next = read.next_start(whole.end());
+                answer.add_held(
                     &subject[whole.end()..next],
                     &string_value.encoding_name(),
+                    string_value.holds_bytes(),
                     position,
                 )?;
                 cursor = next;
@@ -153,17 +151,20 @@ impl VirtualMachine {
             )));
         }
         let tail = subject[cursor.min(subject.len())..].to_string();
-        answer.add(&tail, &string_value.encoding_name(), position)?;
+        answer.add_held(
+            &tail,
+            &string_value.encoding_name(),
+            string_value.holds_bytes(),
+            position,
+        )?;
         // The block may have matched patterns of its own, so the last match
         // this call made is put back as the one `$~` names.
         if let Some(start) = last {
             self.regexp_match_data_in(&source, &flags, &subject, start, None, position)?;
         }
-        let made = crate::object::StringValue::with_encoding(answer.built, &answer.encoding);
-        if string_value.holds_bytes() || answer.encoding == "ASCII-8BIT" {
-            made.mark_bytes();
-        }
-        Ok(Object::String(Rc::new(made)))
+        Ok(Object::String(Rc::new(
+            answer.into_string(string_value.holds_bytes()),
+        )))
     }
 
     /// `each_line` and `lines`: the pieces a separator cuts a string into,
@@ -312,7 +313,7 @@ impl VirtualMachine {
         subject: &str,
         captured: &crate::regexp::Captures<'_, '_>,
         position: Position,
-    ) -> Result<(String, String), MetorexError> {
+    ) -> Result<(String, String, bool), MetorexError> {
         let whole = captured.get(0).expect("a match was found");
         // The matched text is written in the encoding of the String it was
         // found in.
@@ -332,13 +333,14 @@ impl VirtualMachine {
                 return Ok((
                     String::new(),
                     crate::object::string_value::DEFAULT_ENCODING.to_string(),
+                    false,
                 ));
             }
             return self.text_of(found, position);
         }
         let written = self.string_needle("sub", held, position)?;
         let filled = fill_replacement(&written.as_str(), subject, captured);
-        Ok((filled, written.encoding_name()))
+        Ok((filled, written.encoding_name(), written.holds_bytes()))
     }
 
     /// The text a value stands for and the encoding it is written in, taking
@@ -347,17 +349,26 @@ impl VirtualMachine {
         &mut self,
         held: Object,
         position: Position,
-    ) -> Result<(String, String), MetorexError> {
+    ) -> Result<(String, String, bool), MetorexError> {
         match held.view() {
-            View::String(text) => Ok((text.as_str().to_string(), text.encoding_name())),
+            View::String(text) => Ok((
+                text.as_str().to_string(),
+                text.encoding_name(),
+                text.holds_bytes(),
+            )),
             _ => match self
                 .send_to_object(held.clone(), "to_s", vec![], position)?
                 .view()
             {
-                View::String(text) => Ok((text.as_str().to_string(), text.encoding_name())),
+                View::String(text) => Ok((
+                    text.as_str().to_string(),
+                    text.encoding_name(),
+                    text.holds_bytes(),
+                )),
                 shown => Ok((
                     shown.to_string(),
                     crate::object::string_value::DEFAULT_ENCODING.to_string(),
+                    false,
                 )),
             },
         }

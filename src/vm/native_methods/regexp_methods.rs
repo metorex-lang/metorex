@@ -127,7 +127,8 @@ pub(crate) fn subject_text(object: &Object) -> Option<String> {
 /// which is how a match reads the runs its characters take.
 pub(crate) fn match_text(string_value: &crate::object::StringValue) -> String {
     let named = string_value.encoding_name();
-    if (named == "EUC-JP" || super::string_methods::spells_shift_jis(&named))
+    if (matches!(named.as_str(), "EUC-JP" | "GBK")
+        || super::string_methods::spells_shift_jis(&named))
         && !string_value.holds_bytes()
     {
         return super::string_methods::binary_bytes(string_value)
@@ -425,6 +426,7 @@ impl VirtualMachine {
                 let encoding = subject.encoding_name();
                 if !super::string_methods::characters_are_text(subject)
                     || encoding == "EUC-JP"
+                    || encoding == "GBK"
                     || super::string_methods::spells_shift_jis(&encoding)
                 {
                     return Ok(Some(Object::Bool(false)));
@@ -768,6 +770,8 @@ fn multibyte_width(named: &str, bytes: &[u8]) -> usize {
         crate::vm::native_methods::euc_jp_table::euc_jp_character(bytes)
     } else if crate::vm::native_methods::string_methods::spells_shift_jis(named) {
         crate::vm::native_methods::shift_jis_table::shift_jis_character(bytes)
+    } else if named == "GBK" {
+        crate::vm::native_methods::gbk::gbk_character(bytes)
     } else {
         None
     };
@@ -816,9 +820,21 @@ const PRIVATE_USE_PLANE: u32 = 0xf0000;
 /// run decodes to, or a private-use character when the tables name none.
 /// Alongside it, where each run starts among the bytes. None for any other
 /// subject, whose characters are already its own.
+/// A subject read into the characters its encoding spells, for a search
+/// made over it again and again.
+pub(crate) fn read_subject(text: &str, encoding: &str) -> crate::regexp::ReadSubject {
+    match multibyte_reading(text, encoding) {
+        Some((wide, unit_starts)) => {
+            crate::regexp::ReadSubject::of_units(text, wide.chars().collect(), &unit_starts)
+        }
+        None => crate::regexp::ReadSubject::of(text),
+    }
+}
+
 fn multibyte_reading(text: &str, encoding: &str) -> Option<(String, Vec<usize>)> {
     let euc_jp = encoding == "EUC-JP";
-    if !(euc_jp || super::string_methods::spells_shift_jis(encoding))
+    let gbk = encoding == "GBK";
+    if !(euc_jp || gbk || super::string_methods::spells_shift_jis(encoding))
         || text.chars().any(|held| u32::from(held) > 0xff)
     {
         return None;
@@ -826,6 +842,8 @@ fn multibyte_reading(text: &str, encoding: &str) -> Option<(String, Vec<usize>)>
     let bytes: Vec<u8> = text.chars().map(|held| held as u8).collect();
     let groups = if euc_jp {
         super::string_methods::euc_jp_characters(&bytes)
+    } else if gbk {
+        super::gbk::gbk_characters(&bytes)
     } else {
         super::string_methods::shift_jis_characters(&bytes)
     };
@@ -837,6 +855,8 @@ fn multibyte_reading(text: &str, encoding: &str) -> Option<(String, Vec<usize>)>
         at += group.len();
         let decoded = if euc_jp {
             super::euc_jp_table::euc_jp_character(group)
+        } else if gbk {
+            super::gbk::gbk_character(group)
         } else {
             super::shift_jis_table::shift_jis_character(group)
         };

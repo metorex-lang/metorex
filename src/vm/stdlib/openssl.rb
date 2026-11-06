@@ -239,6 +239,8 @@ module OpenSSL
 
     def iv_len = BLOCK
 
+    def key_len = @key_len
+
     def block_size = BLOCK
 
     def encrypt
@@ -781,12 +783,153 @@ module OpenSSL
 
     class PKey; end
 
-    # The key PEM or DER text holds. RSA keys are the kind read.
-    def self.read(text, _password = nil)
+    # The key PEM or DER text holds: an RSA key, or the public half of an
+    # EC one.
+    def self.read(text, password = nil)
       text = text.read if text.respond_to?(:read)
-      RSA.new(text)
+      begin
+        RSA.new(text, password)
+      rescue PKeyError
+        EC.new(text)
+      end
     rescue PKeyError
       raise PKeyError, "Could not parse PKey"
+    end
+
+    # The public half of an elliptic curve key, on one of the named curves.
+    class EC < PKey
+      class ECError < PKeyError; end
+
+      EC_OID = "1.2.840.10045.2.1"
+
+      # Each named curve with its size in bits and the name NIST gives it.
+      CURVES = {
+        "prime256v1" => [256, "P-256"],
+        "secp384r1" => [384, "P-384"],
+        "secp521r1" => [521, "P-521"]
+      }.freeze
+
+      # The curve a key lies on, known by name.
+      class Group
+        attr_reader :curve_name
+
+        def initialize(curve_name)
+          raise ECError, "unknown curve name (#{curve_name})" unless CURVES.key?(curve_name)
+          @curve_name = curve_name
+        end
+
+        def degree
+          CURVES[@curve_name][0]
+        end
+
+        def ==(other)
+          other.is_a?(Group) && other.curve_name == @curve_name
+        end
+      end
+
+      # A point on the curve, held as the octets SEC 1 writes it with.
+      class Point
+        attr_reader :group
+
+        def initialize(group, octets)
+          @group = group
+          @octets = octets.b
+        end
+
+        def to_octet_string(_form = :uncompressed)
+          @octets
+        end
+
+        def to_bn(_form = :uncompressed)
+          OpenSSL::BN.new(@octets, 2)
+        end
+
+        def ==(other)
+          other.is_a?(Point) && other.group == @group && other.to_octet_string == @octets
+        end
+      end
+
+      attr_reader :group
+
+      # The key a SubjectPublicKeyInfo holds, in PEM or DER.
+      def initialize(text = nil)
+        return if text.nil?
+        text = text.read if text.respond_to?(:read)
+        parts = EC.__read__(text.to_s)
+        raise ECError, "invalid curve name" if parts.nil?
+        curve, octets = parts
+        @group = Group.new(curve)
+        @point = octets
+      end
+
+      def self.__read__(text)
+        der = text.b
+        if text.include?("-----BEGIN ")
+          matched = text.match(/-----BEGIN PUBLIC KEY-----(.*?)-----END PUBLIC KEY-----/m)
+          return nil if matched.nil?
+          der = matched[1].unpack1("m")
+        end
+        top = OpenSSL::ASN1.__read_der__(der)
+        return nil unless top && top[0] == 0x30
+        algorithm, key = OpenSSL::ASN1.__read_all__(top[1])
+        return nil unless algorithm && key && algorithm[0] == 0x30 && key[0] == OpenSSL::ASN1::BIT_STRING
+        named, parameters = OpenSSL::ASN1.__read_all__(algorithm[1])
+        return nil unless named && parameters && parameters[0] == OpenSSL::ASN1::OBJECT
+        return nil unless OpenSSL::ASN1.__oid_text__(named[1]) == EC_OID
+        found = OpenSSL.__object__(:find, OpenSSL::ASN1.__oid_text__(parameters[1]))
+        return nil unless found && CURVES.key?(found[0])
+        [found[0], key[1].byteslice(1..)]
+      end
+
+      def oid
+        "id-ecPublicKey"
+      end
+
+      def public_key
+        Point.new(@group, @point)
+      end
+
+      def public?
+        !@point.nil?
+      end
+
+      def private?
+        false
+      end
+      alias private_key? private?
+      alias public_key? public?
+
+      def public_to_der
+        curve = OpenSSL.__object__(:find, @group.curve_name)[2]
+        algorithm = OpenSSL::ASN1.__sequence__(OpenSSL::ASN1.__object__(EC_OID), OpenSSL::ASN1.__object__(curve))
+        OpenSSL::ASN1.__sequence__(algorithm, OpenSSL::ASN1.__encoded__(OpenSSL::ASN1::BIT_STRING, "\x00".b + @point))
+      end
+      alias to_der public_to_der
+
+      def public_to_pem
+        "-----BEGIN PUBLIC KEY-----\n#{[public_to_der].pack("m48")}-----END PUBLIC KEY-----\n"
+      end
+      alias to_pem public_to_pem
+      alias to_s public_to_pem
+      alias export public_to_pem
+
+      # The bytes of the public key a key identifier hashes: the point itself.
+      def __public_key_bits__
+        @point
+      end
+
+      # The lines X509_print writes for the key under Subject Public Key Info.
+      def __printed_lines__
+        rows = @point.unpack1("H*").scan(/../).each_slice(15).map { |row| row.join(":") }
+        [
+          "            Public Key Algorithm: id-ecPublicKey",
+          "                Public-Key: (#{@group.degree} bit)",
+          "                pub:",
+          *rows.each_with_index.map { |row, at| "                    #{row}#{":" if at < rows.size - 1}" },
+          "                ASN1 OID: #{@group.curve_name}",
+          "                NIST CURVE: #{CURVES[@group.curve_name][1]}"
+        ]
+      end
     end
 
     # An RSA key pair, or the public half of one.
@@ -818,7 +961,11 @@ module OpenSSL
           raise TypeError, "no implicit conversion of #{bits.class} into String"
         end
         if bits.is_a?(String)
-          parts = RSA.__read__(bits)
+          # Read from text, the second argument is the password of a key
+          # written encrypted.
+          password = exponent.is_a?(Integer) ? nil : exponent
+          password = password.to_str if !password.nil? && password.respond_to?(:to_str)
+          parts = RSA.__read__(bits, password)
           raise PKeyError, "Neither PUB key nor PRIV key" if parts.nil?
           @n, @e, @d, @p, @q, @dmp1, @dmq1, @iqmp = parts
           return
@@ -833,21 +980,57 @@ module OpenSSL
         @n, @e, @d, @p, @q, @dmp1, @dmq1, @iqmp = OpenSSL.__rsa_generate__(bits, exponent)
       end
 
-      PEM_LABELS = ["RSA PRIVATE KEY", "PUBLIC KEY", "RSA PUBLIC KEY"].freeze
+      PEM_LABELS = ["RSA PRIVATE KEY", "PUBLIC KEY", "RSA PUBLIC KEY", "PRIVATE KEY", "ENCRYPTED PRIVATE KEY"].freeze
 
-      # The parts of a key written as PKCS #1 RSAPrivateKey, as a
-      # SubjectPublicKeyInfo, or as PKCS #1 RSAPublicKey, in DER or in PEM.
-      def self.__read__(text)
+      PBES2_OID = "1.2.840.113549.1.5.13"
+      PBKDF2_OID = "1.2.840.113549.1.5.12"
+      # The ciphers PBES2 names, with the size of key each takes.
+      PBES2_CIPHERS = {
+        "2.16.840.1.101.3.4.1.2" => ["aes-128-cbc", 16],
+        "2.16.840.1.101.3.4.1.22" => ["aes-192-cbc", 24],
+        "2.16.840.1.101.3.4.1.42" => ["aes-256-cbc", 32]
+      }.freeze
+      # The HMAC digests PBKDF2 names, SHA-1 when it names none.
+      PBKDF2_DIGESTS = {
+        "1.2.840.113549.2.7" => "SHA1",
+        "1.2.840.113549.2.8" => "SHA224",
+        "1.2.840.113549.2.9" => "SHA256",
+        "1.2.840.113549.2.10" => "SHA384",
+        "1.2.840.113549.2.11" => "SHA512"
+      }.freeze
+
+      # The parts of a key written as PKCS #1 RSAPrivateKey, as PKCS #8, plain
+      # or encrypted with a password, as a SubjectPublicKeyInfo, or as PKCS #1
+      # RSAPublicKey, in DER or in PEM.
+      def self.__read__(text, password = nil)
         der = text.b
         if text.include?("-----BEGIN ")
           matched = text.match(/-----BEGIN (#{PEM_LABELS.join("|")})-----(.*?)-----END \1-----/m)
           return nil if matched.nil?
-          der = matched[2].unpack1("m")
+          body = matched[2]
+          if body.include?("DEK-Info:")
+            der = __legacy_decrypted__(body, password)
+            return nil if der.nil?
+          else
+            der = body.unpack1("m")
+          end
+          if matched[1] == "ENCRYPTED PRIVATE KEY"
+            der = __pkcs8_decrypted__(der, password)
+            return nil if der.nil?
+          end
         end
         top = OpenSSL::ASN1.__read_der__(der)
         return nil unless top && top[0] == 0x30
         fields = OpenSSL::ASN1.__read_all__(top[1])
         return nil if fields.nil?
+        # PKCS #8 PrivateKeyInfo: a version, the algorithm, then the PKCS #1
+        # key inside an OCTET STRING.
+        if fields.size >= 3 && fields[0][0] == OpenSSL::ASN1::INTEGER && fields[1][0] == 0x30 &&
+           fields[2][0] == OpenSSL::ASN1::OCTET_STRING
+          algorithm = OpenSSL::ASN1.__read_all__(fields[1][1])
+          return nil unless algorithm && OpenSSL::ASN1.__oid_text__(algorithm[0][1]) == RSA_OID
+          return __read__(fields[2][1])
+        end
         if fields.size == 9 && fields.all? { |tag, _| tag == OpenSSL::ASN1::INTEGER }
           return fields.drop(1).map { |_, content| OpenSSL::ASN1.__integer_value__(content) }
         end
@@ -857,9 +1040,65 @@ module OpenSSL
         if fields.size == 2 && fields[0][0] == 0x30 && fields[1][0] == OpenSSL::ASN1::BIT_STRING
           inner = OpenSSL::ASN1.__read_der__(fields[1][1].byteslice(1..))
           numbers = inner && OpenSSL::ASN1.__read_all__(inner[1])
-          return nil unless numbers && numbers.size == 2
+          return nil unless numbers && numbers.size == 2 && numbers.all? { |tag, _| tag == OpenSSL::ASN1::INTEGER }
           return numbers.map { |_, content| OpenSSL::ASN1.__integer_value__(content) }
         end
+        nil
+      end
+
+      # EncryptedPrivateKeyInfo under PBES2: PBKDF2 makes the key from the
+      # password, and the cipher it names opens the PrivateKeyInfo.
+      def self.__pkcs8_decrypted__(der, password)
+        return nil if password.nil?
+        top = OpenSSL::ASN1.__read_der__(der)
+        algorithm, encrypted = OpenSSL::ASN1.__read_all__(top[1])
+        scheme, parameters = OpenSSL::ASN1.__read_all__(algorithm[1])
+        return nil unless OpenSSL::ASN1.__oid_text__(scheme[1]) == PBES2_OID
+        derivation, encryption = OpenSSL::ASN1.__read_all__(parameters[1])
+        kdf, kdf_parameters = OpenSSL::ASN1.__read_all__(derivation[1])
+        return nil unless OpenSSL::ASN1.__oid_text__(kdf[1]) == PBKDF2_OID
+        salt, iterations, *rest = OpenSSL::ASN1.__read_all__(kdf_parameters[1])
+        prf = rest.find { |tag, _| tag == 0x30 }
+        digest = prf ? PBKDF2_DIGESTS[OpenSSL::ASN1.__oid_text__(OpenSSL::ASN1.__read_all__(prf[1])[0][1])] : "SHA1"
+        cipher_oid, iv = OpenSSL::ASN1.__read_all__(encryption[1])
+        cipher_name, key_length = PBES2_CIPHERS[OpenSSL::ASN1.__oid_text__(cipher_oid[1])]
+        return nil if digest.nil? || cipher_name.nil?
+        key = OpenSSL::KDF.pbkdf2_hmac(password, salt: salt[1], iterations: OpenSSL::ASN1.__integer_value__(iterations[1]),
+                                                 length: key_length, hash: digest)
+        __decrypted__(cipher_name, key, iv[1], encrypted[1])
+      end
+
+      # A PEM body OpenSSL encrypted the older way: the DEK-Info header names
+      # the cipher and IV, and the key comes from MD5 over the password and
+      # the IV's first eight bytes.
+      def self.__legacy_decrypted__(body, password)
+        return nil if password.nil?
+        headers, encoded = body.split(/\r?\n\r?\n/, 2)
+        info = headers[/^DEK-Info: *(.+)$/, 1]
+        return nil if info.nil? || encoded.nil?
+        cipher_name, iv_hex = info.strip.split(",", 2)
+        cipher_name = cipher_name.downcase
+        iv = [iv_hex].pack("H*")
+        cipher = OpenSSL::Cipher.new(cipher_name)
+        salt = iv.byteslice(0, 8)
+        key = "".b
+        block = "".b
+        while key.bytesize < cipher.key_len
+          block = OpenSSL::Digest.digest("MD5", block + password.b + salt).b
+          key << block
+        end
+        __decrypted__(cipher_name, key.byteslice(0, cipher.key_len), iv, encoded.unpack1("m"))
+      rescue OpenSSL::Cipher::CipherError
+        nil
+      end
+
+      def self.__decrypted__(cipher_name, key, iv, encrypted)
+        cipher = OpenSSL::Cipher.new(cipher_name)
+        cipher.decrypt
+        cipher.key = key
+        cipher.iv = iv
+        cipher.update(encrypted) + cipher.final
+      rescue OpenSSL::Cipher::CipherError
         nil
       end
 
@@ -906,6 +1145,20 @@ module OpenSSL
         key = OpenSSL::ASN1.__sequence__(OpenSSL::ASN1.__integer__(@n), OpenSSL::ASN1.__integer__(@e))
         algorithm = OpenSSL::ASN1.__sequence__(OpenSSL::ASN1.__object__(RSA_OID), OpenSSL::ASN1.__encoded__(OpenSSL::ASN1::NULL, ""))
         OpenSSL::ASN1.__sequence__(algorithm, OpenSSL::ASN1.__encoded__(OpenSSL::ASN1::BIT_STRING, "\x00".b + key))
+      end
+
+      # The lines X509_print writes for the key under Subject Public Key Info.
+      def __printed_lines__
+        modulus = OpenSSL::ASN1.__integer_bytes__(@n)
+        modulus = "\x00".b + modulus if modulus.getbyte(0) >= 0x80
+        rows = modulus.unpack1("H*").scan(/../).each_slice(15).map { |row| row.join(":") }
+        [
+          "            Public Key Algorithm: rsaEncryption",
+          "                Public-Key: (#{@n.bit_length} bit)",
+          "                Modulus:",
+          *rows.each_with_index.map { |row, at| "                    #{row}#{":" if at < rows.size - 1}" },
+          "                Exponent: #{@e} (0x#{@e.to_s(16)})"
+        ]
       end
 
       # The bytes of the public key a key identifier hashes: the key's own
@@ -973,16 +1226,24 @@ module OpenSSL
     V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT = 18
     V_ERR_SELF_SIGNED_CERT_IN_CHAIN = 19
     V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY = 20
+    V_ERR_UNABLE_TO_GET_ISSUER_CERT = 2
+    V_ERR_UNABLE_TO_VERIFY_LEAF_SIGNATURE = 21
+    V_ERR_CERT_REJECTED = 28
+    V_ERR_INVALID_CA = 79
     V_ERR_HOSTNAME_MISMATCH = 62
 
     VERIFY_ERROR_STRINGS = {
       0 => "ok",
       7 => "certificate signature failure",
-      9 => "certificate is not yet valid or the system clock is incorrect",
+      2 => "unable to get issuer certificate",
+      9 => "certificate is not yet valid",
       10 => "certificate has expired",
       18 => "self-signed certificate",
       19 => "self-signed certificate in certificate chain",
       20 => "unable to get local issuer certificate",
+      21 => "unable to verify the first certificate",
+      28 => "certificate rejected",
+      79 => "invalid CA certificate",
       62 => "hostname mismatch"
     }.freeze
 
@@ -1003,7 +1264,111 @@ module OpenSSL
       end
 
       def value
-        @shown || @der_value.unpack1("H*").scan(/../).map(&:upcase).join(":")
+        @shown || Extension.__shown__(@oid, @der_value) || Extension.__printable__(@der_value)
+      end
+
+      # ASN1_STRING_print: the bytes as text, with each one outside printable
+      # ASCII, other than a line ending, written as a dot.
+      def self.__printable__(bytes)
+        bytes.b.bytes.map { |byte| (byte < 0x20 && byte != 0x0a && byte != 0x0d) || byte > 0x7e ? "." : byte.chr }.join
+      end
+
+      def self.__hex__(bytes)
+        bytes.unpack1("H*").scan(/../).map(&:upcase).join(":")
+      end
+
+      # The text OpenSSL writes for the DER of the extensions it knows, or nil
+      # for one it would show as bytes.
+      def self.__shown__(oid, der)
+        top = OpenSSL::ASN1.__read_der__(der)
+        return nil if top.nil?
+        tag, content = top
+        case oid
+        when "basicConstraints"
+          parts = OpenSSL::ASN1.__read_all__(content) || []
+          authority = parts.any? { |held_tag, held| held_tag == OpenSSL::ASN1::BOOLEAN && held != "\x00".b }
+          length = parts.find { |held_tag, _| held_tag == OpenSSL::ASN1::INTEGER }
+          shown = "CA:#{authority ? "TRUE" : "FALSE"}"
+          length ? "#{shown}, pathlen:#{OpenSSL::ASN1.__integer_value__(length[1])}" : shown
+        when "keyUsage"
+          return nil unless tag == OpenSSL::ASN1::BIT_STRING
+          bytes = content.byteslice(1..).bytes
+          names = ExtensionFactory::KEY_USAGE_BITS.values.filter_map do |bit, name|
+            name if bit / 8 < bytes.size && (bytes[bit / 8] & (0x80 >> (bit % 8))) != 0
+          end
+          names.join(", ")
+        when "extendedKeyUsage"
+          (OpenSSL::ASN1.__read_all__(content) || []).map do |_, held|
+            dotted = OpenSSL::ASN1.__oid_text__(held)
+            found = OpenSSL.__object__(:find, dotted)
+            found ? found[1] : dotted
+          end.join(", ")
+        when "subjectKeyIdentifier"
+          __hex__(content)
+        when "authorityKeyIdentifier"
+          (OpenSSL::ASN1.__read_all__(content) || []).filter_map do |held_tag, held|
+            held_tag == 0x80 ? __hex__(held) : nil
+          end.join(", ")
+        when "subjectAltName", "issuerAltName"
+          (OpenSSL::ASN1.__read_all__(content) || []).map { |name| __general_name__(*name) }.join(", ")
+        when "crlDistributionPoints"
+          points = (OpenSSL::ASN1.__read_all__(content) || []).map do |_, point|
+            parts = OpenSSL::ASN1.__read_all__(point) || []
+            return nil unless parts.size == 1 && parts[0][0] == 0xa0
+            named = OpenSSL::ASN1.__read_all__(parts[0][1]) || []
+            return nil unless named.size == 1 && named[0][0] == 0xa0
+            names = OpenSSL::ASN1.__read_all__(named[0][1]) || []
+            "Full Name:\n" + names.map { |name| "  #{__general_name__(*name)}\n" }.join
+          end
+          points.join("\n")
+        when "authorityInfoAccess"
+          (OpenSSL::ASN1.__read_all__(content) || []).map do |_, description|
+            method, location = OpenSSL::ASN1.__read_all__(description)
+            dotted = OpenSSL::ASN1.__oid_text__(method[1])
+            found = OpenSSL.__object__(:find, dotted)
+            "#{found ? found[1] : dotted} - #{__general_name__(*location)}"
+          end.join("\n")
+        when "certificatePolicies"
+          lines = []
+          (OpenSSL::ASN1.__read_all__(content) || []).each do |_, information|
+            policy, qualifiers = OpenSSL::ASN1.__read_all__(information)
+            dotted = OpenSSL::ASN1.__oid_text__(policy[1])
+            found = OpenSSL.__object__(:find, dotted)
+            lines << "Policy: #{found ? found[1] : dotted}"
+            next if qualifiers.nil?
+            (OpenSSL::ASN1.__read_all__(qualifiers[1]) || []).each do |_, qualifier|
+              kind, detail = OpenSSL::ASN1.__read_all__(qualifier)
+              case OpenSSL::ASN1.__oid_text__(kind[1])
+              when "1.3.6.1.5.5.7.2.1" then lines << "  CPS: #{detail[1]}"
+              when "1.3.6.1.5.5.7.2.2"
+                lines << "  User Notice:"
+                notice = OpenSSL::ASN1.__read_all__(detail[1]) || []
+                return nil unless notice.all? { |tag, _| tag != 0x30 }
+                # OpenSSL writes the text as C characters, which end at the
+                # first zero byte, as the high byte of a BMPString does.
+                notice.each { |_, text| lines << "    Explicit Text: #{text.b.split("\x00".b, 2).first}" }
+              else return nil
+              end
+            end
+          end
+          lines.join("\n")
+        end
+      end
+
+      # A GeneralName the way OpenSSL writes it.
+      def self.__general_name__(tag, held)
+        case tag
+        when 0x81 then "email:#{held}"
+        when 0x82 then "DNS:#{held}"
+        when 0x86 then "URI:#{held}"
+        when 0x87
+          address = held.bytesize == 4 ? held.bytes.join(".") : held.unpack("n*").map { |group| group.to_s(16).upcase }.join(":")
+          "IP Address:#{address}"
+        when 0xa4
+          name = OpenSSL::ASN1.__read_der__(held)
+          "DirName:#{Name.new(OpenSSL::ASN1.__encoded__(0x30, name[1]))}"
+        else "othername:<unsupported>"
+        end
       end
 
       def value_der
@@ -1162,7 +1527,7 @@ module OpenSSL
           OpenSSL::ASN1.__time_value__(tag, content)
         end
         @subject = Name.new(OpenSSL::ASN1.__encoded__(0x30, fields.shift[1]))
-        @public_key = OpenSSL::PKey::RSA.new(OpenSSL::ASN1.__encoded__(0x30, fields.shift[1]))
+        @public_key = OpenSSL::PKey.read(OpenSSL::ASN1.__encoded__(0x30, fields.shift[1]))
         fields.each do |tag, content|
           next unless tag == 0xa3
           listed = OpenSSL::ASN1.__read_der__(content)[1]
@@ -1170,9 +1535,81 @@ module OpenSSL
         end
         oid = OpenSSL::ASN1.__oid_text__(OpenSSL::ASN1.__read_all__(algorithm).first[1])
         @digest_name, (@signature_algorithm, @signature_oid) = SIGNATURE_ALGORITHMS.find { |_, (_, held)| held == oid }
+        # A signature made some other way, such as with ECDSA, is still named
+        # the way OpenSSL names it.
+        if @signature_algorithm.nil?
+          found = OpenSSL.__object__(:find, oid)
+          @signature_algorithm = found ? found[1] : oid
+          @signature_oid = oid
+        end
         @signature = signature.byteslice(1..)
       end
       private :__read__
+
+      # The certificate as OpenSSL's X509_print writes it.
+      def to_text
+        lines = ["Certificate:", "    Data:"]
+        lines << "        Version: #{@version + 1} (0x#{@version.to_s(16)})"
+        number = serial.to_i
+        if number.bit_length <= 63
+          lines << "        Serial Number: #{number} (0x#{number.to_s(16)})"
+        else
+          lines << "        Serial Number:"
+          lines << "            #{OpenSSL::ASN1.__integer_bytes__(number).unpack1("H*").scan(/../).join(":")}"
+        end
+        lines << "        Signature Algorithm: #{signature_algorithm}"
+        lines << "        Issuer: #{Certificate.__printed_name__(@issuer)}"
+        lines << "        Validity"
+        lines << "            Not Before: #{Certificate.__printed_time__(not_before)}"
+        lines << "            Not After : #{Certificate.__printed_time__(not_after)}"
+        lines << "        Subject: #{Certificate.__printed_name__(@subject)}"
+        lines << "        Subject Public Key Info:"
+        lines.concat(public_key.__printed_lines__)
+        unless @extensions.empty?
+          lines << "        X509v3 extensions:"
+          @extensions.each do |extension|
+            found = OpenSSL.__object__(:find, extension.oid)
+            named = found ? found[1] : extension.oid
+            lines << "            #{named}: #{"critical" if extension.critical?}"
+            extension.value.split("\n", -1).each { |line| lines << (line.empty? ? "" : "                #{line}") }
+          end
+        end
+        lines << "    Signature Algorithm: #{signature_algorithm}"
+        lines << "    Signature Value:"
+        signature_bytes = @signature.to_s.b.byteslice(0..) || "".b
+        signature_bytes.unpack1("H*").scan(/../).each_slice(18).with_index do |row, at|
+          last = at == (signature_bytes.bytesize - 1) / 18
+          lines << "        #{row.join(":")}#{":" unless last}"
+        end
+        lines.join("\n") + "\n"
+      end
+
+      # X509_NAME_print: the one-line form, with each slash that opens a
+      # field named by one or two capitals written as a comma instead.
+      def self.__printed_name__(name)
+        line = name.to_s
+        return "" if line.empty?
+        upper = ->(at) { (line[at] || "").match?(/\A[A-Z]\z/) }
+        pieces = []
+        start = 1
+        at = 1
+        loop do
+          ending = at >= line.length
+          opens_a_field = line[at] == "/" && upper.(at + 1) &&
+                          (line[at + 2] == "=" || (upper.(at + 2) && line[at + 3] == "="))
+          if ending || opens_a_field
+            pieces << line[start...at]
+            start = at + 1
+          end
+          break if ending
+          at += 1
+        end
+        pieces.join(", ")
+      end
+
+      def self.__printed_time__(time)
+        time.utc.strftime("%b %e %H:%M:%S %Y GMT")
+      end
 
       def self.__extension__(der)
         parts = OpenSSL::ASN1.__read_all__(der)
@@ -1331,6 +1768,160 @@ module OpenSSL
 
     # The certificates trusted to anchor a chain, and the result of the last
     # verification made against them.
+    # One verification of a certificate against a store: the chain it builds,
+    # and where and why it stopped.
+    class StoreContext
+      attr_reader :chain, :error_depth, :current_cert
+      attr_accessor :error, :time, :flags, :purpose, :trust
+      attr_writer :__callback__, :__adjust__
+
+      def initialize(store, certificate = nil, untrusted = nil)
+        @store = store
+        @certificate = certificate
+        @untrusted = untrusted.to_a
+        @error = V_OK
+        @error_depth = 0
+        @chain = nil
+        @time = store.time
+      end
+
+      def error_string
+        VERIFY_ERROR_STRINGS.fetch(@error, "certificate verify error")
+      end
+
+      def current_crl
+        nil
+      end
+
+      def cleanup
+        self
+      end
+
+      # Build the chain up to a root the store trusts, then check each
+      # certificate's signature and validity from the root down. Every
+      # failure, and every certificate that passes, goes to the callback,
+      # which may accept the failure.
+      def verify
+        trusted = @store.__trusted__
+        @chain = [@certificate]
+        failure = __build__(trusted)
+        if failure
+          return false unless __step__(false, *failure)
+        end
+        (1...@chain.size).each do |depth|
+          next if StoreContext.__may_issue__(@chain[depth])
+          return false unless __step__(false, V_ERR_INVALID_CA, depth)
+        end
+        __check_down__
+      end
+
+      # Whether a certificate may sign others, as OpenSSL's check_ca decides:
+      # a key usage, when there is one, must allow signing certificates, then
+      # basic constraints decide, and without them a self-signed version 1
+      # certificate or one with a key usage may.
+      def self.__may_issue__(certificate)
+        named = certificate.extensions.to_h { |extension| [extension.oid, extension.value] }
+        usage = named["keyUsage"]
+        return false if usage && !usage.split(", ").include?("Certificate Sign")
+        constraints = named["basicConstraints"]
+        return constraints.start_with?("CA:TRUE") if constraints
+        return true if certificate.version.zero? && certificate.__self_issued__
+        !usage.nil?
+      end
+
+      # The chain from the certificate up, and the failure that stopped it
+      # short of a trusted root, if one did.
+      def __build__(trusted)
+        current = @certificate
+        loop do
+          if current.__self_issued__
+            return nil if trusted.include?(current)
+            code = @chain.size == 1 ? V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT : V_ERR_SELF_SIGNED_CERT_IN_CHAIN
+            return [code, @chain.size - 1]
+          end
+          issuer = __issuer_of__(current, trusted) || __issuer_of__(current, @untrusted)
+          if issuer.nil?
+            code = trusted.include?(current) ? V_ERR_UNABLE_TO_GET_ISSUER_CERT : V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY
+            return [code, @chain.size - 1]
+          end
+          @chain << issuer
+          current = issuer
+        end
+      end
+
+      # A certificate named as the issuer, preferring one whose key the
+      # signature verifies with.
+      def __issuer_of__(certificate, candidates)
+        named = candidates.select do |held|
+          !held.equal?(certificate) && held.subject.cmp(certificate.issuer).zero?
+        end
+        named.find { |held| __signed_by__(certificate, held) } || named.first
+      end
+
+      def __signed_by__(certificate, issuer)
+        certificate.verify(issuer.public_key)
+      rescue StandardError
+        false
+      end
+
+      def __check_down__
+        depth = @chain.size - 1
+        top = @chain[depth]
+        issuer = top
+        if top.__self_issued__
+          held = top
+        elsif depth.zero?
+          return false unless __step__(false, V_ERR_UNABLE_TO_VERIFY_LEAF_SIGNATURE, 0)
+          held = top
+        else
+          depth -= 1
+          held = @chain[depth]
+        end
+        now = @time || Time.now
+        loop do
+          if !held.equal?(issuer) && !__signed_by__(held, issuer)
+            return false unless __step__(false, V_ERR_CERT_SIGNATURE_FAILURE, depth)
+          end
+          case held.__valid_at__(now)
+          when :not_yet then return false unless __step__(false, V_ERR_CERT_NOT_YET_VALID, depth)
+          when :expired then return false unless __step__(false, V_ERR_CERT_HAS_EXPIRED, depth)
+          end
+          return false unless __step__(true, @error, depth)
+          return true if depth.zero?
+          issuer = held
+          depth -= 1
+          held = @chain[depth]
+        end
+      end
+
+      # Hand one step to the callback the way Ruby's OpenSSL does: only an
+      # answer of true accepts it, and an exception counts as refusing.
+      def __step__(ok, code, depth)
+        @error = code
+        @error_depth = depth
+        @current_cert = @chain[depth]
+        ok = @__adjust__.call(ok, self) if @__adjust__
+        return ok if @__callback__.nil?
+        answer = begin
+          @__callback__.call(ok, self)
+        rescue StandardError
+          warn "exception in verify_callback is ignored", uplevel: 0
+          false
+        end
+        if answer == true
+          @error = V_OK
+          return true
+        end
+        @error = V_ERR_CERT_REJECTED if @error == V_OK
+        false
+      end
+    end
+
+    DEFAULT_CERT_FILE_ENV = "SSL_CERT_FILE"
+    DEFAULT_CERT_DIR_ENV = "SSL_CERT_DIR"
+    DEFAULT_CERT_FILE = "/etc/ssl/cert.pem"
+    DEFAULT_CERT_DIR = "/etc/ssl/certs"
+
     class Store
       attr_reader :error, :chain
       attr_accessor :time, :flags, :purpose, :trust, :verify_callback
@@ -1347,12 +1938,35 @@ module OpenSSL
       end
 
       def __trusted__
+        __load_default_paths__
         @trusted
       end
 
+      # Trust the certificates of the file and directory the environment
+      # names, or of the system's own, read when they are first needed.
       def set_default_paths
+        @default_paths = true
         self
       end
+
+      def __load_default_paths__
+        return unless @default_paths
+        @default_paths = false
+        file = ENV[DEFAULT_CERT_FILE_ENV] || DEFAULT_CERT_FILE
+        add_file(file) if File.file?(file)
+        directory = ENV[DEFAULT_CERT_DIR_ENV] || DEFAULT_CERT_DIR
+        directory.split(File::PATH_SEPARATOR).each do |held|
+          next unless File.directory?(held)
+          # A directory is read the way OpenSSL looks in one: by the files
+          # named for the hash of a subject.
+          Dir.children(held).grep(/\A\h{8}\.\d+\z/).sort.each do |name|
+            add_file(File.join(held, name)) if File.file?(File.join(held, name))
+          end
+        end
+      rescue StoreError
+        nil
+      end
+      private :__load_default_paths__
 
       # Trust each certificate a PEM file holds.
       def add_file(path)
@@ -1377,46 +1991,15 @@ module OpenSSL
         VERIFY_ERROR_STRINGS.fetch(@error, "certificate verify error")
       end
 
-      # Build the chain from the certificate up to one the store trusts,
-      # finding each issuer by name and signature, and then check every
-      # certificate's validity period, the root's first.
-      def verify(certificate, untrusted = nil)
-        candidates = @trusted + untrusted.to_a
-        chain = [certificate]
-        current = certificate
-        loop do
-          if current.__self_issued__ && current.verify(current.public_key)
-            unless @trusted.include?(current)
-              return failed(chain, chain.size == 1 ? V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT : V_ERR_SELF_SIGNED_CERT_IN_CHAIN)
-            end
-            break
-          end
-          issuer = candidates.find do |held|
-            !held.equal?(current) && held.subject.cmp(current.issuer).zero? && current.verify(held.public_key)
-          end
-          return failed(chain, V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY) if issuer.nil?
-          chain << issuer
-          current = issuer
-          break if @trusted.include?(issuer) && !issuer.__self_issued__
-        end
-        now = @time || Time.now
-        chain.reverse_each do |held|
-          case held.__valid_at__(now)
-          when :not_yet then return failed(chain, V_ERR_CERT_NOT_YET_VALID)
-          when :expired then return failed(chain, V_ERR_CERT_HAS_EXPIRED)
-          end
-        end
-        @chain = chain
-        @error = V_OK
-        true
-      end
-
-      private
-
-      def failed(chain, code)
-        @chain = chain
-        @error = code
-        false
+      # Verify a certificate the way X509_verify_cert does, handing each
+      # step to the block or to the store's verify_callback.
+      def verify(certificate, untrusted = nil, &block)
+        context = StoreContext.new(self, certificate, untrusted)
+        context.__callback__ = block || @verify_callback
+        trusted = context.verify
+        @error = context.error
+        @chain = context.chain
+        trusted
       end
     end
   end
@@ -1452,6 +2035,15 @@ module OpenSSL
 
     # The settings a TLS connection is made under.
     class SSLContext
+      SESSION_CACHE_OFF = 0
+      SESSION_CACHE_CLIENT = 1
+      SESSION_CACHE_SERVER = 2
+      SESSION_CACHE_BOTH = 3
+      SESSION_CACHE_NO_AUTO_CLEAR = 0x80
+      SESSION_CACHE_NO_INTERNAL_LOOKUP = 0x100
+      SESSION_CACHE_NO_INTERNAL_STORE = 0x200
+      SESSION_CACHE_NO_INTERNAL = 0x300
+
       DEFAULT_PARAMS = {
         verify_mode: OpenSSL::SSL::VERIFY_PEER,
         verify_hostname: true,
@@ -1469,6 +2061,10 @@ module OpenSSL
                     :session_remove_cb, :renegotiation_cb, :keylog_cb, :tmp_dh_callback, :security_level
       attr_writer :ciphersuites, :ecdh_curves, :groups, :sigalgs, :client_sigalgs, :tmp_dh,
                   :min_version, :max_version
+
+      # The newest protocol version the context allows, which OpenSSL has no
+      # reader for. Zero or nil sets no limit.
+      def __max_version__ = @max_version
 
       def initialize(version = nil)
         @options = 0x120000
@@ -1510,8 +2106,34 @@ module OpenSSL
         [CIPHER.dup]
       end
 
+      # The words an OpenSSL cipher string names groups of ciphers by.
+      CIPHER_KEYWORDS = %w[
+        DEFAULT COMPLEMENTOFDEFAULT ALL COMPLEMENTOFALL HIGH MEDIUM LOW eNULL NULL aNULL
+        kRSA aRSA RSA kDHE kEDH DH DHE EDH ADH kEECDH kECDHE ECDH ECDHE EECDH AECDH
+        aDSS DSS aECDSA ECDSA AES AES128 AES256 AESGCM AESCCM AESCCM8 CHACHA20 CAMELLIA
+        CAMELLIA128 CAMELLIA256 ARIA ARIA128 ARIA256 SHA SHA1 SHA256 SHA384 TLSv1.2 TLSv1.0
+        TLSv1 SSLv3 PSK kPSK aPSK kECDHEPSK kDHEPSK kRSAPSK
+      ].freeze
+
+      # TLS 1.2 and older ciphers, which TLS 1.3 connections do not use. As
+      # under OpenSSL, a list that leaves none of them is refused.
       def ciphers=(list)
+        text = list.is_a?(Array) ? list.map { |held| held.is_a?(Array) ? held.first : held }.join(":") : list
+        unless text.nil? || SSLContext.__matches_a_cipher__(text.to_s)
+          raise SSLError, "SSL_CTX_set_cipher_list: no cipher match"
+        end
         @ciphers = list
+      end
+
+      def self.__matches_a_cipher__(text)
+        items = text.split(/[:, ]+/).reject(&:empty?)
+        return false if items.any? { |item| %w[!ALL -ALL].include?(item) }
+        items.any? do |item|
+          next false if item.start_with?("!", "-", "@")
+          item.delete_prefix("+").split("+").all? do |part|
+            CIPHER_KEYWORDS.include?(part) || part.match?(/\A[A-Z0-9]+(-[A-Z0-9]+)+\z/)
+          end
+        end
       end
 
       def add_certificate(certificate, key, extra = nil)
@@ -1656,8 +2278,8 @@ module OpenSSL
       attr_accessor :sync_close
       attr_writer :session
 
-      # How many bytes are read from the IO at a time.
-      READ_SIZE = 16_384
+      # A TLS record opens with its content type, version, and length.
+      RECORD_HEADER_SIZE = 5
 
       # The alert a client sends when it refuses the server's chain, by the
       # verification error found.
@@ -1730,7 +2352,7 @@ module OpenSSL
       def syswrite(data)
         data = data.to_s
         records = OpenSSL.__tls__(:write, @connection, data.b)
-        @io.write(records)
+        __io__(:write, records)
         data.bytesize
       end
 
@@ -1747,7 +2369,7 @@ module OpenSSL
       def stop
         return if @connection.nil?
         begin
-          @io.write(OpenSSL.__tls__(:close, @connection)) unless @peer_closed
+          __io__(:write, OpenSSL.__tls__(:close, @connection)) unless @peer_closed
         rescue SystemCallError, IOError
         end
         OpenSSL.__tls__(:free, @connection)
@@ -1808,6 +2430,9 @@ module OpenSSL
       # not blocking, answer :wait_readable once the IO has nothing more to
       # read, or raise SSLErrorWaitReadable when `exception` asks for it.
       def handshake(mode, label, blocking, exception = true)
+        if mode == :server && @connection.nil? && refuse_older_protocol(label, blocking, exception) == :wait_readable
+          return :wait_readable
+        end
         if @connection.nil?
           @mode = mode
           @connection = if mode == :client
@@ -1820,7 +2445,7 @@ module OpenSSL
                         end
           @state = :handshake
           opening = OpenSSL.__tls__(:start, @connection)
-          @io.write(opening) unless opening.empty?
+          __io__(:write, opening) unless opening.empty?
         end
         until @state == :established
           bytes = read_io(blocking)
@@ -1836,11 +2461,50 @@ module OpenSSL
         self
       end
 
+      # The protocol_version alert, in a record of its own.
+      PROTOCOL_VERSION_ALERT = [0x15, 0x03, 0x03, 0x00, 0x02, 0x02, 0x46].pack("C*").freeze
+
+      # A server held to a version older than TLS 1.3, the only one spoken
+      # here, reads the client's hello and refuses it the way OpenSSL refuses
+      # a client offering no version the server allows.
+      def refuse_older_protocol(label, blocking, exception)
+        highest = @context.__max_version__.to_i
+        return if highest.zero? || highest >= OpenSSL::SSL::TLS1_3_VERSION
+        hello = read_io(blocking)
+        if hello == :wait_readable
+          raise SSLErrorWaitReadable, "read would block" if exception
+          return :wait_readable
+        end
+        __io__(:write, PROTOCOL_VERSION_ALERT) unless hello.nil?
+        @state = :failed
+        raise SSLError, "#{label} returned=1 errno=0 #{peer_text}state=error: no protocols available"
+      end
+      private :refuse_older_protocol
+
+      # Call the IO's own method, past any module extending that one IO.
+      # OpenSSL reads and writes the descriptor itself, so a wrapper a
+      # program adds to the socket never sees the TLS records.
+      def __io__(name, *arguments, **options)
+        @io.class.instance_method(name).bind_call(@io, *arguments, **options)
+      end
+      private :__io__
+
+      # The next TLS record from the IO: its five byte header, then as many
+      # bytes as the header names. Reading no further than the record leaves
+      # what follows it to the IO, so waiting on the IO still sees data the
+      # peer sent after the handshake, as it does under OpenSSL.
       def read_io(blocking)
-        if blocking
-          @io.readpartial(READ_SIZE)
-        else
-          @io.read_nonblock(READ_SIZE, exception: false)
+        @incoming ||= "".b
+        loop do
+          wanted = RECORD_HEADER_SIZE
+          if @incoming.bytesize >= RECORD_HEADER_SIZE
+            wanted += @incoming.byteslice(3, 2).unpack1("n")
+            return @incoming.slice!(0, wanted) if @incoming.bytesize >= wanted
+          end
+          missing = wanted - @incoming.bytesize
+          piece = blocking ? __io__(:readpartial, missing) : __io__(:read_nonblock, missing, exception: false)
+          return piece if piece.nil? || piece == :wait_readable
+          @incoming << piece.b
         end
       rescue EOFError
         nil
@@ -1850,7 +2514,7 @@ module OpenSSL
       # on through a chain decision or a failure.
       def advance(progress, label)
         outgoing, read, closed, state, problem = progress
-        @io.write(outgoing) unless outgoing.empty?
+        __io__(:write, outgoing) unless outgoing.empty?
         @plaintext << read
         @peer_closed ||= closed
         @state = state
@@ -1862,18 +2526,24 @@ module OpenSSL
       # trusts, and its name against the hostname, then go on or refuse.
       def decide_chain(label)
         @peer_cert_chain = OpenSSL.__tls__(:peer_chain, @connection).map { |der| OpenSSL::X509::Certificate.new(der) }
-        store = @context.__trusted_store__
-        trusted = store.verify(@peer_cert_chain.first, @peer_cert_chain.drop(1))
-        @verify_result = store.error
-        if trusted && @context.verify_hostname && @hostname &&
-           !OpenSSL::SSL.verify_certificate_identity(@peer_cert_chain.first, @hostname)
-          trusted = false
-          @verify_result = OpenSSL::X509::V_ERR_HOSTNAME_MISMATCH
+        verification = OpenSSL::X509::StoreContext.new(@context.__trusted_store__, @peer_cert_chain.first, @peer_cert_chain.drop(1))
+        verification.__callback__ = @context.verify_callback
+        # A client checks the server's name at the last step, the one for the
+        # server's own certificate, before the callback hears of it.
+        if @context.verify_hostname && @hostname && @mode == :client
+          verification.__adjust__ = lambda do |ok, held|
+            next ok unless ok && held.error_depth.zero?
+            next true if OpenSSL::SSL.verify_certificate_identity(held.current_cert, @hostname) == true
+            held.error = OpenSSL::X509::V_ERR_HOSTNAME_MISMATCH
+            false
+          end
         end
+        trusted = verification.verify
+        @verify_result = verification.error
         if !trusted && (@context.verify_mode.to_i & OpenSSL::SSL::VERIFY_PEER) != 0
           alert = REFUSAL_ALERTS.fetch(@verify_result, 46)
           outgoing, = OpenSSL.__tls__(:decide, @connection, alert)
-          @io.write(outgoing) unless outgoing.empty?
+          __io__(:write, outgoing) unless outgoing.empty?
           @state = :failed
           reason = OpenSSL::X509::VERIFY_ERROR_STRINGS.fetch(@verify_result, "certificate verify failed")
           raise SSLError, "#{label} returned=1 errno=0 #{peer_text}state=error: certificate verify failed (#{reason})"
@@ -1950,6 +2620,276 @@ module OpenSSL
       def close
         @svr.close
       end
+    end
+  end
+end
+
+module OpenSSL
+  module ASN1
+    TAG_CLASS_BITS = { UNIVERSAL: 0x00, APPLICATION: 0x40, CONTEXT_SPECIFIC: 0x80, PRIVATE: 0xc0 }.freeze
+
+    # A value with its tag, the way DER writes it. A constructed one holds a
+    # list of values, and a primitive one its content bytes.
+    class ASN1Data
+      attr_accessor :value, :tag, :tag_class, :indefinite_length
+
+      def initialize(value, tag, tag_class)
+        unless TAG_CLASS_BITS.key?(tag_class)
+          raise ASN1Error, "invalid tag class"
+        end
+        @value = value
+        @tag = tag
+        @tag_class = tag_class
+        @indefinite_length = false
+      end
+
+      def to_der
+        constructed = @value.is_a?(Array)
+        content = constructed ? @value.map(&:to_der).join.b : @value.to_s.b
+        ASN1.__tagged__(@tag, @tag_class, constructed, content)
+      end
+    end
+
+    # A universal value read or written as one piece of content.
+    class Primitive < ASN1Data
+      attr_accessor :tagging
+
+      def initialize(value, tag = nil, tagging = nil, tag_class = nil)
+        tag_class ||= tag.nil? ? :UNIVERSAL : :CONTEXT_SPECIFIC
+        super(value, tag || self.class::DEFAULT_TAG, tag_class)
+        @tagging = tagging
+      end
+
+      def to_der
+        content = __content__
+        return ASN1.__tagged__(@tag, @tag_class, false, content) unless @tagging == :EXPLICIT
+        inner = ASN1.__tagged__(self.class::DEFAULT_TAG, :UNIVERSAL, false, content)
+        ASN1.__tagged__(@tag, @tag_class, true, inner)
+      end
+
+      def __content__
+        @value.to_s.b
+      end
+    end
+
+    # A universal value made of other values, such as a SEQUENCE.
+    class Constructive < ASN1Data
+      include Enumerable
+      attr_accessor :tagging
+
+      def initialize(value, tag = nil, tagging = nil, tag_class = nil)
+        tag_class ||= tag.nil? ? :UNIVERSAL : :CONTEXT_SPECIFIC
+        super(value, tag || self.class::DEFAULT_TAG, tag_class)
+        @tagging = tagging
+      end
+
+      def each(&block)
+        return to_enum(:each) unless block
+        @value.each(&block)
+        self
+      end
+
+      def to_der
+        content = @value.map(&:to_der).join.b
+        return ASN1.__tagged__(@tag, @tag_class, true, content) unless @tagging == :EXPLICIT
+        inner = ASN1.__tagged__(self.class::DEFAULT_TAG, :UNIVERSAL, true, content)
+        ASN1.__tagged__(@tag, @tag_class, true, inner)
+      end
+    end
+
+    class Sequence < Constructive
+      DEFAULT_TAG = SEQUENCE
+    end
+
+    class Set < Constructive
+      DEFAULT_TAG = SET
+    end
+
+    class Boolean < Primitive
+      DEFAULT_TAG = BOOLEAN
+
+      def __content__
+        @value ? "\xFF".b : "\x00".b
+      end
+    end
+
+    class Integer < Primitive
+      DEFAULT_TAG = INTEGER
+
+      def __content__
+        ASN1.__signed_bytes__(@value.to_i)
+      end
+    end
+
+    class Enumerated < Primitive
+      DEFAULT_TAG = ENUMERATED
+
+      def __content__
+        ASN1.__signed_bytes__(@value.to_i)
+      end
+    end
+
+    class BitString < Primitive
+      DEFAULT_TAG = BIT_STRING
+      attr_accessor :unused_bits
+
+      def initialize(*)
+        super
+        @unused_bits = 0
+      end
+
+      def __content__
+        @unused_bits.chr.b + @value.to_s.b
+      end
+    end
+
+    class Null < Primitive
+      DEFAULT_TAG = NULL
+
+      def initialize(value = nil, *rest)
+        super
+      end
+
+      def __content__
+        "".b
+      end
+    end
+
+    # An object identifier, held by its short name when OpenSSL knows one.
+    class ObjectId < Primitive
+      DEFAULT_TAG = OBJECT
+
+      def sn
+        found = OpenSSL.__object__(:find, @value)
+        found ? found[0] : nil
+      end
+
+      def ln
+        found = OpenSSL.__object__(:find, @value)
+        found ? found[1] : nil
+      end
+
+      def oid
+        found = OpenSSL.__object__(:find, @value)
+        found ? found[2] : @value
+      end
+
+      def __content__
+        OpenSSL.__object__(:encode, oid)
+      end
+    end
+
+    # A time written as UTCTime or GeneralizedTime.
+    class UTCTime < Primitive
+      DEFAULT_TAG = UTCTIME
+
+      def __content__
+        @value.utc.strftime("%y%m%d%H%M%SZ")
+      end
+    end
+
+    class GeneralizedTime < Primitive
+      DEFAULT_TAG = GENERALIZEDTIME
+
+      def __content__
+        @value.utc.strftime("%Y%m%d%H%M%SZ")
+      end
+    end
+
+    {
+      OctetString: OCTET_STRING, UTF8String: UTF8STRING, NumericString: NUMERICSTRING,
+      PrintableString: PRINTABLESTRING, T61String: T61STRING, VideotexString: VIDEOTEXSTRING,
+      IA5String: IA5STRING, GraphicString: GRAPHICSTRING, ISO64String: ISO64STRING,
+      GeneralString: GENERALSTRING, UniversalString: UNIVERSALSTRING, BMPString: BMPSTRING,
+      ObjectDescriptor: OBJECT_DESCRIPTOR
+    }.each do |named, tag|
+      const_set(named, Class.new(Primitive)).const_set(:DEFAULT_TAG, tag)
+    end
+
+    UNIVERSAL_CLASSES = {
+      BOOLEAN => Boolean, INTEGER => Integer, BIT_STRING => BitString, OCTET_STRING => OctetString,
+      NULL => Null, OBJECT => ObjectId, OBJECT_DESCRIPTOR => ObjectDescriptor, ENUMERATED => Enumerated,
+      UTF8STRING => UTF8String, SEQUENCE => Sequence, SET => Set, NUMERICSTRING => NumericString,
+      PRINTABLESTRING => PrintableString, T61STRING => T61String, VIDEOTEXSTRING => VideotexString,
+      IA5STRING => IA5String, UTCTIME => UTCTime, GENERALIZEDTIME => GeneralizedTime,
+      GRAPHICSTRING => GraphicString, ISO64STRING => ISO64String, GENERALSTRING => GeneralString,
+      UNIVERSALSTRING => UniversalString, BMPSTRING => BMPString
+    }.freeze
+
+    # The identifier and length octets of a value, then its content.
+    def self.__tagged__(tag, tag_class, constructed, content)
+      raise ASN1Error, "tag number too large" if tag > 30
+      leading = TAG_CLASS_BITS.fetch(tag_class) | (constructed ? 0x20 : 0) | tag
+      __encoded__(leading, content)
+    end
+
+    # Two's complement, in as few bytes as hold the value and its sign.
+    def self.__signed_bytes__(number)
+      return __integer_bytes__(number).then { |bytes| bytes.getbyte(0) >= 0x80 ? "\x00".b + bytes : bytes } unless number.negative?
+      width = 1
+      width += 1 while number < -(1 << (8 * width - 1))
+      __integer_bytes__((1 << (8 * width)) + number).rjust(width, "\xFF".b)
+    end
+
+    def self.__signed_value__(content)
+      held = content.unpack1("H*").to_i(16)
+      return held if content.empty? || content.getbyte(0) < 0x80
+      held - (1 << (8 * content.bytesize))
+    end
+
+    def self.decode(der)
+      der = der.to_der if der.respond_to?(:to_der)
+      der = der.b
+      decoded, rest = __decode_one__(der)
+      raise ASN1Error, "too long" unless rest.empty?
+      decoded
+    end
+
+    def self.decode_all(der)
+      rest = der.b
+      found = []
+      until rest.empty?
+        decoded, rest = __decode_one__(rest)
+        found << decoded
+      end
+      found
+    end
+
+    def self.__decode_one__(bytes)
+      held = __read_der__(bytes)
+      raise ASN1Error, "header too long" if held.nil?
+      leading, content, rest = held
+      raise ASN1Error, "tag number too large" if (leading & 0x1f) == 0x1f
+      tag = leading & 0x1f
+      constructed = (leading & 0x20) != 0
+      tag_class = TAG_CLASS_BITS.key(leading & 0xc0)
+      [__decoded_value__(tag, tag_class, constructed, content), rest]
+    end
+
+    def self.__decoded_value__(tag, tag_class, constructed, content)
+      if constructed
+        children = decode_all(content)
+        made = UNIVERSAL_CLASSES[tag] if tag_class == :UNIVERSAL
+        return ASN1Data.new(children, tag, tag_class) unless made && made <= Constructive
+        return made.new(children)
+      end
+      made = UNIVERSAL_CLASSES[tag] if tag_class == :UNIVERSAL
+      return ASN1Data.new(content, tag, tag_class) if made.nil? || made <= Constructive
+      value = case tag
+              when BOOLEAN then content != "\x00".b
+              when INTEGER, ENUMERATED then OpenSSL::BN.new(__signed_value__(content))
+              when NULL then nil
+              when OBJECT
+                dotted = __oid_text__(content)
+                found = OpenSSL.__object__(:find, dotted)
+                found ? found[0] : dotted
+              when BIT_STRING then content.byteslice(1..)
+              when UTCTIME, GENERALIZEDTIME then __time_value__(tag, content)
+              else content
+              end
+      decoded = made.new(value)
+      decoded.unused_bits = content.getbyte(0) if tag == BIT_STRING
+      decoded
     end
   end
 end

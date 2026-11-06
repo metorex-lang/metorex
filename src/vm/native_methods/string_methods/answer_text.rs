@@ -11,6 +11,10 @@ pub(crate) struct AnswerText {
     pub(crate) built: String,
     pub(crate) encoding: String,
     pub(crate) holds_only_ascii: bool,
+    /// The bytes the pieces spell, which is what the answer holds once a
+    /// piece held as bytes has joined it.
+    bytes: Vec<u8>,
+    joined_bytes: bool,
 }
 
 impl AnswerText {
@@ -21,7 +25,57 @@ impl AnswerText {
             built: String::new(),
             encoding: encoding.to_string(),
             holds_only_ascii: true,
+            bytes: Vec::new(),
+            joined_bytes: false,
         }
+    }
+
+    /// The String the pieces make. Pieces held as bytes are joined as
+    /// bytes, so two halves of a character read as that character.
+    pub(crate) fn into_string(self, holds_bytes: bool) -> crate::object::StringValue {
+        if !self.joined_bytes {
+            let made = crate::object::StringValue::with_encoding(self.built, &self.encoding);
+            if holds_bytes || self.encoding == "ASCII-8BIT" {
+                made.mark_bytes();
+            }
+            return made;
+        }
+        let made = crate::object::StringValue::binary(self.bytes);
+        made.retag(self.encoding);
+        made
+    }
+
+    /// Add a piece, held as bytes or as text.
+    pub(crate) fn add_held(
+        &mut self,
+        piece: &str,
+        encoding: &str,
+        holds_bytes: bool,
+        position: Position,
+    ) -> Result<(), MetorexError> {
+        if holds_bytes {
+            self.add_bytes(piece, encoding, position)
+        } else {
+            self.add(piece, encoding, position)
+        }
+    }
+
+    /// Add a piece held as bytes, as `add` does a piece of text.
+    fn add_bytes(
+        &mut self,
+        piece: &str,
+        encoding: &str,
+        position: Position,
+    ) -> Result<(), MetorexError> {
+        let held = self.bytes.len();
+        self.add(piece, encoding, position)?;
+        if self.bytes.len() > held {
+            self.joined_bytes = true;
+            self.bytes.truncate(held);
+            self.bytes
+                .extend(crate::object::string_value::bytes_of_characters(piece));
+        }
+        Ok(())
     }
 
     /// What has been built so far.
@@ -82,6 +136,7 @@ impl AnswerText {
             self.encoding = encoding.to_string();
         }
         self.built.push_str(piece);
+        self.bytes.extend_from_slice(piece.as_bytes());
         Ok(())
     }
 }

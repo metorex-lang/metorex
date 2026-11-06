@@ -49,6 +49,8 @@ pub(crate) use regexp_methods::{
     LAST_MATCH, capture_reference, comparable_flags, compile, subject_text,
 };
 pub(crate) mod euc_jp_table;
+pub(crate) mod gbk;
+mod gbk_table;
 pub(crate) mod glob;
 pub(crate) mod normalization_table;
 mod set_methods;

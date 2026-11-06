@@ -88,8 +88,11 @@ fn reads_as_another_kind(text: &str) -> bool {
 pub(super) fn is_primitive_key(value: &Object) -> bool {
     // A String that reads back as some other kind is not reconstructible from
     // its text, so `{"1" => x}` keeps the key object beside the entry.
+    // A String in another encoding keeps its object too, so the key answers
+    // with the encoding it was stored under.
     if let View::String(text) = value.view() {
-        return !reads_as_another_kind(&text.as_str());
+        return !reads_as_another_kind(&text.as_str())
+            && text.encoding_name() == crate::object::string_value::DEFAULT_ENCODING;
     }
     // A name standing for the bytes an encoding spells it with is not
     // reconstructible from its text either, so the object is kept beside the

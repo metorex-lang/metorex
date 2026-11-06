@@ -117,9 +117,11 @@ class BasicSocket < IO
     @sync = wanted ? true : false
   end
 
+  # A socket set not to close itself leaves its descriptor open, for
+  # another object made over it with `for_fd` to go on using.
   def close
     return nil if @closed
-    Socket.__net__ "close", @handle, "", 0
+    Socket.__net__ "close", @handle, "", 0 if autoclose?
     @closed = true
     nil
   end
@@ -308,11 +310,29 @@ class BasicSocket < IO
   private :apply_option
 
   # Put every setting the program asked for on a socket it has just opened.
-  def apply_options
+  def apply_options(skipped = [])
     return if @options.nil?
-    @options.each_value { |held| apply_option held }
+    @options.each { |key, held| apply_option held unless skipped.include?(key) }
   end
   private :apply_options
+
+  # The settings that only take effect on a socket not yet bound, as the
+  # flags `bind_only` sets them by: 1 for IPV6_V6ONLY, 2 for SO_REUSEADDR.
+  def self.before_bind_flags
+    @before_bind_flags ||= {
+      [Socket::IPPROTO_IPV6, Socket::IPV6_V6ONLY] => 1,
+      [Socket::SOL_SOCKET, Socket::SO_REUSEADDR] => 2
+    }.freeze
+  end
+
+  def before_bind_flags
+    return 0 if @options.nil?
+    BasicSocket.before_bind_flags.sum do |key, flag|
+      held = @options[key]
+      held && held.data.unpack1("i").nonzero? ? flag : 0
+    end
+  end
+  private :before_bind_flags
 
   # What a setting holds right now, read back from the operating system when
   # there is a socket behind this one to ask.
@@ -560,6 +580,7 @@ class Socket < BasicSocket
       const_set named, found unless found.nil?
     end
 
+    SOMAXCONN = Socket.__number__("SOMAXCONN", 128)
     SOL_SOCKET = Socket.__number__("SOL_SOCKET", 0xffff)
     SO_DEBUG = Socket.__number__("SO_DEBUG", 0x0001)
     SO_ACCEPTCONN = Socket.__number__("SO_ACCEPTCONN", 0x0002)
@@ -1657,11 +1678,11 @@ class TCPSocket < IPSocket
   end
   alias_method :eof, :eof?
 
-  def readpartial(length, _buffer = nil)
+  def readpartial(length, buffer = nil)
     raise IOError, "closed stream" if closed? || read_closed?
     held = read_into_string length
     raise EOFError, "end of file reached" if held.empty?
-    held
+    Socket.filled_buffer(held, buffer)
   end
 
   # Read up to and including the separator, which is what a protocol written
@@ -2746,20 +2767,22 @@ class Socket
     unless @handle.nil?
       Socket.__net__ "bind_on", @handle, address, port
       @bound = [address, port]
-      apply_options
+      # The settings that only work before binding were put on the socket
+      # when they were set, and binding has not undone them.
+      apply_options(BasicSocket.before_bind_flags.keys)
       return 0
     end
     taken = if datagram?
               Socket.__net__ "udp_open", 0, address, port
             else
-              Socket.__net__ "bind_only", 0, address, port
+              Socket.__net__ "bind_only", before_bind_flags, address, port
             end
     # A datagram socket is already open before it is bound, so the one it
     # started on is let go once the bound one takes its place.
     Socket.__net__("close", @handle, "", 0) if datagram? && !@handle.nil?
     @handle = taken
     @bound = [address, port]
-    apply_options
+    apply_options(datagram? ? [] : BasicSocket.before_bind_flags.keys)
     0
   end
 
@@ -3147,7 +3170,7 @@ class Socket
 
   def close
     return nil if @closed
-    Socket.__net__ "close", @handle, "", 0 unless @handle.nil?
+    Socket.__net__ "close", @handle, "", 0 unless @handle.nil? || !autoclose?
     @closed = true
     nil
   end
@@ -3396,13 +3419,16 @@ class Socket
   end
 
   # Take connections one after another, handing each to the block with the
-  # address it came from. The loop ends when the block breaks out of it.
+  # address it came from, from whichever socket one arrives on first. The
+  # loop ends when the block breaks out of it.
   def self.accept_loop(*sockets)
-    listening = sockets.flatten
+    listening = sockets.flatten(1)
     raise ArgumentError, "no sockets" if listening.empty?
     loop do
-      listening.each do |listener|
-        connection, address = listener.accept
+      readable, = IO.select(listening)
+      readable.each do |listener|
+        connection, address = listener.accept_nonblock(exception: false)
+        next if connection == :wait_readable
         yield connection, address
       end
     end
@@ -3528,16 +3554,55 @@ class Socket
     opened_for held, &block
   end
 
-  # The sockets a server listens on, which metorex answers as the one socket
-  # it opens for the address asked for.
+  # A socket listening on each address the host has, IPv6 first, every one
+  # on the same port. A port of 0 takes the one the system picks for the
+  # first address. With no host the sockets listen on every address.
   def self.tcp_server_sockets(host = nil, port = nil, &block)
     host, port = nil, host if port.nil?
-    local = host.nil? ? nil : Socket.resolved(host).first
-    held = Socket.new local.to_s.include?(":") ? :INET6 : :INET, :STREAM
-    held.bind Socket.sockaddr_in(port.nil? ? 0 : port, local)
-    held.listen 5
-    sockets_opened_for [held], &block
+    addresses = host.nil? ? ["::", "0.0.0.0"] : Socket.resolved(host)
+    addresses = addresses.partition { |address| address.include?(":") }.flatten
+    wanted = port.nil? ? 0 : port
+    attempts = 0
+    begin
+      sockets = __listening_on__(addresses, wanted)
+    rescue Errno::EADDRINUSE
+      # The port the system picked for the first address can be taken on
+      # another, so a fresh port is asked for again.
+      attempts += 1
+      retry if wanted.to_s == "0" && attempts < 10
+      raise
+    end
+    sockets_opened_for sockets, &block
   end
+
+  def self.__listening_on__(addresses, wanted)
+    sockets = []
+    trouble = nil
+    addresses.each do |address|
+      six = address.include?(":")
+      held = Socket.new six ? :INET6 : :INET, :STREAM
+      begin
+        held.setsockopt Socket::SOL_SOCKET, Socket::SO_REUSEADDR, 1
+        held.ipv6only! if six
+        port = sockets.empty? ? wanted : sockets.first.local_address.ip_port
+        held.bind Socket.sockaddr_in(port, address)
+        held.listen Socket::SOMAXCONN
+        sockets << held
+      rescue Errno::EADDRINUSE
+        held.close
+        sockets.each(&:close)
+        raise
+      rescue SystemCallError => error
+        # An address this host cannot listen on, such as IPv6 where it is
+        # turned off, is passed over.
+        held.close
+        trouble = error
+      end
+    end
+    raise trouble if sockets.empty? && trouble
+    sockets
+  end
+  private_class_method :__listening_on__
 
   def self.udp_server_sockets(host = nil, port = nil, &block)
     host, port = nil, host if port.nil?

@@ -434,13 +434,6 @@ pub(super) const SOURCE: &str = r##"
     0
   end
 
-  # How many bytes the stream stands over.
-  def size
-    raise IOError, "closed stream" if closed?
-    __drain__
-    IO.__stream__ "size", __stream_handle__, "", 0
-  end
-
   # The file cut down to the count of bytes, or filled out to it.
   def truncate(length)
     raise IOError, "closed stream" if closed?

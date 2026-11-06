@@ -33,7 +33,7 @@ impl VirtualMachine {
         };
         match &*action.as_str() {
             "listen" => self.socket_listen(text, port, position),
-            "bind_only" => self.socket_bind_only(text, port, position),
+            "bind_only" => self.socket_bind_only(handle, text, port, position),
             "tcp_open" => self.socket_tcp_open(text, position),
             "udp_fresh" => self.socket_udp_fresh(text, position),
             "numeric_addrinfo" => self.socket_numeric_addrinfo(text, port, position),

@@ -475,6 +475,19 @@ impl VirtualMachine {
                     &dictionary,
                 )))
             }
+            // A piece of a raw stream written in parts, compressed with the
+            // input before it in the window: one a sync flush ends, or the
+            // last one.
+            "deflate_piece" | "deflate_last_piece" => {
+                let previous = match arguments.get(3).view() {
+                    Some(View::String(held)) => super::pack_format::string_to_bytes(&held.as_str()),
+                    _ => Vec::new(),
+                };
+                let last = &*action.as_str() == "deflate_last_piece";
+                Ok(super::pack_format::bytes_to_string(
+                    &super::zlib_deflate::deflate_piece(&bytes, &previous, last),
+                ))
+            }
             // How much of the stream zlib has handed on after reading what
             // was given with no flush asked for, header included.
             "deflate_handed_on" => {

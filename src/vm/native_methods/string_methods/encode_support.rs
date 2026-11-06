@@ -83,6 +83,9 @@ pub(crate) fn destination_spells(wanted: &str, character: char) -> bool {
     if wanted == "EUC-JP" {
         return crate::vm::native_methods::euc_jp_table::euc_jp_bytes(&text).is_ok();
     }
+    if wanted == "GBK" {
+        return crate::vm::native_methods::gbk::gbk_bytes(&text).is_ok();
+    }
     if wanted == "US-ASCII" {
         return character.is_ascii();
     }
@@ -348,6 +351,12 @@ pub(crate) fn encoded_characters(string_value: &crate::object::StringValue) -> V
             .iter()
             .map(|character| from_bytes(character))
             .collect(),
+        "GBK" if string_value.holds_bytes() => {
+            crate::vm::native_methods::gbk::gbk_characters(&binary_bytes(string_value))
+                .iter()
+                .map(|character| from_bytes(character))
+                .collect()
+        }
         _ => string_value
             .as_str()
             .chars()

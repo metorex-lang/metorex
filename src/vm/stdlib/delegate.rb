@@ -9,6 +9,14 @@
 class Delegator < BasicObject
   include ::Kernel
 
+  # Kernel's private methods, such as `gets` and `puts`, would answer for
+  # the delegator under `__send__` rather than reaching the object behind
+  # it, so they are undefined here as MRI's delegator undefines them.
+  ::Kernel.private_instance_methods.each do |name|
+    next if /\Ainstance_variable_|\Aobject_id\z|\Ablock_given\?\z|\Ainitialize|\Arespond_to_missing\?\z|\Amethod_missing\z/.match?(name)
+    undef_method name
+  end
+
   # A constant a delegating class's code names is looked for at the top
   # level, which a class outside Object's line does not reach by itself.
   def self.const_missing(name)
@@ -21,11 +29,11 @@ class Delegator < BasicObject
 
   # The object being stood in front of. A subclass says how it is held.
   def __getobj__
-    raise ::NotImplementedError, "#{self.class} does not implement __getobj__"
+    ::Kernel.raise ::NotImplementedError, "#{self.class} does not implement __getobj__"
   end
 
   def __setobj__(_object)
-    raise ::NotImplementedError, "#{self.class} does not implement __setobj__"
+    ::Kernel.raise ::NotImplementedError, "#{self.class} does not implement __setobj__"
   end
 
   def method_missing(name, *arguments, &block)
@@ -36,6 +44,7 @@ class Delegator < BasicObject
       super
     end
   end
+  ruby2_keywords :method_missing
 
   # A delegator answers to whatever the object behind it answers to. A
   # private or protected name is reported as one it does not forward, which
@@ -47,7 +56,7 @@ class Delegator < BasicObject
     return false unless delegated
     answered = target.respond_to? name, include_private
     if answered && include_private && !target.respond_to?(name, false)
-      warn "delegator does not forward private method ##{name}"
+      ::Kernel.warn "delegator does not forward private method ##{name}"
       return false
     end
     answered
@@ -79,7 +88,7 @@ class Delegator < BasicObject
     rescue ::NameError
       target = __getobj__
       unless target.respond_to? name
-        raise ::NameError, "undefined method '#{name}' for #{self.inspect}"
+        ::Kernel.raise ::NameError, "undefined method '#{name}' for #{self.inspect}"
       end
       target.method name
     end
@@ -184,13 +193,13 @@ class SimpleDelegator < Delegator
   def __getobj__
     unless defined? @delegate_sd_obj
       return yield if block_given?
-      raise ::ArgumentError, "not delegated"
+      ::Kernel.raise ::ArgumentError, "not delegated"
     end
     @delegate_sd_obj
   end
 
   def __setobj__(object)
-    raise ::ArgumentError, "cannot delegate to self" if object.equal? self
+    ::Kernel.raise ::ArgumentError, "cannot delegate to self" if object.equal? self
     @delegate_sd_obj = object
   end
 end
@@ -202,13 +211,13 @@ def DelegateClass(superclass, &block)
   built.class_eval do
     define_method :__getobj__ do
       unless defined? @delegate_dc_obj
-        raise ArgumentError, "not delegated"
+        ::Kernel.raise ArgumentError, "not delegated"
       end
       @delegate_dc_obj
     end
 
     define_method :__setobj__ do |object|
-      raise ArgumentError, "cannot delegate to self" if object.equal? self
+      ::Kernel.raise ArgumentError, "cannot delegate to self" if object.equal? self
       @delegate_dc_obj = object
     end
   end

@@ -2548,3 +2548,302 @@ fn drb_serves_calls_over_a_unix_socket() {
     let output = run_example("stdlib_libraries/drb_over_a_unix_socket.rb");
     assert_eq!(output, "5\ntrue\n");
 }
+
+#[test]
+fn a_delegator_forwards_names_kernel_keeps_private() {
+    let output = run_example("stdlib/delegator_forwards_kernel_private_names.rb");
+    assert_eq!(output, "[:printed, \"line\"]\n:formatted\nNoMethodError\n");
+}
+
+#[test]
+fn a_tempfile_reads_what_was_copied_to_its_path_and_takes_keywords_through_method_missing() {
+    let output = run_example("io/tempfile_reads_contents_copied_to_its_path.rb");
+    assert_eq!(output, "[\"contents\"]\n\"contents\"\n[\"contents\"]\n");
+}
+
+#[test]
+fn gzip_writer_flush_hands_each_piece_to_the_io_and_finish_leaves_it_open() {
+    let output = run_example("stdlib/gzip_writer_flush_hands_output_to_the_io.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"foo\"\n\"foobar\"\ntrue\n\"foobar\"\ntrue\ntrue\nfalse\n5004\ntrue\n",
+            "[10, \"1f8b0800010000000003\"]\n[9, \"4acbcf07000000ffff\"]\n",
+            "[9, \"4a4a2c02000000ffff\"]\n[10, \"0300951ff69e06000000\"]\n",
+        )
+    );
+}
+
+#[test]
+fn gzip_writer_keeps_text_whose_header_write_raised() {
+    let output = run_example("stdlib/gzip_writer_keeps_data_written_before_a_failed_write.rb");
+    assert_eq!(
+        output,
+        "[:part, 10, \"\"]\n[:part, 13, \"foo\"]\n:aborted\n\"\"\n[\"foo\"]\n"
+    );
+}
+
+#[test]
+fn open_uri_meta_gives_a_string_the_charset_its_content_type_names() {
+    let output = run_example("stdlib/open_uri_meta_reads_a_charset.rb");
+    assert_eq!(
+        output,
+        "#<Encoding:ISO-8859-1>\n\"text/plain\"\n\"iso-8859-1\"\n"
+    );
+}
+
+#[test]
+fn a_certificate_prints_its_fields_the_way_openssl_does() {
+    let output = run_example("stdlib/openssl_certificate_to_text.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "Certificate:\n",
+            "    Data:\n",
+            "        Version: 3 (0x2)\n",
+            "        Serial Number: 1 (0x1)\n",
+            "        Signature Algorithm: sha256WithRSAEncryption\n",
+            "        Issuer: C=JP, O=JIN.GR.JP, OU=RRR, CN=CA\n",
+            "        Validity\n",
+            "            Not Before: Feb 12 08:42:31 2025 GMT\n",
+            "            Not After : Feb 10 08:42:31 2035 GMT\n",
+            "        Subject: C=JP, O=JIN.GR.JP, OU=RRR, CN=CA\n",
+            "        Subject Public Key Info:\n",
+            "            Public Key Algorithm: rsaEncryption\n",
+            "                Public-Key: (2048 bit)\n",
+            "                Modulus:\n",
+            "                Exponent: 65537 (0x10001)\n",
+            "        X509v3 extensions:\n",
+            "            X509v3 Basic Constraints: critical\n",
+            "                CA:TRUE\n",
+            "            X509v3 Key Usage: critical\n",
+            "                Certificate Sign, CRL Sign\n",
+            "            X509v3 Subject Key Identifier: \n",
+            "            X509v3 Authority Key Identifier: \n",
+            "    Signature Algorithm: sha256WithRSAEncryption\n",
+            "    Signature Value:\n",
+            "35\n",
+            "\"        fd:fb:10:94\\n\"\n",
+        )
+    );
+}
+
+#[test]
+fn asn1_decode_reads_a_certificate_into_values_that_encode_it_again() {
+    let output = run_example("stdlib/openssl_asn1_decode_round_trips_a_certificate.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "true\n",
+            "[[OpenSSL::ASN1::ASN1Data, 0, :CONTEXT_SPECIFIC], [OpenSSL::ASN1::Integer, 2, :UNIVERSAL], [OpenSSL::ASN1::Sequence, 16, :UNIVERSAL], [OpenSSL::ASN1::Sequence, 16, :UNIVERSAL], [OpenSSL::ASN1::Sequence, 16, :UNIVERSAL], [OpenSSL::ASN1::Sequence, 16, :UNIVERSAL], [OpenSSL::ASN1::Sequence, 16, :UNIVERSAL], [OpenSSL::ASN1::ASN1Data, 3, :CONTEXT_SPECIFIC]]\n",
+            "1\n",
+            "\"RSA-SHA256\"\n",
+            "2025-02-12 08:42:31 UTC\n",
+            "[\"C\", \"JP\"]\n",
+            "\"c79b045110fa5b3a44899909c43692d45edfa672ad6e84813094c81856751760\"\n",
+            "\"6ce0a402702385915550c9dc15d4ebea9934e2116db2ac7ab92ddb32dee2ae0f\"\n",
+            "[2, 2, 255, 127]\n",
+            "-129\n",
+            "[48, 9, 1, 1, 255, 5, 0, 128, 2, 97, 98]\n",
+        )
+    );
+}
+
+#[test]
+fn a_certificate_prints_ec_keys_policies_and_distribution_points_the_way_openssl_does() {
+    let output = run_example("stdlib/openssl_certificate_to_text_for_ec_keys_and_policies.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "Certificate:\n",
+            "    Data:\n",
+            "        Version: 3 (0x2)\n",
+            "        Serial Number:\n",
+            "        Signature Algorithm: ecdsa-with-SHA384\n",
+            "        Issuer: C=GB, ST=Greater Manchester, L=Salford, O=COMODO CA Limited, CN=COMODO ECC Certification Authority\n",
+            "        Validity\n",
+            "            Not Before: Mar  6 00:00:00 2008 GMT\n",
+            "            Not After : Jan 18 23:59:59 2038 GMT\n",
+            "        Subject: C=GB, ST=Greater Manchester, L=Salford, O=COMODO CA Limited, CN=COMODO ECC Certification Authority\n",
+            "        Subject Public Key Info:\n",
+            "            Public Key Algorithm: id-ecPublicKey\n",
+            "                Public-Key: (384 bit)\n",
+            "                pub:\n",
+            "                ASN1 OID: secp384r1\n",
+            "                NIST CURVE: P-384\n",
+            "        X509v3 extensions:\n",
+            "            X509v3 Subject Key Identifier: \n",
+            "            X509v3 Key Usage: critical\n",
+            "                Certificate Sign, CRL Sign\n",
+            "            X509v3 Basic Constraints: critical\n",
+            "                CA:TRUE\n",
+            "    Signature Algorithm: ecdsa-with-SHA384\n",
+            "    Signature Value:\n",
+            "15\n",
+            "Certificate:\n",
+            "    Data:\n",
+            "        Version: 3 (0x2)\n",
+            "        Serial Number: 6828503384748696800 (0x5ec3b7a6437fa4e0)\n",
+            "        Signature Algorithm: sha1WithRSAEncryption\n",
+            "        Issuer: CN=ACCVRAIZ1, OU=PKIACCV, O=ACCV, C=ES\n",
+            "        Validity\n",
+            "            Not Before: May  5 09:37:37 2011 GMT\n",
+            "            Not After : Dec 31 09:37:37 2030 GMT\n",
+            "        Subject: CN=ACCVRAIZ1, OU=PKIACCV, O=ACCV, C=ES\n",
+            "        Subject Public Key Info:\n",
+            "            Public Key Algorithm: rsaEncryption\n",
+            "                Public-Key: (4096 bit)\n",
+            "                Modulus:\n",
+            "                Exponent: 65537 (0x10001)\n",
+            "        X509v3 extensions:\n",
+            "            Authority Information Access: \n",
+            "                CA Issuers - URI:http://www.accv.es/fileadmin/Archivos/certificados/raizaccv1.crt\n",
+            "                OCSP - URI:http://ocsp.accv.es\n",
+            "            X509v3 Subject Key Identifier: \n",
+            "            X509v3 Basic Constraints: critical\n",
+            "                CA:TRUE\n",
+            "            X509v3 Authority Key Identifier: \n",
+            "            X509v3 Certificate Policies: \n",
+            "                Policy: X509v3 Any Policy\n",
+            "                  User Notice:\n",
+            "                    Explicit Text: \n",
+            "                  CPS: http://www.accv.es/legislacion_c.htm\n",
+            "            X509v3 CRL Distribution Points: \n",
+            "                Full Name:\n",
+            "                  URI:http://www.accv.es/fileadmin/Archivos/certificados/raizaccv1_der.crl\n",
+            "\n",
+            "            X509v3 Key Usage: critical\n",
+            "                Certificate Sign, CRL Sign\n",
+            "            X509v3 Subject Alternative Name: \n",
+            "                email:accv@accv.es\n",
+            "    Signature Algorithm: sha1WithRSAEncryption\n",
+            "    Signature Value:\n",
+            "66\n",
+        )
+    );
+}
+
+#[test]
+fn openssl_parts_required_by_their_own_names_are_already_loaded() {
+    let output = run_example("stdlib/openssl_parts_load_by_their_own_names.rb");
+    assert_eq!(
+        output,
+        "true\nfalse\nfalse\nfalse\n\"900150983cd24fb0d6963f7d28e17f72\"\n"
+    );
+}
+
+#[test]
+fn a_tls_server_still_sees_the_request_waiting_on_its_socket_after_the_handshake() {
+    let output = run_example("stdlib/openssl_server_sees_a_request_sent_with_the_handshake.rb");
+    assert_eq!(output, "\"ready: GET / HTTP/1.0\\n\"\n");
+}
+
+#[test]
+fn a_store_hands_each_verification_step_to_its_callback_the_way_openssl_does() {
+    let output = run_example("stdlib/openssl_store_verify_callback_steps.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "trusted: true 0 3\n",
+            "  [true, 2, 0, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=CA\", 3]\n",
+            "  [true, 1, 0, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=SubCA\", 3]\n",
+            "  [true, 0, 0, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=localhost\", 3]\n",
+            "no intermediate: false 20 1\n",
+            "  [false, 0, 20, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=localhost\", 1]\n",
+            "no intermediate accepted: true 0 1\n",
+            "  [false, 0, 20, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=localhost\", 1]\n",
+            "  [false, 0, 21, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=localhost\", 1]\n",
+            "  [true, 0, 0, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=localhost\", 1]\n",
+            "untrusted root: false 19 3\n",
+            "  [false, 2, 19, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=CA\", 3]\n",
+            "untrusted root accepted: true 0 3\n",
+            "  [false, 2, 19, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=CA\", 3]\n",
+            "  [true, 2, 0, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=CA\", 3]\n",
+            "  [true, 1, 0, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=SubCA\", 3]\n",
+            "  [true, 0, 0, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=localhost\", 3]\n",
+            "self signed leaf: false 18 1\n",
+            "  [false, 0, 18, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=CA\", 1]\n",
+            "expired: false 10 3\n",
+            "  [false, 2, 10, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=CA\", 3]\n",
+            "expired accepted: true 0 3\n",
+            "  [false, 2, 10, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=CA\", 3]\n",
+            "  [true, 2, 0, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=CA\", 3]\n",
+            "  [false, 1, 10, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=SubCA\", 3]\n",
+            "  [true, 1, 0, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=SubCA\", 3]\n",
+            "  [false, 0, 10, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=localhost\", 3]\n",
+            "  [true, 0, 0, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=localhost\", 3]\n",
+            "rejected: false 28 3\n",
+            "  [true, 2, 0, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=CA\", 3]\n",
+            "intermediate trusted: false 2 2\n",
+            "  [false, 1, 2, \"/C=JP/O=JIN.GR.JP/OU=RRR/CN=SubCA\", 2]\n",
+        )
+    );
+}
+
+#[test]
+fn a_tls_socket_reads_and_writes_its_io_past_modules_extending_that_io() {
+    let output = run_example("stdlib/openssl_socket_reads_past_wrappers_on_its_io.rb");
+    assert_eq!(output, "\"ready: GET / HTTP/1.0\\n\"\n[]\n");
+}
+
+#[test]
+fn rsa_keys_read_from_pkcs8_and_from_text_encrypted_with_a_password() {
+    let output = run_example("stdlib/openssl_rsa_reads_pkcs8_and_encrypted_keys.rb");
+    assert_eq!(
+        output,
+        "true\n[true, true]\ntrue\n\"Neither PUB key nor PRIV key\"\n\"Neither PUB key nor PRIV key\"\n"
+    );
+}
+
+#[test]
+fn a_tls_context_refuses_a_cipher_list_that_matches_no_cipher() {
+    let output = run_example("stdlib/openssl_context_refuses_a_cipher_list_matching_nothing.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"!ALL\", \"SSL_CTX_set_cipher_list: no cipher match\"]\n",
+            "[\"\", \"SSL_CTX_set_cipher_list: no cipher match\"]\n",
+            "[[], \"SSL_CTX_set_cipher_list: no cipher match\"]\n",
+            "[\"ALL\", :accepted]\n",
+            "[\"DEFAULT\", :accepted]\n",
+            "[\"ALL:!ALL\", \"SSL_CTX_set_cipher_list: no cipher match\"]\n",
+            "[\"-ALL\", \"SSL_CTX_set_cipher_list: no cipher match\"]\n",
+            "[\"FOO\", \"SSL_CTX_set_cipher_list: no cipher match\"]\n",
+            "[\"FOO:BAR\", \"SSL_CTX_set_cipher_list: no cipher match\"]\n",
+            "[\"!aNULL\", \"SSL_CTX_set_cipher_list: no cipher match\"]\n",
+            "[nil, :accepted]\n",
+            "[\"ALL:!aNULL:!eNULL:!SSLv2\", :accepted]\n",
+            "[\"ECDHE-RSA-AES128-GCM-SHA256\", :accepted]\n",
+            "[\"HIGH:!aNULL:!MD5\", :accepted]\n",
+        )
+    );
+}
+
+#[test]
+fn a_tls_server_held_to_tlsv1_refuses_the_client_with_a_protocol_version_alert() {
+    let output = run_example("stdlib/openssl_server_held_to_tlsv1_refuses_the_client.rb");
+    assert_eq!(
+        output,
+        "\"tlsv1 alert protocol version\"\n\"state=error: no protocols available\"\n"
+    );
+}
+
+#[test]
+fn a_store_refuses_an_issuer_that_may_not_sign_certificates() {
+    let output = run_example("stdlib/openssl_store_checks_that_each_issuer_may_sign.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"v3 root without basic constraints\", false, 79, [[false, 1, 79]]]\n",
+            "[\"v3 root without basic constraints\", :forged, false, 79, [[false, 1, 79]]]\n",
+            "[\"v1 root\", true, 0, [[true, 1, 0], [true, 0, 0]]]\n",
+            "[\"v1 root\", :forged, false, 7, [[true, 1, 0], [false, 0, 7]]]\n",
+            "[\"v3 root with key usage only\", true, 0, [[true, 1, 0], [true, 0, 0]]]\n",
+            "[\"v3 root with key usage only\", :forged, false, 7, [[true, 1, 0], [false, 0, 7]]]\n",
+            "[\"v3 root that is no CA\", false, 79, [[false, 1, 79]]]\n",
+            "[\"v3 root that is no CA\", :forged, false, 79, [[false, 1, 79]]]\n",
+            "[\"v3 root that is a CA\", true, 0, [[true, 1, 0], [true, 0, 0]]]\n",
+            "[\"v3 root that is a CA\", :forged, false, 7, [[true, 1, 0], [false, 0, 7]]]\n",
+        )
+    );
+}

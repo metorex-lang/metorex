@@ -380,12 +380,19 @@ class IPAddr
     self.with_address(@addr + 1)
   end
 
+  # A String is read for whichever family it names, and an address of the
+  # other family is not included. A network is included only when all of it
+  # lies inside this one.
   def include?(other)
-    other = IPAddr.new(other, @family) unless other.is_a?(IPAddr)
+    other = case other
+            when IPAddr then other
+            when String then IPAddr.new(other)
+            else IPAddr.new(other, @family)
+            end
     return false unless other.family == @family
-    width = self.ipv4? ? 32 : 128
-    masklen = width - self.mask_length
-    (other.to_i >> masklen) == (@addr >> masklen)
+    mine = to_range
+    theirs = other.to_range
+    mine.first.to_i <= theirs.first.to_i && theirs.last.to_i <= mine.last.to_i
   end
 
   def ===(other)

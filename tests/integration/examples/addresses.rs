@@ -112,3 +112,12 @@ fn test_addresses_ancillary_data_no_parens_execution() {
     let output = run_example("addresses/ancillary_data_no_parens.rb");
     assert_eq!(output, ANCILLARY_DATA_OUTPUT);
 }
+
+#[test]
+fn ipaddr_include_reads_a_string_for_its_own_family_and_compares_whole_networks() {
+    let output = run_example("addresses/ipaddr_include_across_families.rb");
+    assert_eq!(
+        output,
+        "true\nfalse\nIPAddr::InvalidAddressError\nfalse\ntrue\n"
+    );
+}

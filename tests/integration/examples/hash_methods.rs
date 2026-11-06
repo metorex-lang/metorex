@@ -260,3 +260,27 @@ fn a_default_proc_answers_the_read_and_a_subclass_answers_itself() {
         "nil\n{a: 1}\nnil\n{\"z\" => 5}\nPlain\nPlain\nPlain\nNilClass\n"
     );
 }
+
+#[test]
+fn an_alias_of_to_h_on_a_hash_subclass_keeps_the_default_proc_super_was_given() {
+    let output = run_example("hash_methods/hash_subclass_default_proc_from_super_with_a_block.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"bar\"\nnil\nfalse\n\"text/plain\"\n{\"foo\" => \"bar\"}\nHash\n",
+            "\"bar\"\nfalse\n\"kept\"\n",
+        )
+    );
+}
+
+#[test]
+fn a_string_key_keeps_the_encoding_it_was_stored_with() {
+    let output = run_example("hash_methods/string_keys_and_values_keep_their_encoding.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "#<Encoding:US-ASCII>\n[#<Encoding:US-ASCII>]\n",
+            "#<Encoding:BINARY (ASCII-8BIT)>\ntrue\n",
+        )
+    );
+}

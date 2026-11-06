@@ -773,3 +773,58 @@ fn a_match_keeps_the_encoding_of_the_string_it_was_found_in() {
         )
     );
 }
+
+#[test]
+fn nfc_keeps_hangul_syllables_and_composes_conjoining_jamo() {
+    let output = run_example("encodings/hangul_composition.rb");
+    assert_eq!(
+        output,
+        "[\"c138\", \"acc4\"]\n[\"1109\", \"1166\", \"1100\", \"1168\"]\n[\"ac01\"]\n"
+    );
+}
+
+#[test]
+fn scan_and_gsub_over_shift_jis_text_match_whole_characters() {
+    let output = run_example("encodings/shift_jis_regex_matches_whole_characters.rb");
+    assert_eq!(
+        output,
+        "[131, 65]\n[[131, 65]]\n\"83%41\"\n#<Encoding:Shift_JIS>\n"
+    );
+}
+
+#[test]
+fn gbk_text_converts_and_matches_by_whole_characters() {
+    let output = run_example("encodings/gbk_regex_matches_whole_characters.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[212, 83]\ntrue\n1\n\"d4%53\"\n\"\\\"\\\\x{D453}\\\"\"\n",
+            "[[212, 83]]\n\"許\"\nfalse\n",
+        )
+    );
+}
+
+#[test]
+fn an_empty_binary_string_keeps_its_encoding_when_ascii_is_appended() {
+    let output = run_example("encodings/appending_to_an_empty_binary_string.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "#<Encoding:BINARY (ASCII-8BIT)>\n#<Encoding:BINARY (ASCII-8BIT)>\n",
+            "#<Encoding:UTF-8>\n4\n\"xé\"\nfalse\n3\n",
+        )
+    );
+}
+
+#[test]
+fn bytes_substituted_one_at_a_time_join_into_characters_and_broken_text_refuses_case_mapping() {
+    let output = run_example("encodings/gsub_pieces_that_join_into_utf8.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"café\"\n4\ntrue\n1\ntrue\n",
+            "\"input string invalid\"\n\"input string invalid\"\n\"input string invalid\"\n",
+            "\"\\xBF\"\n",
+        )
+    );
+}

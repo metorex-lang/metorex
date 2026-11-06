@@ -1039,3 +1039,16 @@ fn an_empty_method_reopened_onto_a_core_class_replaces_the_native_one() {
     let output = run_example("methods/empty_redefinition_of_core_method.rb");
     assert_eq!(output, "nil\nnil\nnil\n");
 }
+
+#[test]
+fn def_self_inside_a_block_in_an_instance_method_defines_on_that_instance() {
+    let output = run_example("methods/singleton_def_inside_a_block_in_a_method.rb");
+    assert_eq!(output, "[:helper, 1]\ntrue\n[:helper]\nfalse\n");
+}
+
+#[test]
+fn public_on_a_singleton_class_reaches_a_private_method_from_a_class_or_its_module() {
+    let output =
+        run_example("methods/public_on_a_singleton_class_for_an_inherited_private_method.rb");
+    assert_eq!(output, "\"https\"\nNoMethodError\n\"ws\"\n");
+}

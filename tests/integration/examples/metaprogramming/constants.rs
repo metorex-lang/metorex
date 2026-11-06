@@ -277,3 +277,10 @@ fn anonymous_classes_take_the_names_they_are_bound_to() {
         "\"Top\"\n\"M::InModule\"\n\"C::InClass\"\n\"C::Plain\"\n\"N::Deep::Inner\"\n"
     );
 }
+
+#[test]
+fn a_method_called_from_a_basic_object_class_body_reads_top_level_constants() {
+    let output =
+        run_example("constants/top_level_constant_from_a_method_called_in_a_basic_object_body.rb");
+    assert_eq!(output, "Float\nInteger\n1\n1\n");
+}

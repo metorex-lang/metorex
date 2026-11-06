@@ -113,3 +113,44 @@ fn a_socket_reads_lines_by_separator_and_chomps_them() {
     let output = run_example("sockets/readline_with_separator_and_chomp.rb");
     assert_eq!(output, "\"<fo\"\n\"o>\"\n\"<bar\"\n\"\"\n\"lin\"\n");
 }
+
+#[test]
+fn listeners_open_on_one_ephemeral_port_and_survive_handing_on_by_descriptor() {
+    let output = run_example("sockets/tcp_server_sockets_on_an_ephemeral_port.rb");
+    assert_eq!(output, "false\n1\ntrue\nSocket\ntrue\nTCPServer\ntrue\n");
+}
+
+#[test]
+fn readpartial_fills_the_buffer_it_is_handed_with_what_gets_left_behind() {
+    let output = run_example("sockets/readpartial_fills_a_buffer_after_gets.rb");
+    assert_eq!(output, "\"ok\"\ntrue\n#<Encoding:BINARY (ASCII-8BIT)>\n");
+}
+
+#[test]
+fn a_timeout_ends_a_socket_read_that_is_still_waiting() {
+    let output = run_example("sockets/timeout_ends_a_read_that_is_waiting.rb");
+    assert_eq!(
+        output,
+        "[:gets, \"execution expired\"]\n[:readpartial, \"execution expired\"]\n\"late\\n\"\n"
+    );
+}
+
+#[test]
+fn tcp_server_sockets_listen_on_every_address_of_the_host_on_one_port() {
+    let output = run_example("sockets/tcp_server_sockets_listen_on_every_address.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "128\n",
+            "[[\"::\", true], [\"0.0.0.0\", false]]\n",
+            "1\n",
+            "[true, true]\n",
+            "[[\"127.0.0.1\", false]]\n",
+            "1\n",
+            "[true]\n",
+            "[[\"::1\", true], [\"127.0.0.1\", false]]\n",
+            "1\n",
+            "[true, true]\n",
+        )
+    );
+}

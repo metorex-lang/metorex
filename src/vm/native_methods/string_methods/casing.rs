@@ -12,7 +12,7 @@ pub(crate) enum CaseWanted {
 
 /// The options a case mapping was asked for.
 pub(crate) struct CaseOptions {
-    ascii_only: bool,
+    pub(crate) ascii_only: bool,
     turkic: bool,
     folding: bool,
 }

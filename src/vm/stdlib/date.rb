@@ -277,10 +277,12 @@ class Date
   end
 
   # A `-` opens a negative year only where no digit precedes it, so the
-  # hyphens of `10-01-2007` stay separators.
+  # hyphens of `10-01-2007` stay separators, as do those of the VMS form
+  # `27-sep-2037`.
   def self.signs_a_number(lowered, index)
     return false unless lowered[index] == "-"
     return false if index + 1 >= lowered.length || !digit?(lowered[index + 1])
+    return false if lowered[0...index].match?(/\d-[a-z]+\z/)
     index == 0 || !digit?(lowered[index - 1])
   end
 

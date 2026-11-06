@@ -245,6 +245,9 @@ impl VirtualMachine {
                     }
                     self.wait_for_other_threads(position);
                     self.raise_if_thread_killed(position)?;
+                    // A `Timeout.timeout` limit that passes while the read
+                    // waits ends the read where it stands.
+                    self.raise_expired_timeout(position)?;
                     if self.other_threads_are_waiting() {
                         deadline = (std::time::Instant::now() + WAIT_LIMIT).min(waited_enough);
                     }

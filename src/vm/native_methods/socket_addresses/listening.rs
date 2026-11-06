@@ -30,6 +30,7 @@ impl VirtualMachine {
     /// to reach it, which is what a connection to one is told.
     pub(crate) fn socket_bind_only(
         &mut self,
+        flags: u64,
         text: String,
         port: i64,
         position: Position,
@@ -69,6 +70,7 @@ impl VirtualMachine {
                     position,
                 ));
             }
+            set_before_binding(descriptor, family, flags);
             let (address, length) = sockaddr_of(&wanted);
             if libc::bind(descriptor, address.as_ptr().cast(), length) < 0 {
                 let problem = std::io::Error::last_os_error();
@@ -307,6 +309,39 @@ impl VirtualMachine {
                 ),
                 position,
             )),
+        }
+    }
+}
+
+/// Turns on IPV6_V6ONLY when asked.
+const SET_V6ONLY: u64 = 1;
+/// Turns on SO_REUSEADDR when asked.
+const SET_REUSEADDR: u64 = 2;
+
+/// Put on a fresh socket the settings the program asked for that only take
+/// effect before it is bound.
+fn set_before_binding(descriptor: libc::c_int, family: libc::c_int, flags: u64) {
+    let on: libc::c_int = 1;
+    let length = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
+    // SAFETY: the descriptor was just opened, and `on` outlives each call.
+    unsafe {
+        if flags & SET_REUSEADDR != 0 {
+            libc::setsockopt(
+                descriptor,
+                libc::SOL_SOCKET,
+                libc::SO_REUSEADDR,
+                (&on as *const libc::c_int).cast(),
+                length,
+            );
+        }
+        if flags & SET_V6ONLY != 0 && family == libc::AF_INET6 {
+            libc::setsockopt(
+                descriptor,
+                libc::IPPROTO_IPV6,
+                libc::IPV6_V6ONLY,
+                (&on as *const libc::c_int).cast(),
+                length,
+            );
         }
     }
 }

@@ -16,6 +16,23 @@ impl VirtualMachine {
     ) -> Result<(), MetorexError> {
         let new_name = new_name.to_string();
         let old_name = old_name.to_string();
+        // A core class that answers the name natively comes ahead of the
+        // modules it includes, so `Hash#to_h` is what a Hash subclass names
+        // rather than the `to_h` Enumerable is written with.
+        if let Some(core_owner) = natively_answering_class(class_rc, &old_name) {
+            let mut stub = Method::with_owner(
+                new_name.clone(),
+                vec!["args".to_string()],
+                vec![],
+                core_owner.name().to_string(),
+            );
+            stub.signature.variadic_param = Some((0, "args".to_string()));
+            stub.provenance.original_name = Some(old_name.clone());
+            stub.provenance.native_alias = Some(old_name.clone());
+            stub.owner_class = Some(core_owner);
+            class_rc.define_method(&new_name, Rc::new(stub));
+            return Ok(());
+        }
         let copied = class_rc.alias_method(&new_name, &old_name);
         // A copy of a body-less stub standing for a native method dispatches
         // under the name it was cut from, as an alias made without one does.
@@ -195,4 +212,43 @@ pub(crate) fn parent_of_path(path: &str) -> String {
         return format!("/{}", rest.trim_start_matches('/'));
     }
     front.to_string()
+}
+
+/// The core class along `class_rc`'s ancestry that answers `name` natively
+/// before any method written for it is reached: one whose own table and the
+/// tables of everything ahead of it hold no `name`, and whose core methods
+/// list it.
+pub(crate) fn natively_answering_class(
+    class_rc: &Rc<crate::class::Class>,
+    name: &str,
+) -> Option<Rc<crate::class::Class>> {
+    let mut current = Some(Rc::clone(class_rc));
+    while let Some(class) = current {
+        if class.find_own_method(name).is_some() {
+            return None;
+        }
+        let core_answers = crate::vm::native_methods::core_method_names::CORE_METHODS
+            .iter()
+            .any(|row| {
+                row.owner == class.name()
+                    && (row.public.contains(&name) || row.private.contains(&name))
+            });
+        if core_answers
+            && !class.is_module()
+            && class.name() != "Object"
+            && class.name() != "BasicObject"
+        {
+            return Some(class);
+        }
+        if class.has_mixins()
+            && class
+                .linear_mixins()
+                .iter()
+                .any(|module| module.find_own_method(name).is_some())
+        {
+            return None;
+        }
+        current = class.superclass();
+    }
+    None
 }

@@ -298,6 +298,19 @@ impl VirtualMachine {
             }
             return;
         }
+        // A fiber a thread resumed holds the whole thread up while it waits,
+        // so the wait is handed out to the thread, which gives the others
+        // their turns and resumes the fiber afterwards.
+        if self.fiber_current_handle() != ROOT_FIBER
+            && self
+                .fiber_frames
+                .iter()
+                .any(|frame| self.thread_body_fibers.contains(&frame.handle))
+        {
+            self.blocking_in_fiber = true;
+            let _ = self.fiber_suspend(Object::Nil, position);
+            return;
+        }
         // The thread handing control over is asleep for as long as the wait
         // lasts, whichever thread it is, which is what `status` reports.
         let running = self.running_thread();

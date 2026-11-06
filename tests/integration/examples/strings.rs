@@ -744,3 +744,36 @@ fn a_string_subclass_instance_matches_a_pattern_as_its_string() {
         "0\nnil\n2\n2\nfalse\n#<MatchData \"item\">\n5\ntype mismatch: String given\n"
     );
 }
+
+#[test]
+fn a_large_binary_body_reads_and_splits_on_a_pattern_with_a_limit() {
+    let output = run_example("io/string_io_reads_a_large_binary_body.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "4000000\n#<Encoding:BINARY (ASCII-8BIT)>\nnil\nfalse\n3\n4097\n",
+            "[\"a=1&\", \"a=1&\"]\n",
+        )
+    );
+}
+
+#[test]
+fn a_copy_of_a_binary_string_writes_its_own_bytes_to_a_pipe() {
+    let output = run_example("io/pipe_writes_a_binary_string_copy_as_its_bytes.rb");
+    assert_eq!(output, "[227, 129, 130]\n");
+}
+
+#[test]
+fn string_io_counts_bytes_and_reads_on_from_inside_a_character() {
+    let output = run_example("io/string_io_reads_bytes_from_inside_a_character.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "15\n",
+            "\"\\xE3\\x81\\x93\\xE3\"\n",
+            "4\n",
+            "\"\\x82\\x93\\xE3\\x81\\xAB\\xE3\\x81\\xA1\\xE3\\x81\\xAF\"\n",
+            "\"こんにちは\"\n",
+        )
+    );
+}

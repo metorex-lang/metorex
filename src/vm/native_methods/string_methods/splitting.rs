@@ -177,6 +177,9 @@ pub(crate) fn spelled_bytes(text: &str, named: &str) -> Option<Vec<u8>> {
     if spells_shift_jis(named) {
         return crate::vm::native_methods::shift_jis_table::shift_jis_bytes(text).ok();
     }
+    if named == "GBK" {
+        return crate::vm::native_methods::gbk::gbk_bytes(text).ok();
+    }
     match latin_bytes(text, named) {
         Some(Ok(spelled)) => Some(spelled),
         _ => None,
@@ -340,8 +343,9 @@ fn split_on_pattern(text: &str, held: &crate::regexp::Pattern, limit: i64) -> Ve
     let mut from = 0usize;
     let mut at = 0usize;
     let mut after_empty = false;
+    let read = crate::regexp::ReadSubject::of(text);
     while at <= text.len() {
-        let Some(found) = held.captures_at(text, at) else {
+        let Some(found) = held.captures_in(&read, text, at) else {
             break;
         };
         let whole = found.get(0).expect("a match holds its whole run");
@@ -386,8 +390,12 @@ fn split_before(text: &str, held: &crate::regexp::Pattern, limit: i64) -> Vec<St
     let mut from = 0usize;
     let mut at = 0usize;
     let mut fields = 1i64;
+    let read = crate::regexp::ReadSubject::of(text);
     while at <= text.len() {
-        let Some(found) = held.find_at(text, at) else {
+        let Some(found) = held
+            .captures_in(&read, text, at)
+            .and_then(|found| found.get(0))
+        else {
             break;
         };
         let starts = found.start();

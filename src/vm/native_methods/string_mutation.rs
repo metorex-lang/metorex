@@ -711,15 +711,20 @@ fn appended_encoding(
     if other.as_str().is_empty() || target.encoding_name() == other.encoding_name() {
         return Some(None);
     }
-    if target.as_str().is_empty() {
-        return Some(Some(other.encoding_name()));
-    }
     let reads_alongside_ascii = |named: &str| {
         !matches!(
             named,
             "UTF-16LE" | "UTF-16BE" | "UTF-16" | "UTF-32LE" | "UTF-32BE" | "UTF-32"
         )
     };
+    // An empty string keeps its encoding when ASCII is appended and it reads
+    // ASCII, and takes the appended text's otherwise.
+    if target.as_str().is_empty() {
+        if reads_alongside_ascii(&target.encoding_name()) && other.as_str().is_ascii() {
+            return Some(None);
+        }
+        return Some(Some(other.encoding_name()));
+    }
     if !reads_alongside_ascii(&target.encoding_name())
         || !reads_alongside_ascii(&other.encoding_name())
     {

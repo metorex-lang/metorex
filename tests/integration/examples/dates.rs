@@ -187,3 +187,9 @@ fn time_parse_keeps_the_zone_and_fraction_the_text_names() {
         "{hour: 15, mday: 8, min: 43, mon: 11, offset: 0, sec: 59, year: 2012, zone: \"Z\"}\n0\n#<NoMethodError: private method 'zone_utc?' called for class Time>\ntrue\n2012-11-08 15:43:59 +0000\n\"2012-11-08 15:43:59 UTC\"\n\"2012-11-08 15:43:59 +0900\"\n[2, (1/4)]\n250000\n(1/4)\n"
     );
 }
+
+#[test]
+fn a_day_month_year_date_with_dashes_keeps_its_year_positive() {
+    let output = run_example("dates/time_parse_dashed_rfc_date.rb");
+    assert_eq!(output, "2037\nfalse\n[2037, 9, 27]\n[2037, 9, 27]\n");
+}

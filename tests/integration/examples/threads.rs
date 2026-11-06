@@ -420,3 +420,9 @@ fn a_timeout_limit_reaches_only_the_thread_that_opened_it() {
     let output = run_example("threads/timeout_limit_belongs_to_its_thread.rb");
     assert_eq!(output, ":woken\n\"execution expired\"\n");
 }
+
+#[test]
+fn a_fiber_sleeping_inside_a_thread_lets_the_other_threads_run() {
+    let output = run_example("threads/sleep_in_a_fiber_gives_other_threads_turns.rb");
+    assert_eq!(output, ":woke\nfalse\n");
+}

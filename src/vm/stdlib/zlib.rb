@@ -716,8 +716,12 @@ module Zlib
     def initialize(io, level = nil, _strategy = nil, **_options)
       super()
       @io = io
-      @body = ""
+      # What has been handed to the IO already, and what is waiting for the
+      # next flush.
+      @written = "".b
+      @pending = "".b
       @header_written = false
+      @header_sent = false
       @level = level.nil? ? Zlib::DEFAULT_COMPRESSION : level
     end
 
@@ -725,10 +729,11 @@ module Zlib
       written = 0
       pieces.each do |piece|
         held = piece.to_s
-        @body = @body + held
-        written = written + held.length
+        @pending << held.b
+        written = written + held.bytesize
       end
-      @header_written = true
+      header = header_text
+      @io.write header unless header.empty?
       written
     end
 
@@ -785,31 +790,60 @@ module Zlib
       held
     end
 
+    # What has been written so far goes out to the IO as a piece the reader
+    # can inflate on its own.
     def flush(_kind = nil)
+      @io.write header_text + Zlib.__stream__("deflate_piece", @pending, 0, @written)
+      @written << @pending
+      @pending = "".b
       self
     end
 
     def pos
-      @body.length
+      @written.bytesize + @pending.bytesize
+    end
+
+    def crc
+      Zlib.crc32(@written + @pending)
     end
 
     alias_method :tell, :pos
 
+    # The stream ends with its last piece and the CRC and length of all it
+    # holds, and the IO is closed too.
     def close
       return @io if @closed
-      @closed = true
-      held_time = @mtime
-      held_name = @orig_name
-      # A header given no time of its own carries the time it was written.
-      stamp = held_time.nil? ? 0 : held_time.to_i
-      stamp = Time.now.to_i if stamp.zero?
-      @io.write Zlib.__stream__("gzip", @body, stamp, held_name)
+      finish
       @io.close if @io.respond_to?(:close) && !@io.is_a?(StringIO)
       @io
     end
 
+    # The same, leaving the IO open.
     def finish
-      close
+      return @io if @closed
+      @closed = true
+      last = header_text + Zlib.__stream__("deflate_last_piece", @pending, 0, @written)
+      @written << @pending
+      @pending = "".b
+      @io.write last + [Zlib.crc32(@written), @written.bytesize & 0xffffffff].pack("VV")
+      @io
     end
+
+    # The header, which goes out on the first write as a write of its own,
+    # and nothing after that. A header given no time of its own carries the
+    # time it was written.
+    def header_text
+      return "".b if @header_sent
+      @header_sent = true
+      @header_written = true
+      stamp = @mtime.nil? ? 0 : @mtime.to_i
+      stamp = Time.now.to_i if stamp.zero?
+      flags = @orig_name.nil? ? 0 : 0x08
+      header = [0x1f, 0x8b, 0x08, flags].pack("C4") + [stamp].pack("V") + [0, 0x03].pack("C2")
+      header << @orig_name.b << "\0".b unless @orig_name.nil?
+      header
+    end
+
+    private :header_text
   end
 end

@@ -108,7 +108,22 @@ const EMBEDDED_LIBRARIES: &[(&[&str], &str)] = &[
     (&["zlib"], carried_source!("zlib.rb")),
     (&["open3"], carried_source!("open3.rb")),
     (&["syslog"], carried_source!("syslog.rb")),
-    (&["openssl"], carried_source!("openssl.rb")),
+    (
+        &[
+            "openssl",
+            "openssl/bn",
+            "openssl/cipher",
+            "openssl/digest",
+            "openssl/hmac",
+            "openssl/marshal",
+            "openssl/pkcs5",
+            "openssl/pkey",
+            "openssl/ssl",
+            "openssl/version",
+            "openssl/x509",
+        ],
+        carried_source!("openssl.rb"),
+    ),
     (
         &["openssl/buffering"],
         carried_source!("openssl/buffering.rb"),

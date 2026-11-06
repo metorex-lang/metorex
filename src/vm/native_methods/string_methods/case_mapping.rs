@@ -26,6 +26,7 @@ impl VirtualMachine {
                 .map(Some),
             "upcase" => {
                 let wanted = case_options(method_name, arguments, position)?;
+                refuse_broken_unicode(string_value, &wanted, position)?;
                 Ok(Some(Object::string(mapped_case(
                     &string_value.as_str(),
                     CaseWanted::Up,
@@ -115,6 +116,7 @@ impl VirtualMachine {
             }
             "downcase" => {
                 let wanted = case_options(method_name, arguments, position)?;
+                refuse_broken_unicode(string_value, &wanted, position)?;
                 Ok(Some(Object::string(mapped_case(
                     &string_value.as_str(),
                     CaseWanted::Down,
@@ -125,6 +127,7 @@ impl VirtualMachine {
             // `swapcase` turns each letter the other way.
             "capitalize" => {
                 let wanted = case_options(method_name, arguments, position)?;
+                refuse_broken_unicode(string_value, &wanted, position)?;
                 Ok(Some(Object::string(capitalized_case(
                     &string_value.as_str(),
                     &wanted,
@@ -132,6 +135,7 @@ impl VirtualMachine {
             }
             "swapcase" => {
                 let wanted = case_options(method_name, arguments, position)?;
+                refuse_broken_unicode(string_value, &wanted, position)?;
                 Ok(Some(Object::string(swapped_case(
                     &string_value.as_str(),
                     &wanted,
@@ -140,4 +144,24 @@ impl VirtualMachine {
             _ => Ok(None),
         }
     }
+}
+
+/// A case mapping over Unicode text reads each character, so bytes that
+/// spell none are refused unless only ASCII letters are being mapped.
+fn refuse_broken_unicode(
+    string_value: &crate::object::StringValue,
+    wanted: &CaseOptions,
+    position: Position,
+) -> Result<(), MetorexError> {
+    if wanted.ascii_only
+        || !string_value.encoding_name().starts_with("UTF-")
+        || holds_valid_text(string_value)
+    {
+        return Ok(());
+    }
+    Err(crate::vm::errors::simple_exception(
+        "ArgumentError",
+        "input string invalid",
+        position,
+    ))
 }

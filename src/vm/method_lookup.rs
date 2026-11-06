@@ -887,13 +887,15 @@ impl VirtualMachine {
     fn inherited_visibility(&self, class_rc: &Rc<Class>, name: &str) -> Option<bool> {
         // A module mixed in through another one counts, so a method private
         // in a module that `extend self` reaches through an include is seen.
-        for ancestor in class_rc
-            .transitive_mixins()
-            .into_iter()
-            .chain(std::iter::successors(class_rc.superclass(), |current| {
-                current.superclass()
-            }))
-        {
+        // Each class up the chain is read before the modules it mixes in.
+        let mut ancestors = class_rc.transitive_mixins();
+        let mut cursor = class_rc.superclass();
+        while let Some(current) = cursor {
+            ancestors.push(Rc::clone(&current));
+            ancestors.extend(current.transitive_mixins());
+            cursor = current.superclass();
+        }
+        for ancestor in ancestors {
             if ancestor.has_public_override(name) {
                 return None;
             }
