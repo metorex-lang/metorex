@@ -10,6 +10,7 @@ impl VirtualMachine {
         port: i64,
         position: Position,
     ) -> Result<Object, MetorexError> {
+        self.hold_if_connected(handle);
         let stream = self
             .open_sockets
             .streams
@@ -83,6 +84,7 @@ impl VirtualMachine {
         port: i64,
         position: Position,
     ) -> Result<Object, MetorexError> {
+        self.hold_if_connected(handle);
         let wanted = if port > 0 { port as usize } else { 65536 };
         let mut buffer = vec![0u8; wanted];
         let stream = self
@@ -179,7 +181,8 @@ impl VirtualMachine {
 
     /// A socket that never connected has nothing to read from, which is
     /// what the operating system reports for one.
-    fn refuse_unless_connected(&self, handle: u64, position: Position) -> Result<(), MetorexError> {
+    fn refuse_unless_connected(&mut self, handle: u64, position: Position) -> Result<(), MetorexError> {
+        self.hold_if_connected(handle);
         if self.open_sockets.listeners.contains_key(&handle) {
             return Err(crate::vm::errors::simple_exception(
                 "Errno::ENOTCONN",

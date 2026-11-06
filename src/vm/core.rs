@@ -458,6 +458,12 @@ pub struct VirtualMachine {
     /// The encoding of the String whose native method is running, which a
     /// match it records gives the pieces it cuts out.
     pub(crate) match_subject_encoding: Option<String>,
+    /// The frozen String the last recorded match was made in, which the
+    /// next match in the same text shares rather than copying the text again.
+    pub(crate) last_match_subject: Option<crate::vm::native_methods::regexp_methods::MatchSubject>,
+    /// The text the last recorded match was made in, read into its
+    /// characters.
+    pub(crate) last_match_reading: Option<(Rc<str>, Rc<crate::regexp::ReadSubject>)>,
     pub(crate) next_yaml_emitter: usize,
     /// How many `trace_object_allocations_start` calls are still open.
     pub(crate) allocation_tracing_depth: usize,
@@ -799,6 +805,8 @@ impl VirtualMachine {
             ended_frames_in_force: Vec::new(),
             structs_being_compared: Vec::new(),
             match_subject_encoding: None,
+            last_match_subject: None,
+            last_match_reading: None,
             next_yaml_emitter: 0,
             allocation_tracing_depth: 0,
             allocation_sites: HashMap::new(),

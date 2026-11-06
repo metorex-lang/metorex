@@ -58,7 +58,7 @@ module Bundler
       return false if File.exist? gem_build_complete_path
       return false if manually_installed?
 
-      true
+      stub.missing_extensions?
     end
 
     def activated?

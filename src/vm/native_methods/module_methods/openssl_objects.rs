@@ -3,29 +3,68 @@
 
 use super::*;
 use crate::object::{OptionView, View};
+use std::collections::HashMap;
+use std::sync::OnceLock;
 
 /// One object per line: the short name, the long name, and the OID, with a
 /// tab between them. An object with no OID has an empty third field.
 const OBJECT_TABLE: &str = include_str!("../../stdlib/openssl_objects.tsv");
 
+/// One object of the table: its short name, long name, and OID.
+type ObjectRow = (&'static str, &'static str, &'static str);
+
+/// The table's rows, with the first row each short name, long name, and OID
+/// appears in, built the first time a name is looked up.
+struct ObjectIndex {
+    rows: Vec<ObjectRow>,
+    by_short: HashMap<&'static str, usize>,
+    by_long: HashMap<&'static str, usize>,
+    by_oid: HashMap<&'static str, usize>,
+}
+
+fn object_index() -> &'static ObjectIndex {
+    static INDEX: OnceLock<ObjectIndex> = OnceLock::new();
+    INDEX.get_or_init(|| {
+        let rows: Vec<ObjectRow> = OBJECT_TABLE
+            .lines()
+            .filter_map(|line| {
+                let mut fields = line.split('\t');
+                Some((
+                    fields.next()?,
+                    fields.next()?,
+                    fields.next().unwrap_or_default(),
+                ))
+            })
+            .collect();
+        let mut index = ObjectIndex {
+            by_short: HashMap::new(),
+            by_long: HashMap::new(),
+            by_oid: HashMap::new(),
+            rows: Vec::new(),
+        };
+        for (position, (short, long, oid)) in rows.iter().enumerate() {
+            index.by_short.entry(short).or_insert(position);
+            index.by_long.entry(long).or_insert(position);
+            if !oid.is_empty() {
+                index.by_oid.entry(oid).or_insert(position);
+            }
+        }
+        index.rows = rows;
+        index
+    })
+}
+
 /// The short name, long name, and OID of the object a name stands for,
 /// looked up the way OBJ_txt2nid looks it up: by short name, then by long
 /// name, then by OID.
-fn object_named(text: &str) -> Option<(&'static str, &'static str, &'static str)> {
-    let rows = || {
-        OBJECT_TABLE.lines().filter_map(|line| {
-            let mut fields = line.split('\t');
-            Some((
-                fields.next()?,
-                fields.next()?,
-                fields.next().unwrap_or_default(),
-            ))
-        })
-    };
-    rows()
-        .find(|(short, _, _)| *short == text)
-        .or_else(|| rows().find(|(_, long, _)| *long == text))
-        .or_else(|| rows().find(|(_, _, oid)| !oid.is_empty() && *oid == text))
+fn object_named(text: &str) -> Option<ObjectRow> {
+    let index = object_index();
+    index
+        .by_short
+        .get(text)
+        .or_else(|| index.by_long.get(text))
+        .or_else(|| index.by_oid.get(text))
+        .map(|position| index.rows[*position])
 }
 
 /// Whether text is a dotted OID OpenSSL would take: at least two arcs of

@@ -67,9 +67,16 @@ module Gem
   # Such a gem puts nothing on the load path, and holds no file a `require`
   # could activate it for, so a library it would have provided and metorex
   # does not is a LoadError rather than an activation that finds nothing.
+  # The libraries built for metorex come ahead of the gem's own directories,
+  # where installing it copied the ones built for MRI.
   module MetorexRequirePaths
     def full_require_paths
-      Gem.provided_by_metorex?(name) ? [] : super
+      return [] if Gem.provided_by_metorex?(name)
+
+      paths = super
+      return paths unless have_extensions?
+
+      [extension_dir] | paths
     end
 
     def contains_requirable_file?(file)
@@ -137,6 +144,15 @@ module Gem
       require "fileutils"
       target = extension_dir
       FileUtils.mkdir_p(target)
+      # Processes started together each find the extensions missing. The
+      # first to take the lock builds them, and the others find them built.
+      File.open(File.join(target, "gem_build.lock"), File::RDWR | File::CREAT) do |lock|
+        lock.flock(File::LOCK_EX)
+        build_extensions_into(target) unless File.exist?(gem_build_complete_path)
+      end
+    end
+
+    def build_extensions_into(target)
       log = File.join(target, "gem_make.out")
       built = File.open(log, "w") do |output|
         extensions.all? do |extconf|

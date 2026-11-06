@@ -181,6 +181,21 @@ pub extern "C-unwind" fn rb_ary_store(array: Value, index: i64, element: Value) 
     super::calls::call(to_object(array), "[]=", arguments);
 }
 
+/// Makes the Array `length` elements long, filling what it grows by with
+/// nil and dropping what it shrinks by, refusing a frozen Array either way.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_ary_resize(array: Value, length: i64) -> Value {
+    let held = rb_rarray_len(array);
+    if length > held {
+        let arguments = vec![Object::Int(length - 1), Object::Nil];
+        call(to_object(array), "[]=", arguments);
+    } else {
+        let arguments = vec![Object::Int(length), Object::Int(held - length)];
+        call(to_object(array), "slice!", arguments);
+    }
+    array
+}
+
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_ary_dup(array: Value) -> Value {
     to_value(&Object::array(

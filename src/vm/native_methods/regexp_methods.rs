@@ -277,7 +277,14 @@ impl VirtualMachine {
         // A pattern written with a time limit, or one matched while the
         // class names a limit, is given up on once that long has passed.
         let limit = self.pattern_time_limit(pattern, flags);
-        let taken = compiled.captures_within(searched, start, limit);
+        // Each match of a walk through a long string is made in the same
+        // text, which is read into its characters once.
+        let taken = if reading.is_none() {
+            let read = self.match_reading(text);
+            compiled.captures_in_within(&read, searched, start, limit)
+        } else {
+            compiled.captures_within(searched, start, limit)
+        };
         let found = match taken {
             Ok(Some(found)) => found,
             Ok(None) => {
@@ -307,13 +314,23 @@ impl VirtualMachine {
                 .chain(named.iter().map(|(index, _)| *index))
                 .collect()
         };
+        // In ASCII text a character is a byte, so an offset needs no
+        // counting.
+        let ascii = reading.is_none() && self.match_subject_is_ascii(text);
+        let offset = |at: usize| {
+            if ascii {
+                at as i64
+            } else {
+                char_offset(searched, at)
+            }
+        };
         let mut begins = Vec::with_capacity(kept.len());
         let mut ends = Vec::with_capacity(kept.len());
         for index in &kept {
             match found.get(*index) {
                 Some(group) => {
-                    begins.push(Object::Int(char_offset(searched, group.start())));
-                    ends.push(Object::Int(char_offset(searched, group.end())));
+                    begins.push(Object::Int(offset(group.start())));
+                    ends.push(Object::Int(offset(group.end())));
                 }
                 None => {
                     begins.push(Object::Nil);
@@ -338,17 +355,7 @@ impl VirtualMachine {
         let Some(match_data_class) = self.globals().get("MatchData") else {
             return Ok(None);
         };
-        let subject = match &subject_encoding {
-            Some(named) => {
-                let held =
-                    crate::object::StringValue::with_encoding(text.to_string(), named.clone());
-                if reading.is_some() {
-                    held.mark_bytes();
-                }
-                Object::String(Rc::new(held))
-            }
-            None => Object::string(text.to_string()),
-        };
+        let subject = self.match_subject(text, subject_encoding.as_deref(), reading.is_some());
         let arguments = vec![
             subject,
             Object::Regex(Rc::new(pattern.to_string()), Rc::new(flags.to_string())),
@@ -753,7 +760,7 @@ impl VirtualMachine {
                         && comparable_flags(other_flags) == comparable_flags(flags));
                 Ok(Some(Object::Bool(same)))
             }
-            "freeze" | "itself" => Ok(Some(Object::Regex(
+            "itself" => Ok(Some(Object::Regex(
                 Rc::new(pattern.to_string()),
                 Rc::new(flags.to_string()),
             ))),
@@ -876,6 +883,69 @@ fn multibyte_reading(text: &str, encoding: &str) -> Option<(String, Vec<usize>)>
         wide.push(character);
     }
     Some((wide, unit_starts))
+}
+
+/// The frozen String a match was recorded in, with what it was made from.
+pub(crate) struct MatchSubject {
+    text: String,
+    encoding: Option<String>,
+    holds_bytes: bool,
+    ascii: bool,
+    string: Object,
+}
+
+impl VirtualMachine {
+    /// The frozen String a MatchData made in `text` holds: the one the last
+    /// match recorded when it was made in the same text, so each match of a
+    /// walk through a long string does not copy the string again.
+    fn match_subject(&mut self, text: &str, encoding: Option<&str>, holds_bytes: bool) -> Object {
+        if let Some(held) = &self.last_match_subject
+            && held.holds_bytes == holds_bytes
+            && held.encoding.as_deref() == encoding
+            && held.text == text
+        {
+            return held.string.clone();
+        }
+        let made = match encoding {
+            Some(named) => {
+                crate::object::StringValue::with_encoding(text.to_string(), named.to_string())
+            }
+            None => crate::object::StringValue::new(text.to_string()),
+        };
+        if holds_bytes {
+            made.mark_bytes();
+        }
+        made.freeze();
+        let string = Object::String(Rc::new(made));
+        self.last_match_subject = Some(MatchSubject {
+            text: text.to_string(),
+            encoding: encoding.map(str::to_string),
+            holds_bytes,
+            ascii: text.is_ascii(),
+            string: string.clone(),
+        });
+        string
+    }
+
+    /// `text` read into its characters, kept for the next match in it.
+    fn match_reading(&mut self, text: &str) -> Rc<crate::regexp::ReadSubject> {
+        if let Some((held, read)) = &self.last_match_reading
+            && **held == *text
+        {
+            return Rc::clone(read);
+        }
+        let read = Rc::new(crate::regexp::ReadSubject::of(text));
+        self.last_match_reading = Some((Rc::from(text), Rc::clone(&read)));
+        read
+    }
+
+    /// Whether `text`, the text of the last recorded match, is ASCII.
+    fn match_subject_is_ascii(&self, text: &str) -> bool {
+        match &self.last_match_subject {
+            Some(held) if held.text == text => held.ascii,
+            _ => text.is_ascii(),
+        }
+    }
 }
 
 fn char_offset(text: &str, index: usize) -> i64 {

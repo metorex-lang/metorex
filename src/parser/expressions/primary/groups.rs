@@ -456,46 +456,7 @@ impl Parser<'_> {
                             TokenKind::Colon,
                             "Expected ':' or '=>' after dictionary key",
                         )?;
-                        // A quoted label names a Symbol, which is how a key
-                        // whose characters no plain label could spell is
-                        // written.
-                        match key {
-                            Expression::StringLiteral {
-                                value, position, ..
-                            } => Expression::Symbol { value, position },
-                            // A label written with byte escapes names the
-                            // Symbol those bytes spell, which they have to do
-                            // as UTF-8.
-                            Expression::MethodCall {
-                                receiver,
-                                method,
-                                position,
-                                ..
-                            } if matches!(
-                                method.as_str(),
-                                "__holds_bytes__" | "__binary_literal__"
-                            ) && matches!(
-                                receiver.as_ref(),
-                                Expression::StringLiteral { .. }
-                            ) =>
-                            {
-                                let Expression::StringLiteral { value, .. } = *receiver else {
-                                    unreachable!("the receiver was checked")
-                                };
-                                let bytes: Vec<u8> =
-                                    value.chars().map(|held| held as u32 as u8).collect();
-                                match String::from_utf8(bytes) {
-                                    Ok(spelled) => Expression::Symbol {
-                                        value: spelled,
-                                        position,
-                                    },
-                                    Err(_) => {
-                                        return Err(self.error_at_previous("invalid symbol"));
-                                    }
-                                }
-                            }
-                            other => other,
-                        }
+                        self.quoted_label_key(key)?
                     }
                 };
 
@@ -524,6 +485,87 @@ impl Parser<'_> {
 /// The symbol name a token stands for when it opens a `name: value` pair. A
 /// keyword is a Symbol key the same as an identifier is, so `{nil: 1}` names
 /// the symbol `:nil` rather than the keyword.
+impl Parser<'_> {
+    /// The key a quoted label `"name": value` names: the Symbol its text
+    /// spells, which is how a key whose characters no plain label could
+    /// spell is written. Any other key is answered as it stands.
+    pub(crate) fn quoted_label_key(&self, key: Expression) -> Result<Expression, MetorexError> {
+        Ok(match key {
+            Expression::StringLiteral {
+                value, position, ..
+            } => Expression::Symbol { value, position },
+            // Under the `frozen_string_literal` comment the String is
+            // wrapped in the call that freezes it.
+            Expression::MethodCall {
+                receiver, method, ..
+            } if matches!(
+                method.as_str(),
+                "__frozen_literal__" | "__mutable_literal__"
+            ) && matches!(receiver.as_ref(), Expression::StringLiteral { .. }) =>
+            {
+                let Expression::StringLiteral {
+                    value, position, ..
+                } = *receiver
+                else {
+                    unreachable!("the receiver was checked")
+                };
+                Expression::Symbol { value, position }
+            }
+            // A label written with byte escapes names the Symbol those bytes
+            // spell, which they have to do as UTF-8.
+            Expression::MethodCall {
+                receiver,
+                method,
+                position,
+                ..
+            } if matches!(method.as_str(), "__holds_bytes__" | "__binary_literal__")
+                && matches!(receiver.as_ref(), Expression::StringLiteral { .. }) =>
+            {
+                let Expression::StringLiteral { value, .. } = *receiver else {
+                    unreachable!("the receiver was checked")
+                };
+                let bytes: Vec<u8> = value.chars().map(|held| held as u32 as u8).collect();
+                match String::from_utf8(bytes) {
+                    Ok(spelled) => Expression::Symbol {
+                        value: spelled,
+                        position,
+                    },
+                    Err(_) => return Err(self.error_at_previous("invalid symbol")),
+                }
+            }
+            // An interpolated label names the Symbol its text makes.
+            Expression::InterpolatedString { position, .. } => Expression::MethodCall {
+                receiver: Box::new(key),
+                method: "to_sym".to_string(),
+                arguments: Vec::new(),
+                trailing_block: None,
+                position,
+            },
+            other => other,
+        })
+    }
+}
+
+/// Whether `expression` is written as a quoted string, which a touching
+/// colon makes a label.
+pub(crate) fn is_quoted_string(expression: &Expression) -> bool {
+    match expression {
+        Expression::StringLiteral { .. } | Expression::InterpolatedString { .. } => true,
+        Expression::MethodCall {
+            receiver, method, ..
+        } => {
+            matches!(
+                method.as_str(),
+                "__frozen_literal__"
+                    | "__mutable_literal__"
+                    | "__holds_bytes__"
+                    | "__binary_literal__"
+            ) && matches!(receiver.as_ref(), Expression::StringLiteral { .. })
+        }
+        _ => false,
+    }
+}
+
 pub(crate) fn keyword_symbol_key(kind: &TokenKind) -> Option<&str> {
     match kind {
         TokenKind::Ident(name) => Some(name),

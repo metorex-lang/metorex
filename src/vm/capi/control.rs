@@ -284,6 +284,16 @@ pub extern "C-unwind" fn rb_frame_this_func() -> Value {
     running_method().map_or(0, |method| to_value(&Object::symbol(&method.name)))
 }
 
+/// Raises the EOFError a read past the end of a stream raises.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_eof_error() -> ! {
+    super::raise(crate::vm::errors::simple_exception(
+        "EOFError",
+        "end of file reached",
+        super::called_from(),
+    ))
+}
+
 /// Raises the SystemCallError for `errno` as it stands.
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_sys_fail(message: *const c_char) -> ! {

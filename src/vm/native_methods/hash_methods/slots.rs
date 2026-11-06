@@ -95,7 +95,7 @@ impl VirtualMachine {
     /// makes the bucket-and-compare placement the right one for it. Anything
     /// else is placed by how it renders, which is cheaper and keeps the
     /// primitives reading back from their slot names.
-    fn key_hashes_for_itself(&mut self, key: &Object) -> bool {
+    pub(crate) fn key_hashes_for_itself(&mut self, key: &Object) -> bool {
         if matches!(key.view(), View::Instance(_)) {
             return true;
         }

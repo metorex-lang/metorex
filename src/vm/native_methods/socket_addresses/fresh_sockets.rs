@@ -218,6 +218,33 @@ impl VirtualMachine {
         Ok(Object::Int(answer))
     }
 
+    /// Hold a socket the operating system has connected as a connection,
+    /// though no connect call told this program so, as when a nonblocking
+    /// connect finished while the program checked SO_ERROR rather than
+    /// calling connect again. A socket with no peer is left as it is.
+    pub(crate) fn hold_if_connected(&mut self, handle: u64) {
+        if self.open_sockets.streams.contains_key(&handle) {
+            return;
+        }
+        let Some(descriptor) = self
+            .open_sockets
+            .listeners
+            .get(&handle)
+            .map(std::os::unix::io::AsRawFd::as_raw_fd)
+        else {
+            return;
+        };
+        let mut peer: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
+        let mut length = std::mem::size_of::<libc::sockaddr_storage>() as libc::socklen_t;
+        // SAFETY: the descriptor is open and `peer` has room for any address.
+        let named = unsafe {
+            libc::getpeername(descriptor, (&mut peer as *mut libc::sockaddr_storage).cast(), &mut length)
+        };
+        if named == 0 {
+            self.hold_as_connection(handle);
+        }
+    }
+
     /// Move a socket that has connected from the listeners to the
     /// connections, which is how a connected socket is held.
     fn hold_as_connection(&mut self, handle: u64) {

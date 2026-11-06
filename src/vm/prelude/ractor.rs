@@ -175,6 +175,8 @@ class Ractor
       return true
     end
     return @__shareable_procs.key?(held) if held.is_a?(Proc)
+    # ENV stands for the process's environment, which every Ractor shares.
+    return true if held.equal?(ENV)
     return false unless held.frozen?
     return true if seen.key?(held.__id__)
     seen[held.__id__] = true
@@ -206,7 +208,7 @@ class Ractor
     when Integer, Float, Symbol, NilClass, TrueClass, FalseClass, Module, Ractor
       return
     end
-    return if seen.key?(held)
+    return if seen.key?(held) || held.equal?(ENV)
     seen[held] = true
     if UNSHAREABLE_KINDS.any? { |kind| held.is_a?(kind) }
       raise Ractor::Error, "can not make shareable object for #{held.inspect}"

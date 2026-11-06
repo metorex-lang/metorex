@@ -496,6 +496,15 @@ pub extern "C-unwind" fn rb_str_append(string: Value, added: Value) -> Value {
     string
 }
 
+/// Gives `destination` the bytes and encoding of `source`, as
+/// `String#replace` does.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_str_replace(destination: Value, source: Value) -> Value {
+    let source = string_value(to_object(source));
+    call(to_object(destination), "replace", vec![source]);
+    destination
+}
+
 /// Retags a formatted string with the encoding of a string written into it,
 /// when that one is ASCII-compatible and not binary, as MRI's formatting
 /// does.

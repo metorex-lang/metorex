@@ -91,17 +91,34 @@ impl VirtualMachine {
         value: Option<&Object>,
         position: Position,
     ) -> Result<(), MetorexError> {
-        let class = self.builtins().class_of(receiver);
+        let defined_class = self.native_defining_module(receiver, method_name);
         let mut extra = vec![
             ("method_id", Object::symbol(method_name.to_string())),
             ("callee_id", Object::symbol(method_name.to_string())),
-            ("defined_class", Object::Class(class)),
+            ("defined_class", defined_class),
             ("self", receiver.clone()),
         ];
         if let Some(value) = value {
             extra.push(("return_value", value.clone()));
         }
         self.fire_event(event, position, extra)
+    }
+
+    /// The core class or module among the receiver's ancestors that
+    /// answers `method_name` natively, or the receiver's class when none of
+    /// them lists it.
+    fn native_defining_module(&mut self, receiver: &Object, method_name: &str) -> Object {
+        let class = self.builtins().class_of(receiver);
+        // Asking `ancestors` would be a call of its own, which a trace hears.
+        let owners: Vec<String> = crate::vm::eval::super_expr::walk_ancestors(&class)
+            .iter()
+            .map(|ancestor| ancestor.name().to_string())
+            .collect();
+        let found =
+            crate::vm::native_methods::object_methods::nearest_core_owner(&owners, method_name)
+                .and_then(|owner| self.globals().get(owner))
+                .filter(|owner| matches!(owner.view(), View::Class(_) | View::Module(_)));
+        found.unwrap_or(Object::Class(class))
     }
 
     /// Whether a tracepoint handler is running, which is what
@@ -259,7 +276,7 @@ impl VirtualMachine {
         entries.insert("path".into(), Object::string(self.traced_path()));
         entries.insert(
             "self".into(),
-            self.environment().get("self").unwrap_or(Object::Nil),
+            self.eval_self(position).unwrap_or(Object::Nil),
         );
         for (name, value) in extra {
             entries.insert(((*name).to_string()).into(), value.clone());
@@ -342,6 +359,15 @@ fn same_tracepoint(one: &Object, other: &Object) -> bool {
     }
 }
 
+/// The method a `:call` or `:return` event is about: the name it was
+/// called by, the method, the class the call found it on, and its receiver.
+pub(crate) struct TracedMethod<'a> {
+    pub(crate) name: &'a str,
+    pub(crate) method: &'a Rc<crate::object::Method>,
+    pub(crate) found_on: &'a Rc<crate::class::Class>,
+    pub(crate) receiver: &'a Object,
+}
+
 impl VirtualMachine {
     /// Fire a `:call` or `:return` event for a method written in Ruby. The
     /// method's own name, the class it was found on, and what it answered are
@@ -349,12 +375,16 @@ impl VirtualMachine {
     pub(crate) fn fire_method_event(
         &mut self,
         event: &str,
-        method_name: &str,
-        method: &Rc<crate::object::Method>,
-        found_on: &Rc<crate::class::Class>,
+        traced: TracedMethod<'_>,
         value: Option<&Object>,
         position: Position,
     ) -> Result<(), MetorexError> {
+        let TracedMethod {
+            name: method_name,
+            method,
+            found_on,
+            receiver,
+        } = traced;
         if self.tracepoints.is_empty() || self.tracing || position.prelude {
             return Ok(());
         }
@@ -387,6 +417,7 @@ impl VirtualMachine {
                     ("path", Object::string("<internal:trace_point>")),
                     ("lineno", Object::Int(line as i64)),
                     ("parameters", Object::empty_array()),
+                    ("self", receiver.clone()),
                 ]
             };
             self.fire_event("call", position, place(TRACE_POINT_DISABLE_LINE))?;
@@ -463,6 +494,7 @@ impl VirtualMachine {
                 "parameters",
                 crate::vm::native_methods::method_parameter_list(method),
             ),
+            ("self", receiver.clone()),
         ];
         if let Some(value) = value {
             extra.push(("return_value", value.clone()));

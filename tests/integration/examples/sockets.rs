@@ -154,3 +154,86 @@ fn tcp_server_sockets_listen_on_every_address_of_the_host_on_one_port() {
         )
     );
 }
+
+#[test]
+fn read_nonblock_at_the_end_of_the_stream_empties_the_buffer_and_raises_eof() {
+    let output = run_example("sockets/read_nonblock_at_the_end_of_the_stream.rb");
+    assert_eq!(output, "\"ab\"\n\"ab\"\nEOFError\n\"\"\nnil\nnil\nnil\n");
+}
+
+#[test]
+fn a_nonblocking_connect_confirmed_through_so_error_writes_and_reads() {
+    let output = run_example("sockets/nonblocking_connect_confirmed_through_so_error.rb");
+    assert_eq!(output, ":waiting\n0\n4\n\"ping\"\n\"pong\"\n");
+}
+
+#[test]
+fn a_thread_waiting_in_accept_gets_an_io_error_when_another_thread_closes_the_listener() {
+    let output = run_example("sockets/accept_ends_when_another_thread_closes_the_listener.rb");
+    assert_eq!(output, "[IOError, \"stream closed in another thread\"]\n");
+}
+
+#[test]
+fn a_socket_reads_lines_through_readline_and_gets_with_chomp() {
+    let output = run_example("sockets/socket_readline_and_gets_with_chomp.rb");
+    assert_eq!(output, "\"first\\n\"\n\"second\"\n\"third\"\nnil\n");
+}
+
+#[test]
+fn a_tls_client_reads_with_read_nonblock_and_waits_in_select() {
+    let output = run_example("sockets/tls_read_nonblock_with_select.rb");
+    assert_eq!(
+        output,
+        "\"HTTP/1.1 200 OK\\r\\nContent-Length: 2\\r\\n\\r\\nok\"\n\"GET / HTTP/1.1\\r\\n\"\n"
+    );
+}
+
+#[test]
+fn the_plain_socket_under_a_server_tls_socket_is_readable_once_the_client_writes() {
+    let output = run_example("sockets/tls_raw_socket_readable_after_accept.rb");
+    assert_eq!(output, "[true, \"GET / HTTP/1.1\\r\\n\"]\n");
+}
+
+#[test]
+fn a_unix_family_socket_connects_to_a_path_once() {
+    let output = run_example("sockets/unix_socket_connect_and_connect_nonblock.rb");
+    assert_eq!(output, "0\n\"hello\"\nErrno::EISCONN\n0\n\"hello\"\nErrno::EISCONN\n");
+}
+
+#[test]
+fn a_tls_server_requiring_a_client_certificate_refuses_a_client_without_one() {
+    let output = run_example("sockets/tls_server_requires_a_client_certificate.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "OpenSSL::SSL::SSLError\nOpenSSL::SSL::SSLError\n",
+            "\"hello /C=JP/ST=Shimane/O=Ruby Core Team/OU=Ruby Test/CN=localhost\\n\"\ntrue\n",
+        )
+    );
+}
+
+#[test]
+fn a_tls_server_answers_with_the_context_its_servername_callback_chooses() {
+    let output = run_example("sockets/tls_server_chooses_a_context_by_server_name.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"excon\", \"/CN=excon\", \"ok\\n\"]\n",
+            "[\"other\", \"/C=JP/ST=Shimane/O=Ruby Core Team/OU=Ruby Test/CN=localhost\", \"ok\\n\"]\n",
+            "[nil, nil]\n",
+            "[[OpenSSL::SSL::SSLSocket, \"excon\"], [OpenSSL::SSL::SSLSocket, \"other\"]]\n",
+        )
+    );
+}
+
+#[test]
+fn ip_address_list_names_the_address_of_every_interface() {
+    let output = run_example("sockets/ip_address_list_lists_every_interface_address.rb");
+    assert_eq!(output, "true\ntrue\ntrue\ntrue\n");
+}
+
+#[test]
+fn an_ipv6_address_keeps_the_interface_it_names_after_a_percent_sign() {
+    let output = run_example("sockets/addrinfo_with_an_ipv6_scope.rb");
+    assert_eq!(output, "#<Addrinfo: fe80::1%lo0>\n\"fe80::1%lo0\"\ntrue\n");
+}

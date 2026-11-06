@@ -20,7 +20,9 @@ impl VirtualMachine {
         class_rc: &Rc<Class>,
         name: &str,
     ) -> Option<Rc<Method>> {
-        if let Some(method) = class_rc.find_method(&format!("__class__{}", name)) {
+        // A `def self.name` comes down the superclass chain, and a module's
+        // own methods are not the methods of a class that includes it.
+        if let Some(method) = class_rc.find_inherited_method(&format!("__class__{}", name)) {
             return Some(method);
         }
         if let Some(View::Method(method)) =

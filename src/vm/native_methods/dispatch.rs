@@ -477,11 +477,21 @@ impl VirtualMachine {
         }
 
         // A pattern written as a literal is frozen where it stands. One
-        // built by `Regexp.new` is not, so a program may still change it.
+        // built by `Regexp.new` is not until it is frozen, so a program may
+        // still change it.
         if method_name == "frozen?"
             && let View::Regex(pattern, _) = receiver.view()
         {
-            return Ok(Some(Object::Bool(!self.pattern_was_built(pattern))));
+            return Ok(Some(Object::Bool(
+                !self.pattern_was_built(pattern) || self.object_is_frozen(receiver),
+            )));
+        }
+        if method_name == "freeze"
+            && arguments.is_empty()
+            && let View::Regex(..) = receiver.view()
+        {
+            self.freeze_object(receiver);
+            return Ok(Some(receiver.clone()));
         }
         // The encoding a pattern is read in is settled from the pattern's own
         // address, which is where the encoding of the string it was built

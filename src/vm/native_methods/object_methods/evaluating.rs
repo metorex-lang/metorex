@@ -44,6 +44,16 @@ impl VirtualMachine {
                         .unwrap_or(Object::Nil);
                     return Ok(Some(Object::Bool(!matched.is_truthy())));
                 }
+                // A receiver whose `=~` is native, such as nil, answers it too.
+                if self.responds_to(receiver, "=~") {
+                    let matched = self.send_to_object(
+                        receiver.clone(),
+                        "=~",
+                        vec![arguments[0].clone()],
+                        position,
+                    )?;
+                    return Ok(Some(Object::Bool(!matched.is_truthy())));
+                }
                 let cls = self.builtins().class_of(receiver);
                 let msg = format!("undefined method '=~' for an instance of {}", cls.name());
                 let exc = Object::exception("NoMethodError", msg.clone());

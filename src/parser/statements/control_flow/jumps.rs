@@ -5,6 +5,7 @@ use super::*;
 impl Parser<'_> {
     /// Parse a break statement, optionally with a value (e.g. `break 42`).
     pub(crate) fn parse_break_statement(&mut self) -> Result<Statement, MetorexError> {
+        let operand = std::mem::take(&mut self.jump_as_operand);
         let pos = self.expect(TokenKind::Break, "Expected 'break'")?.position;
         // A `break` in a method, class, or module body, with no loop or block
         // around it, has nothing to break out of.
@@ -41,11 +42,12 @@ impl Parser<'_> {
             value,
             position: pos,
         };
-        self.wrap_with_modifier(stmt)
+        self.finish_jump(stmt, operand)
     }
 
     /// Parse a continue statement, optionally with a value (e.g. `next 42`).
     pub(crate) fn parse_continue_statement(&mut self) -> Result<Statement, MetorexError> {
+        let operand = std::mem::take(&mut self.jump_as_operand);
         let pos = self
             .expect(TokenKind::Continue, "Expected 'continue'")?
             .position;
@@ -92,7 +94,20 @@ impl Parser<'_> {
             value,
             position: pos,
         };
-        self.wrap_with_modifier(stmt)
+        self.finish_jump(stmt, operand)
+    }
+
+    /// A jump read as a statement takes the modifiers after it. One read as an
+    /// operand leaves them to the expression it is part of.
+    pub(crate) fn finish_jump(
+        &mut self,
+        jump: Statement,
+        operand: bool,
+    ) -> Result<Statement, MetorexError> {
+        if operand {
+            return Ok(jump);
+        }
+        self.wrap_with_modifier(jump)
     }
 
     /// The value a `break`, `next`, or `return` carries. `and` and `or` bind
@@ -116,6 +131,7 @@ impl Parser<'_> {
     /// only written inside a rescue body, and Ruby refuses it anywhere else
     /// while the source is still being read.
     pub(crate) fn parse_retry_statement(&mut self) -> Result<Statement, MetorexError> {
+        let operand = std::mem::take(&mut self.jump_as_operand);
         let pos = self.expect(TokenKind::Retry, "Expected 'retry'")?.position;
         if self.rescue_depth == 0 && !self.in_defined_argument {
             return Err(MetorexError::syntax_error(
@@ -123,18 +139,19 @@ impl Parser<'_> {
                 crate::error::SourceLocation::from(pos),
             ));
         }
-        self.wrap_with_modifier(Statement::Retry { position: pos })
+        self.finish_jump(Statement::Retry { position: pos }, operand)
     }
 
     /// Parse a redo statement, which re-runs the enclosing body from the top.
     /// With no loop or block around it there is no body to re-run, which is
     /// known once the statement it sits in has ended.
     pub(crate) fn parse_redo_statement(&mut self) -> Result<Statement, MetorexError> {
+        let operand = std::mem::take(&mut self.jump_as_operand);
         let pos = self.expect(TokenKind::Redo, "Expected 'redo'")?.position;
         if self.jump_target_depth == 0 && !self.in_defined_argument {
             self.unlooped_jumps.push((pos, "Invalid redo"));
         }
-        self.wrap_with_modifier(Statement::Redo { position: pos })
+        self.finish_jump(Statement::Redo { position: pos }, operand)
     }
 
     /// Refuse a `redo`, `break` or `next` written from `offset` on that no

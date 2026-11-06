@@ -23,6 +23,34 @@ fn unsigned(held: Option<&Object>) -> Option<BigUint> {
     held?.as_big_integer()?.to_biguint()
 }
 
+/// The bits of `OpenSSL::SSL::VERIFY_PEER` and `VERIFY_FAIL_IF_NO_PEER_CERT`.
+const VERIFY_PEER: i64 = 1;
+const VERIFY_FAIL_IF_NO_PEER_CERT: i64 = 2;
+
+/// A chain of DER certificates, leaf first.
+fn certificates(held: Option<&Object>) -> Vec<Vec<u8>> {
+    match held.view() {
+        Some(View::Array(listed)) => listed
+            .borrow()
+            .iter()
+            .map(|der| bytes_of(Some(der)))
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// An RSA private key from its modulus and its public and private exponents.
+fn rsa_key(parts: Option<&[Object]>) -> Option<RsaKey> {
+    let [modulus, public_exponent, private_exponent] = parts? else {
+        return None;
+    };
+    Some(RsaKey {
+        modulus: unsigned(Some(modulus))?,
+        public_exponent: unsigned(Some(public_exponent))?,
+        private_exponent: Some(unsigned(Some(private_exponent))?),
+    })
+}
+
 impl VirtualMachine {
     /// The state a connection is in, as the symbol SSLSocket reads it by.
     fn tls_state(connection: &Connection) -> Object {
@@ -72,9 +100,13 @@ impl VirtualMachine {
 
     /// `OpenSSL.__tls__(command, ...)`:
     ///
-    /// * `:client, hostname` and `:server, certificates, n, e, d` make a
-    ///   connection and answer its number. The certificates are DER, leaf
-    ///   first, and n, e, and d are the server's RSA key.
+    /// * `:client, hostname[, certificates, n, e, d]` and `:server,
+    ///   certificates, n, e, d, verify_mode` make a connection and answer its
+    ///   number. The certificates are DER, leaf first, and n, e, and d are
+    ///   the RSA key that proves them. A server asks for the client's
+    ///   certificate when the verify mode has VERIFY_PEER.
+    /// * `:hello_name, record` answers the server name the ClientHello in
+    ///   the record asks for, or nil.
     /// * `:start, number` answers the bytes a client opens with.
     /// * `:feed, number, bytes` and `:decide, number, alert` answer what
     ///   `tls_progress` describes. The alert refuses the server's chain,
@@ -99,38 +131,42 @@ impl VirtualMachine {
                     Some(View::String(text)) => Some(text.as_str().to_string()),
                     _ => None,
                 };
-                Connection::client(name)
+                let client = Connection::client(name);
+                match rsa_key(arguments.get(3..6)) {
+                    Some(key) => client.with_client_certificate(certificates(arguments.get(2)), key),
+                    None => client,
+                }
             } else {
-                let certificates = match arguments.get(1).view() {
-                    Some(View::Array(held)) => held
-                        .borrow()
-                        .iter()
-                        .map(|der| bytes_of(Some(der)))
-                        .collect(),
-                    _ => Vec::new(),
-                };
-                let (Some(modulus), Some(public_exponent), Some(private_exponent)) = (
-                    unsigned(arguments.get(2)),
-                    unsigned(arguments.get(3)),
-                    unsigned(arguments.get(4)),
-                ) else {
+                let Some(key) = rsa_key(arguments.get(2..5)) else {
                     return Err(simple_exception(
                         "OpenSSL::SSL::SSLError",
                         "no private key assigned",
                         position,
                     ));
                 };
-                let key = RsaKey {
-                    modulus,
-                    public_exponent,
-                    private_exponent: Some(private_exponent),
+                let server = Connection::server(certificates(arguments.get(1)), key);
+                let verify_mode = match arguments.get(5).view() {
+                    Some(View::Int(mode)) => mode,
+                    _ => 0,
                 };
-                Connection::server(certificates, key)
+                if verify_mode & VERIFY_PEER != 0 {
+                    server.requesting_certificate(verify_mode & VERIFY_FAIL_IF_NO_PEER_CERT != 0)
+                } else {
+                    server
+                }
             };
             self.next_tls_connection += 1;
             let number = self.next_tls_connection;
             self.tls_connections.insert(number, connection);
             return Ok(Object::Int(number as i64));
+        }
+        if command == "hello_name" {
+            return Ok(
+                match crate::tls::connection::requested_name_in(&bytes_of(arguments.get(1))) {
+                    Some(name) => Object::string(name),
+                    None => Object::Nil,
+                },
+            );
         }
         let number = match arguments.get(1).view() {
             Some(View::Int(held)) => held as usize,

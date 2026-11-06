@@ -843,15 +843,22 @@ impl HashLiteral {
             }
             _ => key_value,
         };
-        let mut probe = self.map.clone();
-        for (slot, held) in &self.key_objs {
-            probe.entry(slot.clone()).or_insert_with(|| held.clone());
-        }
-        probe.insert(
-            "__MX_KEY_OBJECTS__".into(),
-            Object::Dict(Rc::new(RefCell::new(self.key_objs.clone()))),
-        );
-        let slot = vm.dict_slot_in(&probe, &key_value, false, key_position)?;
+        // The slot is found among the pairs stored so far without copying
+        // them, which would make a long literal take time with the square
+        // of its length.
+        let slot = if vm.key_hashes_for_itself(&key_value) {
+            let (map, key_objs) = (&self.map, &self.key_objs);
+            vm.hashed_slot(&key_value, key_position, |candidate| {
+                (map.contains_key(candidate) || key_objs.contains_key(candidate)).then(|| {
+                    key_objs
+                        .get(candidate)
+                        .cloned()
+                        .unwrap_or_else(|| crate::vm::utils::dict_key_to_object(candidate))
+                })
+            })?
+        } else {
+            vm.dict_slot_in(&self.map, &key_value, false, key_position)?
+        };
         if !crate::vm::utils::is_primitive_key(&key_value) || program_string_key {
             self.key_objs
                 .entry(slot.clone())

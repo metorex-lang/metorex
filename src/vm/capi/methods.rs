@@ -43,6 +43,15 @@ pub(crate) const BLOCK_FUNCTION_ARITY: i32 = i32::MIN + 2;
 /// thread's value.
 pub(crate) const THREAD_FUNCTION_ARITY: i32 = i32::MIN + 3;
 
+/// The arity of a hook `rb_add_event_hook2` was handed with
+/// `RUBY_EVENT_HOOK_FLAG_RAW_ARG`, which takes the data VALUE and the trace
+/// argument.
+pub(crate) const RAW_EVENT_HOOK_ARITY: i32 = i32::MIN + 4;
+
+/// The arity of any other hook `rb_add_event_hook` was handed, which takes
+/// the event's details.
+pub(crate) const EVENT_HOOK_ARITY: i32 = i32::MIN + 5;
+
 macro_rules! call_fixed {
     ($address:expr, $receiver:expr, $values:expr, $($index:literal)*) => {{
         // SAFETY: `rb_define_method` was handed a function taking self and
@@ -84,6 +93,18 @@ impl CFunction {
                 let function: extern "C-unwind" fn(Value, usize) =
                     unsafe { std::mem::transmute(address) };
                 function(values[0], self.data);
+                super::values::QNIL
+            }
+            RAW_EVENT_HOOK_ARITY => {
+                // SAFETY: a hook added with the raw argument takes the data
+                // VALUE and the trace argument, which is the TracePoint.
+                let function: extern "C-unwind" fn(Value, Value) =
+                    unsafe { std::mem::transmute(address) };
+                function(self.data, values[0]);
+                super::values::QNIL
+            }
+            EVENT_HOOK_ARITY => {
+                super::tracepoints::call_event_hook(address, self.data, values[0]);
                 super::values::QNIL
             }
             THREAD_FUNCTION_ARITY => {

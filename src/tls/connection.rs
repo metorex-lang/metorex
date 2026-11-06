@@ -2,7 +2,8 @@
 // bytes read from the peer are fed in, and the bytes to send and the
 // application data read come back out. It offers and accepts one cipher
 // suite, TLS_AES_128_GCM_SHA256, agrees keys with X25519, and proves the
-// server's certificate with rsa_pss_rsae_sha256.
+// server's certificate with rsa_pss_rsae_sha256. A server can ask the client
+// for a certificate, which the client proves the same way.
 
 use super::crypto::{self, HASH_LENGTH, RsaKey};
 use super::gcm::Gcm;
@@ -60,6 +61,7 @@ pub mod alert {
     pub const PROTOCOL_VERSION: u8 = 70;
     pub const INTERNAL_ERROR: u8 = 80;
     pub const MISSING_EXTENSION: u8 = 109;
+    pub const CERTIFICATE_REQUIRED: u8 = 116;
 }
 
 fn failure(alert: u8, message: &str) -> TlsError {
@@ -83,6 +85,8 @@ enum Stage {
     WaitCertificateDecision,
     ServerStart,
     WaitClientHello,
+    WaitClientCertificate,
+    WaitClientCertificateVerify,
     WaitClientFinished,
     Established,
     Closed,
@@ -156,6 +160,13 @@ pub struct Connection {
     /// The client application secret, kept until the client's Finished is
     /// checked.
     pending_client_secret: Option<Vec<u8>>,
+    /// Whether a server asks the client for a certificate, and whether it
+    /// refuses a client that sends none.
+    request_certificate: bool,
+    require_certificate: bool,
+    /// The context of the CertificateRequest a client was sent, which its
+    /// Certificate answers with.
+    certificate_request: Option<Vec<u8>>,
 }
 
 fn random_bytes<const N: usize>() -> [u8; N] {
@@ -287,7 +298,29 @@ impl Connection {
             requested_name: None,
             client_share: None,
             pending_client_secret: None,
+            request_certificate: false,
+            require_certificate: false,
+            certificate_request: None,
         }
+    }
+
+    /// The chain and key a client answers a CertificateRequest with.
+    pub fn with_client_certificate(
+        mut self,
+        certificates: Vec<Vec<u8>>,
+        private_key: RsaKey,
+    ) -> Connection {
+        self.certificates = certificates;
+        self.private_key = Some(private_key);
+        self
+    }
+
+    /// Have a server ask the client for a certificate, refusing a client
+    /// that sends none when `required`.
+    pub fn requesting_certificate(mut self, required: bool) -> Connection {
+        self.request_certificate = true;
+        self.require_certificate = required;
+        self
     }
 
     pub fn is_established(&self) -> bool {
@@ -432,7 +465,11 @@ impl Connection {
                 ..Progress::default()
             });
         }
-        self.stage = Stage::WaitServerFinished;
+        self.stage = if self.is_client {
+            Stage::WaitServerFinished
+        } else {
+            Stage::WaitClientFinished
+        };
         // The Finished that came with the chain, and any record after it,
         // may already have been read.
         let mut progress = Progress::default();
@@ -501,9 +538,15 @@ impl Connection {
                         break;
                     }
                     self.stage = Stage::Closed;
+                    // OpenSSL names an alert TLS 1.3 added with its version.
+                    let version = if description == alert::CERTIFICATE_REQUIRED {
+                        "tlsv13"
+                    } else {
+                        "tlsv1"
+                    };
                     return Err(TlsError {
                         message: format!(
-                            "tlsv1 alert {} (SSL alert number {description})",
+                            "{version} alert {} (SSL alert number {description})",
                             alert_name(description)
                         ),
                         alert: description,
@@ -548,10 +591,12 @@ impl Connection {
                 self.stage = Stage::WaitCertificate;
                 Ok(())
             }
-            (Stage::WaitCertificate, CERTIFICATE_REQUEST) => Err(failure(
-                alert::HANDSHAKE_FAILURE,
-                "client certificates are not supported",
-            )),
+            (Stage::WaitCertificate, CERTIFICATE_REQUEST) => {
+                let context = Reader::new(body).vector(1)?.to_vec();
+                self.certificate_request = Some(context);
+                self.transcript.extend_from_slice(message);
+                Ok(())
+            }
             (Stage::WaitCertificate, CERTIFICATE) => self.read_certificate(message, body),
             (Stage::WaitCertificateVerify, CERTIFICATE_VERIFY) => {
                 self.read_certificate_verify(message, body)
@@ -561,6 +606,12 @@ impl Connection {
             }
             (Stage::WaitClientHello, CLIENT_HELLO) => {
                 self.read_client_hello(message, body, progress)
+            }
+            (Stage::WaitClientCertificate, CERTIFICATE) => {
+                self.read_client_certificate(message, body)
+            }
+            (Stage::WaitClientCertificateVerify, CERTIFICATE_VERIFY) => {
+                self.read_certificate_verify(message, body)
             }
             (Stage::WaitClientFinished, FINISHED) => self.read_client_finished(message, body),
             (Stage::Established, NEW_SESSION_TICKET) => Ok(()),
@@ -627,7 +678,8 @@ impl Connection {
         self.master_secret = crypto::hkdf_extract(&derived, &[0u8; HASH_LENGTH]);
     }
 
-    fn read_certificate(&mut self, message: &[u8], body: &[u8]) -> Result<(), TlsError> {
+    /// The certificates of a Certificate message, leaf first.
+    fn certificate_chain(body: &[u8]) -> Result<Vec<Vec<u8>>, TlsError> {
         let mut reader = Reader::new(body);
         reader.vector(1)?;
         let mut list = Reader::new(reader.vector(3)?);
@@ -636,6 +688,31 @@ impl Connection {
             chain.push(list.vector(3)?.to_vec());
             list.vector(2)?;
         }
+        Ok(chain)
+    }
+
+    /// A server reads the client's chain. An empty one skips the
+    /// CertificateVerify, and is refused when a certificate is required.
+    fn read_client_certificate(&mut self, message: &[u8], body: &[u8]) -> Result<(), TlsError> {
+        let chain = Self::certificate_chain(body)?;
+        self.transcript.extend_from_slice(message);
+        if chain.is_empty() {
+            if self.require_certificate {
+                return Err(failure(
+                    alert::CERTIFICATE_REQUIRED,
+                    "peer did not return a certificate",
+                ));
+            }
+            self.stage = Stage::WaitClientFinished;
+            return Ok(());
+        }
+        self.peer_certificates = chain;
+        self.stage = Stage::WaitClientCertificateVerify;
+        Ok(())
+    }
+
+    fn read_certificate(&mut self, message: &[u8], body: &[u8]) -> Result<(), TlsError> {
+        let chain = Self::certificate_chain(body)?;
         if chain.is_empty() {
             return Err(failure(
                 alert::BAD_CERTIFICATE,
@@ -671,7 +748,8 @@ impl Connection {
                 "unsupported certificate key",
             ));
         };
-        let content = self.certificate_verify_content(true);
+        // Each side checks what the other signed.
+        let content = self.certificate_verify_content(self.is_client);
         let proved = match algorithm {
             RSA_PSS_RSAE_SHA256 => key.verify_pss(&content, signature),
             _ => false,
@@ -703,10 +781,22 @@ impl Connection {
             crypto::derive_secret(&self.master_secret, "c ap traffic", &self.transcript);
         let server_application =
             crypto::derive_secret(&self.master_secret, "s ap traffic", &self.transcript);
+        let mut flight = Vec::new();
+        if let Some(context) = self.certificate_request.take() {
+            let certificate = self.certificate_message(&context);
+            self.transcript.extend_from_slice(&certificate);
+            flight.extend(certificate);
+            if !self.certificates.is_empty() {
+                let verify = self.certificate_verify_message(false)?;
+                self.transcript.extend_from_slice(&verify);
+                flight.extend(verify);
+            }
+        }
         let finished =
             handshake_message(FINISHED, &self.finished_data(&self.client_handshake_secret));
         self.transcript.extend_from_slice(&finished);
-        let records = self.sealed_records(HANDSHAKE, &finished);
+        flight.extend(finished);
+        let records = self.sealed_records(HANDSHAKE, &flight);
         progress.outgoing.extend(records);
         self.reading = Some(Direction::new(&server_application));
         self.writing = Some(Direction::new(&client_application));
@@ -795,10 +885,15 @@ impl Connection {
         self.writing = Some(Direction::new(&self.server_handshake_secret.clone()));
         let mut flight = handshake_message(ENCRYPTED_EXTENSIONS, &with_length(2, &[]));
         self.transcript.extend_from_slice(&flight);
-        let certificate = self.certificate_message();
+        if self.request_certificate {
+            let request = Self::certificate_request_message();
+            self.transcript.extend_from_slice(&request);
+            flight.extend_from_slice(&request);
+        }
+        let certificate = self.certificate_message(&[]);
         self.transcript.extend_from_slice(&certificate);
         flight.extend_from_slice(&certificate);
-        let verify = self.certificate_verify_message()?;
+        let verify = self.certificate_verify_message(true)?;
         self.transcript.extend_from_slice(&verify);
         flight.extend_from_slice(&verify);
         let finished =
@@ -816,8 +911,24 @@ impl Connection {
             &self.transcript,
         ));
         self.writing = Some(Direction::new(&server_application));
-        self.stage = Stage::WaitClientFinished;
+        self.stage = if self.request_certificate {
+            Stage::WaitClientCertificate
+        } else {
+            Stage::WaitClientFinished
+        };
         Ok(())
+    }
+
+    /// A CertificateRequest with an empty context, naming the one signature
+    /// algorithm this side checks.
+    fn certificate_request_message() -> Vec<u8> {
+        let algorithms = with_length(2, &RSA_PSS_RSAE_SHA256.to_be_bytes());
+        let mut body = with_length(1, &[]);
+        body.extend(with_length(
+            2,
+            &extension(EXTENSION_SIGNATURE_ALGORITHMS, &algorithms),
+        ));
+        handshake_message(CERTIFICATE_REQUEST, &body)
     }
 
     fn server_hello(&self, session: &[u8]) -> Vec<u8> {
@@ -836,22 +947,22 @@ impl Connection {
         handshake_message(SERVER_HELLO, &body)
     }
 
-    fn certificate_message(&self) -> Vec<u8> {
+    fn certificate_message(&self, context: &[u8]) -> Vec<u8> {
         let mut list = Vec::new();
         for certificate in &self.certificates {
             list.extend(with_length(3, certificate));
             list.extend(with_length(2, &[]));
         }
-        let mut body = with_length(1, &[]);
+        let mut body = with_length(1, context);
         body.extend(with_length(3, &list));
         handshake_message(CERTIFICATE, &body)
     }
 
-    fn certificate_verify_message(&self) -> Result<Vec<u8>, TlsError> {
+    fn certificate_verify_message(&self, server: bool) -> Result<Vec<u8>, TlsError> {
         let Some(key) = &self.private_key else {
             return Err(failure(alert::INTERNAL_ERROR, "no private key"));
         };
-        let content = self.certificate_verify_content(true);
+        let content = self.certificate_verify_content(server);
         let Some(signature) = key.sign_pss(&content, &random_bytes::<HASH_LENGTH>()) else {
             return Err(failure(alert::INTERNAL_ERROR, "the key could not sign"));
         };
@@ -875,6 +986,33 @@ impl Connection {
     }
 }
 
+/// The server name a ClientHello asks for, read from the record that carries
+/// it, so a server can choose its certificate before answering.
+pub fn requested_name_in(record: &[u8]) -> Option<String> {
+    if record.first() != Some(&HANDSHAKE) {
+        return None;
+    }
+    let mut message = Reader::new(record.get(5..)?);
+    if message.number(1).ok()? != CLIENT_HELLO as usize {
+        return None;
+    }
+    let mut hello = Reader::new(message.vector(3).ok()?);
+    hello.take(2 + 32).ok()?;
+    hello.vector(1).ok()?;
+    hello.vector(2).ok()?;
+    hello.vector(1).ok()?;
+    for (kind, body) in extensions(hello.vector(2).ok()?).ok()? {
+        if kind != EXTENSION_SERVER_NAME {
+            continue;
+        }
+        let mut names = Reader::new(Reader::new(body).vector(2).ok()?);
+        if names.number(1).ok()? == 0 {
+            return Some(String::from_utf8_lossy(names.vector(2).ok()?).into_owned());
+        }
+    }
+    None
+}
+
 /// The name OpenSSL gives an alert description in its messages.
 pub fn alert_name(description: u8) -> &'static str {
     match description {
@@ -891,6 +1029,7 @@ pub fn alert_name(description: u8) -> &'static str {
         alert::PROTOCOL_VERSION => "protocol version",
         alert::INTERNAL_ERROR => "internal error",
         alert::MISSING_EXTENSION => "missing extension",
+        alert::CERTIFICATE_REQUIRED => "certificate required",
         _ => "unknown",
     }
 }

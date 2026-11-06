@@ -142,8 +142,9 @@ impl Parser<'_> {
             TokenKind::Redo => self.parse_redo_statement(),
             TokenKind::Retry => self.parse_retry_statement(),
             TokenKind::Return => {
+                let operand = std::mem::take(&mut self.jump_as_operand);
                 let stmt = self.parse_return_statement()?;
-                self.wrap_with_modifier(stmt)
+                self.finish_jump(stmt, operand)
             }
             TokenKind::AttrReader => {
                 let call = self.parse_attr_reader()?;

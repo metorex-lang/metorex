@@ -12,6 +12,7 @@ mod integration {
         mod globals;
         mod hash_methods;
         mod methods;
+        mod parser;
         mod programs;
         mod regexp;
         mod strings;

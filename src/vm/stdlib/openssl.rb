@@ -516,6 +516,14 @@ module OpenSSL
         end
       end
 
+      # A copy holds entries of its own, so adding one to it leaves the
+      # original alone.
+      def initialize_copy(other)
+        super
+        @entries = other.instance_variable_get(:@entries).map(&:dup)
+        @canonical_encoding = nil
+      end
+
       def add_entry(oid, value, type = nil, loc: -1, set: 0)
         named = oid.to_s
         text = OpenSSL::KDF.coerced(value)
@@ -534,6 +542,7 @@ module OpenSSL
         entry = { short: found[0], long: found[1], oid: found[2], value: stored, type: type }
         at = loc.negative? ? @entries.size : [loc, @entries.size].min
         @entries.insert(at, entry)
+        @canonical_encoding = nil
         self
       end
 
@@ -617,8 +626,10 @@ module OpenSSL
 
       alias hash_old hash
 
+      # Kept until an entry is added, since every comparison of two names
+      # reads it.
       def canonical_encoding
-        @entries.map do |entry|
+        @canonical_encoding ||= @entries.map do |entry|
           value = entry[:value].b.downcase.strip.gsub(/\s+/, " ")
           pair = OpenSSL::ASN1.__encoded__(OpenSSL::ASN1::OBJECT, OpenSSL.__object__(:encode, entry[:oid])) +
                  OpenSSL::ASN1.__encoded__(OpenSSL::ASN1::UTF8STRING, value)
@@ -1424,6 +1435,8 @@ module OpenSSL
                      when "X509v3 Key Usage" then key_usage(value)
                      when "X509v3 Subject Key Identifier" then subject_key_identifier(value)
                      when "X509v3 Authority Key Identifier" then authority_key_identifier(value)
+                     when "X509v3 Extended Key Usage" then extended_key_usage(value)
+                     when "Netscape Comment" then [OpenSSL::ASN1.__encoded__(22, value.to_s.b), value.to_s]
                      end
         if der.nil?
           raise ExtensionError, "#{oid} = #{value}: error in extension (name=#{oid}, value=#{value})"
@@ -1466,6 +1479,14 @@ module OpenSSL
         return nil unless value.start_with?("keyid") && @issuer_certificate&.public_key
         identifier = OpenSSL::X509.__key_identifier__(@issuer_certificate.public_key)
         [OpenSSL::ASN1.__sequence__(OpenSSL::ASN1.__encoded__(0x80, identifier)), hex(identifier)]
+      end
+
+      # A SEQUENCE of the purposes named, each by its object identifier.
+      def extended_key_usage(value)
+        found = value.split(",").map { |name| OpenSSL.__object__(:find, name.strip) }
+        return nil if found.empty? || found.any?(&:nil?)
+        purposes = found.map { |held| OpenSSL::ASN1.__object__(held[2]) }
+        [OpenSSL::ASN1.__sequence__(*purposes), found.map { |held| held[1] }.join(", ")]
       end
 
       def hex(bytes)
@@ -2435,17 +2456,34 @@ module OpenSSL
         end
         if @connection.nil?
           @mode = mode
+          if mode == :server && @context.servername_cb
+            @hello ||= read_io(blocking)
+            if @hello == :wait_readable
+              @hello = nil
+              raise SSLErrorWaitReadable, "read would block" if exception
+              return :wait_readable
+            end
+            if @hello.nil?
+              raise SSLError, "#{label} SYSCALL returned=5 errno=0 #{peer_text}state=error: unexpected eof while reading"
+            end
+            choose_context_for(OpenSSL.__tls__(:hello_name, @hello), label)
+          end
           @connection = if mode == :client
-                          OpenSSL.__tls__(:client, @hostname)
+                          OpenSSL.__tls__(:client, @hostname, *client_certificate)
                         else
                           key = @context.key
                           raise SSLError, "#{label} returned=1 errno=0 state=error: no shared cipher" if @context.cert.nil? || key.nil?
                           chain = [@context.cert, *@context.extra_chain_cert].map(&:to_der)
-                          OpenSSL.__tls__(:server, chain, key.n.to_i, key.e.to_i, key.d.to_i)
+                          OpenSSL.__tls__(:server, chain, key.n.to_i, key.e.to_i, key.d.to_i, @context.verify_mode.to_i)
                         end
           @state = :handshake
           opening = OpenSSL.__tls__(:start, @connection)
           __io__(:write, opening) unless opening.empty?
+          if @hello
+            hello = @hello
+            @hello = nil
+            advance(OpenSSL.__tls__(:feed, @connection, hello), label)
+          end
         end
         until @state == :established
           bytes = read_io(blocking)
@@ -2459,6 +2497,28 @@ module OpenSSL
           advance(OpenSSL.__tls__(:feed, @connection, bytes), label)
         end
         self
+      end
+
+      # A server hands the name the client asked for to the context's
+      # servername_cb, and answers with the context that callback returns.
+      def choose_context_for(name, label)
+        return if name.nil?
+        chosen = @context.servername_cb.call([self, name])
+        return unless chosen.is_a?(SSLContext)
+        chosen.setup
+        @context = chosen
+      rescue StandardError => error
+        @state = :failed
+        raise SSLError, "#{label} returned=1 errno=0 #{peer_text}state=error: #{error.message}"
+      end
+
+      # The chain and RSA key a client proves itself with when the server
+      # asks, or nothing when the context holds none.
+      def client_certificate
+        key = @context.key
+        return [] if @context.cert.nil? || !key.respond_to?(:n)
+        chain = [@context.cert, *@context.extra_chain_cert].map(&:to_der)
+        [chain, key.n.to_i, key.e.to_i, key.d.to_i]
       end
 
       # The protocol_version alert, in a record of its own.

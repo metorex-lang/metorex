@@ -36,6 +36,15 @@ text = File.read(helpers)
 abort "bundler/shared_helpers.rb no longer finds its executable as #{looked_up}" unless text.include?(looked_up)
 File.write(helpers, text.sub(looked_up, %(exe_file = "<metorex>/bundler/metorex/bundle.rb" unless File.exist?(exe_file))))
 
+# An installed gem's extensions were built for MRI, and RubyGems' answer to
+# whether a gem is missing them builds them for metorex, so Bundler's stub
+# asks it in place of answering that they are missing.
+stub = File.join(stdlib, "bundler", "stub_specification.rb")
+answered = "      return false if manually_installed?\n\n      true\n"
+text = File.read(stub)
+abort "bundler/stub_specification.rb no longer answers missing_extensions? as #{answered.inspect}" unless text.include?(answered)
+File.write(stub, text.sub(answered, answered.sub("      true\n", "      stub.missing_extensions?\n")))
+
 executable = File.join(stdlib, "bundler", "metorex", "bundle.rb")
 FileUtils.mkdir_p(File.dirname(executable))
 File.write(executable, File.read(release.path("libexec", "bundle")))

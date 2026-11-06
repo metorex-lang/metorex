@@ -178,6 +178,26 @@ impl Parser<'_> {
                 // An argument may assign, which answers what it assigned:
                 // `StringIO.new(text = "hello")` binds `text` and passes it.
                 let expression = self.parse_expression_with_assignment()?;
+                // A quoted string touching a colon is a label, `"name": value`.
+                if crate::parser::expressions::primary::groups::is_quoted_string(&expression)
+                    && self.check(&[TokenKind::Colon])
+                    && !self.peek().had_leading_space
+                {
+                    self.advance();
+                    self.skip_whitespace();
+                    let key = self.quoted_label_key(expression)?;
+                    let value = self.parse_expression_with_assignment()?;
+                    pairs.push((key, value));
+                    self.skip_whitespace();
+                    if !self.match_token(&[TokenKind::Comma]) {
+                        break;
+                    }
+                    self.skip_whitespace();
+                    if self.check(&[TokenKind::RParen]) {
+                        break;
+                    }
+                    continue;
+                }
                 self.skip_whitespace();
                 if self.match_token(&[TokenKind::FatArrow]) {
                     self.skip_whitespace();

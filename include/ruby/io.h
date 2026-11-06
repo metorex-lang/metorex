@@ -45,6 +45,7 @@ typedef struct rb_io {
 rb_io_t *rb_metorex_io_struct(VALUE io);
 VALUE rb_io_taint_check(VALUE io);
 void rb_io_check_closed(rb_io_t *fptr);
+NORETURN(void rb_eof_error(void));
 void rb_io_check_readable(rb_io_t *fptr);
 void rb_io_check_writable(rb_io_t *fptr);
 void rb_io_set_nonblock(rb_io_t *fptr);

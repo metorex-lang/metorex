@@ -258,9 +258,12 @@ impl VirtualMachine {
                 self.pattern_timeouts.insert(source.clone(), held);
             }
             let built = Rc::new(source);
-            // A pattern built here is not frozen, which is what tells it
-            // apart from one written as a literal.
-            self.record_built_pattern(&built);
+            // A pattern built by `Regexp.new` is not frozen, which is what
+            // tells it apart from one written as a literal, interpolated or
+            // not.
+            if !written_out {
+                self.record_built_pattern(&built);
+            }
             // A literal written with `u`, `e` or `s` matches in the encoding
             // the letter names, whatever its parts were written in.
             let named_by_letter = match flags.chars().find(|held| "ues".contains(*held)) {

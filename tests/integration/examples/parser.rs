@@ -1,8 +1,9 @@
+use super::run_example;
 
 #[test]
 fn a_percent_literal_interpolates_variables_written_after_a_hash() {
     let output = run_example("parser/percent_literal_with_caret_delimiter.rb");
-    assert_eq!(output, "x=\"1\"\nplain \#@expanded_name\nx and 1\nx\nx\nx\n");
+    assert_eq!(output, "x=\"1\"\nplain #@expanded_name\nx and 1\nx\nx\nx\n");
 }
 
 #[test]
@@ -66,4 +67,45 @@ fn not_takes_an_assignment_and_a_rescue_modifier_ends_at_a_comment() {
 fn super_with_arguments_can_be_a_bare_argument() {
     let output = run_example("parser/super_as_a_bare_argument.rb");
     assert_eq!(output, "[:base, 1]\n[2]\n");
+}
+
+/// The expected output of both `parser/quoted_labels` variants, with and
+/// without the `frozen_string_literal` comment.
+const QUOTED_LABELS_OUTPUT: &str = concat!(
+    "{parts: {text: \"plain\", file: \"binary\"}, id: 1}\n",
+    "[Symbol, Symbol]\n",
+    "{single: 1, double: 2}\n",
+    "{spread: 3}\n",
+    "{dynamic: 1}\n",
+    "{dynamic: 2}\n",
+);
+
+#[test]
+fn a_quoted_label_names_a_symbol_in_a_hash_and_as_a_keyword_argument() {
+    let output = run_example("parser/quoted_labels.rb");
+    assert_eq!(output, QUOTED_LABELS_OUTPUT);
+}
+
+#[test]
+fn a_quoted_label_names_a_symbol_under_the_frozen_string_literal_comment() {
+    let output = run_example("parser/quoted_labels_under_frozen_string_literal.rb");
+    assert_eq!(output, QUOTED_LABELS_OUTPUT);
+}
+
+#[test]
+fn a_bare_yield_ends_at_a_ternary_colon_that_ends_the_line() {
+    let output = run_example("parser/bare_yield_before_a_ternary_colon_at_the_end_of_a_line.rb");
+    assert_eq!(output, "2\n1\n4\n3\n");
+}
+
+#[test]
+fn an_if_modifier_after_a_jump_operand_covers_the_whole_expression() {
+    let output = run_example("parser/retry_in_an_and_under_an_if_modifier.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[3, [1, 2]]\n[1, []]\n[:left, :right]\n[]\n",
+            "[1, -1, 2, -2, 3, -3, 4]\n[10, 2, 30]\nnil\n:fell_through\n:fell_through\n3\n",
+        )
+    );
 }

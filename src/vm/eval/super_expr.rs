@@ -209,6 +209,7 @@ impl VirtualMachine {
                                         .flatten()
                                         .map(|method| (Rc::clone(&class), method))
                                 })
+                                .or_else(|| attached_class_method(held, &own_key))
                         }) {
                             return self.invoke_method(
                                 next,
@@ -1102,6 +1103,23 @@ impl VirtualMachine {
 
 /// The ancestors of `class` in lookup order: its prepended modules, the class
 /// itself, its included modules, then the same for each superclass.
+/// The `def self.` method a superclass keeps on itself under `own_key`,
+/// with that class, when `held` is the superclass's singleton class.
+fn attached_class_method(
+    held: &Rc<Class>,
+    own_key: &str,
+) -> Option<(Rc<Class>, Rc<crate::object::Method>)> {
+    if !held.is_singleton_class() {
+        return None;
+    }
+    match held.get_class_var("__attached__").view() {
+        Some(View::Class(attached) | View::Module(attached)) => attached
+            .find_own_method(own_key)
+            .map(|method| (Rc::clone(attached), method)),
+        _ => None,
+    }
+}
+
 pub(crate) fn walk_ancestors(class: &Rc<Class>) -> Vec<Rc<Class>> {
     let mut out = Vec::new();
     // A prepended module sits ahead of the class, so `super` from it

@@ -1,9 +1,10 @@
 pub(super) const SOURCE: &str = r##"
 class MatchData
   def initialize(string, regexp, begins, ends, names)
-    # The subject is kept as a frozen copy, so a later change to the string
-    # that was matched leaves what the match reports alone.
-    @string = string.dup.freeze
+    # The subject is kept frozen, copied first when it is not, so a later
+    # change to the string that was matched leaves what the match reports
+    # alone.
+    @string = string.frozen? ? string : string.dup.freeze
     @regexp = regexp
     @begins = begins
     @ends = ends

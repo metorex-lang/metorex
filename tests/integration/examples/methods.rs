@@ -1052,3 +1052,29 @@ fn public_on_a_singleton_class_reaches_a_private_method_from_a_class_or_its_modu
         run_example("methods/public_on_a_singleton_class_for_an_inherited_private_method.rb");
     assert_eq!(output, "\"https\"\nNoMethodError\n\"ws\"\n");
 }
+
+#[test]
+fn super_from_an_extended_module_reaches_a_singleton_method_of_the_superclass() {
+    let output =
+        run_example("methods/super_from_an_extended_module_reaches_the_superclass_singleton.rb");
+    assert_eq!(
+        output,
+        "wrapped named 1\nwrapped self 2\nwrapped opened 3\nwrapped named 4\n"
+    );
+}
+
+#[test]
+fn a_class_including_a_module_with_its_own_new_still_instantiates_with_class_new() {
+    let output =
+        run_example("methods/class_including_a_module_with_its_own_new_still_instantiates.rb");
+    assert_eq!(
+        output,
+        "\"NumberPart(1)\"\n\"TextPart(one)\"\n\"NumberPart(2)\"\ntrue\n"
+    );
+}
+
+#[test]
+fn an_alias_in_a_class_with_a_prepended_module_names_the_class_method_and_recurses_through_the_module() {
+    let output = run_example("methods/alias_in_a_class_with_a_prepended_module.rb");
+    assert_eq!(output, "Request\nSystemStackError\n");
+}

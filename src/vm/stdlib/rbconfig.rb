@@ -51,7 +51,22 @@ module RbConfig
     "STRIP" => "strip",
     "SHELL" => "/bin/sh",
     "EXTOUT" => ".ext",
-    "NULLCMD" => ":"
+    "NULLCMD" => ":",
+    "optflags" => "-O3 -fno-fast-math",
+    "debugflags" => "-ggdb3",
+    # Flags GCC and Clang both accept.
+    "warnflags" => "-Wall -Wextra -Wdeprecated-declarations -Wimplicit-function-declaration " \
+                   "-Wimplicit-int -Wpointer-arith -Wwrite-strings -Wold-style-definition " \
+                   "-Wmissing-noreturn -Wno-long-long -Wno-missing-field-initializers " \
+                   "-Wno-overlength-strings -Wno-unused-parameter -Wno-unused-value " \
+                   "-Wunused-variable -Wundef",
+    "WERRORFLAG" => "-Werror",
+    "GCC" => "yes",
+    "PKG_CONFIG" => "pkg-config",
+    # An extension leaves the `rb_*` functions it calls for the binary that
+    # loads it to supply.
+    "DLDFLAGS" => os.include?("darwin") ? "-Wl,-undefined,dynamic_lookup" : "",
+    "EXTDLDFLAGS" => ""
   }
 
   # A library installed alongside metorex goes under the prefix the binary
@@ -71,6 +86,10 @@ module RbConfig
   # Metorex runs from wherever its binary sits rather than from an installed
   # tree, so there is no prefix to name.
   TOPDIR = nil
+
+  # The values a Makefile is written with, which an extconf.rb may change
+  # without changing CONFIG.
+  MAKEFILE_CONFIG = CONFIG.transform_values(&:dup)
 
   def self.expand(value, config = CONFIG)
     value

@@ -81,6 +81,10 @@ pub struct Parser<'source> {
     /// is reported on rather than taken and so is written freely.
     pub(crate) in_defined_argument: bool,
 
+    /// Whether the jump about to be read is an operand, as in `a && retry if
+    /// b`, where a modifier after it belongs to the whole expression.
+    pub(crate) jump_as_operand: bool,
+
     /// How deep the walk is inside the right-hand side of an assignment,
     /// where `and` and `or` bind more loosely than the assignment itself.
     pub(crate) assignment_rhs_depth: usize,
@@ -494,6 +498,7 @@ impl<'source> Parser<'source> {
             in_when_clause: false,
             rescue_depth: 0,
             in_defined_argument: false,
+            jump_as_operand: false,
             assignment_rhs_depth: 0,
             dict_literal_depth: 0,
             def_body_depth: 0,

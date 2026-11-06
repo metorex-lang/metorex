@@ -72,17 +72,25 @@ pub extern "C-unwind" fn rb_big2ll(value: Value) -> i64 {
 
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_big2ulong(value: Value) -> u64 {
+    unsigned_within(value, "unsigned long")
+}
+
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_big2ull(value: Value) -> u64 {
+    unsigned_within(value, "unsigned long long")
+}
+
+/// The Integer as the eight-byte unsigned C type `type_name` names, a
+/// negative one wrapped around as C converts it.
+fn unsigned_within(value: Value, type_name: &str) -> u64 {
     let number = big_integer(value);
-    let magnitude = magnitude_within(&number, 8, "unsigned long");
+    let magnitude = magnitude_within(&number, 8, type_name);
     if number.sign() != Sign::Minus {
         return magnitude;
     }
     match signed_within(&number, magnitude) {
         Some(wrapped) => wrapped as u64,
-        None => error(
-            "RangeError",
-            "bignum out of range of unsigned long".to_string(),
-        ),
+        None => error("RangeError", format!("bignum out of range of {type_name}")),
     }
 }
 

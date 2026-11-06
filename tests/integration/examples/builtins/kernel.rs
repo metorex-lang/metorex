@@ -555,3 +555,37 @@ fn core_classes_made_from_literals_answer_no_new() {
         )
     );
 }
+
+#[test]
+fn not_match_answers_the_opposite_of_match_for_nil_and_any_receiver_with_one() {
+    let output = run_example("builtins/not_match_operator_on_any_receiver.rb");
+    assert_eq!(
+        output,
+        "true\ntrue\nfalse\nfalse\nNoMethodError\nfalse\ntrue\n"
+    );
+}
+
+#[test]
+fn a_ractor_reads_constants_holding_objects_made_shareable() {
+    let output = run_example("builtins/ractor_reads_a_shareable_parser_constant.rb");
+    assert_eq!(output, "true\ntrue\n\"example.com\"\ntrue\n[\"a\", \"b\"]\n");
+}
+
+#[test]
+fn a_frozen_string_constant_in_a_singleton_class_body_is_read_by_a_ractor() {
+    let output =
+        run_example("builtins/frozen_string_literal_constant_in_a_singleton_class_body.rb");
+    assert_eq!(output, "true\n\".+-\"\n");
+}
+
+#[test]
+fn the_frozen_string_literal_comment_of_a_required_file_freezes_its_literals() {
+    let output = run_example("builtins/frozen_string_literal_in_a_required_file.rb");
+    assert_eq!(output, "true\ntrue\ntrue\n");
+}
+
+#[test]
+fn env_is_shareable_and_a_ractor_reads_it() {
+    let output = run_example("builtins/ractor_reads_env.rb");
+    assert_eq!(output, "true\n[\"set\", false]\ntrue\nfalse\n");
+}

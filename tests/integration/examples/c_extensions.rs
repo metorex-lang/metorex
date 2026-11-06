@@ -1864,3 +1864,38 @@ fn test_c_extensions_c_holding_no_parens_execution() {
     let output = run_example("c_extensions/c_holding_no_parens.rb");
     assert_eq!(output, C_HOLDING_OUTPUT);
 }
+
+/// The expected output of both `c_extensions/c_event_hooks` variants.
+const C_EVENT_HOOKS_OUTPUT: &str = concat!(
+    "1\n",
+    "[[:call, :greet, 8, String, true]]\n",
+    "0\n",
+    "1\n",
+    "[[8, Greeter, nil, false], [16, Greeter, nil, false], [32, Greeter, :hash, Kernel], [32, CEventHooks, :remove_details, CEventHooks]]\n",
+    "[1, 2, 3, nil, nil]\n",
+    "[1]\n",
+    "FrozenError: can't modify frozen Array: [1]\n",
+    "true\n",
+    "\"after\"\n",
+    "\"18446744073709551615\"\n",
+    "\"9223372036854775808\"\n",
+    "RangeError: bignum out of range of unsigned long long\n",
+    "RangeError: bignum too big to convert into 'unsigned long long'\n",
+    "42\n",
+    "false\n",
+    "true\n",
+    "true\n",
+    "EOFError: end of file reached\n",
+);
+
+#[test]
+fn test_c_extensions_c_event_hooks_execution() {
+    let output = run_example("c_extensions/c_event_hooks.rb");
+    assert_eq!(output, C_EVENT_HOOKS_OUTPUT);
+}
+
+#[test]
+fn test_c_extensions_c_event_hooks_no_parens_execution() {
+    let output = run_example("c_extensions/c_event_hooks_no_parens.rb");
+    assert_eq!(output, C_EVENT_HOOKS_OUTPUT);
+}

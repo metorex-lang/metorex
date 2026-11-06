@@ -112,8 +112,12 @@ impl<'a> Lexer<'a> {
     /// program was started with says nothing about its literals.
     pub fn for_embedded_library(source: &'a str) -> Self {
         let mut made = Self::with_start_line(source, 1);
-        made.frozen_literals = false;
-        made.mutable_literals = false;
+        // A library's own magic comment decides for it, and the setting the
+        // program was started with does not reach it.
+        if !names_string_literal_setting(source) {
+            made.frozen_literals = false;
+            made.mutable_literals = false;
+        }
         made
     }
 

@@ -1,15 +1,16 @@
 # Builds the C source beside this file into an extension in `directory`, the
-# way an extconf.rb and make would, and answers the path to require.
+# way an extconf.rb and make would, with the compiler flags given, and
+# answers the path to require.
 require "mkmf"
 require "fileutils"
 
 MakeMakefile::Logging.quiet = true
 
-def build_extension(source, target, directory)
+def build_extension(source, target, directory, flags = [])
   FileUtils.cp(File.join(__dir__, source), File.join(directory, "#{target}.c"))
   Dir.chdir(directory) do
     $srcdir = directory
-    append_cflags("-Wall")
+    append_cflags(["-Wall", *flags])
     create_makefile(target)
     system("make > /dev/null 2>&1") or raise "make failed for #{target}"
   end

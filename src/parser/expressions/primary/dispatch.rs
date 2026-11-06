@@ -345,7 +345,10 @@ impl Parser<'_> {
             | TokenKind::Return => {
                 self.stream
                     .restore_position(self.stream.current_position() - 1);
-                let jump = self.parse_statement()?;
+                self.jump_as_operand = true;
+                let jump = self.parse_statement();
+                self.jump_as_operand = false;
+                let jump = jump?;
                 Ok(Expression::BeginRescue {
                     body: vec![jump],
                     rescue_clauses: Vec::new(),

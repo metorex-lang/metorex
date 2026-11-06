@@ -234,7 +234,7 @@ fn wait_until_writable(number: RawFd) {
     unsafe { libc::poll(&mut watched, 1, -1) };
 }
 
-fn closed_in_another_thread(position: Position) -> MetorexError {
+pub(crate) fn closed_in_another_thread(position: Position) -> MetorexError {
     crate::vm::errors::simple_exception("IOError", "stream closed in another thread", position)
 }
 

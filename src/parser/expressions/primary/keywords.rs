@@ -198,9 +198,12 @@ impl Parser<'_> {
 
     /// Whether a `:` after a bare `yield` separates the branches of a
     /// ternary, as in `block_given? ? yield : content`, rather than opening a
-    /// Symbol. A Symbol's name follows its colon with no space between.
+    /// Symbol. A Symbol's name follows its colon with no space between, so
+    /// a colon followed by a space or ending the line separates.
     fn ternary_separator_after_bare_yield(&mut self) -> bool {
-        self.check(&[TokenKind::Colon]) && self.peek_ahead(1).had_leading_space
+        self.check(&[TokenKind::Colon])
+            && (self.peek_ahead(1).had_leading_space
+                || matches!(self.peek_ahead(1).kind, TokenKind::Newline | TokenKind::EOF))
     }
 
     /// Whether a `+` or `-` after a bare `yield` is the infix operator rather

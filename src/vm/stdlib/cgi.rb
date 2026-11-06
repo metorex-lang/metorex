@@ -8,29 +8,32 @@ module CGI
   # writes is in the encoding of the text it was given.
   def self.escape(text)
     held = CGI.coerced(text)
-    written = held.each_byte.map { |byte| byte == 0x20 ? "+" : CGI.escaped_for_uri(byte) }.join
+    written = CGI.escaped_bytes(held, RESERVED_OR_SPACE).tr(" ", "+")
     written.force_encoding(held.encoding)
   end
 
-  def self.unescape(text, _encoding = nil)
-    CGI.read_percent CGI.coerced(text).gsub("+", " ")
+  # `unescape` reads a form value, where a plus stands for a space.
+  def self.unescape(text, encoding = nil)
+    CGI.unescapeURIComponent(CGI.coerced(text).tr("+", " "), encoding)
   end
 
   # `escapeURIComponent` writes a piece of a URL, where a space is written in
   # hex like anything else and the tilde stands for itself.
   def self.escapeURIComponent(text)
     held = CGI.coerced(text)
-    written = held.each_byte.map { |byte| CGI.escaped_for_uri(byte) }.join
-    written.force_encoding(held.encoding)
+    CGI.escaped_bytes(held, RESERVED).force_encoding(held.encoding)
   end
 
-  # One byte as it stands where the URI syntax leaves it alone, and in hex
-  # otherwise. Reading a byte at a time is what carries a run that spells no
+  # The bytes the URI syntax does not leave alone, with and without the
+  # space a form value writes as a plus.
+  RESERVED = /[^a-zA-Z0-9_\-.~]/n
+  RESERVED_OR_SPACE = /[^a-zA-Z0-9_\-.~ ]/n
+
+  # The text's bytes with each one `pattern` matches written in hex. The
+  # text is read as bytes, which is what carries a run that spells no
   # character through unchanged.
-  def self.escaped_for_uri(byte)
-    spelling = byte.chr
-    return spelling if spelling =~ /\A[a-zA-Z0-9_\-.~]\z/
-    "%%%02X" % byte
+  def self.escaped_bytes(held, pattern)
+    held.b.gsub(pattern) { |byte| "%%%02X" % byte.ord }
   end
 
   # The encoding a decoded string is tagged with when the call names none.
@@ -209,38 +212,6 @@ module CGI
     named = tag.sub("<", "").sub(">", "")
     named = named[1..-1] if named.start_with? "/"
     named.split(/[\s\/]/).first.to_s.downcase
-  end
-
-  # Read every `%NN` back into the byte it names.
-  def self.read_percent(held)
-    answer = ""
-    bytes = []
-    at = 0
-    while at < held.length
-      if held[at] == "%" && held[at + 1, 2] =~ /\A[0-9a-fA-F]{2}\z/
-        bytes.push held[at + 1, 2].to_i(16)
-        at = at + 3
-      else
-        answer = answer + CGI.text_of(bytes) unless bytes.empty?
-        bytes = []
-        answer = answer + held[at]
-        at = at + 1
-      end
-    end
-    answer = answer + CGI.text_of(bytes) unless bytes.empty?
-    answer
-  end
-
-  # The text a run of bytes stands for.
-  # The text a run of bytes stands for. Bytes that spell characters in UTF-8
-  # read back as those characters, and bytes that spell nothing stand for
-  # themselves.
-  def self.text_of(bytes)
-    held = [bytes.map { |byte| "%02x" % byte }.join].pack "H*"
-    points = held.unpack "U*"
-    return held if points.empty?
-    rebuilt = points.map { |point| "%c" % point }.join
-    rebuilt.bytes == bytes ? rebuilt : held
   end
 
   def self.coerced(text)

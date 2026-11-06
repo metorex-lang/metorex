@@ -69,6 +69,13 @@ typedef uintptr_t ID;
 typedef intptr_t SIGNED_VALUE;
 
 #define RUBY_EXTERN extern
+#define RB_LIKELY(x) (__builtin_expect(!!(x), 1))
+#define RB_UNLIKELY(x) (__builtin_expect(!!(x), 0))
+/* An extension built with -fvisibility=hidden still exports its Init
+   function. */
+#define RUBY_FUNC_EXPORTED __attribute__((__visibility__("default"))) extern
+#define RUBY_SYMBOL_EXPORT_BEGIN _Pragma("GCC visibility push(default)")
+#define RUBY_SYMBOL_EXPORT_END _Pragma("GCC visibility pop")
 
 #define Qfalse ((VALUE)0x00)
 #define Qnil ((VALUE)0x08)
@@ -90,6 +97,13 @@ typedef intptr_t SIGNED_VALUE;
 #define INT2FIX(i) ((((VALUE)(SIGNED_VALUE)(i)) << 1) | RUBY_FIXNUM_FLAG)
 #define LONG2FIX(i) INT2FIX(i)
 #define FIX2LONG(v) ((long)(((SIGNED_VALUE)(v)) >> 1))
+#define RB_INT2FIX(i) INT2FIX(i)
+#define RB_LONG2FIX(i) LONG2FIX(i)
+#define RB_FIX2LONG(v) FIX2LONG(v)
+#define RUBY_FIXNUM_MAX (LONG_MAX / 2)
+#define RUBY_FIXNUM_MIN (LONG_MIN / 2)
+#define FIXNUM_MAX RUBY_FIXNUM_MAX
+#define FIXNUM_MIN RUBY_FIXNUM_MIN
 #define INT2NUM(i) INT2FIX(i)
 #define UINT2NUM(i) LONG2FIX((unsigned int)(i))
 
@@ -113,9 +127,11 @@ unsigned long rb_fix2uint(VALUE value);
 #define NUM2LONG(v) rb_num2long((VALUE)(v))
 #define NUM2ULONG(v) rb_num2ulong((VALUE)(v))
 #define NUM2INT(v) ((int)rb_num2int((VALUE)(v)))
+#define RB_NUM2INT(v) NUM2INT(v)
 #define NUM2UINT(v) ((unsigned int)rb_num2uint((VALUE)(v)))
 #define FIX2INT(v) ((int)rb_fix2int((VALUE)(v)))
 #define FIX2UINT(v) ((unsigned int)rb_fix2uint((VALUE)(v)))
+#define FIX2ULONG(v) ((unsigned long)FIX2LONG(v))
 
 ID rb_intern(const char *name);
 VALUE rb_id2sym(ID id);
@@ -488,6 +504,8 @@ void rb_free_generic_ivar(VALUE object);
 #define RB_BUILTIN_TYPE(v) BUILTIN_TYPE(v)
 #define FL_ABLE(v) (!RB_SPECIAL_CONST_P(v))
 #define RB_OBJ_FROZEN(v) (RB_SPECIAL_CONST_P(v) || RB_FL_TEST((v), RUBY_FL_FREEZE))
+#define RB_OBJ_FROZEN_RAW(v) (RBASIC(v)->flags & RUBY_FL_FREEZE)
+#define OBJ_FROZEN_RAW(v) RB_OBJ_FROZEN_RAW(v)
 #define OBJ_FROZEN(v) RB_OBJ_FROZEN(v)
 VALUE rb_io_write(VALUE io, VALUE string);
 VALUE rb_io_flush(VALUE io);
@@ -526,6 +544,7 @@ void rb_str_modify(VALUE string);
 void rb_str_modify_expand(VALUE string, long expand);
 void rb_str_set_len(VALUE string, long length);
 VALUE rb_str_resize(VALUE string, long length);
+VALUE rb_str_replace(VALUE destination, VALUE source);
 VALUE rb_str_drop_bytes(VALUE string, long length);
 void rb_str_free(VALUE string);
 VALUE rb_str_locktmp(VALUE string);
@@ -587,6 +606,7 @@ VALUE rb_ary_new_capa(long capacity);
 VALUE rb_ary_push(VALUE array, VALUE element);
 VALUE rb_ary_pop(VALUE array);
 void rb_ary_store(VALUE array, long index, VALUE element);
+VALUE rb_ary_resize(VALUE array, long length);
 VALUE rb_ary_dup(VALUE array);
 #define RARRAY_AREF(v, i) rb_ary_entry((VALUE)(v), (long)(i))
 #define RARRAY_ASET(v, i, value) rb_ary_store((VALUE)(v), (long)(i), (VALUE)(value))
@@ -855,6 +875,7 @@ static inline VALUE rb_struct_new(VALUE klass, ...) {
 long rb_big2long(VALUE value);
 long long rb_big2ll(VALUE value);
 unsigned long rb_big2ulong(VALUE value);
+unsigned long long rb_big2ull(VALUE value);
 double rb_big2dbl(VALUE value);
 VALUE rb_dbl2big(double number);
 VALUE rb_big2str(VALUE value, int base);

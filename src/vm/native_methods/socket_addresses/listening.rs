@@ -238,7 +238,7 @@ impl VirtualMachine {
                 .open_sockets
                 .listeners
                 .get(&handle)
-                .ok_or_else(|| refused(position, "accept on a closed listener".to_string()))?;
+                .ok_or_else(|| crate::vm::native_methods::streams::closed_in_another_thread(position))?;
             let _ = listener.set_waiting(false);
             let taken = listener.try_once();
             let _ = listener.set_waiting(true);

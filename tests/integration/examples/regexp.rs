@@ -346,3 +346,28 @@ fn a_pattern_opening_with_any_run_finds_the_leftmost_matches() {
         )
     );
 }
+
+#[test]
+fn each_block_match_of_gsub_and_scan_names_its_own_match_data() {
+    let output = run_example("regexp/match_data_of_each_block_match.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"=, =, =\"\n",
+            "[0, \"one\", 4, true, false]\n",
+            "[7, \"two\", 11, true, false]\n",
+            "[14, \"three\", 20, true, false]\n",
+            "1\n",
+            "true\n",
+            "\"one=1, two=2, three=3\"\n",
+            "\"3\"\n",
+            "[15, 29, \"clair\", \"pastry\"]\n",
+        )
+    );
+}
+
+#[test]
+fn a_regexp_literal_is_frozen_and_one_built_by_regexp_new_freezes_when_asked() {
+    let output = run_example("regexp/regexp_freeze_and_frozen.rb");
+    assert_eq!(output, "true\nfalse\ntrue\ntrue\ntrue\ntrue\ntrue\nfalse\n");
+}

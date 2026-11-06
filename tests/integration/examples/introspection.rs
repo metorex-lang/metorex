@@ -1268,3 +1268,20 @@ fn a_class_body_frame_sits_on_the_def_while_method_added_runs() {
         "tests/_examples/introspection/method_added_caller_frames.rb:3:in 'Recorder.method_added'\ntests/_examples/introspection/method_added_caller_frames.rb:8:in '<class:Named>'\ntests/_examples/introspection/method_added_caller_frames.rb:7:in '<main>'\n"
     );
 }
+
+#[test]
+fn a_tracepoint_reports_the_receiver_of_a_method_call_and_main_at_the_top_level() {
+    let output = run_example("introspection/tracepoint_self_inside_a_method.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[:line, nil, Object]\n",
+            "[:call, :greet, Greeter]\n",
+            "[:line, :greet, Greeter]\n",
+            "[:return, :greet, Greeter]\n",
+            "[:line, nil, Object]\n",
+            "[:call, :disable, TracePoint]\n",
+            "[:line, :disable, TracePoint]\n",
+        )
+    );
+}

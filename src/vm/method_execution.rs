@@ -339,6 +339,7 @@ impl VirtualMachine {
             .cloned()
             .unwrap_or_else(|| receiver.clone());
         let arguments_for_body = arguments;
+        let traced_receiver = self_for_body.clone();
         self.user_def_nesting += 1;
         // Activate the lexically-captured refinements from when this method
         // was defined, as a fresh scope. Reset the live user_def_nesting to 0
@@ -430,8 +431,19 @@ impl VirtualMachine {
         let called_class = Rc::clone(&class);
         let returned_name = Rc::clone(&callee_name);
         let returns_inside = !crate::vm::tracepoint::reported_as_c(&method);
+        let receiver_for_events = traced_receiver.clone();
         if !returns_inside {
-            self.fire_method_event("call", &method.name, &method, &class, None, position)?;
+            self.fire_method_event(
+                "call",
+                crate::vm::tracepoint::TracedMethod {
+                    name: &method.name,
+                    method: &method,
+                    found_on: &class,
+                    receiver: &traced_receiver,
+                },
+                None,
+                position,
+            )?;
         }
         let frame_file = self.frames_file();
         let execution_result = self.with_call_frame(
@@ -444,9 +456,12 @@ impl VirtualMachine {
                 if returns_inside {
                     vm.fire_method_event(
                         "call",
-                        &method_for_body.name,
-                        &method_for_body,
-                        &called_class,
+                        crate::vm::tracepoint::TracedMethod {
+                            name: &method_for_body.name,
+                            method: &method_for_body,
+                            found_on: &called_class,
+                            receiver: &receiver_for_events,
+                        },
                         None,
                         position,
                     )?;
@@ -459,9 +474,12 @@ impl VirtualMachine {
                 if returns_inside {
                     vm.fire_method_event(
                         "return",
-                        &returned_name,
-                        &method_for_body,
-                        &called_class,
+                        crate::vm::tracepoint::TracedMethod {
+                            name: &returned_name,
+                            method: &method_for_body,
+                            found_on: &called_class,
+                            receiver: &receiver_for_events,
+                        },
                         Some(&value),
                         position,
                     )?;
@@ -485,9 +503,12 @@ impl VirtualMachine {
             Ok(value) => self
                 .fire_method_event(
                     "return",
-                    method_name,
-                    &method,
-                    &class,
+                    crate::vm::tracepoint::TracedMethod {
+                        name: method_name,
+                        method: &method,
+                        found_on: &class,
+                        receiver: &traced_receiver,
+                    },
                     Some(&value),
                     position,
                 )

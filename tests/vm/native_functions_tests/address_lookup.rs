@@ -171,7 +171,7 @@ require 'socket'
 }
 
 #[test]
-fn taking_a_connection_from_a_listener_that_was_closed_is_refused() {
+fn taking_a_connection_from_a_listener_that_was_closed_raises_an_io_error() {
     let error = run_err(
         r#"
 require 'socket'
@@ -181,7 +181,7 @@ server.close
 Socket.__net__("accept", held, "", 0)
 "#,
     );
-    assert!(error.contains("closed listener"), "{error}");
+    assert!(error.contains("stream closed in another thread"), "{error}");
 }
 
 #[test]

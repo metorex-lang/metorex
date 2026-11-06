@@ -179,7 +179,19 @@ impl Pattern {
         start: usize,
         limit: Option<std::time::Duration>,
     ) -> Result<Option<Captures<'t, 'p>>, TimedOut> {
-        let reading = Reading::of(subject);
+        self.captures_in_within(&ReadSubject::of(subject), subject, start, limit)
+    }
+
+    /// `captures_within` in a subject read already, so matching it again
+    /// does not read it again.
+    pub fn captures_in_within<'t, 'p>(
+        &'p self,
+        read: &ReadSubject,
+        subject: &'t str,
+        start: usize,
+        limit: Option<std::time::Duration>,
+    ) -> Result<Option<Captures<'t, 'p>>, TimedOut> {
+        let reading = &read.0;
         let Some(from) = reading.char_index(start) else {
             return Ok(None);
         };

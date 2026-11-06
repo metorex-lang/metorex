@@ -36,8 +36,13 @@ class Array
 end
 
 module MakeMakefile
-  # How a library is named to the linker.
+  # The values the Makefile is written with.
+  CONFIG = RbConfig::MAKEFILE_CONFIG
+
+  # How a library, and a directory to find libraries in, are named to the
+  # linker.
   LIBARG = "-l%s"
+  LIBPATHFLAG = " -L%s"
 
   # The libraries every program links against already, which need no check.
   COMMON_LIBS = [].freeze
@@ -57,9 +62,144 @@ module MakeMakefile
   # A `main` that does nothing, so a source links into a program.
   MAIN_DOES_NOTHING = "int main(int argc, char **argv)\n{\n  return !!argv[argc];\n}\n"
 
-  def append_cflags(flags, *_options)
-    $CFLAGS = [$CFLAGS, *flags].compact.join(" ")
-    true
+  # Append each flag the compiler accepts without a warning to $CFLAGS.
+  def append_cflags(flags, **options)
+    Array(flags).each do |flag|
+      if checking_for("whether #{flag} is accepted as CFLAGS") { try_cflags(flag, **options) }
+        $CFLAGS << " " << flag
+      end
+    end
+  end
+
+  def try_cflags(flags, werror: true, **_options)
+    try_compile(MAIN_DOES_NOTHING, flags, werror: werror)
+  end
+
+  # The value CONFIG holds for `key`, or what the block answers for it, when
+  # the value is not empty.
+  def config_string(key, config = CONFIG)
+    value = config[key]
+    return value if value.nil? || value.empty?
+
+    block_given? ? yield(value) : value
+  end
+
+  # Append each flag the linker accepts to $LDFLAGS.
+  def append_ldflags(flags, **_options)
+    Array(flags).each do |flag|
+      if checking_for("whether #{flag} is accepted as LDFLAGS") { try_ldflags(flag) }
+        $LDFLAGS << " " << flag
+      end
+    end
+  end
+
+  def try_ldflags(flags, **_options)
+    try_link(MAIN_DOES_NOTHING, "", ldflags: flags)
+  end
+
+  # The path of the program `bin` names, searched for on `path` or $PATH.
+  def find_executable0(bin, path = nil)
+    executable = ->(file) { File.file?(file) && File.executable?(file) }
+    return (bin if executable.call(bin)) if File.expand_path(bin) == bin
+
+    directories = (path || ENV["PATH"] || "/usr/local/bin:/usr/ucb:/usr/bin:/bin").split(File::PATH_SEPARATOR)
+    directories.map { |directory| File.join(directory, bin) }.find(&executable)
+  end
+
+  def find_executable(bin, path = nil)
+    checking_for checking_message(bin, path) do
+      find_executable0(bin, path)
+    end
+  end
+
+  # The compile and link flags pkg-config, or the package's own config
+  # command, reports for `pkg`, added to $INCFLAGS, $CFLAGS, $LDFLAGS and
+  # $libs, as [cflags, ldflags, libs]. Given options, the command's answer to
+  # them is returned instead, and nothing is added.
+  def pkg_config(pkg, *options)
+    not_found = "not found"
+    def not_found.%(answer)
+      answer ? answer.inspect : self
+    end
+
+    checking_for "pkg-config for #{pkg}", not_found do
+      _, library_directory = dir_config(pkg)
+      environment = {}
+      if library_directory && File.directory?(search_path = "#{library_directory}/pkgconfig")
+        environment["PKG_CONFIG_PATH"] = [search_path, ENV["PKG_CONFIG_PATH"]].compact.join(File::PATH_SEPARATOR)
+      end
+      arguments = []
+      if (command = with_config("#{pkg}-config")) && find_executable0(command)
+        # The package's own config command, named on the command line.
+      elsif ($PKGCONFIG ||= (command = with_config("pkg-config") { config_string("PKG_CONFIG") || ENV["PKG_CONFIG"] || "pkg-config" }) &&
+                            find_executable0(command) && command) &&
+            system(environment, $PKGCONFIG, "--exists", pkg)
+        command = $PKGCONFIG
+        arguments = [pkg]
+      elsif find_executable0(command = "#{pkg}-config")
+        # The package's own config command, found on the path.
+      else
+        command = nil
+      end
+      if command
+        ask = proc do |asked|
+          flags = Array(asked).map { |option| "--#{option}" }
+          answer = IO.popen(environment, [command, *flags, *arguments], err: [:child, :out], &:read)
+          if $?.success?
+            answer.strip.shellsplit.map do |word|
+              if word.start_with?("-l")
+                LIBARG % word[2..]
+              elsif word.start_with?("-L")
+                (LIBPATHFLAG % word[2..]).strip
+              else
+                word
+              end
+            end.quote.join(" ")
+          end
+        end
+      end
+      if ask && !options.empty?
+        ask[options]
+      elsif ask && try_ldflags(ldflags = ask["libs"])
+        if (incflags = ask["cflags-only-I"])
+          $INCFLAGS << " " << incflags
+          cflags = ask["cflags-only-other"]
+        else
+          cflags = ask["cflags"]
+        end
+        libs = ask["libs-only-l"]
+        $CFLAGS += " " << cflags if cflags
+        if libs
+          ldflags = (Shellwords.shellwords(ldflags) - Shellwords.shellwords(libs)).quote.join(" ")
+        else
+          libs, ldflags = Shellwords.shellwords(ldflags).partition { |word| word =~ /-l([^ ]+)/ }.map { |words| words.quote.join(" ") }
+        end
+        $libs += " " << libs
+        $LDFLAGS = [$LDFLAGS, ldflags].join(" ")
+        [[incflags, cflags].join(" "), ldflags, libs]
+      end
+    end
+  end
+
+  # Write the definitions the checks made to `header`, which the Makefile
+  # then has the sources include through RUBY_EXTCONF_H in place of passing
+  # each one on the command line.
+  def create_header(header = "extconf.h")
+    message "creating %s\n", header
+    guard = header.tr_cpp
+    lines = ["#ifndef #{guard}\n#define #{guard}\n"]
+    $defs.each do |definition|
+      case definition
+      when /^-D([^=]+)(?:=(.*))?/
+        lines << "#define #{$1} #{$2 ? Shellwords.shellwords($2)[0].gsub(/(?=\t+)/, "\\\n") : 1}\n"
+      when /^-U(.*)/
+        lines << "#undef #{$1}\n"
+      end
+    end
+    lines << "#endif\n"
+    text = lines.join
+    File.binwrite(header, text) unless (File.read(header) == text rescue false)
+    $extconf_h = header
   end
 
   # The value `--name=value` gave on the command line, the default when it
@@ -178,19 +318,27 @@ module MakeMakefile
   end
 
   # Whether the source compiles to an object file.
-  def try_compile(source, options = "", **_options)
+  # Whether the source compiles to an object file. With `werror`, a warning
+  # fails the check as an error does.
+  def try_compile(source, options = "", werror: nil, **_options)
+    options = [options, config_string("WERRORFLAG")].compact.join(" ") if werror
     build_check(source) do |file|
-      run_quietly("#{compiler} #{include_flags} #{preprocessor_flags} #{$CFLAGS} #{options} -c #{file} -o conftest.o")
+      run_quietly("#{compiler} #{include_flags} #{preprocessor_flags} #{$CFLAGS} #{options} -c #{file} -o conftest.o", werror: werror)
     end
   end
 
   alias try_header try_compile
 
-  # Whether the source links into a program.
-  def try_link(source, options = "", **_options)
+  # Whether the source links against the `rb_*` functions the metorex
+  # binary exports, as an extension does. On macOS the linker reads them
+  # from the binary named as the bundle's loader. Elsewhere the source links
+  # into a shared object, which counts only if this interpreter loads it
+  # with every symbol it names resolved.
+  def try_link(source, options = "", ldflags: nil, **_options)
     build_check(source) do |file|
       library_paths = $LIBPATH.map { |held| "-L#{held}" }.join(" ")
-      run_quietly("#{compiler} -o conftest #{include_flags} #{preprocessor_flags} #{$CFLAGS} #{file} #{library_paths} #{$LDFLAGS} #{options} #{$LIBS}")
+      linked = run_quietly("#{compiler} #{link_output} #{include_flags} #{preprocessor_flags} #{$CFLAGS} #{file} #{library_paths} #{$LDFLAGS} #{ldflags} #{options} #{$LIBS}")
+      linked && (darwin? || loads_with_every_symbol?("conftest.so"))
     end
   end
 
@@ -226,6 +374,7 @@ module MakeMakefile
       #{headers}
       extern int t(void);
       #{MAIN_DOES_NOTHING}
+      #{"extern void #{call};" if declared}
       int t(void) { #{prepared}#{call}; return 0; }
     SOURCE
   end
@@ -347,11 +496,11 @@ module MakeMakefile
     # by path, and no VPATH is written, so objects an earlier build left in
     # the source directory are not taken for this build's.
     source_directory = srcprefix ? File.join($srcdir, srcprefix) : $srcdir
-    sources = $srcs || Dir.glob(File.join(source_directory, "*.c")).sort
-    objects = $objs || sources.map { |source| File.basename(source, ".c") + ".o" }
+    sources = $srcs ? $srcs.map { |source| source_path(source, source_directory) } : Dir.glob(File.join(source_directory, "*.c")).sort
+    objects = $objs || sources.map { |source| File.basename(source, ".*") + ".o" }
     dlext = RbConfig::CONFIG["DLEXT"]
     link_flags = if RbConfig::CONFIG["host_os"].include?("darwin")
-      "-bundle -undefined dynamic_lookup"
+      "-bundle"
     else
       "-shared"
     end
@@ -366,11 +515,16 @@ module MakeMakefile
     makefile << "hdrdir = #{RbConfig::CONFIG["rubyhdrdir"]}\n"
     makefile << "arch_hdrdir = $(hdrdir)\n"
     makefile << "CC = #{RbConfig::CONFIG["CC"]}\n"
-    makefile << "CFLAGS = -fPIC -g #{$CFLAGS}\n"
+    makefile << "optflags = #{CONFIG["optflags"]}\n"
+    makefile << "debugflags = #{CONFIG["debugflags"]}\n"
+    makefile << "warnflags = #{CONFIG["warnflags"]}\n"
+    makefile << "CFLAGS = -fPIC $(optflags) $(debugflags) $(warnflags) #{$CFLAGS}\n"
     makefile << "INCFLAGS = -I. #{$INCFLAGS}\n"
+    makefile << "RUBY_EXTCONF_H = #{$extconf_h}\n"
     prefix_include = srcprefix ? ["-I#{source_directory}"] : []
-    makefile << "CPPFLAGS = $(INCFLAGS) #{[*prefix_include, *$defs, preprocessor_flags].join(" ")}".rstrip << "\n"
-    makefile << "DLDFLAGS = #{[link_flags, library_paths, $LDFLAGS].map(&:strip).reject(&:empty?).join(" ")}\n"
+    definitions = $extconf_h ? ["-DRUBY_EXTCONF_H=\\\"$(RUBY_EXTCONF_H)\\\""] : $defs
+    makefile << "CPPFLAGS = $(INCFLAGS) #{[*prefix_include, *definitions, preprocessor_flags].join(" ")}".rstrip << "\n"
+    makefile << "DLDFLAGS = #{[link_flags, $DLDFLAGS, CONFIG["EXTDLDFLAGS"], library_paths, $LDFLAGS].map(&:strip).reject(&:empty?).join(" ")}\n"
     makefile << "LIBS = #{libraries}\n"
     makefile << "DLLIB = #{target}.#{dlext}\n"
     makefile << "OBJS = #{objects.join(" ")}\n"
@@ -395,8 +549,41 @@ module MakeMakefile
     RbConfig::CONFIG["CC"]
   end
 
+  def darwin?
+    RbConfig::CONFIG["host_os"].include?("darwin")
+  end
+
+  def link_output
+    if darwin?
+      "-bundle -bundle_loader #{Shellwords.escape(RbConfig.ruby)} -o conftest.bundle"
+    else
+      "-shared -fPIC -o conftest.so"
+    end
+  end
+
+  def loads_with_every_symbol?(library)
+    require "fiddle"
+    Fiddle::Handle.new(File.expand_path(library), Fiddle::RTLD_NOW).close
+    true
+  rescue Fiddle::DLError
+    false
+  end
+
+  # A source $srcs names by a relative path is found in the first directory
+  # of $VPATH, or the source directory, that holds it.
+  def source_path(source, source_directory)
+    return source if File.expand_path(source) == source
+
+    directories = [source_directory, *$VPATH.map { |directory| directory.gsub("$(srcdir)", $srcdir) }]
+    directories.map { |directory| File.join(directory, source) }.find { |path| File.exist?(path) } ||
+      File.join(source_directory, source)
+  end
+
+  # The headers' directory and $INCFLAGS, with the Makefile variables
+  # $INCFLAGS names put in place, since a check runs the compiler directly.
   def include_flags
-    "-I#{RbConfig::CONFIG["rubyhdrdir"]}"
+    included = $INCFLAGS.gsub("$(hdrdir)", RbConfig::CONFIG["rubyhdrdir"]).gsub("$(srcdir)", $srcdir)
+    "-I#{RbConfig::CONFIG["rubyhdrdir"]} #{included.gsub(/\$\(\w+\)/, "")}"
   end
 
   # $CPPFLAGS with the Makefile's own variables left out, since a check runs
@@ -416,8 +603,12 @@ module MakeMakefile
     end
   end
 
-  def run_quietly(command)
-    system(command, out: File::NULL, err: File::NULL) ? true : false
+  # Whether the command succeeds, and with `werror` prints nothing as well.
+  def run_quietly(command, werror: nil)
+    return (system(command, out: File::NULL, err: File::NULL) ? true : false) unless werror
+
+    output = IO.popen(command, err: [:child, :out], &:read)
+    $?.success? && output.empty?
   end
 end
 
@@ -451,5 +642,8 @@ $CFLAGS = ""
 $CPPFLAGS = ""
 $LDFLAGS = ""
 $LIBS = ""
+$extconf_h = nil
 
 include MakeMakefile
+
+$DLDFLAGS = with_config("dldflags", arg_config("DLDFLAGS", CONFIG["DLDFLAGS"])).dup

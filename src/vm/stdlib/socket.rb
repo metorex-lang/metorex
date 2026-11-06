@@ -884,8 +884,10 @@ class Addrinfo
   def self.first_found(host, port, socktype, protocol)
     entry = Addrinfo.__lookup__(host, port, nil, socktype, protocol, nil).first
     raise Socket::ResolutionError.new("getaddrinfo: nodename nor servname provided, or not known", Socket::EAI_NONAME) if entry.nil?
-    held = Addrinfo.built entry[3], port.nil? ? nil : entry[4], socktype, protocol
-    held.instance_variable_set :@inspected_name, Addrinfo.inspected_name_of(host, port)
+    # The interface an IPv6 address names after its `%` stays with it.
+    scope = host.to_s[/%[^%]+\z/] if host.to_s.include?(":")
+    held = Addrinfo.built "#{entry[3]}#{scope}", port.nil? ? nil : entry[4], socktype, protocol
+    held.instance_variable_set :@inspected_name, scope ? nil : Addrinfo.inspected_name_of(host, port)
     held
   end
 
@@ -1020,7 +1022,7 @@ class Addrinfo
 
   def ip_address
     refuse_unless_ip
-    @address
+    "#{@address}#{@scope}"
   end
 
   def ip_port
@@ -1176,7 +1178,7 @@ class Addrinfo
 
   def inspect_sockaddr
     return @address.start_with?("/") ? @address : "UNIX #{@address}" if unix?
-    return @address if @port.nil? || @port == 0
+    return "#{@address}#{@scope}" if @port.nil? || @port == 0
     shown_address
   end
 
@@ -1351,6 +1353,12 @@ class Addrinfo
   end
 
   def fill_ip(host, port, socktype, protocol)
+    # An IPv6 address can name the interface it is reached through after a
+    # `%`, which the address keeps beside its bytes.
+    written = host.to_s
+    scope = written[/%[^%]+\z/] if written.include?(":")
+    host = written.delete_suffix(scope) if scope
+    @scope = scope
     named = Socket.resolved(host).first
     if named.nil?
       raise SocketError, "getaddrinfo: nodename nor servname provided, or not known"
@@ -1363,7 +1371,7 @@ class Addrinfo
     @afamily = Socket.__address__("family", named, 0) == 4 ? Socket::AF_INET : Socket::AF_INET6
     @pfamily = @afamily
     # An address found by looking a name up shows that name when inspected.
-    @inspected_name = Addrinfo.looked_up_name(host)
+    @inspected_name = scope ? nil : Addrinfo.looked_up_name(host)
     self
   end
 
@@ -1424,8 +1432,9 @@ class Addrinfo
   # An address written the way it is shown, with an IPv6 one in brackets so
   # the colon before the port reads as a separator.
   def shown_address
-    return @address if @port.nil? || @port.zero?
-    ipv6? ? "[#{@address}]:#{@port}" : "#{@address}:#{@port}"
+    scoped = "#{@address}#{@scope}"
+    return scoped if @port.nil? || @port.zero?
+    ipv6? ? "[#{scoped}]:#{@port}" : "#{scoped}:#{@port}"
   end
 
   # TCP or UDP for an internet address of the kind each pairs with, and
@@ -2787,6 +2796,7 @@ class Socket
   end
 
   def connect(sockaddr)
+    return connect_unix(sockaddr) if unix? && !datagram?
     port, address = Socket.unpack_sockaddr_in sockaddr
     if datagram?
       @handle = Socket.__net__("udp_open", 0, "0.0.0.0", 0) if @handle.nil?
@@ -2808,6 +2818,18 @@ class Socket
     end
     0
   end
+
+  # A stream socket in the Unix family connects to the path its address
+  # names, once.
+  def connect_unix(sockaddr)
+    path = Socket.unpack_sockaddr_un sockaddr
+    raise Errno::EISCONN, "connect(2) for #{path}" if @connected
+    __take_handle__ Socket.__net__("unix_connect", 0, path, 0)
+    __connected_to__ path
+    @connected = true
+    0
+  end
+  private :connect_unix
 
   # Connect, giving up with IO::TimeoutError once `limit` seconds pass.
   def connect_within(limit, address, port)
@@ -3041,7 +3063,7 @@ class Socket
 
   # A socket reads and writes lines the way a stream does, no more than
   # `limit` bytes of one when a limit is given.
-  def gets(separator = "\n", limit = nil)
+  def gets(separator = "\n", limit = nil, chomp: false)
     separator, limit = "\n", separator if separator.is_a?(Integer)
     ending = separator.nil? ? nil : separator.to_s
     collected = +""
@@ -3052,7 +3074,8 @@ class Socket
       collected << held
       break if !ending.nil? && collected.end_with?(ending)
     end
-    collected.empty? ? nil : collected
+    return nil if collected.empty?
+    chomp && !ending.nil? ? collected.delete_suffix(ending) : collected
   end
 
   def puts(*lines)
@@ -3090,7 +3113,7 @@ class Socket
       return :wait_readable unless exception
       raise IO::EAGAINWaitReadable, "recvfrom(2) would block"
     end
-    return held if buffer.nil?
+    return held if buffer.nil? || held.nil?
     # The buffer keeps the encoding it was tagged with, since what arrived
     # is bytes rather than characters of any particular encoding.
     tagged = buffer.encoding
@@ -3099,11 +3122,18 @@ class Socket
     buffer
   end
 
+  # At the end of the stream the buffer is emptied, and the read raises
+  # EOFError, or answers nil when told not to raise.
   def read_nonblock(length = nil, buffer = nil, exception: true)
     # BSD asks the descriptor not to wait and leaves it that way, where Linux
     # carries the request in the read itself and leaves the descriptor alone.
     self.nonblock = true unless RUBY_PLATFORM.include? "linux"
-    recv_nonblock length, 0, buffer, exception: exception
+    held = recv_nonblock length, 0, buffer, exception: exception
+    return held unless held.nil?
+
+    buffer&.clear
+    raise EOFError, "end of file reached" if exception
+    nil
   end
 
   def write_nonblock(text, exception: true)
@@ -3221,7 +3251,9 @@ class Socket
     end
 
     def addr
-      @addr.nil? ? nil : Addrinfo.ip(@addr)
+      return nil if @addr.nil?
+      return Addrinfo.ip("#{@addr}%#{@name}") if @addr.downcase.start_with?("fe80:")
+      Addrinfo.ip(@addr)
     end
 
     def netmask
@@ -3469,10 +3501,11 @@ class Socket
   end
 
   # Every address this machine answers on, as far as it can be asked.
+  # The address of each interface that has one in an internet family, in
+  # the order the system lists the interfaces. A link-local IPv6 address
+  # names its interface.
   def self.ip_address_list
-    Socket.resolved(Socket.gethostname).map { |held| Addrinfo.ip held }
-  rescue SocketError
-    [Addrinfo.ip("127.0.0.1")]
+    getifaddrs.filter_map { |interface| interface.addr if interface.addr&.ip? }
   end
 
   # What an address stands for: the name it resolves to, the other names it

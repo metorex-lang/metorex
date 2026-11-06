@@ -377,11 +377,13 @@ pub(crate) fn looks_like_constant_path(name: &str) -> bool {
 
 /// Whether the receiver answers `name` through a method of its own: an
 /// instance method, a `def self.name` class method, or a singleton method.
-/// Used to let a user-defined accessor win over a native handler.
+/// Used to let a user-defined accessor win over a native handler. A `def
+/// self.name` comes down the superclass chain only, since a module's own
+/// methods are not the methods of a class that includes it.
 pub(crate) fn has_user_defined_method(class_rc: &Rc<Class>, name: &str) -> bool {
     class_rc.find_method(name).is_some()
         || class_rc
-            .find_method(&format!("__class__{}", name))
+            .find_inherited_method(&format!("__class__{}", name))
             .is_some()
         || class_rc
             .singleton_class_slot()
