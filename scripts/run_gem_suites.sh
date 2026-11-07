@@ -89,6 +89,21 @@ SUITES=(
   "domain_name|test/test_*.rb|-I lib -I test"
   "connection_pool|test/test_*.rb|-I lib -I test"
   "websocket-extensions|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "i18n|test/**/*_test.rb|-w -I lib -I test -r bundler/setup"
+  "tzinfo|test/ts_all_ruby_format1.rb test/ts_all_ruby_format2.rb test/ts_all_zoneinfo.rb|-w -I lib -r bundler/setup"
+  "multi_json|test/**/*_test.rb|-I lib -I test"
+  "multi_xml|test/**/*_test.rb|-I lib -I test -r bundler/setup"
+  "builder|test/test*.rb|-I lib -I . -I test -r bundler/setup"
+  "mime-types|test/test_*.rb|-w -I lib -I test -I . -r bundler/setup -r minitest/autorun"
+  "mini_mime|test/**/*_test.rb|-I lib -I test -r bundler/setup"
+  "mail|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "addressable|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "public_suffix|test/**/*_test.rb|-I lib -I test -r bundler/setup"
+  "jwt|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "dotenv|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "dotenv|test/**/*_test.rb|-I lib -I test -r bundler/setup"
+  "netrc|test/test_*.rb|-I lib -I test"
+  "rubyzip|test/**/*_test.rb|-I lib -I test -r bundler/setup"
   "racc|test/test_*.rb|--enable-frozen-string-literal -I lib -I test/lib -I $HELPERS -r helper|$REPO_ROOT/scripts/gem_suite/racc_parser_text.rb"
 )
 
@@ -187,6 +202,10 @@ export SIMPLECOV_DISABLE=1
 # A test that omits itself under CI would count differently there than in
 # the recorded runs.
 unset CI
+# Minitest runs a file's tests in an order drawn from this seed, so both
+# engines run them in the same order and a test that depends on another
+# counts the same under each.
+export SEED="${SEED:-1}"
 
 RESULTS="$WORK_DIR/results.tsv"
 while IFS=$'\t' read -r gem file arguments prepare; do

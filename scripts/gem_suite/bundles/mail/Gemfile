@@ -1,0 +1,11 @@
+# The gems mail's specs load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "mail", path: "../../../../gems/mail"
+gem "mini_mime", path: "../../../../gems/mini_mime"
+gem "rspec", "~> 3.0"
+gem "rspec-benchmark"
+
+shipped "logger", "net-imap", "net-pop", "net-smtp", "net-protocol", "date", "timeout"

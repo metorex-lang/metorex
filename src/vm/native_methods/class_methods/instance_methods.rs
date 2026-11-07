@@ -49,7 +49,10 @@ impl VirtualMachine {
                     unbound.origin_class = Some(Rc::clone(class_rc));
                     return Ok(Answered(Object::Method(Rc::new(unbound))));
                 }
-                if let Some((owner, method)) = class_rc.find_method_with_owner(&name_str) {
+                if let Some((owner, method)) = class_rc
+                    .find_method_with_owner(&name_str)
+                    .or_else(|| self.object_method_reached_from(class_rc, &name_str))
+                {
                     // `public_instance_method` only hands out public methods.
                     if method.is_undefined
                         || (method_name == "public_instance_method"

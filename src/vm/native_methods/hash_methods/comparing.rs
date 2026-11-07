@@ -47,6 +47,19 @@ impl VirtualMachine {
                     _ => match crate::vm::native_methods::hash_subclass_value(&arguments[0]).view()
                     {
                         Some(backing @ View::Dict(_)) => backing.to_object(),
+                        // An object that can stand for a hash answers `==`
+                        // for itself, with the hash on the other side.
+                        _ if method_name == "=="
+                            && self.responds_to(&arguments[0], "to_hash") =>
+                        {
+                            let answer = self.send_to_object(
+                                arguments[0].clone(),
+                                "==",
+                                vec![receiver.clone()],
+                                position,
+                            )?;
+                            return Ok(Some(Object::Bool(answer.is_truthy())));
+                        }
                         _ => return Ok(Some(Object::Bool(false))),
                     },
                 };

@@ -154,7 +154,7 @@ fn adding_and_subtracting_days_walks_the_julian_day_number() {
     assert_eq!(quoted(&format!("{DAY}(day - 30).to_s")), "2007-12-17");
     assert_eq!(
         shown("require 'date'\nDate.civil(2008, 3, 1) - Date.civil(2008, 2, 1)"),
-        "29"
+        "(29/1)"
     );
 }
 

@@ -1170,7 +1170,7 @@ const MARSHAL_OBJECTS_OUTPUT: &str = concat!(
     "[TypeError, \"no _dump_data is defined for class Proc\"]\n",
     "[ArgumentError, \"exceed depth limit\"]\n",
     "[TypeError, \"instance of IO needed\"]\n",
-    "[:binmode, \"\\x04\\b:\\tnote\"]\n",
+    "[:binmode, \"\"]\n",
 );
 
 #[test]
@@ -2077,4 +2077,316 @@ fn an_extension_factory_builds_extended_key_usage_and_a_netscape_comment() {
             "OpenSSL::X509::ExtensionError\n",
         )
     );
+}
+
+#[test]
+fn openssl_aes_in_counter_mode() {
+    let output = run_example("stdlib/openssl_aes_counter_mode.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"AES-128-CTR\"\n1\n16\n16\n",
+            "\"874d6191b620e3261bef6864990db6ce9806f66b7970fdff8617187bb9fffdff\"\n",
+            "[5, 20, 7]\ntrue\ntrue\n",
+            "\"411c491b9337de26117d4f7c585e753cbfa02109e4ad2076d196c53fc911ea811cab71419fef79e2\"\n",
+            "\"AES-128-CBC\"\n\"AES-192-CBC\"\n",
+        )
+    );
+}
+
+#[test]
+fn zlib_raw_streams_inflated_in_chunks() {
+    let output = run_example("stdlib/zlib_raw_inflate_in_chunks.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "true\n",
+            "true\n",
+            "11\n",
+            "true\n",
+            "94893\n",
+            "\"trailing bytes after the stream\"\n",
+            "94893\n",
+            "true\n",
+            "300\n",
+            "true\n",
+            "9\n",
+            "9\n",
+            "\"\"\n",
+            "\"TAILMORE\"\n",
+            "\"\"\n",
+            "4\n",
+            "5\n",
+            "false\n",
+            "296\n",
+            "9\n",
+            "true\n",
+            "300\n",
+            "\"XY\"\n",
+            "\"\"\n",
+            "\"hello\"\n",
+            "true\n",
+            "13\n",
+            "\"rest\"\n",
+        )
+    );
+}
+
+#[test]
+fn openssl_ec_keys_and_ecdsa_signatures() {
+    let output = run_example("stdlib/openssl_ec_keys_and_ecdsa.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "OpenSSL::PKey::EC\n",
+            "\"secp384r1\"\n",
+            "384\n",
+            "true\n",
+            "true\n",
+            "\"03ad0aef0370f6159fd5d17adc894007f09f8ca126b7b110246858dbafd3a093dbfe626af36ec3efc7c7a53214414c0c58\"\n",
+            "true\n",
+            "false\n",
+            "true\n",
+            "true\n",
+            "false\n",
+            "true\n",
+            "true\n",
+            "true\n",
+            "true\n",
+            "[\"prime256v1\", true, true]\n",
+            "true\n",
+            "true\n",
+            "[\"secp256k1\", true, true]\n",
+            "true\n",
+            "true\n",
+            "[\"secp521r1\", true, true]\n",
+            "true\n",
+            "true\n",
+            "[\"prime239v2\", true, true]\n",
+            "true\n",
+            "true\n",
+            "false\n",
+            "false\n",
+            "\"FFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551\"\n",
+            "OpenSSL::PKey::PKeyError\n",
+        )
+    );
+}
+
+#[test]
+fn openssl_rsa_pss_signatures() {
+    let output = run_example("stdlib/openssl_rsa_pss_signatures.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "true\n",
+            "true\n",
+            "false\n",
+            "\"no implicit conversion of Symbol into Integer\"\n",
+            "true\n",
+            "false\n",
+            "128\n",
+            "false\n",
+            "true\n",
+            "true\n",
+            "\"private key is needed\"\n",
+        )
+    );
+}
+
+#[test]
+fn openssl_certificate_revocation_lists() {
+    let output = run_example("stdlib/openssl_certificate_revocation_lists.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"crlDistributionPoints = Full Name:,   URI:http://www.example.com/crl, , Full Name:,   URI:http://backup.example.com/crl, \"]\n",
+            "1\n",
+            "\"/DC=org/DC=fake-ca/CN=Fake CA\"\n",
+            "\"sha256WithRSAEncryption\"\n",
+            "[\"crlNumber = 1\"]\n",
+            "true\n",
+            "false\n",
+            "\"-----BEGIN X509 CRL-----\\n\"\n",
+            "{\"URI.1\" => \"http://www.example.com/crl\", \"URI.2\" => \"http://backup.example.com/crl\"}\n",
+            "[true, 0, \"ok\", \"/DC=org/DC=fake/CN=Fake\"]\n",
+            "[false, 10, \"certificate has expired\", \"/DC=org/DC=fake/CN=Fake\"]\n",
+            "[false, 3, \"unable to get certificate CRL\", \"/DC=org/DC=fake/CN=Fake\"]\n",
+            "[false, 23, \"certificate revoked\", \"/DC=org/DC=fake/CN=Fake\"]\n",
+            "[false, 12, \"CRL has expired\", \"/DC=org/DC=fake/CN=Fake\"]\n",
+            "[false, 8, \"CRL signature failure\", \"/DC=org/DC=fake/CN=Fake\"]\n",
+            "2\n",
+            "[\"CRLReason = Key Compromise\"]\n",
+        )
+    );
+}
+
+#[test]
+fn openssl_to_bn_on_a_bn_and_an_integer() {
+    let output = run_example("stdlib/openssl_to_bn.rb");
+    assert_eq!(output, "true\ntrue\nOpenSSL::BN\n");
+}
+
+#[test]
+fn openssl_ec_keys_on_a_binary_curve() {
+    let output = run_example("stdlib/openssl_ec_binary_curve.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"sect571r1\"\n",
+            "571\n",
+            "true\n",
+            "true\n",
+            "true\n",
+            "true\n",
+            "true\n",
+            "true\n",
+            "false\n",
+            "true\n",
+            "73\n",
+            "true\n",
+            "true\n",
+            "true\n",
+            "[\"sect571r1\", \"NIST/SECG curve over a 571 bit binary field\"]\n",
+            "[\"prime256v1\", \"FFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551\", \"046b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c2964fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5\", 256, 1]\n",
+            "[\"secp256k1\", \"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141\", \"0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8\", 256, 1]\n",
+            "[\"secp384r1\", \"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC7634D81F4372DDF581A0DB248B0A77AECEC196ACCC52973\", \"04aa87ca22be8b05378eb1c71ef320ad746e1d3b628ba79b9859f741e082542a385502f25dbf55296c3a545e3872760ab73617de4a96262c6f5d9e98bf9292dc29f8f41dbd289a147ce9da3113b5f0b8c00a60b1ce1d7e819d7a431d7c90ea0e5f\", 384, 1]\n",
+            "[\"secp521r1\", \"01FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFA51868783BF2F966B7FCC0148F709A5D03BB5C9B8899C47AEBB6FB71E91386409\", \"0400c6858e06b70404e9cd9e3ecb662395b4429c648139053fb521f828af606b4d3dbaa14b5e77efe75928fe1dc127a2ffa8de3348b3c1856a429bf97e7e31c2e5bd66011839296a789a3bc0045c8a5fb42c7d1bd998f54449579b446817afbd17273e662c97ee72995ef42640c550b9013fad0761353c7086a272c24088be94769fd16650\", 521, 1]\n",
+            "[\"sect571r1\", \"03FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE661CE18FF55987308059B186823851EC7DD9CA1161DE93D5174D66E8382E9BB2FE84E47\", \"040303001d34b856296c16c0d40d3cd7750a93d1d2955fa80aa5f40fc8db7b2abdbde53950f4c0d293cdd711a35b67fb1499ae60038614f1394abfa3b4c850d927e1e7769c8eec2d19037bf27342da639b6dccfffeb73d69d78c6c27a6009cbbca1980f8533921e8a684423e43bab08a576291af8f461bb2a8b3531d2f0485c19b16e2f1516e23dd3c1a4827af1b8ac15b\", 571, 2]\n",
+        )
+    );
+}
+
+#[test]
+fn zlib_errors_for_corrupt_and_short_streams() {
+    let output = run_example("stdlib/zlib_errors_for_corrupt_and_short_streams.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"Zlib::BufError: buffer error\"\n",
+            "\"Zlib::BufError: buffer error\"\n",
+            "\"Zlib::BufError: buffer error\"\n",
+            "\"Zlib::BufError: buffer error\"\n",
+            "\"Zlib::BufError: buffer error\"\n",
+            "\"Zlib::DataError: invalid block type\"\n",
+            "\"Zlib::DataError: invalid stored block lengths\"\n",
+            "\"Zlib::DataError: unknown compression method\"\n",
+            "\"Zlib::DataError: incorrect header check\"\n",
+            "\"Zlib::DataError: incorrect data check\"\n",
+            "\"Zlib::DataError: invalid block type\"\n",
+            "\"Zlib::BufError: buffer error\"\n",
+            "\"\"\n",
+            "\"\"\n",
+            "true\n",
+            "480\n",
+            "[480, \"\", \"\"]\n",
+        )
+    );
+}
+
+#[test]
+fn zlib_compression_levels() {
+    let output = run_example("stdlib/zlib_compression_levels.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[-1, 10722, \"789c\", \"7c4729186c7b0b46\", 10716, true, \"789c2b2c4d2c2a492dcaa95428c92f49cc29b652\"]\n",
+            "[0, 90187, \"7801\", :stored, 90181, true, \"7801017b0084ff717561727465726c7920746f74\"]\n",
+            "[1, 11373, \"7801\", \"37e1770d8772a627\", 11367, true, \"78012b2c4d2c2a492dcaa95428c92f49cc29b652\"]\n",
+            "[2, 12114, \"785e\", \"8aefbfd79c1157de\", 12108, true, \"785e2b2c4d2c2a492dcaa95428c92f49cc29b652\"]\n",
+            "[3, 11785, \"785e\", \"ae57352516b8d143\", 11779, true, \"785e2b2c4d2c2a492dcaa95428c92f49cc29b652\"]\n",
+            "[4, 11273, \"785e\", \"115bda576a0242c5\", 11267, true, \"785e2b2c4d2c2a492dcaa95428c92f49cc29b652\"]\n",
+            "[5, 11465, \"785e\", \"b5407aadcc939202\", 11459, true, \"785e2b2c4d2c2a492dcaa95428c92f49cc29b652\"]\n",
+            "[6, 10722, \"789c\", \"7c4729186c7b0b46\", 10716, true, \"789c2b2c4d2c2a492dcaa95428c92f49cc29b652\"]\n",
+            "[7, 10577, \"78da\", \"23e9579bef3dd91b\", 10571, true, \"78da2b2c4d2c2a492dcaa95428c92f49cc29b652\"]\n",
+            "[8, 9018, \"78da\", \"3e6e5845ca0ffa2f\", 9012, true, \"78da2b2c4d2c2a492dcaa95428c92f49cc29b652\"]\n",
+            "[9, 9018, \"78da\", \"3e6e5845ca0ffa2f\", 9012, true, \"78da2b2c4d2c2a492dcaa95428c92f49cc29b652\"]\n",
+            "\"7801010000ffff00000001\"\n",
+            "\"\"\n",
+            "70016\n",
+            "true\n",
+        )
+    );
+}
+
+#[test]
+fn openssl_hmac_instances() {
+    let output = run_example("stdlib/openssl_hmac_instances.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "true\n",
+            "32\n",
+            "true\n",
+            "true\n",
+            "44\n",
+            "true\n",
+            "true\n",
+            "false\n",
+            "true\n",
+            "\"4fd0b215276ef12f2b3e4c8ecac2811498b656fc\"\n",
+            "ArgumentError\n",
+        )
+    );
+}
+
+#[test]
+fn delegate_class_forwards_keyword_arguments() {
+    let output = run_example("stdlib/delegate_class_forwards_keywords.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[:io, true, true]\n[:io, false, false]\n{verbose: true}\n",
+            "[[1, 2], {label: \"x\"}]\n[[{a: 1}], {}]\n[:io, false, true]\n",
+        )
+    );
+}
+
+#[test]
+fn zlib_gunzip_errors_name_what_is_wrong() {
+    let output = run_example("stdlib/zlib_gunzip_errors.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"hello\"\n",
+            "\"hello\"\n",
+            "[Zlib::GzipFile::Error, \"not in gzip format\"]\n",
+            "[Zlib::GzipFile::Error, \"unexpected end of file\"]\n",
+            "[Zlib::GzipFile::Error, \"unexpected end of string\"]\n",
+            "[Zlib::GzipFile::CRCError, \"invalid compressed data -- crc error\"]\n",
+            "[Zlib::GzipFile::LengthError, \"invalid compressed data -- length error\"]\n",
+            "[Zlib::GzipFile::Error, \"unsupported compression method 9\"]\n",
+            "[Zlib::GzipFile::Error, \"unexpected end of string\"]\n",
+            "[Zlib::GzipFile::Error, \"unexpected end of string\"]\n",
+            "[Zlib::GzipFile::Error, \"unexpected end of string\"]\n",
+            "[Zlib::GzipFile::Error, \"unexpected end of string\"]\n",
+        )
+    );
+}
+
+#[test]
+fn marshal_keeps_a_replaced_set_ivar() {
+    let output = run_example("stdlib/marshal_keeps_a_replaced_set_ivar.rb");
+    assert_eq!(output, "[\"html\", \"htm\", \"hex\"]\ntrue\n");
+}
+
+#[test]
+fn marshal_links_only_the_same_object() {
+    let output = run_example("stdlib/marshal_links_only_the_same_object.rb");
+    assert_eq!(output, "[\"first\", \"second\", \"first\"]\ntrue\nfalse\nfalse\n");
+}
+
+#[test]
+fn marshal_links_after_a_set() {
+    let output = run_example("stdlib/marshal_links_after_a_set.rb");
+    assert_eq!(
+        output,
+        "Set[\"a\", \"b\"]\nSet[\"shared\"]\n\"shared\"\ntrue\nSet[1]\ntrue\n29\n"
+    );
+}
+
+#[test]
+fn marshal_writes_each_set_its_own_members() {
+    let output = run_example("stdlib/marshal_writes_each_set_its_own_members.rb");
+    assert_eq!(output, "true\n");
 }

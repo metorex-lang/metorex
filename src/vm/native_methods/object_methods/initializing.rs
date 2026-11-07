@@ -90,11 +90,12 @@ impl VirtualMachine {
                 Ok(Some(Object::Int(self.hash_digest(receiver, position)?)))
             }
             "object_id" | "__id__" => {
-                // A reference type is identified by its address. An immediate
-                // gets a value-derived id, so two literals that are the same
-                // value share one, the way Ruby's do.
+                // An object held by reference takes the next id from a
+                // counter the first time it is asked. An immediate gets a
+                // value-derived id, so two literals that are the same value
+                // share one, as Ruby's do.
                 let id = match receiver.view() {
-                    View::Instance(inst) => std::rc::Rc::as_ptr(inst) as i64,
+                    View::Instance(inst) => self.counted_object_id(&inst) as i64,
                     // Two strings holding the same text are two objects, so
                     // each takes an id of its own the first time one is asked
                     // for.
@@ -102,24 +103,24 @@ impl VirtualMachine {
                         let next = self.next_object_id;
                         let given = text.object_id(|| next);
                         if given == next {
-                            self.next_object_id += 1;
+                            self.take_object_id();
                         }
                         given as i64
                     }
-                    View::Array(arr) => std::rc::Rc::as_ptr(arr) as i64,
-                    View::Dict(dict) => std::rc::Rc::as_ptr(dict) as i64,
-                    View::Set(set) => std::rc::Rc::as_ptr(set) as i64,
-                    View::Class(cls) => std::rc::Rc::as_ptr(cls) as i64,
-                    View::Module(m) => std::rc::Rc::as_ptr(m) as i64,
-                    View::Block(block) => std::rc::Rc::as_ptr(block) as i64,
+                    View::Array(arr) => self.counted_object_id(&arr) as i64,
+                    View::Dict(dict) => self.counted_object_id(&dict) as i64,
+                    View::Set(set) => self.counted_object_id(&set) as i64,
+                    View::Class(cls) => self.counted_object_id(&cls) as i64,
+                    View::Module(m) => self.counted_object_id(&m) as i64,
+                    View::Block(block) => self.counted_object_id(&block) as i64,
                     // A Method and a Binding are objects of their own, so two
                     // that name the same thing have different ids.
-                    View::Method(method) => std::rc::Rc::as_ptr(method) as i64,
-                    View::Binding(binding) => std::rc::Rc::as_ptr(binding) as i64,
-                    View::Exception(exc) => std::rc::Rc::as_ptr(exc) as i64,
+                    View::Method(method) => self.counted_object_id(&method) as i64,
+                    View::Binding(binding) => self.counted_object_id(&binding) as i64,
+                    View::Exception(exc) => self.counted_object_id(&exc) as i64,
                     // An integer past the i64 range is a heap object in Ruby
                     // too, so two of the same value have different ids.
-                    View::BigInt(value) => std::rc::Rc::as_ptr(value) as i64,
+                    View::BigInt(value) => self.counted_object_id(&value) as i64,
                     // Ruby's fixnum object_id. Wrapping keeps the far ends of
                     // the range from overflowing.
                     View::Int(n) => n.wrapping_mul(2).wrapping_add(1),

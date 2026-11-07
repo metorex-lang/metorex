@@ -1,0 +1,7 @@
+# The gems tzinfo's tests load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "tzinfo", path: "../../../../gems/tzinfo"
+gem "minitest", "~> 5.0"

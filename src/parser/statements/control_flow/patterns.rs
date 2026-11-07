@@ -238,15 +238,15 @@ impl Parser<'_> {
                 self.advance();
                 Ok(MatchPattern::Wildcard)
             }
-            // A constant named from the top level, `when ::String`. Metorex
-            // resolves a bare constant there anyway, so the leading `::` only
-            // says where to start looking.
+            // A constant named from the top level, `when ::String`, is read
+            // there rather than from the module the `case` is written in,
+            // which may hold a constant of the same name.
             TokenKind::ColonColon
                 if matches!(&self.peek_ahead(1).kind,
                     TokenKind::Ident(name) if name.chars().next().is_some_and(char::is_uppercase)) =>
             {
-                self.advance();
-                self.parse_case_pattern()
+                let held = self.parse_range()?;
+                Ok(MatchPattern::Expression(Box::new(held)))
             }
             // Type pattern (capitalized identifiers like Integer, String, Hash, Array)
             TokenKind::Ident(name) if name.chars().next().is_some_and(|c| c.is_uppercase()) => {

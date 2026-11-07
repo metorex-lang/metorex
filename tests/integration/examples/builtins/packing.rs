@@ -325,3 +325,44 @@ fn strict_base64_refuses_partial_groups_inner_padding_and_stray_bits() {
         "[\"AAAA\", \"\\x00\\x00\\x00\"]\n[\"AAA=\", \"\\x00\\x00\"]\n[\"\", \"\"]\n[\"AA=\", \"invalid base64\"]\n[\"AA==\\n\", \"invalid base64\"]\n[\"AB==\", \"invalid base64\"]\n[\"AAB=\", \"invalid base64\"]\n[\"AA==AAAA\", \"invalid base64\"]\n[\"A===\", \"invalid base64\"]\n[\"====\", \"invalid base64\"]\n"
     );
 }
+
+#[test]
+fn quoted_printable_packs_and_unpacks_as_ruby_does() {
+    let output = run_example("builtins/quoted_printable_packing.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"first line wraps\\n\\nsecond paragraph\"\n",
+            "#<Encoding:BINARY (ASCII-8BIT)>\n",
+            "\"first line wraps\\r\\n\"\n",
+            "\"r=C3=A9sum=C3=A9 caf=C3=A9 r=C3=A9sum=C3=A9 caf=C3=A9 r=C3=A9sum=C3=A9 ca=\\nf=C3=A9 r=C3=A9sum=C3=A9 caf=C3=A9 r=C3=A9sum=C3=A9 caf=C3=A9 r=C3=A9sum=C3=\\n=A9 caf=C3=A9 =\\n\"\n",
+            "\"tab\\there =\\n\\nend=\\n\"\n",
+            "[75, 9]\n",
+            "\"AB=3\"\n",
+            "\"ab\"\n",
+            "\"bad=zz\"\n",
+            "\"test =0D =F0=9F=8D=BF=\\n\"\n",
+            "\"=4\"\n",
+            "\"x=\"\n",
+            "\"a=zzb\"\n",
+            "\"A=4g\"\n",
+        )
+    );
+}
+
+#[test]
+fn uudecoding_stops_at_the_end_line() {
+    let output = run_example("builtins/uuencode_packing.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"Happy today for to be one of peace and serene time.\\n\"\n",
+            "\"+2&%P<'D@=&]D87D`\\n\"\n",
+            "\"-2&%P<'D@XX&\\\"XX&\\\"<@``\\n\"\n",
+            "\"Happy \\xE3\\x81\\x82\\xE3\\x81\\x82r\"\n",
+            "\"Happy today\"\n",
+            "2\n",
+            "\"\"\n",
+        )
+    );
+}

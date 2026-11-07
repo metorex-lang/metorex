@@ -284,3 +284,9 @@ fn a_method_called_from_a_basic_object_class_body_reads_top_level_constants() {
         run_example("constants/top_level_constant_from_a_method_called_in_a_basic_object_body.rb");
     assert_eq!(output, "Float\nInteger\n1\n1\n");
 }
+
+#[test]
+fn a_replaced_top_level_constant_is_read_back() {
+    let output = run_example("constants/replaced_top_level_constant_is_read_back.rb");
+    assert_eq!(output, ":first\n:second\nfalse\n\"1\"\ntrue\n");
+}

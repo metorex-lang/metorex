@@ -286,7 +286,9 @@ module Marshal
     written = ([MAJOR_VERSION, MINOR_VERSION] + Writer.new(limit).bytes_for(object)).pack "C*"
     written = written.force_encoding Encoding::BINARY
     return written if target.nil?
+    # Ruby hands the target the buffer it wrote into, and empties it after.
     target.write written
+    written.clear
     target
   end
 
@@ -484,7 +486,9 @@ module Marshal
   class Writer
     def initialize(limit = -1)
       @symbols = {}
-      @objects = {}
+      # Keyed by the objects themselves, which holds each one until the dump
+      # ends, so a temporary built for the dump is not mistaken for another.
+      @objects = {}.compare_by_identity
       @out = []
       @limit = limit
     end
@@ -570,13 +574,13 @@ module Marshal
     end
 
     def remember(object)
-      @objects[object.__id__] = @objects.size
+      @objects[object] = @objects.size
     end
 
     def linked(object)
-      return false unless @objects.key? object.__id__
+      return false unless @objects.key? object
       text "@"
-      long @objects[object.__id__]
+      long @objects[object]
       true
     end
 
@@ -667,6 +671,7 @@ module Marshal
       when Struct, Data then write_struct object, held_class, limit
       when Range then write_range object, held_class, limit
       when Exception then write_exception object, held_class, limit
+      when Set then write_set object, held_class, limit
       when *Marshal.__unwritable_classes__
         raise TypeError, "no _dump_data is defined for class #{held_class}"
       when IO, MatchData
@@ -702,6 +707,29 @@ module Marshal
       zone = zone.name unless zone.nil? || zone.is_a?(String)
       pairs << [:zone, zone.to_s.dup.force_encoding(Encoding::US_ASCII)] unless zone.nil?
       pairs
+    end
+
+    # A Set, written as an object holding a Hash from each member to true,
+    # whose default is false. Its own instance variables follow the object.
+    def write_set(object, held_class, limit)
+      remember object
+      variables = Marshal.__variables_of__(object)
+      text "I" unless variables.empty?
+      write_extended object
+      text "o"
+      symbol Marshal.__class_path__(held_class)
+      table = Hash.new(false)
+      table.compare_by_identity if object.compare_by_identity?
+      object.each { |member| table[member] = true }
+      long 1
+      symbol :@hash
+      write table, limit
+      return if variables.empty?
+      long variables.length
+      variables.each do |name|
+        symbol name
+        write object.instance_variable_get(name), limit
+      end
     end
 
     # A Range, written as an object holding whether it leaves out its end,
@@ -848,7 +876,7 @@ module Marshal
       @at = 0
       @symbols = []
       @objects = []
-      @building = {}
+      @building = {}.compare_by_identity
       @handler = handler
       @freeze = freeze
     end
@@ -904,7 +932,7 @@ module Marshal
     # Put an object in the table links refer to, as one still being built.
     def remember(object)
       @objects << object
-      @building[object.__id__] = true
+      @building[object] = true
       @objects.length - 1
     end
 
@@ -912,7 +940,7 @@ module Marshal
     # the one frozen copy every equal String shares, and then handed to the
     # proc, whose answer is what the value is read as.
     def leave(value, at = nil)
-      @building.delete value.__id__
+      @building.delete value
       if @freeze
         frozen = Marshal.__frozen__(value)
         @objects[at] = frozen if !at.nil? && !frozen.equal?(value)
@@ -986,7 +1014,7 @@ module Marshal
       at = read_long
       raise ArgumentError, "dump format error (unlinked)" if at >= @objects.length
       value = @objects[at]
-      return value if @building.key? value.__id__
+      return value if @building.key? value
       @handler.nil? ? value : @handler.call(value)
     end
 
@@ -1139,7 +1167,7 @@ module Marshal
       refers = kind.equal?(Class) ? held.is_a?(Class) : held.instance_of?(Module)
       raise ArgumentError, "#{named} does not refer to #{word}" unless refers
       at = remember held
-      @building.delete held.__id__
+      @building.delete held
       @handler.nil? ? held : leave(held, at)
     end
 
@@ -1160,10 +1188,16 @@ module Marshal
         value = read
         if made.is_a? Exception
           apply_exception_variable made, name, value
+        elsif made.is_a?(Set) && name == :@hash
+          # A Set is written as the Hash of its members.
+          made.compare_by_identity if value.compare_by_identity?
+          value.each_key { |member| made.add member }
         else
           Marshal.__set_variable__ made, name, value
         end
       end
+      # A Set written inside `I` carries its own instance variables after it.
+      read_variables made if variables
       finish made, at, extensions, partial
     end
 

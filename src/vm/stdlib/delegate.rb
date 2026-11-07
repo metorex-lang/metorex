@@ -234,8 +234,8 @@ def DelegateClass(superclass, &block)
     next if left_alone.include? name
     next if plain.respond_to? name, true
     built.class_eval do
-      define_method name do |*arguments, &given|
-        __getobj__.__send__ name, *arguments, &given
+      define_method name do |*arguments, **keywords, &given|
+        __getobj__.__send__ name, *arguments, **keywords, &given
       end
     end
   end

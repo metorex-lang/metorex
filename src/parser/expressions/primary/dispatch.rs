@@ -266,6 +266,11 @@ impl Parser<'_> {
             // ── Keyword-led expressions ─────────────────────────────────────
             // `a ||= raise "..."` puts a raise where a value goes, which
             // reads as a call to `raise` with what follows it.
+            // A local named `raise`, such as a `raise:` keyword parameter,
+            // reads as that local.
+            TokenKind::Raise if self.names_a_local("raise") => {
+                Ok(literals::identifier("raise".to_string(), position))
+            }
             TokenKind::Raise => {
                 let arguments = if self.check(&[TokenKind::LParen]) {
                     self.advance();

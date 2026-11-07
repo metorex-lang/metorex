@@ -1700,6 +1700,22 @@ impl Compiler {
         let held = self.next_register;
         self.terminal_statement(last, to)
             .map_err(naming(last.kind_name()))?;
+        // A branch or loop that ends the clause leaves the locals it assigns
+        // in scope after it, as one written anywhere else does, so an
+        // `ensure` after it closes over them.
+        if matches!(
+            last,
+            Statement::If { .. }
+                | Statement::Unless { .. }
+                | Statement::While { .. }
+                | Statement::DoWhile { .. }
+                | Statement::For { .. }
+                | Statement::Match { .. }
+                | Statement::CaseIn { .. }
+                | Statement::Begin { .. }
+        ) {
+            self.unhoist_assigned(last)?;
+        }
         self.next_register = held;
         self.unit
             .start_inner_statement(start, last.position(), self.next_register);

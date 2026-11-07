@@ -1,0 +1,7 @@
+# The gems rubyzip's tests load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "rubyzip", path: "../../../../gems/rubyzip"
+gem "minitest", "~> 5.25"

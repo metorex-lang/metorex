@@ -1,0 +1,12 @@
+# The gems mime-types's tests load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "mime-types", path: "../../../../gems/mime-types"
+gem "mime-types-data", path: "../../../../gems/mime-types-data"
+gem "minitest", "~> 5.0"
+gem "minitest-focus", "~> 1.0"
+gem "minitest-hooks", "~> 1.4"
+
+shipped "logger"

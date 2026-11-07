@@ -1040,15 +1040,17 @@ impl VirtualMachine {
                     )?;
                     match handled {
                         Some(_) => Ok(()),
+                        // A writer on a class the receiver reaches past its
+                        // own, such as one written onto Object, is found by
+                        // the same lookup a call written out makes.
                         None => {
-                            let wording = self.receiver_wording_for(&receiver_obj, *position);
-                            Err(crate::vm::errors::undefined_method_error_worded(
+                            self.send_to_object(
+                                receiver_obj.clone(),
                                 &setter_method,
-                                &receiver_obj,
-                                std::slice::from_ref(&value),
-                                wording,
+                                vec![value],
                                 *position,
-                            ))
+                            )?;
+                            Ok(())
                         }
                     }
                 }

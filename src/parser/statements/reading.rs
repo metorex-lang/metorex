@@ -136,7 +136,7 @@ impl Parser<'_> {
             TokenKind::Begin => {
                 self.control_flow_statement(token.position, Self::parse_begin_statement)
             }
-            TokenKind::Raise => self.parse_raise_statement(),
+            TokenKind::Raise if !self.names_a_local("raise") => self.parse_raise_statement(),
             TokenKind::Break => self.parse_break_statement(),
             TokenKind::Continue => self.parse_continue_statement(),
             TokenKind::Redo => self.parse_redo_statement(),

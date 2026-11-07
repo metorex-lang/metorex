@@ -238,7 +238,11 @@ impl VirtualMachine {
         let mut length = std::mem::size_of::<libc::sockaddr_storage>() as libc::socklen_t;
         // SAFETY: the descriptor is open and `peer` has room for any address.
         let named = unsafe {
-            libc::getpeername(descriptor, (&mut peer as *mut libc::sockaddr_storage).cast(), &mut length)
+            libc::getpeername(
+                descriptor,
+                (&mut peer as *mut libc::sockaddr_storage).cast(),
+                &mut length,
+            )
         };
         if named == 0 {
             self.hold_as_connection(handle);

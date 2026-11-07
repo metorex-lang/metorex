@@ -133,7 +133,9 @@ impl VirtualMachine {
                 };
                 let client = Connection::client(name);
                 match rsa_key(arguments.get(3..6)) {
-                    Some(key) => client.with_client_certificate(certificates(arguments.get(2)), key),
+                    Some(key) => {
+                        client.with_client_certificate(certificates(arguments.get(2)), key)
+                    }
                     None => client,
                 }
             } else {

@@ -1,0 +1,10 @@
+# The gems jwt's specs load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "jwt", path: "../../../../gems/jwt"
+gem "rspec"
+gem "simplecov"
+
+shipped "base64", "logger"

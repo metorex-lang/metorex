@@ -245,7 +245,19 @@ impl VirtualMachine {
                         }
                     }
                 }
-                _ => return Err(method_argument_error(method_name, 1, 0, position)),
+                None => return Err(method_argument_error(method_name, 1, 0, position)),
+                // Anything else cannot be read as a name.
+                Some(other) => {
+                    let named = match other {
+                        View::Nil => "nil".to_string(),
+                        _ => self.builtins().class_of(&other.to_object()).ruby_name(),
+                    };
+                    return Err(crate::vm::errors::simple_exception(
+                        "TypeError",
+                        &format!("no implicit conversion of {named} into String"),
+                        position,
+                    ));
+                }
             };
             let settled =
                 match wanted.to_ascii_lowercase().as_str() {

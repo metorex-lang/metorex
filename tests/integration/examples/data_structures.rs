@@ -165,7 +165,8 @@ fn test_data_structures_hash_map_execution() {
         "[\"apple:2\", \"pear:3\"]\n",
         "[4, 6]\n",
         "[]\n",
-        "map requires a block\n",
+        "Enumerator\n",
+        "2\n",
     );
     let output = run_example("data_structures/hash_map.rb");
     assert_eq!(output, expected);
@@ -177,7 +178,8 @@ fn test_data_structures_hash_map_parens_execution() {
         "[\"apple:2\", \"pear:3\"]\n",
         "[4, 6]\n",
         "[]\n",
-        "map requires a block\n",
+        "Enumerator\n",
+        "2\n",
     );
     let output = run_example("data_structures/hash_map_parens.rb");
     assert_eq!(output, expected);
@@ -247,4 +249,24 @@ fn test_data_structures_maps_that_hold_weakly_execution() {
 fn test_data_structures_maps_that_hold_weakly_no_parens_execution() {
     let output = run_example("data_structures/maps_that_hold_weakly_no_parens.rb");
     assert_eq!(output, MAPS_THAT_HOLD_WEAKLY_OUTPUT);
+}
+
+#[test]
+fn range_and_hash_map_without_a_block_answer_an_enumerator() {
+    let output = run_example("data_structures/map_without_a_block.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "Enumerator\n",
+            "[[1, 0], [2, 1], [3, 2]]\n",
+            "[1, 4]\n",
+            "3\n",
+            "[2, 4, 6]\n",
+            "Enumerator\n",
+            "2\n",
+            "[\"a=1\", \"b=2\"]\n",
+            "[\"y:2\", \"z:1\"]\n",
+            "[[[:b, 2], 0], [[:a, 1], 1]]\n",
+        )
+    );
 }

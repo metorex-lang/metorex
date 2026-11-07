@@ -91,3 +91,48 @@
 [submodule "gems/websocket-extensions"]
 	path = gems/websocket-extensions
 	url = https://github.com/faye/websocket-extensions-ruby
+[submodule "gems/i18n"]
+	path = gems/i18n
+	url = https://github.com/ruby-i18n/i18n
+[submodule "gems/tzinfo"]
+	path = gems/tzinfo
+	url = https://github.com/tzinfo/tzinfo
+[submodule "gems/multi_json"]
+	path = gems/multi_json
+	url = https://github.com/sferik/multi_json
+[submodule "gems/multi_xml"]
+	path = gems/multi_xml
+	url = https://github.com/sferik/multi_xml
+[submodule "gems/builder"]
+	path = gems/builder
+	url = https://github.com/rails/builder
+[submodule "gems/mime-types"]
+	path = gems/mime-types
+	url = https://github.com/mime-types/ruby-mime-types
+[submodule "gems/mime-types-data"]
+	path = gems/mime-types-data
+	url = https://github.com/mime-types/mime-types-data
+[submodule "gems/mini_mime"]
+	path = gems/mini_mime
+	url = https://github.com/discourse/mini_mime
+[submodule "gems/mail"]
+	path = gems/mail
+	url = https://github.com/mikel/mail
+[submodule "gems/addressable"]
+	path = gems/addressable
+	url = https://github.com/sporkmonger/addressable
+[submodule "gems/public_suffix"]
+	path = gems/public_suffix
+	url = https://github.com/weppos/publicsuffix-ruby
+[submodule "gems/jwt"]
+	path = gems/jwt
+	url = https://github.com/jwt/ruby-jwt
+[submodule "gems/dotenv"]
+	path = gems/dotenv
+	url = https://github.com/bkeepers/dotenv
+[submodule "gems/netrc"]
+	path = gems/netrc
+	url = https://github.com/geemus/netrc
+[submodule "gems/rubyzip"]
+	path = gems/rubyzip
+	url = https://github.com/rubyzip/rubyzip

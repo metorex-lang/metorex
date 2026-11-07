@@ -137,6 +137,14 @@ fn builtin_key(vm: &crate::vm::VirtualMachine, name: &str) -> String {
 }
 
 impl VirtualMachine {
+    /// The frame a call is made from, which a `break` in a block written
+    /// there unwinds to: inside a block it is the method the block was
+    /// written in, the same frame the block takes as its home, whichever
+    /// method is running the block.
+    pub(crate) fn calling_frame(&self) -> Option<u64> {
+        self.lexical_home_frame.unwrap_or(self.current_method_frame)
+    }
+
     /// Evaluate a method call expression on a receiver object.
     pub(crate) fn evaluate_method_call(
         &mut self,
@@ -147,7 +155,7 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         let has_block = trailing_block.is_some();
-        let calling_frame = self.current_method_frame;
+        let calling_frame = self.calling_frame();
         let result = self.evaluate_method_call_inner(
             receiver_expr,
             method_name,
@@ -510,7 +518,7 @@ impl VirtualMachine {
         // Fallback: methods defined on the global Object class (mspec injects
         // describe/it/before/after there).
         if self.class_line_reaches_object(&receiver)
-            && let Some((object_class, method)) = self.object_table_method(method_name)
+            && let Some((object_class, method)) = self.object_table_method_for(&receiver, method_name)
         {
             // A private one, as every top-level method is, refuses a call
             // written with a receiver.
@@ -1010,6 +1018,23 @@ impl VirtualMachine {
         let Some(caller) = self.environment().get("self") else {
             return false;
         };
+        // A class is a kind of what its singleton classes are and carry, a
+        // module extended into one of them among them.
+        if let View::Class(class_rc) | View::Module(class_rc) = caller.view() {
+            let mut cursor = Some(Rc::clone(class_rc));
+            while let Some(current) = cursor {
+                if let Some(singleton) = current.singleton_class_slot().as_ref()
+                    && (Rc::ptr_eq(singleton, owner)
+                        || singleton
+                            .transitive_mixins()
+                            .iter()
+                            .any(|mixin| Rc::ptr_eq(mixin, owner)))
+                {
+                    return true;
+                }
+                cursor = current.superclass();
+            }
+        }
         let mut cursor = match caller.view() {
             View::Class(class_rc) | View::Module(class_rc) => Some(Rc::clone(class_rc)),
             View::Instance(instance) => Some(Rc::clone(&instance.borrow().class)),
@@ -1297,6 +1322,48 @@ impl VirtualMachine {
         };
         let method = object_class.find_method(method_name)?;
         (!method.is_undefined).then_some((object_class.clone(), method))
+    }
+
+    /// The method written on Object that `receiver` answers `method_name`
+    /// with, unless the receiver's own class undefined that name.
+    pub(crate) fn object_table_method_for(
+        &self,
+        receiver: &Object,
+        method_name: &str,
+    ) -> Option<(Rc<Class>, Rc<Method>)> {
+        let undefined_on_class = self
+            .builtins()
+            .class_of(receiver)
+            .find_method(method_name)
+            .is_some_and(|method| method.is_undefined);
+        if undefined_on_class {
+            return None;
+        }
+        self.object_table_method(method_name)
+    }
+
+    /// The method written on Object that instances of `class_rc` reach when
+    /// its own chain finds none: a core class's chain stops at an Object of
+    /// its own. None when a class below Object answers the name natively.
+    pub(crate) fn object_method_reached_from(
+        &self,
+        class_rc: &Rc<Class>,
+        method_name: &str,
+    ) -> Option<(Rc<Class>, Rc<Method>)> {
+        if class_rc.is_module() {
+            return None;
+        }
+        let mut cursor = Some(Rc::clone(class_rc));
+        while let Some(current) = cursor {
+            if current.with_ruby_name(|named| named == "Object") {
+                break;
+            }
+            if crate::vm::native_methods::class_answers_natively(&current, method_name, false) {
+                return None;
+            }
+            cursor = current.superclass();
+        }
+        self.object_table_method(method_name)
     }
 
     /// Whether `method`, found for an exception, nil, true or false, is one

@@ -34,6 +34,13 @@ int rb_enc_dummy_p(rb_encoding *encoding);
 #define RUBY_ENC_CODERANGE_BROKEN ENC_CODERANGE_BROKEN
 int rb_enc_str_coderange(VALUE string);
 int rb_enc_str_asciionly_p(VALUE string);
+int rb_enc_str_asciicompat_p(VALUE string);
+typedef unsigned int OnigCodePoint;
+/* metorex keeps no coderange on a string, so reading one works it out and
+   setting one is dropped. */
+#define ENC_CODERANGE(string) rb_enc_str_coderange(string)
+#define ENC_CODERANGE_CLEAN_P(range) ((range) == ENC_CODERANGE_7BIT || (range) == ENC_CODERANGE_VALID)
+#define ENC_CODERANGE_SET(string, range) ((void)(string), (void)(range))
 #define ENC_CODERANGE_ASCIIONLY(string) (rb_enc_str_coderange(string) == ENC_CODERANGE_7BIT)
 /* metorex works a string's coderange out each time it is asked for, so
  * there is nothing held to clear. */

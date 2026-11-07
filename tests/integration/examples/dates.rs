@@ -20,7 +20,7 @@ fn test_dates_points_in_time_no_parens_execution() {
 
 /// The expected output of both `dates/calendar_days` variants, which differ
 /// only in whether the calls are written with parentheses.
-const CALENDAR_DAYS_OUTPUT: &str = "2454482\n2008\n1\n16\n16\n3\n2008\n3\n3\n54481\n(4908963/2)\ntrue\ntrue\n\"2008-01-16\"\n\"#<Date: 2008-01-16 ((2454482j,0s,0n),+0s,2299161j)>\"\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n\"2008-02-15\"\n\"2007-12-17\"\n\"2008-03-16\"\n\"2007-12-16\"\n\"2008-01-17\"\n\"2008-02-16\"\n\"2009-01-16\"\n29\ntrue\ntrue\nfalse\ntrue\ntrue\n\"Wednesday, January 16, 2008\"\n\"Wed Jan 16 2008\"\n\"016 02 02 03\"\n\"       JAN\"\n\"1582-10-04\"\n\"1582-10-15\"\ntrue\ntrue\ntrue\n[16, 17, 18, 19]\n[16, 18, 20, 22]\n";
+const CALENDAR_DAYS_OUTPUT: &str = "2454482\n2008\n1\n16\n16\n3\n2008\n3\n3\n54481\n(4908963/2)\ntrue\ntrue\n\"2008-01-16\"\n\"#<Date: 2008-01-16 ((2454482j,0s,0n),+0s,2299161j)>\"\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n\"2008-02-15\"\n\"2007-12-17\"\n\"2008-03-16\"\n\"2007-12-16\"\n\"2008-01-17\"\n\"2008-02-16\"\n\"2009-01-16\"\n(29/1)\ntrue\ntrue\nfalse\ntrue\ntrue\n\"Wednesday, January 16, 2008\"\n\"Wed Jan 16 2008\"\n\"016 02 02 03\"\n\"       JAN\"\n\"1582-10-04\"\n\"1582-10-15\"\ntrue\ntrue\ntrue\n[16, 17, 18, 19]\n[16, 18, 20, 22]\n";
 
 #[test]
 fn test_dates_calendar_days_execution() {
@@ -192,4 +192,94 @@ fn time_parse_keeps_the_zone_and_fraction_the_text_names() {
 fn a_day_month_year_date_with_dashes_keeps_its_year_positive() {
     let output = run_example("dates/time_parse_dashed_rfc_date.rb");
     assert_eq!(output, "2037\nfalse\n[2037, 9, 27]\n[2037, 9, 27]\n");
+}
+
+#[test]
+fn a_date_or_datetime_subclass_keeps_its_class() {
+    let output = run_example("dates/datetime_subclass_keeps_its_class.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "StampedDateTime\n",
+            "\"2000-01-01T06:00:00+00:00\"\n",
+            "StampedDateTime\n",
+            "StampedDateTime\n",
+            "StampedDateTime\n",
+            "StampedDateTime\n",
+            "StampedDateTime\n",
+            "StampedDateTime\n",
+            "\"2000-01-01T07:00:00+01:00\"\n",
+            "StampedDateTime\n",
+            "StampedDateTime\n",
+            "StampedDateTime\n",
+            "StampedDateTime\n",
+            "StampedDateTime\n",
+            "StampedDateTime\n",
+            "StampedDateTime\n",
+            "5\n",
+            "StampedDateTime\n",
+            "WorkDay\n",
+            "WorkDay\n",
+            "\"2024-02-29\"\n",
+            "WorkDay\n",
+            "WorkDay\n",
+            "WorkDay\n",
+            "Date\n",
+            "StampedDateTime\n",
+        )
+    );
+}
+
+#[test]
+fn date_and_datetime_differences_count_the_instants_apart() {
+    let output = run_example("dates/datetime_difference_across_offsets.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "(1/86400)\n",
+            "(-1/86400)\n",
+            "(79201/86400)\n",
+            "(1/2)\n",
+            "(1/4)\n",
+            "(-11/24)\n",
+            "\"2017-01-14T23:00:01+01:00\"\n",
+            "(15/1)\n",
+            "false\n",
+            "10\n",
+            "false\n",
+        )
+    );
+}
+
+#[test]
+fn iso_week_dates_parse_into_commercial_fields() {
+    let output = run_example("dates/iso_week_dates_parsed.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"2020-W01-2\", {cwyear: 2020, cweek: 1, cwday: 2}, \"2019-12-31\"]\n",
+            "[\"2020-W01\", {cwyear: 2020, cweek: 1}, \"2019-12-30\"]\n",
+            "[\"20W012\", {cwyear: 2020, cweek: 1, cwday: 2}, \"2019-12-31\"]\n",
+            "[\"2020W012\", {cwyear: 2020, cweek: 1, cwday: 2}, \"2019-12-31\"]\n",
+            "[\"2020-w10-7 10:00\", {hour: 10, min: 0, cwyear: 2020, cweek: 10, cwday: 7}, \"2020-03-08\"]\n",
+            "[\"Week 2020-W01-2 ok\", {cwyear: 2020, cweek: 1, cwday: 2}, \"2019-12-31\"]\n",
+            "[\"20-W01\", {cwyear: 2020, cweek: 1}, \"2019-12-30\"]\n",
+            "{cwday: 3}\n",
+            "{cweek: 5}\n",
+            "3\n",
+            "5\n",
+            "\"2019-12-30T10:30:00+00:00\"\n",
+            "[ArgumentError, \"no time information in \\\"2020-W01-2\\\"\"]\n",
+            "{year: 2024, mon: 3, mday: 9}\n",
+        )
+    );
+}
+
+#[test]
+fn datetime_ctime_writes_its_time_of_day() {
+    let output = run_example("dates/datetime_ctime_keeps_the_clock.rb");
+    assert_eq!(
+        output,
+        "\"Fri Nov  6 19:06:45 2026\"\n\"Fri Nov  6 19:06:45 2026\"\n\"Fri Nov  6 00:00:00 2026\"\n\"Fri Nov  6 00:00:00 2026\"\n"
+    );
 }

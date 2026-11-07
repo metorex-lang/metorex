@@ -109,3 +109,70 @@ fn an_if_modifier_after_a_jump_operand_covers_the_whole_expression() {
         )
     );
 }
+
+#[test]
+fn a_rescue_modifier_fallback_can_assign() {
+    let output = run_example("parser/assignment_after_a_rescue_modifier.rb");
+    assert_eq!(output, "3\n-1\n4\n4\n");
+}
+
+#[test]
+fn a_parameter_named_raise_reads_as_a_local() {
+    let output = run_example("parser/raise_as_a_parameter_name.rb");
+    assert_eq!(output, "false\n:raise\n:throw\n3\n:a\n[:b, :loud]\n");
+}
+
+#[test]
+fn a_method_defined_on_nil_true_or_false_belongs_to_its_class() {
+    let output = run_example("parser/def_on_nil_true_and_false.rb");
+    assert_eq!(
+        output,
+        "\"nothing, nil\"\n\"yes\"\n\"no\"\nNilClass\nNilClass\n"
+    );
+}
+
+#[test]
+fn variables_interpolate_without_braces() {
+    let output = run_example("parser/interpolating_variables_without_braces.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"42 items\"\n",
+            "\"hello world\"\n",
+            "\"ledger entries\"\n",
+            "\"42\"\n",
+            "\"42 found\"\n",
+            "\"\\#@ sign\"\n",
+            "\"#1\"\n",
+            "\"4242\"\n",
+            "\"\\#$ alone\"\n",
+            "\"7 total\"\n",
+            "\"%(%*)Z\"\n",
+            "\"heredoc 77 and ledger\\n\"\n",
+            "\"percent 77\"\n",
+            "\"command 77\"\n",
+            "\"77\"\n",
+        )
+    );
+}
+
+#[test]
+fn a_local_assigned_in_a_branch_is_seen_by_a_block_in_ensure() {
+    let output = run_example("parser/local_assigned_in_a_branch_read_in_ensure.rb");
+    assert_eq!(output, "true\n:failed\nnil\n:passed\n[nil, \"local-variable\"]\n");
+}
+
+#[test]
+fn include_and_extend_take_a_method_call_and_a_ternary() {
+    let output = run_example("parser/command_argument_predicate_then_ternary.rb");
+    assert_eq!(output, "true\n:yes\n1\ntrue\n");
+}
+
+#[test]
+fn a_case_pattern_written_with_leading_colons_reads_the_top_level_constant() {
+    let output = run_example("parser/when_names_a_top_level_class.rb");
+    assert_eq!(
+        output,
+        ":date\n:time\n:time\n:other\ntrue\ntrue\n:top_date\n:number\n:other\n"
+    );
+}

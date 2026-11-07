@@ -282,21 +282,27 @@ impl VirtualMachine {
                 )?)))
             }
             "hash" => {
-                let rendered = format!(
-                    "{}[{}]({})",
-                    class_rc.ruby_name(),
-                    members.join(","),
-                    member_values(receiver, members)
-                        .iter()
-                        .map(crate::vm::native_methods::array_methods::inspect_element)
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                );
-                let mut digest: i64 = 0;
-                for byte in rendered.bytes() {
-                    digest = digest.wrapping_mul(31).wrapping_add(byte as i64);
+                // The class's hash, with each member's mixed in. A struct
+                // reached again while it is being hashed adds nothing more.
+                let address = crate::vm::object_ids::reference_address(receiver).unwrap_or(0);
+                let mut digest = self.hash_digest(&Object::Class(Rc::clone(class_rc)), position)?;
+                if STRUCTS_BEING_HASHED.with(|held| held.borrow().contains(&address)) {
+                    return Ok(Some(Object::Int(digest)));
                 }
-                Ok(Some(Object::Int(digest)))
+                STRUCTS_BEING_HASHED.with(|held| held.borrow_mut().push(address));
+                let mixed: Result<i64, MetorexError> = (|| {
+                    for value in member_values(receiver, members) {
+                        let hashed = self.send_to_object(value, "hash", vec![], position)?;
+                        if let View::Int(number) = hashed.view() {
+                            digest = digest.wrapping_mul(31).wrapping_add(number);
+                        }
+                    }
+                    Ok(digest)
+                })();
+                STRUCTS_BEING_HASHED.with(|held| {
+                    held.borrow_mut().pop();
+                });
+                Ok(Some(Object::Int(mixed?)))
             }
             "inspect" | "to_s" => {
                 // A struct reached again while it is being inspected shows
@@ -600,6 +606,9 @@ fn is_generated_member_accessor(
 }
 
 thread_local! {
+    /// The structs whose `hash` is being worked out now.
+    static STRUCTS_BEING_HASHED: std::cell::RefCell<Vec<usize>> =
+        const { std::cell::RefCell::new(Vec::new()) };
     /// The structs whose `inspect` is being rendered now.
     static STRUCTS_BEING_INSPECTED: std::cell::RefCell<Vec<usize>> =
         const { std::cell::RefCell::new(Vec::new()) };

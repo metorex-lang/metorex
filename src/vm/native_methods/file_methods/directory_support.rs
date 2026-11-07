@@ -141,8 +141,6 @@ impl VirtualMachine {
         Ok(names)
     }
 
-    /// Where a user's files live: `$HOME` when no user is named, and the
-    /// password database otherwise.
     /// A name the file system gave, tagged in the encoding the program reads
     /// file names in.
     pub(crate) fn filesystem_text(&self, text: String) -> Object {
@@ -153,21 +151,30 @@ impl VirtualMachine {
         external_text(text, &encoding)
     }
 
+    /// Where a user's files live: `$HOME` when no user is named, and the
+    /// password database otherwise. With no `$HOME`, the database is asked
+    /// for the session's login name, as `getlogin` or `$USER` gives it, and
+    /// then for the user the program runs as.
     pub(crate) fn directory_home(
         &mut self,
         user: Option<String>,
         position: Position,
     ) -> Result<Object, MetorexError> {
         let Some(user) = user else {
-            if let Ok(held) = std::env::var("HOME")
-                && !held.is_empty()
-            {
+            if let Ok(held) = std::env::var("HOME") {
                 return Ok(self.filesystem_text(held));
             }
-            let found = self.passwd_home_for(None);
+            let found = login_name()
+                .and_then(|login| self.passwd_home_for(Some(&login)))
+                .or_else(|| self.passwd_home_for(None));
             return match found {
                 Some(home) => Ok(self.filesystem_text(home)),
-                None => Ok(self.filesystem_text("/".to_string())),
+                None => Err(crate::vm::errors::simple_exception(
+                    "ArgumentError",
+                    // SAFETY: getuid cannot fail.
+                    &format!("couldn't find home for uid '{}'", unsafe { libc::getuid() }),
+                    position,
+                )),
             };
         };
         match self.passwd_home_for(Some(&user)) {
@@ -289,4 +296,17 @@ pub(crate) fn external_text(text: String, encoding: &str) -> Object {
         text,
         encoding.to_string(),
     )))
+}
+
+/// The name the session logged in as: what `getlogin` answers, or `$USER`
+/// where it answers nothing.
+fn login_name() -> Option<String> {
+    // SAFETY: getlogin answers null or a C string the library owns, read
+    // before any other call to it.
+    let held = unsafe { libc::getlogin() };
+    if !held.is_null() {
+        // SAFETY: the pointer is non-null and names a C string.
+        return Some(unsafe { std::ffi::CStr::from_ptr(held) }.to_string_lossy().to_string());
+    }
+    std::env::var("USER").ok()
 }

@@ -24,15 +24,8 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let View::String(path) = arguments[0].view() else {
-                    return Err(method_argument_type_error(
-                        method_name,
-                        "String",
-                        &arguments[0],
-                        position,
-                    ));
-                };
-                if std::path::Path::new(&path_text(path)).is_dir() {
+                let path = self.directory_path_argument(method_name, &arguments[0], position)?;
+                if std::path::Path::new(&path).is_dir() {
                     return Err(crate::vm::errors::simple_exception(
                         "Errno::EISDIR",
                         &format!("Is a directory @ io_fread - {path}"),
@@ -64,7 +57,7 @@ impl VirtualMachine {
                     Some(View::Int(held)) => held as usize,
                     _ => 0,
                 };
-                let held = std::fs::read(path_text(path)).map_err(|problem| {
+                let held = std::fs::read(&path).map_err(|problem| {
                     crate::vm::errors::simple_exception(
                         "Errno::ENOENT",
                         &format!("No such file or directory @ rb_sysopen - {path}: {problem}"),

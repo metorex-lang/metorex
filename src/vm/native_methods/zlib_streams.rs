@@ -119,6 +119,33 @@ impl Huffman {
         Self { counts, symbols }
     }
 
+    /// Whether the lengths make a code zlib accepts: none over-subscribed,
+    /// and none incomplete except where `lone_code_allowed` lets a single
+    /// code of one bit stand alone, as a literal or distance code may.
+    fn lengths_accepted(lengths: &[u8], lone_code_allowed: bool) -> bool {
+        const MAX_BITS: usize = 15;
+        let mut counts = [0i32; MAX_BITS + 1];
+        for length in lengths {
+            counts[*length as usize] += 1;
+        }
+        let longest = (1..=MAX_BITS)
+            .rev()
+            .find(|bits| counts[*bits] != 0)
+            .unwrap_or(0);
+        if longest == 0 {
+            return true;
+        }
+        let mut left = 1i32;
+        for count in counts.iter().skip(1) {
+            left <<= 1;
+            left -= count;
+            if left < 0 {
+                return false;
+            }
+        }
+        left == 0 || (lone_code_allowed && longest == 1)
+    }
+
     fn decode(&self, reader: &mut BitReader<'_>) -> Option<u16> {
         let mut code = 0i32;
         let mut first = 0i32;
@@ -166,46 +193,67 @@ fn fixed_codes() -> (Huffman, Huffman) {
     )
 }
 
+/// Why a stream could not be read: it stopped short, or it is not a stream,
+/// for the reason zlib gives.
+enum Stop {
+    Short,
+    Invalid(&'static str),
+}
+
+/// A read that ran out of bytes stopped short.
+fn bits(read: Option<u32>) -> Result<u32, Stop> {
+    read.ok_or(Stop::Short)
+}
+
 /// The code lengths a dynamic block names for itself.
-fn dynamic_codes(reader: &mut BitReader<'_>) -> Option<(Huffman, Huffman)> {
+fn dynamic_codes(reader: &mut BitReader<'_>) -> Result<(Huffman, Huffman), Stop> {
     const ORDER: [usize; 19] = [
         16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15,
     ];
-    let literal_count = reader.read_bits(5)? as usize + 257;
-    let distance_count = reader.read_bits(5)? as usize + 1;
-    let code_count = reader.read_bits(4)? as usize + 4;
+    let literal_count = bits(reader.read_bits(5))? as usize + 257;
+    let distance_count = bits(reader.read_bits(5))? as usize + 1;
+    let code_count = bits(reader.read_bits(4))? as usize + 4;
+    if literal_count > 286 || distance_count > 30 {
+        return Err(Stop::Invalid("too many length or distance symbols"));
+    }
     let mut code_lengths = [0u8; 19];
     for place in ORDER.iter().take(code_count) {
-        code_lengths[*place] = reader.read_bits(3)? as u8;
+        code_lengths[*place] = bits(reader.read_bits(3))? as u8;
+    }
+    if !Huffman::lengths_accepted(&code_lengths, false) {
+        return Err(Stop::Invalid("invalid code lengths set"));
     }
     let code_code = Huffman::from_lengths(&code_lengths);
-    let mut lengths = Vec::with_capacity(literal_count + distance_count);
-    while lengths.len() < literal_count + distance_count {
-        let symbol = code_code.decode(reader)?;
-        match symbol {
-            0..=15 => lengths.push(symbol as u8),
+    let total = literal_count + distance_count;
+    let mut lengths = Vec::with_capacity(total);
+    while lengths.len() < total {
+        let symbol = code_code.decode(reader).ok_or(Stop::Short)?;
+        let (value, repeat) = match symbol {
+            0..=15 => (symbol as u8, 1),
             16 => {
-                let previous = *lengths.last()?;
-                let repeat = reader.read_bits(2)? + 3;
-                for _ in 0..repeat {
-                    lengths.push(previous);
-                }
+                let Some(previous) = lengths.last().copied() else {
+                    return Err(Stop::Invalid("invalid bit length repeat"));
+                };
+                (previous, bits(reader.read_bits(2))? as usize + 3)
             }
-            17 => {
-                let repeat = reader.read_bits(3)? as usize + 3;
-                lengths.extend(std::iter::repeat_n(0u8, repeat));
-            }
-            18 => {
-                let repeat = reader.read_bits(7)? as usize + 11;
-                lengths.extend(std::iter::repeat_n(0u8, repeat));
-            }
-            _ => return None,
+            17 => (0, bits(reader.read_bits(3))? as usize + 3),
+            _ => (0, bits(reader.read_bits(7))? as usize + 11),
+        };
+        if lengths.len() + repeat > total {
+            return Err(Stop::Invalid("invalid bit length repeat"));
         }
+        lengths.extend(std::iter::repeat_n(value, repeat));
     }
-    if lengths.len() > literal_count + distance_count {
-        return None;
+    if lengths[256] == 0 {
+        return Err(Stop::Invalid("invalid code -- missing end-of-block"));
     }
-    Some((
+    if !Huffman::lengths_accepted(&lengths[..literal_count], true) {
+        return Err(Stop::Invalid("invalid literal/lengths set"));
+    }
+    if !Huffman::lengths_accepted(&lengths[literal_count..], true) {
+        return Err(Stop::Invalid("invalid distances set"));
+    }
+    Ok((
         Huffman::from_lengths(&lengths[..literal_count]),
         Huffman::from_lengths(&lengths[literal_count..]),
     ))
@@ -225,10 +273,24 @@ pub(crate) fn inflate_counted(bytes: &[u8]) -> Option<(Vec<u8>, usize)> {
 /// The same read, with a preset dictionary standing in front of the output so
 /// a back-reference can reach into it.
 pub(crate) fn inflate_counted_with(bytes: &[u8], dictionary: &[u8]) -> Option<(Vec<u8>, usize)> {
+    inflate_checked_with(bytes, dictionary).ok().flatten()
+}
+
+/// The same read, telling a stream that stopped short, as None, from one
+/// that is not a stream at all, as the reason zlib gives.
+fn inflate_checked_with(
+    bytes: &[u8],
+    dictionary: &[u8],
+) -> Result<Option<(Vec<u8>, usize)>, &'static str> {
     let mut out: Vec<u8> = dictionary.to_vec();
-    let used = inflate_into(bytes, &mut out)?;
-    out.drain(..dictionary.len());
-    Some((out, used))
+    match inflate_into(bytes, &mut out) {
+        Ok(used) => {
+            out.drain(..dictionary.len());
+            Ok(Some((out, used)))
+        }
+        Err(Stop::Short) => Ok(None),
+        Err(Stop::Invalid(reason)) => Err(reason),
+    }
 }
 
 /// What the stream at the front of `bytes` stands for as far as the bytes
@@ -242,20 +304,28 @@ pub(crate) fn inflate_so_far(bytes: &[u8], dictionary: &[u8]) -> Vec<u8> {
 
 /// Read a DEFLATE stream onto the end of `out`, answering how many bytes
 /// the stream took. When the bytes run out first, `out` holds what was read
-/// up to there and the answer is None.
-fn inflate_into(bytes: &[u8], out: &mut Vec<u8>) -> Option<usize> {
+/// up to there and the stream stopped short.
+fn inflate_into(bytes: &[u8], out: &mut Vec<u8>) -> Result<usize, Stop> {
     let mut reader = BitReader::new(bytes);
     loop {
-        let last = reader.read_bit()?;
-        let kind = reader.read_bits(2)?;
+        let last = bits(reader.read_bit())?;
+        let kind = bits(reader.read_bits(2))?;
         match kind {
             0 => {
                 reader.align();
                 let at = reader.at;
-                let length = u16::from_le_bytes([*bytes.get(at)?, *bytes.get(at + 1)?]) as usize;
+                let header = bytes.get(at..at + 4).ok_or(Stop::Short)?;
+                let length = u16::from_le_bytes([header[0], header[1]]);
+                if length != !u16::from_le_bytes([header[2], header[3]]) {
+                    return Err(Stop::Invalid("invalid stored block lengths"));
+                }
                 reader.at = at + 4;
-                let piece = bytes.get(reader.at..reader.at + length)?;
-                out.extend_from_slice(piece);
+                let length = length as usize;
+                let available = bytes.len().saturating_sub(reader.at).min(length);
+                out.extend_from_slice(&bytes[reader.at..reader.at + available]);
+                if available < length {
+                    return Err(Stop::Short);
+                }
                 reader.at += length;
             }
             1 | 2 => {
@@ -265,22 +335,23 @@ fn inflate_into(bytes: &[u8], out: &mut Vec<u8>) -> Option<usize> {
                     dynamic_codes(&mut reader)?
                 };
                 loop {
-                    let symbol = literals.decode(&mut reader)?;
+                    let symbol = literals.decode(&mut reader).ok_or(Stop::Short)?;
                     match symbol {
                         0..=255 => out.push(symbol as u8),
                         256 => break,
                         257..=285 => {
                             let slot = symbol as usize - 257;
                             let length = LENGTH_BASE[slot] as usize
-                                + reader.read_bits(LENGTH_EXTRA[slot])? as usize;
-                            let distance_symbol = distances.decode(&mut reader)? as usize;
+                                + bits(reader.read_bits(LENGTH_EXTRA[slot]))? as usize;
+                            let distance_symbol =
+                                distances.decode(&mut reader).ok_or(Stop::Short)? as usize;
                             if distance_symbol >= DISTANCE_BASE.len() {
-                                return None;
+                                return Err(Stop::Invalid("invalid distance code"));
                             }
                             let distance = DISTANCE_BASE[distance_symbol] as usize
-                                + reader.read_bits(DISTANCE_EXTRA[distance_symbol])? as usize;
+                                + bits(reader.read_bits(DISTANCE_EXTRA[distance_symbol]))? as usize;
                             if distance > out.len() {
-                                return None;
+                                return Err(Stop::Invalid("invalid distance too far back"));
                             }
                             let start = out.len() - distance;
                             for step in 0..length {
@@ -288,18 +359,18 @@ fn inflate_into(bytes: &[u8], out: &mut Vec<u8>) -> Option<usize> {
                                 out.push(byte);
                             }
                         }
-                        _ => return None,
+                        _ => return Err(Stop::Invalid("invalid literal/length code")),
                     }
                 }
             }
-            _ => return None,
+            _ => return Err(Stop::Invalid("invalid block type")),
         }
         if last == 1 {
             break;
         }
     }
     reader.align();
-    Some(reader.at)
+    Ok(reader.at)
 }
 
 /// Whether a zlib header says the stream was written against a dictionary the
@@ -310,58 +381,108 @@ pub(crate) fn wants_dictionary(bytes: &[u8]) -> bool {
 
 /// What a zlib stream stands for, alongside the number of bytes it took up,
 /// its header and checksum counted in, read against a preset dictionary the
-/// header named.
-pub(crate) fn zlib_unwrap_counted_with(
+/// header named. A stream that stopped short is None, and one that is not a
+/// zlib stream is the reason zlib gives.
+fn zlib_unwrap_checked_with(
     bytes: &[u8],
     dictionary: &[u8],
-) -> Option<(Vec<u8>, usize)> {
+) -> Result<Option<(Vec<u8>, usize)>, &'static str> {
     if bytes.len() < 2 {
-        return None;
+        return Ok(None);
+    }
+    if (u16::from(bytes[0]) << 8 | u16::from(bytes[1])) % 31 != 0 {
+        return Err("incorrect header check");
+    }
+    if bytes[0] & 0x0f != 8 {
+        return Err("unknown compression method");
+    }
+    if bytes[0] >> 4 > 7 {
+        return Err("invalid window size");
     }
     // A header naming a dictionary is followed by the dictionary's checksum,
     // which the stream itself begins after.
     let front = if wants_dictionary(bytes) { 6 } else { 2 };
-    let (held, used) = inflate_counted_with(bytes.get(front..)?, dictionary)?;
-    if bytes.len() < front + used + 4 {
-        return None;
+    let Some(body) = bytes.get(front..) else {
+        return Ok(None);
+    };
+    let Some((held, used)) = inflate_checked_with(body, dictionary)? else {
+        return Ok(None);
+    };
+    let Some(check) = bytes.get(front + used..front + used + 4) else {
+        return Ok(None);
+    };
+    if u32::from_be_bytes([check[0], check[1], check[2], check[3]]) != adler32(1, &held) {
+        return Err("incorrect data check");
     }
-    Some((held, front + used + 4))
+    Ok(Some((held, front + used + 4)))
 }
 
 /// The same, written against a dictionary. A stream that names one says so in
 /// its header and carries the dictionary's checksum, so a reader can tell
 /// whether it holds the dictionary the writer used.
-pub(crate) fn zlib_wrap_with(bytes: &[u8], dictionary: &[u8]) -> Vec<u8> {
-    let mut out = if dictionary.is_empty() {
-        vec![0x78, 0x9c]
-    } else {
-        vec![0x78, 0xbb]
+pub(crate) fn zlib_wrap_with(bytes: &[u8], dictionary: &[u8], level: i64) -> Vec<u8> {
+    // The header names how hard the writer worked, in the four steps zlib
+    // sorts its levels into, and whether a dictionary was used, with a check
+    // that makes the two bytes a multiple of 31.
+    const CMF: u16 = 0x78;
+    let effort: u16 = match level {
+        0 | 1 => 0,
+        2..=5 => 1,
+        7..=9 => 3,
+        _ => 2,
     };
+    let mut flags = (effort << 6) | if dictionary.is_empty() { 0 } else { 0x20 };
+    flags += 31 - ((CMF << 8) | flags) % 31;
+    let mut out = vec![CMF as u8, flags as u8];
     if !dictionary.is_empty() {
         out.extend_from_slice(&adler32(1, dictionary).to_be_bytes());
     }
-    out.extend_from_slice(&super::zlib_deflate::deflate(bytes, dictionary));
+    out.extend_from_slice(&super::zlib_deflate::deflate(bytes, dictionary, level));
     out.extend_from_slice(&adler32(1, bytes).to_be_bytes());
     out
 }
 
-/// What a zlib stream stands for, with its header and checksum taken off.
-pub(crate) fn zlib_unwrap(bytes: &[u8]) -> Option<Vec<u8>> {
+/// What a gzip member stands for, or the class and message of the error
+/// Ruby's zlib raises for one that is not whole or not right: checked in the
+/// order Ruby checks, the header, the compressed data, then the trailer's
+/// CRC and length.
+fn gzip_unwrap_checked(bytes: &[u8]) -> Result<Vec<u8>, (&'static str, String)> {
+    const GZIP_ERROR: &str = "Zlib::GzipFile::Error";
+    let short = || (GZIP_ERROR, "unexpected end of string".to_string());
     if bytes.len() < 2 {
-        return None;
+        return Err(short());
     }
-    let body = bytes.get(2..bytes.len().saturating_sub(4))?;
-    inflate(body)
-}
-
-/// What a gzip member stands for, with its header and trailer taken off.
-pub(crate) fn gzip_unwrap(bytes: &[u8]) -> Option<Vec<u8>> {
-    if bytes.len() < 18 {
-        return None;
+    if bytes[0] != 0x1f || bytes[1] != 0x8b {
+        return Err((GZIP_ERROR, "not in gzip format".to_string()));
     }
-    let at = gzip_body_start(bytes)?;
-    let body = bytes.get(at..bytes.len().saturating_sub(8))?;
-    inflate(body)
+    match bytes.get(2) {
+        None => return Err(short()),
+        Some(8) => {}
+        Some(method) => return Err((GZIP_ERROR, format!("unsupported compression method {method}"))),
+    }
+    let at = gzip_body_start(bytes).ok_or_else(short)?;
+    let body = bytes.get(at..).ok_or_else(short)?;
+    let (held, used) = match inflate_checked_with(body, &[]) {
+        Ok(Some(read)) => read,
+        Ok(None) => return Err((GZIP_ERROR, "unexpected end of file".to_string())),
+        Err(reason) => return Err(("Zlib::DataError", reason.to_string())),
+    };
+    let trailer = bytes.get(at + used..at + used + 8).ok_or_else(short)?;
+    let crc = u32::from_le_bytes([trailer[0], trailer[1], trailer[2], trailer[3]]);
+    if crc != crc32(0, &held) {
+        return Err((
+            "Zlib::GzipFile::CRCError",
+            "invalid compressed data -- crc error".to_string(),
+        ));
+    }
+    let length = u32::from_le_bytes([trailer[4], trailer[5], trailer[6], trailer[7]]);
+    if length != held.len() as u32 {
+        return Err((
+            "Zlib::GzipFile::LengthError",
+            "invalid compressed data -- length error".to_string(),
+        ));
+    }
+    Ok(held)
 }
 
 /// What a gzip stream at the front of `bytes` stands for, and how many bytes
@@ -413,7 +534,7 @@ pub(crate) fn gzip_wrap(bytes: &[u8], name: Option<&str>, stamp: u32) -> Vec<u8>
         out.extend_from_slice(name.as_bytes());
         out.push(0);
     }
-    out.extend_from_slice(&super::zlib_deflate::deflate(bytes, &[]));
+    out.extend_from_slice(&super::zlib_deflate::deflate(bytes, &[], -1));
     out.extend_from_slice(&crc32(0, bytes).to_le_bytes());
     out.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
     out
@@ -449,6 +570,12 @@ impl VirtualMachine {
             Some(View::Int(held)) => held as u32,
             _ => 0,
         };
+        // The compression level a deflate is asked for, the default when
+        // none is given.
+        let level = match arguments.get(4).view() {
+            Some(View::Int(held)) => held,
+            _ => -1,
+        };
         let refuse = |what: &str| {
             crate::vm::errors::simple_exception(
                 "Zlib::DataError",
@@ -473,6 +600,7 @@ impl VirtualMachine {
                 Ok(super::pack_format::bytes_to_string(&zlib_wrap_with(
                     &bytes,
                     &dictionary,
+                    level,
                 )))
             }
             // A piece of a raw stream written in parts, compressed with the
@@ -496,12 +624,21 @@ impl VirtualMachine {
                     _ => Vec::new(),
                 };
                 let header = if dictionary.is_empty() { 2 } else { 6 };
-                let body = super::zlib_deflate::deflate_handed_on(&bytes, &dictionary);
+                let body = super::zlib_deflate::deflate_handed_on(&bytes, &dictionary, level);
                 Ok(Object::Int((header + body) as i64))
             }
-            "inflate" => match zlib_unwrap(&bytes) {
-                Some(held) => Ok(super::pack_format::bytes_to_string(&held)),
-                None => Err(refuse("the text")),
+            "inflate" => match zlib_unwrap_checked_with(&bytes, &[]) {
+                Ok(Some((held, _))) => Ok(super::pack_format::bytes_to_string(&held)),
+                Ok(None) => Err(crate::vm::errors::simple_exception(
+                    "Zlib::BufError",
+                    "buffer error",
+                    position,
+                )),
+                Err(reason) => Err(crate::vm::errors::simple_exception(
+                    "Zlib::DataError",
+                    reason,
+                    position,
+                )),
             },
             // What the stream stands for, and the bytes after it that are
             // not part of it, which `Zlib::Inflate` passes through.
@@ -515,16 +652,21 @@ impl VirtualMachine {
                     return Ok(Object::symbol("need_dictionary".to_string()));
                 }
                 let read = if raw {
-                    inflate_counted_with(&bytes, &dictionary)
+                    inflate_checked_with(&bytes, &dictionary)
                 } else {
-                    zlib_unwrap_counted_with(&bytes, &dictionary)
+                    zlib_unwrap_checked_with(&bytes, &dictionary)
                 };
                 match read {
-                    Some((held, used)) => Ok(Object::array(vec![
+                    Ok(Some((held, used))) => Ok(Object::array(vec![
                         super::pack_format::bytes_to_string(&held),
                         super::pack_format::bytes_to_string(&bytes[used.min(bytes.len())..]),
                     ])),
-                    None => Ok(Object::Nil),
+                    Ok(None) => Ok(Object::Nil),
+                    Err(reason) => Err(crate::vm::errors::simple_exception(
+                        "Zlib::DataError",
+                        reason,
+                        position,
+                    )),
                 }
             }
             // What a stream that has not all arrived stands for so far. The
@@ -574,9 +716,11 @@ impl VirtualMachine {
                     running,
                 )))
             }
-            "gunzip" => match gzip_unwrap(&bytes) {
-                Some(held) => Ok(super::pack_format::bytes_to_string(&held)),
-                None => Err(refuse("the text")),
+            "gunzip" => match gzip_unwrap_checked(&bytes) {
+                Ok(held) => Ok(super::pack_format::bytes_to_string(&held)),
+                Err((class, message)) => Err(crate::vm::errors::simple_exception(
+                    class, &message, position,
+                )),
             },
             other => Err(MetorexError::runtime_error(
                 format!("unknown stream action {other}"),

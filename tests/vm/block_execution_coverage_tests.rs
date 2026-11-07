@@ -86,8 +86,8 @@ HostIE3.new.run
 // ── instance_exec with next/continue (lines 158-160) ──────────────────────
 
 #[test]
-fn instance_exec_next_produces_loop_control_error() {
-    let err = run_err(
+fn instance_exec_next_ends_the_block_with_its_value() {
+    let result = run(
         r#"
 class HostIE4
   def run
@@ -99,11 +99,7 @@ end
 HostIE4.new.run
 "#,
     );
-    assert!(
-        err.contains("next") || err.contains("continue") || err.contains("loop"),
-        "unexpected: {}",
-        err
-    );
+    assert_eq!(result.map(|value| value.to_string()), Some("7".to_string()));
 }
 
 // ── instance_exec with return (lines 138-141) ─────────────────────────────

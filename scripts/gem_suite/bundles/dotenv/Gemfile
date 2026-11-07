@@ -1,0 +1,9 @@
+# The gems dotenv's specs load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "dotenv", path: "../../../../gems/dotenv"
+gem "dotenv-rails", path: "../../../../gems/dotenv"
+gem "railties", "~> 7.1"
+gem "rspec"

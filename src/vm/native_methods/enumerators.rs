@@ -94,12 +94,13 @@ pub(crate) fn carry_string_encoding(
     answer: Option<Object>,
 ) -> Option<Object> {
     // A method that pads with a string of its own works out which encoding
-    // the two have in common, `encode` is named an encoding outright, and
-    // `inspect` writes its answer in the encoding answers are written in, so
-    // each is already tagged.
+    // the two have in common, as `sub` and `gsub` do with what replaces a
+    // match, `encode` is named an encoding outright, and `inspect` writes
+    // its answer in the encoding answers are written in, so each is already
+    // tagged.
     if matches!(
         method_name,
-        "center" | "ljust" | "rjust" | "+" | "encode" | "inspect"
+        "center" | "ljust" | "rjust" | "+" | "encode" | "inspect" | "sub" | "gsub"
     ) {
         return answer;
     }

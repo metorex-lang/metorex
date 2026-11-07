@@ -155,6 +155,8 @@ impl Parser<'_> {
             self.refuse_paren_less_args -= 1;
             fallback?
         };
+        // `held = value rescue held = other` assigns in the fallback.
+        let fallback = self.fold_assignment(fallback)?;
         if !self.is_at_end()
             && !self.check(&[
                 TokenKind::Newline,

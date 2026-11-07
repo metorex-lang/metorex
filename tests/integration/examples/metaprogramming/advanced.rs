@@ -166,3 +166,9 @@ fn inherited_runs_before_the_class_body() {
     let output = run_example("metaprogramming/inherited_runs_before_the_class_body.rb");
     assert_eq!(output, "[]\n[\"title\"]\n[\"link\"]\n");
 }
+
+#[test]
+fn a_writer_defined_on_object_answers_an_assignment_on_any_value() {
+    let output = run_example("metaprogramming/class_eval_on_object_from_a_hook.rb");
+    assert_eq!(output, "{locale: :en}\n{size: 1}\n{}\n{}\ntrue\nObject\n");
+}

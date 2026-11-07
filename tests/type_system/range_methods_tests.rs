@@ -181,9 +181,9 @@ fn range_map_exclusive() {
 }
 
 #[test]
-fn range_map_error_no_block() {
-    let err = run_err("(1..5).map");
-    assert!(err.contains("block"));
+fn range_map_without_a_block_answers_an_enumerator() {
+    let err = run_err("(1..5).map.no_such_method");
+    assert!(err.contains("Enumerator"), "{err}");
 }
 
 #[test]

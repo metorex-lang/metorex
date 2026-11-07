@@ -111,7 +111,14 @@ impl VirtualMachine {
             // copy through `super`: the extended copy sits just above the
             // receiver's own module-level method in the singleton chain. The
             // copy's own `super` goes on past it, below.
-            let running_owner = self.method_owner_stack.last().cloned().flatten();
+            // In a block, the method the block was written in is the one
+            // whose owner `super` starts past.
+            let block_owner = match self.call_stack.last() {
+                Some(top) if top.block_depth() > 0 => top.owner_class().cloned(),
+                _ => None,
+            };
+            let running_owner =
+                block_owner.or_else(|| self.method_owner_stack.last().cloned().flatten());
             // A module made by a subclass of Module runs the instance methods
             // that subclass and its modules define, and `super` from one goes
             // on through those ancestors, as it does for any other object.

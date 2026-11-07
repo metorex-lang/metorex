@@ -1,0 +1,11 @@
+# The gems mini_mime's tests load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "mini_mime", path: "../../../../gems/mini_mime"
+gem "mime-types", path: "../../../../gems/mime-types"
+gem "mime-types-data", path: "../../../../gems/mime-types-data"
+gem "minitest"
+
+shipped "logger"

@@ -150,3 +150,12 @@ fn test_errors_implicit_integer_conversion_parens_execution() {
     let output = run_example("errors/implicit_integer_conversion_parens.rb");
     assert_eq!(output, IMPLICIT_INTEGER_CONVERSION_OUTPUT);
 }
+
+#[test]
+fn an_exception_raised_in_a_rescue_body_leaves_it() {
+    let output = run_example("errors/exception_raised_in_a_rescue_body_leaves_it.rb");
+    assert_eq!(
+        output,
+        "\"from the rescue body\"\nensured\n\"second\"\nNoMethodError\n"
+    );
+}

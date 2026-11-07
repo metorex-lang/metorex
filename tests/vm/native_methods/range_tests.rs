@@ -36,13 +36,11 @@ fn range_each_without_block_answers_a_walk() {
 // ── Range map without block ───────────────────────────────────────────────
 
 #[test]
-fn range_map_without_block_error() {
-    let err = run_err(
-        r#"
-(1..5).map
-"#,
-    );
-    assert!(err.contains("block") || err.contains("map") || err.contains("requires"));
+fn range_map_without_block_answers_an_enumerator() {
+    let result = run(r#"
+(1..5).map.with_index.to_a.last
+"#);
+    assert_eq!(format!("{}", result.expect("a value")), "[5, 4]");
 }
 
 // ── Range select without block ─────────────────────────────────────────────────

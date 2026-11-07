@@ -141,6 +141,12 @@ pub struct VirtualMachine {
     pub(crate) tracing: bool,
     /// The id the next object to be asked for one takes.
     pub(crate) next_object_id: u64,
+    /// The id each object asked for one was given, by its address, with a
+    /// weak hold on it that keeps the address from going to another object.
+    pub(crate) object_ids: HashMap<usize, (super::object_ids::HeldWeakly, u64)>,
+    /// How many ids the table holds before it next drops those of objects
+    /// that are gone.
+    pub(crate) object_ids_prune_at: usize,
     /// Pairs of hashes a comparison is part-way through, so a hash holding
     /// itself is answered by the structure around it rather than followed
     /// forever.
@@ -713,7 +719,9 @@ impl VirtualMachine {
             constant_homes: Vec::new(),
             traced_line: None,
             tracing: false,
-            next_object_id: 1,
+            next_object_id: super::object_ids::FIRST_OBJECT_ID,
+            object_ids: HashMap::new(),
+            object_ids_prune_at: super::object_ids::FIRST_PRUNE_AT,
             hash_comparisons: Vec::new(),
             hash_walk: Vec::new(),
             hash_walk_looped: false,

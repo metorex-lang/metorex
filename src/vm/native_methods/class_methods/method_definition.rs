@@ -157,6 +157,10 @@ impl VirtualMachine {
                         // class holding exceptions counts them as present.
                         && !answers_exception_method(self, class_rc, &name)
                         && !self.core_ancestor_defines(class_rc, &name, position)?
+                        // A core class's chain does not reach the Object a
+                        // program writes methods on, so one written there
+                        // counts as present for every class.
+                        && (class_rc.is_module() || self.object_table_method(&name).is_none())
                     {
                         let msg = format!(
                             "undefined method '{}' for {} '{}'",

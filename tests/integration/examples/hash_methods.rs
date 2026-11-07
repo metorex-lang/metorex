@@ -284,3 +284,15 @@ fn a_string_key_keeps_the_encoding_it_was_stored_with() {
         )
     );
 }
+
+#[test]
+fn a_hash_equals_an_object_that_stands_for_one() {
+    let output = run_example("hash_methods/equality_with_a_to_hash_object.rb");
+    assert_eq!(output, "true\ntrue\ntrue\ntrue\nfalse\nfalse\n");
+}
+
+#[test]
+fn identity_hash_finds_a_key_after_it_changes() {
+    let output = run_example("hashes/identity_hash_finds_a_key_after_it_changes.rb");
+    assert_eq!(output, "1\n1\n1\n1\nnil\n2\n3\n3\n8\n");
+}

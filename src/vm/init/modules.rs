@@ -253,5 +253,12 @@ pub(crate) fn register_builtin_modules(globals: &mut GlobalRegistry, builtins: &
             Object::String(Rc::new(crate::object::StringValue::with_encoding(v, named))),
         );
     }
-    globals.set("ENV", Object::Dict(Rc::new(RefCell::new(env_map))));
+    let environment = Object::Dict(Rc::new(RefCell::new(env_map)));
+    // A program may point the ENV constant at a hash of its own, as a stubbed
+    // constant does, and that hash is an ordinary one.
+    globals.set(PROCESS_ENVIRONMENT, environment.clone());
+    globals.set("ENV", environment);
 }
+
+/// The name the hash standing for the process environment is held under.
+pub(crate) const PROCESS_ENVIRONMENT: &str = "__process_environment__";

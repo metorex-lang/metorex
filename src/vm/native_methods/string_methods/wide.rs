@@ -131,6 +131,84 @@ pub(crate) fn wide_text(bytes: &[u8], shape: WideShape) -> String {
     text
 }
 
+/// One piece of a run of bytes in a wide encoding: a character, or bytes
+/// that spell none, with the byte after them that ended the try and whether
+/// the run stopped before they were whole.
+pub(crate) enum WidePiece {
+    Character(char),
+    Broken {
+        bytes: Vec<u8>,
+        after: Option<u8>,
+        incomplete: bool,
+    },
+}
+
+/// The pieces a run of bytes in a wide encoding reads as, from the start,
+/// reading the byte order mark when the encoding opens with one. A high
+/// surrogate not followed by a low one is broken by itself, and the unit
+/// after it is read again.
+pub(crate) fn wide_pieces(bytes: &[u8], shape: WideShape) -> Vec<WidePiece> {
+    let mut big_endian = shape.big_endian;
+    let unit_at = |at: usize, big_endian: bool| -> u32 {
+        let taken = &bytes[at..at + shape.unit];
+        let ordered: Vec<u8> = if big_endian {
+            taken.to_vec()
+        } else {
+            taken.iter().rev().copied().collect()
+        };
+        ordered.iter().fold(0u32, |value, byte| (value << 8) | u32::from(*byte))
+    };
+    let mut pieces = Vec::new();
+    let mut at = 0;
+    if shape.marked && bytes.len() >= shape.unit {
+        match unit_at(0, big_endian) {
+            0xfeff => at = shape.unit,
+            0xfffe0000 => {
+                big_endian = !big_endian;
+                at = shape.unit;
+            }
+            _ => {}
+        }
+    }
+    let broken = |from: usize, to: usize, after: Option<u8>, incomplete: bool| WidePiece::Broken {
+        bytes: bytes[from..to].to_vec(),
+        after,
+        incomplete,
+    };
+    while at < bytes.len() {
+        if at + shape.unit > bytes.len() {
+            pieces.push(broken(at, bytes.len(), None, true));
+            break;
+        }
+        let unit = unit_at(at, big_endian);
+        let next = at + shape.unit;
+        if shape.unit == 2 && (0xd800..0xdc00).contains(&unit) {
+            if next + 2 > bytes.len() {
+                pieces.push(broken(at, bytes.len(), None, true));
+                break;
+            }
+            let low = unit_at(next, big_endian);
+            if !(0xdc00..0xe000).contains(&low) {
+                pieces.push(broken(at, next, Some(bytes[next]), false));
+                at = next;
+                continue;
+            }
+            let point = 0x10000 + ((unit - 0xd800) << 10) + (low - 0xdc00);
+            pieces.push(WidePiece::Character(
+                char::from_u32(point).expect("a surrogate pair spells a code point"),
+            ));
+            at = next + 2;
+            continue;
+        }
+        match char::from_u32(unit) {
+            Some(character) => pieces.push(WidePiece::Character(character)),
+            None => pieces.push(broken(at, next, None, false)),
+        }
+        at = next;
+    }
+    pieces
+}
+
 /// The bytes of each character a wide encoding spells, a code unit apiece
 /// except where two UTF-16 units make one character. Bytes too few for a
 /// whole unit at the end are a piece of their own.

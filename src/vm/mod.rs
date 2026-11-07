@@ -40,6 +40,7 @@ mod loading;
 pub(crate) mod method_execution;
 pub(crate) mod method_invocation;
 mod method_lookup;
+pub(crate) mod object_ids;
 mod native_functions;
 pub(crate) mod native_methods;
 mod operators;

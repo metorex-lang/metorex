@@ -73,7 +73,7 @@ require 'zlib'
 Zlib.gunzip("not a member")
 "#,
     );
-    assert!(error.contains("not a stream this can read"), "{error}");
+    assert!(error.contains("not in gzip format"), "{error}");
 }
 
 #[test]
@@ -277,5 +277,5 @@ require 'zlib'
 Zlib.inflate([120, 156, 99].pack("C*"))
 "#,
     );
-    assert!(error.contains("not a stream this can read"), "{error}");
+    assert!(error.contains("buffer error"), "{error}");
 }

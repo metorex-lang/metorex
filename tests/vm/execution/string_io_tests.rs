@@ -123,9 +123,9 @@ fn range_each_no_block_answers_a_walk() {
 }
 
 #[test]
-fn range_map_no_block_error() {
-    let err = run_err("(1..3).map");
-    assert!(err.contains("block") || err.contains("requires"));
+fn range_map_no_block_answers_a_walk() {
+    let result = run("(1..3).map.to_a.inspect");
+    assert_eq!(result, Some(Object::string("[1, 2, 3]")));
 }
 
 // ── String#each_char ─────────────────────────────────────────────────────────

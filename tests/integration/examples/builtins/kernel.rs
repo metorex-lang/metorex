@@ -568,7 +568,10 @@ fn not_match_answers_the_opposite_of_match_for_nil_and_any_receiver_with_one() {
 #[test]
 fn a_ractor_reads_constants_holding_objects_made_shareable() {
     let output = run_example("builtins/ractor_reads_a_shareable_parser_constant.rb");
-    assert_eq!(output, "true\ntrue\n\"example.com\"\ntrue\n[\"a\", \"b\"]\n");
+    assert_eq!(
+        output,
+        "true\ntrue\n\"example.com\"\ntrue\n[\"a\", \"b\"]\n"
+    );
 }
 
 #[test]
@@ -588,4 +591,61 @@ fn the_frozen_string_literal_comment_of_a_required_file_freezes_its_literals() {
 fn env_is_shareable_and_a_ractor_reads_it() {
     let output = run_example("builtins/ractor_reads_env.rb");
     assert_eq!(output, "true\n[\"set\", false]\ntrue\nfalse\n");
+}
+
+#[test]
+fn marshal_round_trips_sets_and_their_members() {
+    let output = run_example("builtins/marshal_round_trips_sets.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"text/html\", \"text/plain\"]\n",
+            "Set\n",
+            "2\n",
+            "[\"htm\", \"html\"]\n",
+            "Set[]\n",
+            "true\n",
+            "[\"shared\", \"shared\"]\n",
+            "true\n",
+            "true\n",
+        )
+    );
+}
+
+#[test]
+fn marshal_round_trips_set_subclasses_and_variables() {
+    let output = run_example("builtins/marshal_round_trips_set_subclasses.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "Tags\n",
+            "[3, 4]\n",
+            "true\n",
+            "\"\\x04\\bo:\\tTags\\x06:\\n@hash}\\ai\\bTi\\tTF\"\n",
+            "Tags\n",
+            "[3, 4]\n",
+            "\"\\x04\\bIo:\\bSet\\x06:\\n@hash}\\x06i\\x06TF\\x06:\\n@noteI\\\"\\tkept\\x06:\\x06ET\"\n",
+            "\"kept\"\n",
+            "[1]\n",
+            "true\n",
+        )
+    );
+}
+
+#[test]
+fn set_inspect_renders_members_and_names_subclasses() {
+    let output = run_example("builtins/set_inspect_with_members_and_subclasses.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "Set[Ledger!, \"x\", :y, 1.5, nil, [1]]\n",
+            "#<Tags: {1, 2}>\n",
+            "\"#<Tags: {3}>\"\n",
+            "\"#<Tags: {}>\"\n",
+            "Set[#<Tags: {1}>]\n",
+            "[#<Tags: {2}>]\n",
+            "#<Tags: {1, #<Tags: {...}>}>\n",
+            "Set[1, Set[...]]\n",
+        )
+    );
 }

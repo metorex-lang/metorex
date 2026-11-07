@@ -42,11 +42,23 @@ impl VirtualMachine {
                             position,
                         ));
                     }
+                    // Without a block the walk is an Enumerator, as Ruby's is.
                     None => {
-                        return Err(MetorexError::runtime_error(
-                            "map requires a block",
-                            position_to_location(position),
-                        ));
+                        let size = self.send_to_object(receiver.clone(), "size", vec![], position)?;
+                        let enumerator = self.globals().get("Enumerator").unwrap_or(Object::Nil);
+                        return self
+                            .send_to_object(
+                                enumerator,
+                                "over",
+                                vec![
+                                    receiver.clone(),
+                                    Object::symbol(method_name.to_string()),
+                                    Object::array(Vec::new()),
+                                    size,
+                                ],
+                                position,
+                            )
+                            .map(Some);
                     }
                 };
 

@@ -337,3 +337,21 @@ fn a_negative_base_raised_by_a_half_turn_answers_an_exact_zero_real_part() {
         )
     );
 }
+
+#[test]
+fn small_float_to_s_uses_an_exponent() {
+    let output = run_example("numbers/small_float_to_s_uses_an_exponent.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"1.8156028367527268e-06\"\n",
+            "\"2.35e-06\"\n",
+            "\"0.0001\"\n",
+            "\"1.0e-05\"\n",
+            "\"1.0e+16\"\n",
+            "\"1.0e+15\"\n",
+            "-6\n",
+            "true\n",
+        )
+    );
+}

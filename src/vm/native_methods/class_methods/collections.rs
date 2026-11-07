@@ -15,7 +15,7 @@ impl VirtualMachine {
         // Array.new — `new(size)`, `new(size, default)`, `new(size) { |i| ... }`.
         // Without arguments, returns an empty array.
         // `Set[1, 2, 3]` builds a set from the arguments directly.
-        if method_name == "[]" && class_rc.name() == "Set" {
+        if method_name == "[]" && crate::vm::method_invocation::descends_from(class_rc, "Set") {
             let elements = Object::array(arguments.to_vec());
             return self
                 .send_to_object(

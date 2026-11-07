@@ -263,6 +263,10 @@ pub(crate) fn bind_block_params(
             let given = vm.pending_block.take().unwrap_or(Object::Nil);
             vm.environment_mut().define(name, given);
         }
+    } else {
+        // A block that takes no block of its own lets go of the one it was
+        // handed, so the first call in its body is not handed it instead.
+        vm.pending_block = None;
     }
     if !missing_keywords.is_empty() {
         let named = missing_keywords

@@ -1,0 +1,11 @@
+# The gems i18n's tests load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "i18n", path: "../../../../gems/i18n"
+gem "mocha", "~> 2.1.0"
+gem "test_declarative", "0.0.6"
+gem "minitest", "~> 5.14"
+
+shipped "json", "racc"

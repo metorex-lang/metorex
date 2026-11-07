@@ -31,11 +31,13 @@ impl AnswerText {
     }
 
     /// The String the pieces make. Pieces held as bytes are joined as
-    /// bytes, so two halves of a character read as that character.
+    /// bytes, so two halves of a character read as that character. Where no
+    /// piece held as bytes added any, the answer is the text pieces' own.
     pub(crate) fn into_string(self, holds_bytes: bool) -> crate::object::StringValue {
         if !self.joined_bytes {
+            let ascii = self.built.is_ascii();
             let made = crate::object::StringValue::with_encoding(self.built, &self.encoding);
-            if holds_bytes || self.encoding == "ASCII-8BIT" {
+            if (holds_bytes && ascii) || self.encoding == "ASCII-8BIT" {
                 made.mark_bytes();
             }
             return made;
@@ -96,6 +98,13 @@ impl AnswerText {
     ) -> Result<(), MetorexError> {
         if piece.is_empty() {
             return Ok(());
+        }
+        // An answer with nothing in it yet takes the encoding of a first
+        // piece that does not read alongside ASCII.
+        if self.built.is_empty()
+            && !crate::vm::native_methods::class_methods::encoding_reads_alongside_ascii(encoding)
+        {
+            self.encoding = encoding.to_string();
         }
         // Text in an encoding that spells ASCII over several bytes never
         // joins text in another, however little either of them holds.

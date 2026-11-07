@@ -560,17 +560,29 @@ impl VirtualMachine {
                     .iter()
                     .map(|held| held.value.clone())
                     .collect();
-                let rendered = crate::object::render_guarded(Rc::as_ptr(set_rc) as usize, || {
-                    elements
-                        .iter()
-                        .map(super::array_methods::inspect_element)
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                });
-                Ok(Some(Object::string(match rendered {
-                    Some(body) => format!("Set[{}]", body),
-                    None => "Set[...]".to_string(),
-                })))
+                let address = Rc::as_ptr(set_rc) as usize;
+                // A set that holds itself prints `Set[...]` there.
+                if crate::object::rendering_in_progress(address) {
+                    return Ok(Some(Object::string("Set[...]")));
+                }
+                crate::object::begin_rendering(address);
+                // Each member renders through its own `inspect`, as an
+                // Array's members do.
+                let mut parts = Vec::with_capacity(elements.len());
+                for element in &elements {
+                    match self.inspected_object(element, position) {
+                        Ok(rendered) => parts.push(match rendered.view() {
+                            View::String(text) => text.to_string(),
+                            other => format!("{}", other),
+                        }),
+                        Err(error) => {
+                            crate::object::end_rendering();
+                            return Err(error);
+                        }
+                    }
+                }
+                crate::object::end_rendering();
+                Ok(Some(Object::string(format!("Set[{}]", parts.join(", ")))))
             }
             "hash" => {
                 let mut total: i64 = 0;

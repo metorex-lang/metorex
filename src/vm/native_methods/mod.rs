@@ -21,6 +21,7 @@ mod socket_addresses;
 pub(crate) use socket_addresses::OpenSockets;
 pub(crate) use streams::OpenStreams;
 pub(crate) mod aes;
+mod binary_curves;
 mod complex_methods;
 mod constant_visibility;
 pub(crate) mod define_method;
@@ -49,7 +50,11 @@ pub(crate) use regexp_methods::{
     LAST_MATCH, capture_reference, comparable_flags, compile, subject_text,
 };
 pub(crate) mod euc_jp_table;
-pub(crate) mod gbk;
+mod cp949_table;
+pub(crate) mod double_byte;
+pub(crate) mod iso_2022_jp;
+mod euc_kr_table;
+mod gb18030_table;
 mod gbk_table;
 pub(crate) mod glob;
 pub(crate) mod normalization_table;

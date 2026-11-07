@@ -197,7 +197,10 @@ fn the_plain_socket_under_a_server_tls_socket_is_readable_once_the_client_writes
 #[test]
 fn a_unix_family_socket_connects_to_a_path_once() {
     let output = run_example("sockets/unix_socket_connect_and_connect_nonblock.rb");
-    assert_eq!(output, "0\n\"hello\"\nErrno::EISCONN\n0\n\"hello\"\nErrno::EISCONN\n");
+    assert_eq!(
+        output,
+        "0\n\"hello\"\nErrno::EISCONN\n0\n\"hello\"\nErrno::EISCONN\n"
+    );
 }
 
 #[test]

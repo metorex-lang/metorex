@@ -1,6 +1,6 @@
-// AES, as FIPS-197 specifies it, run in CBC mode for OpenSSL::Cipher. The
-// Ruby side keeps the bytes short of a whole block and adds and checks the
-// padding, so this only ever runs whole blocks.
+// AES, as FIPS-197 specifies it, run in CBC and CTR modes for
+// OpenSSL::Cipher. In CBC mode the Ruby side keeps the bytes short of a whole
+// block and adds and checks the padding, so CBC only ever runs whole blocks.
 
 use crate::error::MetorexError;
 use crate::lexer::Position;
@@ -205,7 +205,71 @@ fn cbc(key: &[u8], chain: &[u8], data: &[u8], encrypting: bool) -> Option<(Vec<u
     Some((output, previous.to_vec()))
 }
 
+/// Runs `data` through AES in CTR mode from the block `counter`, answering the
+/// output, the counter of the block after the last one used, and the bytes of
+/// the last block's keystream that `data` left unused.
+fn ctr(key: &[u8], counter: &[u8], data: &[u8]) -> Option<(Vec<u8>, Vec<u8>, Vec<u8>)> {
+    let round_keys = expand_key(key)?;
+    if counter.len() != BLOCK_BYTES {
+        return None;
+    }
+    let mut current = [0u8; BLOCK_BYTES];
+    current.copy_from_slice(counter);
+    let mut output = Vec::with_capacity(data.len());
+    let mut unused = Vec::new();
+    for chunk in data.chunks(BLOCK_BYTES) {
+        let mut keystream = current;
+        encrypt_block(&mut keystream, &round_keys);
+        output.extend(
+            chunk
+                .iter()
+                .zip(keystream.iter())
+                .map(|(byte, key)| byte ^ key),
+        );
+        unused = keystream[chunk.len()..].to_vec();
+        for byte in current.iter_mut().rev() {
+            *byte = byte.wrapping_add(1);
+            if *byte != 0 {
+                break;
+            }
+        }
+    }
+    Some((output, current.to_vec(), unused))
+}
+
 impl VirtualMachine {
+    /// `OpenSSL.__aes_ctr__(key, counter, data)` answers the output, the next
+    /// counter, and the unused keystream, as a triple.
+    pub(crate) fn aes_ctr(
+        &mut self,
+        arguments: &[Object],
+        position: Position,
+    ) -> Result<Object, MetorexError> {
+        let (Some(View::String(key)), Some(View::String(counter)), Some(View::String(data))) = (
+            arguments.first().view(),
+            arguments.get(1).view(),
+            arguments.get(2).view(),
+        ) else {
+            return Err(crate::vm::errors::argument_count_error(
+                crate::vm::errors::Arity::Exact(3),
+                arguments.len(),
+                position,
+            ));
+        };
+        let Some((output, next, unused)) = ctr(&key.bytes(), &counter.bytes(), &data.bytes())
+        else {
+            return Err(MetorexError::runtime_error(
+                "AES runs a key of 16, 24, or 32 bytes from a counter of one block".to_string(),
+                crate::vm::utils::position_to_location(position),
+            ));
+        };
+        Ok(Object::array(vec![
+            super::pack_format::bytes_to_string(&output),
+            super::pack_format::bytes_to_string(&next),
+            super::pack_format::bytes_to_string(&unused),
+        ]))
+    }
+
     /// `OpenSSL.__aes_cbc__(key, chain, data, encrypting)` answers the output
     /// of whole blocks and the block the next call chains from, as a pair.
     pub(crate) fn aes_cbc(

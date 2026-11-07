@@ -1,0 +1,7 @@
+# The gems builder's tests load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "builder", path: "../../../../gems/builder"
+gem "minitest"

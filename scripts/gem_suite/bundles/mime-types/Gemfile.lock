@@ -1,0 +1,44 @@
+PATH
+  remote: ../../../../gems/mime-types-data
+  specs:
+    mime-types-data (3.2026.1103)
+
+PATH
+  remote: ../../../../gems/mime-types
+  specs:
+    mime-types (3.7.0)
+      logger
+      mime-types-data (~> 3.2025, >= 3.2025.0507)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    logger (1.7.0)
+    minitest (5.27.0)
+    minitest-focus (1.4.1)
+      minitest (> 5.0)
+    minitest-hooks (1.5.4)
+      minitest (> 5.3)
+
+PLATFORMS
+  arm64-darwin-27
+  ruby
+
+DEPENDENCIES
+  logger (= 1.7.0)
+  mime-types!
+  mime-types-data!
+  minitest (~> 5.0)
+  minitest-focus (~> 1.0)
+  minitest-hooks (~> 1.4)
+
+CHECKSUMS
+  logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
+  mime-types (3.7.0)
+  mime-types-data (3.2026.1103)
+  minitest (5.27.0) sha256=2d3b17f8a36fe7801c1adcffdbc38233b938eb0b4966e97a6739055a45fa77d5
+  minitest-focus (1.4.1) sha256=394517cbe2dcb2d992d8ffc41a3b2b6315777a4daa69239de4fefe7110dd810e
+  minitest-hooks (1.5.4) sha256=1254069f3da51fea234dc4ff974108d03d19260ad5c4b78eed9695726a5069b8
+
+BUNDLED WITH
+  4.0.23

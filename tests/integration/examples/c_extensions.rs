@@ -1899,3 +1899,18 @@ fn test_c_extensions_c_event_hooks_no_parens_execution() {
     let output = run_example("c_extensions/c_event_hooks_no_parens.rb");
     assert_eq!(output, C_EVENT_HOOKS_OUTPUT);
 }
+
+#[test]
+fn test_c_extensions_c_digit_scanning_execution() {
+    let output = run_example("c_extensions/c_digit_scanning.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[12, 2, 0]\n[255, 2, 0]\n[12, 2, 0]\n[0, 0, 0]\n1\n",
+            "\"0123456789abcdef0123456789ABCDEF\"\n",
+            "[0, 9, 10, 35, 10, 35, -1]\n[true, true, true, false]\n4\n",
+            "true\nfalse\ntrue\ntrue\nfalse\n\"é\"\n",
+            "ArgumentError: malloc: possible integer overflow (4*8)\n",
+        )
+    );
+}

@@ -1,0 +1,12 @@
+# The gems multi_xml's tests load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "multi_xml", path: "../../../../gems/multi_xml"
+gem "minitest", ">= 6"
+gem "minitest-mock", ">= 5.27"
+gem "mutant-minitest", ">= 0.14.1"
+gem "simplecov", ">= 0.22"
+
+shipped "bigdecimal", "rexml"

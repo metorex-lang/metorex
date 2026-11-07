@@ -28,6 +28,23 @@ mod parser;
 mod prelude_chunks;
 #[path = "src/regexp/mod.rs"]
 mod regexp;
+/// The build script has no stack switcher, so a match that would move to a
+/// fresh stack carries on the stack it is on.
+mod corosensei {
+    pub mod stack {
+        pub struct DefaultStack;
+
+        impl DefaultStack {
+            pub fn new(_bytes: usize) -> Result<Self, ()> {
+                Ok(Self)
+            }
+        }
+    }
+
+    pub fn on_stack<R>(_stack: stack::DefaultStack, run: impl FnOnce() -> R) -> R {
+        run()
+    }
+}
 #[path = "src/vm/stdlib/source_digest.rs"]
 mod source_digest;
 #[path = "src/symbol_registry.rs"]

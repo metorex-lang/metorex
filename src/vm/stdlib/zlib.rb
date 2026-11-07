@@ -71,8 +71,8 @@ module Zlib
     ZLIB_VERSION
   end
 
-  def deflate(text, _level = DEFAULT_COMPRESSION)
-    Zlib.__stream__ "deflate", Zlib.coerce_text(text), 0
+  def deflate(text, level = DEFAULT_COMPRESSION)
+    Zlib.__stream__ "deflate", Zlib.coerce_text(text), 0, "", level.to_i
   end
 
   def inflate(text)
@@ -191,32 +191,50 @@ module Zlib
 
     def initialize(window_bits = MAX_WBITS)
       @window_bits = window_bits
-      @done = false
+      @ended = false
       @pending = "".b
+      @passed = "".b
+      @read_in = 0
       super()
     end
 
     # What the stream has read so far. A block is handed the text a piece
-    # at a time, in the 16 KiB chunks Ruby's inflater hands out.
+    # at a time, in the 16 KiB chunks Ruby's inflater hands out. Once the
+    # stream has ended, what is given after it is held, and handed back by a
+    # call given nil. Before then, nil says no more is coming, which leaves
+    # the stream short.
     def inflate(text, buffer: nil, &block)
-      self << text
+      if @ended
+        @pending << @passed if text.nil?
+        @passed = text.nil? ? "".b : @passed + Zlib.coerce_text(text)
+      else
+        self << text
+      end
       return take_read(&block) if block
       held = take_read
       return held if buffer.nil?
       buffer.replace held
     end
 
-    # A nil argument says the compressed stream is over. Everything written
-    # after that is passed through rather than read as part of it.
+    # The bytes of the stream itself that have been read, which leaves out
+    # those given after it ended.
+    def total_in
+      @read_in
+    end
+
+    # What is written after the stream has ended is passed through rather
+    # than read as part of it.
     def <<(text)
       if text.nil?
-        @done = true
+        raise BufError, "buffer error" unless @ended
         return self
       end
-      if @done
-        @pending = @pending + Zlib.coerce_text(text)
+      if @ended
+        @passed = @passed + Zlib.coerce_text(text)
       else
-        @input = @input + Zlib.coerce_text(text)
+        given = Zlib.coerce_text(text)
+        @read_in += given.bytesize
+        @input = @input + given
         read_what_is_there
       end
       self
@@ -225,14 +243,15 @@ module Zlib
     # What has been read and not handed back yet, which for a reader is the
     # text the stream stood for rather than a buffer of its own.
     def flush_next_out
-      answer = take_read
-      @finished = true if @done
-      answer
+      @pending << @passed
+      @passed = "".b
+      take_read
     end
 
     def finish(&block)
-      raise BufError, "buffer error" if !@done && !@input.empty?
-      @finished = true
+      raise BufError, "buffer error" unless @ended
+      @pending << @passed
+      @passed = "".b
       return take_read(&block) if block
       take_read
     end
@@ -252,7 +271,7 @@ module Zlib
     # Read as much of a whole stream as the input holds. Anything after the
     # stream it names is passed through rather than read.
     def read_what_is_there
-      return if @done || @input.empty?
+      return if @ended || @input.empty?
       # A window of 16 or more names a gzip stream, and one of 32 or more
       # either kind, told apart by the gzip magic number.
       bits = @window_bits.to_i
@@ -278,10 +297,13 @@ module Zlib
         return
       end
       whole = read[0]
-      @pending = @pending + whole.byteslice(@handed_on, whole.bytesize - @handed_on).to_s + read[1]
+      @pending = @pending + whole.byteslice(@handed_on, whole.bytesize - @handed_on).to_s
+      @passed = @passed + read[1]
+      @read_in -= read[1].bytesize
       @handed_on = 0
       @input = ""
-      @done = true
+      @ended = true
+      @finished = true
     end
 
     # Hand back what has been read and has not been handed back yet, all of
@@ -332,12 +354,12 @@ module Zlib
       @input = @input + Zlib.coerce_text(text) unless text.nil?
       @handed_out ||= 0
       if flush == FINISH
-        written = Zlib.__stream__ "deflate", @input, 0, @dictionary.to_s
+        written = unframed Zlib.__stream__("deflate", @input, 0, @dictionary.to_s, @level.to_i), nil
         @output = written
         @finished = true
       else
-        reached = Zlib.__stream__ "deflate_handed_on", @input, 0, @dictionary.to_s
-        written = Zlib.__stream__("deflate", @input, 0, @dictionary.to_s).byteslice(0, reached)
+        reached = Zlib.__stream__ "deflate_handed_on", @input, 0, @dictionary.to_s, @level.to_i
+        written = unframed Zlib.__stream__("deflate", @input, 0, @dictionary.to_s, @level.to_i), reached
       end
       fresh = written.byteslice(@handed_out, written.bytesize - @handed_out) || "".b
       return hand_over(fresh) if block.nil?
@@ -359,6 +381,18 @@ module Zlib
       fresh
     end
     private :hand_over
+
+    # A negative window asks for a raw stream, which is the zlib one without
+    # its header and the checksum after it. `reached` is how much of the zlib
+    # stream has been handed on, or nil once it is finished.
+    def unframed(written, reached)
+      return reached ? written.byteslice(0, reached) : written unless @window_bits.to_i.negative?
+
+      header = @dictionary.to_s.empty? ? 2 : 6
+      ending = reached || written.bytesize - 4
+      written.byteslice(header, ending - header)
+    end
+    private :unframed
 
     def <<(text)
       @input = @input + Zlib.coerce_text(text) unless text.nil?

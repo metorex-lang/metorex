@@ -47,8 +47,8 @@ pub(crate) fn name_text(held: &std::rc::Rc<crate::object::StringValue>) -> Strin
     if named == "ISO-2022-JP" {
         return euc_jp_table::iso_2022_jp_text(&bytes);
     }
-    if named == "GBK" {
-        return super::gbk::gbk_text(&bytes);
+    if let Some(codec) = super::double_byte::double_byte(&named) {
+        return codec.text(&bytes);
     }
     match string_methods::latin_text(&bytes, &named) {
         Some(text) => text,
@@ -86,8 +86,8 @@ fn decoded_in(held: &std::rc::Rc<crate::object::StringValue>, named: &str) -> St
     if named == "ISO-2022-JP" {
         return euc_jp_table::iso_2022_jp_text(&bytes);
     }
-    if named == "GBK" {
-        return super::gbk::gbk_text(&bytes);
+    if let Some(codec) = super::double_byte::double_byte(&named) {
+        return codec.text(&bytes);
     }
     if let Some(text) = string_methods::latin_text(&bytes, named) {
         return text;

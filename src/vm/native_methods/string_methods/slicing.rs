@@ -96,13 +96,10 @@ impl VirtualMachine {
                 };
                 let text = string_value.to_text();
                 let pieces = split_pieces(&text, &separator, limit);
-                let named = string_value.encoding_name();
+                // Each piece is written the way the string spells its bytes.
                 let made: Vec<Object> = pieces
                     .into_iter()
-                    .map(|piece| {
-                        let held = crate::object::StringValue::with_encoding(piece, named.clone());
-                        Object::String(Rc::new(held))
-                    })
+                    .map(|piece| Object::String(Rc::new(string_value.spelled_like(piece))))
                     .collect();
                 // With a block each piece is handed over and the string
                 // itself is the answer.

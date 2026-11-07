@@ -185,6 +185,19 @@ impl VirtualMachine {
                 .collection_hash_digest(&backing.to_object(), position)
                 .map(seeded_hash);
         }
+        // An object told apart by which object it is hashes from its id,
+        // which it is given here if it has none yet.
+        let identified = match receiver.view() {
+            View::Instance(instance) => Some(self.counted_object_id(&instance)),
+            View::Class(class) | View::Module(class) => Some(self.counted_object_id(&class)),
+            View::Exception(details) => Some(self.counted_object_id(&details)),
+            View::Block(block) => Some(self.counted_object_id(&block)),
+            View::Binding(binding) => Some(self.counted_object_id(&binding)),
+            _ => None,
+        };
+        if let Some(id) = identified {
+            return Ok(seeded_hash(id as i64));
+        }
         if let Some(hashable) = crate::object::ObjectHash::from_object(receiver) {
             return Ok(seeded_text_hash(&hashable.hash_value));
         }

@@ -73,6 +73,16 @@ impl VirtualMachine {
                     } else {
                         all_true = false;
                     }
+                    // The walk stops once the answer is settled, as Ruby's
+                    // does, so the block sees no element past that one.
+                    let settled = match method_name {
+                        "any?" | "none?" => any_true,
+                        "all?" => !all_true,
+                        _ => true_count > 1,
+                    };
+                    if settled {
+                        break;
+                    }
                 }
                 let value = match method_name {
                     "any?" => any_true,

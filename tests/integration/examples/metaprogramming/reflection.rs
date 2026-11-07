@@ -258,3 +258,71 @@ fn defined_finds_the_public_copy_module_function_makes() {
     let output = run_example("metaprogramming/defined_module_function.rb");
     assert_eq!(output, "\"method\"\n\"method\"\nnil\nfalse\n");
 }
+
+#[test]
+fn undef_method_on_a_core_class_hides_an_object_method() {
+    let output =
+        run_example("metaprogramming/undef_method_on_a_core_class_hides_an_object_method.rb");
+    assert_eq!(
+        output,
+        concat!(
+            ":object\n",
+            "\"undefined method 'with_held' for an instance of Integer\"\n",
+            "false\n",
+        )
+    );
+}
+
+#[test]
+fn core_class_ancestry_reaches_object() {
+    let output = run_example("metaprogramming/core_class_ancestry_reaches_object.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "true\n",
+            "true\n",
+            "true\n",
+            "true\n",
+            "true\n",
+            "Object\n",
+            "[Object, Kernel, BasicObject]\n",
+            "nil\n",
+            "BasicObject\n",
+            "true\n",
+            "[Object, Kernel, BasicObject]\n",
+        )
+    );
+}
+
+#[test]
+fn a_later_extend_overrides_an_earlier_one() {
+    let output = run_example("metaprogramming/later_extend_overrides_an_earlier_one.rb");
+    assert_eq!(
+        output,
+        "\".ba\"\n[#<Class:Speaker>, Reversing, Speaking]\n\".dc\"\n"
+    );
+}
+
+#[test]
+fn a_dup_of_an_extended_module_takes_an_override() {
+    let output = run_example("metaprogramming/dup_of_an_extended_module_takes_an_override.rb");
+    assert_eq!(
+        output,
+        "\"?ba\"\n\"ba\"\n\"!ba\"\n\"ab\"\n\"ab\"\n\"abcd\"\n"
+    );
+}
+
+#[test]
+fn object_ids_count_up_from_eight() {
+    let output = run_example("metaprogramming/object_ids_count_up_from_eight.rb");
+    assert_eq!(output, "Integer\n8\ntrue\ntrue\ntrue\n4\n20\n0\n3\n1\n");
+}
+
+#[test]
+fn only_asking_for_an_id_takes_one() {
+    let output = run_example("metaprogramming/only_asking_for_an_id_takes_one.rb");
+    assert_eq!(
+        output,
+        "{\"holder.hash\" => 8, \"Struct.new(:field).new(1).hash\" => 8}\n"
+    );
+}

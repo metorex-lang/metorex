@@ -62,9 +62,20 @@ pub struct Found {
 /// How many pieces one match may try before the engine gives up.
 const STEP_BUDGET: u64 = 20_000_000;
 
+/// How many pieces a match tries, past eight for each character of the
+/// subject, before it starts remembering where it failed. A match that
+/// finishes sooner does not pay for keeping the record.
+const STEPS_BEFORE_REMEMBERING: u64 = 4096;
+
 /// How many pieces deep one match may go. Each sits on a stack frame, and a
 /// pattern that would nest further than this is one no answer is waiting for.
-const NESTING_LIMIT: u32 = 20_000;
+const NESTING_LIMIT: u32 = 200_000;
+
+/// How many pieces deep a match goes on one stack before it moves on to a
+/// fresh one, and how large each fresh one is. A stack's pages are only
+/// taken as they are reached.
+const NESTING_PER_STACK: u32 = 10_000;
+const STACK_SEGMENT_BYTES: usize = 64 * 1024 * 1024;
 
 pub struct Matcher<'a> {
     letters: &'a [char],
@@ -94,6 +105,11 @@ pub struct Matcher<'a> {
     /// Whether the pattern captures anything, which decides whether a branch
     /// has to copy the slots before trying it.
     captures: bool,
+
+    /// Whether the pattern is one whose failures can be remembered, and the
+    /// places it failed to carry on from: what was left to match, and where.
+    can_remember: bool,
+    failures: std::collections::HashSet<(u64, u64, usize)>,
 }
 
 impl<'a> Matcher<'a> {
@@ -114,6 +130,8 @@ impl<'a> Matcher<'a> {
             timed_out: false,
             nesting: 0,
             captures: names.len() > 1,
+            can_remember: root.failures_can_be_remembered(),
+            failures: std::collections::HashSet::new(),
         }
     }
 
@@ -141,6 +159,7 @@ impl<'a> Matcher<'a> {
     /// The leftmost match at or after `from`, or None when there is none.
     pub fn search(&mut self, root: &'a Node, from: usize) -> Option<Found> {
         self.search_start = from;
+        self.failures.clear();
         let beginnings = root.beginnings();
         let mut at = from;
         loop {
@@ -174,6 +193,7 @@ impl<'a> Matcher<'a> {
     /// The match that begins at `at` exactly, or None when there is none.
     pub fn match_at(&mut self, root: &'a Node, at: usize) -> Option<Found> {
         self.search_start = at;
+        self.failures.clear();
         self.reset();
         let end = self.run(root, at, &Rest::Done)?;
         Some(Found {
@@ -186,6 +206,7 @@ impl<'a> Matcher<'a> {
     /// Whether a match begins at `at` exactly.
     pub fn matches_at(&mut self, root: &'a Node, at: usize) -> bool {
         self.search_start = at;
+        self.failures.clear();
         self.reset();
         self.run(root, at, &Rest::Done).is_some()
     }
@@ -258,7 +279,17 @@ impl<'a> Matcher<'a> {
             return None;
         }
         self.nesting += 1;
-        let answer = self.run_piece(node, at, rest);
+        let answer = if self.nesting.is_multiple_of(NESTING_PER_STACK) {
+            match crate::corosensei::stack::DefaultStack::new(STACK_SEGMENT_BYTES) {
+                Ok(stack) => crate::corosensei::on_stack(stack, || self.run_piece(node, at, rest)),
+                Err(_) => {
+                    self.timed_out = true;
+                    None
+                }
+            }
+        } else {
+            self.run_piece(node, at, rest)
+        };
         self.nesting -= 1;
         answer
     }
@@ -509,12 +540,34 @@ impl<'a> Matcher<'a> {
         self.run(first, at, &frame)
     }
 
-    /// Carry on with whatever the frames say follows.
+    /// Carry on with whatever the frames say follows. Past a number of
+    /// steps, a pattern whose failures can be remembered skips a place it
+    /// already failed to carry on from, which keeps a pattern that would
+    /// try the same places over and over to time in step with the subject.
     fn carry_on<'r>(&mut self, rest: &'r Rest<'a, 'r>, at: usize) -> Option<usize> {
         self.steps += 1;
         if self.steps > STEP_BUDGET || self.out_of_time() {
             return None;
         }
+        let remembering = self.can_remember
+            && !matches!(rest, Rest::Done)
+            && self.steps > self.letters.len() as u64 * 8 + STEPS_BEFORE_REMEMBERING;
+        if !remembering {
+            return self.carry_on_frame(rest, at);
+        }
+        let (first, second) = remaining_signature(rest);
+        let place = (first, second, at);
+        if self.failures.contains(&place) {
+            return None;
+        }
+        let answer = self.carry_on_frame(rest, at);
+        if answer.is_none() && !self.timed_out && self.steps <= STEP_BUDGET {
+            self.failures.insert(place);
+        }
+        answer
+    }
+
+    fn carry_on_frame<'r>(&mut self, rest: &'r Rest<'a, 'r>, at: usize) -> Option<usize> {
         match rest {
             Rest::Done => Some(at),
             Rest::Leave { next } => {
@@ -812,8 +865,12 @@ impl<'a> Matcher<'a> {
         let saved = self.saved();
         let found = if behind {
             // A lookbehind reads text ending where it is written, so every
-            // place it could start is tried, nearest first.
-            (0..=at).rev().any(|from| {
+            // place it could start is tried, nearest first, no further back
+            // than the most it can read.
+            let earliest = node
+                .longest_reach()
+                .map_or(0, |reach| at.saturating_sub(reach));
+            (earliest..=at).rev().any(|from| {
                 let taken = self.saved();
                 if self.run(node, from, &Rest::EndsAt(at)).is_some() {
                     return true;
@@ -952,6 +1009,72 @@ impl<'a> Matcher<'a> {
 }
 
 /// Whether two characters are the same once case is set aside.
+/// Two numbers that together stand for what is left to match: each frame's
+/// place in the pattern, and the turn count of a repetition whose count can
+/// still decide anything. Where a group began and what the groups hold are
+/// left out, since a pattern whose failures are remembered never reads them
+/// to decide whether it can carry on.
+fn remaining_signature(rest: &Rest<'_, '_>) -> (u64, u64) {
+    let mut first: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut second: u64 = 0x8422_2325_cbf2_9ce4;
+    let mut mix = |value: u64| {
+        first = (first ^ value).wrapping_mul(0x100_0000_01b3);
+        second = (second.rotate_left(5) ^ value).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+    };
+    let mut frame = rest;
+    loop {
+        match frame {
+            Rest::Done => {
+                mix(1);
+                break;
+            }
+            Rest::EndsAt(place) => {
+                mix(2);
+                mix(*place as u64);
+                break;
+            }
+            Rest::NoFurtherThan(place) => {
+                mix(3);
+                mix(*place as u64);
+                break;
+            }
+            Rest::Leave { next } => {
+                mix(4);
+                frame = next;
+            }
+            Rest::Seq { pieces, next } => {
+                mix(5);
+                mix(pieces.as_ptr() as u64);
+                mix(pieces.len() as u64);
+                frame = next;
+            }
+            Rest::Close { index, next, .. } => {
+                mix(6);
+                mix(*index as u64);
+                frame = next;
+            }
+            Rest::Again {
+                node,
+                least,
+                most,
+                done,
+                next,
+                ..
+            } => {
+                mix(7);
+                mix(*node as *const Node as u64);
+                let counted = match most {
+                    None => (*done).min(*least),
+                    Some(_) => *done,
+                };
+                mix(u64::from(counted));
+                frame = next;
+            }
+        }
+    }
+    (first, second)
+}
+
 fn same_folded(held: char, wanted: char) -> bool {
     held.to_lowercase().eq(wanted.to_lowercase())
 }

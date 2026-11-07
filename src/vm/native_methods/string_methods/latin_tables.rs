@@ -45,29 +45,69 @@ pub(crate) fn latin_text_replacing(bytes: &[u8], named: &str, replacement: &str)
     Some(text)
 }
 
-/// The error a byte the source encoding leaves undefined raises, naming the
-/// step to UTF-8 the conversion stops at.
-pub(crate) fn undefined_byte_error(
-    byte: u8,
+/// Bytes spelled as `String#dump` spells them, quotes and all, which is how
+/// a conversion error names the bytes it stopped at.
+pub(crate) fn dumped_bytes(bytes: &[u8]) -> String {
+    let mut written = String::from("\"");
+    for (at, byte) in bytes.iter().enumerate() {
+        match byte {
+            b'"' | b'\\' => {
+                written.push('\\');
+                written.push(char::from(*byte));
+            }
+            b'#' if matches!(bytes.get(at + 1), Some(b'{' | b'$' | b'@')) => written.push_str("\\#"),
+            b'\n' => written.push_str("\\n"),
+            b'\r' => written.push_str("\\r"),
+            b'\t' => written.push_str("\\t"),
+            0x0c => written.push_str("\\f"),
+            0x0b => written.push_str("\\v"),
+            0x08 => written.push_str("\\b"),
+            0x07 => written.push_str("\\a"),
+            0x1b => written.push_str("\\e"),
+            0x20..=0x7e => written.push(char::from(*byte)),
+            _ => written.push_str(&format!("\\x{byte:02X}")),
+        }
+    }
+    written.push('"');
+    written
+}
+
+/// The error a character the source encoding leaves undefined raises, naming
+/// the step to UTF-8 the conversion stops at.
+pub(crate) fn undefined_bytes_error(
+    bytes: &[u8],
     source: &str,
     wanted: &str,
     position: crate::lexer::Position,
 ) -> crate::error::MetorexError {
-    let spelled = format!("\"\\x{byte:02X}\"");
+    let spelled = dumped_bytes(bytes);
     let message = if wanted == "UTF-8" {
         format!("{spelled} from {source} to UTF-8")
     } else {
         format!("{spelled} to UTF-8 in conversion from {source} to UTF-8 to {wanted}")
     };
+    undefined_conversion(&message, bytes, source, position)
+}
+
+/// An UndefinedConversionError with `message`, whose `error_char` holds
+/// `bytes` in the encoding `tagged`.
+pub(crate) fn undefined_conversion(
+    message: &str,
+    bytes: &[u8],
+    tagged: &str,
+    position: crate::lexer::Position,
+) -> crate::error::MetorexError {
     let error = crate::vm::errors::simple_exception(
         "Encoding::UndefinedConversionError",
-        &message,
+        message,
         position,
     );
+    let character = crate::object::StringValue::binary(bytes.to_vec());
+    character.retag(tagged.to_string());
     super::set_exception_attribute(
         &error,
         "error_char",
-        crate::vm::native_methods::pack_format::bytes_to_string(&[byte]),
+        crate::object::Object::String(std::rc::Rc::new(character)),
     );
     error
 }

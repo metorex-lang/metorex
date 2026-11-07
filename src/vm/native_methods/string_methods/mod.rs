@@ -34,7 +34,7 @@ mod numbers;
 mod padding;
 mod searching;
 #[rustfmt::skip]
-mod single_byte_tables;
+pub(crate) mod single_byte_tables;
 mod slicing;
 mod splitting;
 mod substitution;

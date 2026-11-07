@@ -143,6 +143,14 @@ impl VirtualMachine {
                         position,
                     ));
                 }
+                // Bytes that spell no characters have nothing to normalize.
+                if !super::holds_valid_text(string_value) {
+                    return Err(crate::vm::errors::simple_exception(
+                        "ArgumentError",
+                        &format!("invalid byte sequence in {named}"),
+                        position,
+                    ));
+                }
                 let form = match arguments.first().view() {
                     None => "nfc".to_string(),
                     Some(View::Symbol(held) | View::String(held)) => held.as_str().to_string(),

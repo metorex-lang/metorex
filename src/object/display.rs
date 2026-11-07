@@ -237,8 +237,11 @@ pub(crate) fn inspect_symbol(name: &str) -> String {
     }
     let mut out = String::with_capacity(name.len() + 3);
     out.push_str(":\"");
-    for character in name.chars() {
+    let mut characters = name.chars().peekable();
+    while let Some(character) = characters.next() {
         match character {
+            // A `#` that would open an interpolation read back is escaped.
+            '#' if matches!(characters.peek(), Some('{' | '$' | '@')) => out.push_str("\\#"),
             '"' => out.push_str("\\\""),
             '\\' => out.push_str("\\\\"),
             '\u{7}' => out.push_str("\\a"),

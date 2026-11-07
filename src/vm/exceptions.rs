@@ -616,6 +616,24 @@ impl VirtualMachine {
                     continue;
                 }
             }
+            // A path none of those reach may still name a class through a
+            // module's `const_missing`, which reading it as a constant asks.
+            if held.is_none()
+                && name.contains("::")
+                && let Some(object) = self.globals().get("Object")
+                && let Ok(found) = self.send_to_object(
+                    object,
+                    "const_get",
+                    vec![Object::string(name.clone())],
+                    position,
+                )
+                && matches!(found.view(), View::Class(_) | View::Module(_))
+            {
+                if self.rescue_handler_matches(&found, exception, position)? {
+                    return Ok(true);
+                }
+                continue;
+            }
             if self.exception_matches(exception, std::slice::from_ref(name))? {
                 return Ok(true);
             }
@@ -708,10 +726,6 @@ impl VirtualMachine {
 
         // Check if the exception's type matches any of the specified types
         for type_name in exception_types {
-            // Exact name match (covers stdlib exceptions like LoadError, Errno::*, etc.)
-            if type_name == &exception_type_name {
-                return Ok(true);
-            }
             // `rescue Object` / `rescue BasicObject` catch everything (Ruby semantics).
             if type_name == "Object" || type_name == "BasicObject" {
                 return Ok(true);
@@ -732,12 +746,18 @@ impl VirtualMachine {
                     },
                 },
             };
+            // A name that reaches no class can only be compared as written.
             let Some(target_class) = target_class else {
+                if type_name == &exception_type_name {
+                    return Ok(true);
+                }
                 continue;
             };
             let raised_class = self.raised_class(exception_class.clone(), &exception_type_name);
-            if raised_class.is_some_and(|raised| raised.has_ancestor(&target_class)) {
-                return Ok(true);
+            match &raised_class {
+                Some(raised) if raised.has_ancestor(&target_class) => return Ok(true),
+                None if type_name == &exception_type_name => return Ok(true),
+                _ => {}
             }
             // An exception extended with a module carries it on its
             // singleton class.
@@ -753,13 +773,19 @@ impl VirtualMachine {
     }
 
     /// The class an exception was raised as: the one it carries, or else
-    /// the class its type name reaches.
+    /// the class its type name reaches. A type name with no class carried
+    /// beside it is a core class's, so it is read from the top level before
+    /// the scope, where a module may hold a class of the same name.
     fn raised_class(
         &self,
         carried: Option<Rc<crate::class::Class>>,
         type_name: &str,
     ) -> Option<Rc<crate::class::Class>> {
         carried
+            .or_else(|| match self.globals().get(type_name).view() {
+                Some(View::Class(class)) => Some(class.clone()),
+                _ => None,
+            })
             .or_else(|| match self.resolve_constant_in_scope(type_name).view() {
                 Some(View::Class(class)) => Some(class.clone()),
                 _ => None,

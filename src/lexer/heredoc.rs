@@ -212,10 +212,11 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        // If interpolation is enabled and the body contains `#{`, split it
-        // into Text/Expression parts. Otherwise return the raw String.
+        // If interpolation is enabled and the body holds a `#` that may
+        // start one, split it into Text/Expression parts. Otherwise return
+        // the raw String.
         if interpolate {
-            if body.contains("#{") {
+            if body.contains('#') {
                 return Some(split_interpolated(
                     &body,
                     saved_line + 1,
@@ -474,6 +475,16 @@ fn split_parts(body: &str, first_line: usize, keeps_escaped_hash: bool) -> Vec<I
                 }
             }
             parts.push(InterpolationPart::Expression(expr, line));
+        } else if ch == '#'
+            && let upcoming = chars.clone().take(1024).collect::<Vec<char>>()
+            && let length = super::strings::short_variable_length(&upcoming)
+            && length > 0
+        {
+            if !current.is_empty() {
+                parts.push(InterpolationPart::Text(std::mem::take(&mut current)));
+            }
+            let named: String = chars.by_ref().take(length).collect();
+            parts.push(InterpolationPart::Expression(named, line));
         } else {
             current.push(ch);
         }

@@ -1,6 +1,7 @@
 // Mixing a module into one object's singleton class.
 
 use super::*;
+use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Extend `receiver`'s singleton class with `module_rc`, dispatching to a
@@ -12,6 +13,24 @@ impl VirtualMachine {
         module_rc: &Rc<Class>,
         position: Position,
     ) -> Result<(), MetorexError> {
+        // A module extended later stands ahead of one extended earlier, so
+        // the copies an earlier `extend` in a module body left for the names
+        // this one defines give way to it.
+        if let View::Module(target) | View::Class(target) = receiver.view()
+            && target.holds_extended_copies.get()
+        {
+            for method_name in module_rc.method_names() {
+                let from_key = format!("__ext_from__{}", method_name);
+                let copied_from_another = matches!(
+                    target.get_class_var(&from_key).view(),
+                    Some(View::Module(earlier)) if !Rc::ptr_eq(&earlier, module_rc)
+                );
+                if copied_from_another {
+                    target.remove_class_var(&format!("__ext__{}", method_name));
+                    target.remove_class_var(&from_key);
+                }
+            }
+        }
         if let Some(method) = module_rc.find_method("__class__extend_object") {
             self.invoke_method(
                 Rc::clone(module_rc),

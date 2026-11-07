@@ -371,3 +371,30 @@ fn a_regexp_literal_is_frozen_and_one_built_by_regexp_new_freezes_when_asked() {
     let output = run_example("regexp/regexp_freeze_and_frozen.rb");
     assert_eq!(output, "true\nfalse\ntrue\ntrue\ntrue\ntrue\ntrue\nfalse\n");
 }
+
+#[test]
+fn a_lookbehind_reads_back_only_as_far_as_it_can_match() {
+    let output = run_example("regexp/lookbehind_reads_back_only_as_far_as_it_can_match.rb");
+    assert_eq!(output, "\"abNcd\\r\\nefN\"\n2\ntrue\n7\n");
+}
+
+#[test]
+fn repeated_alternatives_fail_once_per_place() {
+    let output = run_example("regexp/repeated_alternatives_fail_once_per_place.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "true\n",
+            "false\n",
+            "0\n",
+            "nil\n",
+            "\"a=\"\n",
+            "7998\n",
+            "\"\"\n",
+            "\"aaab\"\n",
+            "\"ab\"\n",
+            "\"aaay\"\n",
+            "[\"a\", \"a\", \"a\"]\n",
+        )
+    );
+}

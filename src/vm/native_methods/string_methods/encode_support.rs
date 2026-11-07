@@ -83,8 +83,8 @@ pub(crate) fn destination_spells(wanted: &str, character: char) -> bool {
     if wanted == "EUC-JP" {
         return crate::vm::native_methods::euc_jp_table::euc_jp_bytes(&text).is_ok();
     }
-    if wanted == "GBK" {
-        return crate::vm::native_methods::gbk::gbk_bytes(&text).is_ok();
+    if let Some(codec) = crate::vm::native_methods::double_byte::double_byte(wanted) {
+        return codec.bytes(&text).is_ok();
     }
     if wanted == "US-ASCII" {
         return character.is_ascii();
@@ -117,18 +117,7 @@ pub(crate) fn invalid_bytes_error(
     encoding: &str,
     position: Position,
 ) -> MetorexError {
-    let spelled = |bytes: &[u8]| {
-        let mut written = String::from("\"");
-        for byte in bytes {
-            if byte.is_ascii_graphic() || *byte == b' ' {
-                written.push(*byte as char);
-            } else {
-                written.push_str(&format!("\\x{byte:02X}"));
-            }
-        }
-        written.push('"');
-        written
-    };
+    let spelled = super::dumped_bytes;
     let message = match after {
         _ if incomplete => format!("incomplete {} on {encoding}", spelled(broken)),
         Some(next) => format!(
@@ -351,8 +340,10 @@ pub(crate) fn encoded_characters(string_value: &crate::object::StringValue) -> V
             .iter()
             .map(|character| from_bytes(character))
             .collect(),
-        "GBK" if string_value.holds_bytes() => {
-            crate::vm::native_methods::gbk::gbk_characters(&binary_bytes(string_value))
+        named if string_value.holds_bytes() && crate::vm::native_methods::double_byte::double_byte(named).is_some() => {
+            crate::vm::native_methods::double_byte::double_byte(named)
+                .unwrap()
+                .characters(&binary_bytes(string_value))
                 .iter()
                 .map(|character| from_bytes(character))
                 .collect()

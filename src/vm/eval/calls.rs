@@ -427,7 +427,7 @@ impl VirtualMachine {
         reach: impl FnOnce(&mut Self, Object) -> Result<Object, MetorexError>,
     ) -> Result<Object, MetorexError> {
         let has_block = block.is_some();
-        let calling_frame = self.current_method_frame;
+        let calling_frame = self.calling_frame();
         self.refuse_moved_receiver(&receiver, position)?;
         self.attach_block(block);
         match reach(self, receiver) {

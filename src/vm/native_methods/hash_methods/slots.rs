@@ -17,6 +17,9 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<crate::object::Slot, MetorexError> {
         if by_identity {
+            if let Some(address) = crate::vm::object_ids::reference_address(key) {
+                return Ok(format!("{HASHED_SLOT_PREFIX}a{address}").into());
+            }
             let id = self.object_identity(key, position)?;
             return Ok(format!("{HASHED_SLOT_PREFIX}i{id}").into());
         }

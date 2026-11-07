@@ -388,7 +388,13 @@ impl Parser<'_> {
 
         // Anything but a bare constant name, as `include ::Kernel` or
         // `include self`, is an expression evaluated where the call is made.
-        if !matches!(self.peek().kind, TokenKind::Ident(_)) {
+        // A name that is not a constant's, as `include forking? ? A : B`, is
+        // one too.
+        let names_a_constant = matches!(
+            &self.peek().kind,
+            TokenKind::Ident(name) if name.starts_with(|first: char| first.is_uppercase())
+        );
+        if !names_a_constant {
             let arguments = self.parse_arguments_without_parens()?;
             return Ok(self.include_call_statement(arguments, start_pos));
         }
@@ -492,8 +498,13 @@ impl Parser<'_> {
         }
 
         // Anything but a bare constant name, as `extend ::Mod` or
-        // `extend self`, is an expression evaluated where the call is made.
-        if !matches!(self.peek().kind, TokenKind::Ident(_)) {
+        // `extend self`, is an expression evaluated where the call is made,
+        // and so is a name that is not a constant's.
+        let names_a_constant = matches!(
+            &self.peek().kind,
+            TokenKind::Ident(name) if name.starts_with(|first: char| first.is_uppercase())
+        );
+        if !names_a_constant {
             let arguments = self.parse_arguments_without_parens()?;
             return Ok(mixin_call_statement("extend", arguments, start_pos));
         }

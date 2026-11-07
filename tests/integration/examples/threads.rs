@@ -426,3 +426,9 @@ fn a_fiber_sleeping_inside_a_thread_lets_the_other_threads_run() {
     let output = run_example("threads/sleep_in_a_fiber_gives_other_threads_turns.rb");
     assert_eq!(output, ":woke\nfalse\n");
 }
+
+#[test]
+fn mutex_refuses_recursive_locking() {
+    let output = run_example("threads/mutex_refuses_recursive_locking.rb");
+    assert_eq!(output, "\"deadlock; recursive locking\"\nfalse\n");
+}

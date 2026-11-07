@@ -1,0 +1,7 @@
+# The gems netrc's tests load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "netrc", path: "../../../../gems/netrc"
+gem "minitest"

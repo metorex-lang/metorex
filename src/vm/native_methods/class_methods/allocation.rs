@@ -163,7 +163,7 @@ impl VirtualMachine {
             return Ok(made);
         }
         let inst = crate::object::Instance::new(Rc::clone(class_rc));
-        // A subclass of String, Array or Hash starts out holding an empty
+        // A subclass of String, Array, Hash or Set starts out holding an empty
         // one, which is what its methods then work on.
         let descends = |name: &str| {
             class_rc.name() != name && crate::vm::method_invocation::descends_from(class_rc, name)
@@ -183,6 +183,8 @@ impl VirtualMachine {
                 crate::vm::native_methods::HASH_SUBCLASS_VAR,
                 Object::Dict(Rc::new(std::cell::RefCell::new(Default::default()))),
             ))
+        } else if descends("Set") {
+            Some((crate::vm::native_methods::SET_SUBCLASS_VAR, Object::empty_set()))
         } else {
             None
         };

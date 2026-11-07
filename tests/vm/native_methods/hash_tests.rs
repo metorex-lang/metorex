@@ -34,13 +34,11 @@ fn hash_each_without_block_answers_an_enumerator() {
 // ── Hash map without block ─────────────────────────────────────────────────────
 
 #[test]
-fn hash_map_without_block_error() {
-    let err = run_err(
-        r#"
-{"a" => 1}.map
-"#,
-    );
-    assert!(err.contains("block") || err.contains("map") || err.contains("requires"));
+fn hash_map_without_block_answers_an_enumerator() {
+    let class_name = run(r#"
+{"a" => 1}.map.class.to_s
+"#);
+    assert_eq!(class_name, Some(Object::string("Enumerator")));
 }
 
 // ── Hash select without block ──────────────────────────────────────────────────

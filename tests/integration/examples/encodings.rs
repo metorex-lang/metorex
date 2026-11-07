@@ -828,3 +828,310 @@ fn bytes_substituted_one_at_a_time_join_into_characters_and_broken_text_refuses_
         )
     );
 }
+
+#[test]
+fn split_keeps_each_piece_in_its_encoding() {
+    let output = run_example("encodings/split_keeps_each_piece_in_its_encoding.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[[97, 228], [98, 228]]\n",
+            "[[97, 228], [98, 228]]\n",
+            "[#<Encoding:ISO-8859-1>, #<Encoding:ISO-8859-1>]\n",
+            "5\n",
+            "[[97, 228, 32, 98, 228]]\n",
+            "[[255], [254]]\n",
+            "[#<Encoding:BINARY (ASCII-8BIT)>, #<Encoding:BINARY (ASCII-8BIT)>]\n",
+            "[\"héllo\", \"wörld\"]\n",
+            "[#<Encoding:UTF-8>, #<Encoding:UTF-8>]\n",
+            "[[99, 97, 102, 233], [99, 114, 232, 109, 101]]\n",
+            "[true, true]\n",
+        )
+    );
+}
+
+#[test]
+fn single_byte_text_keeps_its_bytes_through_string_methods() {
+    let output = run_example("encodings/single_byte_text_keeps_its_bytes.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[:gsub_string, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:gsub_block, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:sub, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:index_range, [\"ISO-8859-1\", [228]]]\n",
+            "[:slice_regexp, [\"ISO-8859-1\", [228]]]\n",
+            "[:scan, [[], [228], [], [228], []]]\n",
+            "[:chars, [[228], [], [], [], [], [], [], [], [], [], [], []]]\n",
+            "[:partition, [[228], [], [228]]]\n",
+            "[:rpartition, [[228, 228], [], []]]\n",
+            "[:lines, [[228, 228]]]\n",
+            "[:strip, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:tr, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:delete, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:squeeze, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:ljust, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:plus, [\"ISO-8859-1\", [228, 228, 228, 228]]]\n",
+            "[:times, [\"ISO-8859-1\", [228, 228, 228, 228]]]\n",
+            "[:upcase, [\"ISO-8859-1\", [196, 196]]]\n",
+            "[:downcase, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:capitalize, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:swapcase, [\"ISO-8859-1\", [196, 196]]]\n",
+            "[:reverse, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:each_line, [[228], [228]]]\n",
+            "[:match_capture, [\"ISO-8859-1\", [228]]]\n",
+            "[:pre_match, [\"ISO-8859-1\", [228]]]\n",
+            "[:post_match, [\"ISO-8859-1\", [228]]]\n",
+            "[:dollar, [\"ISO-8859-1\", [228]]]\n",
+            "[:format, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:dup, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:slice_bang, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:insert, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:concat, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:unpack, [\"ASCII-8BIT\", [228, 228]]]\n",
+            "[:each_char, [[], [], [], [], [], [], [], [], [], []]]\n",
+            "[:byteslice, [\"ISO-8859-1\", [228]]]\n",
+            "[:center, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:chomp, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:chop, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:split_limit, [[228], [228]]]\n",
+            "[:start_with, true]\n",
+            "[:to_s, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:to_str, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:encode, [\"UTF-8\", [195, 164, 195, 164]]]\n",
+            "[:freeze_dup, [\"ISO-8859-1\", [228, 228]]]\n",
+            "[:interpolated, [\"ISO-8859-1\", [228, 228]]]\n",
+            "2\n",
+            "2\n",
+            "[195, 169]\n",
+            "[195]\n",
+            "[169, 195]\n",
+            "2\n",
+            "[169, 195]\n",
+        )
+    );
+}
+
+#[test]
+fn encoding_find_refuses_what_is_not_a_name() {
+    let output = run_example("encodings/encoding_find_refuses_non_strings.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[TypeError, \"no implicit conversion of nil into String\"]\n",
+            "[TypeError, \"no implicit conversion of Integer into String\"]\n",
+            "[TypeError, \"no implicit conversion of Symbol into String\"]\n",
+            "#<Encoding:UTF-8>\n",
+        )
+    );
+}
+
+#[test]
+fn gsub_takes_the_encoding_of_a_non_ascii_replacement() {
+    let output = run_example("encodings/gsub_takes_the_replacement_encoding.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"måmmå let me go\"\n",
+            "#<Encoding:UTF-8>\n",
+            "#<Encoding:US-ASCII>\n",
+            "#<Encoding:UTF-8>\n",
+            "#<Encoding:UTF-8>\n",
+            "#<Encoding:UTF-8>\n",
+            "#<Encoding:UTF-8>\n",
+        )
+    );
+}
+
+#[test]
+fn unicode_normalize_refuses_bytes_that_spell_nothing() {
+    let output = run_example("encodings/unicode_normalize_refuses_broken_text.rb");
+    assert_eq!(
+        output,
+        "false\n[ArgumentError, \"invalid byte sequence in UTF-8\"]\n\"ok\"\n\"é\"\n"
+    );
+}
+
+#[test]
+fn korean_double_byte_text_reads_and_writes() {
+    let output = run_example("encodings/korean_double_byte_text_reads_and_writes.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"스티해\"\n",
+            "\"스티해\"\n",
+            "[189, 186, 198, 188, 199, 216]\n",
+            "\"콭\"\n",
+            "2\n",
+            "false\n",
+            "3\n",
+            "\"incomplete \\\"\\\\xB2\\\" on EUC-KR\"\n",
+        )
+    );
+}
+
+#[test]
+fn gsub_takes_a_replacement_in_another_encoding() {
+    let output = run_example("encodings/gsub_takes_a_replacement_in_another_encoding.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "#<Encoding:UTF-16BE>\n",
+            "[0, 104, 0, 105]\n",
+            "#<Encoding::CompatibilityError: incompatible character encodings: UTF-8 and UTF-16BE>\n",
+            "#<Encoding:UTF-16BE>\n",
+            "[0, 104, 0, 105, 0, 104, 0, 105]\n",
+            "#<Encoding:EUC-JP>\n",
+            "[164, 162]\n",
+            "#<Encoding:UTF-8>\n",
+            "#<Encoding:UTF-8>\n",
+        )
+    );
+}
+
+#[test]
+fn gb18030_text_reads_and_writes() {
+    let output = run_example("encodings/gb18030_text_reads_and_writes.rb");
+    assert_eq!(
+        output,
+        r#""開"
+1
+true
+["80", "ffff", "10000", "10ffff"]
+4
+[233, 95, 32, 129, 48, 129, 48, 32, 132, 49, 164, 57, 32, 144, 48, 129, 48, 32, 227, 50, 154, 53, 32, 162, 227]
+true
+false
+false
+false
+false
+1
+Encoding::UndefinedConversionError
+"\"\\x841\\xA50\" from GB18030 to UTF-8"
+[132, 49, 165, 48]
+#<Encoding:GB18030>
+Encoding::UndefinedConversionError
+"\"\\xA2\\xA0\" from GBK to UTF-8"
+"�z"
+"#
+    );
+}
+
+#[test]
+fn utf16_conversion_refuses_a_lone_surrogate() {
+    let output = run_example("encodings/utf16_conversion_refuses_a_lone_surrogate.rb");
+    assert_eq!(
+        output,
+        r#"[154, 138, 222, 186, 155, 104, 247, 79, 128, 9]
+Encoding::InvalidByteSequenceError
+"\"\\xDE\\xBA\" on UTF-16BE"
+[65536]
+false
+"�"
+[Encoding::InvalidByteSequenceError, "\"\\xDC\\x00\" on UTF-16BE", [220, 0], [], false]
+"a�b"
+[Encoding::InvalidByteSequenceError, "\"\\xD8\\x00\" followed by \"\\x00\" on UTF-16BE", [216, 0], [0], false]
+"a�b"
+[Encoding::InvalidByteSequenceError, "incomplete \"\\xD8\\x00\" on UTF-16BE", [216, 0], [], true]
+"a�"
+[Encoding::InvalidByteSequenceError, "incomplete \"\\x00\" on UTF-16BE", [0], [], true]
+"a�"
+[Encoding::InvalidByteSequenceError, "\"\\x00\\xDC\" on UTF-16LE", [0, 220], [], false]
+"a�"
+[Encoding::InvalidByteSequenceError, "\"\\x00\\x11\\x00\\x00\" on UTF-32BE", [0, 17, 0, 0], [], false]
+"a�"
+[Encoding::InvalidByteSequenceError, "\"\\x00\\x00\\xD8\\x00\" on UTF-32BE", [0, 0, 216, 0], [], false]
+"�"
+[Encoding::InvalidByteSequenceError, "incomplete \"\\x00\\x00\\x00\" on UTF-32BE", [0, 0, 0], [], true]
+"�"
+"#
+    );
+}
+
+#[test]
+fn gsub_over_binary_text_takes_a_utf8_replacement() {
+    let output = run_example("encodings/gsub_over_binary_text_takes_a_utf8_replacement.rb");
+    assert_eq!(
+        output,
+        r#""&AOQ-&-&AOQ-&-&AOQ-"
+#<Encoding:BINARY (ASCII-8BIT)>
+"ä&ä&ä"
+#<Encoding:UTF-8>
+true
+"aäb"
+#<Encoding:UTF-8>
+Encoding::CompatibilityError
+[195, 164]
+[195, 164]
+[195, 164]
+[195, 164]
+"#
+    );
+}
+
+#[test]
+fn iso_2022_jp_replaces_bytes_it_cannot_read() {
+    let output = run_example("encodings/iso_2022_jp_replaces_bytes_it_cannot_read.rb");
+    assert_eq!(
+        output,
+        r#"[68, 105, 106, 138, 97, 116]
+#<Encoding:UTF-8>
+true
+"Dij?at"
+Encoding::InvalidByteSequenceError
+"\"\\x8A\" on ISO-2022-JP"
+"あa"
+"?"
+"a?bあ?"
+"a\x8Ab" => [Encoding::InvalidByteSequenceError, "\"\\x8A\" on ISO-2022-JP", [138], nil] | "a?b"
+"\e$B$\"\x8A\e(B" => [Encoding::InvalidByteSequenceError, "\"\\x8A\" on ISO-2022-JP", [138], nil] | "あ?"
+"\e$B$" => [Encoding::InvalidByteSequenceError, "incomplete \"$\" on ISO-2022-JP", [36], nil] | "?"
+"\e$B$\n\e(B" => [Encoding::InvalidByteSequenceError, "\"$\" followed by \"\\n\" on ISO-2022-JP", [36], [10]] | "??"
+"\e$B\n\e(B" => [Encoding::InvalidByteSequenceError, "\"\\n\" on ISO-2022-JP", [10], nil] | "?"
+"\e$B\u007F!\e(B" => [Encoding::InvalidByteSequenceError, "\"\\x7F\" on ISO-2022-JP", [127], nil] | "??"
+"\e$B$\u007F\e(B" => [Encoding::InvalidByteSequenceError, "\"$\" followed by \"\\x7F\" on ISO-2022-JP", [36], [127]] | "??"
+"a\eb" => [Encoding::InvalidByteSequenceError, "\"\\e\" followed by \"b\" on ISO-2022-JP", [27], [98]] | "a?b"
+"a\e$Ab" => [Encoding::InvalidByteSequenceError, "\"\\e$\" followed by \"A\" on ISO-2022-JP", [27, 36], [65]] | "a?Ab"
+"\u000Ea" => [Encoding::InvalidByteSequenceError, "\"\\x0E\" on ISO-2022-JP", [14], nil] | "?a"
+"\u000Fa" => [Encoding::InvalidByteSequenceError, "\"\\x0F\" on ISO-2022-JP", [15], nil] | "?a"
+"\e$B\e(B" => "" | ""
+"\e$B$\"\e(Jx" => "あx" | "あx"
+"\e" => [Encoding::InvalidByteSequenceError, "incomplete \"\\e\" on ISO-2022-JP", [27], nil] | "?"
+"\e$" => [Encoding::InvalidByteSequenceError, "incomplete \"\\e$\" on ISO-2022-JP", [27, 36], nil] | "?"
+"\e$B!\x80\e(B" => [Encoding::InvalidByteSequenceError, "\"!\" followed by \"\\x80\" on ISO-2022-JP", [33], [128]] | "??"
+"\e$B\"/\e(B" => [Encoding::UndefinedConversionError, "\"\\xA2\\xAF\" to UTF-8 in conversion from ISO-2022-JP to stateless-ISO-2022-JP to EUC-JP to UTF-8", [162, 175], nil] | "?"
+"\e$B$\"\e$B$\"\e(B" => "ああ" | "ああ"
+["UTF-8", Encoding::UndefinedConversionError, "\"\\xA2\\xAF\" to UTF-8 in conversion from ISO-2022-JP to stateless-ISO-2022-JP to EUC-JP to UTF-8", "EUC-JP", "UTF-8", #<Encoding:EUC-JP>]
+["UTF-8", Encoding::InvalidByteSequenceError, "\"\\x8A\" on ISO-2022-JP", "ISO-2022-JP", "stateless-ISO-2022-JP", nil]
+["UTF-16LE", Encoding::UndefinedConversionError, "\"\\xA2\\xAF\" to UTF-8 in conversion from ISO-2022-JP to stateless-ISO-2022-JP to EUC-JP to UTF-8 to UTF-16LE", "EUC-JP", "UTF-8", #<Encoding:EUC-JP>]
+["UTF-16LE", Encoding::InvalidByteSequenceError, "\"\\x8A\" on ISO-2022-JP", "ISO-2022-JP", "stateless-ISO-2022-JP", nil]
+"#
+    );
+}
+
+#[test]
+fn binary_text_keeps_its_bytes_through_string_steps() {
+    let output = run_example("encodings/binary_text_keeps_its_bytes_through_string_steps.rb");
+    assert_eq!(
+        output,
+        r#"27
+10
+27
+#<Encoding:BINARY (ASCII-8BIT)>
+[15]
+[15]
+[[4, 10]]
+17
+#<Encoding:BINARY (ASCII-8BIT)>
+19
+15
+15
+15
+15
+[99, 105, 195, 171, 32]
+[99, 105, 195, 171]
+[99, 105, 195, 171]
+[99, 105, 195, 171]
+"#
+    );
+}

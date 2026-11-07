@@ -305,6 +305,30 @@ impl VirtualMachine {
                             .is_some_and(|(_, method)| written_by_program(&method))
                     },
                 );
+                // A core class answers the class methods it and its
+                // superclasses define natively, as `Time.now` and `IO.read`
+                // for File.
+                if let View::Class(held) | View::Module(held) = receiver.view() {
+                    use crate::vm::native_methods::core_method_names::CORE_SINGLETON_METHODS;
+                    let mut cursor = Some(held.clone());
+                    while let Some(current) = cursor {
+                        let own = current.ruby_name();
+                        if let Some(row) =
+                            CORE_SINGLETON_METHODS.iter().find(|row| row.owner == own)
+                        {
+                            names.extend(
+                                row.public
+                                    .iter()
+                                    .filter(|name| {
+                                        self.lookup_method(receiver, name)
+                                            .is_none_or(|(_, method)| !method.is_undefined)
+                                    })
+                                    .map(|name| name.to_string()),
+                            );
+                        }
+                        cursor = current.superclass();
+                    }
+                }
                 names.sort();
                 names.dedup();
                 let method_symbols: Vec<Object> = names.into_iter().map(Object::symbol).collect();

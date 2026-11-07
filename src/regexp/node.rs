@@ -208,6 +208,89 @@ impl Node {
         }
     }
 
+    /// The most characters a match of this node can read, or None when there
+    /// is no bound. A piece that matches one character counts as three,
+    /// the most a case-folded letter expands to.
+    pub fn longest_reach(&self) -> Option<usize> {
+        const FOLDED_LETTER_REACH: usize = 3;
+        match self {
+            Node::Empty
+            | Node::LineStart
+            | Node::LineEnd
+            | Node::SubjectStart
+            | Node::SubjectEnd
+            | Node::SubjectEndBeforeNewline
+            | Node::SearchStart
+            | Node::WordBoundary { .. }
+            | Node::KeepOut
+            | Node::Look { .. } => Some(0),
+            Node::Letter(_) | Node::AnyChar { .. } | Node::Class(_) => Some(FOLDED_LETTER_REACH),
+            Node::Letters(run) => Some(run.len() * FOLDED_LETTER_REACH),
+            Node::Concat(pieces) => pieces
+                .iter()
+                .try_fold(0usize, |total, piece| Some(total + piece.longest_reach()?)),
+            Node::Alternate(pieces) => pieces
+                .iter()
+                .try_fold(0usize, |longest, piece| Some(longest.max(piece.longest_reach()?))),
+            Node::Repeat { node, most, .. } => {
+                Some(node.longest_reach()? * usize::try_from((*most)?).ok()?)
+            }
+            Node::Capture { node, .. } | Node::Group(node) | Node::Atomic(node) => {
+                node.longest_reach()
+            }
+            Node::Conditional {
+                then_node,
+                else_node,
+                ..
+            } => Some(then_node.longest_reach()?.max(else_node.longest_reach()?)),
+            Node::Grapheme | Node::Backreference { .. } | Node::Call(_) | Node::Absent(_) => None,
+        }
+    }
+
+    /// The fewest characters a match of this node can read.
+    pub fn shortest_reach(&self) -> usize {
+        match self {
+            Node::Letter(_) | Node::AnyChar { .. } | Node::Class(_) | Node::Grapheme => 1,
+            Node::Letters(run) => run.len(),
+            Node::Concat(pieces) => pieces.iter().map(Node::shortest_reach).sum(),
+            Node::Alternate(pieces) => pieces.iter().map(Node::shortest_reach).min().unwrap_or(0),
+            Node::Repeat { node, least, .. } => node.shortest_reach() * *least as usize,
+            Node::Capture { node, .. } | Node::Group(node) | Node::Atomic(node) => {
+                node.shortest_reach()
+            }
+            Node::Conditional {
+                then_node,
+                else_node,
+                ..
+            } => then_node.shortest_reach().min(else_node.shortest_reach()),
+            _ => 0,
+        }
+    }
+
+    /// Whether a failure to carry on from a place depends only on where it
+    /// is in the pattern and the subject. That holds where nothing reads back
+    /// what a group took and every repeated piece reads at least one
+    /// character, so a turn that read nothing never decides anything.
+    pub fn failures_can_be_remembered(&self) -> bool {
+        match self {
+            Node::Backreference { .. }
+            | Node::Call(_)
+            | Node::Conditional { .. }
+            | Node::Absent(_) => false,
+            Node::Concat(pieces) | Node::Alternate(pieces) => {
+                pieces.iter().all(Node::failures_can_be_remembered)
+            }
+            Node::Repeat { node, .. } => {
+                node.shortest_reach() > 0 && node.failures_can_be_remembered()
+            }
+            Node::Capture { node, .. }
+            | Node::Group(node)
+            | Node::Atomic(node)
+            | Node::Look { node, .. } => node.failures_can_be_remembered(),
+            _ => true,
+        }
+    }
+
     fn depends_on_where_it_starts(&self) -> bool {
         match self {
             Node::Backreference { .. }

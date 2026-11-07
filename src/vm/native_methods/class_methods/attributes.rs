@@ -131,7 +131,9 @@ impl VirtualMachine {
                     _ => true,
                 };
                 let found = if include_super {
-                    class_rc.find_method_with_owner(&name)
+                    class_rc
+                        .find_method_with_owner(&name)
+                        .or_else(|| self.object_method_reached_from(class_rc, &name))
                 } else {
                     class_rc
                         .find_own_method(&name)

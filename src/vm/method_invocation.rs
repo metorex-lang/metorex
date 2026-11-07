@@ -110,7 +110,7 @@ impl VirtualMachine {
             return Ok(result);
         }
         if self.class_line_reaches_object(&receiver)
-            && let Some((object_class, method)) = self.object_table_method(name)
+            && let Some((object_class, method)) = self.object_table_method_for(&receiver, name)
         {
             return self.invoke_method(object_class, method, receiver, arguments, position);
         }
@@ -1114,6 +1114,16 @@ impl VirtualMachine {
         }
         let (text, held) = match positional.first().view() {
             None => (String::new(), "ASCII-8BIT".to_string()),
+            Some(View::String(given)) if given.holds_bytes() => {
+                let made = crate::object::StringValue::of_bytes(
+                    crate::vm::native_methods::string_methods::binary_bytes(&given),
+                    given.encoding_name(),
+                );
+                if let Some(wanted) = named {
+                    made.retag(wanted);
+                }
+                return Ok(Object::String(Rc::new(made)));
+            }
             Some(View::String(given)) => (given.to_text(), given.encoding_name()),
             Some(other) if self.responds_to(&other.to_object(), "to_str") => {
                 match self

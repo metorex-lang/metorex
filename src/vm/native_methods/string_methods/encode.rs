@@ -81,7 +81,28 @@ impl VirtualMachine {
                 }
                 let reads_bytes = string_value.holds_bytes() || arguments.len() > 1;
                 let reading = match wide_encoding(&held) {
-                    Some(shape) => wide_text(&binary_bytes(string_value), shape),
+                    Some(shape) => {
+                        let mut read = String::new();
+                        for piece in wide_pieces(&binary_bytes(string_value), shape) {
+                            match piece {
+                                WidePiece::Character(character) => read.push(character),
+                                WidePiece::Broken { .. } if options.invalid_replace => {
+                                    read.push_str(&replacement)
+                                }
+                                WidePiece::Broken {
+                                    bytes,
+                                    after,
+                                    incomplete,
+                                } => {
+                                    let error = invalid_bytes_error(
+                                        &bytes, after, incomplete, &held, position,
+                                    );
+                                    return Err(self.with_conversion_ends(error, &held, &wanted));
+                                }
+                            }
+                        }
+                        read
+                    }
                     None if held == "ASCII-8BIT" => binary_text(
                         &binary_bytes(string_value),
                         &wanted,
@@ -98,9 +119,7 @@ impl VirtualMachine {
                         )
                         .map_err(|error| self.with_conversion_ends(error, "UTF-8", &wanted))?,
                     None if held == "ISO-2022-JP" => {
-                        crate::vm::native_methods::euc_jp_table::iso_2022_jp_text(&binary_bytes(
-                            string_value,
-                        ))
+                        self.iso_2022_jp_reading(string_value, &wanted, &options, &replacement, position)?
                     }
                     None if spells_shift_jis(&held) && reads_bytes => {
                         let bytes = binary_bytes(string_value);
@@ -113,17 +132,32 @@ impl VirtualMachine {
                         }
                         crate::vm::native_methods::shift_jis_table::shift_jis_text(&bytes)
                     }
-                    None if held == "GBK" && reads_bytes => {
+                    None if reads_bytes
+                        && crate::vm::native_methods::double_byte::double_byte(&held).is_some() =>
+                    {
+                        let codec =
+                            crate::vm::native_methods::double_byte::double_byte(&held).unwrap();
                         let bytes = binary_bytes(string_value);
-                        if let Some((broken, after, incomplete)) =
-                            crate::vm::native_methods::gbk::gbk_problem(&bytes)
+                        if let Some((broken, after, incomplete)) = codec.problem(&bytes)
                             && !options.invalid_replace
                         {
                             let error =
                                 invalid_bytes_error(&broken, after, incomplete, &held, position);
                             return Err(self.with_conversion_ends(error, &held, &wanted));
                         }
-                        crate::vm::native_methods::gbk::gbk_text(&bytes)
+                        if !options.undef_replace
+                            && let Some(undefined) = codec.undefined(&bytes)
+                        {
+                            return Err(self.with_conversion_ends(
+                                undefined_bytes_error(&undefined, &held, &wanted, position),
+                                &held,
+                                "UTF-8",
+                            ));
+                        }
+                        codec.text_replacing(
+                            &bytes,
+                            options.undef_replace.then_some(replacement.as_str()),
+                        )
                     }
                     None if held == "EUC-JP" && reads_bytes && options.invalid_replace => {
                         euc_jp_text_replacing(&binary_bytes(string_value), &replacement)
@@ -163,7 +197,7 @@ impl VirtualMachine {
                             }
                             Some(byte) if reads_bytes => {
                                 return Err(self.with_conversion_ends(
-                                    undefined_byte_error(byte, &held, &wanted, position),
+                                    undefined_bytes_error(&[byte], &held, &wanted, position),
                                     &held,
                                     "UTF-8",
                                 ));
@@ -234,8 +268,8 @@ impl VirtualMachine {
                     made.set_encoding(wanted);
                     return Ok(Some(Object::String(Rc::new(made))));
                 }
-                if wanted == "GBK" {
-                    let bytes = crate::vm::native_methods::gbk::gbk_bytes(&reading).map_err(
+                if let Some(codec) = crate::vm::native_methods::double_byte::double_byte(&wanted) {
+                    let bytes = codec.bytes(&reading).map_err(
                         |character| {
                             self.undefined_conversion_error(character, &held, &wanted, position)
                         },
@@ -279,4 +313,54 @@ impl VirtualMachine {
             _ => Ok(None),
         }
     }
+
+    /// The text ISO-2022-JP bytes spell, on the way to `wanted`. Bytes that
+    /// spell nothing, and pairs JIS X 0208 has no character for, raise unless
+    /// the options replace them.
+    fn iso_2022_jp_reading(
+        &mut self,
+        string_value: &crate::object::StringValue,
+        wanted: &str,
+        options: &EncodeOptions,
+        replacement: &str,
+        position: Position,
+    ) -> Result<String, MetorexError> {
+        use crate::vm::native_methods::iso_2022_jp::{JisPiece, iso_2022_jp_pieces};
+        let mut read = String::new();
+        for piece in iso_2022_jp_pieces(&binary_bytes(string_value)) {
+            match piece {
+                JisPiece::Character(character) => read.push(character),
+                JisPiece::Broken { .. } if options.invalid_replace => read.push_str(replacement),
+                JisPiece::Broken {
+                    bytes,
+                    after,
+                    incomplete,
+                } => {
+                    let error =
+                        invalid_bytes_error(&bytes, after, incomplete, "ISO-2022-JP", position);
+                    return Err(self.with_conversion_ends(
+                        error,
+                        "ISO-2022-JP",
+                        "stateless-ISO-2022-JP",
+                    ));
+                }
+                JisPiece::Undefined(_) if options.undef_replace => read.push_str(replacement),
+                JisPiece::Undefined(bytes) => {
+                    let onward = if wanted == "UTF-8" {
+                        String::new()
+                    } else {
+                        format!(" to {wanted}")
+                    };
+                    let message = format!(
+                        "{} to UTF-8 in conversion from ISO-2022-JP to stateless-ISO-2022-JP to EUC-JP to UTF-8{onward}",
+                        dumped_bytes(&bytes)
+                    );
+                    let error = undefined_conversion(&message, &bytes, "EUC-JP", position);
+                    return Err(self.with_conversion_ends(error, "EUC-JP", "UTF-8"));
+                }
+            }
+        }
+        Ok(read)
+    }
+
 }

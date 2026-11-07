@@ -26,7 +26,11 @@ pub(crate) fn holds_valid_text(string_value: &crate::object::StringValue) -> boo
         // Shift_JIS spells half-width katakana with one byte of its own, so
         // the shape of a run says more than a plain lead-and-trail pairing.
         named if spells_shift_jis(named) => shift_jis_reads(&binary_bytes(string_value)),
-        "GBK" => crate::vm::native_methods::gbk::gbk_reads(&binary_bytes(string_value)),
+        named if crate::vm::native_methods::double_byte::double_byte(named).is_some() => {
+            crate::vm::native_methods::double_byte::double_byte(named)
+                .unwrap()
+                .reads(&binary_bytes(string_value))
+        }
         // A fixed-width encoding reads whole units, so a run of bytes that
         // does not divide into them spells no characters at all, and a half
         // of a surrogate pair standing alone spells none either.
@@ -319,8 +323,13 @@ pub(crate) fn character_count(string_value: &crate::object::StringValue) -> i64 
         "EUC-JP" if string_value.holds_bytes() => {
             euc_jp_characters(&binary_bytes(string_value)).len() as i64
         }
-        "GBK" if string_value.holds_bytes() => {
-            crate::vm::native_methods::gbk::gbk_characters(&binary_bytes(string_value)).len() as i64
+        named if string_value.holds_bytes()
+            && crate::vm::native_methods::double_byte::double_byte(named).is_some() =>
+        {
+            crate::vm::native_methods::double_byte::double_byte(named)
+                .unwrap()
+                .characters(&binary_bytes(string_value))
+                .len() as i64
         }
         "UTF-8" if string_value.holds_bytes() => {
             utf8_characters(&binary_bytes(string_value)).len() as i64
@@ -338,8 +347,9 @@ pub(crate) fn characters_are_text(string_value: &crate::object::StringValue) -> 
     if super::wide::wide_encoding(&named).is_some() {
         return false;
     }
-    let pairs_bytes =
-        spells_shift_jis(&named) || matches!(named.as_str(), "EUC-JP" | "GBK" | "UTF-8");
+    let pairs_bytes = spells_shift_jis(&named)
+        || matches!(named.as_str(), "EUC-JP" | "UTF-8")
+        || crate::vm::native_methods::double_byte::double_byte(&named).is_some();
     !(pairs_bytes && string_value.holds_bytes()) || string_value.is_ascii()
 }
 
@@ -361,8 +371,10 @@ pub(crate) fn character_units(string_value: &crate::object::StringValue) -> Vec<
         "EUC-JP" if string_value.holds_bytes() => {
             grouped(euc_jp_characters(&binary_bytes(string_value)))
         }
-        "GBK" if string_value.holds_bytes() => grouped(
-            crate::vm::native_methods::gbk::gbk_characters(&binary_bytes(string_value)),
+        named if string_value.holds_bytes() && crate::vm::native_methods::double_byte::double_byte(named).is_some() => grouped(
+            crate::vm::native_methods::double_byte::double_byte(named)
+                .unwrap()
+                .characters(&binary_bytes(string_value)),
         ),
         "UTF-8" if string_value.holds_bytes() => {
             grouped(utf8_characters(&binary_bytes(string_value)))

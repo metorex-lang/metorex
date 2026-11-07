@@ -1,0 +1,9 @@
+# The gems public_suffix's tests load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "public_suffix", path: "../../../../gems/public_suffix"
+gem "minitest"
+gem "minitest-reporters"
+gem "mocha", "~> 3.0.1"

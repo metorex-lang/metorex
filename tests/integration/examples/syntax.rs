@@ -673,3 +673,30 @@ fn defined_joins_a_modifier_condition_across_lines() {
     let output = run_example("syntax/defined_in_a_modifier_condition_across_lines.rb");
     assert_eq!(output, "1\n");
 }
+
+#[test]
+fn multiple_assignment_to_a_scoped_constant_setter() {
+    let output = run_example("syntax/multiple_assignment_to_a_scoped_constant_setter.rb");
+    assert_eq!(
+        output,
+        "[nil, \"UTC\"]\n[1, \"EST\"]\n[\"CST\", 2]\n"
+    );
+}
+
+#[test]
+fn escaped_interpolation_openers_inside_interpolation() {
+    let output = run_example("syntax/escaped_interpolation_openers_inside_interpolation.rb");
+    assert_eq!(
+        output,
+        r##""A"
+"\#{} a"
+"x\#$yz"
+"\#{} a"
+"A"
+"B"
+"\"\#{abac}\""
+"\#{"
+"BEFORE-|-AFTER"
+"##
+    );
+}

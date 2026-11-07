@@ -127,7 +127,8 @@ pub(crate) fn subject_text(object: &Object) -> Option<String> {
 /// which is how a match reads the runs its characters take.
 pub(crate) fn match_text(string_value: &crate::object::StringValue) -> String {
     let named = string_value.encoding_name();
-    if (matches!(named.as_str(), "EUC-JP" | "GBK")
+    if (named == "EUC-JP"
+        || super::double_byte::double_byte(&named).is_some()
         || super::string_methods::spells_shift_jis(&named))
         && !string_value.holds_bytes()
     {
@@ -433,7 +434,7 @@ impl VirtualMachine {
                 let encoding = subject.encoding_name();
                 if !super::string_methods::characters_are_text(subject)
                     || encoding == "EUC-JP"
-                    || encoding == "GBK"
+                    || super::double_byte::double_byte(&encoding).is_some()
                     || super::string_methods::spells_shift_jis(&encoding)
                 {
                     return Ok(Some(Object::Bool(false)));
@@ -777,8 +778,8 @@ fn multibyte_width(named: &str, bytes: &[u8]) -> usize {
         crate::vm::native_methods::euc_jp_table::euc_jp_character(bytes)
     } else if crate::vm::native_methods::string_methods::spells_shift_jis(named) {
         crate::vm::native_methods::shift_jis_table::shift_jis_character(bytes)
-    } else if named == "GBK" {
-        crate::vm::native_methods::gbk::gbk_character(bytes)
+    } else if let Some(codec) = crate::vm::native_methods::double_byte::double_byte(named) {
+        codec.character(bytes)
     } else {
         None
     };
@@ -840,8 +841,8 @@ pub(crate) fn read_subject(text: &str, encoding: &str) -> crate::regexp::ReadSub
 
 fn multibyte_reading(text: &str, encoding: &str) -> Option<(String, Vec<usize>)> {
     let euc_jp = encoding == "EUC-JP";
-    let gbk = encoding == "GBK";
-    if !(euc_jp || gbk || super::string_methods::spells_shift_jis(encoding))
+    let double_byte = super::double_byte::double_byte(encoding);
+    if !(euc_jp || double_byte.is_some() || super::string_methods::spells_shift_jis(encoding))
         || text.chars().any(|held| u32::from(held) > 0xff)
     {
         return None;
@@ -849,8 +850,8 @@ fn multibyte_reading(text: &str, encoding: &str) -> Option<(String, Vec<usize>)>
     let bytes: Vec<u8> = text.chars().map(|held| held as u8).collect();
     let groups = if euc_jp {
         super::string_methods::euc_jp_characters(&bytes)
-    } else if gbk {
-        super::gbk::gbk_characters(&bytes)
+    } else if let Some(codec) = double_byte {
+        codec.characters(&bytes)
     } else {
         super::string_methods::shift_jis_characters(&bytes)
     };
@@ -862,8 +863,8 @@ fn multibyte_reading(text: &str, encoding: &str) -> Option<(String, Vec<usize>)>
         at += group.len();
         let decoded = if euc_jp {
             super::euc_jp_table::euc_jp_character(group)
-        } else if gbk {
-            super::gbk::gbk_character(group)
+        } else if let Some(codec) = double_byte {
+            codec.character(group)
         } else {
             super::shift_jis_table::shift_jis_character(group)
         };

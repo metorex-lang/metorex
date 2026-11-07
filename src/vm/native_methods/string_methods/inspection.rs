@@ -243,7 +243,7 @@ impl VirtualMachine {
                 // A character an encoding spells in bytes of its own is named
                 // by those bytes together, since the answer cannot show the
                 // character itself.
-                if (held == "EUC-JP" || held == "GBK" || spells_shift_jis(&held))
+                if (held == "EUC-JP" || crate::vm::native_methods::double_byte::double_byte(&held).is_some() || spells_shift_jis(&held))
                     && string_value.holds_bytes()
                 {
                     let bytes = binary_bytes(string_value);
@@ -251,8 +251,8 @@ impl VirtualMachine {
                     while at < bytes.len() {
                         let decoded = if held == "EUC-JP" {
                             crate::vm::native_methods::euc_jp_table::euc_jp_character(&bytes[at..])
-                        } else if held == "GBK" {
-                            crate::vm::native_methods::gbk::gbk_character(&bytes[at..])
+                        } else if let Some(codec) = crate::vm::native_methods::double_byte::double_byte(&held) {
+                            codec.character(&bytes[at..])
                         } else {
                             crate::vm::native_methods::shift_jis_table::shift_jis_character(
                                 &bytes[at..],

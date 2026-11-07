@@ -1,0 +1,12 @@
+# The gems multi_json's tests load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "multi_json", path: "../../../../gems/multi_json"
+gem "activesupport", "~> 8.0"
+gem "minitest", ">= 5.20"
+gem "mutant-minitest", ">= 0.12"
+gem "simplecov", ">= 1"
+
+shipped "json"

@@ -232,3 +232,18 @@ fn test_errors_exception_method_aliases_no_parens_execution() {
     let output = run_example("errors/exception_method_aliases_no_parens.rb");
     assert_eq!(output, EXCEPTION_METHOD_ALIASES_OUTPUT);
 }
+
+#[test]
+fn a_rescue_names_the_class_its_constant_reaches() {
+    let output = run_example("errors/rescue_a_top_level_class_beside_a_module_one.rb");
+    assert_eq!(output, ":top\n:argument\n[:escaped, LoadError]\n:pair\n");
+}
+
+#[test]
+fn a_rescue_reaches_a_class_through_const_missing() {
+    let output = run_example("errors/rescue_a_class_reached_through_const_missing.rb");
+    assert_eq!(
+        output,
+        "Current::ParseError\n[:caught, \"boom\"]\n[:argument, \"other\"]\n"
+    );
+}

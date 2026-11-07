@@ -90,10 +90,53 @@ module OpenSSL
     end
   end
 
+  class HMACError < OpenSSLError; end
+
   # A digest keyed with a secret, which says both what the message is and
   # that whoever wrote it held the key.
-  class HMAC
-    def self.digest(digest, key, data)
+class HMAC
+  # A keyed digest of what is fed to it, read as often as wanted.
+  def initialize(key, digest)
+    @key = key.to_s
+    @digest_name = digest.respond_to?(:name) ? digest.name : digest.to_s
+    @data = "".b
+  end
+
+  def initialize_copy(other)
+    super
+    @data = other.instance_variable_get(:@data).dup
+  end
+
+  def update(text)
+    @data << text.to_s.b
+    self
+  end
+  alias << update
+
+  def reset
+    @data = "".b
+    self
+  end
+
+  def digest
+    HMAC.computed(@digest_name, @key, @data)
+  end
+
+  def hexdigest
+    ::Digest.hexencode digest
+  end
+  alias to_s hexdigest
+  alias inspect hexdigest
+
+  def base64digest
+    [digest].pack "m0"
+  end
+
+  def ==(other)
+    other.is_a?(HMAC) && other.digest == digest
+  end
+
+  def self.digest(digest, key, data)
       OpenSSL::HMAC.computed digest, key, data
     end
 
@@ -220,28 +263,31 @@ module OpenSSL
     KEY_BYTES = { "128" => 16, "192" => 24, "256" => 32 }.freeze
 
     def self.ciphers
-      %w[aes-128-cbc aes-192-cbc aes-256-cbc]
+      %w[aes-128-cbc aes-128-ctr aes-192-cbc aes-192-ctr aes-256-cbc aes-256-ctr]
     end
 
     attr_reader :name, :key_len
 
     def initialize name
       @name = name.to_s.upcase
-      bits = @name[/\AAES-(128|192|256)-CBC\z/, 1]
+      bits, mode = @name.match(/\AAES-(128|192|256)-(CBC|CTR)\z/)&.captures
       raise CipherError, "unsupported cipher algorithm (#{name})" if bits.nil?
+      @counting = mode == "CTR"
       @key_len = KEY_BYTES[bits]
       @padding = 1
       @encrypting = true
       @iv = ("\0" * BLOCK).b
       @chain = @iv
       @pending = "".b
+      @unused = "".b
     end
 
     def iv_len = BLOCK
 
     def key_len = @key_len
 
-    def block_size = BLOCK
+    # A counter turns the block cipher into a stream, which takes any length.
+    def block_size = @counting ? 1 : BLOCK
 
     def encrypt
       @encrypting = true
@@ -263,6 +309,7 @@ module OpenSSL
       iv = iv.to_str
       raise ArgumentError, "iv must be #{BLOCK} bytes" unless iv.bytesize == BLOCK
       @iv = iv.b
+      @unused = "".b
       @chain = @iv
     end
 
@@ -282,6 +329,8 @@ module OpenSSL
       data = data.to_str
       raise ArgumentError, "data must not be empty" if data.empty?
       raise CipherError, "key not set" if @key.nil?
+      return counted(data.b) if @counting
+
       @pending << data.b
       whole = @pending.bytesize / BLOCK * BLOCK
       # Decrypting holds the last block back, since `final` takes its padding off.
@@ -291,6 +340,8 @@ module OpenSSL
 
     def final
       raise CipherError, "key not set" if @key.nil?
+      return "".b if @counting
+
       if @encrypting && @padding != 0
         count = BLOCK - @pending.bytesize % BLOCK
         @pending << (count.chr * count)
@@ -309,7 +360,24 @@ module OpenSSL
     def reset
       @chain = @iv
       @pending = "".b
+      @unused = "".b
       self
+    end
+
+    # Runs `data` through the keystream, taking first what the last call left
+    # of its final block.
+    def counted(data)
+      answer = "".b
+      unless @unused.empty?
+        taken = [@unused.bytesize, data.bytesize].min
+        answer << data.byteslice(0, taken).bytes.zip(@unused.bytes).map { |byte, key| byte ^ key }.pack("C*")
+        @unused = @unused.byteslice(taken, @unused.bytesize - taken)
+        data = data.byteslice(taken, data.bytesize - taken)
+      end
+      return answer if data.empty?
+
+      output, @chain, @unused = OpenSSL.__aes_ctr__(@key, @chain, data)
+      answer << output
     end
 
     def run(length)
@@ -326,6 +394,22 @@ module OpenSSL
         raise CipherError, "bad decrypt"
       end
       text.byteslice(0, text.bytesize - count)
+    end
+  end
+
+  # `Cipher::AES.new(128, :CTR)` names the cipher by its parts, and
+  # `Cipher::AES128.new(:CTR)` by its mode alone.
+  class Cipher
+    class AES < Cipher
+      def initialize(*parts)
+        super(parts.inject("AES") { |named, part| "#{named}-#{part}" }.downcase)
+      end
+    end
+
+    %w[128 192 256].each do |bits|
+      const_set("AES#{bits}", Class.new(Cipher) do
+        define_method(:initialize) { |mode = "CBC"| super("aes-#{bits}-#{mode}".downcase) }
+      end)
     end
   end
 
@@ -717,6 +801,10 @@ module OpenSSL
     end
     alias to_int to_i
 
+    def to_bn
+      self
+    end
+
     def to_s(base = 10)
       return @value.to_s(16).upcase.then { |text| text.length.odd? ? "0#{text}" : text } if base == 16
       return OpenSSL::ASN1.__integer_bytes__(@value) if base == 2
@@ -753,6 +841,15 @@ module OpenSSL
       [other, @value]
     end
   end
+end
+
+class Integer
+  def to_bn
+    OpenSSL::BN.new(self)
+  end
+end
+
+module OpenSSL
 
   module ASN1
     # The big-endian bytes of a non-negative integer, with no leading zeros.
@@ -791,11 +888,12 @@ module OpenSSL
 
   module PKey
     class PKeyError < OpenSSL::OpenSSLError; end
+    ECError = PKeyError
+    RSAError = PKeyError
 
     class PKey; end
 
-    # The key PEM or DER text holds: an RSA key, or the public half of an
-    # EC one.
+    # The key PEM or DER text holds: an RSA key or an EC one.
     def self.read(text, password = nil)
       text = text.read if text.respond_to?(:read)
       begin
@@ -807,89 +905,441 @@ module OpenSSL
       raise PKeyError, "Could not parse PKey"
     end
 
-    # The public half of an elliptic curve key, on one of the named curves.
+    # An elliptic curve key on one of the named prime curves: the public
+    # point, and the private number that point is the generator times.
     class EC < PKey
-      class ECError < PKeyError; end
-
       EC_OID = "1.2.840.10045.2.1"
 
-      # Each named curve with its size in bits and the name NIST gives it.
+      # Each named curve: its size in bits, the name NIST gives it, and its
+      # parameters, the prime p of the field, the coefficients a and b of
+      # y^2 = x^3 + ax + b, the generator's coordinates, and the generator's
+      # order n. The cofactor is 1 where none is given.
       CURVES = {
-        "prime256v1" => [256, "P-256"],
-        "secp384r1" => [384, "P-384"],
-        "secp521r1" => [521, "P-521"]
+        "prime256v1" => [256, "P-256", {
+          p: 0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff,
+          a: 0xffffffff00000001000000000000000000000000fffffffffffffffffffffffc,
+          b: 0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b,
+          x: 0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296,
+          y: 0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5,
+          n: 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551
+        }],
+        "prime239v2" => [239, nil, {
+          p: 0x7fffffffffffffffffffffff7fffffffffff8000000000007fffffffffff,
+          a: 0x7fffffffffffffffffffffff7fffffffffff8000000000007ffffffffffc,
+          b: 0x617fab6832576cbbfed50d99f0249c3fee58b94ba0038c7ae84c8c832f2c,
+          x: 0x38af09d98727705120c921bb5e9e26296a3cdcf2f35757a0eafd87b830e7,
+          y: 0x5b0125e4dbea0ec7206da0fc01d9b081329fb555de6ef460237dff8be4ba,
+          n: 0x7fffffffffffffffffffffff800000cfa7e8594377d414c03821bc582063
+        }],
+        "secp256k1" => [256, nil, {
+          p: 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f,
+          a: 0,
+          b: 7,
+          x: 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798,
+          y: 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8,
+          n: 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141
+        }],
+        "secp384r1" => [384, "P-384", {
+          p: 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffff0000000000000000ffffffff,
+          a: 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffff0000000000000000fffffffc,
+          b: 0xb3312fa7e23ee7e4988e056be3f82d19181d9c6efe8141120314088f5013875ac656398d8a2ed19d2a85c8edd3ec2aef,
+          x: 0xaa87ca22be8b05378eb1c71ef320ad746e1d3b628ba79b9859f741e082542a385502f25dbf55296c3a545e3872760ab7,
+          y: 0x3617de4a96262c6f5d9e98bf9292dc29f8f41dbd289a147ce9da3113b5f0b8c00a60b1ce1d7e819d7a431d7c90ea0e5f,
+          n: 0xffffffffffffffffffffffffffffffffffffffffffffffffc7634d81f4372ddf581a0db248b0a77aecec196accc52973
+        }],
+        "secp521r1" => [521, "P-521", {
+          p: (1 << 521) - 1,
+          a: (1 << 521) - 4,
+          b: 0x0051953eb9618e1c9a1f929a21a0b68540eea2da725b99b315f3b8b489918ef109e156193951ec7e937b1652c0bd3bb1bf073573df883d2c34f1ef451fd46b503f00,
+          x: 0x00c6858e06b70404e9cd9e3ecb662395b4429c648139053fb521f828af606b4d3dbaa14b5e77efe75928fe1dc127a2ffa8de3348b3c1856a429bf97e7e31c2e5bd66,
+          y: 0x011839296a789a3bc0045c8a5fb42c7d1bd998f54449579b446817afbd17273e662c97ee72995ef42640c550b9013fad0761353c7086a272c24088be94769fd16650,
+          n: 0x01fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffa51868783bf2f966b7fcc0148f709a5d03bb5c9b8899c47aebb6fb71e91386409
+        }],
+        # A curve over GF(2^571) rather than a prime field, its field
+        # polynomial named by the exponents of its terms.
+        "sect571r1" => [571, "B-571", {
+          field: [571, 10, 5, 2, 0],
+          cofactor: 2,
+          a: 1,
+          b: 0x02f40e7e2221f295de297117b7f3d62f5c6a97ffcb8ceff1cd6ba8ce4a9a18ad84ffabbd8efa59332be7ad6756a66e294afd185a78ff12aa520e4de739baca0c7ffeff7f2955727a,
+          x: 0x0303001d34b856296c16c0d40d3cd7750a93d1d2955fa80aa5f40fc8db7b2abdbde53950f4c0d293cdd711a35b67fb1499ae60038614f1394abfa3b4c850d927e1e7769c8eec2d19,
+          y: 0x037bf27342da639b6dccfffeb73d69d78c6c27a6009cbbca1980f8533921e8a684423e43bab08a576291af8f461bb2a8b3531d2f0485c19b16e2f1516e23dd3c1a4827af1b8ac15b,
+          n: 0x03ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe661ce18ff55987308059b186823851ec7dd9ca1161de93d5174d66e8382e9bb2fe84e47
+        }]
       }.freeze
+
+      # The names OpenSSL also knows the NIST curves by.
+      CURVE_ALIASES = { "P-256" => "prime256v1", "P-384" => "secp384r1", "P-521" => "secp521r1", "B-571" => "sect571r1" }.freeze
+
+      # An operation on a binary curve's points, worked in the interpreter.
+      # Coordinates go as hex and come back as Integers, and nil stands for
+      # the point at infinity.
+      def self.__binary__(group, operation, *values)
+        parameters = group.__parameters__
+        given = values.map { |value| value.is_a?(::Integer) ? value.to_s(16) : value }
+        answer = OpenSSL.__ec2m__(operation, parameters[:field], parameters[:a].to_s(16), parameters[:b].to_s(16), *given)
+        case answer
+        when Array then answer.map { |held| held.to_i(16) }
+        when String then answer.to_i(16)
+        else answer
+        end
+      end
+
+      def self.__binary_field__(group)
+        group.__parameters__.key?(:field)
+      end
+
+      # The curves this knows, in the order OpenSSL lists them, with the
+      # description it gives each.
+      BUILTIN_CURVES = [
+        ["secp256k1", "SECG curve over a 256 bit prime field"],
+        ["secp384r1", "NIST/SECG curve over a 384 bit prime field"],
+        ["secp521r1", "NIST/SECG curve over a 521 bit prime field"],
+        ["prime239v2", "X9.62 curve over a 239 bit prime field"],
+        ["prime256v1", "X9.62/SECG curve over a 256 bit prime field"],
+        ["sect571r1", "NIST/SECG curve over a 571 bit binary field"]
+      ].freeze
+
+      def self.builtin_curves
+        BUILTIN_CURVES.map(&:dup)
+      end
 
       # The curve a key lies on, known by name.
       class Group
+        class Error < OpenSSL::OpenSSLError; end
+
         attr_reader :curve_name
 
         def initialize(curve_name)
-          raise ECError, "unknown curve name (#{curve_name})" unless CURVES.key?(curve_name)
-          @curve_name = curve_name
+          curve_name = curve_name.curve_name if curve_name.is_a?(Group)
+          named = CURVE_ALIASES.fetch(curve_name.to_s, curve_name.to_s)
+          raise ECError, "unknown curve name (#{curve_name})" unless CURVES.key?(named)
+          @curve_name = named
         end
 
         def degree
           CURVES[@curve_name][0]
         end
 
+        def order
+          OpenSSL::BN.new(__parameters__[:n])
+        end
+
+        def cofactor
+          OpenSSL::BN.new(__parameters__.fetch(:cofactor, 1))
+        end
+
+        def generator
+          Point.__affine__(self, [__parameters__[:x], __parameters__[:y]])
+        end
+
+        def point_conversion_form
+          :uncompressed
+        end
+
+        def asn1_flag
+          OpenSSL::PKey::EC::NAMED_CURVE
+        end
+
         def ==(other)
           other.is_a?(Group) && other.curve_name == @curve_name
         end
+        alias eql? ==
+
+        def __parameters__
+          CURVES[@curve_name][2]
+        end
+
+        # The bytes one coordinate takes.
+        def __width__
+          (degree + 7) / 8
+        end
       end
 
-      # A point on the curve, held as the octets SEC 1 writes it with.
+      NAMED_CURVE = 1
+
+      # A point on the curve, held by its affine coordinates, or as the point
+      # at infinity.
       class Point
+        class Error < OpenSSL::OpenSSLError; end
+
         attr_reader :group
 
-        def initialize(group, octets)
-          @group = group
-          @octets = octets.b
+        # The point SEC 1 octets name, given as a String or as the BN that
+        # reads them.
+        def initialize(group, encoded = nil)
+          @group = group.is_a?(Group) ? group : Group.new(group)
+          @coordinates = nil
+          return if encoded.nil?
+          octets = encoded.is_a?(OpenSSL::BN) ? encoded.to_s(2) : encoded.to_str.b
+          @coordinates = Point.__decoded__(@group, octets)
+          raise Error, "invalid encoding" if @coordinates == :invalid
         end
 
-        def to_octet_string(_form = :uncompressed)
-          @octets
+        # The point at `coordinates`, or at infinity for nil.
+        def self.__affine__(group, coordinates)
+          point = allocate
+          point.instance_variable_set(:@group, group)
+          point.instance_variable_set(:@coordinates, coordinates)
+          point
         end
 
-        def to_bn(_form = :uncompressed)
-          OpenSSL::BN.new(@octets, 2)
+        # The coordinates SEC 1 octets name, nil for the point at infinity,
+        # or :invalid.
+        def self.__decoded__(group, octets)
+          width = group.__width__
+          form = octets.getbyte(0)
+          return nil if form == 0 && octets.bytesize == 1
+          prime = group.__parameters__[:p]
+          case form
+          when 4, 6, 7
+            return :invalid unless octets.bytesize == 1 + 2 * width
+            x = octets.byteslice(1, width).unpack1("H*").to_i(16)
+            y = octets.byteslice(1 + width, width).unpack1("H*").to_i(16)
+          when 2, 3
+            return :invalid unless octets.bytesize == 1 + width
+            x = octets.byteslice(1, width).unpack1("H*").to_i(16)
+            if EC.__binary_field__(group)
+              y = EC.__binary__(group, "decompress", x, form - 2)
+              return y.nil? ? :invalid : [x, y]
+            end
+            parameters = group.__parameters__
+            square = (x.pow(3, prime) + parameters[:a] * x + parameters[:b]) % prime
+            y = square.pow((prime + 1) / 4, prime)
+            return :invalid unless y.pow(2, prime) == square
+            y = prime - y if y.odd? != (form == 3)
+          else
+            return :invalid
+          end
+          return :invalid unless EC.__on_curve__(group, x, y)
+          [x, y]
+        end
+
+        def infinity?
+          @coordinates.nil?
+        end
+
+        def on_curve?
+          infinity? || EC.__on_curve__(@group, *@coordinates)
+        end
+
+        def to_octet_string(form)
+          return "\x00".b if infinity?
+          width = @group.__width__
+          x, y = @coordinates
+          x_bytes = OpenSSL::ASN1.__integer_bytes__(x).rjust(width, "\x00".b)
+          odd = EC.__binary_field__(@group) ? EC.__binary__(@group, "y_bit", x, y) == 1 : y.odd?
+          case form
+          when :compressed then (odd ? "\x03" : "\x02").b + x_bytes
+          when :hybrid then (odd ? "\x07" : "\x06").b + x_bytes + OpenSSL::ASN1.__integer_bytes__(y).rjust(width, "\x00".b)
+          else "\x04".b + x_bytes + OpenSSL::ASN1.__integer_bytes__(y).rjust(width, "\x00".b)
+          end
+        end
+
+        def to_bn(form = :uncompressed)
+          OpenSSL::BN.new(to_octet_string(form), 2)
+        end
+
+        # The point times `number`, plus the generator times `base` when
+        # one is given.
+        def mul(number, base = nil)
+          product = EC.__multiply__(@group, @coordinates, number.to_i)
+          if base
+            product = EC.__add__(@group, product, EC.__multiply__(@group, @group.generator.__coordinates__, base.to_i))
+          end
+          Point.__affine__(@group, product)
+        end
+
+        def add(other)
+          Point.__affine__(@group, EC.__add__(@group, @coordinates, other.__coordinates__))
+        end
+
+        def __coordinates__
+          @coordinates
         end
 
         def ==(other)
-          other.is_a?(Point) && other.group == @group && other.to_octet_string == @octets
+          other.is_a?(Point) && other.group == @group && other.__coordinates__ == @coordinates
         end
+        alias eql? ==
+      end
+
+      def self.__on_curve__(group, x, y)
+        if __binary_field__(group)
+          bound = 1 << group.degree
+          return x.between?(0, bound - 1) && y.between?(0, bound - 1) && __binary__(group, "on_curve", x, y)
+        end
+        parameters = group.__parameters__
+        prime = parameters[:p]
+        return false unless x.between?(0, prime - 1) && y.between?(0, prime - 1)
+        (y * y - (x.pow(3, prime) + parameters[:a] * x + parameters[:b])) % prime == 0
+      end
+
+      # Points in Jacobian coordinates, X/Z^2 and Y/Z^3, so that adding and
+      # doubling need no inverse until the end. nil is the point at infinity.
+      def self.__doubled__(parameters, held)
+        return nil if held.nil?
+        prime = parameters[:p]
+        x, y, z = held
+        return nil if y.zero?
+        y_squared = y * y % prime
+        s = 4 * x * y_squared % prime
+        z_squared = z * z % prime
+        m = (3 * x * x + parameters[:a] * z_squared * z_squared) % prime
+        new_x = (m * m - 2 * s) % prime
+        new_y = (m * (s - new_x) - 8 * y_squared * y_squared) % prime
+        [new_x, new_y, 2 * y * z % prime]
+      end
+
+      def self.__summed__(parameters, first, second)
+        return second if first.nil?
+        return first if second.nil?
+        prime = parameters[:p]
+        x1, y1, z1 = first
+        x2, y2, z2 = second
+        z1_squared = z1 * z1 % prime
+        z2_squared = z2 * z2 % prime
+        u1 = x1 * z2_squared % prime
+        u2 = x2 * z1_squared % prime
+        s1 = y1 * z2_squared * z2 % prime
+        s2 = y2 * z1_squared * z1 % prime
+        if u1 == u2
+          return s1 == s2 ? __doubled__(parameters, first) : nil
+        end
+        h = (u2 - u1) % prime
+        r = (s2 - s1) % prime
+        h_squared = h * h % prime
+        h_cubed = h_squared * h % prime
+        new_x = (r * r - h_cubed - 2 * u1 * h_squared) % prime
+        new_y = (r * (u1 * h_squared - new_x) - s1 * h_cubed) % prime
+        [new_x, new_y, h * z1 * z2 % prime]
+      end
+
+      def self.__affine_of__(parameters, held)
+        return nil if held.nil?
+        prime = parameters[:p]
+        x, y, z = held
+        inverse = z.pow(prime - 2, prime)
+        inverse_squared = inverse * inverse % prime
+        [x * inverse_squared % prime, y * inverse_squared * inverse % prime]
+      end
+
+      # `coordinates` times `number`, by doubling and adding over its bits.
+      def self.__multiply__(group, coordinates, number)
+        return nil if coordinates.nil?
+        parameters = group.__parameters__
+        number %= parameters[:n]
+        return __binary__(group, "multiply", *coordinates, number) if __binary_field__(group)
+        point = [coordinates[0], coordinates[1], 1]
+        total = nil
+        (number.bit_length - 1).downto(0) do |bit|
+          total = __doubled__(parameters, total)
+          total = __summed__(parameters, total, point) if number[bit] == 1
+        end
+        __affine_of__(parameters, total)
+      end
+
+      def self.__add__(group, first, second)
+        if __binary_field__(group)
+          return __binary__(group, "add", *(first || [nil, nil]), *(second || [nil, nil]))
+        end
+        parameters = group.__parameters__
+        lifted = [first, second].map { |held| held && [held[0], held[1], 1] }
+        __affine_of__(parameters, __summed__(parameters, *lifted))
       end
 
       attr_reader :group
 
-      # The key a SubjectPublicKeyInfo holds, in PEM or DER.
-      def initialize(text = nil)
-        return if text.nil?
-        text = text.read if text.respond_to?(:read)
-        parts = EC.__read__(text.to_s)
+      # A key read from PEM or DER text, an empty key on the curve a name or
+      # Group gives, or an empty key with no curve at all.
+      def initialize(source = nil, password = nil)
+        @group = nil
+        @private_key = nil
+        @public_key = nil
+        return if source.nil?
+        if source.is_a?(Group)
+          @group = source
+          return
+        end
+        source = source.read if source.respond_to?(:read)
+        source = source.to_str
+        if CURVES.key?(CURVE_ALIASES.fetch(source, source))
+          @group = Group.new(source)
+          return
+        end
+        parts = EC.__read__(source)
         raise ECError, "invalid curve name" if parts.nil?
-        curve, octets = parts
+        curve, point_octets, secret = parts
         @group = Group.new(curve)
-        @point = octets
+        @private_key = secret && OpenSSL::BN.new(secret)
+        @public_key = point_octets ? Point.new(@group, point_octets) : (secret && @group.generator.mul(secret))
       end
 
+      # A new key pair on the curve named.
+      def self.generate(curve)
+        key = new(curve.is_a?(Group) ? curve : Group.new(curve))
+        key.generate_key!
+      end
+
+      def generate_key!
+        raise ECError, "no curve" if @group.nil?
+        order = @group.__parameters__[:n]
+        secret = 0
+        secret = OpenSSL::Random.random_bytes(@group.__width__ + 8).unpack1("H*").to_i(16) % order until secret.positive?
+        @private_key = OpenSSL::BN.new(secret)
+        @public_key = @group.generator.mul(secret)
+        self
+      end
+      alias generate_key generate_key!
+
+      # The curve, the public point, and the private number of a key, from a
+      # SubjectPublicKeyInfo, a SEC 1 ECPrivateKey, or a PKCS #8 key, in PEM
+      # or DER.
       def self.__read__(text)
         der = text.b
         if text.include?("-----BEGIN ")
-          matched = text.match(/-----BEGIN PUBLIC KEY-----(.*?)-----END PUBLIC KEY-----/m)
+          matched = text.match(/-----BEGIN (PUBLIC KEY|EC PRIVATE KEY|PRIVATE KEY)-----(.*?)-----END \1-----/m)
           return nil if matched.nil?
-          der = matched[1].unpack1("m")
+          der = matched[2].unpack1("m")
         end
         top = OpenSSL::ASN1.__read_der__(der)
         return nil unless top && top[0] == 0x30
-        algorithm, key = OpenSSL::ASN1.__read_all__(top[1])
-        return nil unless algorithm && key && algorithm[0] == 0x30 && key[0] == OpenSSL::ASN1::BIT_STRING
-        named, parameters = OpenSSL::ASN1.__read_all__(algorithm[1])
+        fields = OpenSSL::ASN1.__read_all__(top[1])
+        return nil if fields.nil? || fields.size < 2
+        if fields[0][0] == 0x30 && fields[1][0] == OpenSSL::ASN1::BIT_STRING
+          curve = __algorithm_curve__(fields[0][1])
+          return curve && [curve, fields[1][1].byteslice(1..), nil]
+        end
+        if fields[0][0] == OpenSSL::ASN1::INTEGER && fields[1][0] == 0x30 && fields[2]&.first == OpenSSL::ASN1::OCTET_STRING
+          curve = __algorithm_curve__(fields[1][1])
+          return nil if curve.nil?
+          inner = __read__(fields[2][1])
+          return inner && [curve, inner[1], inner[2]]
+        end
+        return nil unless fields[0][0] == OpenSSL::ASN1::INTEGER && fields[1][0] == OpenSSL::ASN1::OCTET_STRING
+        secret = fields[1][1].unpack1("H*").to_i(16)
+        curve = nil
+        point = nil
+        fields.drop(2).each do |tag, content|
+          inner = OpenSSL::ASN1.__read_der__(content)
+          next if inner.nil?
+          if tag == 0xa0 && inner[0] == OpenSSL::ASN1::OBJECT
+            found = OpenSSL.__object__(:find, OpenSSL::ASN1.__oid_text__(inner[1]))
+            curve = found && found[0]
+          elsif tag == 0xa1 && inner[0] == OpenSSL::ASN1::BIT_STRING
+            point = inner[1].byteslice(1..)
+          end
+        end
+        [curve, point, secret]
+      end
+
+      # The named curve an AlgorithmIdentifier for an EC key gives.
+      def self.__algorithm_curve__(content)
+        named, parameters = OpenSSL::ASN1.__read_all__(content)
         return nil unless named && parameters && parameters[0] == OpenSSL::ASN1::OBJECT
         return nil unless OpenSSL::ASN1.__oid_text__(named[1]) == EC_OID
         found = OpenSSL.__object__(:find, OpenSSL::ASN1.__oid_text__(parameters[1]))
-        return nil unless found && CURVES.key?(found[0])
-        [found[0], key[1].byteslice(1..)]
+        found && CURVES.key?(found[0]) ? found[0] : nil
       end
 
       def oid
@@ -897,56 +1347,173 @@ module OpenSSL
       end
 
       def public_key
-        Point.new(@group, @point)
+        @public_key
+      end
+
+      def public_key=(point)
+        raise TypeError, "wrong argument type #{point.class} (expected OpenSSL/EC_POINT)" unless point.nil? || point.is_a?(Point)
+        @public_key = point
+      end
+
+      def private_key
+        @private_key
+      end
+
+      def private_key=(number)
+        @private_key = number.nil? ? nil : OpenSSL::BN.new(number.to_i)
       end
 
       def public?
-        !@point.nil?
+        !@public_key.nil?
       end
 
       def private?
-        false
+        !@private_key.nil?
       end
       alias private_key? private?
       alias public_key? public?
 
-      def public_to_der
-        curve = OpenSSL.__object__(:find, @group.curve_name)[2]
-        algorithm = OpenSSL::ASN1.__sequence__(OpenSSL::ASN1.__object__(EC_OID), OpenSSL::ASN1.__object__(curve))
-        OpenSSL::ASN1.__sequence__(algorithm, OpenSSL::ASN1.__encoded__(OpenSSL::ASN1::BIT_STRING, "\x00".b + @point))
+      def check_key
+        raise ECError, "EC_KEY_check_key: point is not on curve" unless @public_key&.on_curve?
+        if @private_key && @group.generator.mul(@private_key) != @public_key
+          raise ECError, "EC_KEY_check_key: invalid private key"
+        end
+        true
       end
-      alias to_der public_to_der
+
+      # The leftmost bits of a digest, as many as the order has.
+      def __digest_number__(digest)
+        number = digest.b.unpack1("H*").to_i(16)
+        excess = digest.bytesize * 8 - @group.__parameters__[:n].bit_length
+        excess.positive? ? number >> excess : number
+      end
+      private :__digest_number__
+
+      # An ECDSA signature of a digest, as the DER SEQUENCE of r and s.
+      def dsa_sign_asn1(digest)
+        raise ECError, "ECDSA_sign: missing private key" unless private?
+        order = @group.__parameters__[:n]
+        number = __digest_number__(digest.to_str)
+        secret = @private_key.to_i
+        loop do
+          nonce = OpenSSL::Random.random_bytes(@group.__width__ + 8).unpack1("H*").to_i(16) % order
+          next if nonce.zero?
+          x, = EC.__multiply__(@group, @group.generator.__coordinates__, nonce)
+          r = x % order
+          next if r.zero?
+          s = nonce.pow(order - 2, order) * (number + r * secret) % order
+          next if s.zero?
+          return OpenSSL::ASN1.__sequence__(OpenSSL::ASN1.__integer__(r), OpenSSL::ASN1.__integer__(s))
+        end
+      end
+
+      def dsa_verify_asn1(digest, signature)
+        raise ECError, "ECDSA_verify: missing public key" unless public?
+        top = OpenSSL::ASN1.__read_der__(signature.to_str.b)
+        numbers = top && top[0] == 0x30 && top[2].empty? && OpenSSL::ASN1.__read_all__(top[1])
+        unless numbers && numbers.size == 2 && numbers.all? { |tag, _| tag == OpenSSL::ASN1::INTEGER }
+          raise ECError, "ECDSA_verify: nested asn1 error"
+        end
+        r, s = numbers.map { |_, content| OpenSSL::ASN1.__signed_value__(content) }
+        order = @group.__parameters__[:n]
+        return false unless r.between?(1, order - 1) && s.between?(1, order - 1)
+        inverse = s.pow(order - 2, order)
+        number = __digest_number__(digest.to_str)
+        first = EC.__multiply__(@group, @group.generator.__coordinates__, number * inverse % order)
+        second = EC.__multiply__(@group, @public_key.__coordinates__, r * inverse % order)
+        total = EC.__add__(@group, first, second)
+        !total.nil? && total[0] % order == r
+      end
+
+      def sign(digest, data)
+        dsa_sign_asn1(__hashed__(digest, data))
+      end
+
+      def verify(digest, signature, data)
+        dsa_verify_asn1(__hashed__(digest, data), signature)
+      rescue ECError
+        false
+      end
+
+      def __hashed__(digest, data)
+        named = OpenSSL::Digest.canonical_name(digest.respond_to?(:name) ? digest.name : digest.to_s)
+        OpenSSL::Digest.digest(named, data).b
+      end
+      private :__hashed__
+
+      def __curve_object__
+        OpenSSL::ASN1.__object__(OpenSSL.__object__(:find, @group.curve_name)[2])
+      end
+      private :__curve_object__
+
+      def __point_bits__
+        OpenSSL::ASN1.__encoded__(OpenSSL::ASN1::BIT_STRING, "\x00".b + @public_key.to_octet_string(:uncompressed))
+      end
+      private :__point_bits__
+
+      def public_to_der
+        algorithm = OpenSSL::ASN1.__sequence__(OpenSSL::ASN1.__object__(EC_OID), __curve_object__)
+        OpenSSL::ASN1.__sequence__(algorithm, __point_bits__)
+      end
 
       def public_to_pem
         "-----BEGIN PUBLIC KEY-----\n#{[public_to_der].pack("m48")}-----END PUBLIC KEY-----\n"
       end
-      alias to_pem public_to_pem
-      alias to_s public_to_pem
-      alias export public_to_pem
+
+      # The SEC 1 ECPrivateKey, with the curve when `named` asks for it.
+      def __private_key_der__(named)
+        secret = OpenSSL::ASN1.__integer_bytes__(@private_key.to_i).rjust(@group.__width__, "\x00".b)
+        parts = [OpenSSL::ASN1.__integer__(1), OpenSSL::ASN1.__encoded__(OpenSSL::ASN1::OCTET_STRING, secret)]
+        parts << OpenSSL::ASN1.__encoded__(0xa0, __curve_object__) if named
+        parts << OpenSSL::ASN1.__encoded__(0xa1, __point_bits__) if public?
+        OpenSSL::ASN1.__sequence__(*parts)
+      end
+      private :__private_key_der__
+
+      def private_to_der
+        raise ECError, "private key is needed" unless private?
+        algorithm = OpenSSL::ASN1.__sequence__(OpenSSL::ASN1.__object__(EC_OID), __curve_object__)
+        inner = OpenSSL::ASN1.__encoded__(OpenSSL::ASN1::OCTET_STRING, __private_key_der__(false))
+        OpenSSL::ASN1.__sequence__(OpenSSL::ASN1.__integer__(0), algorithm, inner)
+      end
+
+      def private_to_pem
+        "-----BEGIN PRIVATE KEY-----\n#{[private_to_der].pack("m48")}-----END PRIVATE KEY-----\n"
+      end
+
+      def to_der
+        private? ? __private_key_der__(true) : public_to_der
+      end
+
+      def to_pem
+        return public_to_pem unless private?
+        "-----BEGIN EC PRIVATE KEY-----\n#{[to_der].pack("m48")}-----END EC PRIVATE KEY-----\n"
+      end
+      alias to_s to_pem
+      alias export to_pem
 
       # The bytes of the public key a key identifier hashes: the point itself.
       def __public_key_bits__
-        @point
+        @public_key.to_octet_string(:uncompressed)
       end
 
       # The lines X509_print writes for the key under Subject Public Key Info.
       def __printed_lines__
-        rows = @point.unpack1("H*").scan(/../).each_slice(15).map { |row| row.join(":") }
+        rows = __public_key_bits__.unpack1("H*").scan(/../).each_slice(15).map { |row| row.join(":") }
+        nist = CURVES[@group.curve_name][1]
         [
           "            Public Key Algorithm: id-ecPublicKey",
           "                Public-Key: (#{@group.degree} bit)",
           "                pub:",
           *rows.each_with_index.map { |row, at| "                    #{row}#{":" if at < rows.size - 1}" },
           "                ASN1 OID: #{@group.curve_name}",
-          "                NIST CURVE: #{CURVES[@group.curve_name][1]}"
+          *(nist ? ["                NIST CURVE: #{nist}"] : [])
         ]
       end
     end
 
     # An RSA key pair, or the public half of one.
     class RSA < PKey
-      class RSAError < PKeyError; end
-
       RSA_OID = "1.2.840.113549.1.1.1"
 
       # The DigestInfo prefix PKCS #1 v1.5 puts ahead of each digest.
@@ -1190,14 +1757,99 @@ module OpenSSL
         padding = width - prefix.bytesize - hash.bytesize - 3
         raise PKeyError, "EVP_DigestSign: RSA lib" if padding < 8
         encoded = "\x00\x01".b + ("\xFF".b * padding) + "\x00".b + prefix + hash
+        __private_power__(encoded, width)
+      end
+
+      # The private operation on `encoded`, in halves joined by the Chinese
+      # remainder theorem, as `width` bytes.
+      def __private_power__(encoded, width)
         message = encoded.unpack1("H*").to_i(16)
-        # The two halves of the private operation, joined by the Chinese
-        # remainder theorem.
         first = message.pow(@dmp1, @p)
         second = message.pow(@dmq1, @q)
         joined = second + ((@iqmp * (first - second)) % @p) * @q
         OpenSSL::ASN1.__integer_bytes__(joined).rjust(width, "\x00".b)
       end
+      private :__private_power__
+
+      # An RSASSA-PSS signature. The salt is as long as the digest for
+      # `:digest`, as long as the key leaves room for with `:max`, or the
+      # number given.
+      def sign_pss(digest, data, salt_length:, mgf1_hash:)
+        raise ArgumentError, "private key is needed" unless private?
+        hash_name = __digest_name__(digest)
+        hashed = OpenSSL::Digest.digest(hash_name, data).b
+        encoded_bits = @n.bit_length - 1
+        encoded_length = (encoded_bits + 7) / 8
+        salt_bytes = case salt_length
+                     when :digest then hashed.bytesize
+                     when :max then encoded_length - hashed.bytesize - 2
+                     else __salt_bytes__(salt_length)
+                     end
+        if encoded_length < hashed.bytesize + salt_bytes + 2
+          raise PKeyError, "EVP_PKEY_CTX_set_rsa_pss_saltlen: data too large for key size"
+        end
+        salt = OpenSSL::Random.random_bytes(salt_bytes).b
+        check = OpenSSL::Digest.digest(hash_name, ("\x00".b * 8) + hashed + salt).b
+        block = ("\x00".b * (encoded_length - salt_bytes - hashed.bytesize - 2)) + "\x01".b + salt
+        masked = __xor__(block, __mgf1__(__digest_name__(mgf1_hash), check, block.bytesize))
+        masked.setbyte(0, masked.getbyte(0) & (0xff >> (8 * encoded_length - encoded_bits)))
+        __private_power__(masked + check + "\xBC".b, (@n.bit_length + 7) / 8)
+      end
+
+      def verify_pss(digest, signature, data, salt_length:, mgf1_hash:)
+        hash_name = __digest_name__(digest)
+        hashed = OpenSSL::Digest.digest(hash_name, data).b
+        width = (@n.bit_length + 7) / 8
+        return false unless signature.bytesize == width
+        encoded_bits = @n.bit_length - 1
+        encoded_length = (encoded_bits + 7) / 8
+        recovered = signature.b.unpack1("H*").to_i(16).pow(@e, @n)
+        return false if recovered.bit_length > encoded_bits
+        encoded = OpenSSL::ASN1.__integer_bytes__(recovered).rjust(encoded_length, "\x00".b)
+        return false unless encoded.getbyte(-1) == 0xbc && encoded_length >= hashed.bytesize + 2
+        masked = encoded.byteslice(0, encoded_length - hashed.bytesize - 1)
+        check = encoded.byteslice(masked.bytesize, hashed.bytesize)
+        block = __xor__(masked, __mgf1__(__digest_name__(mgf1_hash), check, masked.bytesize))
+        block.setbyte(0, block.getbyte(0) & (0xff >> (8 * encoded_length - encoded_bits)))
+        start = block.index("\x01".b)
+        return false if start.nil? || block.byteslice(0, start).bytes.any?(&:positive?)
+        salt = block.byteslice(start + 1, block.bytesize - start - 1)
+        expected = case salt_length
+                   when :digest then hashed.bytesize
+                   when :auto then salt.bytesize
+                   else __salt_bytes__(salt_length)
+                   end
+        return false unless salt.bytesize == expected
+        OpenSSL::Digest.digest(hash_name, ("\x00".b * 8) + hashed + salt).b == check
+      end
+
+      def __salt_bytes__(salt_length)
+        return salt_length if salt_length.is_a?(Integer)
+        raise TypeError, "no implicit conversion of #{salt_length.class} into Integer"
+      end
+      private :__salt_bytes__
+
+      def __digest_name__(digest)
+        OpenSSL::Digest.canonical_name(digest.respond_to?(:name) ? digest.name : digest.to_s)
+      end
+      private :__digest_name__
+
+      # MGF1: the digests of `seed` and a counter, run together to `length`.
+      def __mgf1__(hash_name, seed, length)
+        mask = "".b
+        counter = 0
+        while mask.bytesize < length
+          mask << OpenSSL::Digest.digest(hash_name, seed + [counter].pack("N")).b
+          counter += 1
+        end
+        mask.byteslice(0, length)
+      end
+      private :__mgf1__
+
+      def __xor__(first, second)
+        first.bytes.zip(second.bytes).map { |left, right| left ^ right }.pack("C*")
+      end
+      private :__xor__
 
       def verify(digest, signature, data)
         hash, prefix = __digested__(digest, data)
@@ -1242,6 +1894,24 @@ module OpenSSL
     V_ERR_CERT_REJECTED = 28
     V_ERR_INVALID_CA = 79
     V_ERR_HOSTNAME_MISMATCH = 62
+    V_ERR_UNABLE_TO_GET_CRL = 3
+    V_ERR_CRL_SIGNATURE_FAILURE = 8
+    V_ERR_CRL_NOT_YET_VALID = 11
+    V_ERR_CRL_HAS_EXPIRED = 12
+    V_ERR_CERT_REVOKED = 23
+
+    V_FLAG_CRL_CHECK = 0x4
+    V_FLAG_CRL_CHECK_ALL = 0x8
+
+    PURPOSE_SSL_CLIENT = 1
+    PURPOSE_SSL_SERVER = 2
+    PURPOSE_NS_SSL_SERVER = 3
+    PURPOSE_SMIME_SIGN = 4
+    PURPOSE_SMIME_ENCRYPT = 5
+    PURPOSE_CRL_SIGN = 6
+    PURPOSE_ANY = 7
+    PURPOSE_OCSP_HELPER = 8
+    PURPOSE_TIMESTAMP_SIGN = 9
 
     VERIFY_ERROR_STRINGS = {
       0 => "ok",
@@ -1255,7 +1925,19 @@ module OpenSSL
       21 => "unable to verify the first certificate",
       28 => "certificate rejected",
       79 => "invalid CA certificate",
-      62 => "hostname mismatch"
+      62 => "hostname mismatch",
+      3 => "unable to get certificate CRL",
+      8 => "CRL signature failure",
+      11 => "CRL is not yet valid",
+      12 => "CRL has expired",
+      23 => "certificate revoked"
+    }.freeze
+
+    # The reasons a CRL entry may give for a revocation.
+    CRL_REASONS = {
+      0 => "Unspecified", 1 => "Key Compromise", 2 => "CA Compromise", 3 => "Affiliation Changed",
+      4 => "Superseded", 5 => "Cessation Of Operation", 6 => "Certificate Hold",
+      8 => "Remove From CRL", 9 => "Privilege Withdrawn", 10 => "AA Compromise"
     }.freeze
 
     # One extension: the object it names, the DER of its value, and whether
@@ -1263,8 +1945,11 @@ module OpenSSL
     class Extension
       attr_reader :oid
 
+      # The value is DER, or an ASN.1 value written as DER.
       def initialize(oid, value, critical = false, shown = nil)
-        @oid = oid
+        found = OpenSSL.__object__(:find, oid.to_s)
+        @oid = found ? found[0] : oid.to_s
+        value = value.to_der if value.respond_to?(:to_der)
         @der_value = value.b
         @critical = critical
         @shown = shown
@@ -1295,6 +1980,10 @@ module OpenSSL
         return nil if top.nil?
         tag, content = top
         case oid
+        when "crlNumber"
+          tag == OpenSSL::ASN1::INTEGER ? OpenSSL::ASN1.__signed_value__(content).to_s : nil
+        when "CRLReason"
+          tag == OpenSSL::ASN1::ENUMERATED ? OpenSSL::X509::CRL_REASONS[OpenSSL::ASN1.__signed_value__(content)] : nil
         when "basicConstraints"
           parts = OpenSSL::ASN1.__read_all__(content) || []
           authority = parts.any? { |held_tag, held| held_tag == OpenSSL::ASN1::BOOLEAN && held != "\x00".b }
@@ -1395,7 +2084,7 @@ module OpenSSL
       end
 
       def to_s
-        "#{@oid} = #{"critical, " if @critical}#{value}"
+        "#{@oid} = #{"critical, " if @critical}#{value.gsub("\n", ", ")}"
       end
 
       def to_a
@@ -1437,6 +2126,7 @@ module OpenSSL
                      when "X509v3 Authority Key Identifier" then authority_key_identifier(value)
                      when "X509v3 Extended Key Usage" then extended_key_usage(value)
                      when "Netscape Comment" then [OpenSSL::ASN1.__encoded__(22, value.to_s.b), value.to_s]
+                     when "X509v3 CRL Distribution Points" then crl_distribution_points(value)
                      end
         if der.nil?
           raise ExtensionError, "#{oid} = #{value}: error in extension (name=#{oid}, value=#{value})"
@@ -1487,6 +2177,26 @@ module OpenSSL
         return nil if found.empty? || found.any?(&:nil?)
         purposes = found.map { |held| OpenSSL::ASN1.__object__(held[2]) }
         [OpenSSL::ASN1.__sequence__(*purposes), found.map { |held| held[1] }.join(", ")]
+      end
+
+      # The tags of the general names a distribution point may be given by.
+      GENERAL_NAME_TAGS = { "email" => 0x81, "DNS" => 0x82, "URI" => 0x86 }.freeze
+
+      # A distribution point for each full name given, written inline as
+      # `URI:...` or as `@section` naming a section of the config.
+      def crl_distribution_points(value)
+        entries = if value.start_with?("@")
+                    @config ? @config[value.delete_prefix("@")].map { |name, held| [name.split(".").first, held] } : []
+                  else
+                    value.split(",").map { |held| held.strip.split(":", 2) }
+                  end
+        return nil if entries.empty? || entries.any? { |kind, held| held.nil? || !GENERAL_NAME_TAGS.key?(kind) }
+        points = entries.map do |kind, held|
+          name = OpenSSL::ASN1.__encoded__(GENERAL_NAME_TAGS[kind], held.b)
+          OpenSSL::ASN1.__sequence__(OpenSSL::ASN1.__encoded__(0xa0, OpenSSL::ASN1.__encoded__(0xa0, name)))
+        end
+        der = OpenSSL::ASN1.__sequence__(*points)
+        [der, nil]
       end
 
       def hex(bytes)
@@ -1787,6 +2497,157 @@ module OpenSSL
       end
     end
 
+    # A certificate a CRL names as revoked: its serial, when it was revoked,
+    # and the extensions that say why.
+    class Revoked
+      attr_reader :time, :extensions
+
+      def initialize
+        @serial = 0
+        @time = nil
+        @extensions = []
+      end
+
+      def serial
+        OpenSSL::BN.new(@serial)
+      end
+
+      def serial=(value)
+        @serial = value.to_i
+      end
+
+      def time=(value)
+        @time = value
+      end
+
+      def extensions=(list)
+        @extensions = list.to_a
+      end
+
+      def add_extension(extension)
+        @extensions << extension
+        extension
+      end
+
+      def to_der
+        parts = [OpenSSL::ASN1.__integer__(@serial), OpenSSL::ASN1.__time__(@time)]
+        parts << OpenSSL::ASN1.__sequence__(*@extensions.map(&:to_der)) unless @extensions.empty?
+        OpenSSL::ASN1.__sequence__(*parts)
+      end
+
+      def ==(other)
+        other.is_a?(Revoked) && other.to_der == to_der
+      end
+    end
+
+    # A certificate revocation list: the certificates an issuer has revoked,
+    # signed by that issuer.
+    class CRL
+      class CRLError < OpenSSL::OpenSSLError; end
+
+      attr_reader :version, :issuer, :last_update, :next_update, :revoked, :extensions
+
+      def initialize
+        @version = 0
+        @issuer = Name.new
+        @last_update = nil
+        @next_update = nil
+        @revoked = []
+        @extensions = []
+        @signature = nil
+      end
+
+      def version=(value)
+        @version = value.to_i
+      end
+
+      def issuer=(name)
+        @issuer = name
+      end
+
+      def last_update=(time)
+        @last_update = time
+      end
+
+      def next_update=(time)
+        @next_update = time
+      end
+
+      def revoked=(list)
+        @revoked = list.to_a
+      end
+
+      def add_revoked(revoked)
+        @revoked << revoked
+        revoked
+      end
+
+      def extensions=(list)
+        @extensions = list.to_a
+      end
+
+      def add_extension(extension)
+        @extensions << extension
+        extension
+      end
+
+      def signature_algorithm
+        @signature_algorithm || "NULL"
+      end
+
+      def sign(key, digest)
+        named = OpenSSL::Digest.canonical_name(digest.respond_to?(:name) ? digest.name : digest.to_s)
+        @signature_algorithm, @signature_oid = SIGNATURE_ALGORITHMS.fetch(named)
+        @digest_name = named
+        @signature = key.sign(named, __tbs_der__)
+        self
+      end
+
+      def verify(key)
+        return false if @signature.nil?
+        key.verify(@digest_name, @signature, __tbs_der__)
+      end
+
+      def to_der
+        raise CRLError, "illegal zero content" if @signature.nil?
+        OpenSSL::ASN1.__sequence__(
+          __tbs_der__,
+          __algorithm_der__,
+          OpenSSL::ASN1.__encoded__(OpenSSL::ASN1::BIT_STRING, "\x00".b + @signature)
+        )
+      end
+
+      def to_pem
+        "-----BEGIN X509 CRL-----\n#{[to_der].pack("m64")}-----END X509 CRL-----\n"
+      end
+      alias to_s to_pem
+
+      def ==(other)
+        other.is_a?(CRL) && other.to_der == to_der
+      end
+
+      def __algorithm_der__
+        OpenSSL::ASN1.__sequence__(OpenSSL::ASN1.__object__(@signature_oid), OpenSSL::ASN1.__encoded__(OpenSSL::ASN1::NULL, ""))
+      end
+      private :__algorithm_der__
+
+      # TBSCertList: what the signature covers.
+      def __tbs_der__
+        parts = []
+        parts << OpenSSL::ASN1.__integer__(@version) unless @version.zero?
+        parts << __algorithm_der__
+        parts << @issuer.to_der
+        parts << OpenSSL::ASN1.__time__(@last_update)
+        parts << OpenSSL::ASN1.__time__(@next_update) if @next_update
+        parts << OpenSSL::ASN1.__sequence__(*@revoked.map(&:to_der)) unless @revoked.empty?
+        unless @extensions.empty?
+          parts << OpenSSL::ASN1.__encoded__(0xa0, OpenSSL::ASN1.__sequence__(*@extensions.map(&:to_der)))
+        end
+        OpenSSL::ASN1.__sequence__(*parts)
+      end
+      private :__tbs_der__
+    end
+
     # The certificates trusted to anchor a chain, and the result of the last
     # verification made against them.
     # One verification of a certificate against a store: the chain it builds,
@@ -1804,15 +2665,15 @@ module OpenSSL
         @error_depth = 0
         @chain = nil
         @time = store.time
+        @flags = store.flags.to_i
+        @current_crl = nil
       end
 
       def error_string
         VERIFY_ERROR_STRINGS.fetch(@error, "certificate verify error")
       end
 
-      def current_crl
-        nil
-      end
+      attr_reader :current_crl
 
       def cleanup
         self
@@ -1833,7 +2694,46 @@ module OpenSSL
           next if StoreContext.__may_issue__(@chain[depth])
           return false unless __step__(false, V_ERR_INVALID_CA, depth)
         end
+        return false unless __check_revocation__
         __check_down__
+      end
+
+      # With CRL checking asked for, each certificate's issuer must have a
+      # CRL in the store that is current, that the issuer signed, and that
+      # does not name the certificate: the leaf alone, or the whole chain
+      # with V_FLAG_CRL_CHECK_ALL.
+      def __check_revocation__
+        return true if (@flags & V_FLAG_CRL_CHECK).zero?
+        last = (@flags & V_FLAG_CRL_CHECK_ALL).zero? ? 0 : @chain.size - 1
+        now = @time || Time.now
+        (0..last).each do |depth|
+          held = @chain[depth]
+          issuer = @chain[depth + 1] || held
+          crl = @store.__crls__.find { |list| list.issuer.cmp(held.issuer).zero? }
+          if crl.nil?
+            return false unless __step__(false, V_ERR_UNABLE_TO_GET_CRL, depth)
+            next
+          end
+          @current_crl = crl
+          if crl.last_update && now < crl.last_update
+            return false unless __step__(false, V_ERR_CRL_NOT_YET_VALID, depth)
+          elsif crl.next_update && now > crl.next_update
+            return false unless __step__(false, V_ERR_CRL_HAS_EXPIRED, depth)
+          end
+          unless __crl_signed_by__(crl, issuer)
+            return false unless __step__(false, V_ERR_CRL_SIGNATURE_FAILURE, depth)
+          end
+          if crl.revoked.any? { |entry| entry.serial == held.serial }
+            return false unless __step__(false, V_ERR_CERT_REVOKED, depth)
+          end
+        end
+        true
+      end
+
+      def __crl_signed_by__(crl, issuer)
+        crl.verify(issuer.public_key)
+      rescue StandardError
+        false
       end
 
       # Whether a certificate may sign others, as OpenSSL's check_ca decides:
@@ -1949,6 +2849,7 @@ module OpenSSL
 
       def initialize
         @trusted = []
+        @crls = []
         @error = 0
         @chain = nil
       end
@@ -1956,6 +2857,15 @@ module OpenSSL
       def add_cert(certificate)
         @trusted << certificate
         self
+      end
+
+      def add_crl(crl)
+        @crls << crl
+        self
+      end
+
+      def __crls__
+        @crls
       end
 
       def __trusted__
@@ -2876,6 +3786,12 @@ module OpenSSL
       UNIVERSALSTRING => UniversalString, BMPSTRING => BMPString
     }.freeze
 
+    # `ASN1::Sequence([...])` builds a `Sequence` the way `Sequence.new` does,
+    # for each universal class.
+    UNIVERSAL_CLASSES.each_value do |universal|
+      define_singleton_method(universal.name.split("::").last) { |*arguments| universal.new(*arguments) }
+    end
+
     # The identifier and length octets of a value, then its content.
     def self.__tagged__(tag, tag_class, constructed, content)
       raise ASN1Error, "tag number too large" if tag > 30
@@ -2950,6 +3866,84 @@ module OpenSSL
       decoded = made.new(value)
       decoded.unused_bits = content.getbyte(0) if tag == BIT_STRING
       decoded
+    end
+  end
+end
+
+module OpenSSL
+  class ConfigError < OpenSSL::OpenSSLError; end
+
+  # The sections of an OpenSSL configuration file, each a table of names and
+  # values. Names before the first section header go in "default".
+  class Config
+    include Enumerable
+
+    DEFAULT_CONFIG_FILE = "/etc/ssl/openssl.cnf"
+
+    def self.parse(text)
+      new.tap { |config| config.__read__(text) }
+    end
+
+    def self.load(path = nil)
+      new(path)
+    end
+
+    def self.parse_config(io)
+      parse(io.read).__sections__
+    end
+
+    def initialize(path = nil)
+      @sections = {}
+      __read__(File.read(path)) if path
+    end
+
+    def __read__(text)
+      section = "default"
+      text.each_line do |line|
+        line = line.sub(/(?<!\\)#.*/, "").strip
+        next if line.empty?
+        if (header = line[/\A\[\s*([^\]]*?)\s*\]\z/, 1])
+          section = header
+          @sections[section] ||= {}
+          next
+        end
+        name, value = line.split("=", 2)
+        raise ConfigError, "missing equal sign" if value.nil?
+        (@sections[section] ||= {})[name.strip] = value.strip
+      end
+      self
+    end
+
+    def __sections__
+      @sections
+    end
+
+    def [](section)
+      (@sections[section] || {}).dup
+    end
+
+    def get_value(section, name)
+      @sections.fetch(section, {})[name]
+    end
+
+    def sections
+      @sections.keys.sort
+    end
+
+    def each
+      return to_enum(:each) unless block_given?
+      @sections.each { |section, values| values.each { |name, value| yield section, name, value } }
+      self
+    end
+
+    def to_s
+      sections.map do |section|
+        "[ #{section} ]\n" + @sections[section].map { |name, value| "#{name}=#{value}\n" }.join + "\n"
+      end.join
+    end
+
+    def inspect
+      "#<#{self.class.name} sections=#{sections.inspect}>"
     end
   end
 end

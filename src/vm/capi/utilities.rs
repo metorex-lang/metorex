@@ -340,3 +340,73 @@ pub extern "C-unwind" fn ruby_strtod(text: *const c_char, end: *mut *mut c_char)
         value
     }
 }
+
+/// The hex digits in lower case and then in upper case, as `ruby/util.h`
+/// gives them.
+#[unsafe(no_mangle)]
+pub static ruby_hexdigits: [u8; 33] = *b"0123456789abcdef0123456789ABCDEF\0";
+
+const fn digit_values() -> [i8; 256] {
+    let mut table = [-1i8; 256];
+    let mut at = 0;
+    while at < 10 {
+        table[b'0' as usize + at] = at as i8;
+        at += 1;
+    }
+    let mut letter = 0;
+    while letter < 26 {
+        table[b'a' as usize + letter] = 10 + letter as i8;
+        table[b'A' as usize + letter] = 10 + letter as i8;
+        letter += 1;
+    }
+    table
+}
+
+/// What each byte stands for as a digit up to base 36, or -1.
+#[unsafe(no_mangle)]
+pub static ruby_digit36_to_number_table: [i8; 256] = digit_values();
+
+/// Reads the digits of `base` at `text`, up to `length` bytes or, for a
+/// negative length, up to the first byte that is not one, answering their
+/// value and how many bytes were read.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn ruby_scan_digits(
+    text: *const u8,
+    length: isize,
+    base: i32,
+    read: *mut usize,
+    overflow: *mut i32,
+) -> u64 {
+    let base = base as u64;
+    let mut value: u64 = 0;
+    let mut overflowed = false;
+    let mut count = 0usize;
+    while length < 0 || count < length as usize {
+        // SAFETY: C hands over `length` readable bytes, or a string ended by
+        // a byte that is no digit.
+        let byte = unsafe { *text.add(count) };
+        let digit = ruby_digit36_to_number_table[byte as usize];
+        if digit < 0 || digit as u64 >= base {
+            break;
+        }
+        let (shifted, multiplied_over) = value.overflowing_mul(base);
+        let (added, added_over) = shifted.overflowing_add(digit as u64);
+        overflowed |= multiplied_over || added_over;
+        value = added;
+        count += 1;
+    }
+    // SAFETY: C hands over places for both answers.
+    unsafe {
+        *read = count;
+        *overflow = overflowed as i32;
+    }
+    value
+}
+
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn ruby_malloc_size_overflow(count: usize, size: usize) -> ! {
+    error(
+        "ArgumentError",
+        format!("malloc: possible integer overflow ({}*{})", count, size),
+    )
+}

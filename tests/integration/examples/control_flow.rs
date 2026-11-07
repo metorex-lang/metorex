@@ -559,3 +559,66 @@ fn a_pattern_guard_may_hold_a_nested_pattern_match() {
         "string \"011\" coerces to 11\ninteger 7\nother hash 1\nother hash 2\ntrue\n\"7\"\n7\n"
     );
 }
+
+#[test]
+fn a_break_in_a_nested_block_ends_only_the_call_it_was_given_to() {
+    let output = run_example("control_flow/break_in_a_block_inside_map.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[[1, true], [2, false], [3, false]]\n",
+            "[5, 10]\n",
+            "[nil, :stop]\n",
+            "true\n",
+            "[1, 2]\n",
+            "false\n",
+            "[1, 2]\n",
+            "false\n",
+            "[1]\n",
+            "false\n",
+            "[1, 2, 3]\n",
+        )
+    );
+}
+
+#[test]
+fn a_block_handed_to_a_proc_that_takes_none_is_dropped() {
+    let output = run_example("control_flow/block_handed_to_a_proc_stays_with_it.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[:load, :no_block]\n[:none, :given]\n1\n",
+            "[:save, :no_block]\n[:none, :given]\n2\n",
+            "[[:run, :no_block], :inner]\n[:x, :no_block]\n",
+        )
+    );
+}
+
+#[test]
+fn next_from_a_rescue_ends_the_block_run() {
+    let output = run_example("control_flow/next_from_a_rescue_in_a_block.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[10, :skipped, 30]\n",
+            "4\n",
+            ":bad\n",
+            "[[:ensure, 1], [:ensure, 2], 2]\n",
+            ":from_rescue\n",
+            ":from_rescue\n",
+            ":plain\n",
+        )
+    );
+}
+
+#[test]
+fn a_do_block_with_ensure_runs_its_body() {
+    let output = run_example("control_flow/do_block_with_ensure_runs_its_body.rb");
+    assert_eq!(output, "[:example, :ensured]\ntrue\n\"1\"\ntrue\n");
+}
+
+#[test]
+fn return_inside_instance_eval_leaves_the_method() {
+    let output = run_example("control_flow/return_inside_instance_eval_leaves_the_method.rb");
+    assert_eq!(output, "false\n:from_eval\n");
+}

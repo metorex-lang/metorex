@@ -196,6 +196,9 @@ impl VirtualMachine {
             return Ok(Some(Object::Int(changed)));
         }
         if class_rc.name() == "Dir" && method_name == "chdir" {
+            // Reading the name may call `to_path`, which would take the block
+            // the call was given.
+            let viewed = self.pending_block.take();
             let target = match arguments.first() {
                 Some(named) => self.directory_path_argument(method_name, named, position)?,
                 None => std::env::var("HOME").unwrap_or_else(|_| "/".to_string()),
@@ -204,7 +207,6 @@ impl VirtualMachine {
             if let Err(error) = std::env::set_current_dir(&target) {
                 return Err(directory_error(&error, "chdir", &target, position));
             }
-            let viewed = self.pending_block.take();
             let Some(View::Block(block)) = viewed.view() else {
                 return Ok(Some(Object::Int(0)));
             };

@@ -34,11 +34,67 @@ const NIL: u32 = 0;
 /// memory level.
 const LIT_BUFSIZE: usize = 1 << 14;
 
-// The settings the default compression level runs with.
-const GOOD_LENGTH: usize = 8;
-const MAX_LAZY: usize = 16;
-const NICE_LENGTH: usize = 128;
-const MAX_CHAIN: usize = 128;
+/// What a compression level asks of the match search, as zlib's
+/// configuration table gives it: a match this long or longer shortens the
+/// chain searched, one this long stops the lazy check (or, at the fast
+/// levels, the hashing of the bytes it covers), one this long ends the
+/// search, and the most chain links followed.
+#[derive(Clone, Copy)]
+pub(crate) struct Level {
+    good_length: usize,
+    max_lazy: usize,
+    nice_length: usize,
+    max_chain: usize,
+    /// Levels one to three take each match as found, with no lazy check.
+    fast: bool,
+}
+
+impl Level {
+    /// The settings of a level from zero to nine, the default for any other.
+    /// Level zero stores rather than compresses and has no settings.
+    pub(crate) fn of(level: i64) -> Option<Level> {
+        let (good_length, max_lazy, nice_length, max_chain, fast) = match level {
+            0 => return None,
+            1 => (4, 4, 8, 4, true),
+            2 => (4, 5, 16, 8, true),
+            3 => (4, 6, 32, 32, true),
+            4 => (4, 4, 16, 16, false),
+            5 => (8, 16, 32, 32, false),
+            7 => (8, 32, 128, 256, false),
+            8 => (32, 128, 258, 1024, false),
+            9 => (32, 258, 258, 4096, false),
+            _ => (8, 16, 128, 128, false),
+        };
+        Some(Level {
+            good_length,
+            max_lazy,
+            nice_length,
+            max_chain,
+            fast,
+        })
+    }
+}
+
+/// The most a stored block holds.
+const MAX_STORED: usize = 65535;
+
+/// `bytes` as stored blocks, the last one ending the stream.
+fn stored(bytes: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(bytes.len() + 5 * (bytes.len() / MAX_STORED + 1));
+    let mut pieces: Vec<&[u8]> = bytes.chunks(MAX_STORED).collect();
+    if pieces.is_empty() {
+        pieces.push(&[]);
+    }
+    let count = pieces.len();
+    for (at, piece) in pieces.into_iter().enumerate() {
+        out.push(u8::from(at + 1 == count));
+        let length = piece.len() as u16;
+        out.extend_from_slice(&length.to_le_bytes());
+        out.extend_from_slice(&(!length).to_le_bytes());
+        out.extend_from_slice(piece);
+    }
+    out
+}
 
 const LITERALS: usize = 256;
 const LENGTH_CODES: usize = 29;
@@ -542,27 +598,33 @@ impl<'a> TreeBuilder<'a> {
 /// How many bytes of the compressed stream zlib has handed on after reading
 /// `bytes` with no flush asked for. It stops while fewer bytes than its
 /// lookahead remain, since a later byte could still extend a match.
-pub(crate) fn deflate_handed_on(bytes: &[u8], dictionary: &[u8]) -> usize {
+pub(crate) fn deflate_handed_on(bytes: &[u8], dictionary: &[u8], level: i64) -> usize {
+    let Some(settings) = Level::of(level) else {
+        return 0;
+    };
     let mut window: Vec<u8> = Vec::with_capacity(dictionary.len() + bytes.len());
     window.extend_from_slice(dictionary);
     window.extend_from_slice(bytes);
-    let mut state = Deflater::new(window, dictionary.len());
+    let mut state = Deflater::new(window, dictionary.len(), settings);
     let end = state.window.len();
     while end - state.strstart >= MIN_LOOKAHEAD {
-        state.step(end);
+        state.turn(end);
     }
     state.writer.handed_on()
 }
 
-/// Compress `bytes` the way zlib does at its default level, with `dictionary`
+/// Compress `bytes` the way zlib does at the level given, with `dictionary`
 /// standing in front of the data where one was given.
-pub(crate) fn deflate(bytes: &[u8], dictionary: &[u8]) -> Vec<u8> {
+pub(crate) fn deflate(bytes: &[u8], dictionary: &[u8], level: i64) -> Vec<u8> {
+    let Some(settings) = Level::of(level) else {
+        return stored(bytes);
+    };
     // The dictionary sits in the window ahead of the data, so a match may
     // reach back into it. None of it is written out.
     let mut window: Vec<u8> = Vec::with_capacity(dictionary.len() + bytes.len());
     window.extend_from_slice(dictionary);
     window.extend_from_slice(bytes);
-    Deflater::new(window, dictionary.len()).run()
+    Deflater::new(window, dictionary.len(), settings).run()
 }
 
 /// One piece of a DEFLATE stream written in parts: `bytes` compressed with
@@ -574,10 +636,14 @@ pub(crate) fn deflate_piece(bytes: &[u8], previous: &[u8], last: bool) -> Vec<u8
     let mut window: Vec<u8> = Vec::with_capacity(kept.len() + bytes.len());
     window.extend_from_slice(kept);
     window.extend_from_slice(bytes);
-    let mut state = Deflater::new(window, kept.len());
+    let mut state = Deflater::new(
+        window,
+        kept.len(),
+        Level::of(-1).expect("the default level compresses"),
+    );
     let end = state.window.len();
     while state.strstart < end {
-        state.step(end);
+        state.turn(end);
     }
     if state.match_available {
         state.block.tally_literal(state.window[end - 1]);
@@ -604,10 +670,11 @@ struct Deflater {
     match_available: bool,
     writer: BitWriter,
     block: Block,
+    settings: Level,
 }
 
 impl Deflater {
-    fn new(window: Vec<u8>, data_start: usize) -> Self {
+    fn new(window: Vec<u8>, data_start: usize, settings: Level) -> Self {
         let mut state = Deflater {
             window,
             head: vec![NIL; HASH_SIZE],
@@ -621,6 +688,7 @@ impl Deflater {
             match_available: false,
             writer: BitWriter::new(),
             block: Block::new(data_start),
+            settings,
         };
         // The rolling hash carries the two bytes before the one it is being
         // folded with, so it is started on the first two bytes of the window.
@@ -658,17 +726,17 @@ impl Deflater {
     /// The longest match at or after `cur_match`, looking no further back
     /// than the window allows and no longer than the chain permits.
     fn longest_match(&mut self, mut cur_match: usize) -> usize {
-        let mut chain_length = MAX_CHAIN;
+        let mut chain_length = self.settings.max_chain;
         let mut best_len = self.prev_length;
         let limit = self.strstart.saturating_sub(MAX_DIST);
-        if best_len >= GOOD_LENGTH {
+        if best_len >= self.settings.good_length {
             chain_length >>= 2;
         }
         let max_len = MAX_MATCH.min(self.window.len() - self.strstart);
         if max_len < MIN_MATCH {
             return MIN_MATCH - 1;
         }
-        let nice_match = NICE_LENGTH.min(max_len);
+        let nice_match = self.settings.nice_length.min(max_len);
 
         loop {
             let mut len = 0;
@@ -702,7 +770,7 @@ impl Deflater {
     fn run(mut self) -> Vec<u8> {
         let end = self.window.len();
         while self.strstart < end {
-            self.step(end);
+            self.turn(end);
         }
         if self.match_available {
             self.block.tally_literal(self.window[end - 1]);
@@ -712,8 +780,61 @@ impl Deflater {
         self.writer.out
     }
 
-    /// One turn of the loop: a position tried for a match, and the match or
-    /// literal before it written to the block once the lazy check settles.
+    /// One turn of the loop the level runs.
+    fn turn(&mut self, end: usize) {
+        if self.settings.fast {
+            self.fast_step(end);
+        } else {
+            self.step(end);
+        }
+    }
+
+    /// One turn of the loop zlib's fast levels run: a match is written as
+    /// soon as it is found, and the bytes it covers are hashed only when it
+    /// is no longer than `max_lazy`.
+    fn fast_step(&mut self, end: usize) {
+        let mut hash_head = NIL;
+        if self.strstart + MIN_MATCH <= end {
+            self.update_hash(self.strstart);
+            hash_head = self.insert_string(self.strstart);
+        }
+        if hash_head != NIL && self.strstart - hash_head as usize <= MAX_DIST {
+            self.match_length = self.longest_match(hash_head as usize);
+        }
+        if self.match_length >= MIN_MATCH {
+            self.block
+                .tally_match(self.strstart - self.match_start, self.match_length);
+            let lookahead = end - self.strstart - self.match_length;
+            if self.match_length <= self.settings.max_lazy && lookahead >= MIN_MATCH {
+                for _ in 1..self.match_length {
+                    self.strstart += 1;
+                    self.update_hash(self.strstart);
+                    self.insert_string(self.strstart);
+                }
+                self.strstart += 1;
+            } else {
+                self.strstart += self.match_length;
+                // The hash restarts on the two bytes the cursor lands on.
+                if self.strstart + 1 < end {
+                    self.ins_h = self.window[self.strstart] as usize;
+                    self.ins_h = ((self.ins_h << HASH_SHIFT)
+                        ^ self.window[self.strstart + 1] as usize)
+                        & HASH_MASK;
+                }
+            }
+            self.match_length = 0;
+        } else {
+            self.block.tally_literal(self.window[self.strstart]);
+            self.strstart += 1;
+        }
+        if self.block.is_full() {
+            self.flush_block(false);
+        }
+    }
+
+    /// One turn of the lazy loop: a position tried for a match, and the
+    /// match or literal before it written to the block once the lazy check
+    /// settles.
     fn step(&mut self, end: usize) {
         {
             let mut hash_head = NIL;
@@ -727,7 +848,7 @@ impl Deflater {
             self.match_length = MIN_MATCH - 1;
 
             if hash_head != NIL
-                && self.prev_length < MAX_LAZY
+                && self.prev_length < self.settings.max_lazy
                 && self.strstart - hash_head as usize <= MAX_DIST
             {
                 self.match_length = self.longest_match(hash_head as usize);

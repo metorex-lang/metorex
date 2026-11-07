@@ -149,14 +149,9 @@ impl VirtualMachine {
                     }
                 };
                 let kept = chomped_bytes(&bytes, named.as_deref(), &string_value.encoding_name());
-                // Text keeps reading as text; a run of bytes keeps standing
-                // for the bytes it holds.
-                let held = match (string_value.holds_bytes(), String::from_utf8(kept.clone())) {
-                    (false, Ok(text)) => text,
-                    _ => crate::vm::native_methods::pack_format::bytes_to_string(&kept).to_string(),
-                };
-                let made =
-                    crate::object::StringValue::with_encoding(held, string_value.encoding_name());
+                // Text keeps reading as text, and a run of bytes keeps
+                // standing for the bytes it holds.
+                let made = crate::object::StringValue::of_bytes(kept, string_value.encoding_name());
                 if string_value.holds_bytes() {
                     made.mark_bytes();
                 }

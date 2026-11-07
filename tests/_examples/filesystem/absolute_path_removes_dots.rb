@@ -1,0 +1,8 @@
+p File.absolute_path(File.join("/srv/app", "./tmp/../../moo"))
+p File.absolute_path("./tmp/../file.txt", "/srv/app")
+p File.absolute_path("../../../../etc", "/srv/app")
+p File.absolute_path("a/./b/../c", "/")
+p File.absolute_path("/srv/app/.")
+p File.absolute_path("/srv//app/../")
+p File.absolute_path("~/notes", "/srv")
+p File.expand_path("./tmp/../../moo", "/srv/app")

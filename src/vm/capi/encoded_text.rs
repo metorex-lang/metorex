@@ -550,3 +550,10 @@ pub extern "C-unwind" fn rb_metorex_is_unicode(encoding: *const RbEncoding) -> i
     let named = call(encoding_object(encoding), "name", Vec::new()).to_string();
     UNICODE_ENCODINGS.contains(&named.as_str()) as i32
 }
+
+/// Whether the encoding of `string` reads ASCII bytes as ASCII.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_enc_str_asciicompat_p(string: Value) -> i32 {
+    let encoding = call(to_object(string), "encoding", Vec::new());
+    call(encoding, "ascii_compatible?", Vec::new()).is_truthy() as i32
+}

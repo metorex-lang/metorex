@@ -175,3 +175,20 @@ fn rational_ranges_step_and_write_their_ends_with_to_s() {
         "11\n[(0/1), (1/10), (1/5)]\n(1/1)\n[(0/1), (1/10), (1/5), (3/10), (2/5), (1/2)]\n(1/2)\n(2/5)\n((0/1..1/1).%((1/10)))\n[(0/1), (1/4), (1/2), (3/4), (1/1)]\n[[(0/1), (1/10)], [(1/10), (1/5)]]\n((1/1..).%(2))\n((1.0...3.5).step(0.5))\n(1/1.step(3, (1/2)))\n(1.step(10, (3/1)))\n\"1/1..2/1\"\n\"1..\"\n\"1/1..\"\n\"..2/1\"\n\"1/1..2/1\"\n\"1.5..2\"\n"
     );
 }
+
+#[test]
+fn symbol_inspect_escapes_interpolation_openers() {
+    let output = run_example("symbols_and_ranges/inspect_escapes_interpolation_openers.rb");
+    assert_eq!(
+        output,
+        concat!(
+            ":\"\\#{}\"\n",
+            ":\"\\\\\\#{}\"\n",
+            ":\"a\\#$b\"\n",
+            ":\"a\\#@b\"\n",
+            ":\"a#x\"\n",
+            "\"\\#{x} \\#$y \\#@z #w\"\n",
+            ":\"\\#{}\"\n",
+        )
+    );
+}

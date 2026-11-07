@@ -1362,7 +1362,7 @@ impl VirtualMachine {
                         block_argument: site.block_argument,
                     }
                 };
-                let calling_frame = self.current_method_frame;
+                let calling_frame = self.calling_frame();
                 crate::vm::program::enter_nesting(position)?;
                 let result = self.super_with(&arguments, super_block, position);
                 self.release_attached_blocks(attached);
@@ -1821,7 +1821,7 @@ impl VirtualMachine {
         class: &Rc<crate::class::Class>,
     ) -> Result<Object, MetorexError> {
         let has_block = block.is_some();
-        let calling_frame = self.current_method_frame;
+        let calling_frame = self.calling_frame();
         self.refuse_moved_receiver(&receiver, position)?;
         self.attach_block(block);
         let answered = self.call_native_method(class, &receiver, &site.name, &arguments, position);

@@ -420,6 +420,12 @@ impl<'a> Lexer<'a> {
                                         self.advance();
                                     }
                                 }
+                                // A string written inside the expression is
+                                // copied whole, so a brace it holds does not
+                                // count toward the ones the expression opens.
+                                Some(inner @ ('"' | '\'' | '`')) if opens_a_string(&expr) => {
+                                    self.copy_quoted_in_interpolation(inner, &mut expr)?;
+                                }
                                 Some(ch) => {
                                     expr.push(ch);
                                     self.advance();
@@ -479,52 +485,143 @@ pub(super) fn binary_run(binary_source: bool, bytes: &[u8]) -> Result<String, ()
     String::from_utf8(bytes.to_vec()).map_err(|_| ())
 }
 
+/// How many of the characters at the start of `rest` name the variable a `#`
+/// interpolates without braces: `@name`, `@@name`, `$name`, a special global
+/// such as `$1` or `$~`, or one such as `$-w`. Zero where they name none, so
+/// `"#@ "` stands as it reads.
+pub(super) fn short_variable_length(rest: &[char]) -> usize {
+    let starts_a_name = |letter: &char| letter.is_alphabetic() || *letter == '_';
+    let continues_a_name = |letter: &char| letter.is_alphanumeric() || *letter == '_';
+    let name_from = |start: usize| -> usize {
+        if !rest.get(start).is_some_and(starts_a_name) {
+            return 0;
+        }
+        start
+            + rest[start..]
+                .iter()
+                .take_while(|letter| continues_a_name(letter))
+                .count()
+    };
+    match rest.first() {
+        Some('@') => name_from(if rest.get(1) == Some(&'@') { 2 } else { 1 }),
+        Some('$') => match rest.get(1) {
+            Some(digit) if digit.is_ascii_digit() => {
+                1 + rest[1..]
+                    .iter()
+                    .take_while(|letter| letter.is_ascii_digit())
+                    .count()
+            }
+            Some(mark) if "~*$?!@/\\;,.=:<>\"&`'+".contains(*mark) => 2,
+            Some('-') if rest.get(2).is_some_and(continues_a_name) => 3,
+            _ => name_from(1),
+        },
+        _ => 0,
+    }
+}
+
+/// Whether a quote that follows `copied` opens a string, rather than ending
+/// a global's name such as `$'`, `$"`, or `` $` ``.
+fn opens_a_string(copied: &str) -> bool {
+    !copied.ends_with('$')
+}
+
 impl<'a> Lexer<'a> {
-    /// The variable a `#` interpolates without braces: `#@name`, `#@@name`,
-    /// and `#$name`. The cursor sits just past the `#`. Nothing is consumed
-    /// where what follows names no variable, so `"#@ "` stands as it reads.
-    pub(super) fn read_short_interpolation(&mut self) -> Option<String> {
-        let saved_chars = self.chars.clone();
-        let saved_prepend = self.prepend.clone();
-        let saved_line = self.line;
-        let saved_column = self.column;
-        let saved_offset = self.offset;
-        let mut named = String::new();
-        match self.peek() {
-            Some('@') => {
-                named.push('@');
-                self.advance();
-                if self.peek() == Some('@') {
-                    named.push('@');
+    /// Copy a string literal written inside an interpolation into `expr`,
+    /// from its opening quote to its closing one. An escaped character is
+    /// copied with its backslash, and a `#{` in a double-quoted string or a
+    /// command copies the expression it opens, braces and strings and all.
+    fn copy_quoted_in_interpolation(&mut self, quote: char, expr: &mut String) -> Result<(), String> {
+        let interpolates = quote != '\'';
+        expr.push(quote);
+        self.advance();
+        loop {
+            match self.peek() {
+                None => {
+                    return Err(format!("Unterminated string starting at line {}", self.line));
+                }
+                Some('\\') => {
+                    expr.push('\\');
+                    self.advance();
+                    if let Some(escaped) = self.peek() {
+                        expr.push(escaped);
+                        self.advance();
+                    }
+                }
+                Some(ch) if ch == quote => {
+                    expr.push(ch);
+                    self.advance();
+                    return Ok(());
+                }
+                Some('#') if interpolates => {
+                    expr.push('#');
+                    self.advance();
+                    if self.peek() == Some('{') {
+                        expr.push('{');
+                        self.advance();
+                        self.copy_interpolated_expression(expr)?;
+                    }
+                }
+                Some(ch) => {
+                    expr.push(ch);
                     self.advance();
                 }
             }
-            Some('$') => {
-                named.push('$');
-                self.advance();
-            }
-            _ => return None,
         }
-        // A name reads the way Ruby lets one be written, so `#@ip[` ends at
-        // the bracket and `#@ ` names nothing at all.
-        let starts_a_name = |letter: char| letter.is_alphabetic() || letter == '_';
-        if !self.peek().is_some_and(starts_a_name) {
-            self.chars = saved_chars;
-            self.prepend = saved_prepend;
-            self.line = saved_line;
-            self.column = saved_column;
-            self.offset = saved_offset;
+    }
+
+    /// Copy an interpolated expression into `expr` up to and including the
+    /// `}` that closes it, the `#{` having been copied already.
+    fn copy_interpolated_expression(&mut self, expr: &mut String) -> Result<(), String> {
+        let mut depth = 1;
+        loop {
+            match self.peek() {
+                None => {
+                    return Err(format!(
+                        "Unterminated interpolation starting at line {}",
+                        self.line
+                    ));
+                }
+                Some('{') => depth += 1,
+                Some('}') => {
+                    depth -= 1;
+                    if depth == 0 {
+                        expr.push('}');
+                        self.advance();
+                        return Ok(());
+                    }
+                }
+                Some(inner @ ('"' | '\'' | '`')) if opens_a_string(expr) => {
+                    self.copy_quoted_in_interpolation(inner, expr)?;
+                    continue;
+                }
+                Some(_) => {}
+            }
+            let ch = self.peek().expect("a character was seen");
+            expr.push(ch);
+            self.advance();
+        }
+    }
+
+    /// The variable a `#` interpolates without braces, read from just past
+    /// the `#`. Nothing is consumed where what follows names no variable.
+    pub(super) fn read_short_interpolation(&mut self) -> Option<String> {
+        const LONGEST_NAME: usize = 1024;
+        let upcoming: Vec<char> = self
+            .prepend
+            .iter()
+            .rev()
+            .copied()
+            .chain(self.chars.clone())
+            .take(LONGEST_NAME)
+            .collect();
+        let length = short_variable_length(&upcoming);
+        if length == 0 {
             return None;
         }
-        while let Some(letter) = self.peek() {
-            if letter.is_alphanumeric() || letter == '_' {
-                named.push(letter);
-                self.advance();
-            } else {
-                break;
-            }
+        for _ in 0..length {
+            self.advance();
         }
-        Some(named)
+        Some(upcoming[..length].iter().collect())
     }
 }
 

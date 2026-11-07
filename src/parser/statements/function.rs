@@ -183,6 +183,19 @@ impl Parser<'_> {
             TokenKind::Bang => "!".to_string(),
             TokenKind::Tilde => "~".to_string(),
             TokenKind::Caret => "^".to_string(),
+            // `def nil.freeze` is `def (nil).freeze`.
+            TokenKind::True | TokenKind::False | TokenKind::Nil
+                if self.check(&[TokenKind::Dot]) =>
+            {
+                let class = match self.previous().kind {
+                    TokenKind::True => "TrueClass",
+                    TokenKind::False => "FalseClass",
+                    _ => "NilClass",
+                };
+                self.advance(); // consume .
+                _singleton_receiver = Some(format!("{}{}", SOLE_INSTANCE_RECEIVER, class));
+                self.parse_singleton_method_name()?
+            }
             // Allow keywords as method names
             TokenKind::Continue => "next".to_string(),
             TokenKind::Include => "include".to_string(),
@@ -631,11 +644,15 @@ impl Parser<'_> {
                         self.declare_local(&name);
                         name
                     }
-                    // `lambda` is a method rather than a keyword, so a
-                    // parameter may take its name.
+                    // `lambda` and `raise` are methods rather than keywords,
+                    // so a parameter may take either name.
                     TokenKind::Lambda => {
                         self.declare_local("lambda");
                         "lambda".to_string()
+                    }
+                    TokenKind::Raise => {
+                        self.declare_local("raise");
+                        "raise".to_string()
                     }
                     _ => return Err(self.error_at_previous("Expected parameter name")),
                 };
@@ -811,11 +828,15 @@ impl Parser<'_> {
                         self.declare_local(&name);
                         name
                     }
-                    // `lambda` is a method rather than a keyword, so a
-                    // parameter may take its name.
+                    // `lambda` and `raise` are methods rather than keywords,
+                    // so a parameter may take either name.
                     TokenKind::Lambda => {
                         self.declare_local("lambda");
                         "lambda".to_string()
+                    }
+                    TokenKind::Raise => {
+                        self.declare_local("raise");
+                        "raise".to_string()
                     }
                     _ => return Err(self.error_at_previous("Expected parameter name")),
                 };

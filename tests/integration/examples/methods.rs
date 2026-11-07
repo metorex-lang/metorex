@@ -1074,7 +1074,44 @@ fn a_class_including_a_module_with_its_own_new_still_instantiates_with_class_new
 }
 
 #[test]
-fn an_alias_in_a_class_with_a_prepended_module_names_the_class_method_and_recurses_through_the_module() {
+fn an_alias_in_a_class_with_a_prepended_module_names_the_class_method_and_recurses_through_the_module()
+ {
     let output = run_example("methods/alias_in_a_class_with_a_prepended_module.rb");
     assert_eq!(output, "Request\nSystemStackError\n");
+}
+
+#[test]
+fn a_method_object_matches_in_a_case_by_calling_itself() {
+    let output = run_example("methods/method_case_equality.rb");
+    assert_eq!(
+        output,
+        "true\nfalse\n:matched\n:missed\ntrue\nArgumentError\n"
+    );
+}
+
+#[test]
+fn a_class_calls_a_protected_class_method_on_a_subclass() {
+    let output = run_example("methods/protected_singleton_method_called_on_a_subclass.rb");
+    assert_eq!(
+        output,
+        "[:load]\n[:load]\n\"protected method 'store_hook' called for class Child\"\n"
+    );
+}
+
+#[test]
+fn singleton_method_super_reaches_the_class_method() {
+    let output = run_example("methods/singleton_method_super_reaches_the_class_method.rb");
+    assert_eq!(output, "3\n5\n5\n");
+}
+
+#[test]
+fn super_in_a_block_of_an_extended_class_method() {
+    let output = run_example("methods/super_in_a_block_of_an_extended_class_method.rb");
+    assert_eq!(output, "\"base [1, 2] block\"\n\"base [3] nested\"\n");
+}
+
+#[test]
+fn super_without_a_block_from_a_subclass_extended_method() {
+    let output = run_example("methods/super_without_a_block_from_a_subclass_extended_method.rb");
+    assert_eq!(output, "\"base [3]\"\n");
 }

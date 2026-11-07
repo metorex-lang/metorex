@@ -65,30 +65,43 @@ pub(crate) fn decode_base64(text: &str) -> Vec<u8> {
 /// Read quoted printable: `=XX` names a byte, and `=` at the end of a line
 /// joins it to the next.
 pub(crate) fn decode_quoted_printable(text: &str) -> Vec<u8> {
-    let characters: Vec<char> = text.chars().collect();
-    let mut out = Vec::new();
-    let mut index = 0;
-    while index < characters.len() {
-        if characters[index] != '=' {
-            out.push(characters[index] as u8);
-            index += 1;
-            continue;
-        }
-        index += 1;
-        if index < characters.len() && characters[index] == '\n' {
-            index += 1;
-            continue;
-        }
-        if index + 1 < characters.len() {
-            let digits: String = characters[index..index + 2].iter().collect();
-            if let Ok(value) = u8::from_str_radix(&digits, 16) {
-                out.push(value);
-                index += 2;
-                continue;
+    // A soft line break, `=` at the end of a line, joins the lines. An `=`
+    // followed by anything but two hex digits ends the decoding, and the
+    // rest is kept as it was written, from that `=` on.
+    let bytes: Vec<u8> = text.chars().map(|held| held as u8).collect();
+    let hex = |byte: u8| (byte as char).to_digit(16).map(|digit| digit as u8);
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut at = 0;
+    let mut kept_from = 0;
+    while at < bytes.len() {
+        if bytes[at] == b'=' {
+            at += 1;
+            if at == bytes.len() {
+                break;
             }
+            if at + 1 < bytes.len() && bytes[at] == b'\r' && bytes[at + 1] == b'\n' {
+                at += 1;
+            }
+            if bytes[at] != b'\n' {
+                let Some(high) = hex(bytes[at]) else {
+                    break;
+                };
+                at += 1;
+                if at == bytes.len() {
+                    break;
+                }
+                let Some(low) = hex(bytes[at]) else {
+                    break;
+                };
+                out.push(high << 4 | low);
+            }
+        } else {
+            out.push(bytes[at]);
         }
-        out.push(b'=');
+        at += 1;
+        kept_from = at;
     }
+    out.extend_from_slice(&bytes[kept_from..]);
     out
 }
 
@@ -98,9 +111,14 @@ pub(crate) fn decode_uu(text: &str) -> Vec<u8> {
     let mut out = Vec::new();
     for line in text.split('\n') {
         let characters: Vec<char> = line.chars().collect();
+        // A line opening with a space or less, or with `a` or above, as the
+        // `end` after the last line does, ends the decoding.
         let Some(marker) = characters.first() else {
-            continue;
+            break;
         };
+        if *marker <= ' ' || *marker >= 'a' {
+            break;
+        }
         let length = ((*marker as u8).wrapping_sub(32) & 0x3f) as usize;
         if length == 0 {
             continue;

@@ -27,11 +27,23 @@ impl VirtualMachine {
                     ));
                 }
                 let viewed = self.pending_block.take();
+                // Without a block the walk is an Enumerator, as Ruby's is.
                 let Some(View::Block(block)) = viewed.view() else {
-                    return Err(MetorexError::runtime_error(
-                        format!("{} requires a block", method_name),
-                        position_to_location(position),
-                    ));
+                    let size = self.send_to_object(receiver.clone(), "size", vec![], position)?;
+                    let enumerator = self.globals().get("Enumerator").unwrap_or(Object::Nil);
+                    return self
+                        .send_to_object(
+                            enumerator,
+                            "over",
+                            vec![
+                                receiver.clone(),
+                                Object::symbol(method_name.to_string()),
+                                Object::array(Vec::new()),
+                                size,
+                            ],
+                            position,
+                        )
+                        .map(Some);
                 };
                 let dict = dict_rc.borrow();
                 let entries: Vec<(Object, Object)> = dict

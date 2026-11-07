@@ -26,7 +26,22 @@ fn encoding_reads_bytes(encoding: &str) -> bool {
             | "UTF-32"
             | "UTF-32BE"
             | "UTF-32LE"
-    )
+    ) || single_byte_encoding(encoding)
+}
+
+/// Whether every byte of the encoding is a character of its own, as each
+/// of ISO-8859-1's and Windows-1252's is.
+fn single_byte_encoding(encoding: &str) -> bool {
+    static NAMES: std::sync::OnceLock<std::collections::HashSet<&'static str>> =
+        std::sync::OnceLock::new();
+    NAMES
+        .get_or_init(|| {
+            crate::vm::native_methods::string_methods::single_byte_tables::SINGLE_BYTE_TABLES
+                .iter()
+                .map(|(name, _)| *name)
+                .collect()
+        })
+        .contains(encoding)
 }
 
 /// The bytes text spells, one per character below 256 and the UTF-8 form of

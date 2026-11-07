@@ -393,9 +393,18 @@ impl VirtualMachine {
                             ControlFlow::Value(value) => {
                                 last_value = value;
                             }
-                            ControlFlow::Return { value, .. } => {
-                                last_value = value;
-                                break 'again;
+                            // `return` in a lambda ends it, and in any other
+                            // block returns from the method that wrote it.
+                            ControlFlow::Return { value, position } => {
+                                if block.is_lambda {
+                                    last_value = value;
+                                    break 'again;
+                                }
+                                return Err(MetorexError::NonLocalReturn {
+                                    value,
+                                    location: position_to_location(position),
+                                    home_frame: block.home_frame,
+                                });
                             }
                             ControlFlow::Break { value, position } => {
                                 // The break belongs to the call that was
@@ -408,8 +417,11 @@ impl VirtualMachine {
                                 });
                             }
                             ControlFlow::Redo { .. } | ControlFlow::Retry { .. } => continue 'again,
-                            ControlFlow::Continue { position, .. } => {
-                                return Err(loop_control_error("next", position));
+                            // `next` ends this run of the block with the
+                            // value it carries.
+                            ControlFlow::Continue { value, .. } => {
+                                last_value = value;
+                                break 'again;
                             }
                         }
                     }

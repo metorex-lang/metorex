@@ -467,6 +467,19 @@ impl VirtualMachine {
             && let Some(result) =
                 self.call_set_method(&backing.to_object(), method_name, arguments, position)?
         {
+            // A subclass names itself around its members in braces, where
+            // Set writes `Set[...]`.
+            if matches!(method_name, "inspect" | "to_s")
+                && let View::String(written) = result.view()
+            {
+                let written = written.as_str().to_string();
+                let body = written
+                    .strip_prefix("Set[")
+                    .and_then(|rest| rest.strip_suffix(']'))
+                    .unwrap_or(&written);
+                let named = self.builtins().class_of(receiver).ruby_name();
+                return Ok(Some(Object::string(format!("#<{}: {{{}}}>", named, body))));
+            }
             // A method that answers the set itself answers the instance.
             return Ok(Some(match result.view() {
                 View::Set(inner) if matches!(backing, View::Set(outer) if Rc::ptr_eq(inner, outer)) => {

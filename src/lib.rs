@@ -16,6 +16,9 @@ pub mod memory_category;
 pub mod object;
 pub mod parser;
 pub mod regexp;
+/// The regexp matcher reaches the stack switcher through the crate root, where
+/// the build script puts one of its own.
+pub(crate) use ::corosensei;
 pub mod repl;
 pub mod resolver;
 pub mod runtime;

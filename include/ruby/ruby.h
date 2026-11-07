@@ -970,6 +970,7 @@ static inline int rb_isupper(int c) { return c >= 'A' && c <= 'Z'; }
 static inline int rb_islower(int c) { return c >= 'a' && c <= 'z'; }
 static inline int rb_isalnum(int c) { return rb_isalpha(c) || rb_isdigit(c); }
 static inline int rb_isspace(int c) { return c == ' ' || (c >= '\t' && c <= '\r'); }
+static inline int rb_isxdigit(int c) { return rb_isdigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); }
 static inline int rb_tolower(int c) { return rb_isupper(c) ? c + ('a' - 'A') : c; }
 static inline int rb_toupper(int c) { return rb_islower(c) ? c - ('a' - 'A') : c; }
 #define ISALPHA(c) rb_isalpha((unsigned char)(c))
@@ -978,6 +979,13 @@ static inline int rb_toupper(int c) { return rb_islower(c) ? c - ('a' - 'A') : c
 #define ISLOWER(c) rb_islower((unsigned char)(c))
 #define ISALNUM(c) rb_isalnum((unsigned char)(c))
 #define ISSPACE(c) rb_isspace((unsigned char)(c))
+#define ISXDIGIT(c) rb_isxdigit((unsigned char)(c))
+#define rb_strlen_lit(text) (sizeof(text "") - 1)
+#define InitVM(name) {void InitVM_##name(void); InitVM_##name();}
+void ruby_malloc_size_overflow(size_t count, size_t size);
+unsigned long ruby_scan_digits(const char *text, ssize_t length, int base, size_t *read, int *overflow);
+extern const char ruby_hexdigits[];
+extern const signed char ruby_digit36_to_number_table[];
 #define TOLOWER(c) rb_tolower((unsigned char)(c))
 #define TOUPPER(c) rb_toupper((unsigned char)(c))
 VALUE rb_gc_location(VALUE object);

@@ -99,7 +99,10 @@ impl VirtualMachine {
         &self,
         dict_rc: &Rc<RefCell<crate::object::HashEntries>>,
     ) -> bool {
-        matches!(self.globals().get("ENV").view(), Some(View::Dict(held)) if Rc::ptr_eq(held, dict_rc))
+        matches!(
+            self.globals().get(crate::vm::init::PROCESS_ENVIRONMENT).view(),
+            Some(View::Dict(held)) if Rc::ptr_eq(held, dict_rc)
+        )
     }
 
     /// A write to ENV reaches the process environment too, so the C library
@@ -111,7 +114,7 @@ impl VirtualMachine {
         key: &Object,
         value: &Object,
     ) {
-        let viewed = self.globals().get("ENV");
+        let viewed = self.globals().get(crate::vm::init::PROCESS_ENVIRONMENT);
         let Some(View::Dict(environment)) = viewed.view() else {
             return;
         };

@@ -129,6 +129,12 @@ impl<'a> Lexer<'a> {
                         pattern.push('{');
                         self.advance(); // consume {
                         interp_depth = 1;
+                    } else if let Some(named) = self.read_short_interpolation() {
+                        // `#@name`, `#$1` and their like interpolate as
+                        // `#{...}` around the variable does.
+                        pattern.push_str("#{");
+                        pattern.push_str(&named);
+                        pattern.push('}');
                     } else {
                         pattern.push('#');
                     }

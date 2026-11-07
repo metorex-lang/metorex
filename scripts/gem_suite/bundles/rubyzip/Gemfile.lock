@@ -1,0 +1,24 @@
+PATH
+  remote: ../../../../gems/rubyzip
+  specs:
+    rubyzip (3.7.0)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    minitest (5.27.0)
+
+PLATFORMS
+  arm64-darwin-27
+  ruby
+
+DEPENDENCIES
+  minitest (~> 5.25)
+  rubyzip!
+
+CHECKSUMS
+  minitest (5.27.0) sha256=2d3b17f8a36fe7801c1adcffdbc38233b938eb0b4966e97a6739055a45fa77d5
+  rubyzip (3.7.0)
+
+BUNDLED WITH
+  4.0.23

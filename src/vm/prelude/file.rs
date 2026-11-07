@@ -106,13 +106,17 @@ class File
     File.__path_text__(name).start_with? File::SEPARATOR
   end
 
-  # The name a path names from the root. A relative one is read from the
-  # directory given, or from the one the program is working in.
+  # The name a path names from the root, with `.` and `..` read out. A
+  # relative one is read from the directory given, or from the one the
+  # program is working in, and a `~` is a name like any other.
   def self.absolute_path(name, directory = nil)
     held = File.__path_text__ name
-    return held if held.start_with? File::SEPARATOR
-    base = directory.nil? ? Dir.pwd : File.absolute_path(directory)
-    File.join base, held
+    tag = held.encoding
+    unless held.start_with? File::SEPARATOR
+      base = directory.nil? ? Dir.pwd : File.absolute_path(directory)
+      held = held.empty? ? base : File.join(base, held)
+    end
+    File.__without_dots__(held).force_encoding(tag)
   end
 
   # The name a path names from the root, with `~`, `.`, and `..` read out and

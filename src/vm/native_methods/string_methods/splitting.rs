@@ -177,8 +177,8 @@ pub(crate) fn spelled_bytes(text: &str, named: &str) -> Option<Vec<u8>> {
     if spells_shift_jis(named) {
         return crate::vm::native_methods::shift_jis_table::shift_jis_bytes(text).ok();
     }
-    if named == "GBK" {
-        return crate::vm::native_methods::gbk::gbk_bytes(text).ok();
+    if let Some(codec) = crate::vm::native_methods::double_byte::double_byte(named) {
+        return codec.bytes(text).ok();
     }
     match latin_bytes(text, named) {
         Some(Ok(spelled)) => Some(spelled),

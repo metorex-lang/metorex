@@ -448,6 +448,12 @@ impl VirtualMachine {
         if class_rc.name() == "Object" {
             self.globals_mut()
                 .set(const_name.to_string(), value.clone());
+            // The top scope starts with a copy of each core constant, ENV
+            // among them, and that copy is read ahead of globals.
+            let root = std::rc::Rc::clone(self.environment().root_scope());
+            if root.borrow().binds(const_name) {
+                root.borrow_mut().set(const_name, value.clone());
+            }
         }
         // An anonymous module/class value takes the constant path as
         // its name, cascading into anonymous modules nested under it.

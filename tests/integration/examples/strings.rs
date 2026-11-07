@@ -777,3 +777,37 @@ fn string_io_counts_bytes_and_reads_on_from_inside_a_character() {
         )
     );
 }
+
+#[test]
+fn count_reads_ranges_in_binary_text() {
+    let output = run_example("strings/count_reads_ranges_in_binary_text.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "6\n",
+            "5\n",
+            "2\n",
+            "4\n",
+            "[80, 111, 107, 233, 109, 111, 110]\n",
+            "#<Encoding:BINARY (ASCII-8BIT)>\n",
+            "\"UG9r6W1vbg==\\n\"\n",
+            "true\n",
+            "[80, 111, 107, 233, 109, 111, 110]\n",
+        )
+    );
+}
+
+#[test]
+fn string_new_keeps_the_bytes_it_is_given() {
+    let output = run_example("strings/string_new_keeps_the_bytes_it_is_given.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[80, 111, 107, 233, 109, 111, 110]\n",
+            "[80, 111, 107, 233, 109, 111, 110]\n",
+            "false\n",
+            "[80, 111, 107, 233, 109, 111, 110]\n",
+            "#<Encoding:BINARY (ASCII-8BIT)>\n",
+        )
+    );
+}

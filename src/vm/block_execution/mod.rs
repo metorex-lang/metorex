@@ -8,7 +8,6 @@ pub(crate) use crate::callable::Callable;
 pub(crate) use crate::error::{MetorexError, StackFrame};
 pub(crate) use crate::lexer::Position;
 pub(crate) use crate::object::{BlockStatement, Object};
-pub(in crate::vm) use crate::vm::errors::loop_control_error;
 pub(in crate::vm) use crate::vm::utils::*;
 pub(crate) use crate::vm::{CallFrame, ControlFlow, VirtualMachine};
 

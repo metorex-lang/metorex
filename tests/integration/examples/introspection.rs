@@ -1285,3 +1285,12 @@ fn a_tracepoint_reports_the_receiver_of_a_method_call_and_main_at_the_top_level(
         )
     );
 }
+
+#[test]
+fn methods_lists_the_class_methods_a_core_class_defines() {
+    let output = run_example("introspection/core_class_methods_listed.rb");
+    assert_eq!(
+        output,
+        "true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\nfalse\nfalse\nfalse\n"
+    );
+}

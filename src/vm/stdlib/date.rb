@@ -161,6 +161,32 @@ class Date
     text = coerce_to_string(text)
     clock = {}
     text = take_clock(text, clock)
+    week = {}
+    text = take_week(text, week, comp)
+    found = parse_calendar(text, comp, clock)
+    return found if week.empty?
+    found.merge(clock).merge(week)
+  end
+
+  # An ISO 8601 week date the text carries, `2020-W01-2` or `-W-2`, taken
+  # out of it into the commercial fields it names.
+  def self.take_week(text, week, comp)
+    text = text.sub(/\b(\d{2}|\d{4})?-?w(\d{2})(?:-?(\d))?\b/i) do
+      week[:cwyear] = complete_year($1.to_i, comp && $1.length == 2) unless $1.nil?
+      week[:cweek] = $2.to_i
+      week[:cwday] = $3.to_i unless $3.nil?
+      " "
+    end
+    return text unless week.empty?
+    text.sub(/-w-(\d)\b/i) do
+      week[:cwday] = $1.to_i
+      " "
+    end
+  end
+
+  # The fields of a date written out with numbers, month names and day
+  # names, with the clock already read from it.
+  def self.parse_calendar(text, comp, clock)
     tokens = tokenize(text)
     found = {}
     numbers = []
@@ -348,6 +374,12 @@ class Date
   def self.parse(text = "-4712-01-01", comp = true, start = ITALY)
     fields = _parse(text, comp)
     raise Date::Error, "invalid date" if fields.empty?
+    # A week date fills what it leaves out from the week this is read in.
+    if fields.key?(:cweek) || fields.key?(:cwday)
+      now = Date.today(start)
+      return Date.commercial(fields[:cwyear] || now.cwyear, fields[:cweek] || now.cweek,
+                             fields[:cwday] || 1, start)
+    end
     return Date.ordinal(fields[:year] || Date.today(start).year, fields[:yday], start) if fields[:yday]
     if fields.key?(:wday) && !fields.key?(:mon) && !fields.key?(:mday) &&
        !fields.key?(:year)
@@ -961,7 +993,7 @@ class Date
   # The same point on the calendar, moved to another day. DateTime overrides
   # this so a shifted one keeps the time of day and offset it holds.
   def rebuild(jd)
-    Date.from_jd(jd, @start)
+    self.class.from_jd(jd, @start)
   end
   private :rebuild
 
@@ -971,7 +1003,8 @@ class Date
   end
 
   def -(other)
-    return @jd - other.jd if other.is_a?(Date)
+    return @jd - other.absolute_day if other.is_a?(DateTime)
+    return Rational(@jd - other.jd, 1) if other.is_a?(Date)
     raise TypeError, "expected numeric" unless other.is_a?(Numeric)
     self.rebuild(@jd - other.to_i)
   end
@@ -1157,8 +1190,14 @@ class Date
   end
 
   def asctime
-    "#{ABBR_DAYNAMES[self.wday]} #{ABBR_MONTHNAMES[self.month]} #{self.day.to_s.rjust(2)} 00:00:00 #{self.padded_year}"
+    "#{ABBR_DAYNAMES[self.wday]} #{ABBR_MONTHNAMES[self.month]} #{self.day.to_s.rjust(2)} #{clock_text} #{self.padded_year}"
   end
+
+  # A Date is at midnight.
+  def clock_text
+    "00:00:00"
+  end
+  private :clock_text
 
   def ctime
     asctime
@@ -1386,6 +1425,11 @@ class DateTime < Date
     from_parts(jd, Rational(0, 1), Rational(0, 1), start)
   end
 
+  # Midnight at the start of a date, as this class.
+  def self.from_date(date)
+    from_jd(date.jd, date.start)
+  end
+
   # ── Building ─────────────────────────────────────────────────────────────
 
   def self.civil(year = -4712, month = 1, day = 1, hour = 0, minute = 0,
@@ -1400,9 +1444,12 @@ class DateTime < Date
     civil(year, month, day, hour, minute, second, offset, start)
   end
 
+  # A Julian Day Number with a fraction names the time of day too.
   def self.jd(number = 0, hour = 0, minute = 0, second = 0, offset = 0,
               start = ITALY)
-    with_clock(number.to_i, hour, minute, second, offset, start)
+    whole = number.floor
+    made = with_clock(whole, hour, minute, second, offset, start)
+    whole == number ? made : made + (number - whole)
   end
 
   def self.ordinal(year = -4712, day = 1, hour = 0, minute = 0, second = 0,
@@ -1476,7 +1523,7 @@ class DateTime < Date
   def self.parse(text = "-4712-01-01T00:00:00+00:00", comp = true, start = ITALY)
     fields = _parse(text, comp)
     raise Date::Error, "invalid date" if fields.empty?
-    Date.parse(text, comp, start).to_datetime.with_fields(fields)
+    from_date(Date.parse(text, comp, start)).with_fields(fields)
   end
 
   def self.strptime(text = "-4712-01-01T00:00:00+00:00", format = "%FT%T%z",
@@ -1486,7 +1533,7 @@ class DateTime < Date
     if fields.key?(:seconds)
       return Time.at(fields[:seconds]).getlocal(fields[:offset] || 0).to_datetime
     end
-    assemble_strptime(fields, start).to_datetime.with_fields(fields)
+    from_date(assemble_strptime(fields, start)).with_fields(fields)
   end
 
   def self.iso8601(text = "-4712-01-01T00:00:00+00:00", start = ITALY)
@@ -1524,9 +1571,7 @@ class DateTime < Date
     fields = yield(text)
     raise Date::Error, "invalid date" if fields.nil? || fields.empty?
     clock = _parse(text)
-    Date.civil(fields[:year], fields[:mon], fields[:mday], start)
-      .to_datetime
-      .with_fields(clock)
+    from_date(Date.civil(fields[:year], fields[:mon], fields[:mday], start)).with_fields(clock)
   end
 
   # ── What a datetime stands for ───────────────────────────────────────────
@@ -1540,6 +1585,11 @@ class DateTime < Date
     @offset
   end
   private :zone_offset
+
+  def clock_text
+    format("%02d:%02d:%02d", self.hour, self.min, self.sec)
+  end
+  private :clock_text
 
   def hour
     self.clock_hour
@@ -1586,23 +1636,23 @@ class DateTime < Date
     wanted = DateTime.read_offset(offset)
     moved = @jd + @fraction - @offset + wanted
     landing = moved.floor
-    DateTime.from_parts(landing, moved - landing, wanted, @start)
+    self.class.from_parts(landing, moved - landing, wanted, @start)
   end
 
   def new_start(start = ITALY)
-    DateTime.from_parts(@jd, @fraction, @offset, start)
+    self.class.from_parts(@jd, @fraction, @offset, start)
   end
 
   # The time of day and offset a parsed set of fields names, laid over this
   # datetime. Fields the text left out keep what they already hold.
   def with_fields(fields)
     offset = fields[:offset].nil? ? @offset : Rational(fields[:offset], 86400)
-    DateTime.with_clock(@jd, fields[:hour] || 0, fields[:min] || 0,
+    self.class.with_clock(@jd, fields[:hour] || 0, fields[:min] || 0,
                         (fields[:sec] || 0) + (fields[:sec_fraction] || 0), offset, @start, true)
   end
 
   def rebuild(jd)
-    DateTime.from_parts(jd, @fraction, @offset, @start)
+    self.class.from_parts(jd, @fraction, @offset, @start)
   end
   private :rebuild
 
@@ -1612,11 +1662,13 @@ class DateTime < Date
     raise TypeError, "expected numeric" unless count.is_a?(Numeric)
     moved = @jd + @fraction + count.to_r
     landing = moved.floor
-    DateTime.from_parts(landing, moved - landing, @offset, @start)
+    self.class.from_parts(landing, moved - landing, @offset, @start)
   end
 
   def -(other)
-    return (@jd + @fraction) - (other.jd + other.day_fraction) if other.is_a?(Date)
+    # Two datetimes are the time between the instants they name, whatever
+    # offsets they are written against.
+    return absolute_day - (other.is_a?(DateTime) ? other.absolute_day : other.jd) if other.is_a?(Date)
     raise TypeError, "expected numeric" unless other.is_a?(Numeric)
     self + (-other.to_r)
   end

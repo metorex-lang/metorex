@@ -431,8 +431,10 @@ class Time
     @offset.nil? && !@utc && calendar[8]
   end
 
+  # Its own answer, rather than a call to `isdst`, so a subclass that names
+  # one after the other reaches this one through `super`.
   def dst?
-    isdst
+    @offset.nil? && !@utc && calendar[8]
   end
 
   def utc_offset

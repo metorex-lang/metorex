@@ -666,3 +666,27 @@ fn test_filesystem_file_subclass_opens_a_path() {
     let output = run_example("filesystem/file_subclass_opens_a_path.rb");
     assert_eq!(output, "LoggedFile\ntrue\nFile\nLoggedFile\n\"hi\"\n");
 }
+
+#[test]
+fn absolute_path_reads_out_dots() {
+    let output = run_example("filesystem/absolute_path_removes_dots.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"/srv/moo\"\n\"/srv/app/file.txt\"\n\"/etc\"\n\"/a/c\"\n\"/srv/app\"\n",
+            "\"/srv\"\n\"/srv/~/notes\"\n\"/srv/moo\"\n",
+        )
+    );
+}
+
+#[test]
+fn dir_home_without_home_reads_the_login_name() {
+    let output = run_example("filesystem/home_without_home_set.rb");
+    assert_eq!(output, "\"\"\ntrue\ntrue\n");
+}
+
+#[test]
+fn chdir_to_a_pathname_runs_its_block() {
+    let output = run_example("filesystem/chdir_to_a_pathname_runs_its_block.rb");
+    assert_eq!(output, "[\"/\"]\n:from_block\n");
+}

@@ -234,11 +234,9 @@ impl VirtualMachine {
         let mut deadline = std::time::Instant::now() + WAIT_LIMIT;
         let waited_enough = std::time::Instant::now() + WAIT_CEILING;
         let stream = loop {
-            let listener = self
-                .open_sockets
-                .listeners
-                .get(&handle)
-                .ok_or_else(|| crate::vm::native_methods::streams::closed_in_another_thread(position))?;
+            let listener = self.open_sockets.listeners.get(&handle).ok_or_else(|| {
+                crate::vm::native_methods::streams::closed_in_another_thread(position)
+            })?;
             let _ = listener.set_waiting(false);
             let taken = listener.try_once();
             let _ = listener.set_waiting(true);

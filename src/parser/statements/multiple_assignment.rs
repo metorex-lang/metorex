@@ -66,6 +66,16 @@ impl Parser<'_> {
                     _ => return false,
                 }
             }
+            // `::Name` reads the name from the top level, as the
+            // `::Time.zone` of `old, ::Time.zone = ...` does.
+            let tok = if matches!(tok.kind, TokenKind::ColonColon)
+                && matches!(self.peek_ahead(offset + 1).kind, TokenKind::Ident(_))
+            {
+                offset += 1;
+                self.peek_ahead(offset)
+            } else {
+                tok
+            };
             // Expect an identifier (or @ivar, @@cvar, $gvar). `lambda` is a
             // method rather than syntax, so a program may name a local after
             // it and assign to that name.
