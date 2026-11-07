@@ -282,12 +282,12 @@ class RubyVM
     end
 
     # The instructions the sequence compiles to, under MRI's heading: each
-    # with its operands, what a side table operand names, and its line,
+    # named in lowercase as YARV's are, with its operands, what a side table operand names, and its line,
     # marked `[Li]` where a statement that is a line event starts.
     def disasm
       heading = "== disasm: #<ISeq:#{@label}@#{@path}:#{@first_lineno} (#{code_location[0]},#{code_location[1]})-(#{code_location[2]},#{code_location[3]})>\n"
       lines = listing.each_with_index.map do |(name, operands, line, line_event, note), index|
-        text = [name, operands.map { |field, value| "#{field}: #{value}" }.join(", ")].reject(&:empty?).join(" ")
+        text = [name.downcase, operands.map { |field, value| "#{field}: #{value}" }.join(", ")].reject(&:empty?).join(" ")
         text = "#{text}  ; #{note}" if note
         format("%04d %-38s (%4d)%s\n", index, text, line, line_event ? "[Li]" : "")
       end

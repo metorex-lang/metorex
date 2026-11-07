@@ -33,17 +33,18 @@ pub(crate) fn outline_of_source(source: &str) -> Option<Object> {
     ))
 }
 
-/// The body of the scope of `kind` that opens on `line` of a program, and
-/// what kind of body it is, or None where the program does not parse or
+/// The body of the scope of `kind` that opens on `line` of a program, what
+/// kind of body it is, and the defaults of its optional positional
+/// parameters, or None where the program does not parse or
 /// holds no such scope. A `top` or `eval` scope is the whole program.
 pub(crate) fn body_of_scope(
     source: &str,
     kind: &str,
     line: usize,
-) -> Option<(Vec<Statement>, UnitKind)> {
+) -> Option<Found> {
     let (statements, closing) = parsed(source)?;
     if matches!(kind, "top" | "eval") {
-        return Some((statements, UnitKind::Plain));
+        return Some((statements, UnitKind::Plain, Vec::new()));
     }
     let context = Context {
         closing,
@@ -57,13 +58,28 @@ pub(crate) fn body_of_scope(
 /// The instructions the scope `body_of_scope` finds compiles to, as
 /// `__unit_listing__` answers them.
 pub(crate) fn listing_of_scope(source: &str, kind: &str, line: usize) -> Option<Object> {
-    let (body, unit_kind) = body_of_scope(source, kind, line)?;
+    let (body, unit_kind, defaults) = body_of_scope(source, kind, line)?;
+    let mut listed = Vec::new();
+    // Each default runs as a unit of its own before the body, and its
+    // closing return hands the value to the parameter.
+    for default in &defaults {
+        let unit = crate::bytecode::compiler::compile_expression(default).ok()?;
+        let mut entries = unit_entries(&unit);
+        entries.pop();
+        listed.extend(entries);
+    }
     let unit = crate::bytecode::compiler::compile_as(&body, unit_kind).ok()?;
-    let listed = crate::bytecode::disassembly::listing(&unit)
+    listed.extend(unit_entries(&unit));
+    Some(Object::array(listed))
+}
+
+/// The instructions of `unit`, each as `__unit_listing__` lists one.
+fn unit_entries(unit: &crate::bytecode::unit::Unit) -> Vec<Object> {
+    crate::bytecode::disassembly::listing(unit)
         .into_iter()
         .map(|listed| {
             let patterns = Object::array(
-                instruction_patterns(&unit, listed.instruction)
+                instruction_patterns(unit, listed.instruction)
                     .into_iter()
                     .map(|(pattern, flags)| {
                         Object::Regex(std::rc::Rc::new(pattern), std::rc::Rc::new(flags))
@@ -87,8 +103,7 @@ pub(crate) fn listing_of_scope(source: &str, kind: &str, line: usize) -> Option<
                 patterns,
             ])
         })
-        .collect();
-    Some(Object::array(listed))
+        .collect()
 }
 
 /// The patterns, as source and flags, an instruction makes Regexps of: the
@@ -198,6 +213,7 @@ fn top_scope(source: &str) -> Scope {
         first: 1,
         last: source.lines().count().max(1),
         parameters: Vec::new(),
+        defaults: Vec::new(),
     }
 }
 
@@ -209,8 +225,12 @@ struct Context {
     closing: ClosingLines,
     /// The kind of scope and the line it opens on whose body is wanted.
     wanted: Option<(String, usize)>,
-    found: RefCell<Option<(Vec<Statement>, UnitKind)>>,
+    found: RefCell<Option<Found>>,
 }
+
+/// The body of the scope a walk looks for, what kind of body it is, and the
+/// defaults of its optional positional parameters.
+type Found = (Vec<Statement>, UnitKind, Vec<Expression>);
 
 /// What an outline says of one scope before its body is read.
 struct Scope {
@@ -219,6 +239,8 @@ struct Scope {
     first: usize,
     last: usize,
     parameters: Vec<Object>,
+    /// The defaults of a method's optional positional parameters.
+    defaults: Vec<Expression>,
 }
 
 /// The outline of a scope running `body`, where `base` is the label of the
@@ -242,7 +264,7 @@ fn outline(
             "class" => UnitKind::ClassBody,
             _ => UnitKind::Plain,
         };
-        *context.found.borrow_mut() = Some((body.to_vec(), unit_kind));
+        *context.found.borrow_mut() = Some((body.to_vec(), unit_kind, scope.defaults.clone()));
     }
     let mut walk = Walk {
         lines: Vec::new(),
@@ -322,6 +344,7 @@ impl Walk<'_> {
                     first: (position.line as usize),
                     last: (end_position.line as usize),
                     parameters: parameters.iter().map(parameter_pair).collect(),
+                    defaults: parameters.iter().filter_map(positional_default).collect(),
                 };
                 self.children
                     .push(outline(scope, body, name, 0, self.context));
@@ -353,6 +376,7 @@ impl Walk<'_> {
             first: (line as usize),
             last: self.closing_line(opened),
             parameters: Vec::new(),
+            defaults: Vec::new(),
         };
         self.children
             .push(outline(scope, body, &label, 0, self.context));
@@ -387,6 +411,7 @@ impl Walk<'_> {
                             .collect::<Vec<_>>(),
                         "req",
                     ),
+                    defaults: Vec::new(),
                 };
                 self.children
                     .push(outline(scope, body, self.base, levels, self.context));
@@ -398,6 +423,7 @@ impl Walk<'_> {
                     first: (position.line as usize),
                     last: self.closing_line(*position),
                     parameters: Vec::new(),
+                    defaults: Vec::new(),
                 };
                 self.children
                     .push(outline(scope, body, "singleton class", 0, self.context));
@@ -544,6 +570,15 @@ impl Walk<'_> {
 }
 
 /// One `[kind, name]` pair of a method's parameter list.
+/// The default of an optional positional parameter, which runs as a unit of
+/// its own when no argument is given for the parameter.
+fn positional_default(parameter: &Parameter) -> Option<Expression> {
+    if parameter.is_named_keyword {
+        return None;
+    }
+    parameter.default_value.as_deref().cloned()
+}
+
 fn parameter_pair(parameter: &Parameter) -> Object {
     let kind = if parameter.is_block {
         "block"

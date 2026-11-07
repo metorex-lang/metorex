@@ -1115,3 +1115,23 @@ fn super_without_a_block_from_a_subclass_extended_method() {
     let output = run_example("methods/super_without_a_block_from_a_subclass_extended_method.rb");
     assert_eq!(output, "\"base [3]\"\n");
 }
+
+#[test]
+fn methods_from_blocks_bind_keyword_defaults() {
+    let output = run_example("methods/methods_from_blocks_bind_keyword_defaults.rb");
+    assert_eq!(
+        output,
+        concat!(
+            ":replaced\n",
+            "1\n",
+            "4\n",
+            ":done\n",
+            ":deprecated\n",
+            "[1, :second, nil]\n",
+            "[1, 2, 3]\n",
+            "[1, 2, nil]\n",
+            "[0, [], 9, \"default\", {}]\n",
+            "[1, [2], 3, \"default\", {other: 4}]\n",
+        )
+    );
+}

@@ -396,7 +396,7 @@ impl VirtualMachine {
 
 /// How deeply expressions and method calls may nest, together, before one
 /// raises SystemStackError rather than running out of stack.
-const MOST_NESTED: usize = 1200;
+const MOST_NESTED: usize = 4000;
 
 thread_local! {
     /// How deeply the program running on this thread is nested. It belongs

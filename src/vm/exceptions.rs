@@ -464,33 +464,47 @@ impl VirtualMachine {
         call_stack: &[crate::vm::CallFrame],
         natives: &[crate::vm::NativeFrame],
     ) -> Vec<(crate::vm::CallFrame, bool)> {
-        let natives: Vec<(usize, crate::vm::CallFrame)> = natives
+        // A deep stack repeats a few methods many times over, so each label
+        // is worked out once for the class and method it names.
+        let mut labels: std::collections::HashMap<(u8, usize, Rc<str>), Option<String>> =
+            std::collections::HashMap::new();
+        let mut natives: Vec<(usize, crate::vm::CallFrame)> = natives
             .iter()
             .filter_map(|native| {
-                let label = self.native_frame_label(native)?;
+                let key = match native.receiver.view() {
+                    None => (0, 0, Rc::clone(&native.name)),
+                    Some(View::Class(class)) => (1, Rc::as_ptr(class) as usize, Rc::clone(&native.name)),
+                    Some(View::Module(module)) => (2, Rc::as_ptr(module) as usize, Rc::clone(&native.name)),
+                    Some(receiver) => {
+                        let class = self.builtins().class_of(&receiver.to_object());
+                        (3, Rc::as_ptr(&class) as usize, Rc::clone(&native.name))
+                    }
+                };
+                let label = match labels.get(&key) {
+                    Some(known) => known.clone(),
+                    None => {
+                        let label = self.native_frame_label(native);
+                        labels.insert(key, label.clone());
+                        label
+                    }
+                }?;
                 let frame = crate::vm::CallFrame::boundary(label)
                     .with_location(Some(format!("{}:{}", native.line, native.column)))
                     .with_source_file(native.file.clone());
                 Some((native.depth, frame))
             })
             .collect();
+        // Stable, so natives at one depth keep the order they were entered in.
+        natives.sort_by_key(|(depth, _)| *depth);
         let mut merged = Vec::with_capacity(call_stack.len() + natives.len());
+        let mut pending = natives.into_iter().peekable();
         for (index, frame) in call_stack.iter().enumerate() {
-            merged.extend(
-                natives
-                    .iter()
-                    .filter(|(depth, _)| *depth == index)
-                    .map(|(_, native)| (native.clone(), true)),
-            );
+            while let Some((_, native)) = pending.next_if(|(depth, _)| *depth <= index) {
+                merged.push((native, true));
+            }
             merged.push((frame.clone(), false));
         }
-        let depth = call_stack.len();
-        merged.extend(
-            natives
-                .iter()
-                .filter(|(at, _)| *at >= depth)
-                .map(|(_, native)| (native.clone(), true)),
-        );
+        merged.extend(pending.map(|(_, native)| (native, true)));
         merged
     }
 

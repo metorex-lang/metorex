@@ -11,22 +11,22 @@ const INSTRUCTION_SEQUENCES_OUTPUT: &str = concat!(
     "21\n",
     "[[1, :line], [2, :line]]\n",
     "== disasm: #<ISeq:<compiled>@<compiled>:1 (1,0)-(2,9)>\n",
-    "0000 LoadInteger to: 0, value: 4            (   1)[Li]\n",
-    "0001 LoadInteger to: 1, value: 5            (   1)\n",
-    "0002 Multiply to: 0, left: 0, right: 1      (   1)\n",
-    "0003 SetLocal from: 0, slot: 0  ; total     (   1)\n",
-    "0004 GetLocal to: 0, slot: 0  ; total       (   2)[Li]\n",
-    "0005 LoadInteger to: 1, value: 1            (   2)\n",
-    "0006 Add to: 0, left: 0, right: 1           (   2)\n",
-    "0007 Return from: 0                         (   2)\n",
+    "0000 loadinteger to: 0, value: 4            (   1)[Li]\n",
+    "0001 loadinteger to: 1, value: 5            (   1)\n",
+    "0002 multiply to: 0, left: 0, right: 1      (   1)\n",
+    "0003 setlocal from: 0, slot: 0  ; total     (   1)\n",
+    "0004 getlocal to: 0, slot: 0  ; total       (   2)[Li]\n",
+    "0005 loadinteger to: 1, value: 1            (   2)\n",
+    "0006 add to: 0, left: 0, right: 1           (   2)\n",
+    "0007 return from: 0                         (   2)\n",
     "[1, :RUBY_EVENT_LINE, [:LoadInteger, 0, 4], [:LoadInteger, 1, 5], [:Multiply, 0, 0, 1], [:SetLocal, 0, 0], 2, :RUBY_EVENT_LINE, [:GetLocal, 0, 0], [:LoadInteger, 1, 1], [:Add, 0, 0, 1], [:Return, 0]]\n",
     "[\"<main>\", true, true, 1]\n",
     "[<RubyVM::InstructionSequence:<compiled>@report.rb:12>, \"report.rb\", \"/reports/report.rb\", 12, 42]\n",
     "[\"area\", \"area\", 19, true]\n",
-    "0000 GetIdentifier to: 0, name: 0  ; width  (  19)[Li]\n",
-    "0001 GetIdentifier to: 1, name: 1  ; height (  19)\n",
-    "0002 Multiply to: 0, left: 0, right: 1      (  19)\n",
-    "0003 Return from: 0                         (  19)\n",
+    "0000 getidentifier to: 0, name: 0  ; width  (  19)[Li]\n",
+    "0001 getidentifier to: 1, name: 1  ; height (  19)\n",
+    "0002 multiply to: 0, left: 0, right: 1      (  19)\n",
+    "0003 return from: 0                         (  19)\n",
     "\"Not a toplevel InstructionSequence\"\n",
     "\"block in <main>\"\n",
     "\"block (2 levels) in builder\"\n",
@@ -60,4 +60,10 @@ fn an_instruction_sequence_lists_the_patterns_its_code_holds() {
         output,
         "[:check, [/\\AAUTH=/i]]\n[:labeled, [/\\ABODY\\[/in]]\n[:as_value, [/\\ABINARY\\[/in]]\n[:words, [/ /]]\n[:args, [/\\ACHARSET\\b/i, /\\ACHARSET\\z/i]]\n"
     );
+}
+
+#[test]
+fn a_method_sequence_opens_with_the_code_of_its_parameter_defaults() {
+    let output = run_example("ruby_vm/default_hash_argument_opens_with_newhash.rb");
+    assert_eq!(output, "0000 newhash to: 0, shape: 0                (   2)\n");
 }

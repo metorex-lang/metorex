@@ -19,15 +19,30 @@ pub(crate) const BY_IDENTITY_KEY: &str = "__MX_BY_IDENTITY__";
 /// method named by `ruby2_keywords`, which can be passed on as keywords again.
 pub(crate) const RUBY2_KEYWORDS_KEY: &str = "__MX_RUBY2_KEYWORDS__";
 
+/// The keys a hash keeps its own bookkeeping under.
+const INTERNAL_KEYS: [&str; 7] = [
+    DEFAULT_PROC_KEY,
+    DEFAULT_VALUE_KEY,
+    BY_IDENTITY_KEY,
+    RUBY2_KEYWORDS_KEY,
+    "__MX_KWARGS__",
+    KEY_OBJECTS_KEY,
+    RENDERED_OBJECTS_KEY,
+];
+
 /// Check if a key is an internal sentinel key
 pub(crate) fn is_internal_key(key: &str) -> bool {
-    key == DEFAULT_PROC_KEY
-        || key == DEFAULT_VALUE_KEY
-        || key == BY_IDENTITY_KEY
-        || key == RUBY2_KEYWORDS_KEY
-        || key == "__MX_KWARGS__"
-        || key == KEY_OBJECTS_KEY
-        || key == RENDERED_OBJECTS_KEY
+    INTERNAL_KEYS.contains(&key)
+}
+
+/// How many entries of `dict` the program put there, leaving out the ones
+/// the hash keeps its own bookkeeping under.
+pub(crate) fn program_entry_count(dict: &crate::object::HashEntries) -> usize {
+    let internal = INTERNAL_KEYS
+        .iter()
+        .filter(|key| dict.contains_key(**key))
+        .count();
+    dict.len() - internal
 }
 
 /// Reconstruct the original key Object from its string key, using the sentinel

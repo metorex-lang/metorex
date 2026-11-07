@@ -94,8 +94,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let dict = dict_rc.borrow();
-                let count = dict.keys().filter(|k| !is_internal_key(k)).count();
+                let count = program_entry_count(&dict_rc.borrow());
                 Ok(Some(Object::Int(count as i64)))
             }
             "[]" => {

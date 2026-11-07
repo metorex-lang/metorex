@@ -168,7 +168,7 @@ The 100 most downloaded gems on rubygems.org (`rubygems.org/stats`, read on 2026
   - Acceptance: a Jenkins run shows the `gems` stage with a branch per group, and a branch fails when a recorded count is raised by hand above what the run produces
 - [x] The gems in the list that ship with Ruby and that Metorex carries: json, racc, base64, and bigdecimal
 - [x] Rack and HTTP: rack, rack-test, rack-protection, faraday, faraday-net_http, multipart-post, excon, httpclient, http-cookie, domain_name, connection_pool, and websocket-extensions
-- [ ] Text, data, and time: i18n, tzinfo, multi_json, multi_xml, builder, mime-types, mime-types-data, mini_mime, mail, addressable, public_suffix, jwt, dotenv, netrc, and rubyzip
+- [x] Text, data, and time: i18n, tzinfo, multi_json, multi_xml, builder, mime-types, mime-types-data, mini_mime, mail, addressable, public_suffix, jwt, dotenv, netrc, and rubyzip
 - [ ] Command line and developer tools: thor, rainbow, ruby-progressbar, unicode-display_width, parallel, method_source, coderay, pry, simplecov, docile, and mini_portile2
 - [ ] Ruby parsing and linting: ast, parser, regexp_parser, rubocop-ast, and rubocop
 - [ ] Templates, loading, and concurrency: tilt, erubi, zeitwerk, sprockets, concurrent-ruby, and thread_safe

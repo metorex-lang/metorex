@@ -161,19 +161,24 @@ impl VirtualMachine {
             }
         }
 
-        // Optional block params (`|a, b = 1|`) become the method's default
-        // parameters, keyed by positional index.
-        let default_parameters = block
-            .parameter_defaults
-            .iter()
-            .map(|(original_index, expression)| {
-                let positional_index = block.parameters[..*original_index]
-                    .iter()
-                    .filter(|p| !p.starts_with('&'))
-                    .count();
-                (positional_index, expression.clone())
-            })
-            .collect();
+        // A block keeps every default by where its parameter is written. A
+        // keyword's goes with the keyword, and a positional one is keyed by
+        // the parameter's place among the positional ones.
+        let mut default_parameters = Vec::new();
+        for (original_index, expression) in &block.parameter_defaults {
+            let written = &block.parameters[*original_index];
+            if let Some(name) = written.strip_prefix(crate::object::KEYWORD_PARAM_PREFIX) {
+                if let Some(keyword) = keyword_parameters.iter_mut().find(|(held, _)| held == name) {
+                    keyword.1 = Some(expression.clone());
+                }
+                continue;
+            }
+            let positional_index = block.parameters[..*original_index]
+                .iter()
+                .filter(|param| is_positional_block_parameter(param))
+                .count();
+            default_parameters.push((positional_index, expression.clone()));
+        }
         let mut method = Method::new(method_name.to_string(), regular_params, block.body.clone());
         method.signature = Seldom::holding(Signature {
             default_parameters,
@@ -372,4 +377,14 @@ fn singleton_class_ends_in(class_rc: &Rc<Class>, owner: &Rc<Class>) -> bool {
             Some(View::Class(_) | View::Module(_))
         )
         && matches!(owner.name(), "Class" | "Module" | "Object" | "BasicObject")
+}
+
+/// Whether a block parameter, as the block lists it, takes a positional
+/// argument once the block becomes a method.
+fn is_positional_block_parameter(param: &str) -> bool {
+    param != crate::object::TRAILING_COMMA_PARAM
+        && param != crate::object::NO_KEYWORDS_PARAM
+        && !param.starts_with('&')
+        && !param.starts_with("**")
+        && !param.starts_with(crate::object::KEYWORD_PARAM_PREFIX)
 }

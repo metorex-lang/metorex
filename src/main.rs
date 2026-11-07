@@ -10,7 +10,7 @@ mod spec;
 use bin_support::*;
 
 /// The stack a deeply nested program such as mspec runs in.
-const PROGRAM_STACK_BYTES: usize = 64 * 1024 * 1024;
+const PROGRAM_STACK_BYTES: usize = 1024 * 1024 * 1024;
 
 fn main() {
     metorex::standard_streams::close_the_ones_closed_at_start();

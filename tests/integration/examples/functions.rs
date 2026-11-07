@@ -499,3 +499,9 @@ fn keywords_forward_through_two_forwarding_methods() {
         "[:adapter, \"PLAIN\", [\"user\", \"secret\"], :when_cached, {}, nil]\n[:adapter, \"EXTERNAL\", [], false, {realm: \"mail.example.com\"}, :answered]\n[:adapter, \"PLAIN\", [], true, {}, nil]\n"
     );
 }
+
+#[test]
+fn recursion_reaches_past_a_thousand_levels() {
+    let output = run_example("functions/recursion_reaches_past_a_thousand_levels.rb");
+    assert_eq!(output, ":bottom\n:bottom\n");
+}
