@@ -4,8 +4,13 @@ class StringScanner
   Error = Class.new(StandardError)
   Version = "3.1.6"
 
+  # Neither this nor `string=` calls a method a subclass may override, as
+  # MRI's C code calls none.
   def initialize(string, fixed_anchor: false)
-    self.string = string
+    @string = scanned_text(string)
+    @position = 0
+    @inside = 0
+    forget_match
     @fixed_anchor = fixed_anchor
   end
 
@@ -14,19 +19,21 @@ class StringScanner
   end
 
   def string=(text)
-    converted = text.is_a?(String) ? text : text.to_str
-    # A String subclass is copied into a plain String, which is what every
-    # piece the scanner hands back is.
-    @string = if converted.instance_of?(String)
-      converted
-    else
-      converted + ""
-    end
-    reset
+    @string = scanned_text(text)
+    @position = 0
+    @inside = 0
+    forget_match
     text
   end
 
   private :initialize
+
+  # A String subclass is copied into a plain String, which is what every
+  # piece the scanner hands back is.
+  private def scanned_text(text)
+    converted = text.is_a?(String) ? text : text.to_str
+    converted.instance_of?(String) ? converted : converted + ""
+  end
 
   def fixed_anchor?
     @fixed_anchor ? true : false

@@ -690,3 +690,21 @@ fn chdir_to_a_pathname_runs_its_block() {
     let output = run_example("filesystem/chdir_to_a_pathname_runs_its_block.rb");
     assert_eq!(output, "[\"/\"]\n:from_block\n");
 }
+
+#[test]
+fn glob_steps_up_through_parent_directories() {
+    let output = run_example("filesystem/glob_steps_up_through_parent_directories.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"/../filesystem/glob_steps_up_through_parent_directories.rb\"]\n",
+            "[\"../filesystem/glob_steps_up_through_parent_directories.rb\"]\n",
+        )
+    );
+}
+
+#[test]
+fn expanding_paths_leaves_a_replaced_pwd_alone() {
+    let output = run_example("filesystem/expanding_paths_leaves_a_replaced_pwd_alone.rb");
+    assert_eq!(output, "0\ntrue\nfalse\n");
+}

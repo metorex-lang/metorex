@@ -542,6 +542,13 @@ impl VirtualMachine {
         value: Object,
         position: Position,
     ) -> Result<Vec<Object>, MetorexError> {
+        // A thread a process was forked from is the only one the process
+        // has, so a thread body's wait goes on in place rather than handing
+        // the turn to the threads of the parent.
+        if self.alone_after_fork && self.running_a_thread_body() {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+            return Ok(Vec::new());
+        }
         self.fiber_suspend_with(SuspendOutput::Yielded(value), position)
     }
 

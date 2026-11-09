@@ -326,3 +326,9 @@ fn only_asking_for_an_id_takes_one() {
         "{\"holder.hash\" => 8, \"Struct.new(:field).new(1).hash\" => 8}\n"
     );
 }
+
+#[test]
+fn module_body_makes_core_private_methods_public() {
+    let output = run_example("metaprogramming/module_body_makes_core_private_methods_public.rb");
+    assert_eq!(output, "true\ntrue\ntrue\nfalse\n");
+}

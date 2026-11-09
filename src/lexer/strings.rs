@@ -316,47 +316,7 @@ impl<'a> Lexer<'a> {
                         },
                         Some('u') => {
                             self.advance();
-                            let mut points = Vec::new();
-                            if self.peek() == Some('{') {
-                                self.advance();
-                                let mut digits = String::new();
-                                while let Some(letter) = self.peek() {
-                                    if letter == '}' {
-                                        self.advance();
-                                        break;
-                                    }
-                                    if letter == ' ' {
-                                        points.push(digits.clone());
-                                        digits.clear();
-                                    } else {
-                                        digits.push(letter);
-                                    }
-                                    self.advance();
-                                }
-                                points.push(digits);
-                            } else {
-                                let mut digits = String::new();
-                                while digits.len() < 4
-                                    && self.peek().is_some_and(|digit| digit.is_ascii_hexdigit())
-                                {
-                                    digits.push(self.peek().expect("a digit was seen"));
-                                    self.advance();
-                                }
-                                points.push(digits);
-                            }
-                            for point in points {
-                                match u32::from_str_radix(&point, 16)
-                                    .ok()
-                                    .and_then(char::from_u32)
-                                {
-                                    Some(letter) => current_text.push(letter),
-                                    None => {
-                                        current_text.push('\\');
-                                        current_text.push('u');
-                                        current_text.push_str(&point);
-                                    }
-                                }
-                            }
+                            self.read_unicode_escape(&mut current_text);
                         }
                         Some(ch) => {
                             // A backslash before something that opens no escape
@@ -629,6 +589,48 @@ impl<'a> Lexer<'a> {
     /// The byte a control or meta escape names. The cursor sits on the letter
     /// that opened it: `c` for `\cX`, `C` for `\C-X`, or `M` for `\M-X`.
     /// Nothing is consumed where what follows spells no such escape.
+    /// The characters a `\u` escape names, read after the `u`: four hex
+    /// digits, or code points in braces separated by spaces. A code point
+    /// that names no character is kept as written.
+    pub(super) fn read_unicode_escape(&mut self, text: &mut String) {
+        let mut points = Vec::new();
+        if self.peek() == Some('{') {
+            self.advance();
+            let mut digits = String::new();
+            while let Some(letter) = self.peek() {
+                if letter == '}' {
+                    self.advance();
+                    break;
+                }
+                if letter == ' ' {
+                    points.push(std::mem::take(&mut digits));
+                } else {
+                    digits.push(letter);
+                }
+                self.advance();
+            }
+            points.push(digits);
+            points.retain(|point| !point.is_empty());
+        } else {
+            let mut digits = String::new();
+            while digits.len() < 4 && self.peek().is_some_and(|digit| digit.is_ascii_hexdigit()) {
+                digits.push(self.peek().expect("a digit was seen"));
+                self.advance();
+            }
+            points.push(digits);
+        }
+        for point in points {
+            match u32::from_str_radix(&point, 16).ok().and_then(char::from_u32) {
+                Some(letter) => text.push(letter),
+                None => {
+                    text.push('\\');
+                    text.push('u');
+                    text.push_str(&point);
+                }
+            }
+        }
+    }
+
     pub(super) fn read_control_escape(&mut self) -> Option<u8> {
         let saved_chars = self.chars.clone();
         let saved_prepend = self.prepend.clone();

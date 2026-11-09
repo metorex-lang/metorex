@@ -145,6 +145,9 @@ pub struct BlockOrigin {
     pub written_within: CodePlaces,
     /// What the body compiled to, once it has run on the bytecode engine.
     pub unit: crate::vm::units::UnitSlot,
+    /// The refinements in force where the block was written, which its body
+    /// sees wherever it runs. None when no `using` was in force there.
+    pub captured_refinements: Option<Rc<Vec<crate::vm::core::RefinementEntry>>>,
 }
 
 impl std::ops::Deref for BlockStatement {
@@ -208,6 +211,7 @@ impl BlockOrigin {
             written_depth: None,
             written_within: no_places(),
             unit: Default::default(),
+            captured_refinements: None,
         }
     }
 }

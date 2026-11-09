@@ -240,3 +240,9 @@ fn an_ipv6_address_keeps_the_interface_it_names_after_a_percent_sign() {
     let output = run_example("sockets/addrinfo_with_an_ipv6_scope.rb");
     assert_eq!(output, "#<Addrinfo: fe80::1%lo0>\n\"fe80::1%lo0\"\ntrue\n");
 }
+
+#[test]
+fn write_takes_several_strings() {
+    let output = run_example("sockets/write_takes_several_strings.rb");
+    assert_eq!(output, "17\n\"HTTP/1.1 200 OK\\r\\n\"\n");
+}

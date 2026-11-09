@@ -285,7 +285,11 @@ fn display_range_exclusive() {
 fn display_binding() {
     use metorex::object::Binding;
     let b = Rc::new(Binding::new(HashMap::new()));
-    assert_eq!(format!("{}", Object::Binding(b)), "<Binding with 0 vars>");
+    let address = Rc::as_ptr(&b) as usize;
+    assert_eq!(
+        format!("{}", Object::Binding(b)),
+        format!("#<Binding:0x{address:016x}>")
+    );
 }
 
 // ── operations: is_truthy ───────────────────────────────────────────────────

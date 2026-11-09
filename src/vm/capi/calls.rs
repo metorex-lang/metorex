@@ -54,6 +54,22 @@ pub extern "C-unwind" fn rb_funcallv(
     to_value(&call(to_object(receiver), &symbol_name(name), arguments))
 }
 
+/// `rb_apply`: calls `name` on `receiver` with the elements of the Array
+/// `arguments` as its arguments.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_apply(receiver: Value, name: Value, arguments: Value) -> Value {
+    let arguments = to_object(arguments);
+    let View::Array(elements) = arguments.view() else {
+        raise(crate::vm::errors::simple_exception(
+            "TypeError",
+            "wrong argument type (expected Array)",
+            super::called_from(),
+        ));
+    };
+    let handed = elements.borrow().clone();
+    to_value(&call(to_object(receiver), &symbol_name(name), handed))
+}
+
 thread_local! {
     /// The block `rb_iterate` hands the next method its walk calls.
     static ITERATE_BLOCK: std::cell::RefCell<Option<Object>> =

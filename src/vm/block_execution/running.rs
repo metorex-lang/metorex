@@ -158,6 +158,7 @@ impl VirtualMachine {
         // `Module.nesting` in the body reports and where an `eval` written
         // there opens what it defines.
         self.enter_block_nesting(block.captured_nesting.clone());
+        let carries_refinements = self.enter_block_refinements(block);
 
         // A trace sees a block body opening and closing, and reads the
         // parameters the block declared off either event.
@@ -275,6 +276,7 @@ impl VirtualMachine {
         self.environment_mut().pop_scope();
         self.class_var_cref_stack.pop();
         self.leave_block_nesting();
+        self.leave_block_refinements(carries_refinements);
         if carries_constant_home {
             self.constant_homes.pop();
         }
@@ -409,6 +411,7 @@ impl VirtualMachine {
         // handed on with `&block` to a native iterator would otherwise see.
         self.class_var_cref_stack.push(block_class_var_home(block));
         self.enter_block_nesting(block.captured_nesting.clone());
+        let carries_refinements = self.enter_block_refinements(block);
         self.running_block_breaks.push(running_break_flag(block));
         let result = match self.enter_block_body(block) {
             Err(error) => Err(error),
@@ -485,6 +488,7 @@ impl VirtualMachine {
         };
         self.running_block_breaks.pop();
         self.leave_block_nesting();
+        self.leave_block_refinements(carries_refinements);
         self.class_var_cref_stack.pop();
 
         self.leave_block_file(saved_file);
@@ -496,6 +500,24 @@ impl VirtualMachine {
     /// Make the file `block` was written in the one running, and a literal
     /// in it read in that file's encoding. Answers the file and encoding it
     /// replaced, or None when the block was written in the running file.
+    /// The refinements in force where the block was written apply in its
+    /// body, though the file that wrote it may have finished loading.
+    pub(crate) fn enter_block_refinements(&mut self, block: &BlockStatement) -> bool {
+        match &block.captured_refinements {
+            Some(entries) => {
+                self.refinement_scopes.push(entries.as_ref().clone());
+                true
+            }
+            None => false,
+        }
+    }
+
+    pub(crate) fn leave_block_refinements(&mut self, carried: bool) {
+        if carried {
+            self.refinement_scopes.pop();
+        }
+    }
+
     fn enter_block_file(&mut self, block: &BlockStatement) -> Option<SavedFile> {
         let written_in = block.source_file.as_deref()?;
         if self.current_source_file.as_deref() == Some(written_in) {

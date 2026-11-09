@@ -488,7 +488,7 @@ fn test_runtime_backtick_command_execution() {
         "false\n",
         "\"through the module\\n\"\n",
         "\"coerced\\n\"\n",
-        "No such file or directory - nonexistent_command_xyz 2>/dev/null\n",
+        "No such file or directory - nonexistent_command_xyz\n",
         "true\n",
         ":`\n"
     );
@@ -509,7 +509,7 @@ fn test_runtime_backtick_command_parens_execution() {
         "false\n",
         "\"through the module\\n\"\n",
         "\"coerced\\n\"\n",
-        "No such file or directory - nonexistent_command_xyz 2>/dev/null\n",
+        "No such file or directory - nonexistent_command_xyz\n",
         "true\n",
         ":`\n"
     );
@@ -2389,4 +2389,53 @@ fn marshal_links_after_a_set() {
 fn marshal_writes_each_set_its_own_members() {
     let output = run_example("stdlib/marshal_writes_each_set_its_own_members.rb");
     assert_eq!(output, "true\n");
+}
+
+#[test]
+fn backquotes_run_shell_syntax_through_sh() {
+    let output = run_example("runtime/backquotes_run_shell_syntax_through_sh.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "true\n127\n",
+            "[Errno::ENOENT, \"No such file or directory - missing_program_for_this_example\"]\n",
+            "3\ntrue\n\"two words\\n\"\n",
+        )
+    );
+}
+
+#[test]
+fn coverage_line_stub_marks_the_lines_that_run() {
+    let output = run_example("coverage/line_stub/main.rb");
+    assert_eq!(output, "[0, 0, nil, nil, 0, nil]\n:refused\n");
+}
+
+#[test]
+fn coverage_keys_methods_by_their_owner_and_place() {
+    let output = run_example("coverage/method_keys/main.rb");
+    assert_eq!(
+        output,
+        "[#<Class:Ledger>, :open, 2, 2, 4, 5, 1]\n[Ledger, :balance, 6, 25, 8, 5, 2]\n[#<Class:Auditing>, :included, 12, 2, 16, 5, 1]\n[Ledger, :audited?, 14, 31, 14, 39, 1]\n[Auditing, :audit, 18, 2, 20, 5, 0]\n"
+    );
+}
+
+#[test]
+fn coverage_counts_empty_files_and_attribute_assignments_as_ruby_does() {
+    let output = run_example("coverage/assignment_lines/main.rb");
+    assert_eq!(output, "[]\n[1, 1, 1, nil, nil]\n");
+}
+
+#[test]
+fn coverage_branches_are_keyed_as_ruby_keys_them() {
+    let output = run_example("coverage/branches/main.rb");
+    let expected = concat!(
+        "[:if, 0, 2, 2, 8, 5] => {[:then, 1, 3, 4, 3, 9] => 1, [:else, 2, 4, 2, 8, 5] => 3}\n",
+        "[:if, 3, 4, 2, 8, 5] => {[:then, 4, 5, 4, 5, 11] => 1, [:else, 5, 7, 4, 7, 8] => 2}\n",
+        "[:unless, 6, 12, 2, 16, 5] => {[:else, 7, 15, 4, 15, 14] => 2, [:then, 8, 13, 4, 13, 12] => 1}\n",
+        "[:case, 9, 20, 2, 23, 5] => {[:when, 10, 21, 19, 21, 20] => 1, [:when, 11, 22, 19, 22, 20] => 2, [:else, 12, 20, 2, 23, 5] => 1}\n",
+        "[:while, 13, 30, 0, 30, 30] => {[:body, 14, 30, 0, 30, 12] => 3}\n",
+        "[:\"&.\", 15, 32, 0, 32, 11] => {[:then, 16, 32, 0, 32, 11] => 0, [:else, 17, 32, 0, 32, 11] => 1}\n",
+        "[:if, 18, 33, 24, 33, 50] => {[:then, 19, 33, 32, 33, 40] => 1, [:else, 20, 33, 43, 33, 50] => 1}\n",
+    );
+    assert_eq!(output, expected);
 }

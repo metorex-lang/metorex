@@ -29,6 +29,14 @@
 
 #include "ruby/st.h"
 
+#ifdef __APPLE__
+#define DLEXT_MAXLEN 7
+#define DLEXT ".bundle"
+#else
+#define DLEXT_MAXLEN 3
+#define DLEXT ".so"
+#endif
+
 #define NORETURN(x) __attribute__((__noreturn__)) x
 #define PUREFUNC(x) __attribute__((__pure__)) x
 #define CONSTFUNC(x) __attribute__((__const__)) x
@@ -126,6 +134,9 @@ unsigned long rb_num2uint(VALUE value);
 unsigned long rb_fix2uint(VALUE value);
 #define NUM2LONG(v) rb_num2long((VALUE)(v))
 #define NUM2ULONG(v) rb_num2ulong((VALUE)(v))
+/* A long long is a long on the platforms metorex builds for. */
+#define NUM2LL(v) ((long long)rb_num2long((VALUE)(v)))
+#define NUM2ULL(v) ((unsigned long long)rb_num2ulong((VALUE)(v)))
 #define NUM2INT(v) ((int)rb_num2int((VALUE)(v)))
 #define RB_NUM2INT(v) NUM2INT(v)
 #define NUM2UINT(v) ((unsigned int)rb_num2uint((VALUE)(v)))
@@ -249,6 +260,10 @@ void rb_define_const(VALUE module, const char *name, VALUE value);
 void rb_deprecate_constant(VALUE module, const char *name);
 
 VALUE rb_funcallv(VALUE receiver, ID name, int count, const VALUE *arguments);
+VALUE rb_apply(VALUE receiver, ID name, VALUE arguments);
+/* The older name for rb_funcallv, which extensions such as byebug still call. */
+#define rb_funcall2 rb_funcallv
+#define rb_funcall3 rb_funcallv_public
 VALUE rb_const_get(VALUE module, ID name);
 VALUE rb_const_get_at(VALUE module, ID name);
 VALUE rb_const_get_from(VALUE module, ID name);
@@ -448,6 +463,8 @@ int rb_thread_alone(void);
 VALUE rb_thread_local_aref(VALUE thread, ID name);
 VALUE rb_thread_local_aset(VALUE thread, ID name, VALUE value);
 VALUE rb_thread_wakeup(VALUE thread);
+VALUE rb_thread_run(VALUE thread);
+VALUE rb_thread_stop(void);
 VALUE rb_thread_create(VALUE (*function)(void *), void *data);
 void rb_thread_wait_for(struct timeval interval);
 int ruby_native_thread_p(void);
@@ -693,6 +710,7 @@ VALUE rb_block_lambda(void);
 void rb_need_block(void);
 ID rb_frame_this_func(void);
 VALUE rb_protect(VALUE (*function)(VALUE), VALUE data, int *state);
+void rb_load_protect(VALUE name, int wrap, int *state);
 NORETURN(void rb_jump_tag(int state));
 VALUE rb_rescue(VALUE (*body)(VALUE), VALUE data, VALUE (*rescue)(VALUE, VALUE), VALUE rescue_data);
 VALUE rb_metorex_rescue2(VALUE (*body)(VALUE), VALUE data, VALUE (*rescue)(VALUE, VALUE), VALUE rescue_data,
@@ -804,6 +822,7 @@ VALUE rb_str_new(const char *text, long length);
 VALUE rb_str_new_cstr(const char *text);
 #define rb_str_new2 rb_str_new_cstr
 VALUE rb_str_append(VALUE string, VALUE added);
+VALUE rb_str_concat(VALUE string, VALUE added);
 VALUE rb_obj_as_string(VALUE object);
 VALUE rb_inspect(VALUE object);
 void rb_metorex_adopt_encoding(VALUE string, VALUE source);
@@ -951,6 +970,7 @@ static inline void ruby_xfree(void *held) { free(held); }
 #define xfree ruby_xfree
 #define ALLOC_N(type, count) ((type *)ruby_xmalloc2((count), sizeof(type)))
 #define ALLOC(type) ((type *)ruby_xmalloc(sizeof(type)))
+#define ALLOCA_N(type, count) ((type *)alloca(sizeof(type) * (size_t)(count)))
 #define ZALLOC_N(type, count) ((type *)ruby_xcalloc((count), sizeof(type)))
 #define ZALLOC(type) ZALLOC_N(type, 1)
 #define REALLOC_N(var, type, count) ((var) = (type *)ruby_xrealloc2((void *)(var), (count), sizeof(type)))
@@ -1099,6 +1119,8 @@ VALUE rb_hash_lookup2(VALUE hash, VALUE key, VALUE missing);
 VALUE rb_hash_size(VALUE hash);
 size_t rb_hash_size_num(VALUE hash);
 #define RHASH_SIZE(v) rb_hash_size_num((VALUE)(v))
+st_table *rb_hash_tbl(VALUE hash, const char *file, int line);
+#define RHASH_TBL(h) rb_hash_tbl(h, __FILE__, __LINE__)
 VALUE rb_hash_set_ifnone(VALUE hash, VALUE default_value);
 void rb_hash_bulk_insert(long count, const VALUE *pairs, VALUE hash);
 void rb_hash_foreach(VALUE hash, int (*function)(VALUE key, VALUE value, VALUE argument), VALUE argument);

@@ -488,7 +488,10 @@ impl VirtualMachine {
             Some(other) => Some(self.coerce_to_integer_base(&other.to_object(), position)?),
         };
 
-        match positional[0].view() {
+        // A String subclass is read as the characters it holds.
+        let argument = crate::vm::native_methods::string_subclass_value(&positional[0])
+            .unwrap_or_else(|| positional[0].clone());
+        match argument.view() {
             View::String(text) => match parse_integer_literal(&text.as_str(), base) {
                 Ok(value) => Ok(Object::integer(value)),
                 Err(ParseFailure::Malformed) => Err(argument_error(

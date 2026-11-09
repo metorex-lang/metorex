@@ -495,13 +495,15 @@ impl crate::vm::VirtualMachine {
             Some(held) => {
                 // Anything that answers to `call` when the signal arrives
                 // runs, whether it could when it was written down or not.
-                self.send_to_object(
+                self.trap_handlers_running += 1;
+                let answered = self.send_to_object(
                     held.to_object(),
                     "call",
                     vec![Object::Int(number as i64)],
                     position,
-                )?;
-                Ok(())
+                );
+                self.trap_handlers_running -= 1;
+                answered.map(|_| ())
             }
             None => Err(self.signal_exception(name, number, position)),
         }

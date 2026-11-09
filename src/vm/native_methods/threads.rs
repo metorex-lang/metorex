@@ -133,6 +133,9 @@ impl VirtualMachine {
                 let held_status = self.take_last_status();
                 let waited = self.run_thread_within(receiver, limit, position);
                 self.restore_last_status(held_status);
+                // The thread waited on may have stopped this one while it
+                // ran, as an `ensure` that kills the threads it started does.
+                self.raise_if_thread_killed(position)?;
                 let Some(value) = waited? else {
                     return Ok(Some(Object::Nil));
                 };
@@ -495,6 +498,11 @@ impl VirtualMachine {
                 Ok(Some(built))
             }
             "__raise_later__" => {
+                // A thread already told to stop unwinds for that, and what it
+                // is handed after is dropped.
+                if inst.borrow().get_var("__thread_killed").is_some_and(Object::is_truthy) {
+                    return Ok(Some(Object::Nil));
+                }
                 let handed = arguments.to_vec();
                 inst.borrow_mut()
                     .set_var("__thread_raise".to_string(), Object::array(handed));

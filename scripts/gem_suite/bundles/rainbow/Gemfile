@@ -1,0 +1,7 @@
+# The gems rainbow's specs load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "rainbow", path: "../../../../gems/rainbow"
+gem "rspec"

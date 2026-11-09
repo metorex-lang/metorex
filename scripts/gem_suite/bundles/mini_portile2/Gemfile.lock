@@ -1,0 +1,55 @@
+PATH
+  remote: ../../../../gems/mini_portile2
+  specs:
+    mini_portile2 (2.8.9)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    date (3.6.0)
+    erb (6.0.7)
+    logger (1.7.0)
+    minitar (0.9)
+    minitest (5.27.0)
+    minitest-hooks (1.5.2)
+      minitest (> 5.3)
+    net-ftp (0.3.9)
+      net-protocol
+      time
+    net-protocol (0.4.0)
+      timeout
+    time (0.5.0)
+      date
+    timeout (0.6.1)
+    webrick (1.9.2)
+
+PLATFORMS
+  arm64-darwin-27
+  ruby
+
+DEPENDENCIES
+  erb (= 6.0.7)
+  logger (= 1.7.0)
+  mini_portile2!
+  minitar (= 0.9)
+  minitest (~> 5.15)
+  minitest-hooks (= 1.5.2)
+  net-ftp
+  webrick
+
+CHECKSUMS
+  date (3.6.0) sha256=18ac945c4e24ebd93534f8eab8c2fd8c5604b3e977105b3798d62a1e8d27b580
+  erb (6.0.7) sha256=c5ca6dc25b0ef974a44dc8f59fe847577122483b1968a38dec305c60bf91ee92
+  logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
+  mini_portile2 (2.8.9)
+  minitar (0.9) sha256=23c0bebead35dbfe9e24088dc436c8a233d03f51d365a686b9a11dd30dc2d588
+  minitest (5.27.0) sha256=2d3b17f8a36fe7801c1adcffdbc38233b938eb0b4966e97a6739055a45fa77d5
+  minitest-hooks (1.5.2) sha256=c5fdd168b5295a6670f1a470ac44360624d5ce0514f73707f577cd425b184b86
+  net-ftp (0.3.9) sha256=307817ccf7f428f79d083f7e36dbb46a9d1d375e0d23027824de1866f0b13b65
+  net-protocol (0.4.0) sha256=f9f90c8c6f64794a45160bf422177a336db12809de3beeeaa26b88fcd2e8c853
+  time (0.5.0) sha256=abea008a7c3e8d2727f95f6fab334b7862004c514fbb4b3315285910e8d1650f
+  timeout (0.6.1) sha256=78f57368a7e7bbadec56971f78a3f5ecbcfb59b7fcbb0a3ed6ddc08a5094accb
+  webrick (1.9.2) sha256=beb4a15fc474defed24a3bda4ffd88a490d517c9e4e6118c3edce59e45864131
+
+BUNDLED WITH
+  4.0.23

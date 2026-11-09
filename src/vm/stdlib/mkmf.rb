@@ -235,6 +235,46 @@ module MakeMakefile
     end
   end
 
+  # What `--enable-name` or `--disable-name` said, or the default when
+  # neither was given, or what the block answers then.
+  def enable_config(config, default = nil)
+    if arg_config("--enable-" + config)
+      true
+    elsif arg_config("--disable-" + config)
+      false
+    elsif block_given?
+      yield(config, default)
+    else
+      default
+    end
+  end
+
+  # Run the block with $CFLAGS set to `flags`, keeping them when the block
+  # answers true and putting the old ones back otherwise.
+  def with_cflags(flags)
+    held = $CFLAGS
+    $CFLAGS = flags.dup
+    answered = yield
+  ensure
+    $CFLAGS = held unless answered
+  end
+
+  def with_cppflags(flags)
+    held = $CPPFLAGS
+    $CPPFLAGS = flags.dup
+    answered = yield
+  ensure
+    $CPPFLAGS = held unless answered
+  end
+
+  def with_ldflags(flags)
+    held = $LDFLAGS
+    $LDFLAGS = flags.dup
+    answered = yield
+  ensure
+    $LDFLAGS = held unless answered
+  end
+
   # The include and library directories `--with-target-dir`,
   # `--with-target-include` and `--with-target-lib` name, or the defaults
   # given, put ahead of the ones searched already.
@@ -330,15 +370,15 @@ module MakeMakefile
   alias try_header try_compile
 
   # Whether the source links against the `rb_*` functions the metorex
-  # binary exports, as an extension does. On macOS the linker reads them
-  # from the binary named as the bundle's loader. Elsewhere the source links
-  # into a shared object, which counts only if this interpreter loads it
+  # binary exports, as an extension does. The source links into a shared
+  # object that leaves those to be found when it is loaded, as the
+  # extension's own link does, and counts only if this interpreter loads it
   # with every symbol it names resolved.
   def try_link(source, options = "", ldflags: nil, **_options)
     build_check(source) do |file|
       library_paths = $LIBPATH.map { |held| "-L#{held}" }.join(" ")
       linked = run_quietly("#{compiler} #{link_output} #{include_flags} #{preprocessor_flags} #{$CFLAGS} #{file} #{library_paths} #{$LDFLAGS} #{ldflags} #{options} #{$LIBS}")
-      linked && (darwin? || loads_with_every_symbol?("conftest.so"))
+      linked && loads_with_every_symbol?(darwin? ? "conftest.bundle" : "conftest.so")
     end
   end
 
@@ -449,6 +489,57 @@ module MakeMakefile
     end
   end
 
+  # Whether `header` compiles, here or from one of `paths`, which goes on
+  # $INCFLAGS where the header is found there.
+  def find_header(header, *paths)
+    message = checking_message(header, paths)
+    header = cpp_include(header)
+    checking_for message do
+      if try_header(header)
+        true
+      else
+        found = paths.find do |directory|
+          flag = "-I#{directory}"
+          try_header(header, flag) && ($INCFLAGS << " " << flag)
+        end
+        found ? true : false
+      end
+    end
+  end
+
+  # Whether `func` links from `lib`, here or from one of `paths`, which goes
+  # on $LDFLAGS where the library is found there.
+  def find_library(lib, func, *paths)
+    dir_config(lib)
+    lib = with_config(lib + "lib", lib)
+    paths = paths.flat_map { |held| held.split(File::PATH_SEPARATOR) }
+    checking_for checking_message(func && func.funcall_style, LIBARG % lib) do
+      libs = append_library($libs, lib)
+      linked = ([nil] + paths).find do |directory|
+        flag = directory ? "-L#{directory}" : ""
+        next false unless try_func(func, libs, nil, flag)
+
+        $LDFLAGS << " " << flag if directory
+        true
+      end
+      $libs = libs if linked
+      linked ? true : false
+    end
+  end
+
+  # Append each flag the preprocessor accepts to $CPPFLAGS.
+  def append_cppflags(flags, **_options)
+    Array(flags).each do |flag|
+      if checking_for("whether #{flag} is accepted as CPPFLAGS") { try_cppflags(flag) }
+        $CPPFLAGS << " " << flag
+      end
+    end
+  end
+
+  def try_cppflags(flags, **_options)
+    try_compile(MAIN_DOES_NOTHING, flags, werror: true)
+  end
+
   def have_func(func, headers = nil, options = "")
     checking_for checking_message(func.funcall_style, headers, options) do
       if try_func(func, $libs, headers, options)
@@ -480,6 +571,22 @@ module MakeMakefile
   def have_macro(macro, headers = nil, options = "")
     checking_for checking_message(macro, headers, options) do
       macro_defined?(macro, cpp_include(headers), options)
+    end
+  end
+
+  def have_struct_member(type, member, headers = nil, options = "")
+    checking_for checking_message("#{type}.#{member}", headers) do
+      if try_compile(<<~SOURCE, options)
+        #{cpp_include(headers)}
+        int s = (char *)&((#{type}*)0)->#{member} - (char *)0;
+        #{MAIN_DOES_NOTHING}
+      SOURCE
+        $defs.push(format("-DHAVE_%s_%s", type.tr_cpp, member.tr_cpp))
+        $defs.push(format("-DHAVE_ST_%s", member.tr_cpp))
+        true
+      else
+        false
+      end
     end
   end
 
@@ -533,11 +640,17 @@ module MakeMakefile
     makefile << "\n"
     makefile << "$(DLLIB): $(OBJS)\n"
     makefile << "\t$(CC) $(DLDFLAGS) -o $@ $(OBJS) $(LIBS)\n"
+    # An object is made again when the header the checks wrote changes, as
+    # it does when extconf.rb runs again.
+    made_from = $extconf_h ? " #{$extconf_h}" : ""
     sources.zip(objects).each do |source, object|
       makefile << "\n"
-      makefile << "#{object}: #{source}\n"
+      makefile << "#{object}: #{source}#{made_from}\n"
       makefile << "\t$(CC) $(CPPFLAGS) $(CFLAGS) -c #{source} -o #{object}\n"
     end
+    makefile << "\n"
+    makefile << "clean:\n"
+    makefile << "\trm -f $(OBJS) $(DLLIB)#{" #{$cleanfiles.join(" ")}" unless $cleanfiles.empty?}\n"
     message "creating Makefile\n"
     File.write("Makefile", makefile)
     true
@@ -555,7 +668,7 @@ module MakeMakefile
 
   def link_output
     if darwin?
-      "-bundle -bundle_loader #{Shellwords.escape(RbConfig.ruby)} -o conftest.bundle"
+      "-bundle -Wl,-undefined,dynamic_lookup -o conftest.bundle"
     else
       "-shared -fPIC -o conftest.so"
     end

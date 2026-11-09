@@ -232,3 +232,22 @@ fn test_spec_init_writes_the_files_rspec_init_writes() {
     assert_eq!(dot_rspec, rspec_dot_rspec);
     assert_eq!(spec_helper, rspec_spec_helper);
 }
+
+// A run started through `RSpec::Core::Runner.invoke`, as RSpec's own `rspec`
+// executable starts one, loads spec_helper.rb only where a spec requires it.
+#[test]
+fn test_invoke_leaves_spec_helper_to_the_specs() {
+    let main = format!(
+        "{}/{}/rex/runner/invoked_as_rspec/main.rb",
+        env!("CARGO_MANIFEST_DIR"),
+        super::EXAMPLES_DIR
+    );
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_metorex"))
+        .arg(&main)
+        .env_remove("SPEC_OPTS")
+        .output()
+        .expect("run metorex");
+    let printed = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{printed}");
+    assert!(printed.starts_with("helper_spec loaded\n.\n"), "{printed}");
+}

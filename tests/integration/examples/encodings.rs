@@ -1135,3 +1135,18 @@ fn binary_text_keeps_its_bytes_through_string_steps() {
 "#
     );
 }
+
+#[test]
+fn class_eval_reads_an_encoding_comment() {
+    let output = run_example("encodings/class_eval_reads_an_encoding_comment.rb");
+    assert_eq!(output, "#<Encoding:ISO-8859-7>\n[99, 97, 102, 233]\n");
+}
+
+#[test]
+fn euc_jp_replaces_whole_characters() {
+    let output = run_example("encodings/euc_jp_replaces_whole_characters.rb");
+    assert_eq!(
+        output,
+        "5\n\"# \u{fffd}\u{fffd}\\n\"\ntrue\ntrue\n\"# \u{fffd}\\n\"\n\"\\\"\\\\x8E\\\\xE0\\\" from EUC-JP to UTF-8\"\n"
+    );
+}

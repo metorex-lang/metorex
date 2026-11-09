@@ -32,10 +32,26 @@ pub(crate) struct CoverageRun {
     /// The branch sites of each file measured, by the path it was loaded
     /// under.
     branches: Vec<(String, FileBranches)>,
+    /// For each file measured, the lines a statement starts on that Ruby
+    /// counts on another line, where an assignment's value starts below it.
+    moved: Vec<(String, std::collections::HashMap<usize, usize>)>,
 }
 
 /// A method as the `methods` mode reports it: where it sits, and how often it
 /// has run.
+/// The end a method made from a block is recorded with until `Coverage`
+/// reads where the block closes.
+const UNKNOWN_END: usize = usize::MAX;
+
+/// A recorded end, or nil where it is not known yet.
+fn end_place(place: usize) -> Object {
+    if place == UNKNOWN_END {
+        Object::Nil
+    } else {
+        Object::Int(place as i64)
+    }
+}
+
 struct MethodSpan {
     file: String,
     owner: Object,
@@ -60,6 +76,7 @@ impl VirtualMachine {
             files: Vec::new(),
             methods: Vec::new(),
             branches: Vec::new(),
+            moved: Vec::new(),
         });
     }
 
@@ -83,9 +100,10 @@ impl VirtualMachine {
         if self.coverage.is_none() {
             return;
         }
-        let counted = source.lines().count().max(1);
+        let counted = source.lines().count();
         let mut lines = vec![None; counted];
-        mark(body, &mut lines);
+        FROZEN_STRINGS.set(crate::lexer::freezes_string_literals(source));
+        let moved = mark(body, &mut lines);
         let mut sites = FileBranches::default();
         register_branches(body, &mut sites);
         if let Some(run) = self.coverage.as_mut() {
@@ -93,6 +111,8 @@ impl VirtualMachine {
             run.files.push((path.to_string(), lines));
             run.branches.retain(|(held, _)| held != path);
             run.branches.push((path.to_string(), sites));
+            run.moved.retain(|(held, _)| held != path);
+            run.moved.push((path.to_string(), moved));
         }
     }
 
@@ -138,6 +158,12 @@ impl VirtualMachine {
         let Some(run) = self.coverage.as_mut() else {
             return;
         };
+        let line = run
+            .moved
+            .iter()
+            .find(|(held, _)| *held == path)
+            .and_then(|(_, moved)| moved.get(&line).copied())
+            .unwrap_or(line);
         let Some((_, lines)) = run.files.iter_mut().find(|(held, _)| *held == path) else {
             return;
         };
@@ -236,6 +262,61 @@ impl VirtualMachine {
             start_column: (start.column.saturating_sub(1) as usize),
             end_line: (end.line as usize),
             end_column: (end.column.saturating_sub(1) as usize) + "end".len(),
+            calls: 0,
+        });
+    }
+
+    /// Record a `def` written in a class or module body, keyed on the class
+    /// or, for `def self.name`, on its singleton class.
+    pub(crate) fn coverage_note_definition(
+        &mut self,
+        class: &std::rc::Rc<crate::class::Class>,
+        on_singleton: bool,
+        name: &str,
+        start: crate::lexer::Position,
+        end: crate::lexer::Position,
+    ) {
+        if self.coverage.is_none() {
+            return;
+        }
+        let held = if class.is_module() {
+            Object::Module(std::rc::Rc::clone(class))
+        } else {
+            Object::Class(std::rc::Rc::clone(class))
+        };
+        let owner = if on_singleton {
+            Object::Class(self.singleton_class_of(&held))
+        } else {
+            held
+        };
+        self.coverage_note_method(owner, name, start, end);
+    }
+
+    /// Record a method `define_method` made from a block written in a
+    /// measured file. The block's place is where it opens, and where it
+    /// closes is left for `Coverage` to read from the file.
+    pub(crate) fn coverage_note_block_method(
+        &mut self,
+        owner: Object,
+        name: &str,
+        file: &str,
+        line: usize,
+        column: usize,
+    ) {
+        let Some(run) = self.coverage.as_mut() else {
+            return;
+        };
+        if !run.files.iter().any(|(held, _)| held == file) {
+            return;
+        }
+        run.methods.push(MethodSpan {
+            file: file.to_string(),
+            owner,
+            name: name.to_string(),
+            start_line: line,
+            start_column: column,
+            end_line: UNKNOWN_END,
+            end_column: UNKNOWN_END,
             calls: 0,
         });
     }
@@ -345,8 +426,8 @@ impl VirtualMachine {
                 Object::symbol(name.clone()),
                 Object::Int(span[0] as i64),
                 Object::Int(span[1] as i64),
-                Object::Int(span[2] as i64),
-                Object::Int(span[3] as i64),
+                end_place(span[2]),
+                end_place(span[3]),
             ]);
             let slot = self.dict_slot_in(&entries, &key, false, Position::new(0, 0, 0))?;
             key_objects.insert(slot.clone(), key);
@@ -364,25 +445,65 @@ impl VirtualMachine {
     }
 }
 
+/// The lines `Coverage.line_stub` answers for `source`: 0 where a line
+/// carries something to run and nil elsewhere, read without running it.
+/// None where the source does not parse.
+pub(crate) fn line_stub(source: &str) -> Option<Vec<Option<u64>>> {
+    if crate::vm::VirtualMachine::prism_refuses_program(source, "") {
+        return None;
+    }
+    let tokens = crate::lexer::Lexer::new(source).tokenize();
+    let body = crate::parser::Parser::new(tokens).parse().ok()?;
+    let mut lines = vec![None; source.lines().count()];
+    mark(&body, &mut lines);
+    Some(lines)
+}
+
 /// Mark every line of `body` that carries something to run, leaving a line
 /// already marked at the count it has.
-fn mark(body: &[Statement], lines: &mut [Option<u64>]) {
+fn mark(body: &[Statement], lines: &mut [Option<u64>]) -> std::collections::HashMap<usize, usize> {
     let mut wanted = Vec::new();
-    collect(body, &mut wanted);
+    let mut moved = std::collections::HashMap::new();
+    collect_used(body, &mut wanted, true, &mut moved);
     for line in wanted {
         if line >= 1 && line <= lines.len() && lines[line - 1].is_none() {
             lines[line - 1] = Some(0);
         }
     }
+    moved
 }
 
 /// The lines of `body` that carry something to run.
 fn collect(body: &[Statement], found: &mut Vec<usize>) {
-    for statement in body {
+    collect_used(body, found, true, &mut std::collections::HashMap::new());
+}
+
+/// The lines of `body` that carry something to run. `used` says whether
+/// the value of the body's last statement is used, which decides whether a
+/// literal standing there runs at all: Ruby drops a literal whose value goes
+/// nowhere, and it is no line of its own then.
+fn collect_used(
+    body: &[Statement],
+    found: &mut Vec<usize>,
+    used: bool,
+    moved: &mut std::collections::HashMap<usize, usize>,
+) {
+    let last = body.len().saturating_sub(1);
+    for (at, statement) in body.iter().enumerate() {
+        let value_used = used && at == last;
         // `begin` is not a line of its own in Ruby's counting: what runs is
         // the body inside it.
-        if !matches!(statement, Statement::Begin { .. } | Statement::Block { .. }) {
-            found.push(statement.position().line as usize);
+        if !matches!(statement, Statement::Begin { .. } | Statement::Block { .. })
+            && (value_used || !is_plain_literal(statement))
+        {
+            // An assignment whose value starts on a line below it is
+            // counted on the value's line.
+            let line = statement.position().line as usize;
+            let counted_on = assigned_value_line(statement).filter(|held| *held > line);
+            if let Some(below) = counted_on {
+                moved.insert(line, below);
+            }
+            found.push(counted_on.unwrap_or(line));
         }
         // An `elsif` line counts as its condition is tested.
         if let Statement::If { elsif_branches, .. } = statement {
@@ -392,12 +513,125 @@ fn collect(body: &[Statement], found: &mut Vec<usize>) {
                     .map(|branch| branch.position.line as usize),
             );
         }
+        // A method, class or module body hands its last value on, and a
+        // loop's body hands nothing on. Any other body's value is used as
+        // far as the statement holding it is.
+        let inner_used = match statement {
+            Statement::ClassDef { .. }
+            | Statement::ModuleDef { .. }
+            | Statement::MethodDef { .. }
+            | Statement::FunctionDef { .. } => true,
+            Statement::While { .. } | Statement::DoWhile { .. } | Statement::For { .. } => false,
+            _ => value_used,
+        };
         for inner in nested_bodies(statement) {
-            collect(inner, found);
+            collect_used(inner, found, inner_used, moved);
         }
-        for inner in nested_blocks(statement) {
-            collect(inner, found);
+        let mut arm_lines = Vec::new();
+        for inner in nested_blocks(statement, &mut arm_lines) {
+            collect_used(inner, found, true, moved);
         }
+        found.extend(arm_lines);
+    }
+}
+
+thread_local! {
+    /// Whether the file being read freezes its string literals, which
+    /// decides whether an array or hash holding strings is copied whole.
+    static FROZEN_STRINGS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// The line the value of an assignment, or of an expression standing as a
+/// statement, starts on.
+fn assigned_value_line(statement: &Statement) -> Option<usize> {
+    match statement {
+        // An attribute or index target reads what it is set on first.
+        Statement::Assignment { target, value, .. } => match &**target {
+            Expression::MethodCall { .. } | Expression::Index { .. } => {
+                Some(start_line(target).min(start_line(value)))
+            }
+            _ => Some(start_line(value)),
+        },
+        Statement::MultipleAssignment { values, .. } => values.first().map(start_line),
+        Statement::Expression { expression, .. } => Some(start_line(expression)),
+        _ => None,
+    }
+}
+
+/// Whether Ruby builds a value once, ahead of time, and copies it where it
+/// stands: a literal, or an array or hash of them. A string is one only
+/// where the file freezes its string literals, while a hash's string keys
+/// always are.
+fn is_static_value(expression: &Expression) -> bool {
+    match expression {
+        Expression::StringLiteral { .. } => FROZEN_STRINGS.get(),
+        // A string literal in a file that freezes them.
+        Expression::MethodCall { receiver, method, .. } if method == "__frozen_literal__" => {
+            matches!(**receiver, Expression::StringLiteral { .. })
+        }
+        Expression::Array { elements, .. } => elements.iter().all(is_static_value),
+        Expression::Dictionary { entries, .. } => entries.iter().all(|(key, value)| {
+            (matches!(key, Expression::StringLiteral { .. }) || is_static_value(key))
+                && is_static_value(value)
+        }),
+        _ => is_literal_expression(expression),
+    }
+}
+
+/// The line an expression starts on, which for a call or an operator is
+/// where what it is made on starts.
+fn start_line(expression: &Expression) -> usize {
+    let own = expression.position().line as usize;
+    let inner = match expression {
+        Expression::MethodCall { receiver, .. } => Some(start_line(receiver)),
+        Expression::BinaryOp { left, .. } => Some(start_line(left)),
+        Expression::Index { array, .. } => Some(start_line(array)),
+        Expression::Range { start, .. } => Some(start_line(start)),
+        // An array or hash literal holding only literals is copied whole
+        // where it starts. Any other is counted from its first element,
+        // which is where the work of building it starts.
+        Expression::Array { .. } | Expression::Dictionary { .. }
+            if is_static_value(expression) =>
+        {
+            None
+        }
+        Expression::Array { elements, .. } => {
+            return elements.first().map_or(own, start_line);
+        }
+        Expression::Dictionary { entries, .. } => {
+            return entries.first().map_or(own, |(key, _)| start_line(key));
+        }
+        _ => None,
+    };
+    inner.map_or(own, |held| held.min(own))
+}
+
+/// Whether a statement is nothing but a literal, which Ruby compiles to
+/// nothing where its value is not used.
+fn is_plain_literal(statement: &Statement) -> bool {
+    let Statement::Expression { expression, .. } = statement else {
+        return false;
+    };
+    is_literal_expression(expression)
+}
+
+fn is_literal_expression(expression: &Expression) -> bool {
+    match expression {
+        Expression::IntLiteral { .. }
+        | Expression::FloatLiteral { .. }
+        | Expression::StringLiteral { .. }
+        | Expression::BoolLiteral { .. }
+        | Expression::NilLiteral { .. }
+        | Expression::Symbol { .. }
+        | Expression::BigIntLiteral { .. } => true,
+        Expression::MethodCall { receiver, method, .. } if method == "__frozen_literal__" => {
+            matches!(**receiver, Expression::StringLiteral { .. })
+        }
+        Expression::Array { elements, .. } => elements.iter().all(is_literal_expression),
+        Expression::Dictionary { entries, .. } => entries
+            .iter()
+            .all(|(key, value)| is_literal_expression(key) && is_literal_expression(value)),
+        _ => false,
     }
 }
 
@@ -466,10 +700,10 @@ pub(crate) fn nested_bodies(statement: &Statement) -> Vec<&[Statement]> {
 
 /// The bodies of blocks written on a statement's own expressions, which run
 /// line by line the same way.
-fn nested_blocks(statement: &Statement) -> Vec<&[Statement]> {
+fn nested_blocks<'a>(statement: &'a Statement, arm_lines: &mut Vec<usize>) -> Vec<&'a [Statement]> {
     let mut found = Vec::new();
     for expression in own_expressions(statement) {
-        gather_blocks(expression, &mut found);
+        gather_blocks(expression, &mut found, arm_lines);
     }
     found
 }
@@ -493,24 +727,173 @@ pub(crate) fn own_expressions(statement: &Statement) -> Vec<&Expression> {
     }
 }
 
-fn gather_blocks<'a>(expression: &'a Expression, found: &mut Vec<&'a [Statement]>) {
+fn gather_blocks<'a>(
+    expression: &'a Expression,
+    found: &mut Vec<&'a [Statement]>,
+    arm_lines: &mut Vec<usize>,
+) {
     match expression {
-        Expression::Lambda { body, .. } | Expression::SingletonClass { body, .. } => {
-            found.push(&body[..])
+        Expression::Lambda {
+            parameter_defaults,
+            body,
+            ..
+        } => {
+            for (_, default) in parameter_defaults.iter() {
+                gather_blocks(default, found, arm_lines);
+            }
+            found.push(&body[..]);
         }
-        Expression::BeginRescue { body, .. } => found.push(body.as_slice()),
+        Expression::SingletonClass { target, body, .. } => {
+            gather_blocks(target, found, arm_lines);
+            found.push(&body[..]);
+        }
+        Expression::BeginRescue {
+            body,
+            rescue_clauses,
+            else_clause,
+            ensure_block,
+            ..
+        } => {
+            found.push(body.as_slice());
+            for clause in rescue_clauses {
+                found.push(clause.body.as_slice());
+            }
+            for held in else_clause.iter().chain(ensure_block.iter()) {
+                found.push(held.as_slice());
+            }
+        }
+        Expression::BinaryOp { left, right, .. } => {
+            gather_blocks(left, found, arm_lines);
+            gather_blocks(right, found, arm_lines);
+        }
+        Expression::UnaryOp { operand, .. } => gather_blocks(operand, found, arm_lines),
+        Expression::PatternTest { value, .. } => gather_blocks(value, found, arm_lines),
+        Expression::Call {
+            callee,
+            arguments,
+            trailing_block,
+            ..
+        } => {
+            gather_blocks(callee, found, arm_lines);
+            for argument in arguments {
+                gather_blocks(argument, found, arm_lines);
+            }
+            if let Some(block) = trailing_block {
+                gather_blocks(block, found, arm_lines);
+            }
+        }
         Expression::MethodCall {
             receiver,
             arguments,
             trailing_block,
             ..
         } => {
-            gather_blocks(receiver, found);
+            gather_blocks(receiver, found, arm_lines);
             for argument in arguments {
-                gather_blocks(argument, found);
+                gather_blocks(argument, found, arm_lines);
             }
             if let Some(block) = trailing_block {
-                gather_blocks(block, found);
+                gather_blocks(block, found, arm_lines);
+            }
+        }
+        Expression::Super {
+            arguments,
+            trailing_block,
+            ..
+        } => {
+            for argument in arguments {
+                gather_blocks(argument, found, arm_lines);
+            }
+            if let Some(block) = trailing_block {
+                gather_blocks(block, found, arm_lines);
+            }
+        }
+        Expression::Yield { arguments, .. }
+        | Expression::Array {
+            elements: arguments,
+            ..
+        } => {
+            for argument in arguments {
+                gather_blocks(argument, found, arm_lines);
+            }
+        }
+        Expression::Index { array, index, .. } => {
+            gather_blocks(array, found, arm_lines);
+            gather_blocks(index, found, arm_lines);
+        }
+        Expression::Dictionary { entries, .. } => {
+            for (key, value) in entries {
+                gather_blocks(key, found, arm_lines);
+                gather_blocks(value, found, arm_lines);
+            }
+        }
+        Expression::Grouped { expression, .. }
+        | Expression::Splat { expression, .. }
+        | Expression::KeywordSplat { expression, .. }
+        | Expression::BlockArg { expression, .. }
+        | Expression::Defined { expression, .. } => gather_blocks(expression, found, arm_lines),
+        Expression::Range { start, end, .. } => {
+            gather_blocks(start, found, arm_lines);
+            gather_blocks(end, found, arm_lines);
+        }
+        Expression::InterpolatedString { parts, .. } => {
+            for part in parts {
+                if let crate::ast::InterpolationPart::Expression(held) = part {
+                    gather_blocks(held, found, arm_lines);
+                }
+            }
+        }
+        Expression::If {
+            condition,
+            then_branch,
+            elsif_branches,
+            else_branch,
+            ..
+        } => {
+            gather_blocks(condition, found, arm_lines);
+            found.push(then_branch.as_slice());
+            for branch in elsif_branches.iter() {
+                gather_blocks(&branch.condition, found, arm_lines);
+                found.push(branch.body.as_slice());
+            }
+            if let Some(body) = else_branch {
+                found.push(body.as_slice());
+            }
+        }
+        Expression::Unless {
+            condition,
+            then_branch,
+            else_branch,
+            ..
+        } => {
+            gather_blocks(condition, found, arm_lines);
+            found.push(then_branch.as_slice());
+            if let Some(body) = else_branch {
+                found.push(body.as_slice());
+            }
+        }
+        Expression::Case {
+            expression,
+            cases,
+            else_case,
+            ..
+        } => {
+            gather_blocks(expression, found, arm_lines);
+            // An arm written as one expression is a line of its own.
+            for case in cases {
+                if let Some(guard) = &case.guard {
+                    gather_blocks(guard, found, arm_lines);
+                }
+                if !matches!(case.body, Expression::BeginRescue { .. }) {
+                    arm_lines.push(case.body.position().line as usize);
+                }
+                gather_blocks(&case.body, found, arm_lines);
+            }
+            if let Some(held) = else_case {
+                if !matches!(**held, Expression::BeginRescue { .. }) {
+                    arm_lines.push(held.position().line as usize);
+                }
+                gather_blocks(held, found, arm_lines);
             }
         }
         _ => {}

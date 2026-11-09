@@ -286,7 +286,11 @@ impl VirtualMachine {
                 .with_location(Some(format!("{}:{}", position.line, position.column)))
                 .with_source_file(self.file_for_frames()),
         );
+        // A `module` body is not in a method, though a block holding it
+        // may run inside one, so `using` is allowed there.
+        let held_method_nesting = std::mem::take(&mut self.user_def_nesting);
         let answer = self.module_body_statements(module, body);
+        self.user_def_nesting = held_method_nesting;
         self.call_stack_pop();
         self.class_var_home = held_home;
         let written_at = body

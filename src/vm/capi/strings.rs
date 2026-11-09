@@ -496,6 +496,14 @@ pub extern "C-unwind" fn rb_str_append(string: Value, added: Value) -> Value {
     string
 }
 
+/// Appends `added` to `string` as `String#<<` does, where an Integer
+/// stands for the codepoint it names.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_str_concat(string: Value, added: Value) -> Value {
+    call(to_object(string), "<<", vec![to_object(added)]);
+    string
+}
+
 /// Gives `destination` the bytes and encoding of `source`, as
 /// `String#replace` does.
 #[unsafe(no_mangle)]

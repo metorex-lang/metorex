@@ -622,3 +622,33 @@ fn return_inside_instance_eval_leaves_the_method() {
     let output = run_example("control_flow/return_inside_instance_eval_leaves_the_method.rb");
     assert_eq!(output, "false\n:from_eval\n");
 }
+
+#[test]
+fn when_values_call_methods_on_literals() {
+    let output = run_example("control_flow/when_values_call_methods_on_literals.rb");
+    assert_eq!(output, ":integer\n:string\n:float\n:other\n");
+}
+
+#[test]
+fn when_ranges_read_names_and_open_ends() {
+    let output = run_example("control_flow/when_ranges_read_names_and_open_ends.rb");
+    assert_eq!(output, ":within\n:past\n:far\n:other\n");
+}
+
+#[test]
+fn class_bodies_as_command_arguments() {
+    let output = run_example("control_flow/class_bodies_as_command_arguments.rb");
+    assert_eq!(output, "#<Class:Ledger>\n#<Class:Ledger>\n[:tally]\n");
+}
+
+#[test]
+fn names_read_before_their_assignment_call_methods() {
+    let output = run_example("control_flow/names_read_before_their_assignment_call_methods.rb");
+    assert_eq!(output, "[\"held\", :local]\nnil\n[:held, :held]\n");
+}
+
+#[test]
+fn range_ends_may_assign() {
+    let output = run_example("control_flow/range_ends_may_assign.rb");
+    assert_eq!(output, "[1, 2]\n3\n[0, 1, 2, 3]\n[1, 2]\n");
+}

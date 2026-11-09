@@ -145,7 +145,10 @@ pub(crate) const MODULE_PRIVATE_DECLARATIONS: &[&str] = &[
     "private",
     "public",
     "protected",
+    "refine",
     "remove_const",
+    "ruby2_keywords",
+    "using",
 ];
 
 /// The native Module and Class instance methods metorex implements, with the
@@ -562,6 +565,7 @@ pub(crate) fn is_native_kernel_method(name: &str) -> bool {
             | "!="
             | "!~"
             | "==="
+            | "<=>"
     )
 }
 

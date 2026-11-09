@@ -1,0 +1,14 @@
+# The gems mini_portile2's tests load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "mini_portile2", path: "../../../../gems/mini_portile2"
+gem "minitar", "0.9"
+gem "minitest-hooks", "1.5.2"
+gem "webrick"
+gem "net-ftp"
+
+gem "minitest", "~> 5.15"
+
+shipped "logger", "erb"

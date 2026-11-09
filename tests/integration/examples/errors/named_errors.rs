@@ -381,3 +381,41 @@ fn test_errors_highlight_keyword_no_parens_execution() {
     let output = run_example("errors/highlight_keyword_no_parens.rb");
     assert_eq!(output, HIGHLIGHT_KEYWORD_OUTPUT);
 }
+
+#[test]
+fn method_missing_super_names_bang_methods_as_calls() {
+    let output = run_example("errors/method_missing_super_names_bang_methods_as_calls.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[NoMethodError, \"undefined method 'boom!' for an instance of Script\"]\n",
+            "[NoMethodError, \"undefined method 'ready?' for an instance of Script\"]\n",
+            "[NameError, \"undefined local variable or method 'missing' for an instance of Script\"]\n",
+            "NoMethodError\n",
+        )
+    );
+}
+
+#[test]
+fn raise_asks_forwarders_for_their_exception() {
+    let output = run_example("errors/raise_asks_forwarders_for_their_exception.rb");
+    assert_eq!(
+        output,
+        "#<NameError: missing record>\n#<TypeError: exception class/object expected>\n"
+    );
+}
+
+#[test]
+fn exceptions_stay_frozen() {
+    let output = run_example("errors/exceptions_stay_frozen.rb");
+    assert_eq!(output, "false\ntrue\nfalse\nFrozenError\n");
+}
+
+#[test]
+fn method_missing_chains_keep_bare_names() {
+    let output = run_example("errors/method_missing_chains_keep_bare_names.rb");
+    assert_eq!(
+        output,
+        "[NameError, \"undefined local variable or method 'acount' for an instance of Group\"]\n"
+    );
+}

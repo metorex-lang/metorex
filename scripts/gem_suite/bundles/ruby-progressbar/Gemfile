@@ -1,0 +1,9 @@
+# The gems ruby-progressbar's specs load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "ruby-progressbar", path: "../../../../gems/ruby-progressbar"
+gem "rspec"
+gem "rspectacular"
+gem "timecop"

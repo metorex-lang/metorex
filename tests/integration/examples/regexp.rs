@@ -398,3 +398,18 @@ fn repeated_alternatives_fail_once_per_place() {
         )
     );
 }
+
+#[test]
+fn whole_pattern_calls() {
+    let output = run_example("regexp/whole_pattern_calls.rb");
+    assert_eq!(
+        output,
+        "\"(a(b)c)\"\n\"[\\\"#<Class:#<Object:0x1>>\\\", :m]\"\n"
+    );
+}
+
+#[test]
+fn subclass_patterns_match_strings() {
+    let output = run_example("regexp/subclass_patterns_match_strings.rb");
+    assert_eq!(output, "true\nfalse\n");
+}

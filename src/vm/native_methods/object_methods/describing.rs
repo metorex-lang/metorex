@@ -90,6 +90,26 @@ impl VirtualMachine {
                 {
                     return self.default_instance_inspect(receiver, position).map(Some);
                 }
+                // The singleton class of a class or module writes that class
+                // or module as its own `inspect` writes it, which a program
+                // may have written for itself.
+                if let View::Class(singleton) = receiver.view()
+                    && singleton.is_singleton_class()
+                    && let Some(attached @ (View::Class(_) | View::Module(_))) =
+                        singleton.get_class_var("__attached__").view()
+                    && self
+                        .lookup_method(&attached.to_object(), "inspect")
+                        .is_some_and(|(_, method)| {
+                            crate::vm::native_methods::object_methods::written_by_program(&method)
+                        })
+                {
+                    let shown =
+                        self.send_to_object(attached.to_object(), "inspect", Vec::new(), position)?;
+                    let View::String(shown) = shown.view() else {
+                        return Ok(Some(Object::string(receiver.to_string())));
+                    };
+                    return Ok(Some(Object::string(format!("#<Class:{}>", shown.as_str()))));
+                }
                 // A callable describes itself in bytes rather than in text,
                 // which is what Ruby tags the description with.
                 if matches!(receiver.view(), View::Block(_)) {

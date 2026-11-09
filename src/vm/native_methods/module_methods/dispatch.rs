@@ -242,6 +242,25 @@ impl VirtualMachine {
                     let clear = matches!(arguments.first().view(), Some(View::Bool(true)));
                     return self.coverage_report(clear).map(Some);
                 }
+                "__coverage_line_stub__" => {
+                    let source = match arguments.first().view() {
+                        Some(View::String(text)) => text.as_str().to_string(),
+                        _ => String::new(),
+                    };
+                    let Some(lines) = crate::vm::coverage::line_stub(&source) else {
+                        return Err(crate::vm::errors::simple_exception(
+                            "SyntaxError",
+                            "invalid Ruby code",
+                            position,
+                        ));
+                    };
+                    return Ok(Some(Object::array(
+                        lines
+                            .into_iter()
+                            .map(|line| line.map_or(Object::Nil, |count| Object::Int(count as i64)))
+                            .collect(),
+                    )));
+                }
                 _ => {}
             }
         }
@@ -411,12 +430,16 @@ impl VirtualMachine {
             }
             let mut found = Vec::new();
             for candidate in candidates {
-                let kind = self.send_to_object(
-                    candidate.clone(),
-                    "is_a?",
-                    vec![wanted.clone()],
-                    position,
-                )?;
+                // The object's own class chain answers, not an `is_a?` it
+                // may not have, as a BasicObject does not.
+                let kind = self
+                    .call_object_type_check_method(
+                        &candidate,
+                        "is_a?",
+                        std::slice::from_ref(&wanted),
+                        position,
+                    )?
+                    .unwrap_or(Object::Bool(false));
                 if crate::vm::utils::is_truthy(&kind) {
                     found.push(candidate);
                 }

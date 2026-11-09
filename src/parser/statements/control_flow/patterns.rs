@@ -90,6 +90,11 @@ impl Parser<'_> {
     pub(in crate::parser) fn parse_case_pattern(&mut self) -> Result<MatchPattern, MetorexError> {
         let token = self.peek().clone();
 
+        if self.in_when_clause && self.is_literal_opening_an_expression() {
+            let held = self.parse_range()?;
+            return Ok(MatchPattern::Expression(Box::new(held)));
+        }
+
         match &token.kind {
             // Array pattern
             TokenKind::LBracket => {
@@ -336,27 +341,54 @@ impl Parser<'_> {
         }
     }
 
+    /// `when 0.class`, `when "a".upcase`, or `when 0..limit`, whose value
+    /// is the expression rather than the literal it opens with.
+    fn is_literal_opening_an_expression(&self) -> bool {
+        matches!(
+            self.peek().kind,
+            TokenKind::Int(_)
+                | TokenKind::Float(_)
+                | TokenKind::String(_)
+                | TokenKind::FrozenString(_)
+                | TokenKind::MutableString(_)
+        ) && match self.peek_ahead(1).kind {
+            TokenKind::Dot | TokenKind::SafeDot => true,
+            TokenKind::DotDot | TokenKind::DotDotDot => matches!(
+                self.peek_ahead(2).kind,
+                TokenKind::Ident(_)
+                    | TokenKind::InstanceVar(_)
+                    | TokenKind::ClassVar(_)
+                    | TokenKind::GlobalVar(_)
+            ),
+            _ => false,
+        }
+    }
+
     /// If `..` or `...` follows a literal pattern, wrap it in a Range pattern.
     pub(crate) fn parse_range_pattern_suffix(
         &mut self,
         start: MatchPattern,
     ) -> Result<MatchPattern, MetorexError> {
-        if self.match_token(&[TokenKind::DotDotDot]) {
-            let end = self.parse_case_pattern()?;
-            Ok(MatchPattern::Range {
-                start: Box::new(start),
-                end: Box::new(end),
-                exclusive: true,
-            })
+        let exclusive = if self.match_token(&[TokenKind::DotDotDot]) {
+            true
         } else if self.match_token(&[TokenKind::DotDot]) {
-            let end = self.parse_case_pattern()?;
-            Ok(MatchPattern::Range {
-                start: Box::new(start),
-                end: Box::new(end),
-                exclusive: false,
-            })
+            false
         } else {
-            Ok(start)
-        }
+            return Ok(start);
+        };
+        // `when 5.. then` has no end, which makes the range endless.
+        let end = if matches!(
+            self.peek().kind,
+            TokenKind::Then | TokenKind::Newline | TokenKind::Semicolon | TokenKind::Comma
+        ) {
+            MatchPattern::NilLiteral
+        } else {
+            self.parse_case_pattern()?
+        };
+        Ok(MatchPattern::Range {
+            start: Box::new(start),
+            end: Box::new(end),
+            exclusive,
+        })
     }
 }

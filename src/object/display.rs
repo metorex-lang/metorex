@@ -198,7 +198,7 @@ impl fmt::Display for Object {
                 }
             }
             View::Binding(binding) => {
-                write!(f, "<Binding with {} vars>", binding.variable_count())
+                write!(f, "#<Binding:0x{:016x}>", Rc::as_ptr(binding) as usize)
             }
             View::Regex(pattern, flags) => {
                 if flags.is_empty() {

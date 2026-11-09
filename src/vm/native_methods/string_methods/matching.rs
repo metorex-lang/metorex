@@ -121,7 +121,10 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let (pattern, flags) = match arguments[0].view() {
+                // A Regexp subclass matches by the pattern it keeps.
+                let argument = crate::vm::native_methods::regexp_subclass_value(&arguments[0])
+                    .unwrap_or_else(|| arguments[0].clone());
+                let (pattern, flags) = match argument.view() {
                     View::Regex(p, f) => (p.as_str().to_string(), f.as_str().to_string()),
                     View::String(s) => (s.as_str().to_string(), String::new()),
                     _ => {
@@ -133,7 +136,7 @@ impl VirtualMachine {
                         ));
                     }
                 };
-                if let View::Regex(written, _) = arguments[0].view() {
+                if let View::Regex(written, _) = argument.view() {
                     self.prepare_match_subject(written, &flags, receiver, position)?;
                 }
                 // A second argument names the character offset to start at,

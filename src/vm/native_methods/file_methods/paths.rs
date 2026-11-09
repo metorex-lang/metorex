@@ -126,7 +126,18 @@ impl VirtualMachine {
                                 "Errno::ENOENT",
                                 format!("No such file or directory @ realpath - {}", path_str),
                             ),
-                            _ => Object::exception(
+                            // Any other refusal is the one the system gave,
+                            // such as EACCES for a directory that cannot be read.
+                            Some(number) => {
+                                let reason = e.to_string();
+                                let reason = reason.split(" (os error").next().unwrap_or(&reason);
+                                Object::exception(
+                                    crate::vm::init::errno_class_name(number)
+                                        .unwrap_or("SystemCallError"),
+                                    format!("{reason} @ realpath - {path_str}"),
+                                )
+                            }
+                            None => Object::exception(
                                 "Errno::ENOTDIR",
                                 format!("Not a directory @ realpath - {}", path_str),
                             ),

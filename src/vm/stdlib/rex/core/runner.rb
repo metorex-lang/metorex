@@ -21,10 +21,17 @@ module Rex
         invoke
       end
 
+      # Started the way RSpec's own `rspec` executable starts it, which
+      # runs only the helpers an option file or a spec requires.
       def self.invoke
+        @invoked_as_rspec = true
         disable_autorun!
         status = run(ARGV, $stderr, $stdout).to_i
         exit(status) if status != 0
+      end
+
+      def self.invoked_as_rspec?
+        @invoked_as_rspec ? true : false
       end
 
       def self.run(args, err=$stderr, out=$stdout)
@@ -68,8 +75,10 @@ module Rex
       end
 
       # Rex loads spec_helper.rb first whenever it is there, unless a
-      # `--require` already loaded it.
+      # `--require` already loaded it or the run was started as RSpec's.
       def load_spec_helper
+        return if Runner.invoked_as_rspec?
+
         helper = File.expand_path(File.join(@configuration.default_path, "spec_helper.rb"))
         return unless File.file?(helper)
         return if $LOADED_FEATURES.include?(helper)

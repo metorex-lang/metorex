@@ -42,7 +42,14 @@ impl VirtualMachine {
             "to_sym" => match receiver.view() {
                 View::Symbol(_) => Ok(Some(receiver.clone())),
                 View::String(s) => self.interned_symbol(s, position).map(Some),
-                _ => Ok(None),
+                // An instance of a String subclass interns the text it holds.
+                _ => match crate::vm::native_methods::string_subclass_value(receiver).view() {
+                    Some(View::String(held)) => {
+                        let held = std::rc::Rc::clone(held);
+                        self.interned_symbol(&held, position).map(Some)
+                    }
+                    _ => Ok(None),
+                },
             },
             // Kernel's conversion functions are private instance methods on
             // every object, which is how `obj.send(:Integer, "10")` reaches

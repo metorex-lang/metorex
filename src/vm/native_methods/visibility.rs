@@ -93,7 +93,15 @@ impl VirtualMachine {
                         (n == "new" && matches!(attached.view(), View::Class(_)))
                             || self.responds_to(&attached, &n)
                     });
-                if !on_object && !on_kernel && !on_metaclass {
+                // Module's own methods are native rather than table entries,
+                // so `public :remove_const` in Module's body names one.
+                let on_module = crate::vm::method_invocation::descends_from(class_rc, "Module")
+                    && (crate::vm::native_methods::is_native_module_method(&n)
+                        || crate::vm::native_methods::class_methods::MODULE_PRIVATE_DECLARATIONS
+                            .contains(&n.as_str())
+                        || crate::vm::native_methods::class_methods::MODULE_PRIVATE_HOOKS
+                            .contains(&n.as_str()));
+                if !on_object && !on_kernel && !on_metaclass && !on_module {
                     let msg = format!("undefined method '{}' for class '{}'", n, class_rc.name());
                     let exc = Object::exception("NameError", msg.clone());
                     return Err(MetorexError::UncaughtException {

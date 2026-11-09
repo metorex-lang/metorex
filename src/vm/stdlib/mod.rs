@@ -327,6 +327,10 @@ const EMBEDDED_LIBRARIES: &[(&[&str], &str)] = &[
     (&["io/console/size"], carried_source!("io_console_size.rb")),
     (&["ipaddr"], carried_source!("ipaddr.rb")),
     (&["coverage"], carried_source!("coverage.rb")),
+    (
+        &["coverage/branch_layout"],
+        carried_source!("coverage/branch_layout.rb"),
+    ),
     (&["date"], carried_source!("date.rb")),
     (&["delegate"], carried_source!("delegate.rb")),
     (

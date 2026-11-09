@@ -308,7 +308,15 @@ impl VirtualMachine {
                 }
             }
         }
-        if let Some(val) = self.environment().get(name) {
+        // A local reserved for an assignment that has not run yet is not a
+        // local where the name is read before it, so a method of the same
+        // name answers there, as Ruby's parser decides.
+        let reserved_for_later = self.environment().name_is_only_hoisted(name)
+            && self
+                .environment()
+                .get("self")
+                .is_some_and(|current_self| self.responds_to(&current_self, name));
+        if !reserved_for_later && let Some(val) = self.environment().get(name) {
             // A method on `self` wins over a same-named Kernel function, so a
             // bare `to_s` inside a class reaches that class's `to_s` rather
             // than the top-level one, and a method that needs arguments
@@ -654,7 +662,11 @@ impl VirtualMachine {
             && crate::vm::native_methods::object_methods::written_by_program(&handler)
         {
             let depth = self.call_stack.len();
-            self.bare_names_missing.push((name.to_string(), depth));
+            // `boom!` and `ready?` can only name methods, so one nothing
+            // answers is a NoMethodError, as a call is.
+            let could_be_local = !name.ends_with(['!', '?']);
+            let recorded = if could_be_local { name.to_string() } else { String::new() };
+            self.bare_names_missing.push((recorded, depth));
             let answered = self.invoke_method(
                 owner,
                 handler,

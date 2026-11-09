@@ -49,13 +49,9 @@ impl VirtualMachine {
                     }
                     built
                 }
-                _ => {
-                    return Err(crate::vm::errors::simple_exception(
-                        "TypeError",
-                        "exception class/object expected",
-                        position,
-                    ));
-                }
+                // Any other value is asked for an exception of its own, as
+                // `Kernel#raise` asks it.
+                _ => self.build_raise_exception(std::slice::from_ref(&value), position)?,
             }
         } else {
             // Bare `raise` re-raises `$!`. With nothing to re-raise Ruby
@@ -197,18 +193,26 @@ impl VirtualMachine {
                 self.invoke_callable(value.to_object(), call_arguments, position)?
             }
             Some(value) => {
-                // Any other receiver is asked for an exception of its own.
-                let Some((class, method)) = self.lookup_method(&value.to_object(), "exception")
-                else {
-                    let msg = "exception class/object expected".to_string();
-                    return Err(MetorexError::UncaughtException {
-                        exception: Object::exception("TypeError", msg.clone()),
-                        location: position_to_location(position),
-                        message: msg,
-                    });
-                };
+                // Any other receiver is asked for an exception of its own,
+                // which one answering through `method_missing` gives too.
                 let call_arguments = message.into_iter().collect();
-                self.invoke_method(class, method, value.to_object(), call_arguments, position)?
+                let receiver = value.to_object();
+                match self.lookup_method(&receiver, "exception") {
+                    Some((class, method)) => {
+                        self.invoke_method(class, method, receiver, call_arguments, position)?
+                    }
+                    None if self.responds_via_missing(&receiver, "exception", true, position)? => {
+                        self.send_to_object(receiver, "exception", call_arguments, position)?
+                    }
+                    None => {
+                        let msg = "exception class/object expected".to_string();
+                        return Err(MetorexError::UncaughtException {
+                            exception: Object::exception("TypeError", msg.clone()),
+                            location: position_to_location(position),
+                            message: msg,
+                        });
+                    }
+                }
             }
         };
         if !matches!(exception.view(), View::Exception(_)) {
@@ -593,6 +597,13 @@ impl VirtualMachine {
         exception: &Object,
         position: Position,
     ) -> Result<bool, MetorexError> {
+        // The word that a thread or fiber is stopping is no exception the
+        // program can rescue, whatever its handlers answer for `===`.
+        if let View::Exception(details) = exception.view()
+            && details.borrow().exception_type == crate::vm::fibers::FIBER_KILLED
+        {
+            return Ok(false);
+        }
         for spread in spreads {
             // Ruby asks a splatted value for its Array form, which is what
             // lets anything answering `to_a` name the classes.

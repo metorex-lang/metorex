@@ -59,6 +59,30 @@ impl VirtualMachine {
         super_block: Option<Object>,
         position: Position,
     ) -> Result<Object, MetorexError> {
+        // A `method_missing` handed a bare name hands it on to the one
+        // `super` reaches, which is handed the bare name in its turn.
+        let handed_on = self
+            .bare_names_missing
+            .last()
+            .filter(|(_, depth)| self.call_stack.len() == *depth + 1)
+            .map(|(bare, _)| (bare.clone(), self.call_stack.len()));
+        let carried = handed_on.is_some();
+        if let Some(entry) = handed_on {
+            self.bare_names_missing.push(entry);
+        }
+        let answered = self.super_from_running_method(arguments, super_block, position);
+        if carried {
+            self.bare_names_missing.pop();
+        }
+        answered
+    }
+
+    fn super_from_running_method(
+        &mut self,
+        arguments: &SuperArguments,
+        super_block: Option<Object>,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
         // Get the current method name from the call stack.
         // The call stack stores method names as "Class#method".
         // A block names the method it was written in, whichever method is
@@ -716,11 +740,15 @@ impl VirtualMachine {
                 None => "method_missing".to_string(),
             };
             // A name written bare reached `method_missing`, and Ruby reports
-            // it as a name that is neither a local nor a method.
+            // it as a name that is neither a local nor a method. Only a
+            // `method_missing` the name was handed to says so, through
+            // `super` from the one before it, and one that `__send__`
+            // reached from there was handed a call. `super_with` marked
+            // this frame when the name was handed to it.
             let written_bare = self
                 .bare_names_missing
                 .last()
-                .is_some_and(|(bare, depth)| *bare == missing && self.call_stack.len() > *depth);
+                .is_some_and(|(bare, depth)| *bare == missing && self.call_stack.len() == *depth);
             if written_bare && evaluated_args.len() == 1 {
                 // Traced here, while `method_missing`'s own file is the one
                 // running, so its frame names that file.

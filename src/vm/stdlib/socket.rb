@@ -1731,8 +1731,9 @@ class TCPSocket < IPSocket
   end
   private :__read_through__
 
-  def write(text)
-    __write_all__ "write", text.to_s
+  # Each object is written in turn, and the answer is how many bytes went.
+  def write(*texts)
+    texts.sum { |text| __write_all__ "write", text.to_s }
   end
 
 
@@ -1965,8 +1966,9 @@ class UNIXSocket < BasicSocket
     Socket.filled_buffer(held, buffer)
   end
 
-  def write(text)
-    __write_all__ "unix_write", text.to_s
+  # Each object is written in turn, and the answer is how many bytes went.
+  def write(*texts)
+    texts.sum { |text| __write_all__ "unix_write", text.to_s }
   end
 
   def write_nonblock(text, exception: true)

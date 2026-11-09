@@ -58,3 +58,12 @@ fn test_metaprogramming_refinement_imports_no_parens_execution() {
     let output = run_example("metaprogramming/refinement_imports_no_parens.rb");
     assert_eq!(output, REFINEMENT_IMPORTS_OUTPUT);
 }
+
+#[test]
+fn refinements_reach_blocks_run_after_their_file_loads() {
+    let output = run_example("metaprogramming/refinements_in_blocks/main.rb");
+    assert_eq!(
+        output,
+        "[\"READY!\"]\n[\"READY!\"]\n[\"READY!\"]\n\"HELLO!\"\n\"WELCOME!\"\n"
+    );
+}

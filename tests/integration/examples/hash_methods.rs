@@ -296,3 +296,9 @@ fn identity_hash_finds_a_key_after_it_changes() {
     let output = run_example("hashes/identity_hash_finds_a_key_after_it_changes.rb");
     assert_eq!(output, "1\n1\n1\n1\nnil\n2\n3\n3\n8\n");
 }
+
+#[test]
+fn keys_must_hash_to_integers() {
+    let output = run_example("hashes/keys_must_hash_to_integers.rb");
+    assert_eq!(output, "\"no implicit conversion of nil into Integer\"\n".repeat(3) + "1\n");
+}

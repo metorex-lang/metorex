@@ -1,0 +1,54 @@
+PATH
+  remote: ../../../../gems/ruby-progressbar
+  specs:
+    ruby-progressbar (1.13.0)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    diff-lcs (1.6.2)
+    fuubar (2.5.1)
+      rspec-core (~> 3.0)
+      ruby-progressbar (~> 1.4)
+    rspec (3.13.2)
+      rspec-core (~> 3.13.0)
+      rspec-expectations (~> 3.13.0)
+      rspec-mocks (~> 3.13.0)
+    rspec-core (3.13.7)
+      rspec-support (~> 3.13.0)
+    rspec-expectations (3.13.6)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.13.0)
+    rspec-mocks (3.13.9)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.13.0)
+    rspec-support (3.13.8)
+    rspectacular (0.70.8)
+      fuubar (~> 2.0)
+      rspec (~> 3.1)
+    timecop (0.9.11)
+
+PLATFORMS
+  arm64-darwin-27
+  ruby
+
+DEPENDENCIES
+  rspec
+  rspectacular
+  ruby-progressbar!
+  timecop
+
+CHECKSUMS
+  diff-lcs (1.6.2) sha256=9ae0d2cba7d4df3075fe8cd8602a8604993efc0dfa934cff568969efb1909962
+  fuubar (2.5.1) sha256=b272a7804b282661c7fab583a3764f92543cb482c365ae39c685cd218fdd4880
+  rspec (3.13.2) sha256=206284a08ad798e61f86d7ca3e376718d52c0bc944626b2349266f239f820587
+  rspec-core (3.13.7) sha256=c64ff16d9788119805cbc6a3f4b6d87cc22417c2d25976a3330de136896b5469
+  rspec-expectations (3.13.6) sha256=bf538ca6d367ff5b0d85a87fdb5c0c6038f2cd1308a0eeba07476caa02d22f35
+  rspec-mocks (3.13.9) sha256=ea5c7ff3054a6098ca6039aacef80aec69d5a8a3ef80be8fc88337359b672a30
+  rspec-support (3.13.8) sha256=e4160030309b7e3e9d9863dfe720a35dfcc577162f5402cd68fc8c5258a0ffd6
+  rspectacular (0.70.8) sha256=83b51f13bfb955399771c123379119d3c9362c5c140531c520324335025af144
+  ruby-progressbar (1.13.0)
+  timecop (0.9.11) sha256=41284dc6e5041f2184f781ace766f942108c842f8d8c1386a26e6343decc7542
+
+BUNDLED WITH
+  4.0.23

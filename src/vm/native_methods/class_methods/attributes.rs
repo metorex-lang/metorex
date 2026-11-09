@@ -225,7 +225,25 @@ impl VirtualMachine {
                     use crate::vm::native_methods::object_methods::{
                         CoreVisibility, nearest_core_visibility,
                     };
+                    // `public :remove_const` in Module's body makes it public.
+                    let made_public = {
+                        let mut cursor = Some(Rc::clone(class_rc));
+                        let mut found_override = false;
+                        while let Some(current) = cursor {
+                            if current.has_public_override(&name) {
+                                found_override = true;
+                                break;
+                            }
+                            cursor = current.superclass();
+                        }
+                        found_override
+                    };
                     if let Some(visibility) = nearest_core_visibility(&owners, &name) {
+                        let visibility = if made_public {
+                            CoreVisibility::Public
+                        } else {
+                            visibility
+                        };
                         return Ok(Answered(Object::Bool(match method_name {
                             "public_method_defined?" => visibility == CoreVisibility::Public,
                             "private_method_defined?" => visibility == CoreVisibility::Private,

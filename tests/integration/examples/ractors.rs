@@ -157,3 +157,9 @@ fn test_ractors_local_storage_no_parens_execution() {
     let output = run_example("ractors/local_storage_no_parens.rb");
     assert_eq!(output, LOCAL_STORAGE_OUTPUT);
 }
+
+#[test]
+fn each_object_lists_the_main_ractor() {
+    let output = run_example("ractors/each_object_lists_the_main_ractor.rb");
+    assert_eq!(output, "1\n42\n[true]\n");
+}

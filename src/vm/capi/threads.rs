@@ -51,6 +51,21 @@ pub extern "C-unwind" fn rb_thread_wakeup(thread: Value) -> Value {
     to_value(&call(to_object(thread), "wakeup", Vec::new()))
 }
 
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_thread_run(thread: Value) -> Value {
+    to_value(&call(to_object(thread), "run", Vec::new()))
+}
+
+/// Stops the running thread until another wakes it, as `Thread.stop` does.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_thread_stop() -> Value {
+    to_value(&call(
+        super::calls::top_level_module("Thread"),
+        "stop",
+        Vec::new(),
+    ))
+}
+
 /// A thread whose body calls `function` with `data` and answers what it
 /// answers.
 #[unsafe(no_mangle)]
@@ -204,6 +219,7 @@ fn wait_until(
     let mut stopped = None;
     let mut signals_seen = crate::vm::signals::signals_taken();
     while !finished.load(Ordering::SeqCst) {
+        run_call_handed_back();
         instance
             .borrow_mut()
             .set_var("__thread_waiting".to_string(), Object::Bool(true));
@@ -248,4 +264,70 @@ fn wait_until(
         .borrow_mut()
         .set_var("__thread_waiting".to_string(), Object::Bool(false));
     stopped
+}
+
+/// A call `rb_thread_call_with_gvl` made from the thread running a
+/// function without the interpreter, waiting for the interpreter's thread to
+/// make it: the function and its argument, and then what it answered.
+struct HandedBack {
+    asked: Option<(usize, usize)>,
+    answered: Option<usize>,
+}
+
+static HANDED_BACK: std::sync::Mutex<HandedBack> = std::sync::Mutex::new(HandedBack {
+    asked: None,
+    answered: None,
+});
+static HANDED_BACK_READY: std::sync::Condvar = std::sync::Condvar::new();
+
+/// Make the call a function running without the interpreter handed back, on
+/// the interpreter's thread, which is waiting for that function to return.
+fn run_call_handed_back() {
+    let asked = HANDED_BACK.lock().map(|mut held| held.asked.take()).unwrap_or(None);
+    let Some((address, argument)) = asked else {
+        return;
+    };
+    let answer = keeping_call_state(|| {
+        // SAFETY: the headers declare the function as taking a pointer and
+        // answering one.
+        let function: extern "C-unwind" fn(*mut c_void) -> *mut c_void =
+            unsafe { std::mem::transmute(address as *const ()) };
+        function(argument as *mut c_void) as usize
+    });
+    if let Ok(mut held) = HANDED_BACK.lock() {
+        held.answered = Some(answer);
+    }
+    HANDED_BACK_READY.notify_all();
+}
+
+/// `rb_thread_call_with_gvl`: calls `function` with `data` where the
+/// interpreter runs. On the interpreter's own thread that is a plain call.
+/// From a function `rb_thread_call_without_gvl` is running, the call is
+/// handed to the interpreter's thread, which makes it while it waits.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_thread_call_with_gvl(
+    function: *const (),
+    data: *mut c_void,
+) -> *mut c_void {
+    if on_interpreter_thread() {
+        // SAFETY: the headers declare the function as taking a pointer and
+        // answering one.
+        let function: extern "C-unwind" fn(*mut c_void) -> *mut c_void =
+            unsafe { std::mem::transmute(function) };
+        return function(data);
+    }
+    let Ok(mut held) = HANDED_BACK.lock() else {
+        return std::ptr::null_mut();
+    };
+    held.asked = Some((function as usize, data as usize));
+    held.answered = None;
+    loop {
+        if let Some(answer) = held.answered.take() {
+            return answer as *mut c_void;
+        }
+        held = match HANDED_BACK_READY.wait(held) {
+            Ok(next) => next,
+            Err(_) => return std::ptr::null_mut(),
+        };
+    }
 }

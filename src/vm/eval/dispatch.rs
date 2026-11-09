@@ -180,6 +180,9 @@ impl VirtualMachine {
         let written_in = Some(self.enclosing_scope_label());
         let written_depth = Some(self.block_nesting_depth());
         let method_nesting = self.method_nesting_stack.last();
+        let captured_refinements = self.any_refinement_active().then(|| {
+            Rc::new(self.refinement_scopes.iter().flatten().cloned().collect::<Vec<_>>())
+        });
         if let Some(last) = shared.origin.borrow().as_ref()
             && same_classes(&last.captured_def_scope, self.def_scope_stack.iter())
             && match method_nesting {
@@ -203,6 +206,7 @@ impl VirtualMachine {
             && Rc::ptr_eq(&last.written_within, &written_within)
             && last.written_in == written_in
             && last.written_depth == written_depth
+            && same_refinements(&last.captured_refinements, &captured_refinements)
         {
             return Rc::clone(last);
         }
@@ -235,6 +239,7 @@ impl VirtualMachine {
             written_depth,
             written_within,
             unit: shared.unit.clone(),
+            captured_refinements,
         });
         *shared.origin.borrow_mut() = Some(Rc::clone(&made));
         made
@@ -766,6 +771,23 @@ fn same_classes<'a>(
             .iter()
             .zip(open)
             .all(|(one, other)| Rc::ptr_eq(one, other))
+}
+
+/// Whether two blocks were written under the same refinements.
+fn same_refinements(
+    held: &Option<Rc<Vec<crate::vm::core::RefinementEntry>>>,
+    other: &Option<Rc<Vec<crate::vm::core::RefinementEntry>>>,
+) -> bool {
+    match (held, other) {
+        (Some(one), Some(other)) => {
+            one.len() == other.len()
+                && one.iter().zip(other.iter()).all(|(left, right)| {
+                    Rc::ptr_eq(&left.module, &right.module) && left.classes == right.classes
+                })
+        }
+        (None, None) => true,
+        _ => false,
+    }
 }
 
 /// Whether two optional classes are the same class, or both none.

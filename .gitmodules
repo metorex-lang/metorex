@@ -136,3 +136,36 @@
 [submodule "gems/rubyzip"]
 	path = gems/rubyzip
 	url = https://github.com/rubyzip/rubyzip
+[submodule "gems/thor"]
+	path = gems/thor
+	url = https://github.com/rails/thor
+[submodule "gems/rainbow"]
+	path = gems/rainbow
+	url = https://github.com/ku1ik/rainbow
+[submodule "gems/ruby-progressbar"]
+	path = gems/ruby-progressbar
+	url = https://github.com/jfelchner/ruby-progressbar
+[submodule "gems/unicode-display_width"]
+	path = gems/unicode-display_width
+	url = https://github.com/janlelis/unicode-display_width
+[submodule "gems/parallel"]
+	path = gems/parallel
+	url = https://github.com/grosser/parallel
+[submodule "gems/method_source"]
+	path = gems/method_source
+	url = https://github.com/banister/method_source
+[submodule "gems/coderay"]
+	path = gems/coderay
+	url = https://github.com/rubychan/coderay
+[submodule "gems/pry"]
+	path = gems/pry
+	url = https://github.com/pry/pry
+[submodule "gems/simplecov"]
+	path = gems/simplecov
+	url = https://github.com/simplecov-ruby/simplecov
+[submodule "gems/docile"]
+	path = gems/docile
+	url = https://github.com/ms-ati/docile
+[submodule "gems/mini_portile2"]
+	path = gems/mini_portile2
+	url = https://github.com/flavorjones/mini_portile

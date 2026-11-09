@@ -2847,3 +2847,18 @@ fn a_store_refuses_an_issuer_that_may_not_sign_certificates() {
         )
     );
 }
+
+#[test]
+fn string_scanner_setup_skips_overridden_methods() {
+    let output = run_example("stdlib_libraries/string_scanner_setup_skips_overridden_methods.rb");
+    assert_eq!(output, "[]\n\"select\"\n");
+}
+
+#[test]
+fn marshal_reads_one_object_from_a_pipe() {
+    let output = run_example("io/marshal_reads_one_object_from_a_pipe.rb");
+    assert_eq!(
+        output,
+        "true\nfalse\n21\n[1, \"two\"]\n\"end of file reached\"\n42\n"
+    );
+}

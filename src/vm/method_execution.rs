@@ -161,6 +161,21 @@ impl VirtualMachine {
             }
         }
 
+        // Kernel's own `to_s`, bound to a class or module, writes it the way
+        // it writes any object, by its class and address, rather than as
+        // Module#to_s names it.
+        if method.body.is_empty()
+            && method_name == "to_s"
+            && method.owner.as_deref() == Some("Kernel")
+            && let View::Class(held) | View::Module(held) = receiver.view()
+        {
+            let kind = if held.is_module() && !held.is_singleton_class() { "Module" } else { "Class" };
+            return Ok(Object::string(format!(
+                "#<{kind}:0x{:016x}>",
+                Rc::as_ptr(held) as usize
+            )));
+        }
+
         // A stub standing in for a native method dispatches under the name it
         // was cut from, even when the alias has been put back under that same
         // name. There is no body to run either way.

@@ -1,0 +1,7 @@
+# The gems method_source's specs load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "method_source", path: "../../../../gems/method_source"
+gem "rspec"

@@ -290,6 +290,11 @@ impl Walk<'_> {
             self.step(directory, &format!("{prefix}./"), rest, place);
             return;
         }
+        // A piece naming the parent steps up to it, as a path does.
+        if segment == ".." && !last {
+            self.step(&directory.join(".."), &format!("{prefix}../"), rest, place);
+            return;
+        }
         if segment == "**" && !rest.is_empty() {
             self.step_through(directory, prefix, rest, only_directories, place);
             return;

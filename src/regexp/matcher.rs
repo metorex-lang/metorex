@@ -116,6 +116,10 @@ impl<'a> Matcher<'a> {
     pub fn new(letters: &'a [char], names: &'a [Option<String>], root: &'a Node) -> Self {
         let mut bodies = vec![None; names.len()];
         collect_bodies(root, &mut bodies);
+        // `\g<0>` calls the whole pattern.
+        if let Some(whole) = bodies.first_mut() {
+            *whole = Some(root);
+        }
         Self {
             letters,
             search_start: 0,
@@ -459,6 +463,13 @@ impl<'a> Matcher<'a> {
                 // A call reads the group's pattern again and the group takes
                 // what that read, so the name holds the latest of them.
                 let leave = Rest::Leave { next: rest };
+                // The whole pattern called again takes no group of its own,
+                // since what it matches is the match itself.
+                if index == 0 {
+                    let outcome = self.run(body, at, &leave);
+                    self.depth -= 1;
+                    return outcome;
+                }
                 let frame = Rest::Close {
                     index,
                     from: at,

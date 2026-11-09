@@ -41,6 +41,13 @@ impl VirtualMachine {
                 Ok(Some(answer?))
             }
             "lock" => {
+                if self.trap_handlers_running > 0 {
+                    return Err(crate::vm::errors::simple_exception(
+                        "ThreadError",
+                        "can't be called from trap context",
+                        position,
+                    ));
+                }
                 if held && self.mutex_is_owned(&inst) {
                     return Err(crate::vm::errors::simple_exception(
                         "ThreadError",

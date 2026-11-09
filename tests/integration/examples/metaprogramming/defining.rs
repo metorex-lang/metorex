@@ -215,3 +215,42 @@ fn module_included_can_be_aliased_removed_and_redefined() {
     let output = run_example("metaprogramming/redefine_module_included.rb");
     assert_eq!(output, "true\ntrue\n[\"Visitor\"]\n[\"Visitor\"]\ntrue\n");
 }
+
+#[test]
+fn remove_method_takes_its_visibility() {
+    let output = run_example("metaprogramming/remove_method_takes_its_visibility.rb");
+    assert_eq!(output, "false\ntrue\nfalse\n");
+}
+
+#[test]
+fn bind_checks_basic_objects_by_class() {
+    let output = run_example("metaprogramming/bind_checks_basic_objects_by_class.rb");
+    assert_eq!(output, ":plain\n\"bind argument must be an instance of Plain\"\n");
+}
+
+#[test]
+fn undefined_methods_have_no_method_object() {
+    let output = run_example("metaprogramming/undefined_methods_have_no_method_object.rb");
+    assert_eq!(
+        output,
+        "\"undefined method 'summary' for class 'Report'\"\nfalse\n[:title]\n[]\n"
+    );
+}
+
+#[test]
+fn singleton_defs_on_true_and_nil_reach_their_class() {
+    let output = run_example("metaprogramming/singleton_defs_on_true_and_nil_reach_their_class.rb");
+    assert_eq!(
+        output,
+        "true\ntrue\n:yes\n:none\n:flag\nfalse\n\"can't define singleton\"\n"
+    );
+}
+
+#[test]
+fn latest_extend_comes_first() {
+    let output = run_example("metaprogramming/latest_extend_comes_first.rb");
+    assert_eq!(
+        output,
+        "\"command\"\n[#<Class:Command>, Command, Helpers]\n\"helpers\"\n"
+    );
+}

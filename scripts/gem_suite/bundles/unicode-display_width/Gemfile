@@ -1,0 +1,7 @@
+# The gems unicode-display_width's specs load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "unicode-display_width", path: "../../../../gems/unicode-display_width"
+gem "rspec"

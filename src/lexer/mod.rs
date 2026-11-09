@@ -313,7 +313,7 @@ impl<'a> Iterator for Lexer<'a> {
 /// escape names is a byte rather than part of a character.
 /// Whether the source says its string literals are frozen, which the magic
 /// comment `# frozen_string_literal: true` asks for.
-fn freezes_string_literals(source: &str) -> bool {
+pub(crate) fn freezes_string_literals(source: &str) -> bool {
     for line in source.lines().take(3) {
         let trimmed = line.trim_start();
         if trimmed.is_empty() {

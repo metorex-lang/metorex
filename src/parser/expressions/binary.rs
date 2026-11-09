@@ -305,7 +305,9 @@ impl Parser<'_> {
                     self.range_operand_depth += 1;
                     let held = self.parse_logical_or();
                     self.range_operand_depth -= 1;
-                    held?
+                    // The end may assign, as `(at...at += size)` does, and
+                    // the range ends at what it assigned.
+                    self.fold_assignment(held?)?
                 }
             };
             expr = Expression::Range {

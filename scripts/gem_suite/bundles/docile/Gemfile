@@ -1,0 +1,8 @@
+# The gems docile's specs load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "docile", path: "../../../../gems/docile"
+gem "rspec"
+gem "simplecov"

@@ -811,3 +811,39 @@ fn string_new_keeps_the_bytes_it_is_given() {
         )
     );
 }
+
+#[test]
+fn percent_strings_delimited_by_spaces() {
+    let output = run_example("strings/percent_strings_delimited_by_spaces.rb");
+    assert_eq!(output, "\"records\"\n\"records\"\n1\n1\n");
+}
+
+#[test]
+fn heredocs_keep_a_single_blank_line() {
+    let output = run_example("strings/heredocs_keep_a_single_blank_line.rb");
+    assert_eq!(output, "\"\\n\"\n\"\\n\\n\"\n\"a\\n\\n\"\n\"\"\n");
+}
+
+#[test]
+fn scrub_keeps_the_characters_it_can_read() {
+    let output = run_example("strings/scrub_keeps_the_characters_it_can_read.rb");
+    assert_eq!(
+        output,
+        "[195, 169, 239, 191, 189]\n\"b/é\u{fffd}.rb\"\n[176, 161, 63]\n[97, 63, 63]\n"
+    );
+}
+
+#[test]
+fn percent_strings_read_unicode_escapes() {
+    let output = run_example("strings/percent_strings_read_unicode_escapes.rb");
+    assert_eq!(
+        output,
+        "\"\\\"b/é\\\\377.rb\\\"\"\n\"aéAb\"\n\"é\"\n[\"é\", \"b\"]\n\"€\"\n"
+    );
+}
+
+#[test]
+fn string_subclasses_answer_to_sym() {
+    let output = run_example("strings/string_subclasses_answer_to_sym.rb");
+    assert_eq!(output, ":test\n[:default, :test]\n");
+}

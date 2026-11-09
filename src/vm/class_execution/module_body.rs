@@ -44,7 +44,7 @@ impl VirtualMachine {
                 body: method_body,
                 is_class_method,
                 position: def_position,
-                ..
+                end_position: def_end,
             } => {
                 let mut m = build_method_from_params(
                     method_name.clone(),
@@ -76,6 +76,7 @@ impl VirtualMachine {
                         self.copy_to_module_function(module, method_name, statement.position())?;
                     }
                 }
+                self.coverage_note_definition(module, *is_class_method, method_name, *def_position, *def_end);
             }
             Statement::Assignment { target, value, .. }
                 if let Expression::Identifier {

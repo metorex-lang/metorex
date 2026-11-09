@@ -144,18 +144,20 @@ impl VirtualMachine {
 
     /// `__FILE__`.
     pub(crate) fn magic_file(&self) -> Object {
-        // The file the code was written in, which is not the file
-        // being run when a required file's method or block is what is
-        // executing.
-        let path = self
-            .current_source_file
+        Object::string(self.written_in_file())
+    }
+
+    /// The file the running code was written in, which is not the file
+    /// being run when a required file's method or block is what is
+    /// executing.
+    pub(crate) fn written_in_file(&self) -> String {
+        self.current_source_file
             .clone()
             .or_else(|| {
                 self.reported_current_file()
                     .map(|path| path.display().to_string())
             })
-            .unwrap_or_else(|| "(eval)".to_string());
-        Object::string(path)
+            .unwrap_or_else(|| "(eval)".to_string())
     }
 
     /// `__dir__`.

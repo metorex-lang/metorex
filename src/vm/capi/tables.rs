@@ -300,3 +300,28 @@ pub extern "C-unwind" fn rb_st_foreach(
     }
     0
 }
+
+thread_local! {
+    /// The table `rb_hash_tbl` last answered.
+    static HASH_TABLE: std::cell::RefCell<Option<Box<StTable>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// A table standing for a Hash, holding the number of entries the Hash
+/// holds when asked. It stays good until the next call.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_hash_tbl(
+    hash: super::values::Value,
+    _file: *const std::ffi::c_char,
+    _line: i32,
+) -> *mut StTable {
+    let counted = super::hashes::rb_hash_size_num(hash);
+    HASH_TABLE.with(|held| {
+        let mut held = held.borrow_mut();
+        let table = held.insert(Box::new(StTable {
+            hash_type: std::ptr::null(),
+            num_entries: counted,
+            entries: std::ptr::null_mut(),
+        }));
+        &mut **table as *mut StTable
+    })
+}

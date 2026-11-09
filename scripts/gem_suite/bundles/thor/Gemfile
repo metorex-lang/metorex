@@ -1,0 +1,14 @@
+# The gems thor's specs load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "thor", path: "../../../../gems/thor"
+gem "rake"
+gem "rspec"
+gem "simplecov"
+gem "coveralls_reborn"
+gem "webmock"
+gem "childlabor"
+
+shipped "rdoc", "readline", "reline", "io-console", "erb", "psych", "stringio", "date", "tsort", "prism", "pp", "prettyprint"

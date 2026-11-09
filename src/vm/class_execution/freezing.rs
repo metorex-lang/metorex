@@ -127,6 +127,11 @@ impl VirtualMachine {
             | View::Binding(_)
             | View::Regex(_, _) => Self::collection_address(receiver)
                 .is_some_and(|address| self.frozen_collections.contains_key(&address)),
+            // An exception keeps no flag of its own either, so the VM records
+            // the one it lives at.
+            View::Exception(details) => self
+                .frozen_collections
+                .contains_key(&(Rc::as_ptr(details) as usize)),
             // Complex and Rational are value objects, frozen from birth.
             View::Instance(inst) => {
                 inst.borrow().frozen || matches!(inst.borrow().class.name(), "Complex" | "Rational")
@@ -148,6 +153,10 @@ impl VirtualMachine {
                 if let Some(sc) = singleton {
                     sc.freeze();
                 }
+            }
+            View::Exception(details) => {
+                self.frozen_collections
+                    .insert(Rc::as_ptr(details) as usize, receiver.clone());
             }
             // A collection has nowhere of its own to keep the flag,
             // so the VM records the one it lives at.

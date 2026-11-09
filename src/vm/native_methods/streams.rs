@@ -243,6 +243,38 @@ fn closed_error(position: Position) -> MetorexError {
 }
 
 impl VirtualMachine {
+    /// Wait for a descriptor to have something to read, as
+    /// `wait_until_readable` does, raising the error of an open
+    /// `Timeout.timeout` limit once its time passes.
+    fn wait_until_readable_within_limits(
+        &mut self,
+        number: RawFd,
+        position: Position,
+    ) -> Result<bool, MetorexError> {
+        loop {
+            let Some(deadline) = self.timeout_limits.iter().map(|(deadline, _, _)| *deadline).min()
+            else {
+                return Ok(wait_until_readable(number));
+            };
+            let left = deadline.saturating_duration_since(std::time::Instant::now());
+            let mut watched = libc::pollfd {
+                fd: number,
+                events: libc::POLLIN,
+                revents: 0,
+            };
+            let waited = left.as_millis().clamp(1, i32::MAX as u128) as libc::c_int;
+            // SAFETY: `watched` is one pollfd, which is the count passed.
+            let ready = unsafe { libc::poll(&mut watched, 1, waited) };
+            if ready > 0 {
+                return Ok(true);
+            }
+            if ready < 0 && std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
+                return Ok(true);
+            }
+            self.raise_expired_timeout(position)?;
+        }
+    }
+
     /// Read from a stream, waiting while it has nothing to hand over yet.
     /// The other threads run while it waits when there are any, and the
     /// descriptor is waited on otherwise, since another process may still
@@ -269,7 +301,7 @@ impl VirtualMachine {
                 continue;
             }
             // A descriptor poll cannot wait on fails the read that follows.
-            wait_until_readable(number);
+            self.wait_until_readable_within_limits(number, position)?;
             self.deliver_pending_signals(position)?;
         }
     }
@@ -657,7 +689,7 @@ impl VirtualMachine {
                     // Another process may still write, such as a child, so
                     // the descriptor is waited on until it has something. A
                     // signal that ends the wait early is handled first.
-                    if !wait_until_readable(number) {
+                    if !self.wait_until_readable_within_limits(number, position)? {
                         return Err(stream_error(&problem, "read", position));
                     }
                     self.deliver_pending_signals(position)?;
@@ -912,7 +944,7 @@ impl VirtualMachine {
                             // Another process may still write, such as a
                             // forked child, so the descriptor is waited on
                             // until it has something.
-                            if wait_until_readable(number) {
+                            if self.wait_until_readable_within_limits(number, position)? {
                                 self.deliver_pending_signals(position)?;
                                 continue;
                             }

@@ -150,6 +150,21 @@ pub(crate) fn split_readable_runs(bytes: &[u8], named: &str) -> Vec<Run> {
                 runs.push(Run::Broken(bytes[at..].to_vec()));
             }
         }
+        "EUC-JP" => {
+            let mut at = 0usize;
+            while at < bytes.len() {
+                match crate::vm::native_methods::string_methods::euc_jp_width(&bytes[at..]) {
+                    Some(width) => {
+                        runs.push(Run::Read(bytes[at..at + width].to_vec()));
+                        at += width;
+                    }
+                    None => {
+                        runs.push(Run::Broken(vec![bytes[at]]));
+                        at += 1;
+                    }
+                }
+            }
+        }
         // A lead byte is read with the one after it, so one the string ends
         // on is put aside.
         named if crate::vm::native_methods::string_methods::pairs_its_bytes(named) => {

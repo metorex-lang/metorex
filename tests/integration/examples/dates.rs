@@ -283,3 +283,12 @@ fn datetime_ctime_writes_its_time_of_day() {
         "\"Fri Nov  6 19:06:45 2026\"\n\"Fri Nov  6 19:06:45 2026\"\n\"Fri Nov  6 00:00:00 2026\"\n\"Fri Nov  6 00:00:00 2026\"\n"
     );
 }
+
+#[test]
+fn iso8601_cuts_off_extra_digits() {
+    let output = run_example("dates/iso8601_cuts_off_extra_digits.rb");
+    assert_eq!(
+        output,
+        "\"2024-01-02T03:04:05.678Z\"\n\"678\"\n(6789/10000)\n678900000\n\"1970-01-01T00:00:00.999Z\"\n"
+    );
+}

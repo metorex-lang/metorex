@@ -299,10 +299,10 @@ module Marshal
     elsif source.respond_to? :to_str
       source.to_str
     elsif source.respond_to?(:read) && source.respond_to?(:getc)
+      # An IO is read one object's worth at a time, so what follows it is
+      # left for the next read and a pipe is not read to its end.
       source.binmode if source.respond_to? :binmode
-      held = source.read
-      raise EOFError, "end of file reached" if held.nil? || held.empty?
-      held
+      return Reader.new("", handler, freeze, stream: source).read_document
     else
       raise TypeError, "instance of IO needed"
     end
@@ -871,8 +871,9 @@ module Marshal
   # Every value is finished through `leave`, which freezes it when asked and
   # hands it to the proc when there is one.
   class Reader
-    def initialize(source, handler = nil, freeze = false)
+    def initialize(source, handler = nil, freeze = false, stream: nil)
       @bytes = source.b
+      @stream = stream
       @at = 0
       @symbols = []
       @objects = []
@@ -882,7 +883,13 @@ module Marshal
     end
 
     def read_document
-      major = next_byte
+      if @stream
+        major = @stream.getbyte
+        raise EOFError, "end of file reached" if major.nil?
+        @at += 1
+      else
+        major = next_byte
+      end
       minor = next_byte
       if major != Marshal::MAJOR_VERSION || minor > Marshal::MINOR_VERSION
         raise TypeError, "incompatible marshal file format (can't be read)"
@@ -893,10 +900,10 @@ module Marshal
     private
 
     def next_byte
-      held = @bytes.getbyte(@at)
+      held = @stream ? @stream.getbyte : @bytes.getbyte(@at)
       raise ArgumentError, "marshal data too short" if held.nil?
       @at += 1
-      held
+      @last_byte = held
     end
 
     def signed_byte
@@ -923,6 +930,12 @@ module Marshal
     end
 
     def read_bytes(count)
+      if @stream
+        held = count.zero? ? "".b : @stream.read(count)
+        raise ArgumentError, "marshal data too short" if held.nil? || held.bytesize < count
+        @at += count
+        return held.b
+      end
       raise ArgumentError, "marshal data too short" if @at + count > @bytes.bytesize
       held = @bytes.byteslice(@at, count)
       @at += count
@@ -1027,7 +1040,7 @@ module Marshal
       when "I"
         raise ArgumentError, "dump format error (symlink with encoding)" unless next_byte.chr == ":"
         read_symbol_body true
-      else raise ArgumentError, "dump format error for symbol(0x#{@bytes.getbyte(@at - 1).to_s(16)})"
+      else raise ArgumentError, "dump format error for symbol(0x#{@last_byte.to_s(16)})"
       end
     end
 

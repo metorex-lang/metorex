@@ -738,7 +738,8 @@ impl VirtualMachine {
             return match self.lookup_method(receiver, name) {
                 Some((_, method)) => !method.is_undefined,
                 None => {
-                    (matches!(receiver.view(), View::Method(_))
+                    (matches!(receiver.view(), View::Method(held)
+                            if held.receiver.is_some() || name != "receiver")
                         && crate::vm::native_methods::method_object_methods::NATIVE_METHOD_OBJECT_METHODS
                             .contains(&name))
                         || (matches!(receiver.view(), View::Exception(_))
@@ -957,9 +958,12 @@ impl VirtualMachine {
             Some(owner) => self.refuses_explicit_receiver(&owner, name),
             // A hook Module or Class defines privately, which nothing in the
             // program defined over again.
+            // `public :remove_const` in Module's body makes it public.
             None => {
                 core_private_module_method(receiver, name)
                     && self.lookup_method(receiver, name).is_none()
+                    && !matches!(self.globals().get("Module").view(),
+                        Some(View::Class(module)) if module.has_public_override(name))
             }
         }
     }
@@ -1777,6 +1781,20 @@ pub(crate) fn module_extended_method(
 ) -> Option<Rc<Method>> {
     if !class_rc.holds_extended_copies.get() {
         return None;
+    }
+    // The modules extended onto it are asked in the order its singleton
+    // class lists them, the latest extended first, so `extend self` written
+    // after `extend Helpers` reaches the module's own method.
+    if let Some(singleton) = class_rc.singleton_class_slot().clone() {
+        let ancestors = crate::vm::eval::super_expr::walk_ancestors(&singleton);
+        if let Some(found) = ancestors
+            .iter()
+            .skip(1)
+            .take_while(|held| held.is_module())
+            .find_map(|held| held.find_own_method(method_name))
+        {
+            return Some(found);
+        }
     }
     let viewed = class_rc.get_class_var(&format!("__ext__{}", method_name));
     let copied = match viewed.view() {

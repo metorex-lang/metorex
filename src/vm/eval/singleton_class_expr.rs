@@ -138,6 +138,13 @@ impl VirtualMachine {
                 class_rc.set_singleton_class(Rc::clone(&sc));
                 sc
             }
+            // nil, true and false have their own class as their singleton
+            // class, so what is defined on one is defined on that class.
+            _ if let Some(named) = crate::builtin_classes::value_class_name(receiver)
+                && let Some(View::Class(own)) = self.globals().get(named).view() =>
+            {
+                Rc::clone(own)
+            }
             other => {
                 let key = primitive_singleton_key(receiver).unwrap_or_else(|| {
                     match other {

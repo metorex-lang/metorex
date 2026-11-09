@@ -190,7 +190,7 @@ pub(crate) fn euc_jp_problem(bytes: &[u8]) -> Option<BytesProblem> {
         // The bytes that may follow the first: one after SS2, two after
         // SS3, and one after any other byte that opens a character.
         let (count, allowed): (usize, fn(u8) -> bool) = match byte {
-            0x8e => (1, |next| (0xa1..=0xdf).contains(&next)),
+            0x8e => (1, |next| (0xa1..=0xfe).contains(&next)),
             0x8f => (2, |next| (0xa1..=0xfe).contains(&next)),
             0xa1..=0xfe => (1, |next| (0xa1..=0xfe).contains(&next)),
             _ => return Some((vec![byte], None, false)),
@@ -218,9 +218,11 @@ pub(crate) fn euc_jp_text_replacing(bytes: &[u8], stands_in: &str) -> String {
                 written.push(character);
                 at += width;
             }
+            // A character EUC-JP spells that has no counterpart in UTF-8
+            // is replaced whole.
             None => {
                 written.push_str(stands_in);
-                at += 1;
+                at += euc_jp_width(&bytes[at..]).unwrap_or(1);
             }
         }
     }
@@ -290,16 +292,44 @@ pub(crate) fn euc_jp_characters(bytes: &[u8]) -> Vec<Vec<u8>> {
     let mut characters = Vec::new();
     let mut at = 0usize;
     while at < bytes.len() {
-        let width = match bytes[at] {
-            0x8e | 0xa1..=0xfe => 2,
-            0x8f => 3,
-            _ => 1,
-        };
-        let stop = (at + width).min(bytes.len());
-        characters.push(bytes[at..stop].to_vec());
-        at = stop;
+        let width = euc_jp_width(&bytes[at..]).unwrap_or(1);
+        characters.push(bytes[at..at + width].to_vec());
+        at += width;
     }
     characters
+}
+
+/// The first EUC-JP character in `bytes` that UTF-8 has no counterpart for.
+pub(crate) fn euc_jp_undefined(bytes: &[u8]) -> Option<Vec<u8>> {
+    let mut at = 0usize;
+    while at < bytes.len() {
+        let width = euc_jp_width(&bytes[at..]).unwrap_or(1);
+        if width > 1
+            && crate::vm::native_methods::euc_jp_table::euc_jp_character(&bytes[at..]).is_none()
+        {
+            return Some(bytes[at..at + width].to_vec());
+        }
+        at += width;
+    }
+    None
+}
+
+/// How many bytes the EUC-JP character at the start of `bytes` takes, or
+/// nothing when they do not spell one: a byte under 0x80 stands alone, and
+/// 0x8E, 0x8F and the bytes from 0xA1 to 0xFE open a run whose other bytes
+/// all lie from 0xA1 to 0xFE.
+pub(crate) fn euc_jp_width(bytes: &[u8]) -> Option<usize> {
+    let width = match *bytes.first()? {
+        0x00..=0x7f => return Some(1),
+        0x8e | 0xa1..=0xfe => 2,
+        0x8f => 3,
+        _ => return None,
+    };
+    let trailing = bytes.get(1..width)?;
+    trailing
+        .iter()
+        .all(|byte| (0xa1..=0xfe).contains(byte))
+        .then_some(width)
 }
 
 /// The characters a string spells, each tagged with the string's own

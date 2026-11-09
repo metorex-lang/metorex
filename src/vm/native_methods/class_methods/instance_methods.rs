@@ -71,7 +71,18 @@ impl VirtualMachine {
                     // written in, while the singleton class is what owns it.
                     if unbound.owner_class.is_none() || owner.is_singleton_class() {
                         unbound.owner = Some(owner.name().to_string());
-                        unbound.owner_class = Some(owner);
+                        unbound.owner_class = Some(Rc::clone(&owner));
+                    }
+                    // A core class nearer than the one the core library wrote
+                    // the method on answers it natively, and owns it.
+                    if !crate::vm::native_methods::object_methods::written_by_program(&method)
+                        && let Some(core) =
+                            crate::vm::native_methods::object_methods::core_owner_ahead_of(
+                                class_rc, &owner, &name_str,
+                            )
+                    {
+                        unbound.owner = Some(core.ruby_name());
+                        unbound.owner_class = Some(core);
                     }
                     unbound.origin_class = Some(Rc::clone(class_rc));
                     return Ok(Answered(Object::Method(Rc::new(unbound))));

@@ -323,6 +323,8 @@ impl VirtualMachine {
                     target.set_encoding(made.encoding_name());
                     if made.holds_bytes() {
                         target.mark_bytes();
+                    } else {
+                        target.clear_bytes();
                     }
                     target.replace_text(made.to_text());
                 }

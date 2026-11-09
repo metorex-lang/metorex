@@ -1294,3 +1294,54 @@ fn methods_lists_the_class_methods_a_core_class_defines() {
         "true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\nfalse\nfalse\nfalse\n"
     );
 }
+
+#[test]
+fn unbound_methods_have_no_receiver() {
+    let output = run_example("introspection/unbound_methods_have_no_receiver.rb");
+    assert_eq!(output, "false\nNoMethodError\ntrue\nnil\n");
+}
+
+#[test]
+fn subclasses_reach_kernel_comparison() {
+    let output = run_example("introspection/subclasses_reach_kernel_comparison.rb");
+    assert_eq!(output, "Kernel\nnil\n");
+}
+
+#[test]
+fn class_methods_belong_to_the_singleton_class() {
+    let output = run_example("introspection/class_methods_belong_to_the_singleton_class.rb");
+    assert_eq!(
+        output,
+        "#<Class:Reading>\n#<Class:Reading>\ntrue\ntrue\nClass\n"
+    );
+}
+
+#[test]
+fn singleton_private_methods_list_their_own() {
+    let output = run_example("introspection/singleton_private_methods_list_their_own.rb");
+    assert_eq!(output, "[:helper]\n[:load_task]\n");
+}
+
+#[test]
+fn each_object_finds_basic_objects() {
+    let output = run_example("introspection/each_object_finds_basic_objects.rb");
+    assert_eq!(output, "1\n1\n");
+}
+
+#[test]
+fn core_classes_own_their_native_methods() {
+    let output = run_example("introspection/core_classes_own_their_native_methods.rb");
+    assert_eq!(output, "Integer\nInteger\nNumeric\ntrue\nmain\n");
+}
+
+#[test]
+fn kernel_to_s_names_classes_by_address() {
+    let output = run_example("introspection/kernel_to_s_names_classes_by_address.rb");
+    assert_eq!(output, "true\ntrue\ntrue\n");
+}
+
+#[test]
+fn singleton_classes_ask_their_module_to_inspect() {
+    let output = run_example("introspection/singleton_classes_ask_their_module_to_inspect.rb");
+    assert_eq!(output, "ArgumentError\ntrue\n\"#<Class:Named>\"\n");
+}

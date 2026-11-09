@@ -219,3 +219,78 @@ fn a_block_handed_on_to_class_eval_reads_constants_through_the_scopes_it_was_wri
         "\"uninitialized constant Outer::NOPE\"\n\"uninitialized constant Outer::NOPE\"\n\"uninitialized constant Outer::NOPE\"\n\"uninitialized constant Outer::NOPE\"\n[Outer]\n[Outer]\n[Outer]\n"
     );
 }
+
+#[test]
+fn toplevel_binding_reads_top_level_constants() {
+    let output = run_example("eval/toplevel_binding_reads_top_level_constants.rb");
+    assert_eq!(output, "\"1.5.0\"\n[]\n");
+}
+
+#[test]
+fn begin_runs_first_in_every_eval() {
+    let output = run_example("eval/begin_runs_first_in_every_eval.rb");
+    assert_eq!(output, "true\ntrue\n[]\n");
+}
+
+#[test]
+fn bindings_name_the_file_their_block_was_written_in() {
+    let output = run_example("eval/bindings_in_loaded_blocks/main.rb");
+    assert_eq!(
+        output,
+        "\"examples.rb\"\n\"examples.rb\"\n\"examples.rb:9)\"\n"
+    );
+}
+
+#[test]
+fn bindings_answer_their_methods() {
+    let output = run_example("eval/bindings_answer_their_methods.rb");
+    assert_eq!(output, "true\ntrue\ntrue\nBinding\n");
+}
+
+#[test]
+fn bindings_inspect_as_objects() {
+    let output = run_example("eval/bindings_inspect_as_objects.rb");
+    assert_eq!(output, "true\ntrue\n");
+}
+
+#[test]
+fn defs_through_bindings_install_where_the_binding_was_taken() {
+    let output = run_example("eval/defs_through_bindings_install_where_the_binding_was_taken.rb");
+    assert_eq!(output, "Object\n[]\n");
+}
+
+#[test]
+fn class_eval_strings_keep_the_callers_scopes() {
+    let output = run_example("eval/class_eval_strings_keep_the_callers_scopes.rb");
+    assert_eq!(
+        output,
+        ":top_level\n[BasicObject, Object]\n\"uninitialized constant BasicObject::Store\"\n:top_level\n"
+    );
+}
+
+#[test]
+fn method_bindings_read_top_level_constants() {
+    let output = run_example("eval/method_bindings_read_top_level_constants.rb");
+    assert_eq!(output, "BasicObject\n");
+}
+
+#[test]
+fn locals_holding_methods_are_locals() {
+    let output = run_example("eval/locals_holding_methods_are_locals.rb");
+    assert_eq!(
+        output,
+        "[[:ledger, :held_total, :unbound], 42, :to_s]\n[:held]\n\"local-variable\"\n\"method\"\n"
+    );
+}
+
+#[test]
+fn proc_bindings_stand_where_the_block_was_written() {
+    let output = run_example("eval/proc_bindings_stand_where_the_block_was_written.rb");
+    assert_eq!(output, "\"proc_bindings_stand_where_the_block_was_written.rb\"\n1\n");
+}
+
+#[test]
+fn classes_defined_through_bindings_are_not_locals() {
+    let output = run_example("eval/classes_defined_through_bindings_are_not_locals.rb");
+    assert_eq!(output, "false\nTally\ntrue\n");
+}

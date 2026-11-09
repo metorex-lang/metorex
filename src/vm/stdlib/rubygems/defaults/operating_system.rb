@@ -148,8 +148,24 @@ module Gem
       # first to take the lock builds them, and the others find them built.
       File.open(File.join(target, "gem_build.lock"), File::RDWR | File::CREAT) do |lock|
         lock.flock(File::LOCK_EX)
-        build_extensions_into(target) unless File.exist?(gem_build_complete_path)
+        next if File.exist?(gem_build_complete_path)
+
+        # A build that failed with this same metorex fails again, so it is
+        # tried once per metorex rather than once per process.
+        failed = File.join(target, "gem_build_failed")
+        if File.exist?(failed) && File.read(failed) == metorex_identity
+          warn "Ignoring #{full_name} because its extensions could not be built for metorex. See #{File.join(target, "gem_make.out")}"
+          next
+        end
+        File.write(failed, metorex_identity) unless build_extensions_into(target)
       end
+    end
+
+    # What tells one metorex binary from another: its size and when it was
+    # written.
+    def metorex_identity
+      held = File.stat(Gem.ruby)
+      "#{held.size} #{held.mtime.to_i}"
     end
 
     def build_extensions_into(target)
@@ -171,6 +187,7 @@ module Gem
       else
         warn "Ignoring #{full_name} because its extensions could not be built for metorex. See #{log}"
       end
+      built
     end
 
     # Copy the libraries a build made to where the extension's name puts

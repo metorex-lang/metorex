@@ -63,7 +63,8 @@ module Coverage
       warn "warning: stop implies clear"
       clear = true
     end
-    answer = __coverage_result__ clear
+    counted = __coverage_branches__
+    answer = __with_method_ends__(__with_branches__(__coverage_result__(clear), counted))
     if stop
       @running = false
       __coverage_stop__
@@ -73,10 +74,60 @@ module Coverage
 
   def peek_result
     raise RuntimeError, "coverage measurement is not enabled" unless running?
-    __coverage_result__ false
+    __with_method_ends__(__with_branches__(__coverage_result__(false), __coverage_branches__))
   end
 
+  # The report with each method `define_method` made from a block keyed to
+  # where that block closes, which is read from the file.
+  def __with_method_ends__(answer)
+    answer.each do |path, report|
+      next unless report.is_a?(Hash) && report[:methods].is_a?(Hash)
+      next unless report[:methods].each_key.any? { |key| key[4].nil? }
+
+      closings = __block_closings__(path)
+      report[:methods] = report[:methods].to_h do |key, count|
+        found = key[4].nil? && closings[[key[2], key[3]]]
+        found ? [[*key[0, 4], *found], count] : [key, count]
+      end
+    end
+    answer
+  end
+
+  # Where each block in a file closes, by the line and column it opens at.
+  def __block_closings__(path)
+    require "prism"
+    parsed = Prism.parse_file(path)
+    closings = {}
+    pending = [parsed.value]
+    until pending.empty?
+      node = pending.pop
+      if node.is_a?(Prism::BlockNode) || node.is_a?(Prism::LambdaNode)
+        place = node.location
+        closings[[place.start_line, place.start_column]] = [place.end_line, place.end_column]
+      end
+      pending.concat(node.compact_child_nodes)
+    end
+    closings
+  rescue SystemCallError
+    {}
+  end
+
+  # The report with each file's branches laid out as Ruby lays them out, from
+  # the branch sites the run counted.
+  def __with_branches__(answer, counted)
+    answer.each do |path, report|
+      next unless report.is_a?(Hash) && report.key?(:branches)
+
+      require "coverage/branch_layout"
+      held = counted.find { |file, _| file == path }
+      report[:branches] = BranchLayout.call(path, held ? held.last : [])
+    end
+    answer
+  end
+
+  # The lines a file would report before any of it runs: 0 where a line
+  # carries something to run and nil elsewhere.
   def line_stub(path)
-    File.readlines(path).map { nil }
+    __coverage_line_stub__ File.read(path)
   end
 end

@@ -11,6 +11,7 @@ typedef VALUE rb_blocking_function_t(void *);
 
 void *rb_thread_call_without_gvl(void *(*function)(void *), void *data,
                                  rb_unblock_function_t *unblock, void *unblock_data);
+void *rb_thread_call_with_gvl(void *(*function)(void *), void *data);
 int ruby_thread_has_gvl_p(void);
 
 #endif

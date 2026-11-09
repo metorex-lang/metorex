@@ -221,7 +221,12 @@ impl VirtualMachine {
         &mut self,
         statements: &[Statement],
     ) -> Result<Option<Object>, MetorexError> {
-        self.run_compiled_program(statements, true)
+        // Each eval is a program of its own, so a `BEGIN` in it runs every
+        // time, though another eval named the same wrote one at that place.
+        let held_blocks = std::mem::take(&mut self.opened_blocks);
+        let ran = self.run_compiled_program(statements, true);
+        self.opened_blocks = held_blocks;
+        ran
     }
 
     /// A `return` leaving an eval, which unwinds to the invocation the code

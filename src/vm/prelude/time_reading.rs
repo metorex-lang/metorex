@@ -381,8 +381,10 @@ pub(super) const SOURCE: &str = r##"
 
   # The fraction of a second, written to the given number of digits, rounded
   # rather than cut down.
+  # Digits past the ones asked for are cut off rather than rounded, as
+  # Ruby writes them.
   def fraction_digits(places)
-    scaled = (__fraction__ * 10 ** places).round.to_i
+    scaled = (__fraction__ * 10 ** places).floor.to_i
     scaled.to_s.rjust(places, "0")
   end
   private :fraction_digits

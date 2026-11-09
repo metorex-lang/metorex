@@ -781,7 +781,18 @@ impl VirtualMachine {
         object: &Object,
         position: Position,
     ) -> Result<Option<ObjectHash>, MetorexError> {
-        if !matches!(object.view(), View::Instance(_)) {
+        // A class or module that writes its own `hash` is placed by it, as
+        // an object of a class is.
+        let hashes_itself = match object.view() {
+            View::Instance(_) => true,
+            View::Class(_) | View::Module(_) => self
+                .lookup_method(object, "hash")
+                .is_some_and(|(_, method)| {
+                    crate::vm::native_methods::object_methods::written_by_program(&method)
+                }),
+            _ => false,
+        };
+        if !hashes_itself {
             return Ok(ObjectHash::from_object(object));
         }
         let slot = self.hashed_slot(object, position, |candidate| {

@@ -112,6 +112,8 @@ impl Parser<'_> {
                 | TokenKind::Super
                 | TokenKind::Case
                 | TokenKind::Begin
+                | TokenKind::Class
+                | TokenKind::Module
         ) || (self.peek().kind == TokenKind::Arrow
             && self.arrow_starts_lambda_argument());
 
@@ -266,6 +268,8 @@ impl Parser<'_> {
                     | TokenKind::Super
                     | TokenKind::Case
                     | TokenKind::Begin
+                    | TokenKind::Class
+                    | TokenKind::Module
             );
 
         // Same disambiguation for method-call paren-less args:

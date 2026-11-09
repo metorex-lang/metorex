@@ -744,6 +744,9 @@ pub fn names_a_definition_under(name: &str, value: &Object) -> bool {
         View::Class(_) | View::Module(_) => {
             name.starts_with(|first: char| !first.is_lowercase() && first != '_')
         }
+        // A `def` registers its method under its own name, unbound. A Method
+        // held under another name, or bound to a receiver, is a local's value.
+        View::Method(method) => method.name == name && method.receiver.is_none(),
         _ => names_a_definition(value),
     }
 }

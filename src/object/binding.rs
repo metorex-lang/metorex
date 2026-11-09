@@ -41,6 +41,10 @@ pub struct Binding {
     /// The implicit parameters, `it` or `_1` to `_9`, the block the binding
     /// was captured in took, with their cells.
     pub implicit_parameters: RefCell<Vec<(String, Rc<RefCell<Object>>)>>,
+    /// The classes a `def` written where the binding was captured would
+    /// install into, innermost last. A `def` run through the binding goes
+    /// there rather than where the eval is written.
+    pub def_scope: RefCell<Option<Vec<Rc<crate::class::Class>>>>,
 }
 
 impl PartialEq for Binding {
@@ -67,6 +71,7 @@ impl Binding {
             frame: RefCell::new(None),
             home_frame: RefCell::new(None),
             implicit_parameters: RefCell::new(Vec::new()),
+            def_scope: RefCell::new(None),
         }
     }
 
@@ -86,6 +91,7 @@ impl Binding {
             frame: RefCell::new(None),
             home_frame: RefCell::new(None),
             implicit_parameters: RefCell::new(Vec::new()),
+            def_scope: RefCell::new(None),
         }
     }
 
@@ -161,6 +167,7 @@ impl Binding {
             frame: RefCell::new(self.frame.borrow().clone()),
             home_frame: RefCell::new(*self.home_frame.borrow()),
             implicit_parameters: RefCell::new(self.implicit_parameters.borrow().clone()),
+            def_scope: RefCell::new(self.def_scope.borrow().clone()),
         }
     }
 }

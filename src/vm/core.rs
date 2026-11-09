@@ -532,6 +532,13 @@ pub struct VirtualMachine {
     /// `SIG` prefix. A String value names a built-in disposition; anything
     /// else is a callable `Process.kill` runs in place of raising.
     pub(crate) signal_handlers: HashMap<String, Object>,
+    /// How many `Signal.trap` handlers are running, one inside another.
+    /// A Mutex refuses to be locked from one.
+    pub(crate) trap_handlers_running: usize,
+    /// Whether this process was forked from a thread other than the main
+    /// one. That thread is the only one the child has, so it waits in place
+    /// rather than handing the turn to threads that are not there.
+    pub(crate) alone_after_fork: bool,
     /// Signals a thread other than the main one sent this process, waiting
     /// for the main thread to run their handlers.
     pub(crate) signals_for_main_thread: Vec<i32>,
@@ -687,6 +694,8 @@ impl VirtualMachine {
                 // `$>` is where a program writes without naming a stream,
                 // which is `$stdout` under another name.
                 (">", "stdout"),
+                // An assignment to `$0` renames the program for both.
+                ("PROGRAM_NAME", "0"),
             ]
             .into_iter()
             .map(|(alias, original)| (alias.to_string(), original.to_string()))
@@ -841,6 +850,8 @@ impl VirtualMachine {
                 ("PIPE".to_string(), Object::Nil),
             ]),
             signals_for_main_thread: Vec::new(),
+            trap_handlers_running: 0,
+            alone_after_fork: false,
             traced_globals: HashMap::new(),
             seeded_global_names,
             load_wrap_depth: 0,
@@ -1231,9 +1242,17 @@ impl VirtualMachine {
         // The arguments come in the locale's encoding.
         let locale = crate::vm::locale_encoding_name()
             .unwrap_or_else(|| crate::object::string_value::DEFAULT_ENCODING.to_string());
+        // Each argument is frozen, as Ruby hands them over, which is what
+        // lets a frozen ARGV be shared with a Ractor.
         let elements: Vec<Object> = args
             .into_iter()
-            .map(|held| crate::vm::native_methods::external_text(held, &locale))
+            .map(|held| {
+                let text = crate::vm::native_methods::external_text(held, &locale);
+                if let crate::object::View::String(written) = text.view() {
+                    written.freeze();
+                }
+                text
+            })
             .collect();
         let argv = Object::Array(Rc::new(RefCell::new(elements)));
         self.globals.set("ARGV", argv.clone());

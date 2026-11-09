@@ -424,7 +424,11 @@ impl Class {
     /// Returns true if the method was found and removed, false otherwise.
     pub fn remove_method(&self, name: &str) -> bool {
         method_named_changed(name);
-        self.methods.borrow_mut().remove(name).is_some()
+        let removed = self.methods.borrow_mut().remove(name).is_some();
+        if removed {
+            self.forget_visibility(name);
+        }
+        removed
     }
 
     /// Create an alias for an existing method.

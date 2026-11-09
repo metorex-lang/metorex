@@ -45,12 +45,26 @@ impl VirtualMachine {
         position: Position,
         stored_at: impl Fn(&str) -> Option<Object>,
     ) -> Result<crate::object::Slot, MetorexError> {
-        let hashed = match self
-            .send_to_object(key.clone(), "hash", vec![], position)?
-            .view()
-        {
+        let answered = self.send_to_object(key.clone(), "hash", vec![], position)?;
+        let hashed = match answered.view() {
             View::Int(number) => number,
-            other => self.object_identity(&other.to_object(), position)?,
+            // Anything else is taken as an Integer through `to_int`, and one
+            // that cannot be is refused, which is what keeps a module whose
+            // `hash` answers nil out of a Set.
+            View::BigInt(_) => folded_hash(&self.coerce_integer_argument(&answered, position)?),
+            _ if self.responds_to(&answered, "to_int") => {
+                folded_hash(&self.coerce_integer_argument(&answered, position)?)
+            }
+            _ => {
+                return Err(crate::vm::errors::simple_exception(
+                    "TypeError",
+                    &format!(
+                        "no implicit conversion of {} into Integer",
+                        self.conversion_name(&answered)
+                    ),
+                    position,
+                ));
+            }
         };
         let mut slot = 0usize;
         loop {
@@ -383,4 +397,15 @@ pub(crate) fn keep_pair(built: &mut crate::object::HashEntries, key: Object, val
         remember_key_object(built, &rendered, &key);
     }
     built.insert(rendered, value);
+}
+
+/// A hash number of any size folded into the range a slot name is written
+/// with, the same for two equal numbers.
+fn folded_hash(number: &num_bigint::BigInt) -> i64 {
+    i64::try_from(number).unwrap_or_else(|_| {
+        number
+            .to_signed_bytes_le()
+            .iter()
+            .fold(0i64, |held, byte| held.wrapping_mul(31).wrapping_add(i64::from(*byte)))
+    })
 }

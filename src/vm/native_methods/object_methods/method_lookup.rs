@@ -101,9 +101,10 @@ impl VirtualMachine {
                     stub.owner_class = Some(owner.clone());
                     return Ok(Some(Object::Method(std::rc::Rc::new(stub))));
                 }
+                // A method undefined with `undef_method` is no method at all.
                 if let Some((resolved_class, method)) = self
                     .lookup_method(receiver, &name_str)
-                    .filter(|_| !shadowed_by_enumerable)
+                    .filter(|(_, found)| !shadowed_by_enumerable && !found.is_undefined)
                 {
                     let mut bound = (*method).clone();
                     bound.receiver = Some(Box::new(receiver.clone()));
@@ -132,6 +133,19 @@ impl VirtualMachine {
                         }
                         bound.owner = Some(resolved_class.ruby_name());
                         bound.owner_class = Some(std::rc::Rc::clone(&resolved_class));
+                    }
+                    // A core class nearer than the one the core library
+                    // wrote the method on answers it natively, and owns it.
+                    if !written_by_program(&method)
+                        && let Some(found_on) = bound.owner_class.clone()
+                        && let Some(core) = core_owner_ahead_of(
+                            &self.builtins().class_of(receiver),
+                            &found_on,
+                            &name_str,
+                        )
+                    {
+                        bound.owner = Some(core.ruby_name());
+                        bound.owner_class = Some(core);
                     }
                     if bound.owner_class.is_none() {
                         // The lookup answers the class it resolved through,

@@ -34,18 +34,20 @@ impl VirtualMachine {
         // Spawn rather than run to completion in one step, so the
         // child's process id is read before it is waited for and
         // `$?.pid` can report it.
-        let spawned = std::process::Command::new("/bin/sh")
-            .arg("-c")
-            .arg(&written)
+        let spawned = command_for(&command, &written)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::inherit())
             .spawn();
         let mut child = match spawned {
             Ok(child) => child,
             Err(error) => {
-                let message = format!("No such file or directory - {} ({})", command, error);
+                let (class, reason) = match error.kind() {
+                    std::io::ErrorKind::PermissionDenied => ("Errno::EACCES", "Permission denied"),
+                    _ => ("Errno::ENOENT", "No such file or directory"),
+                };
+                let message = format!("{reason} - {command}");
                 return Err(MetorexError::UncaughtException {
-                    exception: Object::exception("Errno::ENOENT", message.clone()),
+                    exception: Object::exception(class, message.clone()),
                     location: crate::vm::utils::position_to_location(position),
                     message,
                 });
@@ -62,8 +64,10 @@ impl VirtualMachine {
         let status = std::process::ExitStatus::from_raw(held);
         self.record_last_status(&status, Some(i64::from(child_pid)));
         // A command the shell could not find ends with status 127,
-        // which Ruby reports as Errno::ENOENT from the spawn itself.
-        if status.code() == Some(127) {
+        // which Ruby reports as Errno::ENOENT from the spawn itself when
+        // it ran the program directly. One written with shell syntax Ruby
+        // hands to the shell, whose 127 is the command's status.
+        if status.code() == Some(127) && !uses_shell_syntax(&command) {
             let message = format!("No such file or directory - {}", command);
             return Err(MetorexError::UncaughtException {
                 exception: Object::exception("Errno::ENOENT", message.clone()),
@@ -761,8 +765,19 @@ impl VirtualMachine {
             return Ok(Object::Int(child as i64));
         }
         // Only the thread that called `fork` survives into the child, so
-        // every other one is marked finished there.
+        // every other one is marked finished there. The one that called it
+        // keeps running there, and is still one to wait on.
+        let forking = self.thread_current_stack.last().cloned();
+        self.alone_after_fork = self.running_a_thread_body();
         for thread in std::mem::take(&mut self.pending_threads) {
+            let is_forking = matches!(
+                (thread.view(), forking.view()),
+                (View::Instance(held), Some(View::Instance(running))) if Rc::ptr_eq(held, running)
+            );
+            if is_forking {
+                self.pending_threads.push(thread);
+                continue;
+            }
             if let View::Instance(instance) = thread.view() {
                 instance
                     .borrow_mut()
@@ -1227,4 +1242,46 @@ impl SignalSettings {
             libc::pthread_sigmask(libc::SIG_SETMASK, &self.mask, std::ptr::null_mut());
         }
     }
+}
+
+/// The words MRI's process.c lists as the shell's own, which only the shell
+/// can run.
+const SHELL_WORDS: &[&str] = &[
+    "!", ".", ":", "break", "case", "colon", "continue", "do", "done", "elif", "else", "esac",
+    "eval", "exec", "exit", "export", "fi", "for", "if", "in", "readonly", "return", "set",
+    "shift", "then", "times", "trap", "unset", "until", "while",
+];
+
+/// Whether Ruby hands `command` to `/bin/sh` rather than running it
+/// directly: it holds a character the shell reads specially, or its first
+/// word sets a variable or is one of the shell's own.
+fn uses_shell_syntax(command: &str) -> bool {
+    const SHELL_CHARACTERS: &str = "*?{}[]<>()~&|\\$;'`\"\n#";
+    command.chars().any(|held| SHELL_CHARACTERS.contains(held))
+        || command
+            .split_whitespace()
+            .next()
+            .is_some_and(|first| first.contains('=') || SHELL_WORDS.contains(&first))
+}
+
+/// The process a backquoted command runs as: the shell, named `sh`, for one
+/// written with shell syntax, and otherwise the program its first word
+/// names, with the other words as its arguments, as Ruby runs them.
+fn command_for(command: &str, written: &std::ffi::OsStr) -> std::process::Command {
+    use std::os::unix::ffi::{OsStrExt, OsStringExt};
+    use std::os::unix::process::CommandExt;
+    if uses_shell_syntax(command) {
+        let mut shell = std::process::Command::new("/bin/sh");
+        shell.arg0("sh").arg("-c").arg(written);
+        return shell;
+    }
+    let mut words = written
+        .as_bytes()
+        .split(|byte| byte.is_ascii_whitespace())
+        .filter(|word| !word.is_empty())
+        .map(|word| std::ffi::OsString::from_vec(word.to_vec()));
+    let program = words.next().unwrap_or_default();
+    let mut direct = std::process::Command::new(program);
+    direct.args(words);
+    direct
 }

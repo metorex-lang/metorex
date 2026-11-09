@@ -199,3 +199,9 @@ fn test_globals_environment_merge_nil_execution() {
     let output = run_example("globals/environment_merge_nil.rb");
     assert_eq!(output, "\"kept\"\nfalse\n\"added\"\nfalse\nfalse\n");
 }
+
+#[test]
+fn program_name_follows_dollar_zero() {
+    let output = run_example("globals/program_name_follows_dollar_zero.rb");
+    assert_eq!(output, "\"deploy\"\n\"release\"\n1\n");
+}

@@ -155,7 +155,7 @@ pub(crate) fn euc_jp_reads(bytes: &[u8]) -> bool {
         }
         let trailing = &bytes[at + 1..at + width];
         let fits = match held {
-            0x8e => trailing.iter().all(|byte| (0xa1..=0xdf).contains(byte)),
+            0x8e => trailing.iter().all(|byte| (0xa1..=0xfe).contains(byte)),
             _ => trailing.iter().all(|byte| (0xa1..=0xfe).contains(byte)),
         };
         if !fits {

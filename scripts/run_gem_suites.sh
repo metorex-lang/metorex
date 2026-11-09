@@ -20,7 +20,7 @@
 #
 # A gem with a directory under scripts/gem_suite/bundles runs with
 # BUNDLE_GEMFILE naming the Gemfile there, whose gems
-# scripts/install_gem_suite_gems.sh installs into GEM_BUNDLE.
+# scripts/install_gem_suite_gems.sh installs under GEM_BUNDLES.
 
 set -euo pipefail
 shopt -s globstar
@@ -47,7 +47,8 @@ case "$ENGINE" in
 esac
 export SUITE_RESULTS="$REPO_ROOT/scripts/gem_suite_results.tsv"
 BUNDLES="$REPO_ROOT/scripts/gem_suite/bundles"
-GEM_BUNDLE="${GEM_BUNDLE:-$TARGET_DIR/gem_bundle}"
+# shellcheck source=gem_suite/bundle_paths.sh
+. "$REPO_ROOT/scripts/gem_suite/bundle_paths.sh"
 
 if [ ! -f "$METOREX" ]; then
   echo "Building metorex..."
@@ -104,12 +105,24 @@ SUITES=(
   "dotenv|test/**/*_test.rb|-I lib -I test -r bundler/setup"
   "netrc|test/test_*.rb|-I lib -I test"
   "rubyzip|test/**/*_test.rb|-I lib -I test -r bundler/setup"
+  "thor|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "rainbow|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "ruby-progressbar|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "unicode-display_width|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "parallel|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "method_source|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "coderay|test/functional/suite.rb test/unit/suite.rb|-I lib -r bundler/setup"
+  "coderay|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "pry|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "simplecov|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "docile|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "mini_portile2|test/test_*.rb|-I lib -I test -r bundler/setup"
   "racc|test/test_*.rb|--enable-frozen-string-literal -I lib -I test/lib -I $HELPERS -r helper|$REPO_ROOT/scripts/gem_suite/racc_parser_text.rb"
 )
 
 # The gems whose test files run one after another, since each of them
 # starts a server on the same fixed port.
-ONE_AT_A_TIME=(excon)
+ONE_AT_A_TIME=(excon mini_portile2)
 one_at_a_time() {
   local held
   for held in "${ONE_AT_A_TIME[@]}"; do
@@ -130,6 +143,20 @@ wanted() {
 
 WORK_DIR=$(mktemp -d -t metorex_gem_suites.XXXXXX)
 trap 'rm -rf "$WORK_DIR"' EXIT
+# A test that starts `ruby` by name, as thor's do, starts Metorex in a
+# Metorex run, through a link named `ruby` ahead of the others on PATH.
+if [ "$ENGINE" = "metorex" ]; then
+  mkdir -p "$WORK_DIR/bin"
+  ln -s "$(cd "$(dirname "$METOREX")" && pwd -P)/$(basename "$METOREX")" "$WORK_DIR/bin/ruby"
+  # A test that runs `bundle`, as simplecov's sandboxes do, runs the
+  # Bundler Metorex carries, as `bundle` runs MRI's in an MRI run.
+  cat > "$WORK_DIR/bin/bundle" <<'BUNDLE'
+#!/bin/sh
+exec "$(dirname "$0")/ruby" -e 'require "bundler"; require "bundler/friendly_errors"; Bundler.with_friendly_errors { require "bundler/cli"; Bundler::CLI.start(ARGV, debug: true) }' -- "$@"
+BUNDLE
+  chmod +x "$WORK_DIR/bin/bundle"
+  export PATH="$WORK_DIR/bin:$PATH"
+fi
 QUEUE="$WORK_DIR/queue.tsv"
 : > "$QUEUE"
 for row in "${SUITES[@]}"; do
@@ -139,7 +166,7 @@ for row in "${SUITES[@]}"; do
     echo "gems/$gem is missing, run: git submodule update --init gems/$gem" >&2
     exit 2
   fi
-  if [ -f "$BUNDLES/${gem##*/}/Gemfile" ] && ! BUNDLE_GEMFILE="$BUNDLES/${gem##*/}/Gemfile" BUNDLE_PATH="$GEM_BUNDLE" bundle check > /dev/null 2>&1; then
+  if [ -f "$BUNDLES/${gem##*/}/Gemfile" ] && ! BUNDLE_GEMFILE="$BUNDLES/${gem##*/}/Gemfile" BUNDLE_PATH="$(bundle_path_of "${gem##*/}")" bundle check > /dev/null 2>&1; then
     echo "the gems $gem's tests load are missing, run: scripts/install_gem_suite_gems.sh" >&2
     exit 2
   fi
@@ -175,13 +202,26 @@ run_one() {
   (
     cd "$run_dir"
     if [ -f "$BUNDLES/${gem##*/}/Gemfile" ]; then
-      export BUNDLE_GEMFILE="$BUNDLES/${gem##*/}/Gemfile" BUNDLE_PATH="$GEM_BUNDLE"
+      export BUNDLE_GEMFILE="$BUNDLES/${gem##*/}/Gemfile" BUNDLE_PATH="$(bundle_path_of "${gem##*/}")"
     fi
     if [ "$prepare" != "$NO_PREPARE" ]; then
       "${command[@]}" "$prepare" > "$log" 2>&1 < /dev/null
     fi
+    # The file runs in a process group of its own, and the whole group is
+    # stopped when it ends or runs out of time, so a process a test started
+    # and left behind does not keep running into the next files.
     # shellcheck disable=SC2086
-    perl -e 'alarm shift; exec @ARGV' "$FILE_TIMEOUT" "${command[@]}" $arguments "$file" >> "$log" 2>&1 < /dev/null
+    perl -e '
+      my $limit = shift;
+      my $pid = fork;
+      if ($pid == 0) { setpgrp(0, 0); exec @ARGV or exit 127 }
+      $SIG{ALRM} = sub { kill "KILL", -$pid; waitpid($pid, 0); exit 142 };
+      alarm $limit;
+      waitpid($pid, 0);
+      my $status = $?;
+      kill "KILL", -$pid;
+      exit($status >> 8);
+    ' "$FILE_TIMEOUT" "${command[@]}" $arguments "$file" >> "$log" 2>&1 < /dev/null
   ) || true
   local summary
   summary=$(sed 's/\x1b\[[0-9;]*m//g' "$log" | grep -E '^[0-9]+ (tests|runs|examples?), ' | tail -1 || true)
@@ -196,7 +236,8 @@ run_files() {
 }
 export -f run_one run_files
 NO_PREPARE=none
-export MRI WORK_DIR REPO_ROOT BUNDLES GEM_BUNDLE METOREX FILE_TIMEOUT ENGINE NO_PREPARE
+export -f bundle_path_of
+export MRI WORK_DIR REPO_ROOT BUNDLES GEM_BUNDLES METOREX FILE_TIMEOUT ENGINE NO_PREPARE
 # net-imap's helper measures coverage with SimpleCov unless told not to.
 export SIMPLECOV_DISABLE=1
 # A test that omits itself under CI would count differently there than in

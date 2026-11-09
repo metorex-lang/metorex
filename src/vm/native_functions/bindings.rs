@@ -82,16 +82,12 @@ impl VirtualMachine {
             Some(captured) => captured.to_vec(),
             None => self.snapshot_lexical_nesting(),
         };
+        *held.def_scope.borrow_mut() = Some(self.def_scope_stack.clone());
         *held.frame.borrow_mut() = self.call_stack().last().cloned();
         *held.home_frame.borrow_mut() =
             Some(self.lexical_home_frame.unwrap_or(self.current_method_frame));
         // Where the call sits, which `source_location` reports.
-        *held.source.borrow_mut() = Some((
-            self.reported_current_file()
-                .map(|file| file.display().to_string())
-                .unwrap_or_default(),
-            (position.line as usize),
-        ));
+        *held.source.borrow_mut() = Some((self.written_in_file(), position.line as usize));
         Ok(Object::Binding(std::rc::Rc::new(held)))
     }
 

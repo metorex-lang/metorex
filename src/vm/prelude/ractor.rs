@@ -427,5 +427,13 @@ class Ractor
   end
 
   alias to_s inspect
+
+  # A Ractor's block runs with the Ractor as `self`, so a bare `receive`
+  # there takes from the Ractor running it.
+  def receive
+    Ractor.receive
+  end
+  alias recv receive
+  private :receive, :recv
 end
 "##;

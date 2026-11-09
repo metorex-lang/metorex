@@ -29,14 +29,16 @@ impl VirtualMachine {
             return Ok(());
         }
         let owner = Rc::clone(owner);
-        let named = owner.name().to_string();
-        let answer = self.send_to_object(
-            target.clone(),
+        let named = owner.ruby_name().to_string();
+        // The target's own class chain answers, not an `is_a?` it may not
+        // have, as a BasicObject does not.
+        let answer = self.call_object_type_check_method(
+            target,
             "is_a?",
-            vec![Object::Class(owner)],
+            &[Object::Class(owner)],
             position,
         )?;
-        if answer.is_truthy() {
+        if answer.is_some_and(|held| held.is_truthy()) {
             return Ok(());
         }
         Err(crate::vm::errors::simple_exception(
@@ -169,7 +171,8 @@ impl VirtualMachine {
                         .unwrap_or_else(|| method_obj.name.clone());
                     return Ok(Some(Object::symbol(original)));
                 }
-                "receiver" => {
+                // An UnboundMethod has no receiver, and no `receiver` either.
+                "receiver" if method_obj.receiver.is_some() => {
                     return Ok(Some(
                         method_obj
                             .receiver
@@ -240,10 +243,12 @@ impl VirtualMachine {
                             // itself rather than against a class.
                             let on_singleton =
                                 method_obj.owner_class.as_ref().is_some_and(|owner| {
-                                    matches!(
-                                        owner.get_class_var("__singleton__").view(),
-                                        Some(View::Bool(true))
-                                    )
+                                    owner.is_singleton_class()
+                                        || written_on_class_itself(method_obj, &bound)
+                                        || matches!(
+                                            owner.get_class_var("__singleton__").view(),
+                                            Some(View::Bool(true))
+                                        )
                                 });
                             let shown = match bound.view() {
                                 View::Class(_) | View::Module(_) => {
@@ -426,6 +431,15 @@ impl VirtualMachine {
                         } else {
                             Object::Class(named)
                         }));
+                    }
+                    // A method written as `def self.name` is held by the
+                    // class under its class-level name, and is owned by the
+                    // class's singleton class.
+                    if let Some(held) = &method_obj.receiver
+                        && written_on_class_itself(method_obj, held)
+                    {
+                        let held = held.as_ref().clone();
+                        return Ok(Some(Object::Class(self.singleton_class_of(&held))));
                     }
                     if let Some(owner) = &method_obj.owner_class {
                         let owner = Rc::clone(owner);
@@ -684,6 +698,20 @@ fn parameter_pair(kind: &str, name: &str) -> Object {
 
 /// The parameter list Ruby reports: positionals in the order they were
 /// declared, then the keywords, the keyword rest, and the block.
+/// Whether a method bound to a class is one written as `def self.name` on
+/// that class, which the class holds under its class-level name.
+fn written_on_class_itself(method_obj: &crate::object::Method, bound: &Object) -> bool {
+    let (View::Class(receiver) | View::Module(receiver)) = bound.view() else {
+        return false;
+    };
+    method_obj.owner_class.as_ref().is_some_and(|owner| {
+        Rc::ptr_eq(owner, receiver)
+            && owner
+                .find_own_method(&format!("__class__{}", method_obj.name))
+                .is_some()
+    })
+}
+
 /// The arity MRI gives a core method written in C, for a Method standing for
 /// one of the methods metorex answers natively.
 fn native_arity(method_obj: &crate::object::Method) -> Option<i8> {

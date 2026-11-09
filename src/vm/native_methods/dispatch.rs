@@ -210,6 +210,10 @@ impl VirtualMachine {
                             .collect(),
                         receiver,
                     );
+                    // It stands where the block was written.
+                    if let (Some(file), Some(line)) = (&block.source_file, block.opened_at) {
+                        *binding.source.borrow_mut() = Some((file.to_string(), line as usize));
+                    }
                     return Ok(Some(Object::Binding(Rc::new(binding))));
                 }
                 _ => {}

@@ -113,7 +113,7 @@ class File
     held = File.__path_text__ name
     tag = held.encoding
     unless held.start_with? File::SEPARATOR
-      base = directory.nil? ? Dir.pwd : File.absolute_path(directory)
+      base = directory.nil? ? Dir.__working_directory__ : File.absolute_path(directory)
       held = held.empty? ? base : File.join(base, held)
     end
     File.__without_dots__(held).force_encoding(tag)
@@ -142,7 +142,7 @@ class File
         raise Encoding::CompatibilityError,
               "ASCII incompatible encoding: #{Encoding.default_external}"
       end
-      base = directory.nil? ? Dir.pwd : File.expand_path(directory)
+      base = directory.nil? ? Dir.__working_directory__ : File.expand_path(directory)
       held = held.empty? ? base : File.join(base, held)
     end
     answered = File.__without_dots__ held

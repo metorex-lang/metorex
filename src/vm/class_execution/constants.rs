@@ -44,6 +44,15 @@ impl VirtualMachine {
         let Some(innermost) = innermost else {
             return true;
         };
+        // Object open further out in the nesting reaches them lexically.
+        if !in_method_body
+            && self
+                .def_scope_stack
+                .iter()
+                .any(|open| open.ruby_name_is("Object"))
+        {
+            return true;
+        }
         // A module has no superclass chain to judge by, so it stays open.
         let mut cursor = Some(innermost);
         while let Some(current) = cursor {

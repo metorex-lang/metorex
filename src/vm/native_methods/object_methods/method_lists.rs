@@ -134,6 +134,12 @@ impl VirtualMachine {
                             || self.method_is_restricted(receiver, name)
                     });
                 }
+                // A name `undef_method` removed is no method of the object's.
+                names.retain(|name| {
+                    !self
+                        .lookup_method(receiver, name)
+                        .is_some_and(|(_, method)| method.is_undefined)
+                });
                 names.sort();
                 names.dedup();
                 let symbols: Vec<Object> = names.into_iter().map(Object::symbol).collect();
@@ -769,4 +775,26 @@ impl VirtualMachine {
             })
             .collect()
     }
+}
+
+/// The core class or module ahead of `found_on` among `class`'s ancestors
+/// that answers `name` natively, where the core library wrote the method
+/// found on `found_on` in Ruby for the classes a program writes. Integer's
+/// own `modulo` stands ahead of the one Numeric carries.
+pub(crate) fn core_owner_ahead_of(
+    class: &std::rc::Rc<crate::class::Class>,
+    found_on: &std::rc::Rc<crate::class::Class>,
+    name: &str,
+) -> Option<std::rc::Rc<crate::class::Class>> {
+    let ancestors = crate::vm::eval::super_expr::walk_ancestors(class);
+    let found_at = ancestors
+        .iter()
+        .position(|ancestor| std::rc::Rc::ptr_eq(ancestor, found_on))?;
+    ancestors[..found_at]
+        .iter()
+        .find(|ancestor| {
+            let named = ancestor.ruby_name();
+            nearest_core_owner(std::slice::from_ref(&named), name).is_some()
+        })
+        .cloned()
 }

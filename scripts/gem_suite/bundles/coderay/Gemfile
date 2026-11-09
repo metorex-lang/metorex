@@ -1,0 +1,12 @@
+# The gems coderay's tests load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "coderay", path: "../../../../gems/coderay"
+gem "rspec"
+gem "simplecov"
+gem "shoulda-context"
+gem "test-unit"
+
+shipped "power_assert", "json", "psych", "stringio", "date"

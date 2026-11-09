@@ -529,7 +529,7 @@ class Dir
   # The directory a descriptor names, made the one the program works from.
   # With a block the program works from there only while the block runs.
   def self.fchdir(number)
-    was = Dir.pwd
+    was = Dir.__working_directory__
     IO.__stream__ "fchdir", 0, "", number
     return 0 unless block_given?
     begin
@@ -565,7 +565,7 @@ class Dir
   # a directory removed while the block ran is not an error here.
   def chdir(&block)
     return Dir.chdir(@path) if block.nil?
-    was = Dir.pwd
+    was = Dir.__working_directory__
     Dir.chdir(@path)
     begin
       block.call

@@ -37,6 +37,17 @@ impl VirtualMachine {
                     position,
                 )
             })?;
+        // A value with no singleton class of its own has nowhere for a
+        // method the code defines, as the block form refuses too.
+        if crate::vm::native_methods::object_methods::refuses_a_singleton(&receiver)
+            && crate::vm::native_methods::object_methods::body_defines_a_method(&statements)
+        {
+            return Err(crate::vm::errors::simple_exception(
+                "TypeError",
+                "can't define singleton",
+                position,
+            ));
+        }
         let singleton = self.singleton_class_of(&receiver);
         // The code runs in a scope of its own that sees the caller's locals,
         // so a name it assigns is the caller's own name.
@@ -268,6 +279,7 @@ impl VirtualMachine {
         // in, whatever the receiver it runs against, which is what
         // `Module.nesting` there reports.
         self.enter_block_nesting(block.captured_nesting.clone());
+        let carries_refinements = self.enter_block_refinements(block);
         // A constant in the body is looked up through the modules the block
         // was written in, not those of the method running it.
         let saved_def_scope =
@@ -437,6 +449,7 @@ impl VirtualMachine {
             self.constant_homes.pop();
         }
         self.def_scope_stack = saved_def_scope;
+        self.leave_block_refinements(carries_refinements);
         self.leave_block_nesting();
         self.class_var_cref_stack.pop();
         if carried {

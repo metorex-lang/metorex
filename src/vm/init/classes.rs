@@ -118,8 +118,6 @@ pub(crate) fn register_singletons(globals: &mut GlobalRegistry) {
     if let Some(View::Module(kernel)) = globals.get("Kernel").view() {
         object.add_mixin(kernel.clone());
     }
-    // Ruby's Object has `ruby2_keywords` as a private method; main inherits from Object.
-    object.set_method_private("ruby2_keywords");
     globals.set("Object", Object::Class(Rc::clone(&object)));
 
     // Class and Module — used by `Class.new { ... }` and `Module.new { ... }`.
@@ -147,11 +145,11 @@ pub(crate) fn register_singletons(globals: &mut GlobalRegistry) {
     // self.name` written outside every class lands.
     let main = Object::Instance(crate::object::Instance::new(Rc::clone(&object)));
     globals.set("__main__", main.clone());
-    // TOPLEVEL_BINDING — used by eval('code', TOPLEVEL_BINDING) at top level.
-    globals.set(
-        "TOPLEVEL_BINDING",
-        Object::Binding(Rc::new(Binding::with_receiver(HashMap::new(), main))),
-    );
+    // Code run through TOPLEVEL_BINDING runs at the top level, wherever the
+    // eval is written.
+    let top_level = Binding::with_receiver(HashMap::new(), main);
+    *top_level.home_frame.borrow_mut() = Some(Some(crate::vm::core::TOP_LEVEL_FRAME));
+    globals.set("TOPLEVEL_BINDING", Object::Binding(Rc::new(top_level)));
 
     // TrueClass, FalseClass, NilClass — can't be instantiated
     let true_class = Class::new("TrueClass", Some(Rc::clone(&object)));

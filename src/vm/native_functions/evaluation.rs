@@ -4,6 +4,29 @@ use super::*;
 use crate::object::{OptionView, View};
 
 impl VirtualMachine {
+    /// The text of source code held in a String and the encoding it is
+    /// written in. Source written in an encoding of its own is read back
+    /// through that encoding before it is lexed. A magic comment names the
+    /// encoding the source was written in, whatever the string carrying it
+    /// is tagged with, so binary source that says UTF-8 is read as UTF-8.
+    pub(crate) fn eval_source_text(source: &Object) -> Option<(String, String)> {
+        let View::String(s) = source.view() else {
+            return None;
+        };
+        let tagged = s.encoding_name();
+        let carried = crate::vm::native_methods::name_text(s);
+        Some(
+            match crate::lexer::named_source_encoding(&carried).map(|named| {
+                crate::vm::native_methods::string_methods::canonical_encoding_name(&named)
+            }) {
+                Some(named) if named != tagged => {
+                    (crate::vm::native_methods::text_in_encoding(s, &named), named)
+                }
+                _ => (carried, tagged),
+            },
+        )
+    }
+
     pub(crate) fn parse_source(
         &mut self,
         arguments: Vec<Object>,
@@ -87,24 +110,7 @@ impl VirtualMachine {
             });
         }
         let (code, code_encoding) = match arguments[0].view() {
-            // Source written in an encoding of its own is read back
-            // through that encoding before it is lexed. A magic
-            // comment names the encoding the source was written in,
-            // whatever the string carrying it is tagged with, so
-            // binary source that says UTF-8 is read as UTF-8.
-            View::String(s) => {
-                let tagged = s.encoding_name();
-                let carried = crate::vm::native_methods::name_text(s);
-                match crate::lexer::named_source_encoding(&carried).map(|named| {
-                    crate::vm::native_methods::string_methods::canonical_encoding_name(&named)
-                }) {
-                    Some(named) if named != tagged => (
-                        crate::vm::native_methods::text_in_encoding(s, &named),
-                        named,
-                    ),
-                    _ => (carried, tagged),
-                }
-            }
+            View::String(_) => Self::eval_source_text(&arguments[0]).unwrap_or_default(),
             other => {
                 return Err(MetorexError::runtime_error(
                     format!(
@@ -273,14 +279,9 @@ impl VirtualMachine {
         // Ruby reports every string it compiles, which is what a
         // trace reads the source back out of, with the file the code is
         // named for.
-        let compiled_path = filename.clone().unwrap_or_else(|| {
-            let written_in = self
-                .current_file
-                .as_ref()
-                .map(|file| self.reported_spelling(file).display().to_string())
-                .unwrap_or_default();
-            format!("(eval at {}:{})", written_in, position.line)
-        });
+        let compiled_path = filename
+            .clone()
+            .unwrap_or_else(|| format!("(eval at {}:{})", self.written_in_file(), position.line));
         self.fire_event(
             "script_compiled",
             position,
@@ -330,6 +331,9 @@ impl VirtualMachine {
             {
                 Some(Vec::new())
             }
+            // One taken in a method written outside every class opens
+            // nothing either.
+            Some(held) if held.home_frame.borrow().is_some() => Some(Vec::new()),
             Some(_) => None,
             None if !self.def_scope_stack.is_empty() => None,
             None => self
@@ -338,8 +342,26 @@ impl VirtualMachine {
                 .filter(|captured| !captured.is_empty())
                 .map(|captured| captured.iter().rev().map(Rc::clone).collect()),
         };
+        // A constant the code names is looked up where the binding was
+        // taken, so `Thor` evaluated through TOPLEVEL_BINDING from inside
+        // Bundler is the top-level one.
+        let binding_nesting: Option<crate::object::Nesting> = match (&binding, &captured_nesting) {
+            (Some(held), Some(_)) => Some(held.nesting.borrow().clone().into()),
+            _ => None,
+        };
+        // A binding taken anywhere else installs a `def` where one written
+        // there would, rather than where the eval is written.
+        let opened_scope = captured_nesting.or_else(|| {
+            binding
+                .as_ref()
+                .and_then(|held| held.def_scope.borrow().clone())
+        });
         let saved_def_scope =
-            captured_nesting.map(|opened| std::mem::replace(&mut self.def_scope_stack, opened));
+            opened_scope.map(|opened| std::mem::replace(&mut self.def_scope_stack, opened));
+        let binding_nesting_entered = binding_nesting.is_some();
+        if let Some(nesting) = binding_nesting {
+            self.enter_block_nesting(nesting);
+        }
         if let Some(cref) = carried_cref {
             self.class_var_cref_stack.push(Some(cref));
         }
@@ -424,10 +446,7 @@ impl VirtualMachine {
             // Code run through a binding is named for the eval that
             // ran it rather than for where the binding was taken.
             None => {
-                let written_in = prev_file
-                    .as_ref()
-                    .map(|file| self.reported_spelling(file).display().to_string())
-                    .unwrap_or_default();
+                let written_in = self.written_in_file();
                 self.current_file = Some(std::path::PathBuf::from(format!(
                     "{}{}:{})",
                     crate::vm::EVAL_FILE_PREFIX,
@@ -530,6 +549,9 @@ impl VirtualMachine {
         if carried_cref_pushed {
             self.class_var_cref_stack.pop();
         }
+        if binding_nesting_entered {
+            self.leave_block_nesting();
+        }
         if let Some(held) = saved_def_scope {
             self.def_scope_stack = held;
         }
@@ -537,8 +559,12 @@ impl VirtualMachine {
             // A local the code named that the binding did not have is
             // added to it, which is how `eval("x = 1", b)` leaves `x`
             // behind for the next look through `b`.
+            // A class or method the code defined is a definition rather
+            // than a local, and is not carried.
             for (name, cell) in self.environment().current_scope_var_refs().iter() {
-                if !held.has(name) {
+                if !held.has(name)
+                    && !crate::scope::names_a_definition_under(name, &cell.borrow())
+                {
                     held.set(name, Rc::clone(cell));
                 }
             }

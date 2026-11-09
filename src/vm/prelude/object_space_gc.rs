@@ -105,6 +105,9 @@ module ObjectSpace
       raise TypeError, "class or module required"
     end
     return to_enum(:each_object, wanted) unless block_given?
+    # The main Ractor is there from the start in Ruby, and metorex makes it
+    # the first time it is asked for.
+    Ractor.main if wanted.nil? || Ractor.ancestors.include?(wanted)
     found = __each_object__(wanted)
     found.each { |one| yield one }
     found.size

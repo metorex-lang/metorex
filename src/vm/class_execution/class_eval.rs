@@ -161,6 +161,7 @@ impl VirtualMachine {
         // The body reads its nesting as the scopes the block was written in,
         // whichever method handed the block on.
         self.enter_block_nesting(block.captured_nesting.clone());
+        let carries_refinements = self.enter_block_refinements(block);
         // The method running this block did not write it.
         self.borrowed_frames.push(self.current_method_frame);
         let frame = self.block_frame_at(block, position);
@@ -174,6 +175,7 @@ impl VirtualMachine {
             )
         });
         self.borrowed_frames.pop();
+        self.leave_block_refinements(carries_refinements);
         self.leave_block_nesting();
         self.pop_refinement_scope();
         self.user_def_nesting = saved_nesting;
@@ -266,6 +268,7 @@ impl VirtualMachine {
         let saved_def_scope =
             std::mem::replace(&mut self.def_scope_stack, block.captured_def_scope.clone());
         self.enter_block_nesting(block.captured_nesting.clone());
+        let carries_refinements = self.enter_block_refinements(block);
         self.def_scope_stack.push(Rc::clone(class));
         self.class_var_cref_stack
             .push(lexical_class_variable_home(block));
@@ -292,6 +295,7 @@ impl VirtualMachine {
         self.user_def_nesting = saved_nesting;
         self.constant_homes.pop();
         self.def_scope_stack = saved_def_scope;
+        self.leave_block_refinements(carries_refinements);
         self.leave_block_nesting();
         self.class_var_cref_stack.pop();
         self.environment_mut().pop_scope();
@@ -357,7 +361,17 @@ impl VirtualMachine {
             ));
         }
 
-        let code = self.coerce_eval_string(&arguments[0], position)?;
+        // Code is written in the encoding a magic comment of its own names,
+        // as Kernel#eval's is.
+        let (code, code_encoding) = match Self::eval_source_text(&arguments[0]) {
+            Some(read) => read,
+            None => (
+                self.coerce_eval_string(&arguments[0], position)?,
+                "UTF-8".to_string(),
+            ),
+        };
+        let source_encoding =
+            crate::lexer::named_source_encoding(&code).unwrap_or(code_encoding);
         let filename = match arguments.get(1) {
             Some(obj) => self.coerce_eval_string(obj, position)?,
             None => {
@@ -377,7 +391,9 @@ impl VirtualMachine {
             _ => 1,
         };
 
-        let tokens = crate::lexer::Lexer::with_start_line(&code, lineno).tokenize();
+        let tokens = crate::lexer::Lexer::with_start_line(&code, lineno)
+            .with_source_encoding(Some(source_encoding.clone()))
+            .tokenize();
         let statements = crate::parser::Parser::new(tokens)
             .inside_eval()
             .with_outer_locals(self.visible_local_names())
@@ -411,6 +427,21 @@ impl VirtualMachine {
         // `ModuleSpecs::ClassEvalTest.module_eval("Lookup")` finds
         // `ModuleSpecs::Lookup`.
         let mut enclosing_pushed = 0usize;
+        // Inside a method, the scopes the method was written in stand
+        // around the code as well, so a method of `class Object` that runs
+        // `BasicObject.class_eval("binding")` reads Object's constants.
+        let in_method_body = matches!(
+            self.written_in_method(),
+            Some((depth, _)) if depth == self.def_scope_stack.len()
+        );
+        if (self.def_scope_stack.is_empty() || in_method_body)
+            && let Some(written_in) = self.method_nesting_stack.last().cloned()
+        {
+            for module in written_in.iter().rev() {
+                self.def_scope_stack.push(Rc::clone(module));
+                enclosing_pushed += 1;
+            }
+        }
         let full_name = class_rc.name().to_string();
         if let Some(idx) = full_name.rfind("::") {
             let mut cumulative = String::new();
@@ -458,7 +489,9 @@ impl VirtualMachine {
                 ),
         );
         class_rc.set_current_visibility("public");
+        let previous_source_encoding = self.current_source_encoding.replace(source_encoding);
         let result = self.apply_class_body_statements(class_rc, &statements, position);
+        self.current_source_encoding = previous_source_encoding;
         if let Err(error) = &result {
             self.trace_error_leaving_frame(error);
         }

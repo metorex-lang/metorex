@@ -23,7 +23,7 @@ end
 p(Kernel.`(Command.new))
 
 begin
-  `nonexistent_command_xyz 2>/dev/null`
+  `nonexistent_command_xyz`
 rescue Errno::ENOENT => error
   puts(error.message)
 end

@@ -181,7 +181,10 @@ impl VirtualMachine {
                 View::Class(_) | View::Module(_) if name.starts_with(char::is_uppercase) => {
                     "constant"
                 }
-                View::Method(_) | View::NativeFunction(_) => "method",
+                View::NativeFunction(_) => "method",
+                // A `def` registers its method under its own name; a Method
+                // held in a local under any other name is a local.
+                View::Method(_) if crate::scope::names_a_definition_under(name, &value) => "method",
                 _ => "local-variable",
             });
         }

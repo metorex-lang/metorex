@@ -45,9 +45,8 @@ pub(crate) fn register_special_globals(globals: &mut GlobalRegistry) {
     // is running as.
     globals.set_variable("$", Object::Int(std::process::id() as i64));
 
-    // $0 / $PROGRAM_NAME — set later by main when file is known
+    // $0, which $PROGRAM_NAME names too, set once the script is known.
     globals.set_variable("0", Object::string(String::new()));
-    globals.set_variable("PROGRAM_NAME", Object::string(String::new()));
 
     // $; $, $/ $\ — string separator globals
     globals.set_variable(";", Object::Nil);

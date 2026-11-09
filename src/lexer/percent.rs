@@ -69,6 +69,23 @@ impl<'a> Lexer<'a> {
         if delimits && (!after_value || (spaced_before && opener != Some('='))) {
             return self.lex_percent_string(position);
         }
+        // After an operator, a space or a line end after the `%` delimits a
+        // string as well: `"%s" % % text ` formats "text".
+        if matches!(opener, Some(' ' | '\t' | '\n'))
+            && matches!(
+                self.prev_significant,
+                Some(
+                    TokenKind::Percent
+                        | TokenKind::Equal
+                        | TokenKind::Plus
+                        | TokenKind::Comma
+                        | TokenKind::LParen
+                        | TokenKind::LBracket
+                )
+            )
+        {
+            return self.lex_percent_string(position);
+        }
         Token::new(TokenKind::Percent, position)
     }
 
@@ -320,6 +337,10 @@ impl<'a> Lexer<'a> {
                         'x' => {
                             self.advance();
                             holds_bytes |= self.read_escaped_bytes(&mut content, 16);
+                        }
+                        'u' => {
+                            self.advance();
+                            self.read_unicode_escape(&mut content);
                         }
                         '0'..='7' => {
                             holds_bytes |= self.read_escaped_bytes(&mut content, 8);

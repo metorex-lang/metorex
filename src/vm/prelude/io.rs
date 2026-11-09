@@ -82,6 +82,9 @@ class IO
   def self.pipe(external = nil, internal = nil, **options)
     reading, writing = IO.__stream__ "pipe", 0, "", 0
     pair = [__over__(reading, nil, "r"), __over__(writing, nil, "w")]
+    # What is written to a pipe goes through at once, as Ruby's write end is
+    # opened in sync mode.
+    pair[1].sync = true
     # The encodings a pipe is opened with are the read end's: what comes out
     # of it is what was written in.
     unless external.nil? && internal.nil? && options.empty?

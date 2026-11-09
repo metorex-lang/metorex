@@ -75,6 +75,21 @@ const NATIVE_METHODS_BY_OWNER: &[(&str, &[&str])] = &[
     ("BasicObject", &["instance_eval", "instance_exec"]),
     ("Comparable", &["<", "<=", ">", ">=", "between?", "clamp"]),
     (
+        "Binding",
+        &[
+            "eval",
+            "implicit_parameter_defined?",
+            "implicit_parameter_get",
+            "implicit_parameters",
+            "local_variable_defined?",
+            "local_variable_get",
+            "local_variable_set",
+            "local_variables",
+            "receiver",
+            "source_location",
+        ],
+    ),
+    (
         "Complex",
         &[
             "*",

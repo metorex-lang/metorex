@@ -73,6 +73,17 @@ impl VirtualMachine {
                     made.owner = Some(class_rc.name().to_string());
                     made.owner_class = Some(Rc::clone(class_rc));
                 }
+                if self.coverage.is_some()
+                    && let (Some(file), Some(line), Some(column)) =
+                        (&block.source_file, block.opened_at, block.opened_column)
+                {
+                    let owner = if class_rc.is_module() {
+                        Object::Module(Rc::clone(class_rc))
+                    } else {
+                        Object::Class(Rc::clone(class_rc))
+                    };
+                    self.coverage_note_block_method(owner, &method_name, file, line, column);
+                }
                 made
             }
             View::Method(source) => {

@@ -287,6 +287,9 @@ impl VirtualMachine {
                         Ok(Some(value))
                     }
                     View::Exception(details) => {
+                        if self.object_is_frozen(receiver) {
+                            return Err(self.frozen_modification_error(receiver, position));
+                        }
                         details
                             .borrow_mut()
                             .instance_vars

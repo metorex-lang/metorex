@@ -35,10 +35,12 @@ impl VirtualMachine {
             }
             "local_variable_defined?" => {
                 let name = self.binding_local_name(arguments, method_name, position)?;
+                refuse_a_name_no_local_has(&name, binding, position)?;
                 Ok(Some(Object::Bool(binding.has(&name))))
             }
             "local_variable_get" => {
                 let name = self.binding_local_name(arguments, method_name, position)?;
+                refuse_a_name_no_local_has(&name, binding, position)?;
                 match binding.get(&name) {
                     Some(cell) => Ok(Some(cell.borrow().clone())),
                     None => Err(crate::vm::errors::simple_exception(
@@ -50,15 +52,7 @@ impl VirtualMachine {
             }
             "local_variable_set" => {
                 let name = self.binding_local_name(arguments, method_name, position)?;
-                // A global or one of the names the interpreter keeps for
-                // itself is not a local, so a binding refuses to bind it.
-                if !name.starts_with(|held: char| held == '_' || held.is_lowercase()) {
-                    return Err(crate::vm::errors::simple_exception(
-                        "NameError",
-                        &format!("wrong local variable name '{name}' for {binding:p}"),
-                        position,
-                    ));
-                }
+                refuse_a_name_no_local_has(&name, binding, position)?;
                 let value = arguments.get(1).cloned().unwrap_or(Object::Nil);
                 match binding.get(&name) {
                     Some(cell) => *cell.borrow_mut() = value.clone(),
@@ -180,4 +174,24 @@ impl VirtualMachine {
             )),
         }
     }
+}
+
+/// A constant, a global, or one of the names the interpreter keeps for
+/// itself is not a local, so a binding refuses to look it up or bind it.
+fn refuse_a_name_no_local_has(
+    name: &str,
+    binding: &crate::object::Binding,
+    position: Position,
+) -> Result<(), MetorexError> {
+    if name.starts_with(|held: char| held == '_' || held.is_lowercase()) {
+        return Ok(());
+    }
+    Err(crate::vm::errors::simple_exception(
+        "NameError",
+        &format!(
+            "wrong local variable name '{name}' for #<Binding:0x{:016x}>",
+            binding as *const crate::object::Binding as usize
+        ),
+        position,
+    ))
 }

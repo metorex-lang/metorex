@@ -110,7 +110,7 @@ impl VirtualMachine {
         length: std::time::Duration,
         position: Position,
     ) -> Result<(), MetorexError> {
-        if self.running_a_thread_body() {
+        if self.running_a_thread_body() && !self.alone_after_fork {
             return self.sleep_until_woken_within(Some(length), false, position);
         }
         let deadline = std::time::Instant::now() + length;

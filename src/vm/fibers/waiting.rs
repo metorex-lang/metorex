@@ -186,6 +186,9 @@ impl VirtualMachine {
     /// Hand the turn over from inside a thread, from its own body or from a
     /// fiber it resumed, and raise whatever was handed to it meanwhile.
     pub(crate) fn hand_over_turn(&mut self, position: Position) -> Result<(), MetorexError> {
+        if self.alone_after_fork {
+            return self.raise_if_thread_killed(position);
+        }
         if !self.running_a_thread_body() {
             self.blocking_in_fiber = true;
             self.fiber_suspend(Object::Nil, position)?;
@@ -281,6 +284,12 @@ impl VirtualMachine {
     }
 
     pub(crate) fn wait_for_other_threads(&mut self, position: Position) {
+        // A process forked from a thread has no other thread to hand the
+        // turn to, so the wait goes on in place.
+        if self.alone_after_fork {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+            return;
+        }
         if self.running_a_thread_body() {
             // A thread that hands control over while it waits is asleep for
             // as long as the wait lasts, which is what `status` reports.
@@ -369,12 +378,20 @@ impl VirtualMachine {
             if self.fibers.get(handle).is_some_and(|state| state.finished) {
                 break;
             }
-            // A thread cannot wait on itself, and one part-way through
-            // running another is already on its way.
-            if handle == self.fiber_current_handle()
-                || self.fiber_frames.iter().any(|frame| frame.handle == handle)
-            {
+            // A thread cannot wait on itself.
+            if handle == self.fiber_current_handle() {
                 break;
+            }
+            // One part-way through running this one ends only after this
+            // one hands the turn back to it, which is what waiting on it
+            // does until it is over.
+            if self.fiber_frames.iter().any(|frame| frame.handle == handle) {
+                if !self.running_a_thread_body() {
+                    break;
+                }
+                self.fiber_suspend(Object::Nil, position)?;
+                self.raise_if_thread_killed(position)?;
+                continue;
             }
             // A limit of no time at all still gives the thread one turn,
             // which is what makes `join(0)` report whether it is over.
@@ -400,6 +417,12 @@ impl VirtualMachine {
             match stepped {
                 Ok(FiberStep::Finished(value)) => {
                     self.finish_thread(thread, value.clone());
+                    // In a process forked from it, the thread that forked
+                    // is the whole program, which ends with it.
+                    if self.alone_after_fork {
+                        let status = self.run_at_exit_handlers(0, None);
+                        std::process::exit(status);
+                    }
                     return Ok(Some(value));
                 }
                 Ok(FiberStep::Failed(trouble)) => {
@@ -484,6 +507,9 @@ impl VirtualMachine {
     /// Whether handing control over would let something else run: another
     /// thread waiting for a turn, or the one that made this one.
     pub(crate) fn other_threads_are_waiting(&self) -> bool {
+        if self.alone_after_fork {
+            return false;
+        }
         self.running_a_thread_body() || !self.pending_threads.is_empty()
     }
 
@@ -519,6 +545,11 @@ impl VirtualMachine {
         statements_before: u64,
         position: Position,
     ) -> Result<(), MetorexError> {
+        // A wait inside `Timeout.timeout` ends when the limit passes, as
+        // Ruby's timer thread ends it, so it is no deadlock.
+        if !self.timeout_limits.is_empty() {
+            return self.raise_expired_timeout(position);
+        }
         if self.running_a_thread_body() || self.statements_run != statements_before {
             return Ok(());
         }

@@ -158,6 +158,7 @@ impl<'a> Lexer<'a> {
             lines.push(line);
         }
 
+        let held_lines = lines.len();
         // For `<<~`, strip the common leading whitespace from every line.
         let body = if strip_indent {
             let min_indent = lines
@@ -180,8 +181,9 @@ impl<'a> Lexer<'a> {
         } else {
             lines.join("\n")
         };
-        // Heredoc bodies always have a trailing newline in Ruby.
-        let body = if body.is_empty() {
+        // Heredoc bodies always have a trailing newline in Ruby, a body of
+        // one blank line included.
+        let body = if held_lines == 0 {
             String::new()
         } else {
             format!("{}\n", body)

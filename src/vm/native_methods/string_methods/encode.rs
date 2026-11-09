@@ -159,17 +159,30 @@ impl VirtualMachine {
                             options.undef_replace.then_some(replacement.as_str()),
                         )
                     }
-                    None if held == "EUC-JP" && reads_bytes && options.invalid_replace => {
-                        euc_jp_text_replacing(&binary_bytes(string_value), &replacement)
-                    }
                     None if held == "EUC-JP" && reads_bytes => {
                         let bytes = binary_bytes(string_value);
-                        if let Some((broken, after, incomplete)) = euc_jp_problem(&bytes) {
+                        if !options.invalid_replace
+                            && let Some((broken, after, incomplete)) = euc_jp_problem(&bytes)
+                        {
                             let error =
                                 invalid_bytes_error(&broken, after, incomplete, &held, position);
                             return Err(self.with_conversion_ends(error, &held, &wanted));
                         }
-                        crate::vm::native_methods::euc_jp_table::euc_jp_text(&bytes)
+                        if !options.undef_replace
+                            && let Some(undefined) = euc_jp_undefined(&bytes)
+                        {
+                            let message = if wanted == "UTF-8" {
+                                format!("{} from EUC-JP to UTF-8", dumped_bytes(&undefined))
+                            } else {
+                                format!(
+                                    "{} to UTF-8 in conversion from EUC-JP to UTF-8 to {wanted}",
+                                    dumped_bytes(&undefined)
+                                )
+                            };
+                            let error = undefined_conversion(&message, &undefined, "EUC-JP", position);
+                            return Err(self.with_conversion_ends(error, "EUC-JP", "UTF-8"));
+                        }
+                        euc_jp_text_replacing(&bytes, &replacement)
                     }
                     None if held == "US-ASCII" => {
                         let bytes = binary_bytes(string_value);

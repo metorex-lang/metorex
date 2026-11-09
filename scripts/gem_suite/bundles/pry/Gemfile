@@ -1,0 +1,11 @@
+# The gems pry's specs load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "pry", path: "../../../../gems/pry"
+gem "rspec"
+gem "coderay", path: "../../../../gems/coderay"
+gem "method_source", path: "../../../../gems/method_source"
+
+shipped "reline", "io-console", "irb", "prism", "rdoc", "erb", "psych", "stringio", "date", "pp", "prettyprint", "tsort"

@@ -1,0 +1,12 @@
+# The gems simplecov's specs load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "rake"
+gem "rspec"
+gem "test-unit"
+gem "json_schemer"
+gem "docile", path: "../../../../gems/docile"
+
+shipped "power_assert", "json"

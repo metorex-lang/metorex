@@ -432,3 +432,45 @@ fn mutex_refuses_recursive_locking() {
     let output = run_example("threads/mutex_refuses_recursive_locking.rb");
     assert_eq!(output, "\"deadlock; recursive locking\"\nfalse\n");
 }
+
+#[test]
+fn kills_pass_every_rescue_and_drop_later_raises() {
+    let output = run_example("threads/kills_pass_every_rescue.rb");
+    assert_eq!(output, "nil\nfalse\n");
+}
+
+#[test]
+fn mutex_refuses_trap_context() {
+    let output = run_example("threads/mutex_refuses_trap_context.rb");
+    assert_eq!(output, "\"can't be called from trap context\"\n:outside\n");
+}
+
+#[test]
+fn killed_while_joining_stops_at_once() {
+    let output = run_example("threads/killed_while_joining_stops_at_once.rb");
+    assert_eq!(output, "[:ready, :ready]\n");
+}
+
+#[test]
+fn fork_in_a_thread_keeps_that_thread() {
+    let output = run_example("threads/fork_in_a_thread_keeps_that_thread.rb");
+    assert_eq!(output, "child read ready\ntrue\n");
+}
+
+#[test]
+fn forked_child_runs_only_its_thread() {
+    let output = run_example("threads/forked_child_runs_only_its_thread.rb");
+    assert_eq!(output, "main once\nchild own process\n");
+}
+
+#[test]
+fn waits_under_a_timeout_are_not_deadlocks() {
+    let output = run_example("threads/waits_under_a_timeout_are_not_deadlocks.rb");
+    assert_eq!(output, ":timed_out\nfalse\n");
+}
+
+#[test]
+fn timeouts_end_reads_from_pipes() {
+    let output = run_example("threads/timeouts_end_reads_from_pipes.rb");
+    assert_eq!(output, ":pipe_timed_out\n:popen_timed_out\n");
+}

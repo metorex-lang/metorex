@@ -150,6 +150,16 @@ impl Class {
         self.is_method_private(name) || self.is_method_protected(name)
     }
 
+    /// Forget the visibility this class recorded for `name`, which a removed
+    /// method takes with it.
+    pub fn forget_visibility(&self, name: &str) {
+        if let Some(parts) = self.rare_given() {
+            parts.private_method_names.borrow_mut().remove(name);
+            parts.protected_method_names.borrow_mut().remove(name);
+        }
+        self.public_overrides.borrow_mut().remove(name);
+    }
+
     /// Mark a method name as public on this class (removes private flag and
     /// records an explicit public override so an inherited private status is
     /// shadowed).
