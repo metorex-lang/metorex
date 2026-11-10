@@ -1926,3 +1926,17 @@ fn test_c_extensions_c_library_helpers_execution() {
         )
     );
 }
+
+#[test]
+fn test_c_extensions_onigmo_properties_execution() {
+    let output = run_example("c_extensions/onigmo_properties.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "true\ntrue\n",
+            "[128, [12353..12438, 12445..12447, 110593..110879, 110898..110898, 110928..110930, 127488..127488]]\n",
+            "[128, [48..57, 65..70, 97..102]]\n",
+            "-223\n-223\n-6\n",
+        )
+    );
+}

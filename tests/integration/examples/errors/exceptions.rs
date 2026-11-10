@@ -699,3 +699,15 @@ fn raise_hands_the_call_stack_backtrace_to_a_set_backtrace_the_program_wrote() {
         "Array\ntrue\n[\"given.rb:1\"]\nnil\n[\"first.rb:2\"]\n"
     );
 }
+
+#[test]
+fn test_errors_exception_initialize_called_again_execution() {
+    let output = run_example("errors/exception_initialize_called_again.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"(33) unexpected token\"\n\"RuntimeError\"\n",
+            "#<ArgumentError: wrong number of arguments (given 2, expected 0..1)>\n",
+        )
+    );
+}

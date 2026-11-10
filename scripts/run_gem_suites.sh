@@ -119,6 +119,11 @@ SUITES=(
   "simplecov|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
   "docile|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
   "mini_portile2|test/test_*.rb|-I lib -I test -r bundler/setup"
+  "ast|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "parser|test/**/test_*.rb|-w -I lib -I test -r bundler/setup|$REPO_ROOT/scripts/gem_suite/released_generated_files.rb"
+  "regexp_parser|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC|$REPO_ROOT/scripts/gem_suite/released_generated_files.rb"
+  "rubocop-ast|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC|$REPO_ROOT/scripts/gem_suite/released_generated_files.rb"
+  "rubocop|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
   "racc|test/test_*.rb|--enable-frozen-string-literal -I lib -I test/lib -I $HELPERS -r helper|$REPO_ROOT/scripts/gem_suite/racc_parser_text.rb"
 )
 

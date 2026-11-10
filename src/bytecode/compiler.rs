@@ -3139,34 +3139,26 @@ impl Compiler {
                 trailing_block,
                 ..
             } => return self.bare_call(callee, arguments, trailing_block.as_deref(), to, position),
-            Expression::Array { elements, .. } => {
-                // A long literal is built a chunk of elements at a time, so
-                // its elements need no more registers than a chunk does.
-                let mut chunks = elements.chunks(LITERAL_CHUNK);
-                let first_chunk = chunks.next().unwrap_or(&[]);
-                let first = self.chunk_of_elements(first_chunk)?;
-                self.emit(
-                    Instruction::NewArray {
-                        to: to_register,
-                        first,
-                        count: first_chunk.len() as u8,
-                    },
-                    position,
-                );
-                for chunk in chunks {
-                    let first = self.chunk_of_elements(chunk)?;
+            Expression::Array { elements, .. } if elements.len() > LITERAL_CHUNK => {
+                if let Some(values) = elements.iter().map(immutable_literal).collect::<Option<Vec<_>>>() {
+                    // A long table of numbers, as a Racc grammar writes, is
+                    // copied from one constant rather than built element by
+                    // element, which would take an instruction for each.
+                    let constant = self.constant(Object::array(values))?;
                     self.emit(
-                        Instruction::AppendArray {
-                            array: to_register,
-                            first,
-                            count: chunk.len() as u8,
+                        Instruction::DuplicateArray {
+                            to: to_register,
+                            constant,
                         },
                         position,
                     );
+                    return Ok(());
                 }
-                return Ok(());
+                return self.array_in_chunks(elements, to_register, position);
             }
-            Expression::MethodCall {
+            Expression::Array { elements, .. } => {
+                return self.array_in_chunks(elements, to_register, position);
+            }            Expression::MethodCall {
                 receiver,
                 method,
                 arguments,
@@ -3497,6 +3489,39 @@ impl Compiler {
         Ok(shape)
     }
 
+    /// Build an Array literal into register `to` a chunk of elements at a
+    /// time, so its elements need no more registers than a chunk does.
+    fn array_in_chunks(
+        &mut self,
+        elements: &[Expression],
+        to: u8,
+        position: Position,
+    ) -> Result<(), &'static str> {
+        let mut chunks = elements.chunks(LITERAL_CHUNK);
+        let first_chunk = chunks.next().unwrap_or(&[]);
+        let first = self.chunk_of_elements(first_chunk)?;
+        self.emit(
+            Instruction::NewArray {
+                to,
+                first,
+                count: first_chunk.len() as u8,
+            },
+            position,
+        );
+        for chunk in chunks {
+            let first = self.chunk_of_elements(chunk)?;
+            self.emit(
+                Instruction::AppendArray {
+                    array: to,
+                    first,
+                    count: chunk.len() as u8,
+                },
+                position,
+            );
+        }
+        Ok(())
+    }
+
     /// Compile a chunk of an Array literal's elements to consecutive
     /// registers, answering the first.
     fn chunk_of_elements(&mut self, elements: &[Expression]) -> Result<u8, &'static str> {
@@ -3668,6 +3693,18 @@ impl Compiler {
     fn constant(&mut self, value: Object) -> Result<u16, &'static str> {
         let at = self.unit.constant(value);
         wide(Some(at))
+    }
+}
+
+/// The value a literal stands for, where it is one no program can change:
+/// an Integer, a Float, nil, true, or false.
+fn immutable_literal(element: &Expression) -> Option<Object> {
+    match element {
+        Expression::IntLiteral { value, .. } => Some(Object::Int(*value)),
+        Expression::FloatLiteral { value, .. } => Some(Object::Float(*value)),
+        Expression::NilLiteral { .. } => Some(Object::Nil),
+        Expression::BoolLiteral { value, .. } => Some(Object::Bool(*value)),
+        _ => None,
     }
 }
 

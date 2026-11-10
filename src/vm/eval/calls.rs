@@ -18,7 +18,21 @@ impl VirtualMachine {
         self.lookup_method(&current_self, name)
             .is_some_and(|(_, method)| !method.is_undefined)
     }
+
+    /// Whether `self` answers unknown names with a `method_missing` the
+    /// program wrote, as an RSpec matcher does to reach its example's helpers.
+    fn self_writes_method_missing(&mut self) -> bool {
+        let Ok(current_self) = self.eval_self(crate::lexer::Position::default()) else {
+            return false;
+        };
+        self.lookup_method(&current_self, "method_missing")
+            .is_some_and(|(_, method)| !method.is_undefined && method.source_location.is_some())
+    }
 }
+
+/// The functions metorex offers that Ruby's Kernel has no method for, which
+/// a `method_missing` of the program's own answers first.
+const METOREX_ONLY_FUNCTIONS: &[&str] = &["parse", "assert", "assert_equal", "assert_raises"];
 
 /// How a call written without a receiver, `name(arguments)`, is made, which
 /// is decided before its arguments are evaluated.
@@ -82,6 +96,16 @@ impl VirtualMachine {
         // has a method of that name, as `message = message { ... }` needs.
         if matches!(self.environment().get(name).view(), Some(View::Block(_)))
             && self.self_defines_method(name)
+        {
+            return Ok(CallRoute::OnSelf);
+        }
+
+        // Ruby has no `parse` of its own, so a receiver whose `method_missing`
+        // answers it, as an RSpec matcher forwarding to its example's helper
+        // does, is asked before metorex's function of that name.
+        if METOREX_ONLY_FUNCTIONS.contains(&name)
+            && matches!(self.environment().get(name).view(), None | Some(View::NativeFunction(_)))
+            && self.self_writes_method_missing()
         {
             return Ok(CallRoute::OnSelf);
         }

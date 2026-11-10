@@ -1,0 +1,12 @@
+# The gems regexp_parser's specs load. The released regexp_parser gem is
+# installed beside them for its scanner, which its Rakefile generates with
+# Ragel, and which scripts/gem_suite/released_generated_files.rb copies into
+# the checkout's lib, ahead of the released gem on the load path.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "regexp_parser", "2.13.1"
+gem "rspec", "~> 3.10"
+gem "leto", "~> 2.1"
+gem "regexp_property_values", "~> 1.5"

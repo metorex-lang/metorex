@@ -38,9 +38,11 @@ module Open3
   end
 
   # What the command wrote and the status it ended with, having been handed
-  # `stdin_data` to read.
-  def self.capture2(*command, stdin_data: nil, binmode: false, **options)
-    popen2(*command, **options) do |input, output, waiter|
+  # `stdin_data` to read. The options come last, as a Hash written either
+  # way, `capture2(command, stdin_data: text)` or `capture2(command, {stdin_data: text})`.
+  def self.capture2(*command)
+    stdin_data, binmode, options = Open3.capture_options(command)
+    popen2(*command, options) do |input, output, waiter|
       output.binmode if binmode
       Open3.feed input, stdin_data, binmode
       [output.read, waiter.value]
@@ -48,8 +50,9 @@ module Open3
   end
 
   # The same, with the error stream joined onto the output stream.
-  def self.capture2e(*command, stdin_data: nil, binmode: false, **options)
-    popen2e(*command, **options) do |input, output, waiter|
+  def self.capture2e(*command)
+    stdin_data, binmode, options = Open3.capture_options(command)
+    popen2e(*command, options) do |input, output, waiter|
       output.binmode if binmode
       Open3.feed input, stdin_data, binmode
       [output.read, waiter.value]
@@ -57,8 +60,9 @@ module Open3
   end
 
   # The same again, with the two streams kept apart.
-  def self.capture3(*command, stdin_data: nil, binmode: false, **options)
-    popen3(*command, **options) do |input, output, errors, waiter|
+  def self.capture3(*command)
+    stdin_data, binmode, options = Open3.capture_options(command)
+    popen3(*command, options) do |input, output, errors, waiter|
       if binmode
         output.binmode
         errors.binmode
@@ -66,6 +70,13 @@ module Open3
       Open3.feed input, stdin_data, binmode
       [output.read, errors.read, waiter.value]
     end
+  end
+
+  # The input and binmode a capture takes off the options ending `command`,
+  # and the options left for `Process.spawn`.
+  def self.capture_options(command)
+    options = command.last.is_a?(Hash) ? command.pop.dup : {}
+    [options.delete(:stdin_data), options.delete(:binmode), options]
   end
 
   # Each command reading what the one before it wrote, answering the status

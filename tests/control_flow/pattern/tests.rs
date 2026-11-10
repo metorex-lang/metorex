@@ -314,7 +314,7 @@ fn multiple_rest_patterns_in_array_error() {
 fn array_too_short_for_rest_pattern() {
     let result = run(r#"
 case [1]
-when [first, second, ...rest]
+in [first, second, *rest]
   "matched"
 else
   "too short"
@@ -437,10 +437,10 @@ end
     assert!(err.contains("unexpected ']'"));
 }
 
-// ── ... without name error in case/when array pattern ────────────────────────
+// ── ... with nothing after it in a when clause's Array ───────────────────────
 
 #[test]
-fn case_when_array_rest_without_name_error() {
+fn case_when_array_ending_in_three_dots_is_a_syntax_error() {
     let err = parse_err(
         r#"
 case [1, 2, 3]
@@ -449,7 +449,7 @@ when [first, ...]
 end
 "#,
     );
-    assert!(err.contains("identifier") || err.contains("Expected") || err.contains("..."));
+    assert!(err.contains("unexpected ']'"));
 }
 
 // ── case/in ControlFlow propagation (match body generates non-Next flow) ──────

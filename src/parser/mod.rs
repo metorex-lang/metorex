@@ -220,12 +220,16 @@ pub(crate) struct AnonymousBlockParams {
 
 /// The names a block's parameter list binds, with the `*`, `**` and `&`
 /// markers and any default value left out.
-/// `include` and `extend` are methods rather than keywords, so a parameter
-/// may take either name. Any other token comes back as it was.
+/// `include`, `extend`, and the `attr_*` methods are methods rather than
+/// keywords, so a parameter may take any of their names. Any other token
+/// comes back as it was.
 pub(crate) fn method_name_as_identifier(kind: TokenKind) -> TokenKind {
     match kind {
         TokenKind::Include => TokenKind::Ident("include".to_string()),
         TokenKind::Extend => TokenKind::Ident("extend".to_string()),
+        TokenKind::AttrReader => TokenKind::Ident("attr_reader".to_string()),
+        TokenKind::AttrWriter => TokenKind::Ident("attr_writer".to_string()),
+        TokenKind::AttrAccessor => TokenKind::Ident("attr_accessor".to_string()),
         other => other,
     }
 }
@@ -266,8 +270,9 @@ impl<'source> Parser<'source> {
     /// Whether `name` is a local variable where the walk stands: bound by a
     /// pattern already, or bound before this point anywhere but inside a
     /// block that has closed since.
-    /// Whether the `include` or `extend` at the cursor is assigned to, as
-    /// `include = value` and `include, rest = values` make it a local.
+    /// Whether the `include`, `extend`, or `attr_*` at the cursor is
+    /// assigned to, as `include = value` and `include, rest = values` make
+    /// it a local.
     pub(crate) fn method_name_is_assigned(&self) -> bool {
         match self.peek_ahead(1).kind {
             TokenKind::Equal => true,

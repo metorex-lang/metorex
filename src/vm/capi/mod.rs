@@ -45,6 +45,7 @@ mod modules;
 mod mutexes;
 mod numbers;
 mod numerics;
+mod oniguruma;
 mod objects;
 mod procs;
 mod ranges;

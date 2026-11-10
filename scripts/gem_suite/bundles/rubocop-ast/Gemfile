@@ -1,0 +1,14 @@
+# The gems rubocop-ast's specs load, without RuboCop, as its CI runs them. The
+# released rubocop-ast gem is installed beside them for its node pattern lexer
+# and parser, which its Rakefile generates with oedipus_lex and Racc, and
+# which scripts/gem_suite/released_generated_files.rb copies into the
+# checkout's lib, ahead of the released gem on the load path.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "rubocop-ast", "1.51.0"
+gem "parser", "3.3.13.0"
+gem "rspec", "~> 3.7"
+
+shipped "prism", "racc"

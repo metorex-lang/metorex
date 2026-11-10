@@ -86,7 +86,9 @@ pub(crate) fn destination_spells(wanted: &str, character: char) -> bool {
     if let Some(codec) = crate::vm::native_methods::double_byte::double_byte(wanted) {
         return codec.bytes(&text).is_ok();
     }
-    if wanted == "US-ASCII" {
+    // BINARY takes ASCII from a conversion and nothing else, as US-ASCII
+    // does.
+    if wanted == "US-ASCII" || wanted == "ASCII-8BIT" {
         return character.is_ascii();
     }
     !matches!(latin_bytes(&text, wanted), Some(Err(_)))

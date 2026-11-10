@@ -12,7 +12,12 @@ impl Parser<'_> {
         if !written_apart {
             self.call_argument_depth += 1;
         }
+        // A `do` inside the parentheses belongs to the call it follows there,
+        // even where the call they belong to is itself an argument written
+        // without parentheses, as in `expect eq(list.map do ... end)`.
+        let enclosing_paren_less = std::mem::take(&mut self.paren_less_arg_depth);
         let read = self.parse_arguments_inside_parens();
+        self.paren_less_arg_depth = enclosing_paren_less;
         if !written_apart {
             self.call_argument_depth -= 1;
         }

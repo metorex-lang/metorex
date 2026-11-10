@@ -20,10 +20,11 @@ impl Parser {
             let Some(letter) = self.peek() else {
                 return Err(Trouble("premature end of char-class".to_string()));
             };
+            // A `]` after `&&` closes the class, leaving that side of the
+            // intersection empty, which no character belongs to.
             if letter == '&' && self.peek_at(1) == Some('&') {
                 self.at += 2;
                 parts.push(std::mem::take(&mut items));
-                first = true;
                 continue;
             }
             if letter == '['

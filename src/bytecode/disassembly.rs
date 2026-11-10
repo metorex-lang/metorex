@@ -46,7 +46,7 @@ fn note(unit: &Unit, instruction: &Instruction) -> Option<String> {
             .map(|name| name.text.clone())
     };
     match *instruction {
-        Instruction::LoadConstant { constant, .. } => unit
+        Instruction::LoadConstant { constant, .. } | Instruction::DuplicateArray { constant, .. } => unit
             .constants
             .get(usize::from(constant))
             .map(|value| value.to_string()),

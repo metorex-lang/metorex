@@ -3,7 +3,7 @@
 # Array destructuring patterns
 arr = [1, 2, 3]
 result = case arr
-when [a, b, c] then a + b + c
+in [a, b, c] then a + b + c
 else 0
 end
 puts result
@@ -11,7 +11,7 @@ puts result
 # Array destructuring with rest pattern
 data = [10, 20, 30, 40]
 sum = case data
-when [first, ...rest] then first
+in [first, *rest] then first
 else 0
 end
 puts sum

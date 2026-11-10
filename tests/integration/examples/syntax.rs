@@ -733,3 +733,49 @@ fn test_syntax_singleton_class_assigned_to_a_constant_execution() {
         )
     );
 }
+
+#[test]
+fn test_syntax_regexp_with_a_quote_in_interpolation_execution() {
+    let output = run_example("syntax/regexp_with_a_quote_in_interpolation.rb");
+    assert_eq!(output, "'it\\'s'\n<__x_} 2 1>\n");
+}
+
+#[test]
+fn test_syntax_attr_names_as_locals_execution() {
+    let output = run_example("syntax/attr_names_as_locals.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"attr_accessor :id, :name\\n\"\n3\n",
+            "[:draft, :draft=]\n[:count, :total]\n[:note=, :summary]\n",
+            "\"attr_reader id, name\\n\"\n",
+        )
+    );
+}
+
+#[test]
+fn test_syntax_defined_label_execution() {
+    let output = run_example("syntax/defined_label.rb");
+    assert_eq!(
+        output,
+        "{defined?: :DefinedNode, def: :DefNode}\n{defined?: 1}\n{defined?: 2}\n\"local-variable\"\n"
+    );
+}
+
+#[test]
+fn test_syntax_when_array_values_execution() {
+    let output = run_example("syntax/when_array_values.rb");
+    assert_eq!(output, "\"*\"\n\"?\"\n\"{3}\"\n\"pair or five\"\n");
+}
+
+#[test]
+fn test_syntax_do_block_in_parenthesized_argument_execution() {
+    let output = run_example("syntax/do_block_in_parenthesized_argument.rb");
+    assert_eq!(output, "[\"example0.rb\", \"example1.rb\"]\n[\"A\", \"B\"]\n");
+}
+
+#[test]
+fn test_syntax_do_block_in_parenthesized_condition_execution() {
+    let output = run_example("syntax/do_block_in_parenthesized_condition.rb");
+    assert_eq!(output, ":large_entry\n:stopped\n:done\n");
+}

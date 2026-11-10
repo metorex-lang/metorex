@@ -252,7 +252,7 @@ impl VirtualMachine {
                     Some(NewlineConversion::Cr) => reading.replace('\n', "\r"),
                     _ => reading,
                 };
-                if wanted == "US-ASCII"
+                if (wanted == "US-ASCII" || wanted == "ASCII-8BIT")
                     && let Some(character) = reading.chars().find(|character| !character.is_ascii())
                 {
                     return Err(

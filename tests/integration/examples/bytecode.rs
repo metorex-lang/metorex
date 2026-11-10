@@ -414,3 +414,12 @@ fn test_bytecode_kept_blocks_execution() {
     let output = run_example("bytecode/kept_blocks.rb");
     assert_eq!(output, "0\n10\n20\n[0, 1, 2]\n3\n6\n4\nnil\n");
 }
+
+#[test]
+fn test_bytecode_long_number_table_execution() {
+    let output = run_example("bytecode/long_number_table.rb");
+    assert_eq!(
+        output,
+        "[70001, -1, nil, :present]\n[75, 76, false, [2.5, true, false, nil, -100]]\n"
+    );
+}

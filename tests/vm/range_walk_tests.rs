@@ -5,7 +5,16 @@ use metorex::object::Object;
 use metorex::parser::Parser;
 use metorex::vm::VirtualMachine;
 
+/// Held while a program runs. bigdecimal's C extension keeps the VALUEs it
+/// made in globals the whole process shares, while each thread's interpreter
+/// hands out VALUEs of its own, so two interpreters requiring it at once
+/// would each read the other's.
+static ONE_INTERPRETER_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn run(code: &str) -> Option<Object> {
+    let _running = ONE_INTERPRETER_AT_A_TIME
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let tokens = Lexer::new(code).tokenize();
     let statements = Parser::new(tokens).parse().expect("parse failed");
     let mut vm = VirtualMachine::new();

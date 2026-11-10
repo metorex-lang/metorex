@@ -1186,3 +1186,15 @@ fn test_methods_method_named_like_a_constant_execution() {
         "true\n\"parsed entry\"\nNameError\n\"parsed line\"\n:journal\n:journal\n[:method, [1]]\n"
     );
 }
+
+#[test]
+fn test_methods_pseudo_variable_method_names_execution() {
+    let output = run_example("methods/pseudo_variable_method_names.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[:line, 3]\n[:file, \"a.rb\"]\n[:encoding, \"UTF-8\"]\n",
+            "[:__ENCODING__, :__FILE__, :__LINE__]\n21\n{__LINE__: 1, __FILE__: 2}\n:__ENCODING__\n",
+        )
+    );
+}

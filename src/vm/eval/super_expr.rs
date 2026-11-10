@@ -1074,7 +1074,7 @@ impl VirtualMachine {
 
     /// Exception#initialize, which a subclass's own `initialize` reaches
     /// through `super`. The argument it is handed is the message.
-    fn exception_initialize(
+    pub(crate) fn exception_initialize(
         &mut self,
         receiver: &Object,
         arguments: &[Object],

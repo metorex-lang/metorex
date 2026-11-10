@@ -90,7 +90,11 @@ impl Parser<'_> {
     pub(in crate::parser) fn parse_case_pattern(&mut self) -> Result<MatchPattern, MetorexError> {
         let token = self.peek().clone();
 
-        if self.in_when_clause && self.is_literal_opening_an_expression() {
+        // A `when` compares the subject with what each value it lists
+        // evaluates to, so `[a, -1]` there is an Array, not a pattern.
+        if self.in_when_clause
+            && (self.is_literal_opening_an_expression() || self.check(&[TokenKind::LBracket]))
+        {
             let held = self.parse_range()?;
             return Ok(MatchPattern::Expression(Box::new(held)));
         }

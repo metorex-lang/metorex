@@ -2490,3 +2490,15 @@ fn test_coverage_one_line_statements_execution() {
         "[1, 1, 3, 1, nil, 1, 3, 1, 1, 1, 1, 2, 1, 1, 3, 1, 3, 3, 1, 1, 1, nil, 1, nil]\n"
     );
 }
+
+#[test]
+fn test_stdlib_open3_capture_options_hash_execution() {
+    let output = run_example("stdlib/open3_capture_options_hash.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"entry one\"\ntrue\n\"entry two\"\n\"\"\ntrue\n",
+            "\"entry three\\nnote\\n\"\n#<Encoding:BINARY (ASCII-8BIT)>\ntrue\n",
+        )
+    );
+}

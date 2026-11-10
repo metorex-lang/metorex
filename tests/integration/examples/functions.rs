@@ -511,3 +511,18 @@ fn test_procs_block_reads_the_local_a_last_assignment_makes_execution() {
     let output = run_example("procs/block_reads_the_local_a_last_assignment_makes.rb");
     assert_eq!(output, "true\ntrue\n[3, 2, 1, :done]\n");
 }
+
+#[test]
+fn test_procs_unknown_block_keywords_execution() {
+    let output = run_example("procs/unknown_block_keywords.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "#<ArgumentError: unknown keyword: :extra>\n",
+            "#<ArgumentError: unknown keywords: :day, \"note\">\n",
+            "#<ArgumentError: missing keyword: :month>\n",
+            "[\"rent\", 11, 2026]\n{day: 2}\n",
+            "#<ArgumentError: unknown keyword: :day>\n",
+        )
+    );
+}

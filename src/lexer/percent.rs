@@ -253,13 +253,25 @@ impl<'a> Lexer<'a> {
         if parts.len() == 1
             && let super::InterpolationPart::Text(text) = &parts[0]
         {
-            if holds_bytes {
-                if self.binary_source {
-                    return Token::new(TokenKind::BinaryString(text.clone()), position);
-                }
-                return Token::new(TokenKind::ByteString(text.clone()), position);
-            }
-            return Token::new(TokenKind::String(text.clone()), position);
+            // Every character of a literal that holds bytes stands for one,
+            // as in a double-quoted string.
+            let text = if holds_bytes {
+                super::strings::byte_text(text)
+            } else {
+                text.clone()
+            };
+            // Under the `frozen_string_literal` comment a `%Q` literal is
+            // frozen, as a double-quoted one is.
+            let kind = match (holds_bytes, self.binary_source, self.frozen_literals) {
+                (true, true, true) => TokenKind::FrozenBinaryString(text),
+                (true, true, false) => TokenKind::BinaryString(text),
+                (true, false, true) => TokenKind::FrozenByteString(text),
+                (true, false, false) => TokenKind::ByteString(text),
+                (false, _, true) => TokenKind::FrozenString(text),
+                (false, _, false) if self.mutable_literals => TokenKind::MutableString(text),
+                (false, _, false) => TokenKind::String(text),
+            };
+            return Token::new(kind, position);
         }
         if parts.is_empty() {
             return Token::new(TokenKind::String(String::new()), position);
@@ -349,8 +361,25 @@ impl<'a> Lexer<'a> {
                             content.push(other);
                             self.advance();
                         }
+                        // A backslash ending a line joins the next one on.
+                        '\n' => {
+                            self.advance();
+                        }
+                        'c' | 'C' | 'M' => match self.read_control_escape() {
+                            Some(byte) if byte.is_ascii() => content.push(byte as char),
+                            Some(byte) => {
+                                holds_bytes = true;
+                                super::strings::push_escaped_bytes(&mut content, &[byte]);
+                            }
+                            None => {
+                                content.push(esc);
+                                self.advance();
+                            }
+                        },
+                        // A backslash before something that opens no escape
+                        // stands for that character alone, as in a
+                        // double-quoted string.
                         _ => {
-                            content.push('\\');
                             content.push(esc);
                             self.advance();
                         }
@@ -548,9 +577,7 @@ impl super::Lexer<'_> {
                 false
             }
             Err(_) => {
-                for byte in bytes {
-                    content.push(byte as char);
-                }
+                super::strings::push_escaped_bytes(content, &bytes);
                 true
             }
         }

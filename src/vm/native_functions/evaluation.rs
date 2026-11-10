@@ -268,11 +268,19 @@ impl VirtualMachine {
         }
         // A `frozen_string_literal` comment written after code names
         // nothing, and a verbose run says so.
-        if crate::lexer::frozen_string_literal_after_a_token(&code)
-            && matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true)))
+        if matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true)))
+            && let Some(at) = crate::lexer::frozen_string_literal_after_a_token(&code)
         {
+            let named = filename.clone().unwrap_or_else(|| {
+                format!(
+                    "(eval at {}:{})",
+                    self.file_for_frames().unwrap_or_default(),
+                    position.line
+                )
+            });
+            let line = i64::from(at) - 1 + named_lineno;
             self.emit_warning_to_stderr(
-                "warning: `frozen_string_literal' is ignored after any tokens",
+                &format!("{named}:{line}: warning: 'frozen_string_literal' is ignored after any tokens"),
                 position,
             );
         }

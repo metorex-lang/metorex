@@ -14,6 +14,7 @@ mod parser;
 mod unicode_properties;
 
 pub use parser::{Flags, Trouble};
+pub(crate) use classes::{numbered_property_ranges, plain_property_name, property_number};
 
 use matcher::{Found, Matcher, Slot};
 use node::Node;

@@ -214,8 +214,10 @@ class Ractor
       raise Ractor::Error, "can not make shareable object for #{held.inspect}"
     end
     return __make_proc_shareable__(held) if held.is_a?(Proc)
+    # An object is frozen before its parts are walked, so the parts its own
+    # `freeze` makes, as Parser::Source::Buffer's does, are frozen too.
+    held.freeze unless held.frozen?
     __parts__(held).each { |part| __freeze_deep__(part, seen) }
-    held.freeze
   end
 
   # A Proc is shareable when its `self` is, it assigns to no local of the

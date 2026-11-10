@@ -135,11 +135,14 @@ impl VirtualMachine {
             std::mem::replace(&mut self.current_source_encoding, named_encoding);
         // A `frozen_string_literal` comment written after code names nothing,
         // and a verbose run says so.
-        if crate::lexer::frozen_string_literal_after_a_token(&source)
-            && matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true)))
+        if matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true)))
+            && let Some(line) = crate::lexer::frozen_string_literal_after_a_token(&source)
         {
             self.emit_warning_to_stderr(
-                "warning: `frozen_string_literal' is ignored after any tokens",
+                &format!(
+                    "{}:{line}: warning: 'frozen_string_literal' is ignored after any tokens",
+                    named_path.display()
+                ),
                 crate::lexer::Position::new(0, 0, 0),
             );
         }

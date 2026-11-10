@@ -169,7 +169,7 @@ fn a_compiled_body_answers_its_last_statement() {
 
 #[test]
 fn a_long_array_literal_is_built_a_chunk_at_a_time() {
-    let elements: Vec<String> = (0..300).map(|number| number.to_string()).collect();
+    let elements: Vec<String> = (0..300).map(|number| format!("{number}.succ")).collect();
     let unit = unit_of(&format!("[{}]", elements.join(", ")));
     let appends = unit
         .instructions
@@ -179,7 +179,19 @@ fn a_long_array_literal_is_built_a_chunk_at_a_time() {
     assert_eq!(appends, 4);
     assert!(unit.register_count < 100);
     let built = VirtualMachine::new().run_unit(&unit).unwrap();
-    assert_eq!(built, Object::array((0..300).map(Object::Int).collect()));
+    assert_eq!(built, Object::array((1..=300).map(Object::Int).collect()));
+}
+
+#[test]
+fn a_long_array_of_numbers_is_copied_from_one_constant() {
+    let elements: Vec<String> = (0..300).map(|number| number.to_string()).collect();
+    let unit = unit_of(&format!("[{}, nil]", elements.join(", ")));
+    assert!(matches!(unit.instructions[..], [DuplicateArray { .. }, ..]));
+    assert_eq!(unit.instructions.len(), 2);
+    let built = VirtualMachine::new().run_unit(&unit).unwrap();
+    let mut expected: Vec<Object> = (0..300).map(Object::Int).collect();
+    expected.push(Object::Nil);
+    assert_eq!(built, Object::array(expected));
 }
 
 #[test]

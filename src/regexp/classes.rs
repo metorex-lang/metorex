@@ -179,11 +179,7 @@ fn is_punctuation(letter: char) -> bool {
 /// read without regard to case, underscores, hyphens, or spaces, which is
 /// how Ruby reads them.
 fn in_property(name: &str, letter: char) -> bool {
-    let plain: String = name
-        .chars()
-        .filter(|held| *held != '_' && *held != '-' && *held != ' ')
-        .flat_map(|held| held.to_lowercase())
-        .collect();
+    let plain = plain_property_name(name);
     let point = letter as u32;
     property_ranges(&plain).is_some_and(|ranges| {
         ranges
@@ -200,13 +196,34 @@ fn in_property(name: &str, letter: char) -> bool {
     })
 }
 
+/// A property's name as the table lists it: lowercased, with underscores,
+/// hyphens, and spaces left out.
+pub(crate) fn plain_property_name(name: &str) -> String {
+    name.chars()
+        .filter(|held| *held != '_' && *held != '-' && *held != ' ')
+        .flat_map(|held| held.to_lowercase())
+        .collect()
+}
+
 /// The code point ranges of the property a normalized name stands for.
 fn property_ranges(plain: &str) -> Option<&'static [(u32, u32)]> {
-    use super::unicode_properties::{PROPERTY_NAMES, PROPERTY_RANGES, PROPERTY_TABLES};
+    property_number(plain).and_then(numbered_property_ranges)
+}
+
+/// The number Onigmo gives the property a normalized name stands for.
+pub(crate) fn property_number(plain: &str) -> Option<usize> {
+    use super::unicode_properties::PROPERTY_NAMES;
     let found = PROPERTY_NAMES
         .binary_search_by(|(held, _)| (*held).cmp(plain))
         .ok()?;
-    let (first, count) = PROPERTY_TABLES[PROPERTY_NAMES[found].1 as usize];
+    Some(PROPERTY_NAMES[found].1 as usize)
+}
+
+/// The code point ranges, first and last, of the property Onigmo numbers
+/// `number`.
+pub(crate) fn numbered_property_ranges(number: usize) -> Option<&'static [(u32, u32)]> {
+    use super::unicode_properties::{PROPERTY_RANGES, PROPERTY_TABLES};
+    let (first, count) = *PROPERTY_TABLES.get(number)?;
     Some(&PROPERTY_RANGES[first as usize..(first + count) as usize])
 }
 

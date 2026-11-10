@@ -88,6 +88,9 @@ impl Parser<'_> {
                     | TokenKind::Lambda
                     | TokenKind::Include
                     | TokenKind::Extend
+                    | TokenKind::AttrReader
+                    | TokenKind::AttrWriter
+                    | TokenKind::AttrAccessor
             ) {
                 return false;
             }

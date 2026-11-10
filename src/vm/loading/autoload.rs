@@ -266,6 +266,14 @@ impl VirtualMachine {
         class_rc: &Rc<crate::class::Class>,
         name: &str,
     ) -> Result<Option<Object>, MetorexError> {
+        // An autoload a superclass or a mixin registered is loaded for, and
+        // checked against, the module that registered it, as
+        // `Bundler::Source::Path` reaches `Source`'s `Gemspec`.
+        if class_rc.get_autoload(name).is_none()
+            && let Some(owner) = autoload_owner(class_rc, name)
+        {
+            return self.try_autoload_constant(&owner, name);
+        }
         let Some(path) = class_rc.lookup_autoload(name) else {
             return Ok(None);
         };
@@ -497,6 +505,18 @@ impl VirtualMachine {
     }
 
     pub(crate) fn feature_is_loading(&mut self, feature: &str) -> bool {
+        // A library carried in the binary is named by a `<metorex>/` path
+        // that no search of the load path resolves, with `.rb` or without.
+        if feature.starts_with("<metorex>/") {
+            let with_ending = if feature.ends_with(".rb") {
+                feature.to_string()
+            } else {
+                format!("{feature}.rb")
+            };
+            if self.embedded_libraries_loading.contains(&with_ending) {
+                return true;
+            }
+        }
         let Some(file) = self.feature_file(feature) else {
             return false;
         };
@@ -553,4 +573,25 @@ fn names_a_c_extension(path: &std::path::Path) -> bool {
     path.extension().is_none()
         && !path.with_extension("rb").is_file()
         && std::path::Path::new(&built).is_file()
+}
+
+/// The module in `class_rc`'s ancestry whose own autoload `name` is, searched
+/// in the order `Class#lookup_autoload` searches.
+fn autoload_owner(
+    class_rc: &Rc<crate::class::Class>,
+    name: &str,
+) -> Option<Rc<crate::class::Class>> {
+    if class_rc.get_autoload(name).is_some() {
+        return Some(Rc::clone(class_rc));
+    }
+    let mixins: Vec<Rc<crate::class::Class>> = class_rc.mixins.borrow().iter().cloned().collect();
+    for mixin in &mixins {
+        if let Some(owner) = autoload_owner(mixin, name) {
+            return Some(owner);
+        }
+    }
+    class_rc
+        .superclass
+        .as_ref()
+        .and_then(|superclass| autoload_owner(superclass, name))
 }

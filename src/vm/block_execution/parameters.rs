@@ -150,6 +150,9 @@ pub(crate) fn bind_block_params(
     // A keyword declared without a default has to be given, and a call that
     // leaves one out is refused the way a method's would be.
     let mut missing_keywords: Vec<String> = Vec::new();
+    // The keywords a call passed that the block names no parameter for,
+    // which it refuses when it takes no `**rest` either.
+    let mut unknown_keywords: Vec<Object> = Vec::new();
     // A trailing keyword-argument hash feeds the `name:` parameters, and
     // what is left over is bound by position.
     let keyword_params: Vec<String> = params
@@ -180,6 +183,20 @@ pub(crate) fn bind_block_params(
             }
             _ => Default::default(),
         };
+        if keyword_rest.is_none() {
+            unknown_keywords = named
+                .keys()
+                .filter(|key| !crate::vm::native_methods::hash_methods::is_internal_key(key))
+                .filter(|key| {
+                    !key.strip_prefix(':').is_some_and(|name| {
+                        keyword_params.iter().any(|param| {
+                            param.strip_prefix(crate::object::KEYWORD_PARAM_PREFIX) == Some(name)
+                        })
+                    })
+                })
+                .map(|key| crate::vm::native_methods::hash_methods::reconstruct_key(&named, key))
+                .collect();
+        }
         if let Some(rest_name) = &keyword_rest
             && !rest_name.is_empty()
         {
@@ -282,6 +299,18 @@ pub(crate) fn bind_block_params(
         return Err(crate::vm::errors::simple_exception(
             "ArgumentError",
             &format!("missing {plural}: {named}"),
+            position,
+        ));
+    }
+    if !unknown_keywords.is_empty() {
+        let mut named = Vec::with_capacity(unknown_keywords.len());
+        for key in &unknown_keywords {
+            named.push(vm.get_inspect_representation(key, position)?);
+        }
+        let plural = if named.len() == 1 { "keyword" } else { "keywords" };
+        return Err(crate::vm::errors::simple_exception(
+            "ArgumentError",
+            &format!("unknown {plural}: {}", named.join(", ")),
             position,
         ));
     }

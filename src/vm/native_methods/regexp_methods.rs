@@ -1155,7 +1155,12 @@ impl VirtualMachine {
 /// The flags two patterns are compared on. `/n` names an encoding rather than
 /// a matching rule, so two patterns that differ only in it are the same.
 pub(crate) fn comparable_flags(flags: &str) -> String {
-    flags.chars().filter(|flag| *flag != 'n').collect()
+    // `/.+/imx` and `Regexp.new(".+", 7)` hold the same flags written in
+    // different orders.
+    let mut kept: Vec<char> = flags.chars().filter(|flag| *flag != 'n').collect();
+    kept.sort_unstable();
+    kept.dedup();
+    kept.into_iter().collect()
 }
 
 /// The named groups a pattern declares, as the number each takes among the

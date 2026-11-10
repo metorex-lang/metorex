@@ -187,6 +187,10 @@ pub enum TokenKind {
     /// A literal in a source written in bytes, which stands for those bytes
     /// rather than for the characters they spell.
     BinaryString(String),
+    /// A `ByteString` in a source that asked for frozen literals.
+    FrozenByteString(String),
+    /// A `BinaryString` in a source that asked for frozen literals.
+    FrozenBinaryString(String),
     /// A literal in a source that asked for frozen literals, which stands for
     /// the one frozen string every place writing it shares.
     FrozenString(String),
@@ -383,7 +387,9 @@ impl fmt::Display for TokenKind {
             TokenKind::ByteString(text) => write!(f, "{}", text),
             TokenKind::MutableString(text) => write!(f, "{}", text),
             TokenKind::ByteCommandString(text) => write!(f, "`{}`", text),
-            TokenKind::BinaryString(text) => write!(f, "{}", text),
+            TokenKind::BinaryString(text)
+            | TokenKind::FrozenByteString(text)
+            | TokenKind::FrozenBinaryString(text) => write!(f, "{}", text),
             TokenKind::FrozenString(text) => write!(f, "{}", text),
             TokenKind::KeywordAnd => write!(f, "and"),
             TokenKind::KeywordOr => write!(f, "or"),

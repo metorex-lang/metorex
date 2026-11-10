@@ -163,6 +163,17 @@ pub(super) fn binary_string_literal(value: String, position: Position) -> Expres
     }
 }
 
+/// `literal` frozen, as a literal under the `frozen_string_literal` comment is.
+pub(super) fn frozen(literal: Expression, position: Position) -> Expression {
+    Expression::MethodCall {
+        receiver: Box::new(literal),
+        method: "freeze".to_string(),
+        arguments: Vec::new(),
+        trailing_block: None,
+        position,
+    }
+}
+
 pub(super) fn byte_string_literal(value: String, position: Position) -> Expression {
     Expression::MethodCall {
         receiver: Box::new(Expression::StringLiteral { value, position }),

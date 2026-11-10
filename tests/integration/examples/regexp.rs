@@ -413,3 +413,45 @@ fn subclass_patterns_match_strings() {
     let output = run_example("regexp/subclass_patterns_match_strings.rb");
     assert_eq!(output, "true\nfalse\n");
 }
+
+#[test]
+fn test_regexp_onigmo_corner_syntax_execution() {
+    let output = run_example("regexp/onigmo_corner_syntax.rb");
+    assert_eq!(
+        output,
+        "6\nnil\n0\n0\n[\"abcabc\", \"abc\"]\nnil\nnil\nnil\n0\n"
+    );
+}
+
+#[test]
+fn test_regexp_extended_pattern_from_a_string_execution() {
+    let output = run_example("regexp/extended_pattern_from_a_string.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "/#)/x\n0\n",
+            "#<RegexpError: unmatched close parenthesis: /a)/x>\n",
+            "#<RegexpError: premature end of char-class: /[a/mi>\n",
+        )
+    );
+}
+
+#[test]
+fn test_regexp_unknown_property_names_execution() {
+    let output = run_example("regexp/unknown_property_names.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "#<RegexpError: invalid character property name {Foo}: /\\p{^Foo}/>\n",
+            "#<RegexpError: invalid character property name {Foo Bar}: /\\P{Foo Bar}/>\n",
+            "#<RegexpError: invalid character property name {newline}: /\\p{newline}/>\n",
+            "/\\p{ Alpha }/\n0\n0\n",
+        )
+    );
+}
+
+#[test]
+fn test_regexp_equal_whatever_the_flag_order_execution() {
+    let output = run_example("regexp/equal_whatever_the_flag_order.rb");
+    assert_eq!(output, "true\ntrue\ntrue\n:found\nfalse\ntrue\n");
+}

@@ -874,3 +874,15 @@ fn test_strings_heredoc_inside_interpolation_execution() {
         )
     );
 }
+
+#[test]
+fn test_strings_percent_q_escapes_execution() {
+    let output = run_example("strings/percent_q_escapes.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"<<\\\"EOS\\n\\nEOS\\n\"\n\"ab\"\n\"dw\"\n\"a}b\"\n",
+            "[1, 2, 225]\n[255, 254]\nfalse\ntrue\nfalse\n",
+        )
+    );
+}

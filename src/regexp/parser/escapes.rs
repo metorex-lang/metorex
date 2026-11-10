@@ -155,6 +155,9 @@ impl Parser {
                 None => return Err(Trouble("invalid character property".to_string())),
             }
         }
+        if crate::regexp::property_number(&crate::regexp::plain_property_name(&name)).is_none() {
+            return Err(Trouble(format!("invalid character property name {{{name}}}")));
+        }
         Ok((name, negated))
     }
 
@@ -200,16 +203,24 @@ impl Parser {
         if level[1..].is_empty() {
             return Err(Trouble("invalid backref number/name".to_string()));
         }
-        if !self.names.iter().any(|held| held.as_deref() == Some(name)) {
-            return Err(Trouble("invalid backref number/name".to_string()));
-        }
+        // `\k<1-0>` and `\k<-1+0>` give the level of a group by number.
+        let base = if self.names.iter().any(|held| held.as_deref() == Some(name)) {
+            Target::Named(name.to_string())
+        } else {
+            match name_target(name)? {
+                Target::Named(_) => {
+                    return Err(Trouble("invalid backref number/name".to_string()));
+                }
+                numbered => numbered,
+            }
+        };
         let counted: isize = level[1..].parse().unwrap_or(0);
         let signed = if level.starts_with('-') {
             -counted
         } else {
             counted
         };
-        Ok((Target::Named(name.to_string()), Some(signed)))
+        Ok((base, Some(signed)))
     }
 
     /// Whether a reference points at a group there could be.

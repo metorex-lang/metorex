@@ -630,3 +630,22 @@ fn test_require_autoloaded_superclass_named_like_a_core_class_execution() {
     let output = run_example("require/autoloaded_superclass_named_like_a_core_class/main.rb");
     assert_eq!(output, "Generators::Array\n:generator_array\n");
 }
+
+#[test]
+fn test_loading_autoload_registered_on_a_superclass_execution() {
+    let output = run_example("loading/autoload_registered_on_a_superclass.rb");
+    assert_eq!(output, "Source::Gemspec\nSource::Path\n[]\n");
+}
+
+#[test]
+fn test_loading_late_frozen_string_literal_comment_execution() {
+    let output = run_example("loading/late_frozen_string_literal_comment.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "after_code.rb:2: warning: 'frozen_string_literal' is ignored after any tokens\n",
+            "emacs_style.rb:2: warning: 'frozen_string_literal' is ignored after any tokens\n",
+            "evaluated.rb:11: warning: 'frozen_string_literal' is ignored after any tokens\n",
+        )
+    );
+}

@@ -18,6 +18,8 @@ pub(crate) fn starts_symbol_literal(kind: &TokenKind) -> bool {
             | TokenKind::String(_)
             | TokenKind::ByteString(_)
             | TokenKind::BinaryString(_)
+            | TokenKind::FrozenByteString(_)
+            | TokenKind::FrozenBinaryString(_)
             | TokenKind::FrozenString(_)
             | TokenKind::MutableString(_)
             | TokenKind::InterpolatedString(_)
@@ -234,7 +236,10 @@ impl Parser<'_> {
             // A symbol written in escapes names the characters those bytes
             // spell. Bytes that spell nothing are refused while the source is
             // read, the way Ruby refuses them.
-            TokenKind::ByteString(s) | TokenKind::BinaryString(s) => {
+            TokenKind::ByteString(s)
+            | TokenKind::BinaryString(s)
+            | TokenKind::FrozenByteString(s)
+            | TokenKind::FrozenBinaryString(s) => {
                 let bytes: Vec<u8> = s.chars().map(|held| held as u32 as u8).collect();
                 match String::from_utf8(bytes) {
                     Ok(spelled) => Ok(symbol(spelled, symbol_position)),

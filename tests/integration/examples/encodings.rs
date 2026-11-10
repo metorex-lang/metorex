@@ -1150,3 +1150,31 @@ fn euc_jp_replaces_whole_characters() {
         "5\n\"# \u{fffd}\u{fffd}\\n\"\ntrue\ntrue\n\"# \u{fffd}\\n\"\n\"\\\"\\\\x8E\\\\xE0\\\" from EUC-JP to UTF-8\"\n"
     );
 }
+
+#[test]
+fn test_encodings_escaped_bytes_in_frozen_binary_source_execution() {
+    let output = run_example("encodings/escaped_bytes_in_frozen_binary_source.rb");
+    assert_eq!(
+        output,
+        "#<Encoding:BINARY (ASCII-8BIT)>\ntrue\n[239, 187, 191]\nfalse\ntrue\n"
+    );
+}
+
+#[test]
+fn test_encodings_escaped_bytes_in_frozen_utf8_source_execution() {
+    let output = run_example("encodings/escaped_bytes_in_frozen_utf8_source.rb");
+    assert_eq!(output, "true\n#<Encoding:UTF-8>\nfalse\n");
+}
+
+#[test]
+fn test_encodings_encode_to_binary_takes_ascii_alone_execution() {
+    let output = run_example("encodings/encode_to_binary_takes_ascii_alone.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "#<Encoding::UndefinedConversionError: U+3042 from UTF-8 to ASCII-8BIT>\n",
+            "#<Encoding::UndefinedConversionError: U+00C3 to ASCII-8BIT in conversion from ISO-8859-1 to UTF-8 to ASCII-8BIT>\n",
+            "#<Encoding:BINARY (ASCII-8BIT)>\n\"?\"\n[255]\n",
+        )
+    );
+}

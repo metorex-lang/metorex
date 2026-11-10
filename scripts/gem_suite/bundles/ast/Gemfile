@@ -1,0 +1,11 @@
+# The gems ast's specs load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "ast", path: "../../../../gems/ast"
+gem "rspec"
+gem "simplecov"
+gem "coveralls", "~> 0.8.23"
+
+shipped "json"

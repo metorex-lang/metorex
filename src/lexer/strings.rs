@@ -126,9 +126,13 @@ impl<'a> Lexer<'a> {
                     }
                     if self.frozen_literals && !command {
                         // The source asked for its literals to be frozen, and
-                        // one written in escapes still stands for its bytes.
+                        // one written in escapes still stands for its bytes,
+                        // in bytes where the source is written in them.
+                        if holds_bytes && self.binary_source {
+                            return Ok(TokenKind::FrozenBinaryString(current_text));
+                        }
                         if holds_bytes {
-                            return Ok(TokenKind::ByteString(current_text));
+                            return Ok(TokenKind::FrozenByteString(current_text));
                         }
                         return Ok(TokenKind::FrozenString(current_text));
                     } else if self.mutable_literals && !command && !holds_bytes {
@@ -388,6 +392,9 @@ impl<'a> Lexer<'a> {
                                 }
                                 Some('%') if self.copy_percent_literal_in_interpolation(&mut expr)? => {}
                                 Some('<') if self.copy_heredoc_in_interpolation(&mut expr) => {}
+                                Some('/') if opens_a_regexp(&expr, &self.peek_several(2)) => {
+                                    self.copy_quoted_in_interpolation('/', &mut expr)?;
+                                }
                                 Some(ch) => {
                                     expr.push(ch);
                                     self.advance();
@@ -487,11 +494,28 @@ fn opens_a_string(copied: &str) -> bool {
     !copied.ends_with('$')
 }
 
+/// Whether a `/` that follows `copied` opens a regexp rather than dividing:
+/// where it starts the expression or follows an operator or an opening
+/// bracket, or follows a space and is not followed by one, as in
+/// `gsub /x/`. `slash_and_next` holds the `/` and the character after it.
+fn opens_a_regexp(copied: &str, slash_and_next: &[char]) -> bool {
+    let before = copied.trim_end();
+    match before.chars().last() {
+        None => true,
+        Some(last) if "({[,=|&!;~<>?:+-*%^".contains(last) => true,
+        Some(_) => {
+            before.len() < copied.len()
+                && !slash_and_next.get(1).is_some_and(|next| next.is_whitespace() || *next == '=')
+        }
+    }
+}
+
 impl<'a> Lexer<'a> {
-    /// Copy a string literal written inside an interpolation into `expr`,
-    /// from its opening quote to its closing one. An escaped character is
-    /// copied with its backslash, and a `#{` in a double-quoted string or a
-    /// command copies the expression it opens, braces and strings and all.
+    /// Copy a string or regexp literal written inside an interpolation into
+    /// `expr`, from its opening quote to its closing one. An escaped
+    /// character is copied with its backslash, and a `#{` in any but a
+    /// single-quoted string copies the expression it opens, braces and
+    /// strings and all.
     fn copy_quoted_in_interpolation(&mut self, quote: char, expr: &mut String) -> Result<(), String> {
         let interpolates = quote != '\'';
         expr.push(quote);
@@ -655,6 +679,10 @@ impl<'a> Lexer<'a> {
                     continue;
                 }
                 Some('%') if self.copy_percent_literal_in_interpolation(expr)? => continue,
+                Some('/') if opens_a_regexp(expr, &self.peek_several(2)) => {
+                    self.copy_quoted_in_interpolation('/', expr)?;
+                    continue;
+                }
                 Some(_) => {}
             }
             let ch = self.peek().expect("a character was seen");

@@ -632,13 +632,13 @@ fn lexer_percent_angle_string() {
 // ── %Q string escape and nested delimiter paths (percent.rs 110-128) ────
 
 #[test]
-fn lexer_percent_q_unknown_escape_passes_through() {
-    // `\z` is not `\n`, `\t`, or `\\` → passes through as `\z` (lines 110-112).
+fn lexer_percent_q_unknown_escape_stands_for_the_character() {
+    // `\z` opens no escape, so it stands for `z`, as in a double-quoted string.
     let tokens = Lexer::new(r"%Q(hello\zworld)").tokenize();
     assert!(
         tokens
             .iter()
-            .any(|t| matches!(&t.kind, TokenKind::String(s) if s.contains(r"\z")))
+            .any(|t| matches!(&t.kind, TokenKind::String(s) if s == "hellozworld"))
     );
 }
 

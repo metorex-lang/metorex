@@ -146,15 +146,15 @@ impl Parser<'_> {
                 let stmt = self.parse_return_statement()?;
                 self.finish_jump(stmt, operand)
             }
-            TokenKind::AttrReader => {
+            TokenKind::AttrReader if !self.names_a_local("attr_reader") && !self.method_name_is_assigned() => {
                 let call = self.parse_attr_reader()?;
                 self.wrap_with_modifier(call)
             }
-            TokenKind::AttrWriter => {
+            TokenKind::AttrWriter if !self.names_a_local("attr_writer") && !self.method_name_is_assigned() => {
                 let call = self.parse_attr_writer()?;
                 self.wrap_with_modifier(call)
             }
-            TokenKind::AttrAccessor => {
+            TokenKind::AttrAccessor if !self.names_a_local("attr_accessor") && !self.method_name_is_assigned() => {
                 let call = self.parse_attr_accessor()?;
                 self.wrap_with_modifier(call)
             }

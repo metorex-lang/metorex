@@ -317,6 +317,12 @@ pub enum Instruction {
         first: u8,
         count: u8,
     },
+    /// A new Array holding the elements of the Array constant, written as a
+    /// long literal of Integers, Floats, nil, true, and false.
+    DuplicateArray {
+        to: u8,
+        constant: u16,
+    },
     /// Append the `count` registers from `first` to the Array in `array`.
     AppendArray {
         array: u8,
@@ -713,6 +719,7 @@ impl Instruction {
             Instruction::GetGlobal { .. } => "GetGlobal",
             Instruction::SetGlobal { .. } => "SetGlobal",
             Instruction::NewArray { .. } => "NewArray",
+            Instruction::DuplicateArray { .. } => "DuplicateArray",
             Instruction::AppendArray { .. } => "AppendArray",
             Instruction::AddToHash { .. } => "AddToHash",
             Instruction::NewHash { .. } => "NewHash",

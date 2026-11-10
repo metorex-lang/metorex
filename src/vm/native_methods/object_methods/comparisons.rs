@@ -135,9 +135,36 @@ impl VirtualMachine {
                 names.push(name);
             }
         }
+        // Kernel's functions are its module functions too, which a program
+        // reads back as its singleton methods, as RuboCop's
+        // Style/RedundantSelf reads `Kernel.methods(false)`.
+        if let View::Module(module) = receiver.view()
+            && module.ruby_name_is("Kernel")
+        {
+            names.extend(
+                crate::vm::native_methods::class_methods::KERNEL_PRIVATE_FUNCTIONS
+                    .iter()
+                    .filter(|name| !KERNEL_FUNCTIONS_OF_NO_MODULE.contains(name))
+                    .map(|name| name.to_string()),
+            );
+        }
         names.sort();
         names.dedup();
         let symbols: Vec<Object> = names.into_iter().map(Object::symbol).collect();
         Object::Array(std::rc::Rc::new(std::cell::RefCell::new(symbols)))
     }
 }
+
+/// The private Kernel methods that are no module functions of Kernel: the
+/// line-editing functions `-n` and `-p` give, the copy and inspection hooks,
+/// and `pp`, which the pp library defines.
+const KERNEL_FUNCTIONS_OF_NO_MODULE: &[&str] = &[
+    "chomp",
+    "chop",
+    "initialize_clone",
+    "initialize_copy",
+    "initialize_dup",
+    "instance_variables_to_inspect",
+    "pp",
+    "respond_to_missing?",
+];

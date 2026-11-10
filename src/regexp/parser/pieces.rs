@@ -447,18 +447,20 @@ impl Parser {
     /// `(?imx-imx)` sets the flags for the rest of the enclosing group, and
     /// `(?imx-imx:...)` sets them for its own body alone.
     pub(crate) fn parse_flag_group(&mut self) -> Read<Node> {
+        // Every letter after a `-` is turned off, and a second `-` changes
+        // nothing, as in `(?--m--mx--)`.
         let mut on = String::new();
-        while matches!(
-            self.peek(),
-            Some('i') | Some('m') | Some('x') | Some('a') | Some('d') | Some('u')
-        ) {
-            on.push(self.take().unwrap_or('i'));
-        }
         let mut off = String::new();
-        if self.eat('-') {
-            while matches!(self.peek(), Some('i') | Some('m') | Some('x')) {
-                off.push(self.take().unwrap_or('i'));
+        let mut turning_off = false;
+        loop {
+            match self.peek() {
+                Some('-') => turning_off = true,
+                Some(letter @ ('i' | 'm' | 'x')) if turning_off => off.push(letter),
+                Some(letter @ ('i' | 'm' | 'x')) => on.push(letter),
+                Some(letter @ ('a' | 'd' | 'u')) if !turning_off => on.push(letter),
+                _ => break,
             }
+            self.at += 1;
         }
         let mut inner_flags = self.flags;
         inner_flags.apply(&on, true);

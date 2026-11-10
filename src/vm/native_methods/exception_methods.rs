@@ -172,6 +172,21 @@ impl VirtualMachine {
                 details.cause_settled = true;
                 Ok(Some(Object::Nil))
             }
+            // `initialize` called again on an exception, as
+            // `Exception.instance_method(:initialize).bind_call(error, text)`
+            // does, sets its message anew, to nothing when handed none.
+            "initialize" => {
+                if arguments.len() > 1 {
+                    return Err(crate::vm::errors::argument_count_error(
+                        crate::vm::errors::Arity::Range(0, 1),
+                        arguments.len(),
+                        position,
+                    ));
+                }
+                let given = arguments.first().cloned().unwrap_or(Object::Nil);
+                self.exception_initialize(receiver, &[given], position)
+                    .map(Some)
+            }
             // Ruby's `#message` is `to_s`, which answers the class name when
             // there is no message of its own. The call is dispatched, so a
             // subclass that redefines `to_s` decides what its message is.

@@ -974,6 +974,15 @@ impl VirtualMachine {
                 self.record_allocation(&made, position);
                 registers[register(to)] = made;
             }
+            Instruction::DuplicateArray { to, constant } => {
+                let elements = match unit.constants[index(constant)].view() {
+                    View::Array(held) => held.borrow().clone(),
+                    _ => Vec::new(),
+                };
+                let made = Object::array(elements);
+                self.record_allocation(&made, position);
+                registers[register(to)] = made;
+            }
             Instruction::AppendArray {
                 array,
                 first,

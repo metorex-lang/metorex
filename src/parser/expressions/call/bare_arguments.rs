@@ -77,6 +77,8 @@ impl Parser<'_> {
                 | TokenKind::String(_)
                 | TokenKind::ByteString(_)
                 | TokenKind::BinaryString(_)
+                | TokenKind::FrozenByteString(_)
+                | TokenKind::FrozenBinaryString(_)
                 | TokenKind::FrozenString(_)
                 | TokenKind::MutableString(_)
                 | TokenKind::InterpolatedString(_)
@@ -106,6 +108,9 @@ impl Parser<'_> {
                 | TokenKind::Colon
                 | TokenKind::Include
                 | TokenKind::Extend
+                | TokenKind::AttrReader
+                | TokenKind::AttrWriter
+                | TokenKind::AttrAccessor
                 | TokenKind::Defined
                 | TokenKind::Def
                 | TokenKind::Yield
@@ -142,6 +147,8 @@ impl Parser<'_> {
 
         // Pattern 1: <ident> ':' is a keyword argument (name: value), allow it
         // but only for Ident — not Int/Float/String followed by colon (those are dict-like).
+        // A method named by a keyword token, as in `private attr_reader :name`,
+        // takes a symbol the same way.
         // A `[` is the exception: `p [:only]` opens an array whose first
         // element is a symbol, not a key, and `handle &:upcase` passes the
         // symbol as the block.
@@ -149,6 +156,12 @@ impl Parser<'_> {
             && !matches!(
                 self.peek().kind,
                 TokenKind::Ident(_)
+                    | TokenKind::Include
+                    | TokenKind::Extend
+                    | TokenKind::AttrReader
+                    | TokenKind::AttrWriter
+                    | TokenKind::AttrAccessor
+                    | TokenKind::Defined
                     | TokenKind::LBracket
                     | TokenKind::LParen
                     | TokenKind::Ampersand
@@ -233,6 +246,8 @@ impl Parser<'_> {
                     | TokenKind::String(_)
                     | TokenKind::ByteString(_)
                     | TokenKind::BinaryString(_)
+                    | TokenKind::FrozenByteString(_)
+                    | TokenKind::FrozenBinaryString(_)
                     | TokenKind::FrozenString(_)
                     | TokenKind::MutableString(_)
                     | TokenKind::InterpolatedString(_)
@@ -261,6 +276,9 @@ impl Parser<'_> {
                     | TokenKind::Colon
                     | TokenKind::Include
                     | TokenKind::Extend
+                    | TokenKind::AttrReader
+                    | TokenKind::AttrWriter
+                    | TokenKind::AttrAccessor
                     | TokenKind::Defined
                     | TokenKind::Def
                     | TokenKind::Arrow

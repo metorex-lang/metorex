@@ -163,7 +163,6 @@ impl VirtualMachine {
                     return Err(method_argument_error("new", 1, 0, position));
                 }
             };
-            refuse_bad_pattern(&source, position)?;
             let mut flags = String::new();
             match arguments.get(1).view() {
                 Some(View::Int(options)) => {
@@ -228,6 +227,7 @@ impl VirtualMachine {
                     flags.push('i');
                 }
             }
+            refuse_bad_pattern(&source, &flags, position)?;
             // `timeout:` says how long a match of this pattern may take,
             // which stands in place of what the class names.
             if let Some(View::Dict(options)) = arguments.get(1).or(arguments.get(2)).view()

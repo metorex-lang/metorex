@@ -1,0 +1,25 @@
+# The gems RuboCop's specs load. rubydex, which publishes binaries for MRI
+# alone, is left out, so the examples that need it skip under either engine.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "rubocop", path: "../../../../gems/rubocop"
+gem "parser", "3.3.13.0"
+gem "regexp_parser", "2.13.1"
+gem "rubocop-ast", "1.51.0"
+gem "rspec", "~> 3.7"
+gem "webmock"
+gem "asciidoctor"
+gem "yard", "~> 0.9"
+gem "mcp", "~> 1.0", "!= 1.8.0"
+gem "ruby-lsp", "~> 0.24"
+gem "rubocop-performance", "~> 1.27.0"
+gem "rubocop-rake", "~> 0.7.0"
+gem "rubocop-rspec", "~> 3.10.1"
+gem "rainbow", path: "../../../../gems/rainbow"
+gem "parallel", path: "../../../../gems/parallel"
+gem "ruby-progressbar", path: "../../../../gems/ruby-progressbar"
+gem "unicode-display_width", path: "../../../../gems/unicode-display_width"
+
+shipped "json", "prism", "racc", "rbs", "rdoc", "erb", "psych", "stringio", "date", "tsort", "irb", "reline", "io-console", "pp", "prettyprint", "logger"

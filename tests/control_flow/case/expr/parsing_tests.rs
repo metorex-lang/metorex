@@ -150,7 +150,7 @@ end
 }
 
 #[test]
-fn test_parse_case_expression_with_array_pattern() {
+fn test_parse_case_expression_when_array_is_an_array_value() {
     let source = r#"
 case arr
 when [a, b]
@@ -167,23 +167,14 @@ end
     match expr {
         Expression::Case { cases, .. } => {
             assert_eq!(cases.len(), 2);
-
-            // First case should have array pattern with 2 elements
-            match &cases[0].pattern {
-                MatchPattern::Array(patterns) => {
-                    assert_eq!(patterns.len(), 2);
-                    assert!(matches!(patterns[0], MatchPattern::Identifier(_)));
-                    assert!(matches!(patterns[1], MatchPattern::Identifier(_)));
+            for (case, length) in cases.iter().zip([2, 1]) {
+                match &case.pattern {
+                    MatchPattern::Expression(value) => match value.as_ref() {
+                        Expression::Array { elements, .. } => assert_eq!(elements.len(), length),
+                        other => panic!("Expected an Array, got {:?}", other),
+                    },
+                    other => panic!("Expected an Expression pattern, got {:?}", other),
                 }
-                _ => panic!("Expected Array pattern"),
-            }
-
-            // Second case should have array pattern with 1 element
-            match &cases[1].pattern {
-                MatchPattern::Array(patterns) => {
-                    assert_eq!(patterns.len(), 1);
-                }
-                _ => panic!("Expected Array pattern"),
             }
         }
         _ => panic!("Expected Expression::Case"),
@@ -222,11 +213,11 @@ end
 }
 
 #[test]
-fn test_parse_case_expression_with_rest_pattern() {
+fn test_parse_case_expression_when_array_holds_a_negative_number() {
     let source = r#"
-case arr
-when [first, ...rest]
-  first
+case quantity
+when [0, -1]
+  "*"
 else
   nil
 end
@@ -237,16 +228,11 @@ end
     match expr {
         Expression::Case { cases, .. } => {
             assert_eq!(cases.len(), 1);
-
-            // Should have array pattern with rest
-            match &cases[0].pattern {
-                MatchPattern::Array(patterns) => {
-                    assert_eq!(patterns.len(), 2);
-                    assert!(matches!(patterns[0], MatchPattern::Identifier(_)));
-                    assert!(matches!(patterns[1], MatchPattern::Rest(_)));
-                }
-                _ => panic!("Expected Array pattern"),
-            }
+            assert!(matches!(
+                &cases[0].pattern,
+                MatchPattern::Expression(value)
+                    if matches!(value.as_ref(), Expression::Array { elements, .. } if elements.len() == 2)
+            ));
         }
         _ => panic!("Expected Expression::Case"),
     }
@@ -729,7 +715,7 @@ case x when 1, 2, 3 then "small" when 4, 5 then "medium" else "large" end
 }
 
 #[test]
-fn test_parse_case_expression_then_with_array_destructuring() {
+fn test_parse_case_expression_then_with_array_values() {
     let source = r#"
 case arr when [a, b] then a + b when [x] then x else 0 end
 "#;
@@ -739,19 +725,11 @@ case arr when [a, b] then a + b when [x] then x else 0 end
     match expr {
         Expression::Case { cases, .. } => {
             assert_eq!(cases.len(), 2);
-
-            match &cases[0].pattern {
-                MatchPattern::Array(patterns) => {
-                    assert_eq!(patterns.len(), 2);
-                }
-                _ => panic!("Expected Array pattern"),
-            }
-
-            match &cases[1].pattern {
-                MatchPattern::Array(patterns) => {
-                    assert_eq!(patterns.len(), 1);
-                }
-                _ => panic!("Expected Array pattern"),
+            for case in &cases {
+                assert!(matches!(
+                    &case.pattern,
+                    MatchPattern::Expression(value) if matches!(value.as_ref(), Expression::Array { .. })
+                ));
             }
         }
         _ => panic!("Expected Expression::Case"),

@@ -23,6 +23,10 @@ impl Parser<'_> {
         // an argument written without parentheses or a modifier's condition.
         let held_paren_less = std::mem::take(&mut self.paren_less_arg_depth);
         let held_condition = std::mem::take(&mut self.modifier_condition_depth);
+        // A `do` inside the group opens a block on the call before it, even
+        // where the group is the condition of a loop, whose own `do` can
+        // only come after the closing parenthesis.
+        let held_loop_condition = std::mem::take(&mut self.condition_depth);
         // A `:` inside the group cannot be the separator of a ternary the
         // group sits in, so `cond ? (break :a) : b` reads `:a` as a symbol.
         let held_ternary = std::mem::take(&mut self.ternary_depth);
@@ -35,6 +39,7 @@ impl Parser<'_> {
         self.refuse_paren_less_args = held_refusal;
         self.paren_less_arg_depth = held_paren_less;
         self.modifier_condition_depth = held_condition;
+        self.condition_depth = held_loop_condition;
         parsed
     }
 
@@ -609,6 +614,11 @@ pub(crate) fn keyword_symbol_key(kind: &TokenKind) -> Option<&str> {
         TokenKind::AttrReader => Some("attr_reader"),
         TokenKind::AttrWriter => Some("attr_writer"),
         TokenKind::AttrAccessor => Some("attr_accessor"),
+        TokenKind::Defined => Some("defined?"),
+        TokenKind::MagicFile => Some("__FILE__"),
+        TokenKind::MagicLine => Some("__LINE__"),
+        TokenKind::MagicDir => Some("__dir__"),
+        TokenKind::SourceEncoding(_) => Some("__ENCODING__"),
         _ => None,
     }
 }

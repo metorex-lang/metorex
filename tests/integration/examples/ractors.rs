@@ -163,3 +163,9 @@ fn each_object_lists_the_main_ractor() {
     let output = run_example("ractors/each_object_lists_the_main_ractor.rb");
     assert_eq!(output, "1\n42\n[true]\n");
 }
+
+#[test]
+fn test_ractors_make_shareable_freezes_before_walking_execution() {
+    let output = run_example("ractors/make_shareable_freezes_before_walking.rb");
+    assert_eq!(output, "true\n[0, 2, 4]\ntrue\n");
+}

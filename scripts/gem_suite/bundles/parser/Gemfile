@@ -1,0 +1,13 @@
+# The gems parser's tests load. The released parser gem is installed beside
+# them for its lexer and grammars, which its Rakefile generates with Ragel and
+# Racc, and which scripts/gem_suite/released_generated_files.rb copies into
+# the checkout's lib, ahead of the released gem on the load path.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "parser", "3.3.13.0"
+gem "minitest", "~> 5.10"
+gem "simplecov", "~> 0.15.1"
+
+shipped "racc", "json"

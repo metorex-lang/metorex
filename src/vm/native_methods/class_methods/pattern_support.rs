@@ -74,10 +74,19 @@ pub(crate) fn pattern_reaches_beyond_ascii(source: &str) -> bool {
 
 /// The RegexpError a pattern Ruby refuses raises, checked before the engine
 /// underneath is asked to compile it.
-pub(crate) fn refuse_bad_pattern(source: &str, position: Position) -> Result<(), MetorexError> {
+pub(crate) fn refuse_bad_pattern(
+    source: &str,
+    flags: &str,
+    position: Position,
+) -> Result<(), MetorexError> {
     let letters: Vec<char> = source.chars().collect();
+    let extended = flags.contains('x');
+    let shown_flags: String = ['m', 'i', 'x']
+        .into_iter()
+        .filter(|letter| flags.contains(*letter))
+        .collect();
     let refuse = |named: &str| {
-        let message = format!("{}: /{}/", named, source);
+        let message = format!("{}: /{}/{}", named, source, shown_flags);
         Err(crate::vm::errors::simple_exception(
             "RegexpError",
             &message,
@@ -148,6 +157,15 @@ pub(crate) fn refuse_bad_pattern(source: &str, position: Position) -> Result<(),
                     }
                 }
             }
+            // Under `x` a `#` outside a class comments out the rest of its
+            // line, parentheses and all.
+            '#' if extended && !class_opened => {
+                at += letters[at..]
+                    .iter()
+                    .position(|held| *held == '\n')
+                    .unwrap_or(letters.len() - at);
+                continue;
+            }
             '[' if !class_opened => class_opened = true,
             ']' if class_opened => class_opened = false,
             '(' if !class_opened => {
@@ -193,7 +211,7 @@ pub(crate) fn refuse_bad_pattern(source: &str, position: Position) -> Result<(),
     }
     // Whatever the checks above let through, the engine still has to be able
     // to read the pattern before there is anything to match with.
-    if let Err(trouble) = crate::vm::native_methods::regexp_methods::read_pattern(source, "") {
+    if let Err(trouble) = crate::vm::native_methods::regexp_methods::read_pattern(source, flags) {
         return refuse(&trouble);
     }
     Ok(())

@@ -169,3 +169,18 @@
 [submodule "gems/mini_portile2"]
 	path = gems/mini_portile2
 	url = https://github.com/flavorjones/mini_portile
+[submodule "gems/ast"]
+	path = gems/ast
+	url = https://github.com/whitequark/ast
+[submodule "gems/parser"]
+	path = gems/parser
+	url = https://github.com/whitequark/parser
+[submodule "gems/regexp_parser"]
+	path = gems/regexp_parser
+	url = https://github.com/ammar/regexp_parser
+[submodule "gems/rubocop-ast"]
+	path = gems/rubocop-ast
+	url = https://github.com/rubocop/rubocop-ast
+[submodule "gems/rubocop"]
+	path = gems/rubocop
+	url = https://github.com/rubocop/rubocop

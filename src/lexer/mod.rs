@@ -391,9 +391,33 @@ fn literal_default() -> LiteralDefault {
     }
 }
 
-/// Whether a `frozen_string_literal` magic comment was written after code
-/// began, where it settles nothing and Ruby says so under `$VERBOSE`.
-pub fn frozen_string_literal_after_a_token(source: &str) -> bool {
+/// The line of a `frozen_string_literal` magic comment written after code,
+/// which names nothing. A line that only reads like one, inside a heredoc
+/// or written as part of other words, is no magic comment.
+pub fn frozen_string_literal_after_a_token(source: &str) -> Option<u32> {
+    // Most files name the setting only in their first comments, so the
+    // source is read as tokens only when a later line might.
+    if !mentions_frozen_string_literal_after_code(source) {
+        return None;
+    }
+    let mut a_token_came_first = false;
+    for token in Lexer::new(source).tokenize() {
+        match &token.kind {
+            TokenKind::Newline | TokenKind::EOF => {}
+            TokenKind::Comment(text) => {
+                if a_token_came_first && is_frozen_string_literal_comment(text) {
+                    return Some(token.position.line);
+                }
+            }
+            _ => a_token_came_first = true,
+        }
+    }
+    None
+}
+
+/// Whether some line after the first line of code holds a comment naming
+/// `frozen_string_literal`.
+fn mentions_frozen_string_literal_after_code(source: &str) -> bool {
     let mut a_token_came_first = false;
     for line in source.lines() {
         let trimmed = line.trim_start();
@@ -413,6 +437,23 @@ pub fn frozen_string_literal_after_a_token(source: &str) -> bool {
         }
     }
     false
+}
+
+/// Whether a comment's text is a magic comment setting
+/// `frozen_string_literal`, written alone, `frozen_string_literal: true`,
+/// or among others between `-*-` marks.
+fn is_frozen_string_literal_comment(text: &str) -> bool {
+    let lowered = text.trim().trim_start_matches('#').trim().to_ascii_lowercase();
+    let setting = |written: &str| {
+        let written = written.trim().replace('-', "_");
+        written
+            .strip_prefix("frozen_string_literal")
+            .is_some_and(|rest| rest.trim_start().starts_with(':'))
+    };
+    match lowered.strip_prefix("-*-").and_then(|inner| inner.strip_suffix("-*-")) {
+        Some(inner) => inner.split(';').any(setting),
+        None => setting(&lowered),
+    }
 }
 
 /// Whether a magic comment says anything at all about frozen string

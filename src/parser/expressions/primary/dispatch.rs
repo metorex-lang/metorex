@@ -110,6 +110,18 @@ impl Parser<'_> {
                 }
             }
             TokenKind::BinaryString(value) => Ok(literals::binary_string_literal(value, position)),
+            TokenKind::FrozenBinaryString(value) => Ok(literals::frozen(
+                literals::binary_string_literal(value, position),
+                position,
+            )),
+            TokenKind::FrozenByteString(value) => {
+                let (parts, _) =
+                    self.adjacent_string_parts(vec![InterpolationPart::Text(value)], true);
+                Ok(literals::frozen(
+                    joined_bytes_literal(only_text(&parts).unwrap_or_default(), position),
+                    position,
+                ))
+            }
             // A literal in a source that asked for frozen literals stands for
             // the one frozen string every place writing it shares.
             TokenKind::FrozenString(value) => {
@@ -207,14 +219,21 @@ impl Parser<'_> {
             // `include`/`extend` as a method call in expression context
             // (e.g. `should include(Foo)`). Statement-level `include Foo`
             // is dispatched before reaching primary parsing.
-            TokenKind::Include => Ok(literals::identifier("include".to_string(), position)),
-            TokenKind::Extend => Ok(literals::identifier("extend".to_string(), position)),
             // attr_reader/writer/accessor in expression context
-            // (e.g. `(attr_accessor :foo).should ==` from the specs).
-            TokenKind::AttrReader => Ok(literals::identifier("attr_reader".to_string(), position)),
-            TokenKind::AttrWriter => Ok(literals::identifier("attr_writer".to_string(), position)),
-            TokenKind::AttrAccessor => {
-                Ok(literals::identifier("attr_accessor".to_string(), position))
+            // (e.g. `(attr_accessor :foo).should ==` from the specs). Each
+            // of these may also name a local, as `attr_accessor = text` does.
+            kind @ (TokenKind::Include
+            | TokenKind::Extend
+            | TokenKind::AttrReader
+            | TokenKind::AttrWriter
+            | TokenKind::AttrAccessor) => {
+                let TokenKind::Ident(name) = crate::parser::method_name_as_identifier(kind) else {
+                    unreachable!("each of these names a method")
+                };
+                if self.assignment_ahead() {
+                    self.declare_local(&name);
+                }
+                Ok(literals::identifier(name, position))
             }
             TokenKind::InstanceVar(name) => Ok(literals::instance_variable(name, position)),
             TokenKind::ClassVar(name) => Ok(literals::class_variable(name, position)),

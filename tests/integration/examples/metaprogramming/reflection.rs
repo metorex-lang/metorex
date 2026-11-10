@@ -332,3 +332,15 @@ fn module_body_makes_core_private_methods_public() {
     let output = run_example("metaprogramming/module_body_makes_core_private_methods_public.rb");
     assert_eq!(output, "true\ntrue\ntrue\nfalse\n");
 }
+
+#[test]
+fn test_metaprogramming_method_missing_answers_before_metorex_functions_execution() {
+    let output = run_example("metaprogramming/method_missing_answers_before_metorex_functions.rb");
+    assert_eq!(output, "[\"parsed [1, 2]\", \"asserted [1, 2]\"]\nArray\n");
+}
+
+#[test]
+fn test_metaprogramming_kernel_module_functions_execution() {
+    let output = run_example("metaprogramming/kernel_module_functions.rb");
+    assert_eq!(output, "true\ntrue\ntrue\ntrue\ntrue\nfalse\nfalse\n");
+}
