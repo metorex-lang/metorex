@@ -700,3 +700,36 @@ fn escaped_interpolation_openers_inside_interpolation() {
 "##
     );
 }
+
+#[test]
+fn test_syntax_include_as_a_local_execution() {
+    let output = run_example("syntax/include_as_a_local.rb");
+    assert_eq!(output, "[\"1\"]\n[\"btree\", \"id\", nil]\n2\n");
+}
+
+#[test]
+fn test_syntax_raise_an_assignment_execution() {
+    let output = run_example("syntax/raise_an_assignment.rb");
+    assert_eq!(
+        output,
+        "\"found UTF-8\"\nEncodingFound\n[\"bad ledger\", true]\n"
+    );
+}
+
+#[test]
+fn test_syntax_operator_after_end_execution() {
+    let output = run_example("syntax/operator_after_end.rb");
+    assert_eq!(output, "6\nnil\n11\n\"aa\"\n4\n");
+}
+
+#[test]
+fn test_syntax_singleton_class_assigned_to_a_constant_execution() {
+    let output = run_example("syntax/singleton_class_assigned_to_a_constant.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "{id: 1, class: \"entry\"}\ntrue\n",
+            "\"private constant Parser::AttributeMerger referenced\"\n465\n[:Totals]\n",
+        )
+    );
+}

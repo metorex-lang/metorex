@@ -16,7 +16,9 @@
 # counts differ from MRI's there. With CHECK=1 a Metorex run is compared with
 # the Metorex counts stored there instead, and fails when a file passes fewer
 # examples than it did. With LOG_DIR set, what each file printed is copied
-# there, named after the file.
+# there, named after the file. FILE_TIMEOUT is the longest one file may run,
+# 300 seconds unless set, and SANDBOX_FILE_TIMEOUT the longest one of
+# simplecov's sandbox spec files may, 900 unless set.
 #
 # A gem with a directory under scripts/gem_suite/bundles runs with
 # BUNDLE_GEMFILE naming the Gemfile there, whose gems
@@ -123,6 +125,10 @@ SUITES=(
 # The gems whose test files run one after another, since each of them
 # starts a server on the same fixed port.
 ONE_AT_A_TIME=(excon mini_portile2)
+
+# The longest one of simplecov's sandbox spec files may run, each of which
+# boots a Rails application and runs its tests once per example.
+SANDBOX_FILE_TIMEOUT="${SANDBOX_FILE_TIMEOUT:-900}"
 one_at_a_time() {
   local held
   for held in "${ONE_AT_A_TIME[@]}"; do
@@ -193,6 +199,10 @@ run_one() {
   local run_dir="$WORK_DIR/runs/${name//\//__}/$gem"
   mkdir -p "$WORK_DIR/logs" "$run_dir"
   (cd "$REPO_ROOT/gems/$gem" && tar --exclude .git -cf - .) | (cd "$run_dir" && tar -xf -)
+  local limit="$FILE_TIMEOUT"
+  case "$name" in
+    simplecov/spec/sandbox/*) limit="$SANDBOX_FILE_TIMEOUT" ;;
+  esac
   local command
   if [ "$ENGINE" = "mri" ]; then
     command=("$MRI")
@@ -221,7 +231,7 @@ run_one() {
       my $status = $?;
       kill "KILL", -$pid;
       exit($status >> 8);
-    ' "$FILE_TIMEOUT" "${command[@]}" $arguments "$file" >> "$log" 2>&1 < /dev/null
+    ' "$limit" "${command[@]}" $arguments "$file" >> "$log" 2>&1 < /dev/null
   ) || true
   local summary
   summary=$(sed 's/\x1b\[[0-9;]*m//g' "$log" | grep -E '^[0-9]+ (tests|runs|examples?), ' | tail -1 || true)
@@ -237,7 +247,7 @@ run_files() {
 export -f run_one run_files
 NO_PREPARE=none
 export -f bundle_path_of
-export MRI WORK_DIR REPO_ROOT BUNDLES GEM_BUNDLES METOREX FILE_TIMEOUT ENGINE NO_PREPARE
+export MRI WORK_DIR REPO_ROOT BUNDLES GEM_BUNDLES METOREX FILE_TIMEOUT SANDBOX_FILE_TIMEOUT ENGINE NO_PREPARE
 # net-imap's helper measures coverage with SimpleCov unless told not to.
 export SIMPLECOV_DISABLE=1
 # A test that omits itself under CI would count differently there than in

@@ -594,6 +594,10 @@ impl ArgumentList {
     ) -> Result<(), MetorexError> {
         self.tail_from_splat = false;
         let mut value = value;
+        // An instance of a Hash subclass passes the hash it holds.
+        if let Some(held) = crate::vm::native_methods::subclasses::hash_subclass_value(&value) {
+            value = held;
+        }
         // Anything else is asked for a Hash of its own, which is
         // how an object stands in for keyword arguments.
         if !matches!(value.view(), View::Dict(_)) && vm.lookup_method(&value, "to_hash").is_some() {

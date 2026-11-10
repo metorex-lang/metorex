@@ -69,6 +69,14 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// The next `count` characters, or as many as are left, without
+    /// consuming them.
+    pub(super) fn peek_several(&mut self, count: usize) -> Vec<char> {
+        let mut seen: Vec<char> = self.prepend.iter().rev().copied().take(count).collect();
+        seen.extend(self.chars.clone().take(count - seen.len()));
+        seen
+    }
+
     /// Skip whitespace characters (spaces and tabs, but not newlines).
     /// Also handles line continuations: a `\` immediately followed by a
     /// newline is consumed silently so the two source lines join. Returns

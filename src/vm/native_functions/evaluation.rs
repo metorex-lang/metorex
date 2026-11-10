@@ -478,7 +478,8 @@ impl VirtualMachine {
         if self.coverage_counts_eval()
             && let Some(named) = self.current_source_file.clone()
         {
-            self.coverage_note_eval(&named, &statements);
+            let last_line = lineno + code.lines().count().saturating_sub(1);
+            self.coverage_note_eval(&named, &statements, last_line);
         }
         // The eval is a place of its own in a backtrace, standing at
         // the line it was written on in the file that wrote it, so

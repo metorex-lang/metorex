@@ -1681,6 +1681,11 @@ impl VirtualMachine {
                 }
                 Ok(())
             }
+            StartKind::SameLine { terminal: true } => Ok(()),
+            StartKind::SameLine { terminal: false } => {
+                self.coverage_skip_line = Some(line);
+                self.begin_statement(statement.position, false)
+            }
         }
     }
 

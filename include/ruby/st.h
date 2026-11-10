@@ -1,6 +1,7 @@
 #ifndef RUBY_ST_H
 #define RUBY_ST_H 1
 
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -62,6 +63,23 @@ int rb_st_foreach(st_table *table, st_foreach_callback_func *function, st_data_t
 #define st_delete rb_st_delete
 #define st_foreach rb_st_foreach
 #define st_is_member(table, key) st_lookup((table), (key), (st_data_t *)0)
+
+/* st's comparisons fold only ASCII letters, whatever the locale. */
+static inline int st_locale_insensitive_strncasecmp(const char *left, const char *right, size_t count) {
+  for (size_t at = 0; at < count; at++) {
+    unsigned char one = (unsigned char)left[at], other = (unsigned char)right[at];
+    if (one >= 'A' && one <= 'Z') one += 'a' - 'A';
+    if (other >= 'A' && other <= 'Z') other += 'a' - 'A';
+    if (one != other) return one < other ? -1 : 1;
+    if (one == '\0') return 0;
+  }
+  return 0;
+}
+static inline int st_locale_insensitive_strcasecmp(const char *left, const char *right) {
+  return st_locale_insensitive_strncasecmp(left, right, (size_t)-1);
+}
+#define st_strcasecmp st_locale_insensitive_strcasecmp
+#define st_strncasecmp st_locale_insensitive_strncasecmp
 
 #ifdef __cplusplus
 }

@@ -172,3 +172,9 @@ fn a_writer_defined_on_object_answers_an_assignment_on_any_value() {
     let output = run_example("metaprogramming/class_eval_on_object_from_a_hook.rb");
     assert_eq!(output, "{locale: :en}\n{size: 1}\n{}\n{}\ntrue\nObject\n");
 }
+
+#[test]
+fn test_metaprogramming_class_eval_block_reads_its_own_locals_execution() {
+    let output = run_example("metaprogramming/class_eval_block_reads_its_own_locals.rb");
+    assert_eq!(output, "[true, \"2026-12\"]\n:made_here\n:made_here\n1\n");
+}

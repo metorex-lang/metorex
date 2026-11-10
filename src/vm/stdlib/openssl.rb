@@ -238,6 +238,21 @@ class HMAC
     end
   end
 
+  # PBKDF2 under the name OpenSSL gave it before KDF, which Active Support's
+  # key generator still calls.
+  module PKCS5
+    module_function
+
+    def pbkdf2_hmac(pass, salt, iter, keylen, digest)
+      OpenSSL::KDF.pbkdf2_hmac(pass, salt: salt, iterations: iter,
+                               length: keylen, hash: digest)
+    end
+
+    def pbkdf2_hmac_sha1(pass, salt, iter, keylen)
+      pbkdf2_hmac(pass, salt, iter, keylen, "sha1")
+    end
+  end
+
   # Bytes nobody can guess, which is what a key or a salt is made of.
   module Random
     def self.random_bytes(count = nil)

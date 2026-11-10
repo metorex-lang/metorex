@@ -182,6 +182,18 @@ impl VirtualMachine {
                 Some(path) => Object::string(path.display().to_string()),
                 None => Object::Nil,
             }),
+            // The operating system's release as uname reports it, which
+            // RbConfig names the macOS host by.
+            "__kernel_release__" => {
+                let mut held: libc::utsname = unsafe { std::mem::zeroed() };
+                // SAFETY: `uname` fills the struct it is handed, and its
+                // release field ends in a NUL.
+                if unsafe { libc::uname(&mut held) } != 0 {
+                    return Ok(Object::Nil);
+                }
+                let release = unsafe { std::ffi::CStr::from_ptr(held.release.as_ptr()) };
+                Ok(Object::string(release.to_string_lossy().into_owned()))
+            }
             // Where the headers a C extension is compiled against live.
             "__header_directory__" => Ok(Object::string(crate::vm::capi::HEADER_DIRECTORY)),
             // The bytes a C type's size function counts for what an object

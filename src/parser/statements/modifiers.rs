@@ -17,13 +17,36 @@ impl Parser<'_> {
     ) -> Result<Statement, MetorexError> {
         let opened_at = self.stream.current_position();
         let parsed = parse(self)?;
-        // A call or a logical operator after `end` makes the whole construct
-        // an operand: `if ready then value end || fallback`.
+        // A call or a binary operator after `end` makes the whole construct
+        // an operand: `if ready then value end || fallback`, and nokogiri's
+        // `if ... else ... end =~ /of-type/`.
         if !self.check(&[
             TokenKind::Dot,
             TokenKind::SafeDot,
             TokenKind::LogicalOr,
             TokenKind::LogicalAnd,
+            TokenKind::Match,
+            TokenKind::NotMatch,
+            TokenKind::EqualEqual,
+            TokenKind::TripleEqual,
+            TokenKind::BangEqual,
+            TokenKind::Less,
+            TokenKind::Greater,
+            TokenKind::LessEqual,
+            TokenKind::GreaterEqual,
+            TokenKind::Spaceship,
+            TokenKind::Plus,
+            TokenKind::Minus,
+            TokenKind::Star,
+            TokenKind::StarStar,
+            TokenKind::Slash,
+            TokenKind::Percent,
+            TokenKind::Pipe,
+            TokenKind::Caret,
+            TokenKind::Ampersand,
+            TokenKind::Shovel,
+            TokenKind::RightShift,
+            TokenKind::Question,
         ]) {
             // `begin ... end while cond` and the rest of the modifiers read
             // the block they follow.

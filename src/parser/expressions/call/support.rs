@@ -21,6 +21,17 @@ pub(crate) fn names_a_string_literal(expr: &Expression) -> bool {
     }
 }
 
+/// Add the keyword arguments, gathered into one hash, ahead of the `&block`
+/// argument, so their values are worked out before the block is handed to
+/// the call, and a method a value calls does not take the block.
+pub(crate) fn push_keyword_hash(arguments: &mut Vec<Expression>, keywords: Expression) {
+    let at = arguments
+        .iter()
+        .position(|argument| matches!(argument, Expression::BlockArg { .. }))
+        .unwrap_or(arguments.len());
+    arguments.insert(at, keywords);
+}
+
 /// Put the `**held` arguments back among the keyword arguments they were
 /// written alongside, so one call carries a single set of keywords rather
 /// than a hash argument and a set of keywords.

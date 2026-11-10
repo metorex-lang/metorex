@@ -103,6 +103,21 @@ pub(crate) fn starts_operator_symbol(kind: &TokenKind) -> bool {
 }
 
 impl Parser<'_> {
+    /// The symbol `name` stands for, as `:name=` where an `=` follows. It
+    /// names a setter only when the `=` is written against the name, so
+    /// `:a ==> 1` is `:a` followed by `==`.
+    fn symbol_with_setter(&mut self, name: &str, symbol_position: Position) -> Expression {
+        if self.check(&[TokenKind::Equal])
+            && !self.peek().had_leading_space
+            && !matches!(self.peek_ahead(1).kind, TokenKind::Equal)
+        {
+            self.advance();
+            symbol(format!("{}=", name), symbol_position)
+        } else {
+            symbol(name, symbol_position)
+        }
+    }
+
     /// Parse a symbol literal after a leading `:` token has been consumed.
     pub(crate) fn parse_symbol_literal(
         &mut self,
@@ -110,66 +125,55 @@ impl Parser<'_> {
     ) -> Result<Expression, MetorexError> {
         let next = self.advance();
         match next.kind {
-            TokenKind::Ident(name) => {
-                // `:name=` names a setter only when the `=` is written against
-                // the name, so `:a ==> 1` is `:a` followed by `==`.
-                if self.check(&[TokenKind::Equal])
-                    && !self.peek().had_leading_space
-                    && !matches!(self.peek_ahead(1).kind, TokenKind::Equal)
-                {
-                    self.advance(); // consume '='
-                    Ok(symbol(format!("{}=", name), symbol_position))
-                } else {
-                    Ok(symbol(name, symbol_position))
-                }
-            }
+            TokenKind::Ident(name) => Ok(self.symbol_with_setter(&name, symbol_position)),
             TokenKind::InstanceVar(name) => Ok(symbol(format!("@{}", name), symbol_position)),
             TokenKind::ClassVar(name) => Ok(symbol(format!("@@{}", name), symbol_position)),
             // `:$name` is a symbol too, which is how `trace_var` names the
             // global it watches.
             TokenKind::GlobalVar(name) => Ok(symbol(format!("${}", name), symbol_position)),
 
-            // Keyword names as symbols
-            TokenKind::Def => Ok(symbol("def", symbol_position)),
-            TokenKind::Class => Ok(symbol("class", symbol_position)),
-            TokenKind::If => Ok(symbol("if", symbol_position)),
-            TokenKind::Else => Ok(symbol("else", symbol_position)),
-            TokenKind::End => Ok(symbol("end", symbol_position)),
-            TokenKind::Do => Ok(symbol("do", symbol_position)),
-            TokenKind::Nil => Ok(symbol("nil", symbol_position)),
-            TokenKind::True => Ok(symbol("true", symbol_position)),
-            TokenKind::False => Ok(symbol("false", symbol_position)),
-            TokenKind::Return => Ok(symbol("return", symbol_position)),
-            TokenKind::Retry => Ok(symbol("retry", symbol_position)),
-            TokenKind::Redo => Ok(symbol("redo", symbol_position)),
-            TokenKind::Begin => Ok(symbol("begin", symbol_position)),
-            TokenKind::Rescue => Ok(symbol("rescue", symbol_position)),
-            TokenKind::Ensure => Ok(symbol("ensure", symbol_position)),
-            TokenKind::While => Ok(symbol("while", symbol_position)),
-            TokenKind::For => Ok(symbol("for", symbol_position)),
-            TokenKind::Case => Ok(symbol("case", symbol_position)),
-            TokenKind::When => Ok(symbol("when", symbol_position)),
-            TokenKind::Module => Ok(symbol("module", symbol_position)),
-            TokenKind::Include => Ok(symbol("include", symbol_position)),
-            TokenKind::Yield => Ok(symbol("yield", symbol_position)),
-            TokenKind::Super => Ok(symbol("super", symbol_position)),
-            TokenKind::Lambda => Ok(symbol("lambda", symbol_position)),
-            TokenKind::Break => Ok(symbol("break", symbol_position)),
-            TokenKind::Continue => Ok(symbol("next", symbol_position)),
-            TokenKind::Raise => Ok(symbol("raise", symbol_position)),
-            TokenKind::AttrReader => Ok(symbol("attr_reader", symbol_position)),
-            TokenKind::AttrWriter => Ok(symbol("attr_writer", symbol_position)),
-            TokenKind::AttrAccessor => Ok(symbol("attr_accessor", symbol_position)),
-            TokenKind::Extend => Ok(symbol("extend", symbol_position)),
-            TokenKind::Alias => Ok(symbol("alias", symbol_position)),
-            TokenKind::Unless => Ok(symbol("unless", symbol_position)),
-            TokenKind::Until => Ok(symbol("until", symbol_position)),
-            TokenKind::Then => Ok(symbol("then", symbol_position)),
-            TokenKind::Elsif => Ok(symbol("elsif", symbol_position)),
-            TokenKind::In => Ok(symbol("in", symbol_position)),
-            TokenKind::KeywordAnd => Ok(symbol("and", symbol_position)),
-            TokenKind::KeywordOr => Ok(symbol("or", symbol_position)),
-            TokenKind::NotKeyword => Ok(symbol("not", symbol_position)),
+            // Keyword names as symbols, `:next=` naming a setter as `:name=`
+            // does.
+            TokenKind::Def => Ok(self.symbol_with_setter("def", symbol_position)),
+            TokenKind::Class => Ok(self.symbol_with_setter("class", symbol_position)),
+            TokenKind::If => Ok(self.symbol_with_setter("if", symbol_position)),
+            TokenKind::Else => Ok(self.symbol_with_setter("else", symbol_position)),
+            TokenKind::End => Ok(self.symbol_with_setter("end", symbol_position)),
+            TokenKind::Do => Ok(self.symbol_with_setter("do", symbol_position)),
+            TokenKind::Nil => Ok(self.symbol_with_setter("nil", symbol_position)),
+            TokenKind::True => Ok(self.symbol_with_setter("true", symbol_position)),
+            TokenKind::False => Ok(self.symbol_with_setter("false", symbol_position)),
+            TokenKind::Return => Ok(self.symbol_with_setter("return", symbol_position)),
+            TokenKind::Retry => Ok(self.symbol_with_setter("retry", symbol_position)),
+            TokenKind::Redo => Ok(self.symbol_with_setter("redo", symbol_position)),
+            TokenKind::Begin => Ok(self.symbol_with_setter("begin", symbol_position)),
+            TokenKind::Rescue => Ok(self.symbol_with_setter("rescue", symbol_position)),
+            TokenKind::Ensure => Ok(self.symbol_with_setter("ensure", symbol_position)),
+            TokenKind::While => Ok(self.symbol_with_setter("while", symbol_position)),
+            TokenKind::For => Ok(self.symbol_with_setter("for", symbol_position)),
+            TokenKind::Case => Ok(self.symbol_with_setter("case", symbol_position)),
+            TokenKind::When => Ok(self.symbol_with_setter("when", symbol_position)),
+            TokenKind::Module => Ok(self.symbol_with_setter("module", symbol_position)),
+            TokenKind::Include => Ok(self.symbol_with_setter("include", symbol_position)),
+            TokenKind::Yield => Ok(self.symbol_with_setter("yield", symbol_position)),
+            TokenKind::Super => Ok(self.symbol_with_setter("super", symbol_position)),
+            TokenKind::Lambda => Ok(self.symbol_with_setter("lambda", symbol_position)),
+            TokenKind::Break => Ok(self.symbol_with_setter("break", symbol_position)),
+            TokenKind::Continue => Ok(self.symbol_with_setter("next", symbol_position)),
+            TokenKind::Raise => Ok(self.symbol_with_setter("raise", symbol_position)),
+            TokenKind::AttrReader => Ok(self.symbol_with_setter("attr_reader", symbol_position)),
+            TokenKind::AttrWriter => Ok(self.symbol_with_setter("attr_writer", symbol_position)),
+            TokenKind::AttrAccessor => Ok(self.symbol_with_setter("attr_accessor", symbol_position)),
+            TokenKind::Extend => Ok(self.symbol_with_setter("extend", symbol_position)),
+            TokenKind::Alias => Ok(self.symbol_with_setter("alias", symbol_position)),
+            TokenKind::Unless => Ok(self.symbol_with_setter("unless", symbol_position)),
+            TokenKind::Until => Ok(self.symbol_with_setter("until", symbol_position)),
+            TokenKind::Then => Ok(self.symbol_with_setter("then", symbol_position)),
+            TokenKind::Elsif => Ok(self.symbol_with_setter("elsif", symbol_position)),
+            TokenKind::In => Ok(self.symbol_with_setter("in", symbol_position)),
+            TokenKind::KeywordAnd => Ok(self.symbol_with_setter("and", symbol_position)),
+            TokenKind::KeywordOr => Ok(self.symbol_with_setter("or", symbol_position)),
+            TokenKind::NotKeyword => Ok(self.symbol_with_setter("not", symbol_position)),
             TokenKind::Defined => Ok(symbol("defined?", symbol_position)),
             TokenKind::MagicFile => Ok(symbol("__FILE__", symbol_position)),
             TokenKind::MagicLine => Ok(symbol("__LINE__", symbol_position)),

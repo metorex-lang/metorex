@@ -90,3 +90,20 @@ fn bundle_install_installs_a_gem_from_a_server_and_bundle_exec_runs_with_it() {
         String::from_utf8_lossy(&ran.stderr)
     );
 }
+
+#[test]
+fn bundler_takes_the_ruby_platform_variant_of_gems_metorex_does_not_provide() {
+    let examples = Path::new(env!("CARGO_MANIFEST_DIR")).join(crate::common::EXAMPLES_DIR);
+    let ran = metorex_cmd()
+        .arg(examples.join("bundler/ruby_platform/main.rb"))
+        .env_remove("BUNDLE_GEMFILE")
+        .env_remove("RUBYOPT")
+        .output()
+        .expect("metorex runs");
+    assert_eq!(
+        String::from_utf8_lossy(&ran.stdout),
+        "true\ntrue\nfalse\ntrue\n",
+        "{}",
+        String::from_utf8_lossy(&ran.stderr)
+    );
+}

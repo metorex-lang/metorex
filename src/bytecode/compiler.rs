@@ -80,16 +80,14 @@ pub fn compile_as(body: &[Statement], kind: UnitKind) -> Result<Unit, &'static s
                 compiler.statements(before, ANSWER, true)?;
             }
             let start = compiler.unit.instructions.len();
-            compiler
-                .terminal_statement(last, ANSWER)
-                .map_err(naming(last.kind_name()))?;
+            compiler.statement_line = Some(last.position().line);
+            let compiled = compiler.terminal_statement(last, ANSWER);
+            compiler.statement_line = None;
+            compiled.map_err(naming(last.kind_name()))?;
             compiler.unit.start_statement(start, last.position());
-            compiler.unit.set_start_kind(
-                start,
-                StartKind::Terminal {
-                    line_event: !matches!(last, Statement::Begin { .. }),
-                },
-            );
+            compiler
+                .unit
+                .set_start_kind(start, terminal_start(before, last));
         }
         _ if matches!(kind, UnitKind::ClassBody | UnitKind::ModuleBody) => {
             if body.is_empty() {
@@ -160,6 +158,10 @@ struct Compiler {
     protections: Vec<Protection>,
     /// How many `begin`s the code being compiled is inside.
     begins: usize,
+    /// The line of the statement being compiled, which a statement inside it
+    /// written on the same line does not count again, as the branch of
+    /// `if ready then x = 1 end` does not.
+    statement_line: Option<u32>,
 }
 
 /// What a run has open at a place in the code: argument lists, call routes,
@@ -227,6 +229,7 @@ impl Compiler {
             pending: Pending::default(),
             protections: Vec::new(),
             begins: 0,
+            statement_line: None,
         };
         compiler.unit.use_registers(ANSWER + 1);
         for name in compiler.assigned.clone() {
@@ -371,14 +374,19 @@ impl Compiler {
                 expression:
                     Expression::SingletonClass {
                         target,
+                        assign_to,
                         body,
                         position: opened_at,
-                        ..
                     },
                 ..
             } => {
                 let held = self.temporary()?;
                 self.expression(target, held)?;
+                // `class << AttributeMerger = Object.new` stores the object
+                // before the body runs, as haml's parser does.
+                if let Some(destination) = assign_to {
+                    self.store_register(destination, held, *opened_at)?;
+                }
                 self.define(
                     Definition::SingletonClass {
                         target: held,
@@ -550,14 +558,19 @@ impl Compiler {
                 expression:
                     Expression::SingletonClass {
                         target,
+                        assign_to,
                         body,
                         position: opened_at,
-                        ..
                     },
                 ..
             } => {
                 let held = self.temporary()?;
                 self.expression(target, held)?;
+                // `class << AttributeMerger = Object.new` stores the object
+                // before the body runs, as haml's parser does.
+                if let Some(destination) = assign_to {
+                    self.store_register(destination, held, *opened_at)?;
+                }
                 self.define(
                     Definition::SingletonClass {
                         target: held,
@@ -637,16 +650,12 @@ impl Compiler {
     }
 
     /// Compile the last statement of a method body, which answers the
-    /// method's value without passing through the statement runner: an
-    /// assignment there is evaluated as an expression would be, and an `if`
-    /// or `unless` runs as one written as an expression.
+    /// method's value without passing through the statement runner: an `if`
+    /// or `unless` runs as one written as an expression. An assignment is
+    /// compiled as any other is, introducing its local ahead of a value a
+    /// block in it closes over.
     fn terminal_statement(&mut self, statement: &Statement, to: usize) -> Result<(), &'static str> {
         match statement {
-            Statement::Assignment {
-                target,
-                value,
-                position,
-            } => self.assignment(target, value, to, *position),
             Statement::Begin {
                 body,
                 rescue_clauses,
@@ -723,11 +732,14 @@ impl Compiler {
             let at = list.first().map(Statement::position).unwrap_or_default();
             self.emit(Instruction::LoadNil { to: to as u8 }, at);
         }
+        let mut previous_line = self.statement_line;
         for statement in list {
             let start = self.unit.instructions.len();
             let held = self.next_register;
-            self.statement(statement, to)
-                .map_err(naming(statement.kind_name()))?;
+            let enclosing = self.statement_line.replace(statement.position().line);
+            let compiled = self.statement(statement, to);
+            self.statement_line = enclosing;
+            compiled.map_err(naming(statement.kind_name()))?;
             self.next_register = held;
             if of_the_body {
                 self.unit.start_statement(start, statement.position());
@@ -751,6 +763,14 @@ impl Compiler {
                     },
                 );
             }
+            // A statement on the line the one before it starts on is no line
+            // event and counts no line, as `a = 1; b = 2` counts its line once.
+            let line = statement.position().line;
+            if previous_line == Some(line) {
+                self.unit
+                    .set_start_kind(start, StartKind::SameLine { terminal: false });
+            }
+            previous_line = Some(line);
         }
         Ok(())
     }
@@ -1698,8 +1718,10 @@ impl Compiler {
         }
         let start = self.unit.instructions.len();
         let held = self.next_register;
-        self.terminal_statement(last, to)
-            .map_err(naming(last.kind_name()))?;
+        let enclosing = self.statement_line.replace(last.position().line);
+        let compiled = self.terminal_statement(last, to);
+        self.statement_line = enclosing;
+        compiled.map_err(naming(last.kind_name()))?;
         // A branch or loop that ends the clause leaves the locals it assigns
         // in scope after it, as one written anywhere else does, so an
         // `ensure` after it closes over them.
@@ -1719,12 +1741,7 @@ impl Compiler {
         self.next_register = held;
         self.unit
             .start_inner_statement(start, last.position(), self.next_register);
-        self.unit.set_start_kind(
-            start,
-            StartKind::Terminal {
-                line_event: !matches!(last, Statement::Begin { .. }),
-            },
-        );
+        self.unit.set_start_kind(start, terminal_start(before, last));
         Ok(())
     }
 
@@ -3668,6 +3685,21 @@ fn gathered_in_a_list(argument: &Expression) -> bool {
         argument,
         Expression::Splat { .. } | Expression::KeywordSplat { .. } | Expression::BlockArg { .. }
     )
+}
+
+/// How the last statement of a method body or a `begin` clause starts:
+/// as one on a line of its own, unless the statement before it starts on the
+/// same line, which counted that line already.
+fn terminal_start(before: &[Statement], last: &Statement) -> StartKind {
+    if before
+        .last()
+        .is_some_and(|previous| previous.position().line == last.position().line)
+    {
+        return StartKind::SameLine { terminal: true };
+    }
+    StartKind::Terminal {
+        line_event: !matches!(last, Statement::Begin { .. }),
+    }
 }
 
 /// Whether a method body's last statement answers the method's value

@@ -6,9 +6,7 @@ eval_gemfile "../ruby_shipped.rb"
 gem "parallel", path: "../../../../gems/parallel"
 gem "rspec"
 gem "activerecord"
-# Built from source, as MRI's prebuilt copy cannot be loaded by metorex,
-# which builds its own copy from the same source.
-gem "sqlite3", force_ruby_platform: true
+gem "sqlite3"
 gem "benchmark"
 gem "ruby-progressbar", path: "../../../../gems/ruby-progressbar"
 

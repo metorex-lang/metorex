@@ -101,28 +101,17 @@ impl VirtualMachine {
         self_obj: Object,
         constants_stay_lexical: bool,
     ) -> Result<Object, MetorexError> {
-        let prev_self = self.environment().get("self");
+        // The block reads the variables it captured where it was written,
+        // in a scope of its own, so a local of the method running it, such
+        // as the `options` of Active Support's `execute_hook`, does not hide
+        // one the block captured under the same name.
+        self.environment_mut().push_isolated_scope();
+        self.environment_mut()
+            .attach_captured(Rc::clone(&block.captured_vars));
+        self.environment_mut()
+            .attach_reserved(Rc::clone(&block.reserved_names));
         self.environment_mut()
             .define_named("self", self_obj.clone());
-        // Share the outer RefCells so an assignment like `x = self` inside the
-        // block mutates the caller's local, matching Ruby's closure semantics
-        // for blocks (including `Class.new do ... end`).
-        for (name, cell) in block.captured_vars.iter() {
-            // A global such as the `method` function does not hide a local
-            // the block captured under the same name.
-            let global = self.environment().global_scope().borrow().own_var_ref(name);
-            let held_only_globally = global.as_ref().is_some_and(|global| {
-                !Rc::ptr_eq(cell, global)
-                    && self
-                        .environment()
-                        .get_ref(name)
-                        .is_some_and(|found| Rc::ptr_eq(&found, global))
-            });
-            if self.environment().get(name).is_none() || held_only_globally {
-                self.environment_mut()
-                    .define_shared(name.to_string(), cell.clone());
-            }
-        }
         // Bind the block's first parameter to the class/module, matching Ruby:
         // `Class.new { |c| ... }` and `mod.class_eval { |m| ... }` both yield
         // the class/module as the sole block argument.
@@ -184,11 +173,7 @@ impl VirtualMachine {
         }
         self.def_scope_stack.pop();
         self.class_var_cref_stack.pop();
-        if let Some(prev) = prev_self {
-            self.environment_mut().define_named("self", prev);
-        } else {
-            self.environment_mut().undefine("self");
-        }
+        self.environment_mut().pop_scope();
         result
     }
 
@@ -386,8 +371,11 @@ impl VirtualMachine {
                 format!("(eval at {}:{})", caller, position.line)
             }
         };
+        // A line of 0 is kept, as Kernel#eval keeps it: ActionView compiles a
+        // template from line 0, so the `def` it wraps the template in sits on
+        // a line no coverage counts, ahead of the template's own lines.
         let lineno = match arguments.get(2).view() {
-            Some(View::Int(n)) => n.max(1) as usize,
+            Some(View::Int(n)) => n.max(0) as usize,
             _ => 1,
         };
 
@@ -469,7 +457,8 @@ impl VirtualMachine {
         // Code handed to `class_eval` is counted into the file it names when
         // the run was started with `eval` coverage on.
         if self.coverage_counts_eval() {
-            self.coverage_note_eval(&filename, &statements);
+            let last_line = lineno + code.lines().count().saturating_sub(1);
+            self.coverage_note_eval(&filename, &statements, last_line);
         }
         // The code is a place of its own in a backtrace, named as the code
         // that ran it and standing where the call was made, as Kernel#eval's

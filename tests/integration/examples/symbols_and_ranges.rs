@@ -192,3 +192,17 @@ fn symbol_inspect_escapes_interpolation_openers() {
         )
     );
 }
+
+#[test]
+fn test_symbols_and_ranges_keyword_setter_symbols_execution() {
+    let output = run_example("symbols_and_ranges/keyword_setter_symbols.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[[:next, \"sibling\"], [:name, \"entry\"]]\n",
+            "true\n",
+            "[:next=, :class=, :if=, :end=, :nil=, :begin=]\n",
+            "true\ntrue\n",
+        )
+    );
+}

@@ -1914,3 +1914,15 @@ fn test_c_extensions_c_digit_scanning_execution() {
         )
     );
 }
+
+#[test]
+fn test_c_extensions_c_library_helpers_execution() {
+    let output = run_example("c_extensions/c_library_helpers.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"maintenance window\"\n0\n-1\n1\n0\n0\n\"ledger: 2026-11\"\n465\n",
+            "true\nfalse\ntrue\nNoMemoryError: failed to allocate memory\n",
+        )
+    );
+}

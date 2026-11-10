@@ -119,7 +119,10 @@ impl VirtualMachine {
     /// Add the lines of code handed to `eval` under a file name, which `eval`
     /// coverage counts into that file. A name the run has not seen before
     /// becomes a file of its own, the way Ruby reports `eval("...", b, name)`.
-    pub(crate) fn coverage_note_eval(&mut self, path: &str, body: &[Statement]) {
+    /// Note the lines of code evaluated into `path`, which runs through
+    /// `last_line`, the line its last line is read as: the counts reach
+    /// that far, whether or not a statement starts there, as a file's do.
+    pub(crate) fn coverage_note_eval(&mut self, path: &str, body: &[Statement], last_line: usize) {
         let Some(run) = self.coverage.as_mut() else {
             return;
         };
@@ -131,6 +134,7 @@ impl VirtualMachine {
         let Some(highest) = wanted.iter().max().copied() else {
             return;
         };
+        let highest = highest.max(last_line);
         if !run.files.iter().any(|(held, _)| held == path) {
             run.files.push((path.to_string(), Vec::new()));
         }

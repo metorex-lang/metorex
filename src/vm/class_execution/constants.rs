@@ -141,19 +141,38 @@ impl VirtualMachine {
             }
             return Ok(Some(current));
         }
+        // Each module around the code, innermost first, answers with a
+        // constant of its own or one it autoloads, which is loaded now, before
+        // a module further out is asked. A block's modules are the ones
+        // around where it was written, as in an `included do` block a class
+        // runs through `class_eval`.
+        // The class and module bodies running now come after those, as
+        // the scopes a body opened in a file an autoload loads does, so
+        // `class ArrayBuffer < Array` in temple's Generators loads that
+        // module's own Array ahead of the top-level one.
+        let mut scopes = self.lexical_nesting();
+        for open in self.def_scope_stack.iter().rev() {
+            if !scopes.iter().any(|held| Rc::ptr_eq(held, open)) {
+                scopes.push(Rc::clone(open));
+            }
+        }
+        for scope in scopes {
+            if let Some(found) = scope.get_class_var(name) {
+                return Ok(Some(found));
+            }
+            if scope.lookup_autoload(name).is_some()
+                && let Some(loaded) = self.try_autoload_constant(&scope, name)?
+            {
+                return Ok(Some(loaded));
+            }
+        }
         if let Some(found) = self.resolve_constant_in_scope(name) {
             return Ok(Some(found));
         }
-        // A name one of the modules around the code autoloads, or Object
-        // does, is loaded now, innermost module first.
-        let mut scopes: Vec<Rc<crate::class::Class>> =
-            self.def_scope_stack.iter().rev().cloned().collect();
         if let Some(View::Class(object)) = self.globals().get("Object").view() {
-            scopes.push(object.clone());
-        }
-        for scope in scopes {
-            if scope.lookup_autoload(name).is_some()
-                && let Some(loaded) = self.try_autoload_constant(&scope, name)?
+            let object = object.clone();
+            if object.lookup_autoload(name).is_some()
+                && let Some(loaded) = self.try_autoload_constant(&object, name)?
             {
                 return Ok(Some(loaded));
             }

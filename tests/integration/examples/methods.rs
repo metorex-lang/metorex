@@ -1135,3 +1135,54 @@ fn methods_from_blocks_bind_keyword_defaults() {
         )
     );
 }
+
+#[test]
+fn test_methods_alias_unary_operators_execution() {
+    let output = run_example("methods/alias_unary_operators.rb");
+    assert_eq!(
+        output,
+        "\"-120\"\n\"45\"\n:flipped\n:flipped\n:-@\n:~\n"
+    );
+}
+
+#[test]
+fn test_methods_super_then_a_call_execution() {
+    let output = run_example("methods/super_then_a_call.rb");
+    assert_eq!(output, "{paid: 1}\n{paid: 1}\nnil\nnil\n");
+}
+
+#[test]
+fn test_methods_anonymous_parameters_ending_a_line_execution() {
+    let output = run_example("methods/anonymous_parameters_ending_a_line.rb");
+    assert_eq!(
+        output,
+        "[\"users\", true]\n:id\n:id\n:name\n[[:req, :name], [:key, :temporary], [:keyrest, :**]]\n"
+    );
+}
+
+#[test]
+fn test_methods_extend_after_a_singleton_prepend_execution() {
+    let output = run_example("methods/extend_after_a_singleton_prepend.rb");
+    assert_eq!(
+        output,
+        "Tracking#inherited User\nNaming#inherited User\nTracking\n"
+    );
+}
+
+#[test]
+fn test_methods_keyword_values_before_the_block_argument_execution() {
+    let output = run_example("methods/keyword_values_before_the_block_argument.rb");
+    assert_eq!(
+        output,
+        "{sql: \"SELECT 1\", month: \"2026-11\"}\n\"2026-11\"\n:no_block\n"
+    );
+}
+
+#[test]
+fn test_methods_method_named_like_a_constant_execution() {
+    let output = run_example("methods/method_named_like_a_constant.rb");
+    assert_eq!(
+        output,
+        "true\n\"parsed entry\"\nNameError\n\"parsed line\"\n:journal\n:journal\n[:method, [1]]\n"
+    );
+}

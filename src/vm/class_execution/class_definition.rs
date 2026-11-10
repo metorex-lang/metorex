@@ -98,10 +98,14 @@ impl VirtualMachine {
                 // def-scope chain (so `class ChildA < ParentA` inside
                 // `class ContainerA` sees the enclosing module's ParentA),
                 // then environment and globals.
-                let direct = parent_scope
-                    .as_ref()
-                    .and_then(|p| p.get_class_var(super_name))
-                    .or_else(|| self.resolve_constant_in_scope(super_name))
+                // A module around the class that autoloads the name loads it
+                // here, ahead of a top-level constant of the same name, as
+                // temple's `class ArrayBuffer < Array` in Generators does.
+                let direct = match parent_scope.as_ref().and_then(|p| p.get_class_var(super_name)) {
+                    Some(found) => Some(found),
+                    None => self.resolve_constant_with_autoload(super_name)?,
+                };
+                let direct = direct
                     // The class the body opens in reaches what its ancestors
                     // define, as `klass.class_eval("class A < Inherited")`
                     // run from another module's method does.

@@ -165,12 +165,14 @@ impl Parser<'_> {
             // `include Named if ready` and `extend Named unless done` take a
             // modifier as any statement does.
             TokenKind::Include
-                if !self.include_call_is_chained() && !self.names_a_local("include") =>
+                if !self.include_call_is_chained()
+                    && !self.names_a_local("include")
+                    && !self.method_name_is_assigned() =>
             {
                 let included = self.parse_include()?;
                 self.wrap_with_modifier(included)
             }
-            TokenKind::Extend if !self.names_a_local("extend") => {
+            TokenKind::Extend if !self.names_a_local("extend") && !self.method_name_is_assigned() => {
                 let extended = self.parse_extend()?;
                 self.wrap_with_modifier(extended)
             }

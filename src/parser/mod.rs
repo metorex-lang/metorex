@@ -266,6 +266,16 @@ impl<'source> Parser<'source> {
     /// Whether `name` is a local variable where the walk stands: bound by a
     /// pattern already, or bound before this point anywhere but inside a
     /// block that has closed since.
+    /// Whether the `include` or `extend` at the cursor is assigned to, as
+    /// `include = value` and `include, rest = values` make it a local.
+    pub(crate) fn method_name_is_assigned(&self) -> bool {
+        match self.peek_ahead(1).kind {
+            TokenKind::Equal => true,
+            TokenKind::Comma => self.scans_assignment_targets(0, false),
+            _ => false,
+        }
+    }
+
     pub(crate) fn names_a_local(&self, name: &str) -> bool {
         // `_1` to `_9` are reserved for numbered parameters, so none of
         // them names a method.

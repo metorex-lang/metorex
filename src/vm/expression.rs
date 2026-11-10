@@ -261,6 +261,13 @@ impl VirtualMachine {
         value: Object,
         position: crate::lexer::Position,
     ) -> Result<Option<SharedPairs>, MetorexError> {
+        // An instance of a Hash subclass spreads the hash it holds, without
+        // being asked for `to_hash`, as ActiveSupport::OrderedOptions does.
+        if let Some(held) = crate::vm::native_methods::subclasses::hash_subclass_value(&value)
+            && let View::Dict(pairs) = held.view()
+        {
+            return Ok(Some(pairs.clone()));
+        }
         match value.view() {
             View::Dict(pairs) => Ok(Some(pairs.clone())),
             View::Nil => Ok(None),

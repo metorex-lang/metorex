@@ -8,6 +8,16 @@ module RbConfig
   # starts others as `ruby`.
   install_name = File.basename(__interpreter_path__() || "metorex")
   cpu, os = RUBY_PLATFORM.split "-", 2
+  # The host as MRI's configure names it, which a library a gem builds for
+  # it, such as nokogiri's libxml2, is kept under: arm64-apple-darwin27 on
+  # macOS, where the operating system carries the kernel's major version.
+  vendor = nil
+  host = RUBY_PLATFORM.dup
+  if os.include?("darwin")
+    vendor = "apple"
+    os = "#{os}#{__kernel_release__().to_i}"
+    host = "#{cpu}-#{vendor}-#{os}"
+  end
 
   CONFIG = {
     "MAJOR" => major,
@@ -20,13 +30,16 @@ module RbConfig
     "RUBY_BASE_NAME" => "metorex",
     "ruby_install_name" => install_name,
     "arch" => RUBY_PLATFORM.dup,
-    "host" => RUBY_PLATFORM.dup,
+    "host" => host.dup,
+    "host_alias" => "",
     "host_cpu" => cpu,
     "host_os" => os,
-    "target" => RUBY_PLATFORM.dup,
+    "target" => host.dup,
+    "target_alias" => "",
     "target_cpu" => cpu,
     "target_os" => os,
-    "build" => RUBY_PLATFORM.dup,
+    "build" => host.dup,
+    "build_alias" => "",
     "build_cpu" => cpu,
     "build_os" => os,
     "EXEEXT" => "",
@@ -74,6 +87,9 @@ module RbConfig
   prefix = File.dirname(File.dirname(__interpreter_path__()))
   # The directory the binary sits in, which a program that starts the
   # interpreter again joins with `ruby_install_name`.
+  if vendor
+    CONFIG["host_vendor"] = CONFIG["target_vendor"] = CONFIG["build_vendor"] = vendor
+  end
   CONFIG["bindir"] = File.dirname(__interpreter_path__())
   CONFIG["prefix"] = prefix
   CONFIG["rubylibprefix"] = "#{prefix}/lib/metorex"

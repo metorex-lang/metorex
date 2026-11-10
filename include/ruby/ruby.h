@@ -75,6 +75,7 @@ extern "C" {
 typedef uintptr_t VALUE;
 typedef uintptr_t ID;
 typedef intptr_t SIGNED_VALUE;
+typedef pid_t rb_pid_t;
 
 #define RUBY_EXTERN extern
 #define RB_LIKELY(x) (__builtin_expect(!!(x), 1))
@@ -94,6 +95,7 @@ typedef intptr_t SIGNED_VALUE;
 #define RB_TEST(v) RTEST(v)
 #define RB_GC_GUARD(v) (*(volatile VALUE *)&(v))
 #define NIL_P(v) ((VALUE)(v) == Qnil)
+#define RB_NIL_P NIL_P
 
 #define RUBY_FIXNUM_FLAG 0x01
 #define FIXNUM_P(v) ((((SIGNED_VALUE)(v)) & RUBY_FIXNUM_FLAG) != 0)
@@ -133,6 +135,7 @@ long rb_fix2int(VALUE value);
 unsigned long rb_num2uint(VALUE value);
 unsigned long rb_fix2uint(VALUE value);
 #define NUM2LONG(v) rb_num2long((VALUE)(v))
+#define RB_NUM2LONG NUM2LONG
 #define NUM2ULONG(v) rb_num2ulong((VALUE)(v))
 /* A long long is a long on the platforms metorex builds for. */
 #define NUM2LL(v) ((long long)rb_num2long((VALUE)(v)))
@@ -151,6 +154,7 @@ const char *rb_id2name(ID id);
 ID rb_intern2(const char *text, long length);
 ID rb_intern_str(VALUE string);
 #define rb_intern_const(text) rb_intern(text)
+#define CONST_ID(var, text) ((var) = rb_intern(text))
 VALUE rb_id2str(ID id);
 VALUE rb_sym2str(VALUE symbol);
 VALUE rb_to_symbol(VALUE value);
@@ -942,9 +946,14 @@ void rb_gc_mark_locations(const VALUE *start, const VALUE *end);
 #define RB_OBJ_WRITE(old, slot, young) (*(VALUE *)(slot) = (VALUE)(young))
 #define RB_OBJ_WRITTEN(old, previous, young) ((void)0)
 
+NORETURN(static inline void rb_memerror(void));
+static inline void rb_memerror(void) {
+  rb_exc_raise(rb_exc_new_str(rb_eNoMemError, rb_str_new_cstr("failed to allocate memory")));
+}
+
 static inline void *ruby_xmalloc_checked(void *made) {
   if (made == NULL) {
-    rb_exc_raise(rb_exc_new_str(rb_eNoMemError, rb_str_new_cstr("failed to allocate memory")));
+    rb_memerror();
   }
   return made;
 }
@@ -982,6 +991,8 @@ static inline void ruby_xfree(void *held) { free(held); }
    to free it by. */
 #define RB_ALLOCV_N(type, v, count) ((type *)((v) = (VALUE)ruby_xmalloc2((count), sizeof(type))))
 #define RB_ALLOCV_END(v) ruby_xfree((void *)(v))
+#define RB_ALLOCV(v, size) ((void *)((v) = (VALUE)ruby_xmalloc(size)))
+#define ALLOCV(v, size) RB_ALLOCV(v, size)
 #define ALLOCV_N(type, v, count) RB_ALLOCV_N(type, v, count)
 #define ALLOCV_END(v) RB_ALLOCV_END(v)
 static inline int rb_isalpha(int c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); }

@@ -697,6 +697,12 @@ impl Parser<'_> {
         Ok(params)
     }
 
+    /// Whether a `*`, `**` or `&` parameter ends its line, as one written
+    /// with no name may when the list goes on, or closes, on the next.
+    fn anonymous_parameter_ends_its_line(&self) -> bool {
+        self.check(&[TokenKind::Newline, TokenKind::Comment(String::new())])
+    }
+
     pub(crate) fn parse_parameters(&mut self) -> Result<Vec<Parameter>, MetorexError> {
         let mut params = Vec::new();
         self.skip_whitespace();
@@ -735,7 +741,7 @@ impl Parser<'_> {
             // Check for block parameter (&block). A bare `&` with no name is
             // an anonymous block parameter, forwarded on by a bare `&`.
             if self.match_token(&[TokenKind::Ampersand]) {
-                if self.check(&[TokenKind::Comma, TokenKind::RParen]) {
+                if self.check(&[TokenKind::Comma, TokenKind::RParen]) || self.anonymous_parameter_ends_its_line() {
                     crate::parser::push_tight(
                         &mut params,
                         Parameter::block(ANONYMOUS_BLOCK.to_string(), param_pos),
@@ -756,7 +762,9 @@ impl Parser<'_> {
             // Check for variadic parameter (*args). A bare `*` with no name is
             // an anonymous splat, which discards the remaining positional args.
             else if self.match_token(&[TokenKind::StarStar]) {
-                if self.check(&[TokenKind::Comma, TokenKind::RParen, TokenKind::Pipe]) {
+                if self.check(&[TokenKind::Comma, TokenKind::RParen, TokenKind::Pipe])
+                    || self.anonymous_parameter_ends_its_line()
+                {
                     crate::parser::push_tight(
                         &mut params,
                         Parameter::keyword(ANONYMOUS_KWREST.to_string(), param_pos),
@@ -790,7 +798,9 @@ impl Parser<'_> {
             // Check for variadic parameter (*args). A bare `*` with no name is
             // an anonymous splat, which discards the remaining positional args.
             else if self.match_token(&[TokenKind::Star]) {
-                if self.check(&[TokenKind::Comma, TokenKind::RParen, TokenKind::Pipe]) {
+                if self.check(&[TokenKind::Comma, TokenKind::RParen, TokenKind::Pipe])
+                    || self.anonymous_parameter_ends_its_line()
+                {
                     crate::parser::push_tight(
                         &mut params,
                         Parameter::variadic(ANONYMOUS_SPLAT.to_string(), param_pos),

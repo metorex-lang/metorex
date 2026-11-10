@@ -96,6 +96,7 @@ impl Parser<'_> {
                 TokenKind::Question,
                 TokenKind::Colon,
                 TokenKind::Dot,
+                TokenKind::SafeDot,
                 TokenKind::ColonColon,
                 TokenKind::DotDot,
                 TokenKind::DotDotDot,

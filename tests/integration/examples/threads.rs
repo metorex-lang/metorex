@@ -474,3 +474,9 @@ fn timeouts_end_reads_from_pipes() {
     let output = run_example("threads/timeouts_end_reads_from_pipes.rb");
     assert_eq!(output, ":pipe_timed_out\n:popen_timed_out\n");
 }
+
+#[test]
+fn test_threads_constants_stay_home_across_threads_execution() {
+    let output = run_example("threads/constants_stay_home_across_threads/main.rb");
+    assert_eq!(output, "Ledger::Adapters::NullTransaction\n[]\n");
+}

@@ -50,12 +50,23 @@ module MakeMakefile
   # What every source a check compiles starts with.
   COMMON_HEADERS = "#include \"ruby.h\"\n"
 
-  # Whether `message` keeps quiet, which `$VERBOSE` overrides.
+  # Whether `message` keeps quiet, which `$VERBOSE` overrides, and the
+  # mkmf.log every check writes its commands, their output and the program
+  # it checked to, as MRI's mkmf does.
   module Logging
     @quiet = $extmk
+    @path = nil
 
     class << self
       attr_accessor :quiet
+
+      # The log is opened, emptied, in the directory the first check runs
+      # in, and written to there from then on.
+      def write(text)
+        opened = @path
+        @path ||= File.expand_path("mkmf.log")
+        File.open(@path, opened ? "a" : "w") { |log| log.write(text) }
+      end
     end
   end
 
@@ -110,6 +121,26 @@ module MakeMakefile
     checking_for checking_message(bin, path) do
       find_executable0(bin, path)
     end
+  end
+
+  # Runs `command`, a String for the shell or an Array of words, with a Hash
+  # at the Array's front naming environment variables, answering whether it
+  # succeeded.
+  def xsystem(command, _options = nil)
+    environment, words = environment_and_words(command)
+    system(environment, *words)
+  end
+
+  # Runs `command` as xsystem does, opening a pipe to it as IO.popen does.
+  def xpopen(command, *mode, &block)
+    environment, words = environment_and_words(command)
+    IO.popen(environment, words.length == 1 ? words.first : words, *mode, &block)
+  end
+
+  def environment_and_words(command)
+    words = command.is_a?(Array) ? command.dup : [command.to_s]
+    environment = words.first.is_a?(Hash) ? words.shift : {}
+    [environment, words]
   end
 
   # The compile and link flags pkg-config, or the package's own config
@@ -321,8 +352,11 @@ module MakeMakefile
   # Print what is being checked for, run the check, and print its answer.
   def checking_for(subject, format = nil)
     message "%s", "checking for #{subject}... "
+    Logging.write("checking for #{subject}... -------------------- ")
     answer = yield
-    message "%s\n", format ? format % answer : (answer ? "yes" : "no")
+    result = format ? format % answer : (answer ? "yes" : "no")
+    message "%s\n", result
+    Logging.write("#{result}\n\n")
     answer
   end
 
@@ -515,15 +549,16 @@ module MakeMakefile
     paths = paths.flat_map { |held| held.split(File::PATH_SEPARATOR) }
     checking_for checking_message(func && func.funcall_style, LIBARG % lib) do
       libs = append_library($libs, lib)
-      linked = ([nil] + paths).find do |directory|
-        flag = directory ? "-L#{directory}" : ""
-        next false unless try_func(func, libs, nil, flag)
+      library_paths = $LIBPATH
+      linked = false
+      loop do
+        linked = try_func(func, libs) ? true : false
+        break if linked || paths.empty?
 
-        $LDFLAGS << " " << flag if directory
-        true
+        $LIBPATH = library_paths | [paths.shift]
       end
-      $libs = libs if linked
-      linked ? true : false
+      linked ? ($libs = libs) : ($LIBPATH = library_paths)
+      linked
     end
   end
 
@@ -621,6 +656,8 @@ module MakeMakefile
     makefile << "srcdir = #{$srcdir}\n"
     makefile << "hdrdir = #{RbConfig::CONFIG["rubyhdrdir"]}\n"
     makefile << "arch_hdrdir = $(hdrdir)\n"
+    makefile << "ruby = #{RbConfig.ruby}\n"
+    makefile << "RUBY = $(ruby)\n"
     makefile << "CC = #{RbConfig::CONFIG["CC"]}\n"
     makefile << "optflags = #{CONFIG["optflags"]}\n"
     makefile << "debugflags = #{CONFIG["debugflags"]}\n"
@@ -634,6 +671,11 @@ module MakeMakefile
     makefile << "DLDFLAGS = #{[link_flags, $DLDFLAGS, CONFIG["EXTDLDFLAGS"], library_paths, $LDFLAGS].map(&:strip).reject(&:empty?).join(" ")}\n"
     makefile << "LIBS = #{libraries}\n"
     makefile << "DLLIB = #{target}.#{dlext}\n"
+    makefile << "TARGET_SO = $(DLLIB)\n"
+    makefile << "DESTDIR =\n"
+    makefile << "sitearchdir = #{RbConfig::CONFIG["sitearchdir"]}\n"
+    makefile << "sitelibdir = #{RbConfig::CONFIG["sitelibdir"]}\n"
+    makefile << "RUBYARCHDIR = $(DESTDIR)$(sitearchdir)$(target_prefix)\n"
     makefile << "OBJS = #{objects.join(" ")}\n"
     makefile << "\n"
     makefile << "all: $(DLLIB)\n"
@@ -648,6 +690,12 @@ module MakeMakefile
       makefile << "#{object}: #{source}#{made_from}\n"
       makefile << "\t$(CC) $(CPPFLAGS) $(CFLAGS) -c #{source} -o #{object}\n"
     end
+    makefile << "\n"
+    # `make install`, as RubyGems runs it after building, copies the library
+    # to where `sitearchdir` and the extension's name put it.
+    makefile << "install: $(DLLIB)\n"
+    makefile << "\tmkdir -p $(RUBYARCHDIR)\n"
+    makefile << "\tcp $(DLLIB) $(RUBYARCHDIR)\n"
     makefile << "\n"
     makefile << "clean:\n"
     makefile << "\trm -f $(OBJS) $(DLLIB)#{" #{$cleanfiles.join(" ")}" unless $cleanfiles.empty?}\n"
@@ -678,7 +726,8 @@ module MakeMakefile
     require "fiddle"
     Fiddle::Handle.new(File.expand_path(library), Fiddle::RTLD_NOW).close
     true
-  rescue Fiddle::DLError
+  rescue Fiddle::DLError => error
+    Logging.write("#{error.message}\n")
     false
   end
 
@@ -718,10 +767,11 @@ module MakeMakefile
 
   # Whether the command succeeds, and with `werror` prints nothing as well.
   def run_quietly(command, werror: nil)
-    return (system(command, out: File::NULL, err: File::NULL) ? true : false) unless werror
-
     output = IO.popen(command, err: [:child, :out], &:read)
-    $?.success? && output.empty?
+    succeeded = $?.success?
+    Logging.write("#{command.inspect}\n#{output}")
+    Logging.write("checked program was:\n#{File.read("conftest.c")}\n") if File.exist?("conftest.c")
+    succeeded && (!werror || output.empty?)
   end
 end
 
@@ -756,6 +806,17 @@ $CPPFLAGS = ""
 $LDFLAGS = ""
 $LIBS = ""
 $extconf_h = nil
+$LIBEXT = RbConfig::CONFIG["LIBEXT"].dup
+$OBJEXT = RbConfig::CONFIG["OBJEXT"].dup
+$EXEEXT = RbConfig::CONFIG["EXEEXT"].dup
+$ASMEXT = "S"
+$LOCAL_LIBS = ""
+$distcleandirs = []
+# The files an extconf.rb names for installing beside the extension, which
+# metorex leaves where they are, since only the libraries a build makes are
+# copied to where the gem's extensions are kept.
+$INSTALLFILES = []
+$NONINSTALLFILES = [/~\z/, /\A#.*#\z/, /\A\.#/, /\.bak\z/i, /\.orig\z/, /\.rej\z/, /\.l[ao]\z/, /\.o\z/]
 
 include MakeMakefile
 

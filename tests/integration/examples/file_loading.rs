@@ -615,3 +615,18 @@ fn a_disk_file_a_carried_library_requires_names_itself() {
     let output = run_example("require/disk_file_required_by_carried_library.rb");
     assert_eq!(output, "\"power_assert.rb\"\n2\n");
 }
+
+#[test]
+fn test_require_autoload_included_from_a_block_execution() {
+    let output = run_example("require/autoload_included_from_a_block/main.rb");
+    assert_eq!(
+        output,
+        "Ledger::Scoping::Default included in Account\ntrue\ntrue\n"
+    );
+}
+
+#[test]
+fn test_require_autoloaded_superclass_named_like_a_core_class_execution() {
+    let output = run_example("require/autoloaded_superclass_named_like_a_core_class/main.rb");
+    assert_eq!(output, "Generators::Array\n:generator_array\n");
+}

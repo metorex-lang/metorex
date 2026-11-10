@@ -386,6 +386,8 @@ impl<'a> Lexer<'a> {
                                 Some(inner @ ('"' | '\'' | '`')) if opens_a_string(&expr) => {
                                     self.copy_quoted_in_interpolation(inner, &mut expr)?;
                                 }
+                                Some('%') if self.copy_percent_literal_in_interpolation(&mut expr)? => {}
+                                Some('<') if self.copy_heredoc_in_interpolation(&mut expr) => {}
                                 Some(ch) => {
                                     expr.push(ch);
                                     self.advance();
@@ -529,6 +531,104 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// Read a heredoc opened inside an interpolation, as `"#{<<~RUBY}"`
+    /// does, whose body is on the lines after the string's, and copy it into
+    /// `expr` as a double-quoted literal. Answers whether one was there.
+    fn copy_heredoc_in_interpolation(&mut self, expr: &mut String) -> bool {
+        if !matches!(self.peek_several(3).as_slice(), ['<', '<', '~' | '-']) {
+            return false;
+        }
+        let value_starts_here = match expr.trim_end().chars().last() {
+            None => true,
+            Some(last) => !(last.is_alphanumeric() || matches!(last, '_' | ')' | ']' | '}' | '"' | '\'')),
+        };
+        if !value_starts_here {
+            return false;
+        }
+        let saved = (
+            self.chars.clone(),
+            self.prepend.clone(),
+            self.line,
+            self.column,
+            self.offset,
+        );
+        self.advance();
+        self.advance();
+        let literal = self.try_read_heredoc().and_then(|read| double_quoted_literal(&read));
+        match literal {
+            Some(literal) => {
+                expr.push_str(&literal);
+                true
+            }
+            None => {
+                (self.chars, self.prepend, self.line, self.column, self.offset) = saved;
+                false
+            }
+        }
+    }
+
+    /// Copy a percent literal written inside an interpolation, such as
+    /// `%q{', "'", '}`, into `expr` whole, so a quote or brace it holds is
+    /// not read as one the expression writes. Answers whether one was there:
+    /// a `%` is a literal only where a value starts, so `a % b` is left to
+    /// be copied as the operator.
+    fn copy_percent_literal_in_interpolation(&mut self, expr: &mut String) -> Result<bool, String> {
+        let ahead = self.peek_several(3);
+        let (prefix, opening) = match ahead.as_slice() {
+            ['%', kind @ ('q' | 'Q' | 'w' | 'W' | 'i' | 'I' | 's' | 'r' | 'x'), opening, ..]
+                if !opening.is_alphanumeric() && !opening.is_whitespace() =>
+            {
+                (format!("%{kind}"), *opening)
+            }
+            ['%', opening @ ('{' | '(' | '[' | '<' | '|' | '!'), ..] => ("%".to_string(), *opening),
+            _ => return Ok(false),
+        };
+        let value_starts_here = match expr.trim_end().chars().last() {
+            None => true,
+            Some(last) => !(last.is_alphanumeric() || matches!(last, '_' | ')' | ']' | '}' | '"' | '\'')),
+        };
+        if !value_starts_here {
+            return Ok(false);
+        }
+        let closing = match opening {
+            '{' => '}',
+            '(' => ')',
+            '[' => ']',
+            '<' => '>',
+            other => other,
+        };
+        for _ in 0..prefix.chars().count() + 1 {
+            self.advance();
+        }
+        expr.push_str(&prefix);
+        expr.push(opening);
+        let mut depth = 1;
+        loop {
+            match self.advance() {
+                None => return Err(format!("Unterminated string starting at line {}", self.line)),
+                Some('\\') => {
+                    expr.push('\\');
+                    if let Some(escaped) = self.advance() {
+                        expr.push(escaped);
+                    }
+                }
+                Some(ch) if ch == closing => {
+                    expr.push(ch);
+                    depth -= 1;
+                    if depth == 0 {
+                        return Ok(true);
+                    }
+                }
+                Some(ch) => {
+                    if ch == opening && opening != closing {
+                        depth += 1;
+                    }
+                    expr.push(ch);
+                }
+            }
+        }
+    }
+
     /// Copy an interpolated expression into `expr` up to and including the
     /// `}` that closes it, the `#{` having been copied already.
     fn copy_interpolated_expression(&mut self, expr: &mut String) -> Result<(), String> {
@@ -554,6 +654,7 @@ impl<'a> Lexer<'a> {
                     self.copy_quoted_in_interpolation(inner, expr)?;
                     continue;
                 }
+                Some('%') if self.copy_percent_literal_in_interpolation(expr)? => continue,
                 Some(_) => {}
             }
             let ch = self.peek().expect("a character was seen");
@@ -685,4 +786,41 @@ impl<'a> Lexer<'a> {
             _ => held & 0x9f,
         })
     }
+}
+
+/// A string read from the source written back as a double-quoted literal
+/// that reads as the same string, its interpolations kept as they were.
+fn double_quoted_literal(read: &TokenKind) -> Option<String> {
+    let mut literal = String::from("\"");
+    let write_text = |text: &str, literal: &mut String| {
+        for character in text.chars() {
+            match character {
+                '\\' => literal.push_str("\\\\"),
+                '"' => literal.push_str("\\\""),
+                '#' => literal.push_str("\\#"),
+                '\n' => literal.push_str("\\n"),
+                '\t' => literal.push_str("\\t"),
+                '\r' => literal.push_str("\\r"),
+                other => literal.push(other),
+            }
+        }
+    };
+    match read {
+        TokenKind::String(text) => write_text(text, &mut literal),
+        TokenKind::InterpolatedString(parts) => {
+            for part in parts {
+                match part {
+                    InterpolationPart::Text(text) => write_text(text, &mut literal),
+                    InterpolationPart::Expression(code, _) => {
+                        literal.push_str("#{");
+                        literal.push_str(code);
+                        literal.push('}');
+                    }
+                }
+            }
+        }
+        _ => return None,
+    }
+    literal.push('"');
+    Some(literal)
 }

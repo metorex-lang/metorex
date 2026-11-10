@@ -240,7 +240,7 @@ impl Parser<'_> {
                     position,
                 },
             ));
-            arguments.push(Expression::Dictionary { entries, position });
+            push_keyword_hash(&mut arguments, Expression::Dictionary { entries, position });
         }
 
         self.skip_whitespace();

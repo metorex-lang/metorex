@@ -314,6 +314,10 @@ pub(crate) fn register_native_functions(globals: &mut GlobalRegistry) {
         Object::NativeFunction("__interpreter_path__".to_string()),
     );
     globals.set(
+        "__kernel_release__",
+        Object::NativeFunction("__kernel_release__".to_string()),
+    );
+    globals.set(
         "__header_directory__",
         Object::NativeFunction("__header_directory__".to_string()),
     );

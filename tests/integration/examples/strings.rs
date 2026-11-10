@@ -847,3 +847,30 @@ fn string_subclasses_answer_to_sym() {
     let output = run_example("strings/string_subclasses_answer_to_sym.rb");
     assert_eq!(output, ":test\n[:default, :test]\n");
 }
+
+#[test]
+fn test_strings_percent_literals_inside_interpolation_execution() {
+    let output = run_example("strings/percent_literals_inside_interpolation.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"concat('it', \\\"'\\\", 's')\"\n",
+            "\"a y b\"\n\"a pq b\"\n\"a nested {braces} b\"\n\"nested x}\"\n\"remainder 1\"\n",
+        )
+    );
+}
+
+#[test]
+fn test_strings_heredoc_inside_interpolation_execution() {
+    let output = run_example("strings/heredoc_inside_interpolation.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "test/test_helper.rb:\n# test/test_helper.rb\n",
+            "class ActiveSupport::TestCase\n  parallelize_teardown { SimpleCov.result }\nend\n",
+            ":after\n\"before heredoc line\\n middle\"\n",
+            "\"window: maintenance \\\"moves\\\" to 02:00 2026-11 \\\\ done (2026-11)\"\n",
+            "20\n",
+        )
+    );
+}

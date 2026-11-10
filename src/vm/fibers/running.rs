@@ -633,6 +633,7 @@ impl VirtualMachine {
                 class_var_home: Vec::new(),
                 class_var_cref_stack: Vec::new(),
                 method_nesting_stack: Vec::new(),
+                constant_homes: Vec::new(),
                 current_method_frame: Some(crate::vm::core::TOP_LEVEL_FRAME),
                 lexical_home_frame: None,
                 attached_block_flags: Vec::new(),
@@ -665,6 +666,7 @@ impl VirtualMachine {
                 &mut self.method_nesting_stack,
                 taken.method_nesting_stack,
             ),
+            constant_homes: std::mem::replace(&mut self.constant_homes, taken.constant_homes),
             current_method_frame: std::mem::replace(
                 &mut self.current_method_frame,
                 taken.current_method_frame,

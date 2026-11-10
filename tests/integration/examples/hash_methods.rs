@@ -302,3 +302,12 @@ fn keys_must_hash_to_integers() {
     let output = run_example("hashes/keys_must_hash_to_integers.rb");
     assert_eq!(output, "\"no implicit conversion of nil into Integer\"\n".repeat(3) + "1\n");
 }
+
+#[test]
+fn test_hashes_double_splat_of_a_hash_subclass_execution() {
+    let output = run_example("hashes/double_splat_of_a_hash_subclass.rb");
+    assert_eq!(
+        output,
+        "[\"k\", {store_key_references: true}]\n[nil, {mode: :strict}]\n"
+    );
+}

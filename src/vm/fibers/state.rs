@@ -52,6 +52,10 @@ pub(crate) struct FiberContext {
     pub(crate) class_var_home: Vec<std::rc::Rc<crate::class::Class>>,
     pub(crate) class_var_cref_stack: Vec<Option<std::rc::Rc<crate::class::Class>>>,
     pub(crate) method_nesting_stack: Vec<crate::object::Nesting>,
+    /// The scopes the blocks and methods this fiber is running as class
+    /// bodies keep their constants in, which a class another fiber or
+    /// thread defines in the meantime must not land in.
+    pub(crate) constant_homes: Vec<(usize, Option<std::rc::Rc<crate::class::Class>>)>,
     /// The invocation a `return` written here belongs to. It travels with the
     /// fiber, so a method the interrupted side is part-way through still
     /// returns to itself once control comes back to it.

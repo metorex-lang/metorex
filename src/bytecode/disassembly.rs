@@ -139,7 +139,7 @@ pub fn listing(unit: &Unit) -> Vec<Listed> {
                         line_event
                     }
                     StartKind::BodyStatement { runs } => runs,
-                    StartKind::InBranch { .. } => false,
+                    StartKind::InBranch { .. } | StartKind::SameLine { .. } => false,
                 }),
             note: note(unit, instruction),
         })

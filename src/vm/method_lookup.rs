@@ -1785,10 +1785,13 @@ pub(crate) fn module_extended_method(
     // The modules extended onto it are asked in the order its singleton
     // class lists them, the latest extended first, so `extend self` written
     // after `extend Helpers` reaches the module's own method.
+    // A module prepended to the singleton class stands ahead of it, so the
+    // extended modules are the ones after the singleton class itself.
     if let Some(singleton) = class_rc.singleton_class_slot().clone() {
         let ancestors = crate::vm::eval::super_expr::walk_ancestors(&singleton);
         if let Some(found) = ancestors
             .iter()
+            .skip_while(|held| !Rc::ptr_eq(held, &singleton))
             .skip(1)
             .take_while(|held| held.is_module())
             .find_map(|held| held.find_own_method(method_name))

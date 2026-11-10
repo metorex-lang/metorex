@@ -2018,6 +2018,9 @@ fn mkmf_checks_link_against_the_interpreter_and_write_the_extconf_header() {
             "true\n",
             "false\n",
             "true\n",
+            "true\n",
+            "true\n",
+            "true\n",
         )
     );
 }
@@ -2438,4 +2441,52 @@ fn coverage_branches_are_keyed_as_ruby_keys_them() {
         "[:if, 18, 33, 24, 33, 50] => {[:then, 19, 33, 32, 33, 40] => 1, [:else, 20, 33, 43, 33, 50] => 1}\n",
     );
     assert_eq!(output, expected);
+}
+
+#[test]
+fn test_stdlib_mkmf_running_commands_execution() {
+    let output = run_example("stdlib/mkmf_running_commands.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "true\ntrue\n\"maintenance window\\n\"\n\"2026-11\\n\"\n\"shell words\\n\"\n",
+            "[\"\", \"\", \"\"]\ntrue\n",
+            "checking for zlibVersion() in -lz... yes\ntrue\n",
+            "checking for cos() in -lm... yes\ntrue\n[\"-lm\", \"-lz\"]\n",
+            "[\"a\", \"o\", \"\"]\n[[], \"\"]\n",
+        )
+    );
+}
+
+#[test]
+fn test_stdlib_openssl_pkcs5_execution() {
+    let output = run_example("stdlib/openssl_pkcs5.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "32\n\"186a85603697bfc938097359ccfd9b1d6ac2c75885d90ae5af8ed399eb755501\"\n",
+            "true\n\"0c60c80f961f0e71f3a9b524af6012062fe037a6\"\n",
+        )
+    );
+}
+
+#[test]
+fn test_coverage_eval_from_line_zero_execution() {
+    let output = run_example("coverage/eval_from_line_zero.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "{lines: [1, 4, 1, nil]}\n{lines: [0, nil]}\n",
+            "{lines: [nil, nil, nil, nil, 1, 1]}\n{lines: [1, nil, 1, 1, 1, nil]}\n",
+        )
+    );
+}
+
+#[test]
+fn test_coverage_one_line_statements_execution() {
+    let output = run_example("coverage/one_line_statements/main.rb");
+    assert_eq!(
+        output,
+        "[1, 1, 3, 1, nil, 1, 3, 1, 1, 1, 1, 2, 1, 1, 3, 1, 3, 3, 1, 1, 1, nil, 1, nil]\n"
+    );
 }

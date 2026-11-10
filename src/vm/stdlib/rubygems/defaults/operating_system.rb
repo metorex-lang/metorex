@@ -126,14 +126,19 @@ module Gem
 
     # The environment an extension's build runs in: the one the program
     # started with, before Bundler named its bundle and put bundler/setup in
-    # RUBYOPT, and marked as a build's.
+    # RUBYOPT, and marked as a build's. The gems installed beside this one
+    # are on GEM_PATH, so an extconf.rb finds the ones it builds with, such
+    # as mini_portile2, as it does when installing puts them there.
     def environment_for_extension_builds
       changes = { BUILDING_EXTENSIONS => "1" }
-      return changes unless defined?(Bundler) && Bundler.respond_to?(:unbundled_env)
-
-      unbundled = Bundler.unbundled_env
-      ENV.each_key { |key| changes[key] = nil unless unbundled.key?(key) }
-      unbundled.each { |key, value| changes[key] = value unless ENV[key] == value }
+      if defined?(Bundler) && Bundler.respond_to?(:unbundled_env)
+        unbundled = Bundler.unbundled_env
+        ENV.each_key { |key| changes[key] = nil unless unbundled.key?(key) }
+        unbundled.each { |key, value| changes[key] = value unless ENV[key] == value }
+      end
+      inherited = changes.key?("GEM_PATH") ? changes["GEM_PATH"] : ENV["GEM_PATH"]
+      paths = [base_dir, *inherited.to_s.split(File::PATH_SEPARATOR), *Gem.default_path]
+      changes["GEM_PATH"] = paths.reject(&:empty?).uniq.join(File::PATH_SEPARATOR)
       changes
     end
 
@@ -170,13 +175,14 @@ module Gem
 
     def build_extensions_into(target)
       log = File.join(target, "gem_make.out")
+      source = source_for_metorex_builds(target)
       built = File.open(log, "w") do |output|
         extensions.all? do |extconf|
           build = File.join(target, "build", File.dirname(extconf))
           FileUtils.mkdir_p(build)
           environment = environment_for_extension_builds
           made = Dir.chdir(build) do
-            system(environment, Gem.ruby, File.join(full_gem_path, extconf), out: output, err: output) &&
+            system(environment, Gem.ruby, File.join(source, extconf), out: output, err: output) &&
               system(environment, "make", out: output, err: output)
           end
           made && install_libraries_built_for_metorex(build, target)
@@ -188,6 +194,20 @@ module Gem
         warn "Ignoring #{full_name} because its extensions could not be built for metorex. See #{log}"
       end
       built
+    end
+
+    # The gem's files as it was packaged, unpacked from the .gem file
+    # installing it kept, since installing it for MRI may have removed what
+    # the build reads, as nokogiri's removes the sources of the libraries it
+    # builds. A gem installed without its .gem file builds from where it is
+    # installed.
+    def source_for_metorex_builds(target)
+      return full_gem_path unless File.file?(cache_file)
+
+      require "rubygems/package"
+      source = File.join(target, "source")
+      Gem::Package.new(cache_file).extract_files(source) unless File.directory?(source)
+      source
     end
 
     # Copy the libraries a build made to where the extension's name puts

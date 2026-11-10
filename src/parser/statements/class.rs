@@ -641,6 +641,17 @@ impl Parser<'_> {
         })
     }
 
+    /// The `@` written against a unary operator's name, read past, or
+    /// nothing where none follows.
+    fn unary_operator_at(&mut self) -> &'static str {
+        if matches!(&self.peek().kind, TokenKind::InstanceVar(name) if name.is_empty()) {
+            self.advance();
+            "@"
+        } else {
+            ""
+        }
+    }
+
     /// Parse a method name accepted by `alias`: a bare identifier or a
     /// symbol literal (`:name`). Certain keywords are accepted because they
     /// are valid Ruby method names.
@@ -704,8 +715,10 @@ impl Parser<'_> {
             TokenKind::Alias => Ok("alias".to_string()),
             TokenKind::Defined => Ok("defined?".to_string()),
             // An operator is a method name too, so `alias old <=>` names one.
-            TokenKind::Plus => Ok("+".to_string()),
-            TokenKind::Minus => Ok("-".to_string()),
+            // `-@` and `+@` name the unary ones, with the `@` read as an
+            // instance variable with no name of its own.
+            TokenKind::Plus => Ok(format!("+{}", self.unary_operator_at())),
+            TokenKind::Minus => Ok(format!("-{}", self.unary_operator_at())),
             TokenKind::Star => Ok("*".to_string()),
             TokenKind::StarStar => Ok("**".to_string()),
             TokenKind::Slash => Ok("/".to_string()),
@@ -720,11 +733,19 @@ impl Parser<'_> {
             TokenKind::Spaceship => Ok("<=>".to_string()),
             TokenKind::Shovel => Ok("<<".to_string()),
             TokenKind::RightShift => Ok(">>".to_string()),
-            TokenKind::Tilde => Ok("~".to_string()),
+            // `~@` and `!@` name the same methods as `~` and `!`.
+            TokenKind::Tilde => {
+                self.unary_operator_at();
+                Ok("~".to_string())
+            }
             TokenKind::Caret => Ok("^".to_string()),
             TokenKind::Ampersand => Ok("&".to_string()),
             TokenKind::Pipe => Ok("|".to_string()),
-            TokenKind::Bang | TokenKind::NotKeyword => Ok("!".to_string()),
+            TokenKind::Bang => {
+                self.unary_operator_at();
+                Ok("!".to_string())
+            }
+            TokenKind::NotKeyword => Ok("!".to_string()),
             TokenKind::Match => Ok("=~".to_string()),
             TokenKind::NotMatch => Ok("!~".to_string()),
             TokenKind::LBracket => {

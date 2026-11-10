@@ -865,9 +865,13 @@ fn plan(vm: &VirtualMachine, unit: &Unit) -> (Vec<Planned>, Vec<Option<SlotRead>
                         count: unit.register_count as u32,
                         index: statement.index,
                         checks: match statement.kind {
-                            StartKind::Statement { .. } => true,
+                            StartKind::Statement { .. } | StartKind::SameLine { terminal: false } => {
+                                true
+                            }
                             StartKind::BodyStatement { runs } => runs,
-                            StartKind::Terminal { .. } | StartKind::InBranch { .. } => false,
+                            StartKind::Terminal { .. }
+                            | StartKind::InBranch { .. }
+                            | StartKind::SameLine { terminal: true } => false,
                         },
                     }
                 }

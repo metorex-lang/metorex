@@ -505,3 +505,9 @@ fn recursion_reaches_past_a_thousand_levels() {
     let output = run_example("functions/recursion_reaches_past_a_thousand_levels.rb");
     assert_eq!(output, ":bottom\n:bottom\n");
 }
+
+#[test]
+fn test_procs_block_reads_the_local_a_last_assignment_makes_execution() {
+    let output = run_example("procs/block_reads_the_local_a_last_assignment_makes.rb");
+    assert_eq!(output, "true\ntrue\n[3, 2, 1, :done]\n");
+}

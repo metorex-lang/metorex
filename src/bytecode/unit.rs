@@ -107,6 +107,12 @@ pub enum StartKind {
     /// A statement of a class or module body: the line's coverage, and when
     /// `runs`, what an ordinary statement does as it starts.
     BodyStatement { runs: bool },
+    /// A statement written on the line the one before it in the same list
+    /// starts on, as `a = 1; b = 2` writes the second: what an ordinary
+    /// statement does as it starts, with no line event and no count for the
+    /// line, which the statement before it counted. The last statement of a
+    /// method body or a `begin` clause, `terminal`, does none of it.
+    SameLine { terminal: bool },
 }
 
 /// The source position of each instruction, as its line, its column, and

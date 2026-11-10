@@ -433,14 +433,18 @@ impl VirtualMachine {
                 expression:
                     Expression::SingletonClass {
                         target,
+                        assign_to,
                         body: inner_body,
                         position: sc_pos,
-                        ..
                     },
                 ..
             } => {
-                *last_value =
-                    self.evaluate_singleton_class_expression(target, None, inner_body, *sc_pos)?;
+                *last_value = self.evaluate_singleton_class_expression(
+                    target,
+                    assign_to.as_deref(),
+                    inner_body,
+                    *sc_pos,
+                )?;
             }
             // class << self block — treat inner statements as class-level
             Statement::Block { statements, .. } => {

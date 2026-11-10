@@ -183,9 +183,19 @@ impl VirtualMachine {
             return Ok(ControlFlow::Value(Object::symbol(name)));
         }
 
-        // Register the function in the environment (for immediate local access)
-        self.environment_mut()
-            .define(name.to_string(), Object::Method(Rc::clone(&function)));
+        // Register the function in the environment (for immediate local
+        // access), unless the name already stands for a constant there, as
+        // nokogiri's `Nokogiri` method does beside its module: the method is
+        // reached by calling it, and the bare name still reads the constant.
+        let shadows_a_constant = crate::class::names_a_constant(name)
+            && self
+                .environment()
+                .get(name)
+                .is_some_and(|held| !matches!(held.view(), View::Method(_)));
+        if !shadows_a_constant {
+            self.environment_mut()
+                .define(name.to_string(), Object::Method(Rc::clone(&function)));
+        }
 
         // Ruby installs the method on the current default definee: the
         // innermost lexical class/module if there is one, otherwise Object

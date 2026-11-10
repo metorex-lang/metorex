@@ -921,13 +921,13 @@ simplecov/spec/sandbox/old_version_json_spec.rb	2	2	0	-	-	-
 simplecov/spec/sandbox/oneshot_line_coverage_spec.rb	6	0	0	-	-	-
 simplecov/spec/sandbox/pagination_spec.rb	6	0	0	-	-	-
 simplecov/spec/sandbox/parallel_tests_spec.rb	9	0	0	-	-	-
-simplecov/spec/sandbox/rails_template_languages_spec.rb	9	1	0	-	-	-
+simplecov/spec/sandbox/rails_template_languages_spec.rb	9	0	0	-	-	-
 simplecov/spec/sandbox/refuse_coverage_drop_spec.rb	11	0	0	-	-	-
 simplecov/spec/sandbox/rspec_conductor_spec.rb	4	0	0	-	-	-
 simplecov/spec/sandbox/rspec_failing_spec.rb	6	0	0	-	-	-
 simplecov/spec/sandbox/rspec_fails_on_initialization_spec.rb	1	0	0	-	-	-
 simplecov/spec/sandbox/rspec_integration_spec.rb	3	0	0	-	-	-
-simplecov/spec/sandbox/rspec_rails_spec.rb	14	1	0	-	-	-
+simplecov/spec/sandbox/rspec_rails_spec.rb	14	0	0	-	-	-
 simplecov/spec/sandbox/rspec_without_simplecov_spec.rb	2	0	0	-	-	-
 simplecov/spec/sandbox/skipping_code_blocks_manually_spec.rb	2	0	0	-	-	-
 simplecov/spec/sandbox/skipping_with_directives_spec.rb	8	0	0	-	-	-

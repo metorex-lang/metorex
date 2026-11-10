@@ -76,9 +76,9 @@ impl Parser<'_> {
             } else {
                 tok
             };
-            // Expect an identifier (or @ivar, @@cvar, $gvar). `lambda` is a
-            // method rather than syntax, so a program may name a local after
-            // it and assign to that name.
+            // Expect an identifier (or @ivar, @@cvar, $gvar). `lambda`,
+            // `include` and `extend` are methods rather than syntax, so a
+            // program may name a local after one and assign to that name.
             if !matches!(
                 tok.kind,
                 TokenKind::Ident(_)
@@ -86,6 +86,8 @@ impl Parser<'_> {
                     | TokenKind::ClassVar(_)
                     | TokenKind::GlobalVar(_)
                     | TokenKind::Lambda
+                    | TokenKind::Include
+                    | TokenKind::Extend
             ) {
                 return false;
             }

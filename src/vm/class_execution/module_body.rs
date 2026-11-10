@@ -100,13 +100,18 @@ impl VirtualMachine {
                 expression:
                     Expression::SingletonClass {
                         target,
+                        assign_to,
                         body: inner_body,
                         position: sc_pos,
-                        ..
                     },
                 ..
             } => {
-                self.evaluate_singleton_class_expression(target, None, inner_body, *sc_pos)?;
+                self.evaluate_singleton_class_expression(
+                    target,
+                    assign_to.as_deref(),
+                    inner_body,
+                    *sc_pos,
+                )?;
             }
             // class << self block — process inner statements at module level
             Statement::Block {
