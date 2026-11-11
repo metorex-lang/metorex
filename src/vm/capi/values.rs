@@ -9,7 +9,7 @@
 use crate::object::Object;
 use crate::object::View;
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::rc::Rc;
 
 pub(crate) type Value = usize;
@@ -22,9 +22,9 @@ pub(crate) const QUNDEF: Value = 0x24;
 #[derive(Default)]
 struct Pinned {
     /// Each pinned object's value, by its VALUE.
-    by_value: HashMap<Value, Object>,
+    by_value: crate::fast_hash::AddressMap<Value, Object>,
     /// Each pinned object's VALUE, by the address that tells it apart.
-    by_identity: HashMap<usize, Value>,
+    by_identity: crate::fast_hash::AddressMap<usize, Value>,
 }
 
 thread_local! {

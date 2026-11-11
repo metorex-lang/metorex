@@ -440,9 +440,18 @@ impl VirtualMachine {
         let mut method_scopes = self.spare_refinement_scopes.pop().unwrap_or_default();
         method_scopes.push(captured_scope);
         let caller_scopes = std::mem::replace(&mut self.refinement_scopes, method_scopes);
-        // Snapshot the positional args so `super` (bare form, inside the
-        // body) can forward them to the parent method.
-        self.method_arg_stack.push(arguments_for_body.clone());
+        // A bare `super` hands on the parameters as they stand, except for a
+        // method with a parameter that takes its argument apart, which
+        // hands on the arguments as they were given.
+        let destructures = method
+            .parameters
+            .iter()
+            .any(|name| name.starts_with(crate::object::DESTRUCTURED_GROUP_PREFIX));
+        self.method_arg_stack.push(if destructures {
+            arguments_for_body.clone()
+        } else {
+            Vec::new()
+        });
         self.method_running_stack.push(Rc::clone(&method));
         self.method_running_frames.push(None);
         // Where this method was defined, so a `super` in its body starts from

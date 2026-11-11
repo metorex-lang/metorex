@@ -153,6 +153,28 @@ impl VirtualMachine {
 }
 
 impl VirtualMachine {
+    /// `send_in_force`, kept on the call site `site` for the class or
+    /// module deciding the receiver's dispatch.
+    pub(crate) fn send_in_force_at(
+        &self,
+        site: &crate::bytecode::unit::CallSite,
+        receiver: &Object,
+    ) -> bool {
+        let deciding = match receiver.view() {
+            View::Class(class) | View::Module(class) => Some(std::rc::Rc::clone(class)),
+            _ => self.class_deciding_dispatch(receiver),
+        };
+        let Some(deciding) = deciding.filter(|_| !self.any_refinement_active()) else {
+            return self.send_in_force(receiver, &site.name);
+        };
+        if let Some(answer) = site.cache.core_send_for(&deciding) {
+            return answer;
+        }
+        let answer = self.send_in_force(receiver, &site.name);
+        site.cache.keep_core_send(&deciding, answer);
+        answer
+    }
+
     /// Whether `send`, `__send__`, or `public_send`, named `name`, is the
     /// core library's on `receiver`.
     pub(crate) fn send_in_force(&self, receiver: &Object, name: &str) -> bool {

@@ -21,7 +21,7 @@ fn next_version() -> u64 {
 }
 
 /// How many bindings an emptied scope keeps for `define_named`.
-const SPARE_BINDINGS: usize = 8;
+const SPARE_BINDINGS: usize = 64;
 
 /// Represents a single scope in the scope chain
 /// Each scope can have a parent scope, forming a chain for variable lookup
@@ -492,7 +492,10 @@ impl Scope {
             *value_ref.borrow_mut() = value;
             // The assignment the parser reserved the name for has now run,
             // so a block written from here on closes over it.
-            if self.hoisted_names.remove(name) {
+            if !self.hoisted_names.is_empty()
+                && let Some(taken) = self.hoisted_names.take(name)
+            {
+                self.keep_spare_name(Some(taken));
                 self.version = next_version();
             }
             return true;

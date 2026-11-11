@@ -121,3 +121,46 @@ pub fn with_joined<R>(prefix: &str, name: &str, read: impl FnOnce(&str) -> R) ->
     key[prefix.len()..length].copy_from_slice(name.as_bytes());
     read(std::str::from_utf8(&key[..length]).expect("two strings joined are UTF-8"))
 }
+
+/// The multiplier `AddressHasher` mixes a word with, from the fractional
+/// part of the golden ratio.
+const ADDRESS_SEED: u64 = 0x9e_37_79_b9_7f_4a_7c_15;
+
+/// A hasher for tables keyed by an address or another machine word. An
+/// address is aligned, so its low bits are zero, and a table picks a bucket
+/// by the low bits of the hash: the full product of the multiply is folded
+/// down so that every bit of the key reaches them.
+#[derive(Default, Clone, Copy)]
+pub struct AddressHasher {
+    hash: u64,
+}
+
+impl Hasher for AddressHasher {
+    fn write(&mut self, bytes: &[u8]) {
+        for byte in bytes {
+            self.write_u64(u64::from(*byte));
+        }
+    }
+
+    fn write_usize(&mut self, value: usize) {
+        self.write_u64(value as u64);
+    }
+
+    fn write_u64(&mut self, value: u64) {
+        let product = u128::from(self.hash ^ value) * u128::from(ADDRESS_SEED);
+        self.hash = (product as u64) ^ ((product >> 64) as u64);
+    }
+
+    fn finish(&self) -> u64 {
+        self.hash
+    }
+}
+
+/// What builds an `AddressHasher` for a map.
+pub type AddressHashing = BuildHasherDefault<AddressHasher>;
+
+/// A HashMap keyed by addresses.
+pub type AddressMap<K, V> = std::collections::HashMap<K, V, AddressHashing>;
+
+/// A HashSet of addresses.
+pub type AddressSet<K> = std::collections::HashSet<K, AddressHashing>;

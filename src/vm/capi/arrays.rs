@@ -10,7 +10,6 @@ use super::{called_from, raise};
 use crate::object::Object;
 use crate::object::{OptionView, View};
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 
 /// The VALUEs handed to C for one Array, and the VALUEs they were when C
@@ -22,7 +21,7 @@ struct Buffer {
 }
 
 thread_local! {
-    static BUFFERS: RefCell<HashMap<Value, Buffer>> = RefCell::new(HashMap::new());
+    static BUFFERS: RefCell<crate::fast_hash::AddressMap<Value, Buffer>> = RefCell::new(Default::default());
 }
 
 /// Carries what C wrote into each buffer back into its Array.

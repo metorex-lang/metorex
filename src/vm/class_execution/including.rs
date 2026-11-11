@@ -131,13 +131,16 @@ impl VirtualMachine {
     }
 
     /// Whether `value` is an instance of a class that descends from Module.
+    /// Only a superclass can make one: `include` refuses a class.
     pub(crate) fn is_module_subclass_instance(&mut self, value: &Object) -> bool {
-        let viewed = self.globals().get("Module");
-        let Some(View::Class(module_class)) = viewed.view() else {
-            return false;
-        };
-        let value_class = self.builtins().class_of(value);
-        self.builtins().is_subclass_of(&value_class, module_class)
+        let mut class = Some(self.builtins().class_of(value));
+        while let Some(current) = class {
+            if current.name() == "Module" {
+                return true;
+            }
+            class = current.superclass();
+        }
+        false
     }
 
     /// Mix `module_rc` into `target` with full Ruby semantics: dispatch to a

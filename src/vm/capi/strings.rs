@@ -16,7 +16,7 @@ use crate::vm::native_methods::string_methods::{
     binary_bytes, bytes_are_characters, wide_encoding,
 };
 use std::cell::{Cell, RefCell};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::ffi::c_char;
 use std::rc::Rc;
 
@@ -68,7 +68,7 @@ impl Buffer {
 }
 
 thread_local! {
-    static BUFFERS: RefCell<HashMap<Value, Buffer>> = RefCell::new(HashMap::new());
+    static BUFFERS: RefCell<crate::fast_hash::AddressMap<Value, Buffer>> = RefCell::new(Default::default());
     /// The strings whose buffers C was handed since control last crossed
     /// from C into Ruby, which are the ones C has written into since then
     /// unless it kept a pointer from before.

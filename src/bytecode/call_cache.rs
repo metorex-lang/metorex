@@ -23,6 +23,10 @@ pub fn hits_and_misses() -> (u64, u64) {
 #[derive(Debug, Default)]
 pub struct CallCache {
     entries: RefCell<Vec<Entry>>,
+    /// For a `send` written with the name to send: the class or module
+    /// deciding the last receiver's dispatch, the method state then, and
+    /// whether the core library's `send` answered it.
+    core_send: RefCell<Option<(Weak<Class>, u64, bool)>>,
 }
 
 /// One class and the method a call on its instances reached. The weak
@@ -58,6 +62,26 @@ impl CallCache {
                 entry.state == state && std::ptr::eq(entry.class.as_ptr(), Rc::as_ptr(class))
             })
             .and_then(|entry| entry.method.upgrade())
+    }
+
+    /// Whether the core library's `send` answered a receiver whose dispatch
+    /// `class` decides, under the current method state, when that is known.
+    pub fn core_send_for(&self, class: &Rc<Class>) -> Option<bool> {
+        let state = method_state();
+        match &*self.core_send.borrow() {
+            Some((held, at, answer))
+                if *at == state && std::ptr::eq(held.as_ptr(), Rc::as_ptr(class)) =>
+            {
+                Some(*answer)
+            }
+            _ => None,
+        }
+    }
+
+    /// Keep whether the core library's `send` answers a receiver whose
+    /// dispatch `class` decides.
+    pub fn keep_core_send(&self, class: &Rc<Class>, answer: bool) {
+        *self.core_send.borrow_mut() = Some((Rc::downgrade(class), method_state(), answer));
     }
 
     /// Count a call answered from the method `peek` found.

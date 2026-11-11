@@ -569,3 +569,23 @@ fn block_given_answers_for_the_frame_it_is_asked_in() {
         )
     );
 }
+
+#[test]
+fn a_send_written_with_its_name_reaches_a_send_defined_after_earlier_calls() {
+    let output = run_example("functions/send_redefined_after_repeated_calls.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[1, 2, 3]\n",
+            "[4]\n",
+            "[:intercepted, :keys]\n",
+            "[:intercepted, :keys]\n",
+            "[7, 7, 7]\n",
+            ":own_send\n",
+            ":class_send\n",
+            "80\n",
+            "true\n",
+            "false\n",
+        )
+    );
+}

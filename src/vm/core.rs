@@ -218,7 +218,7 @@ pub struct VirtualMachine {
     /// The encoding each loaded file names in its magic comment, against the
     /// spelling the file was named by. A method's body is written in the file
     /// it was defined in, whatever file is calling it.
-    pub(crate) file_encodings: HashMap<String, String>,
+    pub(crate) file_encodings: crate::fast_hash::NameMap<String, String>,
     /// The spelling each loaded file was named by, against the path its
     /// symlinks resolve to. `__FILE__` and a backtrace name the spelling,
     /// while everything that loads or dedups works from the resolved path.
@@ -758,7 +758,7 @@ impl VirtualMachine {
             bare_names_missing: Vec::new(),
             eval_named_files: Default::default(),
             current_source_encoding: None,
-            file_encodings: HashMap::new(),
+            file_encodings: Default::default(),
             reported_files: std::collections::HashMap::new(),
             timeout_limits: Vec::new(),
             thread_timeout_limits: HashMap::new(),

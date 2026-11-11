@@ -1960,7 +1960,7 @@ impl VirtualMachine {
         let written = written_receiver(site.receiver);
         let pending =
             std::mem::replace(&mut self.program_call_pending, !self.tracepoints.is_empty());
-        let result = if site.sends_literal_name && self.send_in_force(&receiver, &site.name) {
+        let result = if site.sends_literal_name && self.send_in_force_at(site, &receiver) {
             self.send_literal_name(receiver, &site.name, arguments, block, position)
         } else {
             self.call_with_block_through(
