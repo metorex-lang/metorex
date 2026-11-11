@@ -361,11 +361,11 @@ pub struct VirtualMachine {
     /// module the method was defined in and the depth of the def scope
     /// stack when it started. A `def` written in the method's body installs
     /// there, unless a class body opened since is deeper.
-    pub(crate) method_definees: HashMap<u64, (usize, Definee)>,
+    pub(crate) method_definees: crate::fast_hash::NameMap<u64, (usize, Definee)>,
     /// For a frame `instance_exec` gave a receiver to, how many frames were
     /// borrowed when it did, so the receiver stands while no file has been
     /// loaded since.
-    pub(crate) exec_definee_borrows: HashMap<u64, usize>,
+    pub(crate) exec_definee_borrows: crate::fast_hash::NameMap<u64, usize>,
     /// Whether Rex's native fast paths run, which `config.fast_paths` sets.
     pub(crate) fast_paths_enabled: bool,
     /// Whether a library metorex carries is listed in `$LOADED_FEATURES` as
@@ -454,7 +454,7 @@ pub struct VirtualMachine {
     pub(crate) parked_last_matches: Vec<(Option<u64>, Object, Object)>,
     /// The `$~` and `$_` of method frames that have returned, which the
     /// blocks written in them still read and set when they run.
-    pub(crate) ended_frame_matches: HashMap<u64, (Object, Object)>,
+    pub(crate) ended_frame_matches: crate::fast_hash::NameMap<u64, (Object, Object)>,
     /// The returned frames whose `$~` and `$_` are the ones in force, while
     /// a block written in each runs.
     pub(crate) ended_frames_in_force: Vec<u64>,
@@ -571,8 +571,8 @@ pub struct VirtualMachine {
     /// The file frames name as their source, by the text it was made from,
     /// so frames entered from the same file share one.
     pub(crate) frames_file_held: crate::fast_hash::NameMap<String, Rc<str>>,
-    /// `frames_file` for code that names no source file, with the path it
-    /// was spelled from.
+    /// `frames_file` for code that names no source file, with the current
+    /// file it was made for.
     pub(crate) frames_path_held: Option<(PathBuf, Rc<str>)>,
     /// Stack of lexically enclosing class/module definitions. Used to route
     /// nested `class`/`module` declarations to the enclosing scope (so
@@ -789,8 +789,8 @@ impl VirtualMachine {
             attached_block_flags: Vec::new(),
             toplevel_public: false,
             toplevel_frame: Some(TOP_LEVEL_FRAME),
-            method_definees: HashMap::new(),
-            exec_definee_borrows: HashMap::new(),
+            method_definees: Default::default(),
+            exec_definee_borrows: Default::default(),
             fast_paths_enabled: true,
             lists_carried_features: true,
             fast_path_originals: HashMap::new(),
@@ -818,7 +818,7 @@ impl VirtualMachine {
             tls_connections: HashMap::new(),
             next_tls_connection: 0,
             parked_last_matches: Vec::new(),
-            ended_frame_matches: HashMap::new(),
+            ended_frame_matches: Default::default(),
             ended_frames_in_force: Vec::new(),
             structs_being_compared: Vec::new(),
             match_subject_encoding: None,

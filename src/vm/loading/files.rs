@@ -18,14 +18,15 @@ impl VirtualMachine {
     /// `file_for_frames` as a shared string, made once for each file.
     pub(crate) fn frames_file(&mut self) -> Option<Rc<str>> {
         if self.current_source_file.is_none() {
-            let reported = self.reported_spelling_of(self.current_file.as_ref()?);
+            let current = self.current_file.as_ref()?;
             if let Some((path, shared)) = &self.frames_path_held
-                && path == reported
+                && path.as_os_str() == current.as_os_str()
             {
                 return Some(Rc::clone(shared));
             }
+            let reported = self.reported_spelling_of(current);
             let shared: Rc<str> = Rc::from(reported.display().to_string().as_str());
-            self.frames_path_held = Some((reported.clone(), Rc::clone(&shared)));
+            self.frames_path_held = Some((current.clone(), Rc::clone(&shared)));
             return Some(shared);
         }
         if let Some(current) = &self.current_source_file

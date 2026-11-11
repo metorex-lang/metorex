@@ -94,6 +94,9 @@ impl VirtualMachine {
             | "__prism_serialize_stream__"
             | "__prism_parse_success__"
             | "__prism_string_query__" => self.call_prism_function(name, &arguments, position),
+            "__prism_serialization_version__" | "__prism_load_node__" | "__prism_load_tokens__" => {
+                self.call_prism_loading_function(name, &arguments, position)
+            }
             // The files other than its library a bundled gem metorex carries
             // reads, each as its path under the gem's directory and its text.
             "__carried_gem_data__" => {

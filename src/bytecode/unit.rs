@@ -31,6 +31,9 @@ pub struct Unit {
     /// For each name, the Symbol a `LoadSymbol` naming it made last, with
     /// the source encoding it was made under.
     pub symbol_caches: Vec<SymbolCache>,
+    /// For each name, the frozen String a `LoadFrozenString` naming it
+    /// loaded last, with the source encoding it was made under.
+    pub frozen_string_caches: Vec<SymbolCache>,
     /// The unit's locals, numbered by their place here. `GetLocal` and
     /// `SetLocal` name one by that number.
     pub locals: Vec<Name>,
@@ -688,6 +691,7 @@ impl Unit {
         tighten(&mut self.constant_caches);
         tighten(&mut self.slot_caches);
         tighten(&mut self.symbol_caches);
+        tighten(&mut self.frozen_string_caches);
         tighten(&mut self.locals);
         tighten(&mut self.call_sites);
         tighten(&mut self.regexes);
@@ -785,6 +789,7 @@ impl Unit {
         self.constant_caches.push(Default::default());
         self.slot_caches.push(Default::default());
         self.symbol_caches.push(Default::default());
+        self.frozen_string_caches.push(Default::default());
         self.names.len() - 1
     }
 

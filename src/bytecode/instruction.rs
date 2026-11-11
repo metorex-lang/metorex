@@ -52,6 +52,12 @@ pub enum Instruction {
         to: u8,
         text: u16,
     },
+    /// The frozen String every place writing the literal text the name
+    /// holds shares, in a source asking for frozen string literals.
+    LoadFrozenString {
+        to: u8,
+        text: u16,
+    },
     /// The Regexp of the unit's pattern the operand numbers.
     LoadRegex {
         to: u8,
@@ -664,6 +670,7 @@ impl Instruction {
             Instruction::LoadSelf { .. } => "LoadSelf",
             Instruction::LoadSymbol { .. } => "LoadSymbol",
             Instruction::NewString { .. } => "NewString",
+            Instruction::LoadFrozenString { .. } => "LoadFrozenString",
             Instruction::LoadRegex { .. } => "LoadRegex",
             Instruction::LoadFile { .. } => "LoadFile",
             Instruction::LoadDirectory { .. } => "LoadDirectory",

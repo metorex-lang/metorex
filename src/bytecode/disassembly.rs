@@ -51,7 +51,9 @@ fn note(unit: &Unit, instruction: &Instruction) -> Option<String> {
             .get(usize::from(constant))
             .map(|value| value.to_string()),
         Instruction::LoadSymbol { name: index, .. } => name(index).map(|text| format!(":{text}")),
-        Instruction::NewString { text, .. } => name(text).map(|text| format!("{text:?}")),
+        Instruction::NewString { text, .. } | Instruction::LoadFrozenString { text, .. } => {
+            name(text).map(|text| format!("{text:?}"))
+        }
         Instruction::GetLocal { slot, .. }
         | Instruction::SetLocal { slot, .. }
         | Instruction::Unhoist { slot }

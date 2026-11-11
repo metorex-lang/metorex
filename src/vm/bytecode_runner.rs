@@ -616,6 +616,28 @@ impl VirtualMachine {
                 let text = &unit.names[index(text)].text;
                 registers[register(to)] = self.evaluate_string_literal(text, position);
             }
+            Instruction::LoadFrozenString { to, text } => {
+                let cache = &unit.frozen_string_caches[index(text)];
+                let kept = cache
+                    .borrow()
+                    .as_ref()
+                    .filter(|(encoding, _)| *encoding == self.current_source_encoding)
+                    .map(|(_, shared)| shared.clone());
+                registers[register(to)] = match kept {
+                    Some(shared) => shared,
+                    None => {
+                        let written =
+                            self.evaluate_string_literal(&unit.names[index(text)].text, position);
+                        let shared = match written.view() {
+                            View::String(held) => self.deduped_string(held),
+                            _ => written,
+                        };
+                        *cache.borrow_mut() =
+                            Some((self.current_source_encoding.clone(), shared.clone()));
+                        shared
+                    }
+                };
+            }
             Instruction::LoadRegex { to, pattern } => {
                 let regex = &unit.regexes[index(pattern)];
                 registers[register(to)] =

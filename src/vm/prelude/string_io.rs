@@ -516,11 +516,12 @@ class StringIO
     letter
   end
 
+  # The check `reading_allowed` makes is written out here, since a parser
+  # reading serialized input calls this once for each byte.
   def getbyte
-    reading_allowed
+    raise IOError, "not opened for reading" unless @readable && !@closed_read
     byte = @string.getbyte(@position)
-    return nil if byte.nil?
-    @position = @position + 1
+    @position += 1 unless byte.nil?
     byte
   end
 

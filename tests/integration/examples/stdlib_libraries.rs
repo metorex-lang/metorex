@@ -1958,6 +1958,42 @@ fn test_stdlib_prism_parsing_no_parens_execution() {
     assert_eq!(output, PRISM_PARSING_OUTPUT);
 }
 
+const PRISM_NODE_TREE_OUTPUT: &str = concat!(
+    "957\n",
+    "\"b161b03b459937545a49522df3f42ca95fbeb9a9f0347d214013a87ee99dd3de\"\n",
+    "[:module_node, :local_variable_write_node, :call_node, :call_node, :local_variable_write_node, :or_node]\n",
+    "\"__END__\\nunparsed\\n\"\n",
+    "0\n",
+    "[:IDENTIFIER, \"rate\", 0, 32]\n",
+    "[:EQUAL, \"=\", 5, 1]\n",
+    "[:BRACKET_LEFT_ARRAY, \"[\", 7, 1025]\n",
+    "[:INTEGER, \"1\", 8, 2]\n",
+    "[:COMMA, \",\", 9, 1025]\n",
+    "[:STRING_BEGIN, \"'\", 11, 1025]\n",
+    "[:STRING_CONTENT, \"two\", 12, 1025]\n",
+    "[:STRING_END, \"'\", 15, 2]\n",
+    "[:COMMA, \",\", 16, 1025]\n",
+    "[:SYMBOL_BEGIN, \":\", 18, 128]\n",
+    "[:IDENTIFIER, \"three\", 19, 8]\n",
+    "[:BRACKET_RIGHT, \"]\", 24, 2]\n",
+    "[:COMMENT, \"# note\\n\", 26, 2]\n",
+    "[:EOF, \"\\n\", 32, 1]\n",
+    "\"5c2b8cb5d6f7b6b8f0ffe6a18cbe58db157bb4225af8c24bfa91c04a14e94a38\"\n",
+    "true\n",
+    "true\n",
+    "true\n",
+    "true\n",
+    "[:a]\n",
+    "\"été\"\n",
+    "[0, 1, 2, 3]\n",
+);
+
+#[test]
+fn test_stdlib_prism_node_tree_execution() {
+    let output = run_example("stdlib/prism_node_tree.rb");
+    assert_eq!(output, PRISM_NODE_TREE_OUTPUT);
+}
+
 const BUNDLED_GEMS_OUTPUT: &str = concat!(
     "[[:posted], false]\n",
     "true\n",

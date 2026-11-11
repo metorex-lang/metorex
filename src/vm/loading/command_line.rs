@@ -255,6 +255,7 @@ impl VirtualMachine {
             }
         }
         self.script_path = Some((canonical, as_given));
+        self.frames_path_held = None;
         // The scope in force here is the one the script's own top level runs
         // in, which is what TOPLEVEL_BINDING stands over.
         self.main_script_scope = Some(self.environment().current_scope());

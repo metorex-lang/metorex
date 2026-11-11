@@ -2852,6 +2852,21 @@ impl Compiler {
                 to: to_register,
                 text: self.name(value)?,
             },
+            Expression::MethodCall {
+                receiver,
+                method,
+                arguments,
+                trailing_block: None,
+                ..
+            } if method == "__frozen_literal__"
+                && arguments.is_empty()
+                && let Expression::StringLiteral { value, .. } = receiver.as_ref() =>
+            {
+                Instruction::LoadFrozenString {
+                    to: to_register,
+                    text: self.name(value)?,
+                }
+            }
             Expression::Symbol { value, .. } => Instruction::LoadSymbol {
                 to: to_register,
                 name: self.name(value)?,

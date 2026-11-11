@@ -264,6 +264,9 @@ pub(crate) fn register_native_functions(globals: &mut GlobalRegistry) {
         "__prism_serialize_stream__",
         "__prism_parse_success__",
         "__prism_string_query__",
+        "__prism_serialization_version__",
+        "__prism_load_node__",
+        "__prism_load_tokens__",
     ] {
         globals.set(name, Object::NativeFunction(name.to_string()));
     }

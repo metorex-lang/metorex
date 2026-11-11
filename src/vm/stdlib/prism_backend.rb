@@ -2,10 +2,25 @@
 
 # What prism's C extension defines, written over the parser metorex compiles
 # in. Prism serializes each result and prism's own Prism::Serialize reads it
-# back, as prism/ffi.rb does.
+# back, as prism/ffi.rb does, with its nodes and tokens read natively.
 
 module Prism
   VERSION = __prism_version__().freeze
+
+  # Prism::Serialize::Loader's reading of nodes and tokens, done natively
+  # as Prism's C extension builds them for MRI.
+  module NativeLoading
+    def load_node(constant_pool, encoding, freeze)
+      node, io.pos = __prism_load_node__(io.string, io.pos, source, input, constant_pool, encoding, freeze)
+      node
+    end
+
+    def load_tokens
+      tokens, io.pos = __prism_load_tokens__(io.string, io.pos, source, Serialize.const_get(:TOKEN_TYPES))
+      tokens
+    end
+  end
+  private_constant :NativeLoading
 
   class << self
     def dump(source, **options)
@@ -21,7 +36,7 @@ module Prism
 
     def lex(code, **options)
       serialized = __prism_serialize__(:lex, prism_source(code), dump_options(options))
-      Serialize.load_lex(code, serialized, options.fetch(:freeze, false))
+      serializer.load_lex(code, serialized, options.fetch(:freeze, false))
     end
 
     def lex_file(filepath, **options)
@@ -30,7 +45,7 @@ module Prism
     end
 
     def parse(code, **options)
-      Serialize.load_parse(code, dump(prism_source(code), **options), options.fetch(:freeze, false))
+      serializer.load_parse(code, dump(prism_source(code), **options), options.fetch(:freeze, false))
     end
 
     def parse_file(filepath, **options)
@@ -40,12 +55,12 @@ module Prism
 
     def parse_stream(stream, **options)
       source, serialized = __prism_serialize_stream__(stream, dump_options(options))
-      Prism.load(source, serialized, options.fetch(:freeze, false))
+      serializer.load_parse(source, serialized, options.fetch(:freeze, false))
     end
 
     def parse_comments(code, **options)
       serialized = __prism_serialize__(:parse_comments, prism_source(code), dump_options(options))
-      Serialize.load_parse_comments(code, serialized, options.fetch(:freeze, false))
+      serializer.load_parse_comments(code, serialized, options.fetch(:freeze, false))
     end
 
     def parse_file_comments(filepath, **options)
@@ -55,7 +70,7 @@ module Prism
 
     def parse_lex(code, **options)
       serialized = __prism_serialize__(:parse_lex, prism_source(code), dump_options(options))
-      Serialize.load_parse_lex(code, serialized, options.fetch(:freeze, false))
+      serializer.load_parse_lex(code, serialized, options.fetch(:freeze, false))
     end
 
     def parse_lex_file(filepath, **options)
@@ -91,6 +106,17 @@ module Prism
     end
 
     private
+
+    # Prism::Serialize, reading nodes and tokens natively when it reads the
+    # serialization version the native table was written from.
+    def serializer
+      loader = Serialize.const_get(:Loader)
+      unless loader.include?(NativeLoading)
+        version = %i[MAJOR_VERSION MINOR_VERSION PATCH_VERSION].map { |part| Serialize.const_get(part) }
+        loader.prepend(NativeLoading) if version == __prism_serialization_version__()
+      end
+      Serialize
+    end
 
     def prism_source(source)
       raise TypeError, "wrong argument type #{source.class} (expected String)" unless source.is_a?(String)

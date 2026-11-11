@@ -95,6 +95,7 @@ impl VirtualMachine {
         // that loads the file works from the resolved path.
         self.reported_files
             .insert(canonical_path.clone(), named_path.clone());
+        self.frames_path_held = None;
         // Save the current file path to restore later
         let previous_file = self.current_file.clone();
         // Code in the file being executed belongs to that file, so a block
