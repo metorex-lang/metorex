@@ -33,7 +33,15 @@ pub type CachedFrameName = (Rc<str>, Rc<str>, Rc<str>, Option<Rc<str>>);
 pub struct BodyFacts {
     places: std::cell::OnceCell<crate::object::CodePlaces>,
     owner_path: std::cell::OnceCell<Rc<str>>,
+    takes_a_block: std::cell::OnceCell<bool>,
+    /// Whether another method of the same name uses its block: 0 before it
+    /// is known, `NAMESAKE_USES_A_BLOCK` for yes, and otherwise one more
+    /// than the method state a no was found under.
+    namesake_uses_a_block: std::cell::Cell<u64>,
 }
+
+/// `BodyFacts::namesake_uses_a_block` holding a yes.
+const NAMESAKE_USES_A_BLOCK: u64 = u64::MAX;
 
 impl Clone for BodyFacts {
     fn clone(&self) -> Self {
@@ -58,6 +66,27 @@ impl BodyFacts {
             let _ = self.owner_path.set(Rc::clone(&path));
         }
         Some(path)
+    }
+
+    /// Whether the body reaches the block the method was given, as `found`
+    /// answers the first time it is asked.
+    pub fn takes_a_block(&self, found: impl FnOnce() -> bool) -> bool {
+        *self.takes_a_block.get_or_init(found)
+    }
+
+    /// Whether another method of the same name uses its block, as `found`
+    /// answers. A yes is kept for good, since a name a method once used a
+    /// block under stays one, and a no while the method state stays `state`.
+    pub fn namesake_uses_a_block(&self, state: u64, found: impl FnOnce() -> bool) -> bool {
+        match self.namesake_uses_a_block.get() {
+            NAMESAKE_USES_A_BLOCK => return true,
+            kept if kept == state + 1 => return false,
+            _ => {}
+        }
+        let answer = found();
+        self.namesake_uses_a_block
+            .set(if answer { NAMESAKE_USES_A_BLOCK } else { state + 1 });
+        answer
     }
 
     /// The places the method's body was written within: its file and line,
@@ -91,6 +120,11 @@ impl Clone for FrameNames {
 pub struct NativeMiss(RefCell<Option<(std::rc::Weak<crate::class::Class>, u64)>>);
 
 impl NativeMiss {
+    /// Added to the method state a miss is kept under when the call was
+    /// made on a class or module itself, which the native methods answer
+    /// apart from its instances.
+    pub const CALLED_ON_MODULE: u64 = 1 << 63;
+
     /// Whether no native method answered this name for `class` under the
     /// method state `state`.
     pub fn recorded(&self, class: &Rc<crate::class::Class>, state: u64) -> bool {

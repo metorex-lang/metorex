@@ -18,6 +18,7 @@ thread_local! {
     static FLOAT_OPERATORS: MethodGuard = const { MethodGuard::new() };
     static ARRAY_READ: MethodGuard = const { MethodGuard::new() };
     static HASH_READ: MethodGuard = const { MethodGuard::new() };
+    static INTEGER_READ: MethodGuard = const { MethodGuard::new() };
     static HASH_WRITE: MethodGuard = const { MethodGuard::new() };
     static INTEGER_CASE_EQUAL: MethodGuard = const { MethodGuard::new() };
     static FLOAT_CASE_EQUAL: MethodGuard = const { MethodGuard::new() };
@@ -116,6 +117,11 @@ impl VirtualMachine {
     /// Whether `[]` on `collection`, a Hash, still reads it directly.
     pub(crate) fn hash_read_in_force(&self, collection: &Object) -> bool {
         self.core_method_in_force(&HASH_READ, collection, "[]")
+    }
+
+    /// Whether `[]` on `number`, an Integer, still reads its bits directly.
+    pub(crate) fn integer_read_in_force(&self, number: &Object) -> bool {
+        self.core_method_in_force(&INTEGER_READ, number, "[]")
     }
 
     /// Whether `[]=` on `collection`, a Hash, still writes it directly.

@@ -115,3 +115,9 @@ fn the_strict_category_warns_for_a_name_another_method_uses_a_block_under() {
     let code = "Warning[:strict_unused_block] = true\nclass Order\n  def with(x) = yield(x)\nend\nclass Label\n  def with(x) = x\nend\nLabel.new.with(1) { 2 }";
     assert!(warnings_from(code).contains("the block passed to 'Label#with'"));
 }
+
+#[test]
+fn a_name_another_method_used_a_block_under_stays_quiet_after_that_method_changes() {
+    let code = "$VERBOSE = true\nclass Order\n  def with(x) = yield(x)\nend\nclass Label\n  def with(x) = x\nend\nLabel.new.with(1) { 2 }\nclass Order\n  def with(x) = x\nend\nLabel.new.with(1) { 2 }";
+    assert_eq!(warnings_from(code), "");
+}

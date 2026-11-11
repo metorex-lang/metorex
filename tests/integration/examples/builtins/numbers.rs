@@ -69,6 +69,20 @@ fn test_builtins_integer_bits_operations_parens_execution() {
 }
 
 #[test]
+fn one_bit_of_a_machine_word_integer_reads_its_twos_complement_form() {
+    let expected = concat!(
+        "[1, 0, 1, 0]\n",
+        "[0, 1, 0, 1, 1, 1, 1]\n",
+        "[1, 0, 0]\n",
+        "[0, 0]\n",
+        "[0, 1]\n",
+        "[:written, 0]\n"
+    );
+    let output = run_example("builtins/integer_bits/single_bit.rb");
+    assert_eq!(output, expected);
+}
+
+#[test]
 fn test_builtins_big_integers_execution() {
     let expected = concat!(
         "[18446744073709551616, 1267650600228229401496703205376]\n",

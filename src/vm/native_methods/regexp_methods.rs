@@ -187,10 +187,7 @@ impl VirtualMachine {
         }
         let ascii_compatible =
             super::class_methods::encoding_reads_alongside_ascii(&string_encoding);
-        let only_ascii = ascii_compatible
-            && super::string_methods::binary_bytes(&text)
-                .iter()
-                .all(u8::is_ascii);
+        let only_ascii = ascii_compatible && text.is_ascii();
         if only_ascii && pattern_encoding == "US-ASCII" {
             return Ok(());
         }

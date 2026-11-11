@@ -15,6 +15,7 @@ mod big_integers;
 mod bit_operations;
 mod bit_reading;
 mod bits;
+pub(crate) use bits::bit_of;
 mod class_methods;
 mod coercion;
 mod digits;

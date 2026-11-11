@@ -3,6 +3,16 @@
 use super::*;
 use crate::object::View;
 
+/// The bit at position `bit` of `value`'s two's-complement form, the sign
+/// bit repeating above the word.
+pub(crate) fn bit_of(value: i64, bit: i64) -> i64 {
+    match bit {
+        ..0 => 0,
+        0..64 => (value >> bit) & 1,
+        _ => i64::from(value < 0),
+    }
+}
+
 impl VirtualMachine {
     /// The bits of an integer read as a two's-complement run.
     pub(crate) fn call_int_bit_method(
@@ -25,6 +35,13 @@ impl VirtualMachine {
                     "no implicit conversion of nil into Integer",
                     position,
                 ));
+            }
+            // One bit of a machine-word Integer at a machine-word position
+            // is read off the word, sign bits above it included.
+            if let (View::Int(value), [lone]) = (receiver.view(), arguments)
+                && let View::Int(bit) = lone.view()
+            {
+                return Ok(Some(Object::Int(bit_of(value, bit))));
             }
             return self
                 .integer_bits_at(

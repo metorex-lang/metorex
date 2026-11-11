@@ -423,9 +423,7 @@ impl VirtualMachine {
                     let named = text.encoding_name();
                     let standing = if !encoding_reads_alongside_ascii(&named) {
                         UnionEncoding::AsciiIncompatible(named.to_string())
-                    } else if crate::vm::native_methods::string_methods::binary_bytes(&text)
-                        .is_ascii()
-                    {
+                    } else if text.is_ascii() {
                         UnionEncoding::AsciiOnly
                     } else {
                         UnionEncoding::Fixed(named.to_string())

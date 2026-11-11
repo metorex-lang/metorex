@@ -359,6 +359,13 @@ impl VirtualMachine {
         // A number reads its own bits by subscript, where a pair of
         // arguments arrives as the Array the subscript gathered.
         if matches!(collection.view(), View::Int(_) | View::BigInt(_)) {
+            if let (View::Int(value), View::Int(bit)) = (collection.view(), key.view())
+                && self.integer_read_in_force(&collection)
+            {
+                return Ok(Object::Int(crate::vm::native_methods::int_methods::bit_of(
+                    value, bit,
+                )));
+            }
             let spread = match key.view() {
                 View::Array(gathered) => gathered.borrow().clone(),
                 _ => vec![key.clone()],

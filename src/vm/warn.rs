@@ -504,7 +504,13 @@ impl VirtualMachine {
         }
         // Outside strict mode a name some other method uses a block under
         // does not warn, since a call of that name may mean that method.
-        if strict != Some(true) && another_method_of_the_name_uses_a_block(method) {
+        if strict != Some(true)
+            && method
+                .body_facts
+                .namesake_uses_a_block(crate::class::method_state(), || {
+                    another_method_of_the_name_uses_a_block(method)
+                })
+        {
             return Ok(());
         }
         let called_in = self
@@ -585,7 +591,9 @@ impl VirtualMachine {
 fn uses_its_block(method: &crate::object::Method) -> bool {
     method.signature.block_parameter.is_some()
         || method.provenance.captured_vars.is_some()
-        || body_takes_a_block(&method.body)
+        || method
+            .body_facts
+            .takes_a_block(|| body_takes_a_block(&method.body))
 }
 
 /// Whether a method other than `method`, of any class or module, goes by its

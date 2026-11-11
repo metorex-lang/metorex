@@ -290,10 +290,21 @@ impl VirtualMachine {
         // they had no answer for is not looked up again until either
         // changes. A debug build looks again and checks the answer.
         let follows_class = native_answer_follows_class(&class, &receiver);
+        // What they answer a class or module itself is decided by that
+        // class or module and the method state.
+        let called_on_module = match receiver.view() {
+            View::Class(held) | View::Module(held) => Some(Rc::clone(held)),
+            _ => None,
+        };
         let state = crate::class::method_state();
         // The class's ancestors were looked at when the miss was recorded,
         // and they do not change.
-        let known_miss = follows_class && method.native_miss.recorded(&class, state);
+        let known_miss = match &called_on_module {
+            Some(module) => method
+                .native_miss
+                .recorded(module, state | crate::object::NativeMiss::CALLED_ON_MODULE),
+            None => follows_class && method.native_miss.recorded(&class, state),
+        };
         if !known_miss || cfg!(debug_assertions) {
             let answered =
                 self.answered_natively_first(&class, &method, &receiver, &arguments, position)?;
@@ -304,11 +315,16 @@ impl VirtualMachine {
                 );
                 return Ok(result);
             }
-            if follows_class
-                && ancestors_answer_nothing_natively(&class)
-                && crate::class::method_state() == state
-            {
-                method.native_miss.record(&class, state);
+            if crate::class::method_state() == state {
+                match &called_on_module {
+                    Some(module) => method
+                        .native_miss
+                        .record(module, state | crate::object::NativeMiss::CALLED_ON_MODULE),
+                    None if follows_class && ancestors_answer_nothing_natively(&class) => {
+                        method.native_miss.record(&class, state);
+                    }
+                    None => {}
+                }
             }
         }
 

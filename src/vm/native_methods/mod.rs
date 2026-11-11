@@ -31,7 +31,7 @@ mod exception_methods;
 mod file_methods;
 mod float_methods;
 pub(crate) mod hash_methods;
-mod int_methods;
+pub(crate) mod int_methods;
 mod io_methods;
 pub(crate) mod kernel_conversion;
 pub(crate) mod method_object_methods;

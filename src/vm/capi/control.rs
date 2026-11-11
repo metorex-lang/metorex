@@ -204,10 +204,28 @@ fn symbol_of(tag: *const c_char) -> Value {
 
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_catch_obj(tag: Value, function: *const (), data: Value) -> Value {
-    let method = super::fibers::block_function_method(function, data);
-    let block = crate::vm::program::block_for_method(method, called_from());
-    interpreter().pending_block = Some(block);
-    to_value(&kernel_function("catch", vec![to_object(tag)]))
+    // The block function runs as the block of `catch`, handed the tag, with
+    // the tag live for a `throw` to find while it runs.
+    let live = to_object(tag);
+    interpreter().catch_tags.push(live.clone());
+    let answered = caught(|| {
+        // SAFETY: C hands `rb_catch_obj` a block function, which takes the
+        // first value yielded, the data VALUE, the count and pointer of the
+        // values yielded, and the block.
+        let function: extern "C-unwind" fn(Value, Value, i32, *const Value, Value) -> Value =
+            unsafe { std::mem::transmute(function) };
+        function(tag, data, 1, &tag, QNIL)
+    });
+    interpreter().catch_tags.pop();
+    match answered {
+        Ok(value) => value,
+        Err(MetorexError::Throw { tag: thrown, value, .. })
+            if crate::vm::native_functions::throw_tags_match(&live, &thrown) =>
+        {
+            to_value(&value)
+        }
+        Err(error) => raise(error),
+    }
 }
 
 #[unsafe(no_mangle)]

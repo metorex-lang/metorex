@@ -309,9 +309,7 @@ fn holds_only_ascii(value: &Object) -> bool {
     if !encoding_reads_alongside_ascii(&text.encoding_name()) {
         return false;
     }
-    crate::vm::native_methods::string_methods::binary_bytes(&text)
-        .iter()
-        .all(|byte| byte.is_ascii())
+    text.is_ascii()
 }
 
 /// Record `entry` against `pattern`'s address in `table`. Before the table

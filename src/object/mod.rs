@@ -32,7 +32,7 @@ pub use block::{
 pub use exception::{Exception, SourceLocation};
 pub use hash::ObjectHash;
 pub use instance::Instance;
-pub use method::{Method, Provenance, Seldom, Signature};
+pub use method::{Method, NativeMiss, Provenance, Seldom, Signature};
 pub use slot::Slot;
 
 /// The classes and modules lexically open where a method or block was
