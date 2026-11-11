@@ -29,7 +29,7 @@ impl VirtualMachine {
                     let named = self.path_name_argument("dirname", &arguments[0], position)?;
                     let encoding = match arguments[0].view() {
                         View::String(held) => held.encoding_name(),
-                        _ => "UTF-8".to_string(),
+                        _ => "UTF-8",
                     };
                     if let View::String(held) = arguments[0].view()
                         && !crate::vm::native_methods::string_methods::encoding_is_ascii_compatible(

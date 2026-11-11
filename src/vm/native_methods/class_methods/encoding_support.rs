@@ -147,13 +147,13 @@ impl VirtualMachine {
     /// The encoding an object reports, or None for one that carries none.
     pub(crate) fn encoding_name_of(&mut self, value: &Object) -> Option<String> {
         match value.view() {
-            View::String(text) => Some(text.encoding_name()),
+            View::String(text) => Some(text.encoding_name().to_string()),
             // A symbol named in ASCII is written in ASCII, whatever the
             // source naming it was written in.
             View::Symbol(text) => Some(if text.as_str().is_ascii() {
                 "US-ASCII".to_string()
             } else {
-                text.encoding_name()
+                text.encoding_name().to_string()
             }),
             View::Regex(pattern, flags) => Some(self.pattern_encoding_name(pattern, flags)),
             View::Class(class_rc)

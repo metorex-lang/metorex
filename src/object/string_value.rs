@@ -394,8 +394,8 @@ impl StringValue {
     }
 
     /// The name of the encoding this string says it is in.
-    pub fn encoding_name(&self) -> String {
-        self.shared_encoding_name().to_string()
+    pub fn encoding_name(&self) -> &'static str {
+        self.shared_encoding_name()
     }
 
     /// The name of the encoding the string is tagged with, held for the run.

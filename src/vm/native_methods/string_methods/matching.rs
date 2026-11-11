@@ -101,7 +101,7 @@ impl VirtualMachine {
                     &flags,
                     &subject,
                     start,
-                    Some(string_value.encoding_name()),
+                    Some(string_value.encoding_name().to_string()),
                     position,
                 )?;
                 match (found, block) {

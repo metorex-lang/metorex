@@ -22,7 +22,7 @@ impl VirtualMachine {
                 Some(named) if named != tagged => {
                     (crate::vm::native_methods::text_in_encoding(s, &named), named)
                 }
-                _ => (carried, tagged),
+                _ => (carried, tagged.to_string()),
             },
         )
     }
@@ -417,7 +417,7 @@ impl VirtualMachine {
         let mut hoisted: Vec<String> = Vec::new();
         for name in crate::ast::scope_locals::collect_assigned_locals(&statements) {
             if self.environment().assignment_introduces_a_local(&name) {
-                self.environment_mut().hoist(name.clone());
+                self.environment_mut().hoist(&name);
                 hoisted.push(name);
             }
         }

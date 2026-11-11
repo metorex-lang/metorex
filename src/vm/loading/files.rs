@@ -15,8 +15,7 @@ impl VirtualMachine {
         })
     }
 
-    /// `file_for_frames` as a shared string, made once while the file
-    /// stays the same.
+    /// `file_for_frames` as a shared string, made once for each file.
     pub(crate) fn frames_file(&mut self) -> Option<Rc<str>> {
         if self.current_source_file.is_none() {
             let reported = self.reported_spelling_of(self.current_file.as_ref()?);
@@ -30,15 +29,14 @@ impl VirtualMachine {
             return Some(shared);
         }
         if let Some(current) = &self.current_source_file
-            && let Some((text, shared)) = &self.frames_file_held
-            && text == current
+            && let Some(shared) = self.frames_file_held.get(current.as_str())
         {
             return Some(Rc::clone(shared));
         }
         let text = self.file_for_frames()?;
         let shared: Rc<str> = Rc::from(text.as_str());
         if self.current_source_file.as_ref() == Some(&text) {
-            self.frames_file_held = Some((text, Rc::clone(&shared)));
+            self.frames_file_held.insert(text, Rc::clone(&shared));
         }
         Some(shared)
     }

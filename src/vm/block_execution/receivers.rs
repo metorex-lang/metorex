@@ -350,7 +350,7 @@ impl VirtualMachine {
                 // short-circuits via raise.
                 for name in collect_assigned_locals(block.body()) {
                     if vm.environment().assignment_introduces_a_local(&name) {
-                        vm.environment_mut().hoist(name);
+                        vm.environment_mut().hoist(&name);
                     }
                 }
 

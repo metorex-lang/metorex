@@ -400,6 +400,14 @@ impl VirtualMachine {
         self.store_prepared(&prepared, value)
     }
 
+    /// Write `value` into the local `name`, binding it in the current scope
+    /// when no scope it reads through binds it yet.
+    pub(crate) fn store_local(&mut self, name: &str, value: Object) {
+        if !self.environment_mut().set(name, value.clone()) {
+            self.environment_mut().define_named(name, value);
+        }
+    }
+
     /// Write `value` into a variable or a bare constant, the targets that
     /// need nothing evaluated ahead of their value.
     fn store_named(&mut self, target: &Expression, value: Object) -> Result<(), MetorexError> {
@@ -409,6 +417,10 @@ impl VirtualMachine {
                 // anonymous classes/modules on first assignment, matching
                 // Ruby's `klass.name` behavior after binding to a constant.
                 let is_const = name.chars().next().is_some_and(|c| c.is_ascii_uppercase());
+                if !is_const {
+                    self.store_local(name, value);
+                    return Ok(());
+                }
                 if is_const {
                     self.refuse_unshareable_constant_assignment(&value, *position)?;
                 }
@@ -476,9 +488,6 @@ impl VirtualMachine {
                         self.trigger_const_added_hook(owner, name, *position)?;
                     }
                     return Ok(());
-                }
-                if !self.environment_mut().set(name, value.clone()) {
-                    self.environment_mut().define(name.clone(), value);
                 }
                 Ok(())
             }

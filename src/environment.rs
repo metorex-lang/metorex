@@ -148,7 +148,7 @@ impl Environment {
 
     /// Reserves a name for the rest of the current scope ahead of the
     /// assignment that introduces it, the way Ruby's parser does.
-    pub fn hoist(&mut self, name: String) {
+    pub fn hoist(&mut self, name: &str) {
         self.current_scope().borrow_mut().hoist(name);
     }
 

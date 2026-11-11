@@ -111,7 +111,7 @@ impl VirtualMachine {
                 let held = string_value.as_str().to_string();
                 let encoding = self
                     .escaped_literal_encoding(held.is_ascii())
-                    .unwrap_or_else(|| string_value.encoding_name());
+                    .unwrap_or_else(|| string_value.encoding_name().to_string());
                 let made = crate::object::StringValue::from_bytes(held);
                 made.set_encoding(encoding);
                 Ok(Some(Object::String(Rc::new(made))))
@@ -136,7 +136,7 @@ impl VirtualMachine {
                     ));
                 }
                 let named = string_value.encoding_name();
-                if !matches!(named.as_str(), "UTF-8" | "US-ASCII" | "UTF8-MAC") {
+                if !matches!(named, "UTF-8" | "US-ASCII" | "UTF8-MAC") {
                     return Err(crate::vm::errors::simple_exception(
                         "Encoding::CompatibilityError",
                         &format!("Unicode Normalization not appropriate for {named}"),

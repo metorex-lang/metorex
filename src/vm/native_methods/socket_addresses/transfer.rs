@@ -224,6 +224,23 @@ impl VirtualMachine {
         }
     }
 
+    /// With no other thread in this process, what ends a wait on a socket is
+    /// another process, which MRI waits on for as long as it takes. Such a
+    /// wait still runs signal handlers and ends at a `Timeout.timeout` limit,
+    /// and this says whether the wait is one of those.
+    pub(crate) fn waiting_on_another_process(
+        &mut self,
+        position: Position,
+    ) -> Result<bool, MetorexError> {
+        if self.other_threads_are_waiting() {
+            return Ok(false);
+        }
+        self.deliver_pending_signals(position)?;
+        self.raise_expired_timeout(position)?;
+        std::thread::sleep(std::time::Duration::from_millis(1));
+        Ok(true)
+    }
+
     /// Read through `attempt` until something arrives. Nothing having
     /// arrived yet is not the end of the matter, so whatever else the
     /// program has to run gets a turn and the read is tried again.
@@ -247,6 +264,9 @@ impl VirtualMachine {
                     // turn, and the wait is given more time for
                     // having handed one over, up to a ceiling that a
                     // wait nothing can ever end still reaches.
+                    if self.waiting_on_another_process(position)? {
+                        continue;
+                    }
                     if std::time::Instant::now() >= deadline {
                         return Err(timed_out(position));
                     }

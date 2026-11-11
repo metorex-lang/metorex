@@ -615,11 +615,11 @@ pub(crate) fn errno_naming_path(
         path,
     ));
     let written = crate::object::StringValue::binary(bytes);
-    let binary = matches!(path.encoding_name().as_str(), "ASCII-8BIT" | "BINARY");
+    let binary = matches!(path.encoding_name(), "ASCII-8BIT" | "BINARY");
     written.retag(if binary {
         "ASCII-8BIT".to_string()
     } else {
-        path.encoding_name()
+        path.encoding_name().to_string()
     });
     let message = written.as_str().to_string();
     let exception = Object::exception(class_name, message.clone());

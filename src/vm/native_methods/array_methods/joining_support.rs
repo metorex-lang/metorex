@@ -120,7 +120,7 @@ impl VirtualMachine {
         for (at, part) in parts.iter().enumerate() {
             let held = part.encoding_name();
             if at == 0 {
-                writing = held;
+                writing = held.to_string();
                 all_ascii = part.is_ascii();
                 continue;
             }
@@ -128,7 +128,7 @@ impl VirtualMachine {
                 continue;
             }
             if all_ascii {
-                writing = held;
+                writing = held.to_string();
                 all_ascii = false;
                 continue;
             }

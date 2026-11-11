@@ -45,7 +45,7 @@ impl VirtualMachine {
 
     /// The socket a descriptor names, answered as the handle metorex
     /// holds it under, which is what `for_fd` builds another socket
-    /// around.
+    /// around. A socket the program did not open is taken up first.
     pub(crate) fn socket_handle_of_descriptor(
         &mut self,
         port: i64,
@@ -89,10 +89,106 @@ impl VirtualMachine {
             )
             .find(|(_, number)| *number == wanted)
             .map(|(held, _)| held);
-        Ok(match found {
+        Ok(match found.or_else(|| self.adopt_inherited_socket(wanted)) {
             Some(held) => Object::Int(held as i64),
             None => Object::Nil,
         })
+    }
+
+    /// Hold a socket this program did not open, such as one a parent
+    /// process handed on, under a handle of its own, as the kind of socket
+    /// the operating system says it is. A descriptor that is no socket is
+    /// left alone.
+    fn adopt_inherited_socket(&mut self, descriptor: i32) -> Option<u64> {
+        use std::os::unix::io::FromRawFd as _;
+        let option = |name: libc::c_int| {
+            let mut value: libc::c_int = 0;
+            let mut length = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
+            // SAFETY: `value` holds an int, and `length` says so.
+            let answered = unsafe {
+                libc::getsockopt(
+                    descriptor,
+                    libc::SOL_SOCKET,
+                    name,
+                    &mut value as *mut libc::c_int as *mut libc::c_void,
+                    &mut length,
+                )
+            };
+            (answered == 0).then_some(value)
+        };
+        let kind = option(libc::SO_TYPE)?;
+        let address_of = |ask: unsafe extern "C" fn(
+            libc::c_int,
+            *mut libc::sockaddr,
+            *mut libc::socklen_t,
+        ) -> libc::c_int| {
+            // SAFETY: an all-zero sockaddr_storage is a valid value, and
+            // `length` says how much of it there is.
+            let mut address: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
+            let mut length = std::mem::size_of::<libc::sockaddr_storage>() as libc::socklen_t;
+            // SAFETY: as above.
+            let answered = unsafe {
+                ask(
+                    descriptor,
+                    &mut address as *mut libc::sockaddr_storage as *mut libc::sockaddr,
+                    &mut length,
+                )
+            };
+            (answered == 0).then_some(address)
+        };
+        let address = address_of(libc::getsockname)?;
+        // macOS does not answer SO_ACCEPTCONN, so a stream socket with no
+        // other end is taken to be listening.
+        let listening = match option(libc::SO_ACCEPTCONN) {
+            Some(value) => value != 0,
+            None => address_of(libc::getpeername).is_none(),
+        };
+        let unix = libc::c_int::from(address.ss_family) == libc::AF_UNIX;
+        let handle = self.open_sockets.next;
+        // SAFETY: the descriptor is an open socket of the kind and family
+        // asked above, which the object built here owns from now on, as
+        // the Ruby object built around it does.
+        unsafe {
+            match (kind, listening, unix) {
+                (libc::SOCK_STREAM, true, false) => {
+                    let held = std::net::TcpListener::from_raw_fd(descriptor);
+                    let _ = held.set_nonblocking(true);
+                    self.open_sockets.listeners.insert(handle, held);
+                }
+                (libc::SOCK_STREAM, false, false) => {
+                    let held = std::net::TcpStream::from_raw_fd(descriptor);
+                    let _ = held.set_read_timeout(Some(POLL_LIMIT));
+                    let _ = held.set_nonblocking(true);
+                    self.open_sockets.streams.insert(handle, held);
+                }
+                (libc::SOCK_STREAM, true, true) => {
+                    let held = std::os::unix::net::UnixListener::from_raw_fd(descriptor);
+                    let _ = held.set_nonblocking(true);
+                    self.open_sockets.unix_listeners.insert(handle, held);
+                }
+                (libc::SOCK_STREAM, false, true) => {
+                    let held = std::os::unix::net::UnixStream::from_raw_fd(descriptor);
+                    let _ = held.set_read_timeout(Some(POLL_LIMIT));
+                    let _ = held.set_nonblocking(true);
+                    self.open_sockets.unix_streams.insert(handle, held);
+                }
+                (libc::SOCK_DGRAM, _, false) => {
+                    let held = std::net::UdpSocket::from_raw_fd(descriptor);
+                    let _ = held.set_read_timeout(Some(POLL_LIMIT));
+                    let _ = held.set_nonblocking(true);
+                    self.open_sockets.datagrams.insert(handle, held);
+                }
+                (libc::SOCK_DGRAM, _, true) => {
+                    let held = std::os::unix::net::UnixDatagram::from_raw_fd(descriptor);
+                    let _ = held.set_read_timeout(Some(POLL_LIMIT));
+                    let _ = held.set_nonblocking(true);
+                    self.open_sockets.unix_datagrams.insert(handle, held);
+                }
+                _ => return None,
+            }
+        }
+        self.open_sockets.next += 1;
+        Some(handle)
     }
 
     /// The port a named service is reached on, and the name a port is

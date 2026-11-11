@@ -2,7 +2,7 @@
 # RubyGems reads from here as it would an operating system's defaults. Gems go
 # under ~/.gem/metorex when GEM_HOME names no place. A gem's C extensions are
 # built against metorex's headers the first time the gem is needed, into a
-# directory named for a digest of those headers, since an installed gem's
+# directory named for a digest of those headers beside the gem, since an installed gem's
 # extensions were built for MRI. A gem whose library metorex carries, such as
 # prism, is left to the copy metorex carries when another gem depends on it,
 # and an installed copy of one whose extensions metorex provides is not put on
@@ -25,8 +25,11 @@ module Gem
     end
   end
 
-  def self.default_ext_dir_for(_base_dir)
-    File.join(default_dir, "extensions", RbConfig::CONFIG["arch"], extension_api_version)
+  # Beside the gem when its directory is writable, as MRI keeps them, so a
+  # process that changes HOME finds the ones built before.
+  def self.default_ext_dir_for(base_dir)
+    holder = base_dir && File.writable?(base_dir) ? base_dir : default_dir
+    File.join(holder, "extensions", RbConfig::CONFIG["arch"], extension_api_version)
   end
 
   # Whether metorex carries the library a gem of this name provides. The

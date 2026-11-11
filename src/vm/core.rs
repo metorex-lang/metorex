@@ -463,7 +463,7 @@ pub struct VirtualMachine {
     pub(crate) structs_being_compared: Vec<(usize, usize)>,
     /// The encoding of the String whose native method is running, which a
     /// match it records gives the pieces it cuts out.
-    pub(crate) match_subject_encoding: Option<String>,
+    pub(crate) match_subject_encoding: Option<&'static str>,
     /// The frozen String the last recorded match was made in, which the
     /// next match in the same text shares rather than copying the text again.
     pub(crate) last_match_subject: Option<crate::vm::native_methods::regexp_methods::MatchSubject>,
@@ -568,9 +568,9 @@ pub struct VirtualMachine {
     /// Emptied register lists, which a unit run takes rather than
     /// allocating one.
     pub(crate) spare_registers: Vec<Vec<Object>>,
-    /// The file frames name as their source, with the text it was made
-    /// from, so frames entered from the same file share one.
-    pub(crate) frames_file_held: Option<(String, Rc<str>)>,
+    /// The file frames name as their source, by the text it was made from,
+    /// so frames entered from the same file share one.
+    pub(crate) frames_file_held: crate::fast_hash::NameMap<String, Rc<str>>,
     /// `frames_file` for code that names no source file, with the path it
     /// was spelled from.
     pub(crate) frames_path_held: Option<(PathBuf, Rc<str>)>,
@@ -860,7 +860,7 @@ impl VirtualMachine {
             refinement_scopes: vec![Vec::new()],
             spare_refinement_scopes: Vec::new(),
             spare_registers: Vec::new(),
-            frames_file_held: None,
+            frames_file_held: Default::default(),
             frames_path_held: None,
             def_scope_stack: Vec::new(),
             patterns_built_once: std::collections::HashMap::new(),

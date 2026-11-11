@@ -189,7 +189,7 @@ impl crate::vm::VirtualMachine {
                 .environment()
                 .assignment_introduces_a_local(&local.text)
             {
-                self.environment_mut().hoist(local.text.clone());
+                self.environment_mut().hoist(&local.text);
             }
         }
     }

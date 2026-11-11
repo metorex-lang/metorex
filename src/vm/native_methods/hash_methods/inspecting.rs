@@ -35,9 +35,9 @@ impl VirtualMachine {
             let writing = if name.holds_bytes() {
                 name.encoding_name()
             } else {
-                writing
+                &writing
             };
-            return Ok((format!("{}: {}", shown, rendered_value), writing));
+            return Ok((format!("{}: {}", shown, rendered_value), writing.to_string()));
         }
         let (rendered_key, writing) = self.rendered_with_encoding(key, position)?;
         Ok((format!("{} => {}", rendered_key, rendered_value), writing))
@@ -52,7 +52,7 @@ impl VirtualMachine {
     ) -> Result<(String, String), MetorexError> {
         let rendered = self.inspected_object(obj, position)?;
         Ok(match rendered.view() {
-            View::String(text) => (text.to_string(), text.encoding_name()),
+            View::String(text) => (text.to_string(), text.encoding_name().to_string()),
             other => (format!("{}", other), "US-ASCII".to_string()),
         })
     }

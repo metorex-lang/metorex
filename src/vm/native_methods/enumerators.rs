@@ -118,7 +118,7 @@ pub(crate) fn carry_string_encoding(
         {
             return;
         }
-        derived.set_encoding(held.clone());
+        derived.set_encoding(held);
         // Characters that stand for bytes go on standing for bytes in
         // whatever the method made out of them.
         if source.holds_bytes() {

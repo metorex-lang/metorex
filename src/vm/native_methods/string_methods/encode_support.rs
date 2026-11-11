@@ -251,7 +251,7 @@ pub(crate) fn symbol_inspect_text(value: &crate::object::StringValue) -> String 
     if let Some(shape) = wide_encoding(&named) {
         return format!(":{:?}", wide_text(&bytes, shape));
     }
-    if matches!(named.as_str(), "ASCII-8BIT" | "BINARY") && !bytes.is_ascii() {
+    if matches!(named, "ASCII-8BIT" | "BINARY") && !bytes.is_ascii() {
         let mut written = String::from(":\"");
         for byte in &bytes {
             if byte.is_ascii_graphic() || *byte == b' ' {
@@ -344,7 +344,7 @@ pub(crate) fn encoded_characters(string_value: &crate::object::StringValue) -> V
     let from_bytes = |bytes: &[u8]| {
         let spelled: String = bytes.iter().map(|byte| *byte as char).collect();
         let made = crate::object::StringValue::from_bytes(spelled);
-        made.set_encoding(named.clone());
+        made.set_encoding(named);
         Object::String(Rc::new(made))
     };
     let per_byte = || {
@@ -353,7 +353,7 @@ pub(crate) fn encoded_characters(string_value: &crate::object::StringValue) -> V
             .map(|byte| from_bytes(&[*byte]))
             .collect()
     };
-    match named.as_str() {
+    match named {
         "ASCII-8BIT" | "BINARY" => per_byte(),
         held if dummy_encoding(held) => per_byte(),
         held if let Some(shape) = wide_encoding(held) => {
@@ -385,7 +385,7 @@ pub(crate) fn encoded_characters(string_value: &crate::object::StringValue) -> V
             .chars()
             .map(|character| {
                 let made =
-                    crate::object::StringValue::with_encoding(character.to_string(), named.clone());
+                    crate::object::StringValue::with_encoding(character.to_string(), named);
                 Object::String(Rc::new(made))
             })
             .collect(),

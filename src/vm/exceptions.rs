@@ -187,6 +187,21 @@ impl VirtualMachine {
                 answered
             }
             Some(given @ View::String(_)) => runtime_error_from(&given.to_object()),
+            // An instance of a String subclass is a message too.
+            Some(View::Instance(_))
+                if let Some(text) = crate::vm::native_methods::subclasses::string_subclass_value(
+                    &arguments[0],
+                ) =>
+            {
+                let made = runtime_error_from(&text);
+                if let View::Exception(details) = made.view() {
+                    details
+                        .borrow_mut()
+                        .instance_vars
+                        .insert(crate::vm::MESSAGE_STRING_KEY.into(), arguments[0].clone());
+                }
+                made
+            }
             // An exception class is instantiated with the message.
             Some(value @ View::Class(_)) => {
                 let call_arguments = message.into_iter().collect();

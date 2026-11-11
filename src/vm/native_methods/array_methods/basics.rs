@@ -58,7 +58,7 @@ impl VirtualMachine {
                             if parts.is_empty()
                                 && let View::String(text) = rendered.view()
                             {
-                                writing = text.encoding_name();
+                                writing = text.encoding_name().to_string();
                             }
                             parts.push(match rendered.view() {
                                 View::String(text) => text.to_string(),

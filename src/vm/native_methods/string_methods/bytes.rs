@@ -246,7 +246,7 @@ impl VirtualMachine {
                 // An encoding that spells even the ASCII letters in more
                 // than one byte holds nothing ASCII-only, empty or not.
                 let compatible = !matches!(
-                    string_value.encoding_name().as_str(),
+                    string_value.encoding_name(),
                     "UTF-16" | "UTF-16BE" | "UTF-16LE" | "UTF-32" | "UTF-32BE" | "UTF-32LE"
                 );
                 Ok(Some(Object::Bool(

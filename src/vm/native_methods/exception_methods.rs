@@ -820,11 +820,15 @@ impl VirtualMachine {
                 // encoding and bytes and all, while the message still reads
                 // the same.
                 if exc.message_given
-                    && let Some(given @ View::String(text)) =
-                        exc.instance_vars.get(crate::vm::MESSAGE_STRING_KEY).view()
-                    && *text.as_str() == *exc.message
+                    && let Some(given) = exc.instance_vars.get(crate::vm::MESSAGE_STRING_KEY)
                 {
-                    return Ok(Some(given.to_object()));
+                    let characters = crate::vm::native_methods::subclasses::string_subclass_value(given)
+                        .unwrap_or_else(|| given.clone());
+                    if let View::String(text) = characters.view()
+                        && *text.as_str() == *exc.message
+                    {
+                        return Ok(Some(given.clone()));
+                    }
                 }
                 let rendered = if exc.message_given {
                     exc.message.clone()

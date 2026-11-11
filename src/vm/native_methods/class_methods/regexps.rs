@@ -24,7 +24,7 @@ impl VirtualMachine {
             let source = self.coerce_name_argument(&arguments[0], position)?;
             let named = match arguments[0].view() {
                 View::String(held) => held.encoding_name(),
-                _ => "US-ASCII".to_string(),
+                _ => "US-ASCII",
             };
             let escaped = quoted_for_pattern(&source);
             // Ruby tags the answer US-ASCII when nothing but ASCII went in,
@@ -32,7 +32,7 @@ impl VirtualMachine {
             let tagged = if source.is_ascii() {
                 "US-ASCII".to_string()
             } else {
-                named
+                named.to_string()
             };
             let made = crate::object::StringValue::with_encoding(escaped, tagged);
             // Characters standing for bytes go on standing for them in the
@@ -282,7 +282,7 @@ impl VirtualMachine {
                 Some('s') if written_out => Some("Windows-31J"),
                 _ => None,
             };
-            if let Some(named) = named_by_letter.map(str::to_string).or(source_encoding) {
+            if let Some(named) = named_by_letter.map(str::to_string).or(source_encoding.map(str::to_string)) {
                 self.record_pattern_encoding(&built, named);
             }
             let made = Object::Regex(built, Rc::new(flags));
@@ -422,13 +422,13 @@ impl VirtualMachine {
                     let text = self.union_string_argument(part, position)?;
                     let named = text.encoding_name();
                     let standing = if !encoding_reads_alongside_ascii(&named) {
-                        UnionEncoding::AsciiIncompatible(named)
+                        UnionEncoding::AsciiIncompatible(named.to_string())
                     } else if crate::vm::native_methods::string_methods::binary_bytes(&text)
                         .is_ascii()
                     {
                         UnionEncoding::AsciiOnly
                     } else {
-                        UnionEncoding::Fixed(named)
+                        UnionEncoding::Fixed(named.to_string())
                     };
                     (crate::regexp::escape(&text.as_str()), standing)
                 }

@@ -144,9 +144,9 @@ pub(crate) fn match_text(string_value: &crate::object::StringValue) -> String {
 /// match cuts out of it carry too.
 pub(crate) fn subject_encoding(object: &Object) -> Option<String> {
     match object.view() {
-        View::String(text) => Some(text.encoding_name()),
+        View::String(text) => Some(text.encoding_name().to_string()),
         _ => match super::string_subclass_value(object).view() {
-            Some(View::String(text)) => Some(text.encoding_name()),
+            Some(View::String(text)) => Some(text.encoding_name().to_string()),
             _ => None,
         },
     }
@@ -249,7 +249,7 @@ impl VirtualMachine {
         subject_encoding: Option<String>,
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        let subject_encoding = subject_encoding.or_else(|| self.match_subject_encoding.clone());
+        let subject_encoding = subject_encoding.or_else(|| self.match_subject_encoding.map(str::to_string));
         let Some(compiled) = compile(pattern, flags) else {
             self.globals_mut().set(LAST_MATCH, Object::Nil);
             return Ok(None);

@@ -57,7 +57,7 @@ impl VirtualMachine {
     /// The one frozen string that stands for this text in this encoding.
     /// Every equal string deduplicates to it.
     pub(crate) fn deduped_string(&mut self, held: &crate::object::StringValue) -> Object {
-        let key = (held.as_str().to_string(), held.encoding_name());
+        let key = (held.as_str().to_string(), held.encoding_name().to_string());
         if let Some(found) = self.deduped_strings.get(&key) {
             return Object::String(Rc::clone(found));
         }

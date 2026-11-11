@@ -15,8 +15,8 @@ impl VirtualMachine {
         if from == to {
             return Ok(());
         }
-        if !NOT_ASCII_COMPATIBLE.contains(&from.as_str())
-            && !NOT_ASCII_COMPATIBLE.contains(&to.as_str())
+        if !NOT_ASCII_COMPATIBLE.contains(&from)
+            && !NOT_ASCII_COMPATIBLE.contains(&to)
         {
             return Ok(());
         }

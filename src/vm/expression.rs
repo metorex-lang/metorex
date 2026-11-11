@@ -131,7 +131,7 @@ impl Interpolation {
                 });
             }
             if self.carried.is_none() {
-                self.carried = Some((spelled.encoding_name(), spelled.holds_bytes()));
+                self.carried = Some((spelled.encoding_name().to_string(), spelled.holds_bytes()));
             }
         }
         if let View::String(spelled) = value.view()
@@ -611,7 +611,7 @@ impl VirtualMachine {
                         let (pattern, flags) =
                             (pattern.as_str().to_string(), flags.as_str().to_string());
                         let subject = s.as_str().to_string();
-                        let encoding = Some(s.encoding_name());
+                        let encoding = Some(s.encoding_name().to_string());
                         match self.regexp_match_data_in(
                             &pattern, &flags, &subject, 0, encoding, position,
                         )? {

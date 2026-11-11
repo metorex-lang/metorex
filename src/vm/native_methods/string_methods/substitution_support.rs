@@ -235,7 +235,7 @@ impl VirtualMachine {
                 };
                 // Each line is written the way the whole string was, which a
                 // block reading them has to see.
-                let line = crate::object::StringValue::with_encoding(piece, &named);
+                let line = crate::object::StringValue::with_encoding(piece, &*named);
                 if string_value.holds_bytes() {
                     line.mark_bytes();
                 }
@@ -340,7 +340,7 @@ impl VirtualMachine {
         }
         let written = self.string_needle("sub", held, position)?;
         let filled = fill_replacement(&written.as_str(), subject, captured);
-        Ok((filled, written.encoding_name(), written.holds_bytes()))
+        Ok((filled, written.encoding_name().to_string(), written.holds_bytes()))
     }
 
     /// The text a value stands for and the encoding it is written in, taking
@@ -353,7 +353,7 @@ impl VirtualMachine {
         match held.view() {
             View::String(text) => Ok((
                 text.as_str().to_string(),
-                text.encoding_name(),
+                text.encoding_name().to_string(),
                 text.holds_bytes(),
             )),
             _ => match self
@@ -362,7 +362,7 @@ impl VirtualMachine {
             {
                 View::String(text) => Ok((
                     text.as_str().to_string(),
-                    text.encoding_name(),
+                    text.encoding_name().to_string(),
                     text.holds_bytes(),
                 )),
                 shown => Ok((

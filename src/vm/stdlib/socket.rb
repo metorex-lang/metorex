@@ -475,8 +475,8 @@ class BasicSocket < IO
     @do_not_reverse_lookup = held
   end
 
-  # Another socket over a descriptor already open. The descriptor names a
-  # socket this program opened, and both objects then work the same one.
+  # Another socket over a descriptor already open, one this program opened
+  # or one it was handed. Both objects then work the same socket.
   def self.for_fd(number)
     handle = Socket.__net__ "handle_of_fd", 0, "", number.to_i
     raise Errno::EBADF, "fstat(2)" if handle.nil?

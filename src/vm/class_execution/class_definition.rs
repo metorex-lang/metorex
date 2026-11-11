@@ -328,7 +328,7 @@ impl VirtualMachine {
         // Ruby reserves every local the body assigns before any of it runs,
         // so one assigned in a branch not taken answers nil.
         for name in crate::ast::collect_assigned_locals(body) {
-            self.environment_mut().hoist(name);
+            self.environment_mut().hoist(&name);
         }
         // A trace sees a class body opening and closing, with the class
         // itself as the `self` those two events report.

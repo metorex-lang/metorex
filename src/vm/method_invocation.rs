@@ -1145,13 +1145,13 @@ impl VirtualMachine {
                 }
                 return Ok(Object::String(Rc::new(made)));
             }
-            Some(View::String(given)) => (given.to_text(), given.encoding_name()),
+            Some(View::String(given)) => (given.to_text(), given.encoding_name().to_string()),
             Some(other) if self.responds_to(&other.to_object(), "to_str") => {
                 match self
                     .send_to_object(other.to_object(), "to_str", vec![], position)?
                     .view()
                 {
-                    View::String(given) => (given.to_text(), given.encoding_name()),
+                    View::String(given) => (given.to_text(), given.encoding_name().to_string()),
                     _ => {
                         return Err(self.string_conversion_error(&other.to_object(), position));
                     }
@@ -1159,7 +1159,7 @@ impl VirtualMachine {
             }
             Some(other) => {
                 match crate::vm::native_methods::string_subclass_value(&other.to_object()).view() {
-                    Some(View::String(given)) => (given.to_text(), given.encoding_name()),
+                    Some(View::String(given)) => (given.to_text(), given.encoding_name().to_string()),
                     _ => return Err(self.string_conversion_error(&other.to_object(), position)),
                 }
             }

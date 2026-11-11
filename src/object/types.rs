@@ -29,7 +29,7 @@ struct Symbols {
     names: Vec<&'static Rc<crate::object::StringValue>>,
     /// The ids by encoding and name, with the encoding empty for an ASCII
     /// name, so a name already given an id is found without a copy of it.
-    ids: std::collections::HashMap<&'static str, std::collections::HashMap<Box<str>, u64>>,
+    ids: crate::fast_hash::NameMap<&'static str, crate::fast_hash::NameMap<Box<str>, u64>>,
 }
 
 thread_local! {
@@ -42,8 +42,9 @@ thread_local! {
 fn symbol_id(name: Rc<crate::object::StringValue>) -> u64 {
     let named = name.shared_encoding_name();
     let spelled_in_ascii = name.as_str().is_ascii()
-        && crate::vm::native_methods::string_methods::encoding_is_ascii_compatible(named)
-        && !crate::vm::native_methods::class_methods::is_dummy_encoding(named);
+        && (matches!(named, "UTF-8" | "US-ASCII")
+            || crate::vm::native_methods::string_methods::encoding_is_ascii_compatible(named)
+                && !crate::vm::native_methods::class_methods::is_dummy_encoding(named));
     let encoding = if spelled_in_ascii { "" } else { named };
     SYMBOLS.with(|symbols| {
         let mut symbols = symbols.borrow_mut();

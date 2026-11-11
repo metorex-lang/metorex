@@ -80,7 +80,7 @@ impl VirtualMachine {
             return Ok(made);
         };
         let named = given.encoding_name();
-        if matches!(named.as_str(), "UTF-8" | "US-ASCII") {
+        if matches!(named, "UTF-8" | "US-ASCII") {
             return Ok(made);
         }
         let wanted = vec![Object::string(named)];
@@ -202,7 +202,7 @@ pub(crate) fn names_a_second_path(method_name: &str) -> bool {
 pub(crate) fn path_text(held: &Rc<crate::object::StringValue>) -> String {
     // A binary string's characters are its bytes, whether or not it was
     // built from them.
-    let binary = matches!(held.encoding_name().as_str(), "ASCII-8BIT" | "BINARY");
+    let binary = matches!(held.encoding_name(), "ASCII-8BIT" | "BINARY");
     if !held.holds_bytes() && !binary {
         return held.as_str().to_string();
     }

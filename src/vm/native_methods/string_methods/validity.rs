@@ -13,7 +13,7 @@ pub(crate) fn holds_valid_text(string_value: &crate::object::StringValue) -> boo
     if dummy_encoding(&named) && !pairs_its_bytes(&named) {
         return true;
     }
-    match named.as_str() {
+    match named {
         "ASCII-8BIT" | "BINARY" => true,
         "US-ASCII" => string_value.as_str().is_ascii(),
         "UTF-8" if string_value.holds_bytes() => {
@@ -304,7 +304,7 @@ pub(crate) fn character_count(string_value: &crate::object::StringValue) -> i64 
     if string_value.is_ascii() && !named.starts_with("UTF-16") && !named.starts_with("UTF-32") {
         return string_value.byte_len() as i64;
     }
-    match named.as_str() {
+    match named {
         // A run of bytes has one character to the byte however it is tagged.
         "ASCII-8BIT" | "BINARY" => binary_bytes(string_value).len() as i64,
         // A fixed-width encoding reads whole units, and a unit left short at
@@ -348,7 +348,7 @@ pub(crate) fn characters_are_text(string_value: &crate::object::StringValue) -> 
         return false;
     }
     let pairs_bytes = spells_shift_jis(&named)
-        || matches!(named.as_str(), "EUC-JP" | "UTF-8")
+        || matches!(named, "EUC-JP" | "UTF-8")
         || crate::vm::native_methods::double_byte::double_byte(&named).is_some();
     !(pairs_bytes && string_value.holds_bytes()) || string_value.is_ascii()
 }
@@ -364,7 +364,7 @@ pub(crate) fn character_units(string_value: &crate::object::StringValue) -> Vec<
             .map(|group| group.iter().map(|byte| *byte as char).collect())
             .collect()
     };
-    match named.as_str() {
+    match named {
         held if spells_shift_jis(held) && string_value.holds_bytes() => {
             grouped(shift_jis_characters(&binary_bytes(string_value)))
         }

@@ -96,7 +96,7 @@ impl VirtualMachine {
                         {
                             name.clone()
                         }
-                        _ => string_value.encoding_name(),
+                        _ => string_value.encoding_name().to_string(),
                     };
                     built.set_encoding(wider);
                     if string_value.holds_bytes() {

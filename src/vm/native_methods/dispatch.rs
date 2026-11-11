@@ -682,7 +682,7 @@ impl VirtualMachine {
                 let named_in = if ascii_compatible && text.as_str().is_ascii() {
                     "US-ASCII".to_string()
                 } else {
-                    text.encoding_name()
+                    text.encoding_name().to_string()
                 };
                 match method_name {
                     // `name` answers one frozen string per symbol, where

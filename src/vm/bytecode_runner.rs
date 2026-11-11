@@ -894,13 +894,17 @@ impl VirtualMachine {
                 match &state.cells[slot] {
                     Some(cell) => *cell.borrow_mut() = value,
                     None => {
-                        let name = unit.locals[slot].text.clone();
-                        let target = Expression::Identifier {
-                            name: name.clone(),
-                            position,
-                        };
-                        self.assign_value(&target, value)?;
-                        state.cells[slot] = self.environment().get_ref(&name);
+                        let name = &unit.locals[slot].text;
+                        if name.starts_with(|first: char| first.is_ascii_uppercase()) {
+                            let target = Expression::Identifier {
+                                name: name.clone(),
+                                position,
+                            };
+                            self.assign_value(&target, value)?;
+                        } else {
+                            self.store_local(name, value);
+                        }
+                        state.cells[slot] = self.environment().get_ref(name);
                     }
                 }
             }

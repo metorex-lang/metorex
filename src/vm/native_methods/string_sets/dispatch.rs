@@ -379,13 +379,13 @@ impl VirtualMachine {
                 let tagged = |piece: String| {
                     Object::String(std::rc::Rc::new(crate::object::StringValue::with_encoding(
                         piece,
-                        encoding.clone(),
+                        encoding,
                     )))
                 };
                 let parts = match found {
                     Some((start, end)) => vec![
                         tagged(text[..start].to_string()),
-                        cut(text[start..end].to_string(), separator_encoding.clone()),
+                        cut(text[start..end].to_string(), separator_encoding.to_string()),
                         tagged(text[end..].to_string()),
                     ],
                     // A separator that is nowhere in the string leaves the
@@ -761,10 +761,10 @@ impl VirtualMachine {
                 let carried = held
                     .as_ref()
                     .map(|held| held.encoding_name())
-                    .unwrap_or_else(|| "UTF-8".to_string());
+                    .unwrap_or_else(|| "UTF-8");
                 // A dump written in an encoding that spells no ASCII cannot be
                 // read back, since the quoting itself is written in ASCII.
-                if NOT_ASCII_COMPATIBLE.contains(&carried.as_str()) {
+                if NOT_ASCII_COMPATIBLE.contains(&carried) {
                     return Err(crate::vm::errors::simple_exception(
                         "Encoding::CompatibilityError",
                         &format!("ASCII incompatible encoding: {carried}"),
@@ -776,7 +776,7 @@ impl VirtualMachine {
                 };
                 let (bytes, named) = undump(&text).map_err(refuse)?;
                 let named = match named {
-                    None => carried,
+                    None => carried.to_string(),
                     Some(name) => {
                         if !crate::vm::init::ENCODING_NAMES
                             .iter()

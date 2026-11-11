@@ -414,20 +414,37 @@ fn test_file_loader_required_by_name_no_parens_execution() {
 
 /// Run an example with GEM_HOME and GEM_PATH naming the fixture gem tree
 /// under `require/gem_home`.
+fn copy_directory(source: &std::path::Path, destination: &std::path::Path) {
+    std::fs::create_dir_all(destination).expect("the temporary directory is writable");
+    for entry in std::fs::read_dir(source).expect("the directory is readable") {
+        let entry = entry.expect("the directory entry is readable");
+        let target = destination.join(entry.file_name());
+        if entry.file_type().expect("the entry has a type").is_dir() {
+            copy_directory(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), &target).expect("the file copies");
+        }
+    }
+}
+
 fn run_example_with_installed_gems(path: &str) -> String {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let gem_home = format!(
+    let installed = format!(
         "{manifest_dir}/{}/require/gem_home",
         crate::common::EXAMPLES_DIR
     );
-    // A gem's C extension is built under the home directory, which each run
-    // gets afresh so the build is part of what the example does.
+    // A gem's C extension is built beside the installed gem, so each run
+    // gets a fresh copy of the gem directory and a fresh home, and the build
+    // is part of what the example does.
     let home = std::env::temp_dir().join(format!(
         "metorex_gem_home_{}_{}",
         std::process::id(),
         path.replace('/', "_")
     ));
     std::fs::create_dir_all(&home).expect("the temporary directory is writable");
+    let home = std::fs::canonicalize(&home).expect("the temporary directory resolves");
+    let gem_home = home.join("gem_home");
+    copy_directory(std::path::Path::new(&installed), &gem_home);
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_metorex"))
         .current_dir(manifest_dir)
         .arg(format!("{}/{}", crate::common::EXAMPLES_DIR, path))

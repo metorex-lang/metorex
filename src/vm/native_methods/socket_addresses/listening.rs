@@ -247,6 +247,9 @@ impl VirtualMachine {
                     // turn, and the wait is given more time for
                     // having handed one over, up to a ceiling that a
                     // wait nothing can ever end still reaches.
+                    if self.waiting_on_another_process(position)? {
+                        continue;
+                    }
                     if std::time::Instant::now() >= deadline {
                         return Err(timed_out(position));
                     }

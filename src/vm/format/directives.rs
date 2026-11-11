@@ -135,7 +135,7 @@ impl VirtualMachine {
                 if text.holds_bytes() {
                     *wrote_bytes = true;
                 }
-                Ok((text.as_str().to_string(), text.encoding_name()))
+                Ok((text.as_str().to_string(), text.encoding_name().to_string()))
             }
             other => Ok((
                 other.to_string(),

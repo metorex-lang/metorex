@@ -18,7 +18,8 @@
 # examples than it did. With LOG_DIR set, what each file printed is copied
 # there, named after the file. FILE_TIMEOUT is the longest one file may run,
 # 300 seconds unless set, and SANDBOX_FILE_TIMEOUT the longest one of
-# simplecov's sandbox spec files may, 900 unless set.
+# simplecov's sandbox spec files or RuboCop's command line spec files may,
+# 900 unless set.
 #
 # A gem with a directory under scripts/gem_suite/bundles runs with
 # BUNDLE_GEMFILE naming the Gemfile there, whose gems
@@ -132,7 +133,9 @@ SUITES=(
 ONE_AT_A_TIME=(excon mini_portile2)
 
 # The longest one of simplecov's sandbox spec files may run, each of which
-# boots a Rails application and runs its tests once per example.
+# boots a Rails application and runs its tests once per example, or one of
+# RuboCop's command line spec files, each of which runs RuboCop over a
+# project once per example.
 SANDBOX_FILE_TIMEOUT="${SANDBOX_FILE_TIMEOUT:-900}"
 one_at_a_time() {
   local held
@@ -206,7 +209,7 @@ run_one() {
   (cd "$REPO_ROOT/gems/$gem" && tar --exclude .git -cf - .) | (cd "$run_dir" && tar -xf -)
   local limit="$FILE_TIMEOUT"
   case "$name" in
-    simplecov/spec/sandbox/*) limit="$SANDBOX_FILE_TIMEOUT" ;;
+    simplecov/spec/sandbox/* | rubocop/spec/rubocop/cli/* | rubocop/spec/rubocop/cli_spec.rb | rubocop/spec/rubocop/server/*) limit="$SANDBOX_FILE_TIMEOUT" ;;
   esac
   local command
   if [ "$ENGINE" = "mri" ]; then

@@ -725,7 +725,7 @@ fn appended_encoding(
         if reads_alongside_ascii(&target.encoding_name()) && other.as_str().is_ascii() {
             return Some(None);
         }
-        return Some(Some(other.encoding_name()));
+        return Some(Some(other.encoding_name().to_string()));
     }
     if !reads_alongside_ascii(&target.encoding_name())
         || !reads_alongside_ascii(&other.encoding_name())
@@ -736,7 +736,7 @@ fn appended_encoding(
         return Some(None);
     }
     if target.as_str().is_ascii() {
-        return Some(Some(other.encoding_name()));
+        return Some(Some(other.encoding_name().to_string()));
     }
     None
 }

@@ -57,7 +57,7 @@ impl VirtualMachine {
                             crate::vm::native_methods::pack_format::bytes_to_string(&bad)
                                 .to_string(),
                         );
-                        piece.set_encoding(named.clone());
+                        piece.set_encoding(named);
                         let answered = self.execute_block_callable(
                             block,
                             vec![Object::String(std::rc::Rc::new(piece))],

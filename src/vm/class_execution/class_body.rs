@@ -82,7 +82,7 @@ impl VirtualMachine {
         // Ruby reserves every local the body assigns before any of it runs,
         // so one assigned in a branch not taken answers nil.
         for name in crate::ast::collect_assigned_locals(body) {
-            self.environment_mut().hoist(name);
+            self.environment_mut().hoist(&name);
         }
         let answered = self.apply_class_body(class, body, position);
         self.environment_mut().pop_scope();

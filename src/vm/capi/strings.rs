@@ -520,7 +520,7 @@ pub extern "C-unwind" fn rb_str_replace(destination: Value, source: Value) -> Va
 pub extern "C-unwind" fn rb_metorex_adopt_encoding(string: Value, source: Value) {
     let made = string_from(string);
     let named = string_from(source).encoding_name();
-    if matches!(named.as_str(), "ASCII-8BIT" | "BINARY") || wide_encoding(&named).is_some() {
+    if matches!(named, "ASCII-8BIT" | "BINARY") || wide_encoding(&named).is_some() {
         return;
     }
     let bytes = binary_bytes(&made);

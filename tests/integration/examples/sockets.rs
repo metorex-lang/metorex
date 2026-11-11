@@ -246,3 +246,9 @@ fn write_takes_several_strings() {
     let output = run_example("sockets/write_takes_several_strings.rb");
     assert_eq!(output, "17\n\"HTTP/1.1 200 OK\\r\\n\"\n");
 }
+
+#[test]
+fn eof_and_readpartial_wait_for_a_server_in_another_process() {
+    let output = run_example("sockets/eof_waits_for_another_process.rb");
+    assert_eq!(output, "\"checked\"\n");
+}

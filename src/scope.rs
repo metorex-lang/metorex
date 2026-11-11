@@ -67,6 +67,9 @@ pub struct Scope {
     /// of, which nothing else held, kept for `define_named` to bind again
     /// rather than allocate.
     spare_bindings: Vec<(String, Rc<RefCell<Object>>)>,
+    /// Hoisted names an earlier use of this scope let go of, kept for
+    /// `hoist` to use again rather than allocate.
+    spare_names: Vec<String>,
     /// A number that changes, to one no scope has had, each time the names
     /// this scope binds, reserves, or captures change, which a kept block
     /// compares.
@@ -194,6 +197,7 @@ impl Scope {
             captured: None,
             reserved: no_reserved_names(),
             spare_bindings: Vec::new(),
+            spare_names: Vec::new(),
             version: next_version(),
         }
     }
@@ -210,6 +214,7 @@ impl Scope {
             captured: None,
             reserved: no_reserved_names(),
             spare_bindings: Vec::new(),
+            spare_names: Vec::new(),
             version: next_version(),
         }
     }
@@ -232,7 +237,11 @@ impl Scope {
         self.is_method_boundary = false;
         self.inherited_names.clear();
         self.hidden_names.clear();
-        self.hoisted_names.clear();
+        for name in self.hoisted_names.drain() {
+            if self.spare_names.len() < SPARE_BINDINGS {
+                self.spare_names.push(name);
+            }
+        }
         self.captured = None;
         self.reserved = no_reserved_names();
         self.version = next_version();
@@ -253,7 +262,8 @@ impl Scope {
             self.hidden_names.remove(name);
         }
         if !self.hoisted_names.is_empty() {
-            self.hoisted_names.remove(name);
+            let taken = self.hoisted_names.take(name);
+            self.keep_spare_name(taken);
         }
     }
 
@@ -353,17 +363,40 @@ impl Scope {
     /// Reserves `name` for the rest of this scope, the way Ruby's parser
     /// does at the assignment that introduces a local. Reading it answers
     /// nil, and a block written before the assignment does not close over it.
-    pub fn hoist(&mut self, name: String) {
+    pub fn hoist(&mut self, name: &str) {
         self.version = next_version();
-        self.hoisted_names.insert(name.clone());
-        self.variables
-            .insert(name, Rc::new(RefCell::new(Object::Nil)));
+        if !self.hoisted_names.contains(name) {
+            let mut held = self.spare_names.pop().unwrap_or_default();
+            held.clear();
+            held.push_str(name);
+            self.hoisted_names.insert(held);
+        }
+        let (key, cell) = match self.spare_bindings.pop() {
+            Some((mut key, cell)) => {
+                key.clear();
+                key.push_str(name);
+                *cell.borrow_mut() = Object::Nil;
+                (key, cell)
+            }
+            None => (name.to_string(), Rc::new(RefCell::new(Object::Nil))),
+        };
+        self.variables.insert(key, cell);
+    }
+
+    /// Keep a name this scope stopped hoisting for `hoist` to use again.
+    fn keep_spare_name(&mut self, name: Option<String>) {
+        if let Some(name) = name
+            && self.spare_names.len() < SPARE_BINDINGS
+        {
+            self.spare_names.push(name);
+        }
     }
 
     /// Say that the assignment `name` was reserved for has begun, so code
     /// written in its value closes over the name.
     pub fn unhoist(&mut self, name: &str) {
-        if self.hoisted_names.remove(name) {
+        if let Some(taken) = self.hoisted_names.take(name) {
+            self.keep_spare_name(Some(taken));
             self.version = next_version();
             return;
         }

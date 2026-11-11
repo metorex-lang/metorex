@@ -137,7 +137,7 @@ impl VirtualMachine {
                 let writing = if encoding_is_ascii_compatible(&held) {
                     held
                 } else {
-                    "US-ASCII".to_string()
+                    &"US-ASCII".to_string()
                 };
                 let made = crate::object::StringValue::with_encoding(out, writing);
                 Ok(Some(Object::String(Rc::new(made))))
@@ -173,7 +173,7 @@ impl VirtualMachine {
                 // bytes shows the bytes themselves, since the characters they
                 // would spell are not what the string holds.
                 let binary = matches!(
-                    string_value.encoding_name().as_str(),
+                    string_value.encoding_name(),
                     "ASCII-8BIT" | "BINARY"
                 );
                 // A string whose characters stand for bytes is written as

@@ -42,9 +42,11 @@ pub(crate) struct OpenSockets {
     pub(crate) next: u64,
 }
 
-/// How long a read or an accept waits before giving up. Metorex runs one
-/// thread, so a socket that would block forever has nobody left to write to
-/// it, and waiting is what a deadlock looks like from the inside.
+/// How long a read or an accept waits on this process's other threads before
+/// giving up. Metorex runs them one at a time, so a socket that would block
+/// forever has none of them left to write to it, and waiting is what a
+/// deadlock looks like from the inside. A read with no other thread to wait on
+/// waits for another process as long as it takes.
 pub(crate) const WAIT_LIMIT: std::time::Duration = std::time::Duration::from_secs(2);
 /// The longest a wait may run altogether. A machine with more work on it than
 /// cores runs each thread in fits and starts, so a wait that keeps handing

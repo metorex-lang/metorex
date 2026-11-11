@@ -24,7 +24,7 @@ impl VirtualMachine {
                     Some(named) => self.encode_target_name(string_value, named, position)?,
                     None => match self.globals().get("__Encoding_default_internal").view() {
                         Some(View::Class(internal)) => internal.name().to_string(),
-                        _ => string_value.encoding_name(),
+                        _ => string_value.encoding_name().to_string(),
                     },
                 };
                 // An encoding that spells a character in more than one byte
@@ -35,8 +35,8 @@ impl VirtualMachine {
                 let held = match arguments.get(1) {
                     Some(source) => self
                         .encoding_name_argument(source, position)
-                        .unwrap_or_else(|_| string_value.encoding_name()),
-                    None => string_value.encoding_name(),
+                        .unwrap_or_else(|_| string_value.encoding_name().to_string()),
+                    None => string_value.encoding_name().to_string(),
                 };
                 let replacement = options
                     .replace
