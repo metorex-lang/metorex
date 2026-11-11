@@ -42,6 +42,21 @@ impl VirtualMachine {
         {
             return Ok(Object::Bool(answer.is_truthy()));
         }
+        // An instance of a Range subclass that writes no `==` of its own
+        // compares as the range it holds, on either side.
+        let subclass_range = crate::vm::native_methods::range_subclass_value(&left).is_some()
+            || crate::vm::native_methods::range_subclass_value(&right).is_some();
+        if subclass_range
+            && let (Some(left_range), Some(right_range)) = (
+                crate::vm::native_methods::as_range(&left),
+                crate::vm::native_methods::as_range(&right),
+            )
+            && !self
+                .lookup_method(&left, "==")
+                .is_some_and(|(_, method)| !method.is_undefined && !method.body.is_empty())
+        {
+            return self.evaluate_equality(left_range, right_range, position);
+        }
         // Two ranges compare by their ends and their exclusivity,
         // which Range answers from its own method table.
         if matches!((left.view(), &right), (View::Range { .. }, _)) {

@@ -222,6 +222,9 @@ impl VirtualMachine {
         // or module body the load was called from. A wrapped load names a
         // module for them to land on instead.
         let caller_def_scope = std::mem::take(&mut self.def_scope_stack);
+        // The class or module body the load was written in is not one the
+        // file's top level runs in, so `undef` there names Object.
+        let caller_bodies = std::mem::take(&mut self.body_contexts);
         // A `class_exec` block the load was called from holds its constants
         // where it was written, which says nothing about the file's bodies.
         let caller_constant_homes = std::mem::take(&mut self.constant_homes);
@@ -284,6 +287,7 @@ impl VirtualMachine {
         self.call_stack_pop();
         self.method_nesting_stack = caller_nesting;
         self.def_scope_stack = caller_def_scope;
+        self.body_contexts = caller_bodies;
         self.constant_homes = caller_constant_homes;
         if let Some(saved) = previous_self {
             match saved {
@@ -353,6 +357,9 @@ impl VirtualMachine {
         // rather than nesting inside the class or module body it was asked
         // for from.
         let caller_def_scope = std::mem::take(&mut self.def_scope_stack);
+        // The class or module body the load was written in is not one the
+        // file's top level runs in, so `undef` there names Object.
+        let caller_bodies = std::mem::take(&mut self.body_contexts);
         let caller_nesting = std::mem::take(&mut self.method_nesting_stack);
         let caller_constant_homes = std::mem::take(&mut self.constant_homes);
         let caller_library = self
@@ -376,6 +383,7 @@ impl VirtualMachine {
         self.loading_embedded_library = caller_library;
         self.method_nesting_stack = caller_nesting;
         self.def_scope_stack = caller_def_scope;
+        self.body_contexts = caller_bodies;
         self.constant_homes = caller_constant_homes;
         if let Err(error) = result {
             // A library that raised while loading is not loaded, so the next

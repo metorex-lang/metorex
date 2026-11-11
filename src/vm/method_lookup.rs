@@ -880,6 +880,11 @@ impl VirtualMachine {
         }
     }
 
+    /// Whether no ancestor of `class_rc` marks `name` private or protected.
+    pub(crate) fn inherited_visibility_is_public(&self, class_rc: &Rc<Class>, name: &str) -> bool {
+        self.inherited_visibility(class_rc, name).is_none()
+    }
+
     /// Whether `name` is already private through `class_rc`'s ancestors.
     pub(crate) fn inherits_private(&self, class_rc: &Rc<Class>, name: &str) -> bool {
         matches!(self.inherited_visibility(class_rc, name), Some(true))
@@ -1415,10 +1420,29 @@ impl VirtualMachine {
     /// Whether the method the receiver would answer comes from the Enumerable
     /// module rather than from its own class.
     pub(crate) fn enumerable_stands_in(&self, receiver: &Object, method_name: &str) -> bool {
+        // A method the receiver was given of its own comes first.
         let class = match receiver.view() {
-            View::Instance(instance_rc) => Rc::clone(&instance_rc.borrow().class),
+            View::Instance(instance_rc) => {
+                let instance = instance_rc.borrow();
+                if instance.find_singleton_method(method_name).is_some()
+                    || instance
+                        .singleton_class()
+                        .is_some_and(|singleton| singleton.find_own_method(method_name).is_some())
+                {
+                    return false;
+                }
+                Rc::clone(&instance.class)
+            }
             View::Class(_) | View::Module(_) => return false,
-            _ => self.builtins().class_of(receiver),
+            _ => {
+                if self
+                    .existing_singleton_class(receiver)
+                    .is_some_and(|singleton| singleton.find_own_method(method_name).is_some())
+                {
+                    return false;
+                }
+                self.builtins().class_of(receiver)
+            }
         };
         class
             .find_method_with_owner(method_name)

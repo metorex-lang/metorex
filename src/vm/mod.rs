@@ -46,7 +46,7 @@ pub(crate) mod native_methods;
 mod operators;
 pub(super) mod param_binding;
 mod parsed_sources;
-mod pattern_matching;
+pub(crate) mod pattern_matching;
 mod prelude;
 mod program;
 mod ractors;

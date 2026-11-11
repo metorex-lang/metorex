@@ -652,3 +652,9 @@ fn range_ends_may_assign() {
     let output = run_example("control_flow/range_ends_may_assign.rb");
     assert_eq!(output, "[1, 2]\n3\n[0, 1, 2, 3]\n[1, 2]\n");
 }
+
+#[test]
+fn test_do_block_in_an_if_condition_belongs_to_the_call() {
+    let output = run_example("control_flow/do_block_in_if_condition.rb");
+    assert_eq!(output, ":small\n:big\n[2, 4]\n:none\n2\n0\n");
+}

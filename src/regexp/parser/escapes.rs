@@ -55,6 +55,14 @@ impl Parser {
                 ascii_only: false,
                 parts: vec![vec![ClassItem::Named(self.named_run(letter), false)]],
             })),
+            // Without a brace the escape names no property, and Ruby reads
+            // it as the letter, with a warning.
+            'p' | 'P' if self.peek() != Some('{') => {
+                let written: String = self.letters.iter().collect();
+                self.warnings
+                    .push(format!("invalid Unicode Property \\{letter}: /{written}/"));
+                Ok(Node::Letter(letter))
+            }
             'p' | 'P' => {
                 let (name, negated) = self.read_property()?;
                 Ok(Node::Class(Class {
@@ -72,6 +80,15 @@ impl Parser {
                     folded: self.flags.folded,
                     level,
                 })
+            }
+            // Without a name to call, `\g` is the letter, and Ruby warns
+            // when more of the pattern follows it.
+            'g' if !matches!(self.peek(), Some('<' | '\'')) => {
+                if self.peek().is_some() {
+                    let written: String = self.letters.iter().collect();
+                    self.warnings.push(format!("invalid subexp call: /{written}/"));
+                }
+                Ok(Node::Letter('g'))
             }
             'g' => {
                 let target = self.read_reference_name()?;

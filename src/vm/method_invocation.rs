@@ -473,6 +473,27 @@ impl VirtualMachine {
                     arguments,
                     position,
                 )?;
+                // Range#initialize, reached through `super`, wrote the ends,
+                // which become the range the instance holds.
+                if let View::Instance(made) = object.view() {
+                    let mut held = made.borrow_mut();
+                    if let Some(first) = held.instance_vars.shift_remove("begin") {
+                        let last = held.instance_vars.shift_remove("end").unwrap_or(Object::Nil);
+                        let excludes = held
+                            .instance_vars
+                            .shift_remove("excludes")
+                            .is_some_and(|flag| flag.is_truthy());
+                        held.set_var(
+                            crate::vm::native_methods::RANGE_SUBCLASS_VAR.to_string(),
+                            Object::Range(
+                                Box::new(first),
+                                Box::new(last),
+                                excludes,
+                                std::rc::Rc::new(()),
+                            ),
+                        );
+                    }
+                }
             }
             return Ok(object);
         }

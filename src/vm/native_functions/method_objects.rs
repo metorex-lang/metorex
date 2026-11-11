@@ -1,3 +1,4 @@
+use std::rc::Rc;
 // A method held as an object, and a constant registered against a file.
 
 use super::*;
@@ -107,10 +108,15 @@ impl VirtualMachine {
         arguments: Vec<Object>,
         position: Position,
     ) -> Result<Object, MetorexError> {
-        // Inside a method the definee is the module the method was
-        // written in, which a module's instance method reaches
+        // A class or module as `self` registers on itself, as Module#autoload
+        // does. Otherwise, inside a method, the definee is the module the
+        // method was written in, which a module's instance method reaches
         // through the nesting it captured.
-        let owner = match self.autoload_definee() {
+        let receiver_module = match self.environment().get("self").view() {
+            Some(View::Class(held) | View::Module(held)) => Some(Rc::clone(held)),
+            _ => None,
+        };
+        let owner = match receiver_module.or_else(|| self.autoload_definee()) {
             Some(enclosing) => enclosing,
             None => (match self.globals().get("Object").view() {
                 Some(View::Class(object_class)) => object_class,

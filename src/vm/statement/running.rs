@@ -225,11 +225,24 @@ impl VirtualMachine {
         };
         // A constant at the top level is bound on Object, which Ruby leaves
         // out of the name it reports.
-        let message = if named == "Object" {
-            format!("warning: already initialized constant {}", name)
+        let shown = if named == "Object" {
+            name.to_string()
         } else {
-            format!("warning: already initialized constant {}::{}", named, name)
+            format!("{named}::{name}")
         };
-        self.emit_warning_to_stderr(&message, position);
+        let prefix = self.warning_prefix(0, position);
+        self.emit_warning_to_stderr(
+            &format!("{prefix}already initialized constant {shown}"),
+            position,
+        );
+        // Ruby names where the value written over was set, when it knows.
+        if let Some((file, line)) = owner.get_const_location(name)
+            && !file.is_empty()
+        {
+            self.emit_warning_to_stderr(
+                &format!("{file}:{line}: warning: previous definition of {name} was here"),
+                position,
+            );
+        }
     }
 }

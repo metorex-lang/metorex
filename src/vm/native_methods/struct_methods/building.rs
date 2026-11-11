@@ -191,12 +191,7 @@ impl VirtualMachine {
                 Rc::clone(parent)
             };
             if owner.get_class_var(&name).is_some() {
-                let message = format!(
-                    "warning: already initialized constant {}::{}",
-                    owner.ruby_name(),
-                    name
-                );
-                self.emit_warning_to_stderr(&message, position);
+                self.warn_already_initialized(&owner, &name, position);
             }
             let qualified = format!("{}::{}", owner.ruby_name(), name);
             generated.assign_name_recursive(&qualified);

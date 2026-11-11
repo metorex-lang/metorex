@@ -206,3 +206,15 @@ fn test_symbols_and_ranges_keyword_setter_symbols_execution() {
         )
     );
 }
+
+#[test]
+fn test_range_subclass_super_with_two_ends_is_inclusive() {
+    let output = run_example("symbols_and_ranges/range_subclass_super_two_ends.rb");
+    assert_eq!(output, "1..3\nfalse\n3\n\"x\"\ntrue\ntrue\n");
+}
+
+#[test]
+fn test_range_subclass_compares_as_the_range_it_holds() {
+    let output = run_example("symbols_and_ranges/range_subclass_equality.rb");
+    assert_eq!(output, "true\ntrue\ntrue\ntrue\n2..2\ntrue\ntrue\n");
+}

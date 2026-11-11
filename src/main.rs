@@ -390,6 +390,10 @@ fn real_main_after_inline(cli: Cli) {
         {
             let ending = err_exception(&err);
             vm.run_at_exit_handlers(1, ending);
+            // Ruby reports an Interrupt it ends on, and no other signal.
+            if number == libc::SIGINT {
+                report_error(&mut vm, &err);
+            }
             // SAFETY: the default disposition is restored and the signal is
             // sent to this process, which then ends before returning.
             unsafe {
@@ -438,7 +442,10 @@ fn finish_with_error(vm: &mut VirtualMachine, err: &metorex::error::MetorexError
     if let Some(number) = signalled {
         let ending = err_exception(err);
         vm.run_at_exit_handlers(1, ending);
-        report_error(vm, err);
+        // Ruby reports an Interrupt it ends on, and no other signal.
+        if number == libc::SIGINT {
+            report_error(vm, err);
+        }
         // SAFETY: the default disposition is restored and the signal is sent
         // to this process, which then ends before returning.
         unsafe {

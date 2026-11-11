@@ -245,8 +245,11 @@ impl VirtualMachine {
                     return Ok(Object::Bool(false));
                 }
                 // A library metorex carries is used when the load path
-                // holds no file of that name.
-                if let Some(source) = crate::vm::stdlib::embedded_library(&require_name) {
+                // holds no file of that name. A bundled gem's library is
+                // out of reach once Bundler has set up a bundle without it.
+                if let Some(source) = crate::vm::stdlib::embedded_library(&require_name)
+                    && !self.bundle_leaves_out(&require_name, position)?
+                {
                     let already = self.run_embedded_library(&require_name, source)?;
                     return Ok(Object::Bool(already));
                 }
@@ -486,5 +489,33 @@ impl VirtualMachine {
 
         // Return true if newly loaded, false if already loaded (Ruby behavior)
         Ok(Object::Bool(!was_already_loaded))
+    }
+}
+
+impl VirtualMachine {
+    /// Whether `name` is a library of a bundled gem metorex carries that the
+    /// bundle Bundler set up does not list, which Ruby cannot load then.
+    fn bundle_leaves_out(&mut self, name: &str, position: Position) -> Result<bool, MetorexError> {
+        let Some(gem) = crate::vm::stdlib::carried_gem_of(name) else {
+            return Ok(false);
+        };
+        let Some(bundler) = self.globals().constant("Bundler") else {
+            return Ok(false);
+        };
+        let setup = self.send_to_object(
+            bundler,
+            "instance_variable_get",
+            vec![Object::symbol("@setup")],
+            position,
+        )?;
+        if matches!(setup.view(), View::Nil) {
+            return Ok(false);
+        }
+        let Some(gem_module) = self.globals().constant("Gem") else {
+            return Ok(false);
+        };
+        let loaded = self.send_to_object(gem_module, "loaded_specs", vec![], position)?;
+        let listed = self.send_to_object(loaded, "key?", vec![Object::string(gem)], position)?;
+        Ok(!listed.is_truthy())
     }
 }

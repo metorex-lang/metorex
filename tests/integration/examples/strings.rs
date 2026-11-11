@@ -886,3 +886,9 @@ fn test_strings_percent_q_escapes_execution() {
         )
     );
 }
+
+#[test]
+fn test_unary_plus_copy_keeps_bytes_that_are_no_characters() {
+    let output = run_example("strings/unary_plus_keeps_bytes.rb");
+    assert_eq!(output, "[170]\n[170]\n[194, 170]\n[99, 97, 102, 195, 169]\n");
+}

@@ -205,3 +205,9 @@ fn program_name_follows_dollar_zero() {
     let output = run_example("globals/program_name_follows_dollar_zero.rb");
     assert_eq!(output, "\"deploy\"\n\"release\"\n1\n");
 }
+
+#[test]
+fn test_verbose_reassignment_and_redefinition_warnings_name_both_places() {
+    let output = run_example("warnings_redefinition/main.rb");
+    assert_eq!(output, "definitions.rb:2: warning: already initialized constant LIMIT\ndefinitions.rb:1: warning: previous definition of LIMIT was here\ndefinitions.rb:5: warning: already initialized constant Settings::NAME\ndefinitions.rb:4: warning: previous definition of NAME was here\ndefinitions.rb:7: warning: already initialized constant Settings::NAME\ndefinitions.rb:5: warning: previous definition of NAME was here\ndefinitions.rb:8: warning: already initialized constant Settings::Box::SIZE\ndefinitions.rb:8: warning: previous definition of SIZE was here\ndefinitions.rb:10: warning: method redefined; discarding old greet\ndefinitions.rb:9: warning: previous definition of greet was here\ndefinitions.rb:18: warning: method redefined; discarding old size\ndefinitions.rb:15: warning: previous definition of size was here\n");
+}

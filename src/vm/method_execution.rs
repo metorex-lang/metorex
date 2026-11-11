@@ -411,8 +411,14 @@ impl VirtualMachine {
         );
         // `Module.nesting` inside the body reports where the method was
         // defined, not the scopes open at the call site.
-        self.method_nesting_stack
-            .push(method.captured_nesting.clone());
+        // A method `define_method` made from a block written at the top level
+        // reads constants from Object, whatever class it runs in.
+        if method.provenance.block_label.is_some() {
+            self.enter_block_nesting(method.captured_nesting.clone());
+        } else {
+            self.method_nesting_stack
+                .push(method.captured_nesting.clone());
+        }
         // A class variable written in the body belongs to the class or
         // module the method was written in, whatever the receiver is.
         self.class_var_cref_stack.push(
@@ -502,7 +508,11 @@ impl VirtualMachine {
                 Ok::<Object, MetorexError>(value)
             },
         );
-        self.method_nesting_stack.pop();
+        if method.provenance.block_label.is_some() {
+            self.leave_block_nesting();
+        } else {
+            self.method_nesting_stack.pop();
+        }
         self.class_var_cref_stack.pop();
         self.method_owner_stack.pop();
         self.method_arg_stack.pop();

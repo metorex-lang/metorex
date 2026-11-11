@@ -1198,3 +1198,27 @@ fn test_methods_pseudo_variable_method_names_execution() {
         )
     );
 }
+
+#[test]
+fn test_singleton_index_method_answers_a_subscript() {
+    let output = run_example("methods/singleton_index_method.rb");
+    assert_eq!(output, "{\"stub\" => \"a\"}\n{\"stub\" => \"a\"}\n{}\n");
+}
+
+#[test]
+fn test_public_new_on_a_singleton_class_records_nothing() {
+    let output = run_example("methods/public_new_on_singleton_records_nothing.rb");
+    assert_eq!(output, "#<Class:Ver>\ntrue\ntrue\nfalse\n[]\n");
+}
+
+#[test]
+fn test_singleton_methods_on_collections_answer_before_natives() {
+    let output = run_example("methods/singleton_methods_on_collections.rb");
+    assert_eq!(output, ":stubbed\n:stubbed_reject\n:stubbed\n:argv_stub\n1\ntrue\n2\n");
+}
+
+#[test]
+fn test_file_write_does_not_call_file_open() {
+    let output = run_example("io/write_does_not_call_file_open.rb");
+    assert_eq!(output, "3\n\"abc\"\n");
+}

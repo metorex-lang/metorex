@@ -208,6 +208,7 @@ impl VirtualMachine {
             .or_else(|| self.def_scope_stack.last().cloned())
         {
             self.refuse_frozen_definee(&definee, position)?;
+            self.warn_method_redefined(&definee, name, position);
             definee.define_method(name, Rc::clone(&function));
             if from_method_body.is_some() {
                 definee.clear_method_visibility(name);
@@ -227,6 +228,8 @@ impl VirtualMachine {
                 self.copy_to_module_function(&definee, name, position)?;
             }
         } else if let Some(View::Class(object_class)) = self.globals().get("Object").view() {
+            let object_class = Rc::clone(object_class);
+            self.warn_method_redefined(&object_class, name, position);
             object_class.define_method(name, Rc::clone(&function));
             // A method defined in top-level code is private unless `public`
             // was called there. One defined when a method runs is public.
@@ -240,5 +243,53 @@ impl VirtualMachine {
         }
 
         Ok(ControlFlow::Value(Object::symbol(name)))
+    }
+}
+
+impl VirtualMachine {
+    /// Under `$VERBOSE`, Ruby reports a `def` that replaces a method the
+    /// program wrote on the same class, and where the old one was written,
+    /// unless an alias still reaches the old method.
+    pub(crate) fn warn_method_redefined(
+        &mut self,
+        class: &Rc<crate::class::Class>,
+        name: &str,
+        position: crate::lexer::Position,
+    ) {
+        if !matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true))) {
+            return;
+        }
+        let Some(old) = class.find_own_method(name) else {
+            return;
+        };
+        if old.is_undefined || old.body.is_empty() {
+            return;
+        }
+        let Some(written) = old
+            .source_location
+            .as_ref()
+            .and_then(|location| location.filename.clone().map(|file| (file, location.line)))
+        else {
+            return;
+        };
+        let aliased = class.method_names().iter().any(|other| {
+            other != name
+                && class.find_own_method(other).is_some_and(|held| {
+                    held.provenance.original_name.as_deref() == Some(name)
+                })
+        });
+        if aliased {
+            return;
+        }
+        let prefix = self.warning_prefix(0, position);
+        self.emit_warning_to_stderr(
+            &format!("{prefix}method redefined; discarding old {name}"),
+            position,
+        );
+        let (file, line) = written;
+        self.emit_warning_to_stderr(
+            &format!("{file}:{line}: warning: previous definition of {name} was here"),
+            position,
+        );
     }
 }

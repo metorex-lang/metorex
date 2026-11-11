@@ -271,9 +271,10 @@ impl Parser<'_> {
     }
 
     fn parse_condition_in_place(&mut self) -> Result<Expression, MetorexError> {
-        self.condition_depth += 1;
+        let ends_at_do = usize::from(std::mem::take(&mut self.loop_condition));
+        self.condition_depth += ends_at_do;
         let parsed = self.parse_expression();
-        self.condition_depth -= 1;
+        self.condition_depth -= ends_at_do;
         let expr = parsed?;
         // `if value in Integer | Float` tests the value against a pattern.
         if self.check(&[TokenKind::In]) {
@@ -295,11 +296,11 @@ impl Parser<'_> {
             self.skip_whitespace();
             // The value is read as part of the condition, so a `do` after it
             // opens the loop body rather than a block on the value.
-            self.condition_depth += 1;
+            self.condition_depth += ends_at_do;
             self.assignment_rhs_depth += 1;
             let read = self.parse_expression();
             self.assignment_rhs_depth -= 1;
-            self.condition_depth -= 1;
+            self.condition_depth -= ends_at_do;
             let value = read?;
             // `while line = gets and line.size > 1` tests the assignment and
             // then the rest.
@@ -318,9 +319,9 @@ impl Parser<'_> {
         {
             let position = self.advance().position;
             self.skip_whitespace();
-            self.condition_depth += 1;
+            self.condition_depth += ends_at_do;
             let read = self.parse_expression();
-            self.condition_depth -= 1;
+            self.condition_depth -= ends_at_do;
             let value = read?;
             let reading = crate::parser::statements::or_assign_reading(&operation, expr.clone());
             return Ok(Expression::BinaryOp {

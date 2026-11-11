@@ -137,19 +137,21 @@ class IO
     spelled = text.is_a?(String) ? text : text.to_s
     at = offset == :__none__ ? nil : offset
     path = File.path(name)
+    # Opened through File.new, so a program's own File.open is not called,
+    # as MRI's IO.write does not call it.
     brought_into_being = !File.exist?(path)
     opened_with = options[:open_args]
     held = if !opened_with.nil?
       given = opened_with.to_a
       if given.last.is_a? Hash
-        File.open path, *given[0..-2], **given.last
+        File.new path, *given[0..-2], **given.last
       else
-        File.open path, *given
+        File.new path, *given
       end
     else
       mode = options[:mode]
       mode = at.nil? ? "w" : File::WRONLY | File::CREAT if mode.nil?
-      File.open path, mode, **options.reject { |key, _| key == :mode || key == :perm }
+      File.new path, mode, **options.reject { |key, _| key == :mode || key == :perm }
     end
     written = begin
       held.seek at, IO::SEEK_SET unless at.nil?
@@ -172,7 +174,7 @@ class IO
   end
 
   def self.readlines(name, separator = $/, limit = nil, chomp: false, **options)
-    held = File.open File.path(name), options[:mode].nil? ? "r" : options[:mode]
+    held = File.new File.path(name), options[:mode].nil? ? "r" : options[:mode]
     begin
       held.readlines separator, limit, chomp: chomp
     ensure
@@ -188,7 +190,7 @@ class IO
         IO.foreach(name, separator, limit, chomp: chomp, **options) { |line| yielder << line }
       end
     end
-    held = File.open File.path(name), options[:mode].nil? ? "r" : options[:mode]
+    held = File.new File.path(name), options[:mode].nil? ? "r" : options[:mode]
     # Reading every line of a file leaves no last line read behind.
     $_ = nil
     begin
@@ -423,9 +425,9 @@ class IO
       reader = if source.respond_to?(:readpartial) || source.respond_to?(:read)
         source
       else
-        opened_source = File.open(File.path(source), "rb")
+        opened_source = File.new(File.path(source), "rb")
       end
-      writer = destination.respond_to?(:write) ? destination : (opened_target = File.open(File.path(destination), "wb"))
+      writer = destination.respond_to?(:write) ? destination : (opened_target = File.new(File.path(destination), "wb"))
       return 0 if length == 0
       # A whole stream is passed on as it arrives, so a copy between two
       # pipes carries each piece over without waiting for the end.

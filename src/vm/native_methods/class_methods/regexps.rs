@@ -228,6 +228,16 @@ impl VirtualMachine {
                 }
             }
             refuse_bad_pattern(&source, &flags, position)?;
+            // An escape Ruby reads as a plain letter is reported as the
+            // pattern is made, while a repetition it rewrites is not.
+            if let Ok(read) =
+                crate::vm::native_methods::regexp_methods::read_pattern(&source, &flags)
+            {
+                for warning in read.warnings.iter().filter(|held| !held.starts_with("nested repeat")) {
+                    let prefix = self.warning_prefix(0, position);
+                    self.emit_warning_to_stderr(&format!("{prefix}{warning}"), position);
+                }
+            }
             // `timeout:` says how long a match of this pattern may take,
             // which stands in place of what the class names.
             if let Some(View::Dict(options)) = arguments.get(1).or(arguments.get(2)).view()

@@ -128,11 +128,10 @@ pub(crate) fn refuse_bad_pattern(
                         {
                             return refuse("invalid Unicode list");
                         }
+                        // Each code point the list names has up to six digits.
                         if inside
-                            .iter()
-                            .filter(|held| held.is_ascii_hexdigit())
-                            .count()
-                            > 6
+                            .split(|held| held.is_whitespace())
+                            .any(|point| point.len() > 6)
                         {
                             return refuse("invalid Unicode range");
                         }

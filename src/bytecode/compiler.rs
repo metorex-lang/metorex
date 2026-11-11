@@ -1560,8 +1560,12 @@ impl Compiler {
         let value = self.temporary()?;
         let matched = self.temporary()?;
         self.expression(subject, value)?;
-        let list = wide(Some(self.unit.when_list(cases.to_vec(), position)))?;
-        self.emit(Instruction::WarnDuplicatedWhen { list }, position);
+        // Only a case with a literal written twice has anything to warn of,
+        // which spares every other case the check each time it runs.
+        if crate::vm::pattern_matching::cases::duplicates_a_when_literal(cases) {
+            let list = wide(Some(self.unit.when_list(cases.to_vec(), position)))?;
+            self.emit(Instruction::WarnDuplicatedWhen { list }, position);
+        }
         let mut done = Vec::new();
         for (index, case) in cases.iter().enumerate() {
             let arm = wide(Some(self.unit.pattern_arm(PatternArm {

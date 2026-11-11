@@ -376,6 +376,7 @@ impl VirtualMachine {
         // logic in execute_class_def / execute_module_def sees an empty
         // outer scope.
         let saved_def_scope = std::mem::take(&mut self.def_scope_stack);
+        let saved_bodies = std::mem::take(&mut self.body_contexts);
         self.autoload_const_access_depth += 1;
         if reloading {
             self.autoload_reload_depth += 1;
@@ -432,6 +433,7 @@ impl VirtualMachine {
         self.autoload_loading
             .retain(|(cls, n, _)| !(Rc::ptr_eq(cls, class_rc) && n == name));
         self.def_scope_stack = saved_def_scope;
+        self.body_contexts = saved_bodies;
         if let Err(err) = load_result {
             class_rc.set_autoload(name, &path);
             if let Ok(canonical) = p.canonicalize() {

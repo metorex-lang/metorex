@@ -189,6 +189,7 @@ impl VirtualMachine {
                 m.end_line = Some(def_end.line as usize);
                 self.warn_redefined_optimized_method(class.name(), method_name, *def_position)?;
                 self.refuse_frozen_definee(class, *def_position)?;
+                self.warn_method_redefined(class, method_name, *def_position);
                 class.define_method(method_name, Rc::new(m));
                 apply_current_visibility(class, method_name);
                 let hook = Self::method_added_hook_for(class);
@@ -267,6 +268,7 @@ impl VirtualMachine {
                 } else {
                     self.warn_redefined_optimized_method(class.name(), method_name, *def_position)?;
                     self.refuse_frozen_definee(class, *def_position)?;
+                    self.warn_method_redefined(class, method_name, *def_position);
                     class.define_method(method_name, method);
                     apply_current_visibility(class, method_name);
                     // A method defined in a `class << obj` body is a
@@ -723,17 +725,7 @@ impl VirtualMachine {
         assign_pos: Position,
     ) -> Result<(), MetorexError> {
         if class.get_class_var(const_name).is_some() {
-            let owner = class.ruby_name();
-            let owner = if owner.is_empty() {
-                class.inspect_name()
-            } else {
-                owner
-            };
-            let msg = format!(
-                "warning: already initialized constant {}::{}",
-                owner, const_name
-            );
-            self.emit_warning_to_stderr(&msg, assign_pos);
+            self.warn_already_initialized(class, const_name, assign_pos);
         }
         // A value written over a pending autoload takes its place.
         class.remove_autoload(const_name);

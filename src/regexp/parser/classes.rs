@@ -62,6 +62,19 @@ impl Parser {
                 && !(self.peek_at(1) == Some('&') && self.peek_at(2) == Some('&'))
             {
                 self.at += 1;
+                // A nested class after the `-` joins the class, and the span
+                // stays open: the next character ends it, while a `]` or `&&`
+                // drops its start.
+                while self.peek() == Some('[') && self.peek_at(1) != Some(':') {
+                    self.at += 1;
+                    let nested = self.parse_class()?;
+                    items.push(ClassItem::Nested(Box::new(nested)));
+                }
+                if matches!(self.peek(), None | Some(']'))
+                    || (self.peek() == Some('&') && self.peek_at(1) == Some('&'))
+                {
+                    continue;
+                }
                 match self.class_member()? {
                     Member::Letter(high) => {
                         if high < low {

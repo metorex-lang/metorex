@@ -536,6 +536,23 @@ const EMBEDDED_LIBRARIES: &[(&[&str], &str)] = &[
     (&["uri/wss"], carried_source!("uri/wss.rb")),
 ];
 
+/// The name of the bundled gem a carried library belongs to, such as `rake`
+/// for `rake/task`, or None for one that is part of Ruby itself.
+pub(crate) fn carried_gem_of(name: &str) -> Option<&'static str> {
+    let trimmed = name.strip_suffix(".rb").unwrap_or(name);
+    if EMBEDDED_LIBRARIES.iter().any(|(names, _)| names.contains(&trimmed)) {
+        return None;
+    }
+    GEM_LIBRARIES
+        .iter()
+        .find(|(named, _, _)| *named == trimmed)
+        .map(|(_, directory, _)| {
+            directory
+                .rsplit_once('-')
+                .map_or(*directory, |(gem, _)| gem)
+        })
+}
+
 /// The source of a library metorex carries, or None for a name it does not
 /// have. A file on the load path wins over one of these.
 pub(crate) fn embedded_library(name: &str) -> Option<&'static str> {

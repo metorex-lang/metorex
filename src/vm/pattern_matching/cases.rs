@@ -121,6 +121,15 @@ impl VirtualMachine {
 /// How a `when` pattern is written, for the literals that can be compared as
 /// text. Anything else answers None, since two expressions that happen to
 /// name the same value are not a duplicate as written.
+/// Whether two `when` clauses of `cases` are written with the same literal.
+pub(crate) fn duplicates_a_when_literal(cases: &[crate::ast::MatchCase]) -> bool {
+    let mut seen = std::collections::HashSet::new();
+    cases
+        .iter()
+        .filter_map(|case| literal_pattern_spelling(&case.pattern))
+        .any(|spelling| !seen.insert(spelling))
+}
+
 pub(crate) fn literal_pattern_spelling(pattern: &crate::ast::MatchPattern) -> Option<String> {
     use crate::ast::{Expression, MatchPattern};
     match pattern {

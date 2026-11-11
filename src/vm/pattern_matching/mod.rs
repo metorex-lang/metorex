@@ -12,7 +12,7 @@ pub(crate) use std::cell::RefCell;
 pub(crate) use std::collections::HashMap;
 pub(crate) use std::rc::Rc;
 
-mod cases;
+pub(crate) mod cases;
 mod collections;
 mod failures;
 mod patterns;

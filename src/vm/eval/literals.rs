@@ -338,8 +338,9 @@ impl VirtualMachine {
         // Check for user-defined [] method on instances
         if let View::Instance(instance_rc) = collection.view() {
             let class = Rc::clone(&instance_rc.borrow().class);
-            if let Some(method) = class.find_method("[]") {
-                return self.invoke_method(class, method, collection.clone(), vec![key], position);
+            // A `[]` on the object's singleton class comes ahead of its class's.
+            if let Some((owner, method)) = self.lookup_method(&collection, "[]") {
+                return self.invoke_method(owner, method, collection.clone(), vec![key], position);
             }
             // A Thread keeps its locals under `t[:k]`, which the
             // Thread method table reads. Going through it here keeps

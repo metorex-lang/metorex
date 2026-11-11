@@ -649,3 +649,21 @@ fn test_loading_late_frozen_string_literal_comment_execution() {
         )
     );
 }
+
+#[test]
+fn test_bare_autoload_registers_on_the_module_running_the_method() {
+    let output = run_example("loading/autoload_from_extended_method/main.rb");
+    assert_eq!(output, "true\nnil\nnil\n");
+}
+
+#[test]
+fn test_undef_in_a_file_required_from_a_module_body_names_object() {
+    let output = run_example("loading/undef_in_required_file/main.rb");
+    assert_eq!(output, "main\n[]\n\"root/x\"\nfalse\n");
+}
+
+#[test]
+fn test_bundled_gem_left_out_of_the_bundle_cannot_be_required() {
+    let output = run_example("loading/bundled_gem_outside_the_bundle.rb");
+    assert_eq!(output, "cannot load such file -- rake\n[1]\n");
+}

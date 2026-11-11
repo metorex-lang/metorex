@@ -455,3 +455,18 @@ fn test_regexp_equal_whatever_the_flag_order_execution() {
     let output = run_example("regexp/equal_whatever_the_flag_order.rb");
     assert_eq!(output, "true\ntrue\ntrue\n:found\nfalse\ntrue\n");
 }
+
+#[test]
+fn test_range_start_before_a_nested_class_waits_for_its_end() {
+    let output = run_example("regexp/range_start_before_nested_class.rb");
+    assert_eq!(
+        output,
+        "[\"b\", \"c\"]\n[\"b\", \"c\", \"x\"]\n[\"a\", \"b\", \"c\", \"d\"]\n[\"a\", \"c\"]\n[\"a\", \"b\", \"c\", \"x\"]\nfalse\n"
+    );
+}
+
+#[test]
+fn test_property_and_call_escapes_without_a_name_read_as_letters() {
+    let output = run_example("regexp/lenient_property_and_call_escapes.rb");
+    assert_eq!(output, "true\nfalse\n[\"a\", \"b\"]\ntrue\ntrue\n\"\\\\g\"\ntrue\ntrue\n");
+}

@@ -183,7 +183,11 @@ fn set_disposition(number: i32, command: &Object) {
     let Some(caught) = CAUGHT.get(number as usize) else {
         return;
     };
-    let catching = !matches!(command.view(), View::String(_) | View::Nil);
+    // Ruby's own handler for SIGINT raises Interrupt, so `DEFAULT` keeps
+    // catching it, where for any other signal it hands it back to the system.
+    let ruby_default = number == libc::SIGINT
+        && matches!(command.view(), View::String(held) if *held.as_str() == *"DEFAULT");
+    let catching = ruby_default || !matches!(command.view(), View::String(_) | View::Nil);
     if !catching && !caught.load(std::sync::atomic::Ordering::SeqCst) {
         return;
     }
@@ -222,6 +226,12 @@ fn set_disposition(number: i32, command: &Object) {
 }
 
 impl crate::vm::VirtualMachine {
+    /// Catch SIGINT with Ruby's own handler, which raises Interrupt in the
+    /// main thread, as a Ruby program starts out doing.
+    pub fn install_interrupt_handler(&mut self) {
+        set_disposition(libc::SIGINT, &Object::string("DEFAULT"));
+    }
+
     /// Run the Ruby handler of every signal that has arrived since the last
     /// time this was asked, lowest number first.
     pub(crate) fn deliver_pending_signals(
@@ -419,11 +429,16 @@ impl crate::vm::VirtualMachine {
                 && !matches!(name.as_str(), "KILL" | "STOP")
             {
                 // Handlers run on the main thread, so one sent from another
-                // thread waits for the main thread to run again.
+                // thread waits for the main thread to run again. The default
+                // handler raises there too.
                 if !self.thread_current_stack.is_empty()
-                    && matches!(
-                        self.signal_handlers.get(&name),
-                        Some(held) if !matches!(held.view(), View::String(_) | View::Nil)
+                    && !matches!(
+                        self.signal_handlers.get(&name).view(),
+                        Some(View::Nil)
+                    )
+                    && !matches!(
+                        self.signal_handlers.get(&name).view(),
+                        Some(View::String(held)) if *held.as_str() == *"IGNORE"
                     )
                 {
                     self.signals_for_main_thread.push(number);
@@ -525,7 +540,8 @@ impl crate::vm::VirtualMachine {
         let exception = Object::exception(class_name, message.clone());
         if let View::Exception(details) = exception.view() {
             let mut details = details.borrow_mut();
-            details.message_given = !message.is_empty();
+            // An Interrupt a signal raises carries an empty message.
+            details.message_given = true;
             details
                 .instance_vars
                 .insert(SIGNO_KEY.into(), Object::Int(number as i64));

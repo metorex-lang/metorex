@@ -68,6 +68,9 @@ pub struct Parser<'source> {
     /// How deep the walk is inside a `while`, `until` or `for` condition,
     /// where a `do` closes the condition rather than opening a block.
     pub(crate) condition_depth: usize,
+    /// Set while a `while` or `until` condition is read, where a `do` opens
+    /// the loop body rather than a block.
+    pub(crate) loop_condition: bool,
 
     /// Whether the walk is reading a `when` clause, where a `*` spreads a
     /// list of choices rather than naming a rest pattern.
@@ -510,6 +513,7 @@ impl<'source> Parser<'source> {
             not_operand_depth: 0,
             paren_less_arg_depth: 0,
             condition_depth: 0,
+            loop_condition: false,
             in_when_clause: false,
             rescue_depth: 0,
             in_defined_argument: false,

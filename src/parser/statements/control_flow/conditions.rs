@@ -94,6 +94,7 @@ impl Parser<'_> {
         let start_pos = self.expect(TokenKind::While, "Expected 'while'")?.position;
         self.skip_whitespace();
 
+        self.loop_condition = true;
         let condition = self.parse_tested_condition()?;
         self.skip_whitespace();
 
@@ -128,6 +129,7 @@ impl Parser<'_> {
         let start_pos = self.expect(TokenKind::Until, "Expected 'until'")?.position;
         self.skip_whitespace();
 
+        self.loop_condition = true;
         let condition = self.parse_tested_condition()?;
         self.skip_whitespace();
         self.match_token(&[TokenKind::Do]);

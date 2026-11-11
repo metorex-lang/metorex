@@ -178,6 +178,7 @@ pub(crate) fn apply_encoding_flags(vm: &mut VirtualMachine, cli: &Cli) {
 /// Apply `-I` (include paths), `-r` (require libraries) and `-w` (warnings)
 /// flags to a VM.
 pub(crate) fn apply_cli_flags(vm: &mut VirtualMachine, cli: &Cli) {
+    vm.install_interrupt_handler();
     // A feature turned on leaves a module behind under the name Ruby gives
     // it, which is what `defined?` finds.
     let features = Features::read(cli);

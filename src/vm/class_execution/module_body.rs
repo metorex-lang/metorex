@@ -68,6 +68,7 @@ impl VirtualMachine {
                     )?;
                 } else {
                     self.refuse_frozen_definee(module, statement.position())?;
+                    self.warn_method_redefined(module, method_name, statement.position());
                     module.define_method(method_name, method);
                     apply_current_visibility(module, method_name);
                     let hook = Self::method_added_hook_for(module);
@@ -225,17 +226,7 @@ impl VirtualMachine {
         assign_pos: Position,
     ) -> Result<(), MetorexError> {
         if module.get_class_var(const_name).is_some() {
-            let owner = module.ruby_name();
-            let owner = if owner.is_empty() {
-                module.inspect_name()
-            } else {
-                owner
-            };
-            let msg = format!(
-                "warning: already initialized constant {}::{}",
-                owner, const_name
-            );
-            self.emit_warning_to_stderr(&msg, assign_pos);
+            self.warn_already_initialized(module, const_name, assign_pos);
         }
         crate::vm::statement::name_constant_value(module, const_name, &const_value);
         // A value written over a pending autoload takes its place.

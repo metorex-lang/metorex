@@ -70,12 +70,15 @@ impl VirtualMachine {
                     if !text.is_frozen() && !text.is_chilled() {
                         return Ok(value.clone());
                     }
-                    Ok(Object::String(std::rc::Rc::new(
-                        crate::object::StringValue::with_encoding(
-                            text.to_text(),
-                            text.encoding_name(),
-                        ),
-                    )))
+                    // The copy keeps bytes that are no characters as bytes.
+                    let made = crate::object::StringValue::with_encoding(
+                        text.to_text(),
+                        text.encoding_name(),
+                    );
+                    if text.holds_bytes() {
+                        made.mark_bytes();
+                    }
+                    Ok(Object::String(std::rc::Rc::new(made)))
                 }
                 _ => Err(unary_type_error(op, &value, position)),
             },

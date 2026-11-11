@@ -1,0 +1,6 @@
+p "abc-dx".scan(/[a-[bc]]/)
+p "abc-dxy".scan(/[xa-[bc]]/)
+p "abc-dxy".scan(/[a-[bc]d]/)
+p "abc-".scan(/[ab-[c]]/)
+p "abcdxyz".scan(/[a-[x]c]/)
+p Regexp.new("[a-[bc]]").match?("a")

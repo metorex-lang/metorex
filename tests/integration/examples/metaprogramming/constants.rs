@@ -290,3 +290,9 @@ fn a_replaced_top_level_constant_is_read_back() {
     let output = run_example("constants/replaced_top_level_constant_is_read_back.rb");
     assert_eq!(output, ":first\n:second\nfalse\n\"1\"\ntrue\n");
 }
+
+#[test]
+fn test_define_method_top_level_block_reads_object_constants() {
+    let output = run_example("constants/define_method_top_level_constant.rb");
+    assert_eq!(output, "File\nFile\nFile\n");
+}

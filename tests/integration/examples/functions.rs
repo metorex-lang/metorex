@@ -526,3 +526,9 @@ fn test_procs_unknown_block_keywords_execution() {
         )
     );
 }
+
+#[test]
+fn test_local_named_lambda_reads_as_a_local() {
+    let output = run_example("functions/local_named_lambda.rb");
+    assert_eq!(output, ":skipped\n:called\n3\n3\n16\n");
+}

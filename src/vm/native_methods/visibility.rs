@@ -63,7 +63,20 @@ impl VirtualMachine {
             // already carries records nothing.
             let has_own_entry =
                 class_rc.find_own_method(&n).is_some() || class_rc.has_visibility_marking(&n);
-            let already_set = !has_own_entry && self.inherits_visibility(class_rc, &n, modifier);
+            // The singleton class of a class answers `new` and the methods
+            // the class responds to natively, which are public already.
+            let natively_public = modifier == "public"
+                && class_rc.find_method(&n).is_none()
+                && class_rc
+                    .get_class_var("__attached__")
+                    .is_some_and(|attached| {
+                        (n == "new" && matches!(attached.view(), View::Class(_)))
+                            || (self.responds_to(&attached, &n)
+                                && !self.method_is_restricted(&attached, &n))
+                    })
+                && self.inherited_visibility_is_public(class_rc, &n);
+            let already_set = !has_own_entry
+                && (natively_public || self.inherits_visibility(class_rc, &n, modifier));
             if !already_set {
                 to_mark.push(n.clone());
             }

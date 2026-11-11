@@ -278,6 +278,10 @@ impl VirtualMachine {
         if self.was_moved(&receiver) {
             return false;
         }
+        // A Range subclass instance answers its ends from the range it holds.
+        if crate::vm::native_methods::range_subclass_value(&receiver).is_some() {
+            return false;
+        }
         let Some(method) = called.cache.peek(&class) else {
             return false;
         };

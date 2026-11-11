@@ -311,3 +311,12 @@ fn test_hashes_double_splat_of_a_hash_subclass_execution() {
         "[\"k\", {store_key_references: true}]\n[nil, {mode: :strict}]\n"
     );
 }
+
+#[test]
+fn test_values_at_reads_a_missing_key_through_the_default_block() {
+    let output = run_example("hashes/values_at_default_block.rb");
+    assert_eq!(
+        output,
+        "[\"keyword\"]\n[\"a\", \"b\"]\n{keyword: \"keyword\", a: \"a\", b: \"b\"}\n\"start_of_line\"\n[\"start_of_line\"]\n"
+    );
+}

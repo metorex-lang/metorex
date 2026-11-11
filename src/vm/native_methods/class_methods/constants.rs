@@ -426,12 +426,7 @@ impl VirtualMachine {
         // Overwriting a bound value warns; replacing a pending
         // autoload registration does not.
         if class_rc.get_class_var(const_name).is_some() {
-            let msg = format!(
-                "warning: already initialized constant {}::{}",
-                class_rc.inspect_name(),
-                const_name
-            );
-            self.emit_warning_to_stderr(&msg, position);
+            self.warn_already_initialized(class_rc, const_name, position);
         }
         // Setting the constant cancels any pending autoload for it
         // and clears any "loaded but unrealized" bookkeeping.

@@ -22,9 +22,9 @@ class File
       raise IOError, "not opened for reading"
     end
     held = if open_options.empty?
-      File.open File.path(name), mode
+      File.new File.path(name), mode
     else
-      File.open File.path(name), mode, **open_options
+      File.new File.path(name), mode, **open_options
     end
     begin
       held.seek offset unless offset.nil? || offset == 0
@@ -211,7 +211,7 @@ class File
       end
       counted = counted.to_int
     end
-    held = File.open path, "r+"
+    held = File.new path, "r+"
     begin
       held.truncate counted
     ensure

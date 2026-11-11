@@ -23,7 +23,6 @@ impl Parser<'_> {
             Vec::new()
         };
 
-        self.skip_whitespace();
         let trailing_block = if self.check(&[TokenKind::LBrace]) {
             Some(Box::new(self.parse_brace_block()?))
         } else if self.check(&[TokenKind::Do]) {

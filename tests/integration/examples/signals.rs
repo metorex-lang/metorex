@@ -2,14 +2,14 @@ use super::run_example;
 
 #[test]
 fn test_signals_delivery_execution() {
-    let expected = "true\ntrue\ntrue\nInterrupt\nshutting down\ntrue\nSIGTERM\ntrue\nDEFAULT\ntrue\nInterrupt\nSIGTERM\n1\nhandled true\nunsupported signal 'SIGNOPE'\n";
+    let expected = "true\ntrue\ntrue\nInterrupt\nshutting down\ntrue\nSIGTERM\ntrue\nDEFAULT\ntrue\n\nSIGTERM\n1\nhandled true\nunsupported signal 'SIGNOPE'\n";
     let output = run_example("signals/delivery.rb");
     assert_eq!(output, expected);
 }
 
 #[test]
 fn test_signals_delivery_parens_execution() {
-    let expected = "true\ntrue\ntrue\nInterrupt\nshutting down\ntrue\nSIGTERM\ntrue\nDEFAULT\ntrue\nInterrupt\nSIGTERM\n1\nhandled true\nunsupported signal 'SIGNOPE'\n";
+    let expected = "true\ntrue\ntrue\nInterrupt\nshutting down\ntrue\nSIGTERM\ntrue\nDEFAULT\ntrue\n\nSIGTERM\n1\nhandled true\nunsupported signal 'SIGNOPE'\n";
     let output = run_example("signals/delivery_parens.rb");
     assert_eq!(output, expected);
 }
@@ -161,4 +161,13 @@ fn test_signals_kill_from_thread_execution() {
 fn test_signals_kill_from_thread_no_parens_execution() {
     let output = run_example("signals/kill_from_thread_no_parens.rb");
     assert_eq!(output, KILL_FROM_THREAD_OUTPUT);
+}
+
+#[test]
+fn test_interrupt_raises_in_the_main_thread_of_a_fork_and_of_the_process() {
+    let output = run_example("signals/interrupt_raises_in_the_main_thread.rb");
+    assert_eq!(
+        output,
+        "\"DEFAULT\"\n\"READY\\n\"\n\"interrupted Interrupt\\n\"\n0\ninterrupted\n\"\"\n2\n"
+    );
 }
