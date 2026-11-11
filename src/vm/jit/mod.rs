@@ -18,7 +18,7 @@
 //! It is on unless `METOREX_JIT=0`, and `METOREX_JIT_CALL_THRESHOLD` sets
 //! how many runs of a unit come before it is compiled.
 
-mod attributes;
+pub(crate) mod attributes;
 mod bare_calls;
 mod memory;
 mod native_calls;

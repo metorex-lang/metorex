@@ -9,6 +9,10 @@ use crate::parser::tighten;
 #[derive(Debug, Default)]
 pub struct Unit {
     pub instructions: Vec<Instruction>,
+    /// Where the locals that stand for a method's parameters start among
+    /// `locals`, for a method's body. They are bound before the unit runs,
+    /// so they are not reserved the way the locals before them are.
+    pub parameter_slots_from: Option<usize>,
     /// How often the unit has run and the machine code it was compiled to.
     pub jit: crate::vm::jit::JitSlot,
     /// The source position of each instruction, which backtraces,
@@ -64,6 +68,9 @@ pub struct Unit {
     /// The `when` clauses of each `case`/`when`, which are warned about when
     /// two are written the same, with where the `case` was written.
     pub when_lists: Vec<(Vec<crate::ast::MatchCase>, Position)>,
+    /// The `when` arms written with literals that `WhenDispatch` goes to
+    /// by value.
+    pub when_tables: Vec<WhenTable>,
     /// The flip-flops written as conditions: where each was written and how
     /// many of its sides are Integer literals.
     pub flip_flops: Vec<(Position, usize)>,
@@ -577,6 +584,17 @@ pub enum Definition {
     },
 }
 
+/// The leading `when` arms of a `case` statement written with Integer and
+/// Symbol literals: the instruction each value's first arm starts its body
+/// at, and the instruction testing goes on at when the value is none of
+/// them.
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct WhenTable {
+    pub integers: crate::fast_hash::NameMap<i64, u16>,
+    pub symbols: crate::fast_hash::NameMap<String, u16>,
+    pub otherwise: u16,
+}
+
 /// One arm of a `case`/`when` or `case`/`in` statement.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PatternArm {
@@ -707,6 +725,7 @@ impl Unit {
         tighten(&mut self.case_arms);
         tighten(&mut self.pattern_arms);
         tighten(&mut self.when_lists);
+        tighten(&mut self.when_tables);
         tighten(&mut self.flip_flops);
         tighten(&mut self.patterns);
         tighten(&mut self.handlers);
@@ -888,6 +907,11 @@ impl Unit {
     pub fn when_list(&mut self, cases: Vec<crate::ast::MatchCase>, position: Position) -> usize {
         self.when_lists.push((cases, position));
         self.when_lists.len() - 1
+    }
+
+    pub fn when_table(&mut self, table: WhenTable) -> usize {
+        self.when_tables.push(table);
+        self.when_tables.len() - 1
     }
 
     pub fn flip_flop(&mut self, position: Position, integer_sides: usize) -> usize {

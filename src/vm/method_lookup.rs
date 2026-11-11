@@ -1727,12 +1727,22 @@ pub(crate) fn class_level_method(
     class_rc: &Rc<Class>,
     method_name: &str,
 ) -> Option<(Rc<Class>, Rc<Method>)> {
-    let class_level_name = std::cell::OnceCell::new();
+    crate::fast_hash::with_joined("__class__", method_name, |class_level_name| {
+        class_level_method_named(class_rc, method_name, class_level_name)
+    })
+}
+
+/// `class_level_method` with the name a `def self.name` is stored under.
+fn class_level_method_named(
+    class_rc: &Rc<Class>,
+    method_name: &str,
+    class_level_name: &str,
+) -> Option<(Rc<Class>, Rc<Method>)> {
     let own_class_level_method = |class: &Rc<Class>| {
         if !class.holds_class_methods.get() {
             return None;
         }
-        class.find_own_method(class_level_name.get_or_init(|| format!("__class__{}", method_name)))
+        class.find_own_method(class_level_name)
     };
     if let Some(method) =
         own_class_level_method(class_rc).or_else(|| module_extended_method(class_rc, method_name))

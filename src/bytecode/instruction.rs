@@ -594,6 +594,15 @@ pub enum Instruction {
         subject: u8,
         arm: u16,
     },
+    /// Go to the body of the first arm of the unit's `when` table the
+    /// operand numbers whose literal is the Integer or Symbol in `subject`,
+    /// or to where the table says testing goes on when none is. Any other
+    /// value, or a run counting branches, goes on to the next instruction,
+    /// which tests the arms one at a time.
+    WhenDispatch {
+        subject: u8,
+        table: u16,
+    },
     /// Test the unit's `in` pattern the operand numbers against the value in
     /// `subject`, putting whether it matched in the register after it, and
     /// binding the names the pattern reached.
@@ -774,6 +783,7 @@ impl Instruction {
             Instruction::PopScope => "PopScope",
             Instruction::WarnDuplicatedWhen { .. } => "WarnDuplicatedWhen",
             Instruction::WhenArm { .. } => "WhenArm",
+            Instruction::WhenDispatch { .. } => "WhenDispatch",
             Instruction::InArm { .. } => "InArm",
             Instruction::GuardFailed => "GuardFailed",
             Instruction::PushDeconstructed { .. } => "PushDeconstructed",

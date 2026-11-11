@@ -42,33 +42,8 @@ impl VirtualMachine {
                 _ => None,
             }
         });
-        match held.view() {
-            Some(View::Instance(instance_rc)) => {
-                let instance = instance_rc.borrow();
-                Ok(instance.get_var(name).cloned().unwrap_or(Object::Nil))
-            }
-            Some(View::Exception(details)) => Ok(details
-                .borrow()
-                .instance_vars
-                .get(name)
-                .cloned()
-                .unwrap_or(Object::Nil)),
-            Some(View::Class(class_rc)) => Ok(class_rc
-                .get_class_var(&format!("@{}", name))
-                .unwrap_or(Object::Nil)),
-            Some(View::Module(module_rc)) => Ok(module_rc
-                .get_class_var(&format!("@{}", name))
-                .unwrap_or(Object::Nil)),
-            // Immediates (Int/Float/Symbol/Bool/Nil/etc.) and other non-instance
-            // selves: ivar reads return nil — matching Ruby, where ivars on
-            // immediates default to nil even if no writer ever ran.
-            // A collection or a String keeps its instance variables aside,
-            // where `instance_variable_set` puts them too.
-            Some(other) => Ok(Self::collection_address(&other.to_object())
-                .and_then(|address| self.collection_variables.get(&address))
-                .and_then(|held| held.get(name))
-                .cloned()
-                .unwrap_or(Object::Nil)),
+        match held {
+            Some(held) => Ok(self.instance_variable_of(&held, name)),
             None => Err(MetorexError::runtime_error(
                 format!(
                     "Instance variable @{} can only be used within a method",
@@ -76,6 +51,34 @@ impl VirtualMachine {
                 ),
                 position_to_location(position),
             )),
+        }
+    }
+
+    /// The instance variable `@name` of `held`, nil when it has none.
+    pub(crate) fn instance_variable_of(&self, held: &Object, name: &str) -> Object {
+        match held.view() {
+            View::Instance(instance_rc) => {
+                let instance = instance_rc.borrow();
+                instance.get_var(name).cloned().unwrap_or(Object::Nil)
+            }
+            View::Exception(details) => details
+                .borrow()
+                .instance_vars
+                .get(name)
+                .cloned()
+                .unwrap_or(Object::Nil),
+            View::Class(class_rc) | View::Module(class_rc) => {
+                with_class_ivar_key(name, |key| class_rc.get_class_var(key)).unwrap_or(Object::Nil)
+            }
+            // An Integer, a Symbol, nil, or another value with no variables
+            // of its own reads nil, as Ruby's do. A collection or a String
+            // keeps its instance variables aside, where
+            // `instance_variable_set` puts them too.
+            _ => Self::collection_address(held)
+                .and_then(|address| self.collection_variables.get(&address))
+                .and_then(|variables| variables.get(name))
+                .cloned()
+                .unwrap_or(Object::Nil),
         }
     }
 
@@ -198,4 +201,10 @@ fn uninitialized_class_var_error(
         location: position_to_location(position),
         message,
     }
+}
+
+/// Call `read` with the key a class or module holds its instance variable
+/// `name` under, which is the name after an `@`.
+pub(crate) fn with_class_ivar_key<R>(name: &str, read: impl FnOnce(&str) -> R) -> R {
+    crate::fast_hash::with_joined("@", name, read)
 }

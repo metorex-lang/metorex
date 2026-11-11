@@ -19,6 +19,20 @@ thread_local! {
     static ARRAY_READ: MethodGuard = const { MethodGuard::new() };
     static HASH_READ: MethodGuard = const { MethodGuard::new() };
     static HASH_WRITE: MethodGuard = const { MethodGuard::new() };
+    static INTEGER_CASE_EQUAL: MethodGuard = const { MethodGuard::new() };
+    static FLOAT_CASE_EQUAL: MethodGuard = const { MethodGuard::new() };
+    static SYMBOL_CASE_EQUAL: MethodGuard = const { MethodGuard::new() };
+    static STRING_CASE_EQUAL: MethodGuard = const { MethodGuard::new() };
+}
+
+/// The kinds of literal a `when` compares the value against itself while
+/// their `===` is the core library's.
+#[derive(Clone, Copy)]
+pub(crate) enum LiteralKind {
+    Integer,
+    Float,
+    Symbol,
+    String,
 }
 
 impl VirtualMachine {
@@ -68,6 +82,30 @@ impl VirtualMachine {
     /// instructions apply are the core library's.
     pub(crate) fn integer_operators_in_force(&self) -> bool {
         self.operators_in_force(&INTEGER_OPERATORS, &Object::Int(0))
+    }
+
+    /// Whether `===` on the values of `kind` is the core library's, as a
+    /// `when` written with a literal of that kind needs to compare the
+    /// value itself.
+    pub(crate) fn case_equality_in_force(&self, kind: LiteralKind) -> bool {
+        let guard = match kind {
+            LiteralKind::Integer => &INTEGER_CASE_EQUAL,
+            LiteralKind::Float => &FLOAT_CASE_EQUAL,
+            LiteralKind::Symbol => &SYMBOL_CASE_EQUAL,
+            LiteralKind::String => &STRING_CASE_EQUAL,
+        };
+        !self.any_refinement_active()
+            && guard.with(|guard| {
+                guard.holds(|| {
+                    let sample = match kind {
+                        LiteralKind::Integer => Object::Int(0),
+                        LiteralKind::Float => Object::Float(0.0),
+                        LiteralKind::Symbol => Object::symbol("sample"),
+                        LiteralKind::String => Object::string(String::new()),
+                    };
+                    self.lookup_own_operator_method(&sample, "===").is_none()
+                })
+            })
     }
 
     /// Whether `[]` on `collection`, an Array, still reads it directly.

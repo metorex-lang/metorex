@@ -90,9 +90,16 @@ fn count_compiled(unit: &Unit) {
 
 /// Compile `body`, recording the result for the engine report.
 pub fn compile(body: &[Statement], kind: UnitKind) -> Compiled {
+    compile_with_parameters(body, kind, &[])
+}
+
+/// Compile a method's `body`, where `parameters` are the names of its
+/// parameters, recording the result for the engine report.
+fn compile_with_parameters(body: &[Statement], kind: UnitKind, parameters: &[String]) -> Compiled {
     let _counted =
         crate::vm::memory_report::attribute(crate::vm::memory_report::Category::CompiledUnits);
-    let compiled = match crate::bytecode::compiler::compile_as(body, kind) {
+    let compiled = match crate::bytecode::compiler::compile_with_parameters(body, kind, parameters)
+    {
         Ok(unit) => {
             count_compiled(&unit);
             Compiled::Unit(Box::new(unit))
@@ -160,9 +167,13 @@ impl crate::vm::VirtualMachine {
         &mut self,
         slot: &UnitSlot,
         body: &crate::ast::Body,
+        method: &crate::object::Method,
     ) -> Result<ControlFlow, MetorexError> {
         let compiled = slot.compiled(|| {
-            body.read_once(|statements| self.compile_body(statements, UnitKind::Method))
+            let parameters = parameter_names(method);
+            body.read_once(|statements| {
+                self.compile_body_with_parameters(statements, UnitKind::Method, &parameters)
+            })
         });
         self.run_compiled(&compiled, || body.read_once(first_position))
     }
@@ -184,7 +195,8 @@ impl crate::vm::VirtualMachine {
     /// Reserve in the scope each local `unit` assigns, before any of it
     /// runs.
     fn hoist_unit_locals(&mut self, unit: &Unit) {
-        for local in &unit.locals {
+        let assigned = unit.parameter_slots_from.unwrap_or(unit.locals.len());
+        for local in &unit.locals[..assigned] {
             if self
                 .environment()
                 .assignment_introduces_a_local(&local.text)
@@ -257,10 +269,11 @@ impl crate::vm::VirtualMachine {
         &mut self,
         slot: &UnitSlot,
         body: &crate::ast::Body,
+        method: &crate::object::Method,
         lambda_semantics: bool,
     ) -> Result<Object, MetorexError> {
         loop {
-            let ran = self.run_compiled_method_unit(slot, body);
+            let ran = self.run_compiled_method_unit(slot, body, method);
             if let Ok(ControlFlow::Return { .. }) = &ran
                 && let Some(running) = self.running_code.last_mut()
             {
@@ -309,7 +322,18 @@ impl crate::vm::VirtualMachine {
     /// out, and so is one Metorex made with no file, such as the body of a
     /// reader `attr_reader` defines.
     fn compile_body(&self, body: &[Statement], kind: UnitKind) -> Compiled {
-        let compiled = compile(body, kind);
+        self.compile_body_with_parameters(body, kind, &[])
+    }
+
+    /// `compile_body` for a method's body, where `parameters` are the names
+    /// of the method's parameters.
+    fn compile_body_with_parameters(
+        &self,
+        body: &[Statement],
+        kind: UnitKind,
+        parameters: &[String],
+    ) -> Compiled {
+        let compiled = compile_with_parameters(body, kind, parameters);
         let file = self
             .current_source_file
             .clone()
@@ -415,4 +439,23 @@ fn method_body_answer(flow: ControlFlow, lambda_semantics: bool) -> Result<Objec
 /// Where the first of `body`'s statements is written.
 fn first_position(body: &[Statement]) -> crate::lexer::Position {
     body.first().map(Statement::position).unwrap_or_default()
+}
+
+/// The names `method`'s parameters bind, leaving out what is not written
+/// as a name, such as a destructured parameter.
+fn parameter_names(method: &crate::object::Method) -> Vec<String> {
+    let signature = &method.signature;
+    method
+        .parameters
+        .iter()
+        .chain(signature.keyword_parameters.iter().map(|(name, _)| name))
+        .chain(signature.keyword_rest_parameter.iter())
+        .chain(signature.block_parameter.iter())
+        .chain(signature.variadic_param.iter().map(|(_, name)| name))
+        .filter(|name| {
+            name.starts_with(|first: char| first.is_lowercase() || first == '_')
+                && name.chars().all(|character| character.is_alphanumeric() || character == '_')
+        })
+        .cloned()
+        .collect()
 }

@@ -1,8 +1,9 @@
 # Copies the bundled gems MRI ships that metorex carries into this repository.
 # Each gem's Ruby library goes into src/vm/stdlib/gems, which `require` finds
-# by feature name, and the C extensions of nkf, rbs, debug, json, and
-# bigdecimal into vendor/nkf, vendor/rbs, vendor/debug, vendor/json, and
-# vendor/bigdecimal, which build.rs compiles into the binary. MRI's
+# by feature name, and the C extensions of nkf, rbs, debug, json,
+# bigdecimal, and racc into vendor/nkf, vendor/rbs, vendor/debug,
+# vendor/json, vendor/bigdecimal, and vendor/racc, which build.rs compiles
+# into the binary. MRI's
 # resolv.rb, which resolv-replace and rinda's ring build on, and its pp.rb
 # and prettyprint.rb, which irb prints with, replace metorex's own.
 #
@@ -215,6 +216,15 @@ Dir.glob("{*.c,*.h,missing/*.c}", base: bigdecimal).each do |path|
   FileUtils.cp(File.join(bigdecimal, path), File.join(vendor, path))
 end
 FileUtils.cp(File.join(release.bundled_gem("bigdecimal"), "LICENSE"), vendor)
+
+# racc's parser core, which its Ruby library uses in place of its own
+# parsing loop when `racc/cparse` loads.
+racc = release.bundled_gem("racc")
+vendor = File.join(root, "vendor", "racc")
+FileUtils.rm_rf(vendor)
+FileUtils.mkdir_p(vendor)
+FileUtils.cp(File.join(racc, "ext", "racc", "cparse", "cparse.c"), vendor)
+%w[BSDL COPYING].each { |file| FileUtils.cp(File.join(racc, file), vendor) }
 
 puts "#{versions.join(", ")}: #{entries.size} Ruby files"
 

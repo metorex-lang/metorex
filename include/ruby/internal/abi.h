@@ -2,6 +2,6 @@
 #define RUBY_ABI_H 1
 
 /* Written by build.rs from a digest of the other headers. */
-#define RUBY_ABI_VERSION 0x846e6690564bd9c1
+#define RUBY_ABI_VERSION 0xc668e5765bb04c5f
 
 #endif

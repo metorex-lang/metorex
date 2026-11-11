@@ -532,3 +532,40 @@ fn test_local_named_lambda_reads_as_a_local() {
     let output = run_example("functions/local_named_lambda.rb");
     assert_eq!(output, ":skipped\n:called\n3\n3\n16\n");
 }
+
+#[test]
+fn a_parameter_reads_as_a_local_ahead_of_a_method_of_its_name() {
+    let output = run_example("functions/parameters_read_as_locals.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "42\n",
+            "nil\n",
+            "\"10 EUR for paper, ink [:rush]\"\n",
+            "\"5 USD FOR TONER []\"\n",
+            "8\n",
+            "7\n",
+            "\"the method\"\n",
+            ":called\n",
+            "[[1, 1], [2, 2], [3, 3]]\n",
+        )
+    );
+}
+
+#[test]
+fn block_given_answers_for_the_frame_it_is_asked_in() {
+    let output = run_example("functions/block_given_in_each_frame.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[false, false, false]\n",
+            "[true, false, true, :yielded]\n",
+            "true\n",
+            "false\n",
+            "\"no block given (yield)\"\n",
+            "false\n",
+            "false\n",
+            "false\n",
+        )
+    );
+}

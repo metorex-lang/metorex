@@ -42,6 +42,10 @@
 #define CONSTFUNC(x) __attribute__((__const__)) x
 #define UNREACHABLE_RETURN(value) __builtin_unreachable()
 #define UNREACHABLE __builtin_unreachable()
+#ifndef STRINGIZE0
+#define STRINGIZE(expr) STRINGIZE0(expr)
+#define STRINGIZE0(expr) #expr
+#endif
 
 #ifdef __cplusplus
 extern "C" {

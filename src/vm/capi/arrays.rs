@@ -159,10 +159,27 @@ pub extern "C-unwind" fn rb_ary_new() -> Value {
     to_value(&Object::array(Vec::new()))
 }
 
+/// The elements of `array` when it is an Array that is not frozen, which C
+/// changes in place without a method call, as MRI's functions do. C's own
+/// writes to the elements are carried in first.
+fn changeable_elements(array: Value) -> Option<Rc<RefCell<Vec<Object>>>> {
+    carry_element_writes_back();
+    let object = to_object(array);
+    let View::Array(elements) = object.view() else {
+        return None;
+    };
+    (!super::running_interpreter().object_is_frozen(&object)).then(|| elements.clone())
+}
+
 /// Appends `element`, refusing a frozen Array as `Array#push` does.
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_ary_push(array: Value, element: Value) -> Value {
-    super::calls::call(to_object(array), "push", vec![to_object(element)]);
+    match changeable_elements(array) {
+        Some(elements) => elements.borrow_mut().push(to_object(element)),
+        None => {
+            super::calls::call(to_object(array), "push", vec![to_object(element)]);
+        }
+    }
     array
 }
 
@@ -170,13 +187,35 @@ pub extern "C-unwind" fn rb_ary_push(array: Value, element: Value) -> Value {
 /// refusing a frozen Array as `Array#pop` does.
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_ary_pop(array: Value) -> Value {
-    to_value(&super::calls::call(to_object(array), "pop", Vec::new()))
+    match changeable_elements(array) {
+        Some(elements) => {
+            let popped = elements.borrow_mut().pop();
+            popped.map_or(QNIL, |element| to_value(&element))
+        }
+        None => to_value(&super::calls::call(to_object(array), "pop", Vec::new())),
+    }
 }
 
 /// Stores `element` at `index`, counted from the end when negative, as
-/// `Array#[]=` does with one index.
+/// `Array#[]=` does with one index, filling with nil up to an index past
+/// the end.
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_ary_store(array: Value, index: i64, element: Value) {
+    if let Some(elements) = changeable_elements(array) {
+        let mut elements = elements.borrow_mut();
+        let at = if index < 0 {
+            index + elements.len() as i64
+        } else {
+            index
+        };
+        if let Ok(at) = usize::try_from(at) {
+            if at >= elements.len() {
+                elements.resize(at + 1, Object::Nil);
+            }
+            elements[at] = to_object(element);
+            return;
+        }
+    }
     let arguments = vec![Object::Int(index), to_object(element)];
     super::calls::call(to_object(array), "[]=", arguments);
 }

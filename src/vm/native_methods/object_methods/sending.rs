@@ -30,15 +30,17 @@ impl VirtualMachine {
                 };
                 // A complaint about what the call was handed names the call
                 // itself in the backtrace, the way Ruby's does.
-                let named = crate::vm::CallFrame::method(
-                    format!("Kernel#{}", method_name),
-                    Some(format!("{}", position_to_location(position))),
-                    method_name,
-                    method_name,
-                );
+                let named = || {
+                    crate::vm::CallFrame::method(
+                        format!("Kernel#{}", method_name),
+                        Some(format!("{}", position_to_location(position))),
+                        method_name,
+                        method_name,
+                    )
+                };
                 if arguments.is_empty() {
                     let message = "no method name given".to_string();
-                    return self.with_call_frame(named, |vm| {
+                    return self.with_call_frame(named(), |vm| {
                         let raised = vm.add_stack_trace_to_exception(
                             Object::exception("ArgumentError", message.clone()),
                             position,
@@ -58,7 +60,7 @@ impl VirtualMachine {
                             "{} is not a symbol nor a string",
                             self.get_inspect_representation(&arguments[0], position)?
                         );
-                        return self.with_call_frame(named, |vm| {
+                        return self.with_call_frame(named(), |vm| {
                             let raised = vm.add_stack_trace_to_exception(
                                 Object::exception("TypeError", message.clone()),
                                 position,

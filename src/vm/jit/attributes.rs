@@ -66,7 +66,7 @@ struct AttributeRead {
 
 /// The variable `method` answers, when its body answers one instance
 /// variable and it takes no parameters.
-pub(super) fn plain_reader(method: &Method) -> Option<&str> {
+pub(crate) fn plain_reader(method: &Method) -> Option<&str> {
     let plain = method.parameters.is_empty()
         && method.signature.default_parameters.is_empty()
         && method.signature.keyword_parameters.is_empty()

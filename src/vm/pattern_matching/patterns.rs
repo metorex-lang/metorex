@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::object::View;
+use crate::vm::specialized::LiteralKind;
 
 impl VirtualMachine {
     /// Match a pattern against a value and collect variable bindings.
@@ -54,6 +55,17 @@ impl VirtualMachine {
         None
     }
 
+    /// Whether `pattern === value` holds, asked of the pattern's class.
+    fn literal_case_equal(
+        &mut self,
+        pattern: Object,
+        value: &Object,
+        position: Position,
+    ) -> Result<bool, MetorexError> {
+        let answer = self.send_to_object(pattern, "===", vec![value.clone()], position)?;
+        Ok(answer.is_truthy())
+    }
+
     pub(crate) fn match_pattern(
         &mut self,
         pattern: &crate::ast::MatchPattern,
@@ -64,26 +76,46 @@ impl VirtualMachine {
         use crate::ast::MatchPattern;
 
         match pattern {
-            // A number written as a pattern asks the value with `===`, which
-            // counts an Integer and a Float of the same value as equal.
-            MatchPattern::IntLiteral(pattern_int) => match value.view() {
-                View::Int(value_int) => Ok(*pattern_int == value_int),
-                View::Float(value_float) => Ok(*pattern_int as f64 == value_float),
-                _ => Ok(false),
-            },
-            MatchPattern::FloatLiteral(pattern_float) => match value.view() {
-                View::Float(value_float) => Ok(*pattern_float == value_float),
-                View::Int(value_int) => Ok(*pattern_float == value_int as f64),
-                _ => Ok(false),
-            },
-            MatchPattern::StringLiteral(pattern_string) => match value.view() {
-                View::String(value_string) => Ok(pattern_string == value_string.as_ref()),
-                _ => Ok(false),
-            },
-            MatchPattern::SymbolLiteral(pattern_name) => match value.view() {
-                View::Symbol(value_name) => Ok(pattern_name == value_name.as_ref()),
-                _ => Ok(false),
-            },
+            // A literal written as a pattern asks the value with `===`. The
+            // core library's counts an Integer and a Float of the same value
+            // as equal, which is compared here while it is the one in force.
+            MatchPattern::IntLiteral(pattern_int) => {
+                let in_force = self.case_equality_in_force(LiteralKind::Integer);
+                match value.view() {
+                    View::Int(value_int) if in_force => Ok(*pattern_int == value_int),
+                    View::Float(value_float) if in_force => Ok(*pattern_int as f64 == value_float),
+                    _ => self.literal_case_equal(Object::Int(*pattern_int), value, position),
+                }
+            }
+            MatchPattern::FloatLiteral(pattern_float) => {
+                let in_force = self.case_equality_in_force(LiteralKind::Float);
+                match value.view() {
+                    View::Float(value_float) if in_force => Ok(*pattern_float == value_float),
+                    View::Int(value_int) if in_force => Ok(*pattern_float == value_int as f64),
+                    _ => self.literal_case_equal(Object::Float(*pattern_float), value, position),
+                }
+            }
+            MatchPattern::StringLiteral(pattern_string) => {
+                if self.case_equality_in_force(LiteralKind::String) {
+                    match value.view() {
+                        View::String(value_string) => {
+                            return Ok(pattern_string == value_string.as_ref());
+                        }
+                        View::Instance(_) => {}
+                        _ => return Ok(false),
+                    }
+                }
+                self.literal_case_equal(Object::string(pattern_string.clone()), value, position)
+            }
+            MatchPattern::SymbolLiteral(pattern_name) => {
+                if self.case_equality_in_force(LiteralKind::Symbol) {
+                    return Ok(matches!(
+                        value.view(),
+                        View::Symbol(value_name) if pattern_name == value_name.as_ref()
+                    ));
+                }
+                self.literal_case_equal(Object::symbol(pattern_name.clone()), value, position)
+            }
             MatchPattern::BoolLiteral(pattern_bool) => match value.view() {
                 View::Bool(value_bool) => Ok(*pattern_bool == value_bool),
                 _ => Ok(false),

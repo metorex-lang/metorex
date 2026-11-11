@@ -91,12 +91,17 @@ impl<'a> UnitRun<'a> {
 const SPARE_REGISTER_LISTS: usize = 64;
 
 /// What one run of a unit keeps besides its registers.
-struct RunState {
+#[derive(Default)]
+pub(crate) struct RunState {
     /// The cells the unit's locals are held in, shared with the scope the
     /// unit runs in, so `binding`, `local_variables`, and `eval` read and
     /// write them too. A slot holds its cell from the unit's first write of
     /// the local on.
     cells: Vec<Option<Rc<RefCell<Object>>>>,
+    /// For each local, one more than the scope depth an `Unhoist` of it
+    /// last ran at, or 0 before one runs. A local stops being hoisted the
+    /// first time, so another at that depth has nothing to do.
+    unhoisted: Vec<usize>,
     /// The argument lists being gathered, the innermost call's last.
     arguments: Vec<ArgumentList>,
     /// The errors handlers keep while a `rescue` or an `ensure` deals with
@@ -126,12 +131,28 @@ impl VirtualMachine {
     /// loop of the unit, which the body the unit is decides what to do
     /// with.
     pub(crate) fn run_unit_flow(&mut self, unit: &Unit) -> Result<ControlFlow, MetorexError> {
-        let mut state = RunState {
-            cells: vec![None; unit.locals.len()],
-            arguments: Vec::new(),
-            routes: Vec::new(),
-            errors: (0..unit.error_slots).map(|_| None).collect(),
-        };
+        let mut state = self.spare_run_states.pop().unwrap_or_default();
+        state.cells.resize(unit.locals.len(), None);
+        state.unhoisted.resize(unit.locals.len(), 0);
+        state.errors.resize_with(unit.error_slots, || None);
+        let ran = self.run_unit_flow_with(unit, &mut state);
+        state.cells.clear();
+        state.unhoisted.clear();
+        state.arguments.clear();
+        state.routes.clear();
+        state.errors.clear();
+        if self.spare_run_states.len() < SPARE_REGISTER_LISTS {
+            self.spare_run_states.push(state);
+        }
+        ran
+    }
+
+    /// `run_unit_flow` with the state the run keeps.
+    fn run_unit_flow_with(
+        &mut self,
+        unit: &Unit,
+        state: &mut RunState,
+    ) -> Result<ControlFlow, MetorexError> {
         // A continuation taken in the unit runs it again from the statement
         // its `callcc` was written in.
         self.run_restartable(|vm, statement| {
@@ -145,7 +166,7 @@ impl VirtualMachine {
             // jump, leaves what it opened for the run to close.
             let scopes = vm.environment().current_depth();
             let loops = vm.running_block_breaks.len();
-            let ran = vm.run_unit_from(unit, &mut state, at);
+            let ran = vm.run_unit_from(unit, state, at);
             while vm.environment().current_depth() > scopes {
                 vm.environment_mut().pop_scope();
             }
@@ -390,11 +411,37 @@ impl VirtualMachine {
         at: usize,
     ) -> Result<Next, MetorexError> {
         if let Instruction::Unhoist { slot } = run.unit.instructions[at] {
-            let name = &run.unit.locals[usize::from(slot)].text;
-            self.environment_mut().unhoist(name);
+            self.unhoist_local(run.unit, run.state, usize::from(slot));
             return Ok(Next::Step);
         }
         self.step_instruction(run, at)
+    }
+
+    /// The cell of the parameter the local in `slot` stands for, when it
+    /// is one and holds a plain value. A Method or a native function held
+    /// under the name may be called when named bare, which reading the
+    /// name decides.
+    fn parameter_cell(&self, unit: &Unit, slot: usize) -> Option<Rc<RefCell<Object>>> {
+        if unit.parameter_slots_from.is_none_or(|from| slot < from) {
+            return None;
+        }
+        let cell = self.environment().get_ref(&unit.locals[slot].text)?;
+        let plain = !matches!(
+            cell.borrow().view(),
+            View::NativeFunction(_) | View::Method(_)
+        );
+        plain.then_some(cell)
+    }
+
+    /// Say that the assignment of the local in `slot` has begun, unless
+    /// this run already said so at the scope depth it stands at.
+    #[inline(always)]
+    fn unhoist_local(&mut self, unit: &Unit, state: &mut RunState, slot: usize) {
+        let depth = self.environment().current_depth() + 1;
+        if state.unhoisted[slot] != depth {
+            state.unhoisted[slot] = depth;
+            self.environment_mut().unhoist(&unit.locals[slot].text);
+        }
     }
 
     /// Run the `GetIdentifier` at `at`.
@@ -899,15 +946,19 @@ impl VirtualMachine {
                     self.environment_mut().unhoist(name);
                 }
             }
-            Instruction::Unhoist { slot } => {
-                let name = &unit.locals[index(slot)].text;
-                self.environment_mut().unhoist(name);
-            }
+            Instruction::Unhoist { slot } => self.unhoist_local(unit, state, index(slot)),
             Instruction::GetLocal { to, slot } => {
                 let slot = index(slot);
                 registers[register(to)] = match &state.cells[slot] {
                     Some(cell) => cell.borrow().clone(),
-                    None => self.read_identifier(&unit.locals[slot].text, position)?,
+                    None => match self.parameter_cell(unit, slot) {
+                        Some(cell) => {
+                            let value = cell.borrow().clone();
+                            state.cells[slot] = Some(cell);
+                            value
+                        }
+                        None => self.read_identifier(&unit.locals[slot].text, position)?,
+                    },
                 };
             }
             Instruction::SetLocal { from, slot } => {
@@ -1437,6 +1488,22 @@ impl VirtualMachine {
                 let arm = &unit.pattern_arms[index(arm)];
                 let matched = self.enter_when_arm(arm, &registers[subject])?;
                 registers[subject + 1] = Object::Bool(matched);
+            }
+            Instruction::WhenDispatch { subject, table } => {
+                if self.coverage.is_none()
+                    && self.case_equality_in_force(crate::vm::specialized::LiteralKind::Integer)
+                    && self.case_equality_in_force(crate::vm::specialized::LiteralKind::Symbol)
+                {
+                    let table = &unit.when_tables[index(table)];
+                    let target = match registers[register(subject)].view() {
+                        View::Int(number) => Some(table.integers.get(&number)),
+                        View::Symbol(name) => Some(table.symbols.get(&*name.as_str())),
+                        _ => None,
+                    };
+                    if let Some(found) = target {
+                        return Ok(Next::JumpTo(index(found.copied().unwrap_or(table.otherwise))));
+                    }
+                }
             }
             Instruction::InArm { subject, arm } => {
                 let subject = register(subject);

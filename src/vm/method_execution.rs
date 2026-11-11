@@ -95,12 +95,158 @@ impl VirtualMachine {
         Ok(value)
     }
 
+    /// What a method with no body of its own answers when it stands for a
+    /// native method, a Kernel function, or the core library's `to_s`, or
+    /// the arguments handed back when it is none of those. It is kept out
+    /// of `invoke_method_unguarded`, whose frame every call takes.
+    #[inline(never)]
+    fn answered_by_a_stub(
+        &mut self,
+        class: &Rc<crate::class::Class>,
+        method: &Rc<Method>,
+        receiver: &Object,
+        arguments: Vec<Object>,
+        position: Position,
+    ) -> Result<Result<Object, Vec<Object>>, MetorexError> {
+        let class = Rc::clone(class);
+        let method_name: &str = &method.name;
+        // Kernel's own `to_s`, bound to a class or module, writes it the way
+        // it writes any object, by its class and address, rather than as
+        // Module#to_s names it.
+        if method.body.is_empty()
+            && method_name == "to_s"
+            && method.owner.as_deref() == Some("Kernel")
+            && let View::Class(held) | View::Module(held) = receiver.view()
+        {
+            let kind = if held.is_module() && !held.is_singleton_class() { "Module" } else { "Class" };
+            return Ok(Ok(Object::string(format!(
+                "#<{kind}:0x{:016x}>",
+                Rc::as_ptr(held) as usize
+            ))));
+        }
+
+        // A stub standing in for a native method dispatches under the name it
+        // was cut from, even when the alias has been put back under that same
+        // name. There is no body to run either way.
+        if let Some(target) = method.provenance.native_alias.clone() {
+            for owner in [Rc::clone(&class), self.builtins().class_of(&receiver)] {
+                self.through_native_alias = true;
+                let answered = self.call_native_method(
+                    owner.as_ref(),
+                    &receiver,
+                    &target,
+                    &arguments,
+                    position,
+                );
+                self.through_native_alias = false;
+                if let Some(result) = answered? {
+                    return Ok(Ok(result));
+                }
+            }
+            // Arithmetic on a number is not in any native table, and going
+            // back through the name would reach a redefinition rather than
+            // the operator this stub was cut from.
+            if arguments.len() == 1
+                && let Some(result) = self.builtin_number_operator(
+                    &target,
+                    receiver.clone(),
+                    arguments[0].clone(),
+                    position,
+                )
+            {
+                return result.map(Ok);
+            }
+            // An exception's own methods, such as `SystemExit#status`, are
+            // answered by the exception's dispatch.
+            if matches!(receiver.view(), View::Exception(_))
+                && let Some(result) =
+                    self.call_exception_method(&receiver, &target, &arguments, position)?
+            {
+                return Ok(Ok(result));
+            }
+            // `new` on a class is the constructor rather than an entry in any
+            // native table, so it is reached through the class itself.
+            if target == "new"
+                && let View::Class(constructed) = receiver.view()
+            {
+                let constructed = Rc::clone(constructed);
+                return self.invoke_class(constructed, arguments, position).map(Ok);
+            }
+            if let Some(result) =
+                self.call_object_method(&receiver, &target, &arguments, position)?
+            {
+                return Ok(Ok(result));
+            }
+            // A Kernel function is reached without a receiver rather than
+            // through any class's table, so the stub goes there for it.
+            if crate::vm::native_methods::is_kernel_private_function(&target) {
+                return self.call_native_function(&target, arguments, position).map(Ok);
+            }
+        }
+
+        // A stub copied under a new name (`define_singleton_method(:other,
+        // method(:constants))`) still means the native method it was cut from.
+        // The receiver's own class is what dispatches it, since the stub may
+        // live on a singleton class that names no native table.
+        if method.body.is_empty()
+            && method.provenance.captured_vars.is_none()
+            && let Some(original) = &method.provenance.original_name
+            && original != method_name
+        {
+            let original = original.clone();
+            for owner in [Rc::clone(&class), self.builtins().class_of(&receiver)] {
+                if let Some(result) = self.call_native_method(
+                    owner.as_ref(),
+                    &receiver,
+                    &original,
+                    &arguments,
+                    position,
+                )? {
+                    return Ok(Ok(result));
+                }
+            }
+        }
+
+        // A Kernel function is reached without a receiver rather than through
+        // any class's table, so a stub standing in for one goes there for it,
+        // naming the receiver it was bound to.
+        if method.body.is_empty()
+            && method.provenance.captured_vars.is_none()
+            && method.owner.as_deref() == Some("Kernel")
+            && crate::vm::native_methods::is_kernel_private_function(method_name)
+        {
+            let held = self.kernel_function_receiver.replace(receiver.clone());
+            let answered = self.call_native_function(method_name, arguments, position);
+            self.kernel_function_receiver = held;
+            return answered.map(Ok);
+        }
+
+        // For stub methods (empty body, registered on Object for introspection),
+        // fall through to base Object native methods (class, to_s, respond_to?, etc.)
+        // A method the program wrote with an empty body names its place in the
+        // source, and runs as the empty method it is.
+        if method.body.is_empty()
+            && method.provenance.captured_vars.is_none()
+            && method.source_location.is_none()
+        {
+            self.bound_stub_depth += 1;
+            let answered = self.call_object_method(&receiver, method_name, &arguments, position);
+            self.bound_stub_depth -= 1;
+            if let Some(result) = answered? {
+                return Ok(Ok(result));
+            }
+        }
+
+        Ok(Err(arguments))
+    }
+
+
     fn invoke_method_unguarded(
         &mut self,
         class: Rc<Class>,
         method: Rc<Method>,
         receiver: Object,
-        mut arguments: Vec<Object>,
+        arguments: Vec<Object>,
         position: Position,
     ) -> Result<Object, MetorexError> {
         self.program_call_pending = false;
@@ -145,6 +291,8 @@ impl VirtualMachine {
         // changes. A debug build looks again and checks the answer.
         let follows_class = native_answer_follows_class(&class, &receiver);
         let state = crate::class::method_state();
+        // The class's ancestors were looked at when the miss was recorded,
+        // and they do not change.
         let known_miss = follows_class && method.native_miss.recorded(&class, state);
         if !known_miss || cfg!(debug_assertions) {
             let answered =
@@ -156,136 +304,34 @@ impl VirtualMachine {
                 );
                 return Ok(result);
             }
-            if follows_class && crate::class::method_state() == state {
+            if follows_class
+                && ancestors_answer_nothing_natively(&class)
+                && crate::class::method_state() == state
+            {
                 method.native_miss.record(&class, state);
             }
         }
 
-        // Kernel's own `to_s`, bound to a class or module, writes it the way
-        // it writes any object, by its class and address, rather than as
-        // Module#to_s names it.
-        if method.body.is_empty()
-            && method_name == "to_s"
-            && method.owner.as_deref() == Some("Kernel")
-            && let View::Class(held) | View::Module(held) = receiver.view()
-        {
-            let kind = if held.is_module() && !held.is_singleton_class() { "Module" } else { "Class" };
-            return Ok(Object::string(format!(
-                "#<{kind}:0x{:016x}>",
-                Rc::as_ptr(held) as usize
-            )));
-        }
-
-        // A stub standing in for a native method dispatches under the name it
-        // was cut from, even when the alias has been put back under that same
-        // name. There is no body to run either way.
-        if let Some(target) = method.provenance.native_alias.clone() {
-            for owner in [Rc::clone(&class), self.builtins().class_of(&receiver)] {
-                self.through_native_alias = true;
-                let answered = self.call_native_method(
-                    owner.as_ref(),
-                    &receiver,
-                    &target,
-                    &arguments,
-                    position,
-                );
-                self.through_native_alias = false;
-                if let Some(result) = answered? {
-                    return Ok(result);
-                }
-            }
-            // Arithmetic on a number is not in any native table, and going
-            // back through the name would reach a redefinition rather than
-            // the operator this stub was cut from.
-            if arguments.len() == 1
-                && let Some(result) = self.builtin_number_operator(
-                    &target,
-                    receiver.clone(),
-                    arguments[0].clone(),
-                    position,
-                )
-            {
-                return result;
-            }
-            // An exception's own methods, such as `SystemExit#status`, are
-            // answered by the exception's dispatch.
-            if matches!(receiver.view(), View::Exception(_))
-                && let Some(result) =
-                    self.call_exception_method(&receiver, &target, &arguments, position)?
-            {
-                return Ok(result);
-            }
-            // `new` on a class is the constructor rather than an entry in any
-            // native table, so it is reached through the class itself.
-            if target == "new"
-                && let View::Class(constructed) = receiver.view()
-            {
-                let constructed = Rc::clone(constructed);
-                return self.invoke_class(constructed, arguments, position);
-            }
-            if let Some(result) =
-                self.call_object_method(&receiver, &target, &arguments, position)?
-            {
-                return Ok(result);
-            }
-            // A Kernel function is reached without a receiver rather than
-            // through any class's table, so the stub goes there for it.
-            if crate::vm::native_methods::is_kernel_private_function(&target) {
-                return self.call_native_function(&target, arguments, position);
+        // A method with no body of its own, or one standing for a native
+        // method, may answer without running a body.
+        let mut arguments = arguments;
+        if method.body.is_empty() || method.provenance.native_alias.is_some() {
+            match self.answered_by_a_stub(&class, &method, &receiver, arguments, position)? {
+                Ok(answer) => return Ok(answer),
+                Err(handed_back) => arguments = handed_back,
             }
         }
 
-        // A stub copied under a new name (`define_singleton_method(:other,
-        // method(:constants))`) still means the native method it was cut from.
-        // The receiver's own class is what dispatches it, since the stub may
-        // live on a singleton class that names no native table.
-        if method.body.is_empty()
-            && method.provenance.captured_vars.is_none()
-            && let Some(original) = &method.provenance.original_name
-            && original != method_name
+        // A reader of one instance variable, as `attr_reader` defines,
+        // answers the variable without a frame of its own, as MRI's does,
+        // while nothing watches calls run.
+        if arguments.is_empty()
+            && self.tracepoints.is_empty()
+            && self.coverage.is_none()
+            && let Some(variable) = crate::vm::jit::attributes::plain_reader(&method)
         {
-            let original = original.clone();
-            for owner in [Rc::clone(&class), self.builtins().class_of(&receiver)] {
-                if let Some(result) = self.call_native_method(
-                    owner.as_ref(),
-                    &receiver,
-                    &original,
-                    &arguments,
-                    position,
-                )? {
-                    return Ok(result);
-                }
-            }
-        }
-
-        // A Kernel function is reached without a receiver rather than through
-        // any class's table, so a stub standing in for one goes there for it,
-        // naming the receiver it was bound to.
-        if method.body.is_empty()
-            && method.provenance.captured_vars.is_none()
-            && method.owner.as_deref() == Some("Kernel")
-            && crate::vm::native_methods::is_kernel_private_function(method_name)
-        {
-            let held = self.kernel_function_receiver.replace(receiver.clone());
-            let answered = self.call_native_function(method_name, arguments, position);
-            self.kernel_function_receiver = held;
-            return answered;
-        }
-
-        // For stub methods (empty body, registered on Object for introspection),
-        // fall through to base Object native methods (class, to_s, respond_to?, etc.)
-        // A method the program wrote with an empty body names its place in the
-        // source, and runs as the empty method it is.
-        if method.body.is_empty()
-            && method.provenance.captured_vars.is_none()
-            && method.source_location.is_none()
-        {
-            self.bound_stub_depth += 1;
-            let answered = self.call_object_method(&receiver, method_name, &arguments, position);
-            self.bound_stub_depth -= 1;
-            if let Some(result) = answered? {
-                return Ok(result);
-            }
+            self.pending_block = None;
+            return Ok(self.instance_variable_of(&receiver, variable));
         }
 
         let expected = method.parameters.len();
@@ -947,11 +993,11 @@ impl VirtualMachine {
                 .captured_vars
                 .as_ref()
                 .is_some_and(|captured| captured.contains_key("block_given?"));
-            if !inherits_block_given {
-                self.environment_mut().define_named(
-                    "block_given?",
-                    Object::Bool(block.is_some() && !from_a_block),
-                );
+            // A method's scope sits under the root one, which answers false,
+            // so only a true answer is bound here.
+            if !inherits_block_given && block.is_some() && !from_a_block {
+                self.environment_mut()
+                    .define_named("block_given?", Object::Bool(true));
             }
             if let Some(block_value) = block.as_ref().filter(|_| !from_a_block) {
                 self.environment_mut()
@@ -1001,7 +1047,7 @@ impl VirtualMachine {
                     .define(block_param.clone(), Object::Nil);
             }
 
-            self.run_compiled_method_body(&method.unit, &method.body, method.lambda_body)
+            self.run_compiled_method_body(&method.unit, &method.body, &method, method.lambda_body)
         })();
 
         // An error the interpreter raised in the body takes its backtrace
@@ -1138,7 +1184,7 @@ impl VirtualMachine {
                     .define(block_param.clone(), Object::Nil);
             }
 
-            self.run_compiled_method_body(&function.unit, &function.body, false)
+            self.run_compiled_method_body(&function.unit, &function.body, function, false)
         })();
 
         self.current_method_frame = saved_frame;
@@ -1328,13 +1374,28 @@ fn native_answer_follows_class(
         && !instance.has_singleton_methods()
         && !instance.has_singleton_class()
         && !class.is_singleton_class()
-        && class.superclass.as_ref().is_some_and(|parent| {
-            parent.name() == "Object"
-                && parent
-                    .superclass
-                    .as_ref()
-                    .is_none_or(|root| root.name() == "BasicObject")
-        })
+}
+
+/// Whether `class` and its superclasses below Object are classes of the
+/// program's own, which no native table answers for, so what the native
+/// methods answer one of its instances is decided by Object's.
+fn ancestors_answer_nothing_natively(class: &std::rc::Rc<crate::class::Class>) -> bool {
+    let mut cursor = Some(std::rc::Rc::clone(class));
+    while let Some(current) = cursor {
+        if current.name() == "Object" {
+            return current
+                .superclass
+                .as_ref()
+                .is_none_or(|root| root.name() == "BasicObject");
+        }
+        if current.is_singleton_class()
+            || crate::vm::native_methods::names_a_native_owner(current.name())
+        {
+            return false;
+        }
+        cursor = current.superclass.clone();
+    }
+    false
 }
 
 fn backs_a_core_value(receiver: &crate::object::Object) -> bool {
@@ -1398,10 +1459,14 @@ impl VirtualMachine {
         on_a_module: bool,
     ) -> (Rc<str>, Rc<str>, Rc<str>) {
         let slot = usize::from(on_a_module);
-        let cacheable = method.provenance.alias_origin.is_none() && method.owner.is_some();
+        let cacheable = method.provenance.alias_origin.is_none();
         if cacheable
-            && let Some((callee, frame_name, defined)) = &method.frame_names.slots().borrow()[slot]
+            && let Some((callee, frame_name, defined, called_through)) =
+                &method.frame_names.slots().borrow()[slot]
             && **callee == *method_name
+            && called_through
+                .as_deref()
+                .is_none_or(|called_through| called_through == class.name())
         {
             return (Rc::clone(callee), Rc::clone(frame_name), Rc::clone(defined));
         }
@@ -1432,6 +1497,7 @@ impl VirtualMachine {
                 Rc::clone(&callee),
                 Rc::clone(&frame_name),
                 Rc::clone(&defined),
+                method.owner.is_none().then(|| Rc::from(class.name())),
             ));
         }
         (callee, frame_name, defined)

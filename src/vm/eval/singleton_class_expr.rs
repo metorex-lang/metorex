@@ -35,6 +35,27 @@ pub(crate) enum SingletonKey {
     Other(&'static str),
 }
 
+impl SingletonKey {
+    /// The bit `primitive_singleton_kinds` keeps for keys of this kind.
+    pub(crate) fn kind_bit(&self) -> u16 {
+        1 << match self {
+            SingletonKey::Nil => 0,
+            SingletonKey::True => 1,
+            SingletonKey::False => 2,
+            SingletonKey::Array(_) => 3,
+            SingletonKey::Dict(_) => 4,
+            SingletonKey::Set(_) => 5,
+            SingletonKey::String(_) => 6,
+            SingletonKey::Regex(_) => 7,
+            SingletonKey::Block(_) => 8,
+            SingletonKey::Method(_) => 9,
+            SingletonKey::Binding(_) => 10,
+            SingletonKey::Exception(_) => 11,
+            SingletonKey::Other(_) => 12,
+        }
+    }
+}
+
 /// The key the singleton class of a value-kind receiver that has no
 /// per-object storage slot of its own is kept under. None for receivers
 /// that *do* own a slot, which are handled directly from the object, and
@@ -162,6 +183,7 @@ impl VirtualMachine {
                 let sc = Class::new(singleton_class_display_name(receiver), None);
                 sc.set_class_var("__singleton__", Object::Bool(true));
                 sc.set_class_var("__attached__", receiver.clone());
+                self.primitive_singleton_kinds |= key.kind_bit();
                 self.primitive_singleton_classes.insert(key, Rc::clone(&sc));
                 sc
             }
@@ -184,6 +206,9 @@ impl VirtualMachine {
             View::Instance(_) | View::Class(_) | View::Module(_) => None,
             other => Some(SingletonKey::Other(other.type_name())),
         })?;
+        if self.primitive_singleton_kinds & key.kind_bit() == 0 {
+            return None;
+        }
         self.primitive_singleton_classes.get(&key).map(Rc::clone)
     }
 

@@ -87,7 +87,15 @@ pub extern "C-unwind" fn rb_hash_freeze(hash: Value) -> Value {
 /// The value for `key`, or the Hash's default when it holds none.
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_hash_aref(hash: Value, key: Value) -> Value {
-    to_value(&call(to_object(hash), "[]", vec![to_object(key)]))
+    let hash = to_object(hash);
+    if matches!(hash.view(), View::Dict(_)) {
+        let machine = super::interpreter();
+        let answered = machine.index_value(hash, to_object(key), super::called_from());
+        let answered = super::or_raise(answered);
+        super::strings::carry_changes_in();
+        return to_value(&answered);
+    }
+    to_value(&call(hash, "[]", vec![to_object(key)]))
 }
 
 #[unsafe(no_mangle)]

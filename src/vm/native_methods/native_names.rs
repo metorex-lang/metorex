@@ -395,24 +395,34 @@ const NATIVE_METHODS_BY_OWNER: &[(&str, &[&str])] = &[
     ("TrueClass", &["&", "===", "^", "inspect", "to_s", "|"]),
 ];
 
+/// The native methods of each class or module that has some, by its name.
+type ByOwner = std::collections::HashMap<
+    &'static str,
+    std::collections::HashSet<&'static str, crate::fast_hash::NameHashing>,
+    crate::fast_hash::NameHashing,
+>;
+
+fn by_owner() -> &'static ByOwner {
+    static BY_OWNER: std::sync::OnceLock<ByOwner> = std::sync::OnceLock::new();
+    BY_OWNER.get_or_init(|| {
+        let mut by_owner = ByOwner::default();
+        for (owner, names) in NATIVE_METHODS_BY_OWNER {
+            by_owner.entry(owner).or_default().extend(names.iter());
+        }
+        by_owner
+    })
+}
+
 /// Whether the class or module named `owner` answers `name` natively.
 fn owner_answers(owner: &str, name: &str) -> bool {
-    type ByOwner = std::collections::HashMap<
-        &'static str,
-        std::collections::HashSet<&'static str, crate::fast_hash::NameHashing>,
-        crate::fast_hash::NameHashing,
-    >;
-    static BY_OWNER: std::sync::OnceLock<ByOwner> = std::sync::OnceLock::new();
-    BY_OWNER
-        .get_or_init(|| {
-            let mut by_owner = ByOwner::default();
-            for (owner, names) in NATIVE_METHODS_BY_OWNER {
-                by_owner.entry(owner).or_default().extend(names.iter());
-            }
-            by_owner
-        })
+    by_owner()
         .get(owner)
         .is_some_and(|names| names.contains(name))
+}
+
+/// Whether the class or module named `owner` answers any name natively.
+pub(crate) fn names_a_native_owner(owner: &str) -> bool {
+    by_owner().contains_key(owner)
 }
 
 /// Whether nil, true or false answers `name` with a native method of its own

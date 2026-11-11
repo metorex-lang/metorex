@@ -59,8 +59,27 @@ pub enum UnitKind {
 
 /// Compile `body`, the body of what `kind` names.
 pub fn compile_as(body: &[Statement], kind: UnitKind) -> Result<Unit, &'static str> {
+    compile_with_parameters(body, kind, &[])
+}
+
+/// Compile `body`, the body of what `kind` names, where `parameters` are
+/// the names of the method's parameters. A parameter the body reads is
+/// read as a local, in a slot after the locals the body assigns.
+pub fn compile_with_parameters(
+    body: &[Statement],
+    kind: UnitKind,
+    parameters: &[String],
+) -> Result<Unit, &'static str> {
     let of_a_method = kind == UnitKind::Method;
     let mut compiler = Compiler::for_body(body);
+    compiler.parameters = parameters
+        .iter()
+        .filter(|name| !compiler.assigned.contains(name))
+        .cloned()
+        .collect();
+    if !compiler.parameters.is_empty() {
+        compiler.unit.parameter_slots_from = Some(compiler.unit.locals.len());
+    }
     let end = match body.last() {
         Some(last) => last.position(),
         None => Position::default(),
@@ -149,6 +168,9 @@ struct Compiler {
     spots: Vec<Option<ErrorSpot>>,
     /// The locals the body assigns, which the scope reserves on entry.
     assigned: Vec<String>,
+    /// The parameters of the method the body belongs to, which are bound
+    /// before it runs.
+    parameters: Vec<String>,
     /// The loops being compiled, the innermost last.
     loops: Vec<Loop>,
     /// What the code compiled so far has opened and not yet closed.
@@ -225,6 +247,7 @@ impl Compiler {
             next_register: ANSWER + 1,
             spots: Vec::new(),
             assigned: crate::ast::collect_assigned_locals(body),
+            parameters: Vec::new(),
             loops: Vec::new(),
             pending: Pending::default(),
             protections: Vec::new(),
@@ -1566,8 +1589,31 @@ impl Compiler {
             let list = wide(Some(self.unit.when_list(cases.to_vec(), position)))?;
             self.emit(Instruction::WarnDuplicatedWhen { list }, position);
         }
+        let dispatched = cases
+            .iter()
+            .take_while(|case| case.guard.is_none() && dispatch_literals(&case.pattern).is_some())
+            .count();
+        let table = (dispatched >= 2)
+            .then(|| -> Result<usize, &'static str> {
+                let table = self.unit.when_table(Default::default());
+                let operand = wide(Some(table))?;
+                self.emit(
+                    Instruction::WhenDispatch {
+                        subject: value as u8,
+                        table: operand,
+                    },
+                    position,
+                );
+                Ok(table)
+            })
+            .transpose()?;
         let mut done = Vec::new();
         for (index, case) in cases.iter().enumerate() {
+            if let Some(table) = table
+                && index == dispatched
+            {
+                self.unit.when_tables[table].otherwise = wide(Some(self.unit.instructions.len()))?;
+            }
             let arm = wide(Some(self.unit.pattern_arm(PatternArm {
                 pattern: case.pattern.clone(),
                 guard: case.guard.clone(),
@@ -1588,9 +1634,30 @@ impl Compiler {
                 },
                 case.position,
             );
+            if let Some(table) = table
+                && index < dispatched
+            {
+                let body = wide(Some(self.unit.instructions.len()))?;
+                let held = &mut self.unit.when_tables[table];
+                for literal in dispatch_literals(&case.pattern).unwrap_or_default() {
+                    match literal {
+                        DispatchLiteral::Integer(number) => {
+                            held.integers.entry(number).or_insert(body);
+                        }
+                        DispatchLiteral::Symbol(name) => {
+                            held.symbols.entry(name).or_insert(body);
+                        }
+                    }
+                }
+            }
             self.statements_in(&case.body, to, false, Some(position.line as usize))?;
             done.push(self.emit(Instruction::Jump { target: 0 }, case.position));
             self.jump_here(next_arm)?;
+        }
+        if let Some(table) = table
+            && dispatched == cases.len()
+        {
+            self.unit.when_tables[table].otherwise = wide(Some(self.unit.instructions.len()))?;
         }
         let arm = u16::try_from(cases.len()).map_err(|_| OVER_LIMIT)?;
         self.emit(Instruction::CoverBranch { arm }, position);
@@ -3690,6 +3757,12 @@ impl Compiler {
                 slot: wide(Some(slot))?,
             });
         }
+        if self.parameters.iter().any(|held| held == name) {
+            return Ok(Instruction::GetLocal {
+                to,
+                slot: wide(Some(self.unit.local(name)))?,
+            });
+        }
         let name_index = self.name(name)?;
         Ok(if starts_uppercase(name) {
             Instruction::GetConstant {
@@ -3728,6 +3801,31 @@ fn immutable_literal(element: &Expression) -> Option<Object> {
 }
 
 /// A 16-bit operand for a side table index.
+/// A value a `when` arm is written to compare against that a
+/// `WhenDispatch` table holds.
+enum DispatchLiteral {
+    Integer(i64),
+    Symbol(String),
+}
+
+/// The Integer and Symbol literals a `when` arm is written with, or None
+/// when it is written with anything else.
+fn dispatch_literals(pattern: &crate::ast::MatchPattern) -> Option<Vec<DispatchLiteral>> {
+    use crate::ast::MatchPattern;
+    match pattern {
+        MatchPattern::IntLiteral(number) => Some(vec![DispatchLiteral::Integer(*number)]),
+        MatchPattern::SymbolLiteral(name) => Some(vec![DispatchLiteral::Symbol(name.clone())]),
+        MatchPattern::Multiple(patterns) => {
+            let mut literals = Vec::new();
+            for pattern in patterns {
+                literals.extend(dispatch_literals(pattern)?);
+            }
+            Some(literals)
+        }
+        _ => None,
+    }
+}
+
 fn wide(index: Option<usize>) -> Result<u16, &'static str> {
     index
         .and_then(|index| u16::try_from(index).ok())

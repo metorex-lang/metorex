@@ -68,6 +68,7 @@ fn main() {
     compile_debug();
     compile_json();
     compile_bigdecimal();
+    compile_racc();
     parse_carried_sources();
 }
 
@@ -293,6 +294,18 @@ fn compile_bigdecimal() {
             "-DHAVE_RB_CATEGORY_WARN",
             "-DHAVE_CONST_RB_WARN_CATEGORY_DEPRECATED",
         ],
+    );
+}
+
+/// racc's parser core, which `require "racc/cparse"` starts with
+/// `Init_cparse`, with the version of the racc release vendor/racc was
+/// copied from, which its extconf.rb defines.
+fn compile_racc() {
+    compile_extension(
+        "racc",
+        vec![PathBuf::from("vendor/racc/cparse.c")],
+        &[],
+        &["-DRACC_INFO_VERSION=1.8.1"],
     );
 }
 

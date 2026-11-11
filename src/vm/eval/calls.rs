@@ -72,7 +72,8 @@ impl VirtualMachine {
         // A call written with parentheses names a method, so a local of the
         // same name that holds no callable does not stand in the way of
         // `foobar()` reaching `foobar`, or raising NoMethodError without one.
-        if let Some(held) = self.environment().get(name)
+        let local = self.environment().get(name);
+        if let Some(held) = &local
             && !matches!(
                 held.view(),
                 View::Method(_) | View::Block(_) | View::NativeFunction(_)
@@ -94,8 +95,7 @@ impl VirtualMachine {
         }
         // A local holding a proc is not called by `name(...)` when `self`
         // has a method of that name, as `message = message { ... }` needs.
-        if matches!(self.environment().get(name).view(), Some(View::Block(_)))
-            && self.self_defines_method(name)
+        if matches!(local.view(), Some(View::Block(_))) && self.self_defines_method(name)
         {
             return Ok(CallRoute::OnSelf);
         }
@@ -104,7 +104,7 @@ impl VirtualMachine {
         // answers it, as an RSpec matcher forwarding to its example's helper
         // does, is asked before metorex's function of that name.
         if METOREX_ONLY_FUNCTIONS.contains(&name)
-            && matches!(self.environment().get(name).view(), None | Some(View::NativeFunction(_)))
+            && matches!(local.view(), None | Some(View::NativeFunction(_)))
             && self.self_writes_method_missing()
         {
             return Ok(CallRoute::OnSelf);
@@ -116,8 +116,7 @@ impl VirtualMachine {
         // the receiver has a method by that name, which lets `class_eval {
         // define_method ... }` hit the class's own define_method.
         if self.environment().get("self").is_some() {
-            let env_val = self.environment().get(name);
-            let dispatch_to_self = match env_val.view() {
+            let dispatch_to_self = match local.view() {
                 None => true,
                 // `define_method`, `private`, `public` live in globals as
                 // top-level conveniences, but inside a class/module body or

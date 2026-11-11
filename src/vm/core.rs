@@ -568,6 +568,9 @@ pub struct VirtualMachine {
     /// Emptied register lists, which a unit run takes rather than
     /// allocating one.
     pub(crate) spare_registers: Vec<Vec<Object>>,
+    /// Emptied run states, kept for the next units run to fill again rather
+    /// than allocate.
+    pub(crate) spare_run_states: Vec<crate::vm::bytecode_runner::RunState>,
     /// The file frames name as their source, by the text it was made from,
     /// so frames entered from the same file share one.
     pub(crate) frames_file_held: crate::fast_hash::NameMap<String, Rc<str>>,
@@ -598,10 +601,13 @@ pub struct VirtualMachine {
     /// have no per-object storage (Nil / true / false / Int / Float /
     /// Symbol / String). Keyed by the receiver's kind and address so every
     /// lookup for the same receiver returns the same Class instance.
-    pub(crate) primitive_singleton_classes: std::collections::HashMap<
+    pub(crate) primitive_singleton_classes: crate::fast_hash::NameMap<
         crate::vm::eval::singleton_class_expr::SingletonKey,
         Rc<crate::class::Class>,
     >,
+    /// The kinds of key `primitive_singleton_classes` holds one of, a bit
+    /// for each, which spares the lookup for a value of any other kind.
+    pub(crate) primitive_singleton_kinds: u16,
     /// Stack of positional arguments captured for each active method
     /// invocation. `super` (bare form) reads the top entry to forward args
     /// to the parent method; pushed by invoke_method, popped on return.
@@ -860,6 +866,7 @@ impl VirtualMachine {
             refinement_scopes: vec![Vec::new()],
             spare_refinement_scopes: Vec::new(),
             spare_registers: Vec::new(),
+            spare_run_states: Vec::new(),
             frames_file_held: Default::default(),
             frames_path_held: None,
             def_scope_stack: Vec::new(),
@@ -867,7 +874,8 @@ impl VirtualMachine {
             flip_flops: std::collections::HashMap::new(),
             pattern_timeouts: std::collections::HashMap::new(),
             traced_binding: None,
-            primitive_singleton_classes: std::collections::HashMap::new(),
+            primitive_singleton_classes: Default::default(),
+            primitive_singleton_kinds: 0,
             method_arg_stack: Vec::new(),
             method_running_stack: Vec::new(),
             method_running_frames: Vec::new(),

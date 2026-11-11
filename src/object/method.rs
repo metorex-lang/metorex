@@ -23,8 +23,9 @@ impl FrameNames {
 }
 
 /// One cached frame name: the name the method was called by, the frame name,
-/// and the name it was defined as.
-pub type CachedFrameName = (Rc<str>, Rc<str>, Rc<str>);
+/// the name it was defined as, and, for a method that records no owner, the
+/// name of the class it was called through, which the frame is named for.
+pub type CachedFrameName = (Rc<str>, Rc<str>, Rc<str>, Option<Rc<str>>);
 
 /// What a method's body says about the method, worked out on its first
 /// call. A copy starts empty, as `FrameNames` does.

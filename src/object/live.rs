@@ -24,12 +24,11 @@ const OLD_ENTRIES_PER_YOUNG_ONE: usize = 32;
 /// covers them too, rather than only the objects made since the last one.
 const OLD_GROWTH_BEFORE_A_WHOLE_COLLECTION: usize = 8;
 
-/// The share of the live entries that dead ones reach before they are
-/// cleared out between collections: a sixty-fourth. A dead entry's weak
-/// reference keeps the object's allocation.
-const LIVE_ENTRIES_PER_DEAD_ONE: usize = 64;
-
-/// The fewest new entries between two clearings.
+/// The fewest new entries between two clearings. Between collections only
+/// the entries made since the last one are cleared, each time as many more
+/// have been made as were left alive, so each entry is looked at a few
+/// times at most. A dead entry's weak reference keeps the object's
+/// allocation.
 const FEWEST_ENTRIES_BETWEEN_CLEARINGS: usize = 1024;
 
 /// The fewest entries a list makes room for when it grows.
@@ -97,6 +96,21 @@ impl<T> Registry<T> {
         });
         self.young_from = old;
         (self.held.len(), old)
+    }
+
+    /// Clear out the dead entries among those made since the last
+    /// collection, keeping the order of the rest, and answer how many of
+    /// them are left.
+    fn clear_dead_young(&mut self) -> usize {
+        let mut kept = self.young_from;
+        for at in self.young_from..self.held.len() {
+            if self.held[at].strong_count() > 0 {
+                self.held.swap(kept, at);
+                kept += 1;
+            }
+        }
+        self.held.truncate(kept);
+        kept - self.young_from
     }
 
     fn promote(&mut self) {
@@ -174,13 +188,11 @@ fn count_entry() {
         account.entries >= account.clear_at
     });
     if clearing_due {
-        let (alive, old) = clear_dead_entries();
+        let young = clear_dead_young_entries();
         ACCOUNT.with(|account| {
             let mut account = account.borrow_mut();
-            account.entries = alive;
-            account.old = old;
-            account.due_at = old + next_collection_after(old);
-            account.clear_at = alive + next_clearing_after(alive);
+            account.entries = account.old + young;
+            account.clear_at = account.entries + next_clearing_after(young);
         });
     }
     if crate::vm::memory_report::walk_wanted() {
@@ -358,16 +370,35 @@ pub fn set_collecting(wanted: bool) -> bool {
     ENABLED.with(|enabled| !enabled.replace(wanted))
 }
 
-/// How many entries are made before the dead ones among them are cleared
-/// out, with `alive` entries left by the last clearing.
-fn next_clearing_after(alive: usize) -> usize {
-    (alive / LIVE_ENTRIES_PER_DEAD_ONE).max(FEWEST_ENTRIES_BETWEEN_CLEARINGS)
+/// How many entries are made before the dead ones made since the last
+/// collection are cleared out, with `young` of them left by the last
+/// clearing.
+fn next_clearing_after(young: usize) -> usize {
+    young.max(FEWEST_ENTRIES_BETWEEN_CLEARINGS)
 }
 
 /// How many entries are made before the next collection, with `old`
 /// entries surviving earlier ones.
 fn next_collection_after(old: usize) -> usize {
     (old / OLD_ENTRIES_PER_YOUNG_ONE).max(FIRST_COLLECTION_AT)
+}
+
+/// Clear the dead entries made since the last collection out of the list,
+/// answering how many of those are left.
+fn clear_dead_young_entries() -> usize {
+    LISTS.with(|lists| {
+        let mut lists = lists.borrow_mut();
+        lists.instances.clear_dead_young()
+            + lists.classes.clear_dead_young()
+            + lists.strings.clear_dead_young()
+            + lists.arrays.clear_dead_young()
+            + lists.hashes.clear_dead_young()
+            + lists.sets.clear_dead_young()
+            + lists.exceptions.clear_dead_young()
+            + lists.blocks.clear_dead_young()
+            + lists.methods.clear_dead_young()
+            + lists.bindings.clear_dead_young()
+    })
 }
 
 /// Clear the dead entries out of the list, answering how many are left and
@@ -429,7 +460,7 @@ pub(crate) fn settle(whole: bool) {
             account.old_after_whole = alive.max(FIRST_COLLECTION_AT);
         }
         account.due_at = alive + next_collection_after(alive);
-        account.clear_at = alive + next_clearing_after(alive);
+        account.clear_at = alive + next_clearing_after(0);
     });
     DUE.with(|due| due.set(false));
 }

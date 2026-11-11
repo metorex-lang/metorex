@@ -28,10 +28,14 @@ impl Hasher for NameHasher {
         for word in words {
             self.add_word(u64::from_le_bytes(*word));
         }
+        // The last few bytes are gathered one at a time, since copying them
+        // into a zeroed word calls memmove for a length known only here.
         if !rest.is_empty() {
-            let mut word = [0u8; 8];
-            word[..rest.len()].copy_from_slice(rest);
-            self.add_word(u64::from_le_bytes(word));
+            let word = rest
+                .iter()
+                .enumerate()
+                .fold(0u64, |word, (at, byte)| word | u64::from(*byte) << (at * 8));
+            self.add_word(word);
         }
     }
 
@@ -100,4 +104,20 @@ impl std::hash::BuildHasher for ProgramHashing {
     fn build_hasher(&self) -> Self::Hasher {
         PROGRAM_KEYS.with(std::hash::BuildHasher::build_hasher)
     }
+}
+
+/// The longest key `with_joined` writes on the stack rather than the heap.
+const STACK_KEY_LENGTH: usize = 96;
+
+/// Call `read` with `prefix` and `name` written one after the other, as a
+/// key some tables keep a name under.
+pub fn with_joined<R>(prefix: &str, name: &str, read: impl FnOnce(&str) -> R) -> R {
+    let length = prefix.len() + name.len();
+    if length > STACK_KEY_LENGTH {
+        return read(&format!("{prefix}{name}"));
+    }
+    let mut key = [0u8; STACK_KEY_LENGTH];
+    key[..prefix.len()].copy_from_slice(prefix.as_bytes());
+    key[prefix.len()..length].copy_from_slice(name.as_bytes());
+    read(std::str::from_utf8(&key[..length]).expect("two strings joined are UTF-8"))
 }

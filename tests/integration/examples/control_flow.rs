@@ -658,3 +658,19 @@ fn test_do_block_in_an_if_condition_belongs_to_the_call() {
     let output = run_example("control_flow/do_block_in_if_condition.rb");
     assert_eq!(output, ":small\n:big\n[2, 4]\n:none\n2\n0\n");
 }
+
+#[test]
+fn a_case_written_with_literal_whens_matches_by_value_and_asks_a_redefined_case_equality() {
+    let output = run_example("control_flow/case_when_literal_table.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"one\", \"two or three\", \"two or three\", \"ready\", \"four\", \"five to nine\", \"done\", nil, nil]\n",
+            "[\"one\", \"two or three\", \"two or three\", nil, nil]\n",
+            "[\"newline\", \"space\", \"comment\", \"other 46\", \"newline\", \"other :space\"]\n",
+            "\"one\"\n",
+            "\"other 1180591620717411303424\"\n",
+            "{waiting: 67, busy: 67, idle: 66}\n",
+        )
+    );
+}

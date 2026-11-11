@@ -2898,3 +2898,12 @@ fn marshal_reads_one_object_from_a_pipe() {
         "true\nfalse\n21\n[1, \"two\"]\n\"end of file reached\"\n42\n"
     );
 }
+
+#[test]
+fn racc_parses_with_its_c_core_and_reports_a_parse_error() {
+    let output = run_example("stdlib/racc_c_core.rb");
+    assert_eq!(
+        output,
+        "\"c\"\n14\n18\n\"parse error on value \\\"*\\\" (\\\"*\\\")\"\n"
+    );
+}

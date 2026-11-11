@@ -437,6 +437,14 @@ impl Scope {
     /// Gets a variable value by traversing the scope chain
     /// Returns None if the variable is not found in any scope
     pub fn get(&self, name: &str) -> Option<Object> {
+        // A method's scope binds `self` before anything else, so the first
+        // binding is looked at before the name is hashed.
+        if name == "self"
+            && let Some((first, cell)) = self.variables.first()
+            && first == "self"
+        {
+            return Some(cell.borrow().clone());
+        }
         // First, check if the variable exists in this scope
         if let Some(value_ref) = self.variables.get(name) {
             return Some(value_ref.borrow().clone());

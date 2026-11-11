@@ -485,10 +485,14 @@ impl VirtualMachine {
     }
 
     /// Whether `value` has `name` written in Ruby, rather than answering it
-    /// natively or not at all.
+    /// natively or not at all. A method with no body stands for a native one
+    /// unless the program wrote it.
     fn defines_method(&self, value: &Object, name: &str) -> bool {
-        self.lookup_method(value, name)
-            .is_some_and(|(_, method)| !method.is_undefined)
+        self.lookup_method(value, name).is_some_and(|(_, method)| {
+            !method.is_undefined
+                && (!method.body.is_empty()
+                    || crate::vm::method_execution::written_by_the_program(&method))
+        })
     }
 }
 
