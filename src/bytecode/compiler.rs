@@ -184,6 +184,9 @@ struct Compiler {
     /// written on the same line does not count again, as the branch of
     /// `if ready then x = 1 end` does not.
     statement_line: Option<u32>,
+    /// The address of the statement being compiled when a later statement
+    /// follows it, so that nothing reads the value it answers.
+    discarded_statement: Option<*const Statement>,
 }
 
 /// What a run has open at a place in the code: argument lists, call routes,
@@ -253,6 +256,7 @@ impl Compiler {
             protections: Vec::new(),
             begins: 0,
             statement_line: None,
+            discarded_statement: None,
         };
         compiler.unit.use_registers(ANSWER + 1);
         for name in compiler.assigned.clone() {
@@ -756,10 +760,12 @@ impl Compiler {
             self.emit(Instruction::LoadNil { to: to as u8 }, at);
         }
         let mut previous_line = self.statement_line;
-        for statement in list {
+        for (at, statement) in list.iter().enumerate() {
             let start = self.unit.instructions.len();
             let held = self.next_register;
             let enclosing = self.statement_line.replace(statement.position().line);
+            self.discarded_statement =
+                (at + 1 < list.len()).then_some(statement as *const Statement);
             let compiled = self.statement(statement, to);
             self.statement_line = enclosing;
             compiled.map_err(naming(statement.kind_name()))?;
@@ -831,7 +837,10 @@ impl Compiler {
                 targets,
                 values,
                 position,
-            } => self.multiple_assignment(targets, values, to, *position),
+            } => {
+                let discarded = self.discarded_statement == Some(statement as *const Statement);
+                self.multiple_assignment(targets, values, to, discarded, *position)
+            }
             Statement::DeclareLocals { names, position } => {
                 for name in names {
                     let slot = wide(Some(self.unit.local(name)))?;
@@ -2625,15 +2634,64 @@ impl Compiler {
     }
 
     /// Compile `targets = values`, which spreads the values across the
-    /// targets and answers the right-hand side as written.
+    /// targets and answers the right-hand side as written, or nil when
+    /// `discarded` says a later statement follows it.
     fn multiple_assignment(
         &mut self,
         targets: &[Expression],
         values: &[Expression],
         to: usize,
+        discarded: bool,
         position: Position,
     ) -> Result<(), &'static str> {
         let held = self.next_register;
+        if values.len() > 1 && self.writes_each_value_directly(targets, values) {
+            for target in targets {
+                if let Expression::Identifier { name, .. } = target
+                    && values
+                        .iter()
+                        .any(|value| !self.cannot_see_locals(value, name))
+                {
+                    let slot = wide(Some(self.unit.local(name)))?;
+                    self.emit(Instruction::Unhoist { slot }, position);
+                }
+            }
+            let first = self.next_register;
+            self.plain_arguments(values)?;
+            for (offset, target) in targets.iter().enumerate() {
+                let from = if offset < values.len() {
+                    (first + offset) as u8
+                } else {
+                    let register = self.temporary()?;
+                    self.emit(Instruction::LoadNil { to: register as u8 }, position);
+                    register as u8
+                };
+                let instruction = match target {
+                    Expression::Identifier { name, .. } => Instruction::SetLocal {
+                        from,
+                        slot: wide(self.unit.locals.iter().position(|held| &held.text == name))?,
+                    },
+                    Expression::InstanceVariable { name, .. } => Instruction::SetInstanceVariable {
+                        from,
+                        name: self.name(name)?,
+                    },
+                    _ => unreachable!("only locals and instance variables are written directly"),
+                };
+                self.emit(instruction, position);
+            }
+            let answer = if discarded {
+                Instruction::LoadNil { to: to as u8 }
+            } else {
+                Instruction::NewArray {
+                    to: to as u8,
+                    first: first as u8,
+                    count: values.len() as u8,
+                }
+            };
+            self.emit(answer, position);
+            self.next_register = held;
+            return Ok(());
+        }
         let mut prepared = Vec::with_capacity(targets.len());
         for target in targets {
             prepared.push(self.prepare(target)?);
@@ -2666,6 +2724,29 @@ impl Compiler {
         );
         self.next_register = held;
         Ok(())
+    }
+
+    /// Whether `targets = values` can write each value straight to its
+    /// target: every target is a local or an instance variable, and every
+    /// value is a plain one, with no splat to spread.
+    fn writes_each_value_directly(&self, targets: &[Expression], values: &[Expression]) -> bool {
+        let plain_target = |target: &Expression| match target {
+            Expression::Identifier { name, .. } => {
+                self.assigned.contains(name) && !starts_uppercase(name)
+            }
+            Expression::InstanceVariable { .. } => true,
+            _ => false,
+        };
+        targets.iter().all(plain_target)
+            && values.len() <= usize::from(u8::MAX)
+            && !values.iter().any(|value| {
+                matches!(
+                    value,
+                    Expression::Splat { .. }
+                        | Expression::KeywordSplat { .. }
+                        | Expression::BlockArg { .. }
+                )
+            })
     }
 
     /// Compile a call's arguments to consecutive registers from the next

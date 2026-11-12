@@ -423,3 +423,24 @@ fn test_bytecode_long_number_table_execution() {
         "[70001, -1, nil, :present]\n[75, 76, false, [2.5, true, false, nil, -100]]\n"
     );
 }
+
+#[test]
+fn test_bytecode_parallel_assignments_execution() {
+    let output = run_example("bytecode/parallel_assignments.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[1, 2]\n",
+            "[2, 1]\n",
+            "[:l, :r]\n",
+            "[1, 2, nil]\n",
+            "5\n",
+            "[4, 3]\n",
+            "7\n",
+            "[1, 2]\n",
+            "[10, 14, nil, true, 8]\n",
+            "[1, 14, nil, true, 8]\n",
+            "nil\n",
+        )
+    );
+}

@@ -20,6 +20,20 @@ pub(crate) const KWARGS_MARKER: &str = "__MX_KWARGS__";
 /// keywords are split from the arguments. No keyword name holds it.
 pub(crate) const NON_SYMBOL_KEY_MARK: char = '\0';
 
+/// The value a parameter's default expression gives. An instance variable
+/// or a literal is read here, without compiling the expression to run alone.
+fn default_value(vm: &mut VirtualMachine, default: &Expression) -> Result<Object, MetorexError> {
+    match default {
+        Expression::InstanceVariable { name, position } => {
+            vm.eval_instance_var_read(name, *position)
+        }
+        Expression::NilLiteral { .. } => Ok(Object::Nil),
+        Expression::BoolLiteral { value, .. } => Ok(Object::Bool(*value)),
+        Expression::IntLiteral { value, .. } => Ok(Object::Int(*value)),
+        _ => vm.evaluate_expression(default),
+    }
+}
+
 /// Count the number of positional arguments, excluding a trailing kwargs dict.
 pub(crate) fn positional_arg_count(arguments: &[Object]) -> usize {
     positional_arg_count_for(arguments, true)
@@ -142,7 +156,7 @@ pub(crate) fn bind_params(
                         value.clone()
                     }
                     None => match default_parameters.iter().find(|(index, _)| *index == i) {
-                        Some((_, default_expr)) => vm.evaluate_expression(default_expr)?,
+                        Some((_, default_expr)) => default_value(vm, default_expr)?,
                         None => Object::Nil,
                     },
                 }
@@ -195,7 +209,7 @@ pub(crate) fn bind_params(
                 {
                     Some(value) => value.clone(),
                     None => match default_parameters.iter().find(|(index, _)| *index == i) {
-                        Some((_, default_expr)) => vm.evaluate_expression(default_expr)?,
+                        Some((_, default_expr)) => default_value(vm, default_expr)?,
                         None => Object::Nil,
                     },
                 }
