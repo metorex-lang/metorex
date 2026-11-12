@@ -7,7 +7,7 @@ use super::VirtualMachine;
 use crate::object::{OptionView, View};
 
 use crate::ast::Expression;
-use crate::bytecode::call_cache::CallCache;
+use crate::bytecode::call_cache::{CallCache, ReceiverKind};
 use crate::class::Class;
 use crate::error::MetorexError;
 use crate::lexer::Position;
@@ -239,9 +239,63 @@ impl VirtualMachine {
             if let Some(method) = cache.find(&class) {
                 return self.invoke_method(class, method, receiver, arguments, position);
             }
+            if cache.answered_natively(&class, ReceiverKind::Instance)
+                && let Some(answer) =
+                    self.answer_natively(&class, &receiver, method_name, &arguments, position)?
+            {
+                return Ok(answer);
+            }
+            self.recording_call_cache = Some(Rc::clone(cache));
+        } else if let Some(kind) = self.value_kind_deciding_dispatch(&receiver) {
+            let class = self.builtins().class_of(&receiver);
+            if cache.answered_natively(&class, kind)
+                && let Some(answer) =
+                    self.answer_natively(&class, &receiver, method_name, &arguments, position)?
+            {
+                return Ok(answer);
+            }
             self.recording_call_cache = Some(Rc::clone(cache));
         }
         self.call_evaluated_method(receiver, method_name, arguments, written, position)
+    }
+
+    /// What the native methods, or failing them the methods every object
+    /// has, answer for `method_name` on `receiver`, once the lookup has
+    /// found nothing written in the program standing ahead of them.
+    pub(crate) fn answer_natively(
+        &mut self,
+        class: &Rc<Class>,
+        receiver: &Object,
+        method_name: &str,
+        arguments: &[Object],
+        position: Position,
+    ) -> Result<Option<Object>, MetorexError> {
+        match self.call_native_method(class, receiver, method_name, arguments, position)? {
+            Some(answer) => Ok(Some(answer)),
+            None => self.call_object_method(receiver, method_name, arguments, position),
+        }
+    }
+
+    /// The kind of a value whose calls its class and kind alone decide: one
+    /// of the core kinds without a singleton class, while no refinement is
+    /// active.
+    fn value_kind_deciding_dispatch(&self, receiver: &Object) -> Option<ReceiverKind> {
+        if self.any_refinement_active() || self.existing_singleton_class(receiver).is_some() {
+            return None;
+        }
+        Some(match receiver.view() {
+            View::Nil => ReceiverKind::Nil,
+            View::Bool(false) => ReceiverKind::False,
+            View::Bool(true) => ReceiverKind::True,
+            View::Int(_) => ReceiverKind::Integer,
+            View::BigInt(_) => ReceiverKind::BigInteger,
+            View::Float(_) => ReceiverKind::Float,
+            View::String(_) => ReceiverKind::String,
+            View::Symbol(_) => ReceiverKind::Symbol,
+            View::Array(_) => ReceiverKind::Array,
+            View::Dict(_) => ReceiverKind::Hash,
+            _ => return None,
+        })
     }
 
     /// The class of an object whose calls its class alone decides: an
@@ -269,6 +323,7 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         let mut recording = self.recording_call_cache.take();
+        CALLER_CONSULTED.set(false);
         // Refinement dispatch: if an active refinement covers this receiver's
         // class and defines this method, use it.
         if let Some(method) = find_refinement(&receiver, method_name, self) {
@@ -500,18 +555,25 @@ impl VirtualMachine {
         }
         // Try native method as fallback
         let class = self.builtins().class_of(&receiver);
+        let kind = match receiver.view() {
+            View::Instance(_) => Some(ReceiverKind::Instance),
+            _ => self.value_kind_deciding_dispatch(&receiver),
+        };
         let native_result =
             self.call_native_method(&class, &receiver, method_name, &arguments, position)?;
 
-        if let Some(result) = native_result {
-            return Ok(result);
-        }
-
         // For user-defined class instances, fall back to base Object methods
-        let object_result =
-            self.call_object_method(&receiver, method_name, &arguments, position)?;
-
-        if let Some(result) = object_result {
+        let answered = match native_result {
+            Some(result) => Some(result),
+            None => self.call_object_method(&receiver, method_name, &arguments, position)?,
+        };
+        if let Some(result) = answered {
+            if let Some(cache) = recording
+                && let Some(kind) = kind
+                && !CALLER_CONSULTED.get()
+            {
+                cache.keep_native_answer(&class, kind);
+            }
             return Ok(result);
         }
 

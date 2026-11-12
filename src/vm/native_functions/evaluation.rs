@@ -470,7 +470,7 @@ impl VirtualMachine {
             &mut self.current_source_file,
             self.current_file
                 .as_ref()
-                .map(|file| file.display().to_string()),
+                .map(|file| Rc::from(file.display().to_string())),
         );
         // The eval'd string runs in the caller's body, so it sees the
         // visibility state in force there. A toggle it sets belongs to
@@ -484,7 +484,7 @@ impl VirtualMachine {
         // Code handed to `eval` is counted into the file it names when
         // the run was started with `eval` coverage on.
         if self.coverage_counts_eval()
-            && let Some(named) = self.current_source_file.clone()
+            && let Some(named) = self.current_source_file.as_deref().map(str::to_string)
         {
             let last_line = lineno + code.lines().count().saturating_sub(1);
             self.coverage_note_eval(&named, &statements, last_line);
@@ -510,7 +510,8 @@ impl VirtualMachine {
                 .with_location(Some(format!("{}:{}", position.line, position.column)))
                 .with_source_file(
                     prev_source_file
-                        .clone()
+                        .as_deref()
+                        .map(str::to_string)
                         .or_else(|| prev_file.as_ref().map(|file| file.display().to_string())),
                 ),
         );

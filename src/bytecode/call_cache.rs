@@ -27,6 +27,27 @@ pub struct CallCache {
     /// deciding the last receiver's dispatch, the method state then, and
     /// whether the core library's `send` answered it.
     core_send: RefCell<Option<(Weak<Class>, u64, bool)>>,
+    /// The class and kind of the last receiver a native method answered
+    /// after every check the lookup makes, and the method state then.
+    native: RefCell<Option<(Weak<Class>, ReceiverKind, u64)>>,
+}
+
+/// What a receiver is, among the kinds a native answer is kept for. Values
+/// of different kinds that share a class, nil and true among them, are told
+/// apart by it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReceiverKind {
+    Instance,
+    Nil,
+    False,
+    True,
+    Integer,
+    BigInteger,
+    Float,
+    String,
+    Symbol,
+    Array,
+    Hash,
 }
 
 /// One class and the method a call on its instances reached. The weak
@@ -82,6 +103,24 @@ impl CallCache {
     /// dispatch `class` decides.
     pub fn keep_core_send(&self, class: &Rc<Class>, answer: bool) {
         *self.core_send.borrow_mut() = Some((Rc::downgrade(class), method_state(), answer));
+    }
+
+    /// Whether a native method answered the last receiver of `kind` whose
+    /// dispatch `class` decides, under the current method state.
+    pub fn answered_natively(&self, class: &Rc<Class>, kind: ReceiverKind) -> bool {
+        matches!(
+            &*self.native.borrow(),
+            Some((held, held_kind, state))
+                if *held_kind == kind
+                    && *state == method_state()
+                    && std::ptr::eq(held.as_ptr(), Rc::as_ptr(class))
+        )
+    }
+
+    /// Keep that a native method answered a receiver of `kind` whose
+    /// dispatch `class` decides.
+    pub fn keep_native_answer(&self, class: &Rc<Class>, kind: ReceiverKind) {
+        *self.native.borrow_mut() = Some((Rc::downgrade(class), kind, method_state()));
     }
 
     /// Count a call answered from the method `peek` found.

@@ -327,7 +327,7 @@ impl VirtualMachine {
     /// the main script the way it was given, as `__FILE__` names it.
     fn traced_path(&self) -> String {
         if let Some(file) = &self.current_source_file {
-            return file.clone();
+            return file.to_string();
         }
         match self.reported_current_file() {
             Some(path) => path.to_string_lossy().to_string(),
@@ -511,8 +511,10 @@ impl VirtualMachine {
 /// Whether a trace reports `method` as one Ruby writes in C: one the core
 /// library writes, or one an attribute call made.
 pub(crate) fn reported_as_c(method: &crate::object::Method) -> bool {
-    (!method.body.is_empty() && !method.body.opens_in_the_program())
-        || made_by_an_attribute_call(method)
+    method.body_facts.reported_as_c(|| {
+        (!method.body.is_empty() && !method.body.opens_in_the_program())
+            || made_by_an_attribute_call(method)
+    })
 }
 
 /// The line MRI 4.0.7's trace_point.rb defines `TracePoint#disable` on, and

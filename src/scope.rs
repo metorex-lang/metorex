@@ -236,14 +236,20 @@ impl Scope {
         self.parent = None;
         self.is_method_boundary = false;
         self.inherited_names.clear();
-        self.hidden_names.clear();
-        for name in self.hoisted_names.drain() {
-            if self.spare_names.len() < SPARE_BINDINGS {
-                self.spare_names.push(name);
+        if !self.hidden_names.is_empty() {
+            self.hidden_names.clear();
+        }
+        if !self.hoisted_names.is_empty() {
+            for name in self.hoisted_names.drain() {
+                if self.spare_names.len() < SPARE_BINDINGS {
+                    self.spare_names.push(name);
+                }
             }
         }
         self.captured = None;
-        self.reserved = no_reserved_names();
+        if !self.reserved.is_empty() {
+            self.reserved = no_reserved_names();
+        }
         self.version = next_version();
     }
 
@@ -704,6 +710,18 @@ impl Scope {
             .get(name)
             .or_else(|| self.captured_ref(name))
             .cloned()
+    }
+
+    /// Put `value` in the binding this scope holds for `name` itself,
+    /// answering whether it holds one.
+    pub fn assign_own(&mut self, name: &str, value: Object) -> bool {
+        match self.variables.get(name) {
+            Some(cell) => {
+                *cell.borrow_mut() = value;
+                true
+            }
+            None => false,
+        }
     }
 
     /// Whether this scope binds or captured `name` itself.

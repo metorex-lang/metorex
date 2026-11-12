@@ -22,7 +22,7 @@ impl VirtualMachine {
         source_location.filename = self
             .loading_embedded_library
             .clone()
-            .or_else(|| self.current_source_file.clone())
+            .or_else(|| self.current_source_file.as_deref().map(str::to_string))
             .or_else(|| {
                 self.reported_current_file()
                     .map(|file| file.display().to_string())

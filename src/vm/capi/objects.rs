@@ -445,6 +445,12 @@ pub(crate) fn is_not_implemented(function: &super::CFunction) -> bool {
 }
 
 /// Whether `name` is one Ruby code reads as an instance variable.
+/// The name of an instance variable without its `@`, for a name the
+/// program can see.
+fn visible_bare_name(name: &str) -> Option<&str> {
+    is_visible_name(name).then(|| &name[1..])
+}
+
 fn is_visible_name(name: &str) -> bool {
     name.starts_with('@') && !name.starts_with("@@") && name.len() > 1
 }
@@ -459,6 +465,18 @@ fn hidden(object: Value, name: &str) -> Option<Value> {
 
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_ivar_get(object: Value, name: Value) -> Value {
+    // An instance's variable is read where the instance keeps it, as MRI
+    // reads it, without a call of `instance_variable_get`.
+    let named = to_object(id_symbol(name));
+    if let (View::Symbol(held), View::Instance(instance)) =
+        (named.view(), to_object(object).view())
+    {
+        let text = held.as_str();
+        if let Some(bare) = visible_bare_name(&text) {
+            let value = instance.borrow().instance_vars.get(bare).cloned();
+            return value.map_or(QNIL, |value| to_value(&value));
+        }
+    }
     let name = symbol_name(name);
     if is_visible_name(&name) {
         return send(object, "instance_variable_get", vec![Object::symbol(&name)]);
@@ -468,6 +486,21 @@ pub extern "C-unwind" fn rb_ivar_get(object: Value, name: Value) -> Value {
 
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_ivar_set(object: Value, name: Value, value: Value) -> Value {
+    // An instance that may change takes the variable where it keeps it, as
+    // MRI writes it. A frozen one is refused by the call below.
+    let named = to_object(id_symbol(name));
+    if let (View::Symbol(held), View::Instance(instance)) =
+        (named.view(), to_object(object).view())
+        && !instance.borrow().frozen
+    {
+        let text = held.as_str();
+        if let Some(bare) = visible_bare_name(&text) {
+            instance
+                .borrow_mut()
+                .set_program_var(bare.to_string(), to_object(value));
+            return value;
+        }
+    }
     let name = symbol_name(name);
     if is_visible_name(&name) {
         let arguments = vec![Object::symbol(&name), to_object(value)];

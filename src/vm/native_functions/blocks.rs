@@ -75,7 +75,7 @@ impl VirtualMachine {
             });
         };
         let site = (
-            self.current_source_file.clone().unwrap_or_default(),
+            self.current_source_file.as_deref().map(str::to_string).unwrap_or_default(),
             position.line,
             position.column,
         );

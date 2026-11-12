@@ -102,7 +102,7 @@ impl VirtualMachine {
         // written in it names it however far from the load it is called.
         let previous_source_file = self
             .current_source_file
-            .replace(named_path.display().to_string());
+            .replace(Rc::from(named_path.display().to_string()));
 
         // Load file source with error context
         let source = load_file_source(&canonical_path).map_err(|e| {
@@ -131,6 +131,7 @@ impl VirtualMachine {
         if let Some(named) = &named_encoding {
             self.file_encodings
                 .insert(named_path.display().to_string(), named.clone());
+            self.entered_files.clear();
         }
         let previous_source_encoding =
             std::mem::replace(&mut self.current_source_encoding, named_encoding);
@@ -370,7 +371,7 @@ impl VirtualMachine {
         // required it.
         let caller_source = self
             .current_source_file
-            .replace(crate::vm::stdlib::embedded_library_file(name));
+            .replace(Rc::from(crate::vm::stdlib::embedded_library_file(name)));
         let caller_method_nesting = std::mem::take(&mut self.user_def_nesting);
         self.embedded_libraries_loading.push(feature);
         // Its top level has locals of its own, and `main` as `self`, whatever

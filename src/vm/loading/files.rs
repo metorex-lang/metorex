@@ -3,13 +3,16 @@
 use super::*;
 use crate::object::{OptionView, View};
 
+/// How many recently entered files `entered_file` keeps.
+const ENTERED_FILES_KEPT: usize = 16;
+
 impl VirtualMachine {
     /// The path `__FILE__` reports for the file running now: the spelling the
     /// main script was named by, and the current file for anything else.
     /// The file the code running now was written in, which a frame
     /// records as the file its call site is in.
     pub(crate) fn file_for_frames(&self) -> Option<String> {
-        self.current_source_file.clone().or_else(|| {
+        self.current_source_file.as_deref().map(str::to_string).or_else(|| {
             self.reported_current_file()
                 .map(|file| file.display().to_string())
         })
@@ -17,29 +20,33 @@ impl VirtualMachine {
 
     /// `file_for_frames` as a shared string, made once for each file.
     pub(crate) fn frames_file(&mut self) -> Option<Rc<str>> {
-        if self.current_source_file.is_none() {
-            let current = self.current_file.as_ref()?;
-            if let Some((path, shared)) = &self.frames_path_held
-                && path.as_os_str() == current.as_os_str()
-            {
-                return Some(Rc::clone(shared));
-            }
-            let reported = self.reported_spelling_of(current);
-            let shared: Rc<str> = Rc::from(reported.display().to_string().as_str());
-            self.frames_path_held = Some((current.clone(), Rc::clone(&shared)));
-            return Some(shared);
+        if let Some(current) = &self.current_source_file {
+            return Some(Rc::clone(current));
         }
-        if let Some(current) = &self.current_source_file
-            && let Some(shared) = self.frames_file_held.get(current.as_str())
+        let current = self.current_file.as_ref()?;
+        if let Some((path, shared)) = &self.frames_path_held
+            && path.as_os_str() == current.as_os_str()
         {
             return Some(Rc::clone(shared));
         }
-        let text = self.file_for_frames()?;
-        let shared: Rc<str> = Rc::from(text.as_str());
-        if self.current_source_file.as_ref() == Some(&text) {
-            self.frames_file_held.insert(text, Rc::clone(&shared));
-        }
+        let reported = self.reported_spelling_of(current);
+        let shared: Rc<str> = Rc::from(reported.display().to_string().as_str());
+        self.frames_path_held = Some((current.clone(), Rc::clone(&shared)));
         Some(shared)
+    }
+
+    /// `named` shared, with the encoding it is written in, as code entered
+    /// in that file runs under.
+    pub(crate) fn entered_file(&mut self, named: &str) -> (Rc<str>, Option<String>) {
+        if let Some((file, encoding)) = self.entered_files.iter().find(|(file, _)| **file == *named) {
+            return (Rc::clone(file), encoding.clone());
+        }
+        let entry = (Rc::from(named), self.file_encodings.get(named).cloned());
+        if self.entered_files.len() == ENTERED_FILES_KEPT {
+            self.entered_files.remove(0);
+        }
+        self.entered_files.push(entry.clone());
+        entry
     }
 
     pub(crate) fn reported_current_file(&self) -> Option<PathBuf> {

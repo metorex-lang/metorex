@@ -257,7 +257,7 @@ impl VirtualMachine {
         let (line, path) = if level == 0 {
             (
                 Some(position.line as usize),
-                self.current_source_file.clone(),
+                self.current_source_file.as_deref().map(str::to_string),
             )
         } else {
             counted

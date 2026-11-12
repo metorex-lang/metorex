@@ -135,7 +135,7 @@ impl Environment {
 
     /// Defines a variable in the current scope
     pub fn define(&mut self, name: String, value: Object) {
-        self.current_scope().borrow_mut().define(name, value);
+        self.current_scope_ref().borrow_mut().define(name, value);
     }
 
     /// `define`, from a borrowed name, which the scope copies into a binding
@@ -146,10 +146,15 @@ impl Environment {
             .define_named(name, value);
     }
 
+    /// `Scope::assign_own` on the current scope.
+    pub fn assign_own(&mut self, name: &str, value: Object) -> bool {
+        self.current_scope_ref().borrow_mut().assign_own(name, value)
+    }
+
     /// Reserves a name for the rest of the current scope ahead of the
     /// assignment that introduces it, the way Ruby's parser does.
     pub fn hoist(&mut self, name: &str) {
-        self.current_scope().borrow_mut().hoist(name);
+        self.current_scope_ref().borrow_mut().hoist(name);
     }
 
     /// Whether an assignment to `name` in the body being entered introduces a
@@ -168,63 +173,63 @@ impl Environment {
     /// Whether `name` is only reserved for an assignment further down, which
     /// means no local of that name is in scope where execution stands.
     pub fn name_is_only_hoisted(&self, name: &str) -> bool {
-        self.current_scope().borrow().is_only_hoisted(name)
+        self.current_scope_ref().borrow().is_only_hoisted(name)
     }
 
     /// Binds a name the program did not declare, which `local_variables`
     /// and a Binding leave out.
     pub fn define_hidden(&mut self, name: String, value: Object) {
-        self.current_scope().borrow_mut().define_hidden(name, value);
+        self.current_scope_ref().borrow_mut().define_hidden(name, value);
     }
 
     /// The implicit parameters the block running here took, leaving out
     /// those of any block around it.
     pub fn implicit_parameters(&self) -> Vec<(String, Rc<RefCell<Object>>)> {
-        self.current_scope().borrow().implicit_parameters()
+        self.current_scope_ref().borrow().implicit_parameters()
     }
 
     /// Say that the assignment a hoisted name was reserved for has begun,
     /// so a block written in its value closes over the name.
     pub fn unhoist(&mut self, name: &str) {
-        self.current_scope().borrow_mut().unhoist(name);
+        self.current_scope_ref().borrow_mut().unhoist(name);
     }
 
     /// Remove a variable from the current scope (does not touch parent scopes).
     pub fn undefine(&mut self, name: &str) {
-        self.current_scope().borrow_mut().undefine(name);
+        self.current_scope_ref().borrow_mut().undefine(name);
     }
 
     /// Gets a variable value by traversing the scope chain from the current scope
     pub fn get(&self, name: &str) -> Option<Object> {
-        self.current_scope().borrow().get(name)
+        self.current_scope_ref().borrow().get(name)
     }
 
     /// Sets a variable value by traversing the scope chain from the current scope
     /// Returns true if the variable was found and updated, false otherwise
     pub fn set(&mut self, name: &str, value: Object) -> bool {
-        self.current_scope().borrow_mut().set(name, value)
+        self.current_scope_ref().borrow_mut().set(name, value)
     }
 
     /// Gets a variable at a specific depth relative to the current scope
     pub fn get_at(&self, depth: usize, name: &str) -> Option<Object> {
-        self.current_scope().borrow().get_at(depth, name)
+        self.current_scope_ref().borrow().get_at(depth, name)
     }
 
     /// Sets a variable at a specific depth relative to the current scope
     pub fn set_at(&mut self, depth: usize, name: &str, value: Object) -> bool {
-        self.current_scope().borrow_mut().set_at(depth, name, value)
+        self.current_scope_ref().borrow_mut().set_at(depth, name, value)
     }
 
     /// Collects all variables from the current scope chain
     /// This is used for lambda closure capture
     pub fn current_scope_vars(&self) -> std::collections::HashMap<String, Object> {
-        self.current_scope().borrow().collect_all_vars()
+        self.current_scope_ref().borrow().collect_all_vars()
     }
 
     /// Collects all variable references from the current scope chain
     /// This is used for lambda closure capture with mutable closures
     pub fn current_scope_var_refs(&self) -> crate::scope::Captures {
-        self.current_scope().borrow().collect_all_var_refs()
+        self.current_scope_ref().borrow().collect_all_var_refs()
     }
 
     /// Names bound as local variables where execution currently sits. At the
@@ -257,7 +262,7 @@ impl Environment {
     /// top-level local reaches a block's own scope as the same reference
     /// rather than as a local of its own.
     pub fn resolves_to_root_binding(&self, name: &str) -> bool {
-        if self.current_scope().borrow().is_root() {
+        if self.current_scope_ref().borrow().is_root() {
             return false;
         }
         let Some(root_ref) = self.scopes[0].borrow().own_var_ref(name) else {
@@ -270,7 +275,7 @@ impl Environment {
     /// Defines a variable in the current scope with a shared reference
     /// Used when a closure defines a captured variable
     pub fn define_shared(&mut self, name: String, value: std::rc::Rc<std::cell::RefCell<Object>>) {
-        self.current_scope().borrow_mut().define_shared(name, value);
+        self.current_scope_ref().borrow_mut().define_shared(name, value);
     }
 
     /// Defines a name a block captured from its definition site. It resolves
@@ -289,16 +294,16 @@ impl Environment {
     /// Read and write through the names a block closed over in the current
     /// scope, without copying them into it.
     pub fn attach_reserved(&mut self, reserved: std::rc::Rc<Vec<String>>) {
-        self.current_scope().borrow_mut().attach_reserved(reserved);
+        self.current_scope_ref().borrow_mut().attach_reserved(reserved);
     }
 
     pub fn attach_captured(&mut self, captured: crate::scope::CapturedNames) {
-        self.current_scope().borrow_mut().attach_captured(captured);
+        self.current_scope_ref().borrow_mut().attach_captured(captured);
     }
 
     /// Gets a shared reference to a variable
     pub fn get_ref(&self, name: &str) -> Option<std::rc::Rc<std::cell::RefCell<Object>>> {
-        self.current_scope().borrow().get_ref(name)
+        self.current_scope_ref().borrow().get_ref(name)
     }
 }
 

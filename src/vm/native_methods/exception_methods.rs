@@ -574,7 +574,7 @@ impl VirtualMachine {
                     Some(entry) => entry.clone(),
                     None => format!(
                         "{}:{}:in '{}'",
-                        self.current_source_file.clone().unwrap_or_default(),
+                        self.current_source_file.as_deref().map(str::to_string).unwrap_or_default(),
                         position.line,
                         self.get_current_method_name().unwrap_or("<main>")
                     ),

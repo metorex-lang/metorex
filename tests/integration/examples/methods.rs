@@ -57,6 +57,13 @@ fn test_default_params_method_parens_execution() {
 }
 
 #[test]
+fn a_block_in_a_default_reads_the_parameters_as_bound() {
+    let expected = "true\n[3, 3]\n:changed\n8\n";
+    let output = run_example("methods/default_params/block_in_a_default.rb");
+    assert_eq!(output, expected);
+}
+
+#[test]
 fn test_yield_qmark_call_execution() {
     let expected = "true\n";
     let output = run_example("methods/yield_qmark_call.rb");

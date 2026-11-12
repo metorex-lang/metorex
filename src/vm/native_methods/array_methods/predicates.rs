@@ -186,7 +186,8 @@ impl VirtualMachine {
                     Some(named @ View::Class(_)) => {
                         let file = self
                             .current_source_file
-                            .clone()
+                            .as_deref()
+                            .map(str::to_string)
                             .unwrap_or_else(|| "-".to_string());
                         let message = format!(
                             "{}:{}: warning: passing arguments to Enumerable#to_set is deprecated\n",

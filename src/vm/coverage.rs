@@ -156,7 +156,7 @@ impl VirtualMachine {
         if line == 0 {
             return;
         }
-        let Some(path) = self.current_source_file.clone() else {
+        let Some(path) = self.current_source_file.as_deref().map(str::to_string) else {
             return;
         };
         let Some(run) = self.coverage.as_mut() else {
@@ -182,7 +182,7 @@ impl VirtualMachine {
         if self.coverage.is_none() {
             return;
         }
-        let Some(path) = self.current_source_file.clone() else {
+        let Some(path) = self.current_source_file.as_deref().map(str::to_string) else {
             return;
         };
         let Some(run) = self.coverage.as_mut() else {
@@ -247,7 +247,7 @@ impl VirtualMachine {
         start: crate::lexer::Position,
         end: crate::lexer::Position,
     ) {
-        let Some(path) = self.current_source_file.clone() else {
+        let Some(path) = self.current_source_file.as_deref().map(str::to_string) else {
             return;
         };
         let Some(run) = self.coverage.as_mut() else {

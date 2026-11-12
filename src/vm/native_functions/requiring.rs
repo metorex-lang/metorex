@@ -342,7 +342,8 @@ impl VirtualMachine {
         }
         self.load_call_site = self
             .current_source_file
-            .clone()
+            .as_deref()
+            .map(str::to_string)
             .or_else(|| {
                 self.current_file
                     .as_ref()
@@ -386,7 +387,7 @@ impl VirtualMachine {
         // method defined elsewhere is what is running.
         let written_in = self
             .current_source_file
-            .as_ref()
+            .as_deref()
             .map(std::path::PathBuf::from)
             .filter(|path| path.is_file());
         let current_file = written_in
@@ -471,7 +472,8 @@ impl VirtualMachine {
         // Execute the file (it will handle its own deduplication)
         self.load_call_site = self
             .current_source_file
-            .clone()
+            .as_deref()
+            .map(str::to_string)
             .or_else(|| {
                 self.current_file
                     .as_ref()

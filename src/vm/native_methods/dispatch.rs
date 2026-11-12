@@ -5,6 +5,27 @@ use super::*;
 use crate::object::{OptionView, View};
 
 impl VirtualMachine {
+    /// `struct_members`, remembering a class that holds none. `Struct.new`
+    /// defines the members' accessors as it records them, which moves the
+    /// method state on, so such a class holds none while the state stands.
+    fn struct_members_of(&mut self, class: &Rc<Class>) -> Option<Vec<String>> {
+        let address = Rc::as_ptr(class) as usize;
+        let state = crate::class::method_state();
+        if self
+            .classes_without_members
+            .get(&address)
+            .is_some_and(|(_, found_under)| *found_under == state)
+        {
+            return None;
+        }
+        let members = struct_methods::struct_members(class);
+        if members.is_none() {
+            self.classes_without_members
+                .insert(address, (Rc::downgrade(class), state));
+        }
+        members
+    }
+
     /// Attempt to execute a native (built-in) method implementation.
     ///
     /// Returns `Ok(Some(result))` if a native method was found and executed successfully,
@@ -601,7 +622,7 @@ impl VirtualMachine {
         // Instances of a generated struct class get Struct's instance methods.
         if let View::Instance(instance) = receiver.view() {
             let instance_class = Rc::clone(&instance.borrow().class);
-            if let Some(members) = struct_methods::struct_members(&instance_class)
+            if let Some(members) = self.struct_members_of(&instance_class)
                 && let Some(result) = self.call_struct_instance_method(
                     &instance_class,
                     &members,

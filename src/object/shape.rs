@@ -32,6 +32,9 @@ pub struct Shape {
     slots_by_name: OnceCell<NameMap<String, usize>>,
     /// The shape each further name leads to.
     next: RefCell<NameMap<String, Rc<Shape>>>,
+    /// Whether any name starts with `__`, as the ones the interpreter keeps
+    /// for itself do.
+    holds_interpreter_style_names: bool,
 }
 
 impl Shape {
@@ -40,6 +43,7 @@ impl Shape {
             names: Vec::new(),
             slots_by_name: OnceCell::new(),
             next: RefCell::new(NameMap::default()),
+            holds_interpreter_style_names: false,
         }
     }
 
@@ -71,6 +75,8 @@ impl Shape {
             names,
             slots_by_name: OnceCell::new(),
             next: RefCell::new(NameMap::default()),
+            holds_interpreter_style_names: self.holds_interpreter_style_names
+                || name.starts_with("__"),
         });
         SHAPES_MADE.with(|count| count.set(count.get() + 1));
         self.next
@@ -109,11 +115,20 @@ impl InstanceVariables {
     }
 
     pub fn get(&self, name: &str) -> Option<&Object> {
-        self.shape.slot_of(name).map(|slot| &self.slots[slot])
+        self.slot_named(name).map(|slot| &self.slots[slot])
     }
 
     pub fn contains_key(&self, name: &str) -> bool {
-        self.shape.slot_of(name).is_some()
+        self.slot_named(name).is_some()
+    }
+
+    /// `Shape::slot_of`, answered without a search for a `__` name when the
+    /// shape holds none.
+    fn slot_named(&self, name: &str) -> Option<usize> {
+        if !self.shape.holds_interpreter_style_names && name.starts_with("__") {
+            return None;
+        }
+        self.shape.slot_of(name)
     }
 
     /// Set `name` to `value`, answering the value it replaced.

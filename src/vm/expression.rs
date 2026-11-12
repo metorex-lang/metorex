@@ -318,7 +318,8 @@ impl VirtualMachine {
         let position = written.key_position;
         let file = self
             .current_source_file
-            .clone()
+            .as_deref()
+            .map(str::to_string)
             .or_else(|| {
                 self.current_file
                     .as_ref()
@@ -719,7 +720,7 @@ impl VirtualMachine {
     /// two pieces, so the name the code was read under is part of the key.
     fn flip_flop_site(&self, position: Position) -> (String, usize, usize, usize) {
         (
-            self.current_source_file.clone().unwrap_or_default(),
+            self.current_source_file.as_deref().map(str::to_string).unwrap_or_default(),
             (position.line as usize),
             (position.column as usize),
             (position.offset as usize),

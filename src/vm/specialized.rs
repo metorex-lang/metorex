@@ -149,12 +149,18 @@ impl VirtualMachine {
                         owner
                             .find_own_method(name)
                             .is_some_and(|method| written_by_the_program(&method))
-                    })
+                    }) && !self.a_value_singleton_defines(name)
                 })
             })
-            && self
-                .existing_singleton_class(receiver)
-                .is_none_or(|singleton| singleton.find_own_method(name).is_none())
+    }
+
+    /// Whether the singleton class of a String, collection, or other value
+    /// of a core kind defines `name` itself. Making such a class, or
+    /// defining a method on one, moves the method state on.
+    fn a_value_singleton_defines(&self, name: &str) -> bool {
+        self.primitive_singleton_classes
+            .values()
+            .any(|singleton| singleton.find_own_method(name).is_some())
     }
 }
 

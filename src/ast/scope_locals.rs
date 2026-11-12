@@ -24,6 +24,13 @@ pub fn collect_assigned_locals(body: &[Statement]) -> Vec<String> {
     names
 }
 
+/// `collect_assigned_locals` for one expression.
+pub fn collect_assigned_locals_in(expression: &Expression) -> Vec<String> {
+    let mut names: Vec<String> = Vec::new();
+    walk_expression(expression, &mut names);
+    names
+}
+
 fn add(names: &mut Vec<String>, name: &str) {
     if name
         .chars()

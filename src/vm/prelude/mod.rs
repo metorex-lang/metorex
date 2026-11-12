@@ -89,7 +89,7 @@ impl VirtualMachine {
         let held_file = self
             .current_file
             .replace(std::path::PathBuf::from(PRELUDE_FILE));
-        let held_source = self.current_source_file.replace(PRELUDE_FILE.to_string());
+        let held_source = self.current_source_file.replace(std::rc::Rc::from(PRELUDE_FILE));
         self.execute_program(&statements)
             .unwrap_or_else(|error| panic!("prelude failed to run: {}", error));
         self.current_file = held_file;

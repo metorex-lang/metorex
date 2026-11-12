@@ -41,6 +41,14 @@ impl VirtualMachine {
                 position,
             ));
         }
+        // An instance whose class alone decides its calls reaches what an
+        // earlier send of the name reached on that class.
+        let deciding_class = self.class_deciding_dispatch(&receiver);
+        if let Some(class) = &deciding_class
+            && let Some(method) = self.send_caches.get(name).and_then(|cache| cache.find(class))
+        {
+            return self.invoke_method(Rc::clone(class), method, receiver, arguments, position);
+        }
         // A refinement in force here stands ahead of what the receiver's own
         // class answers, whether the call was written out or reached through
         // `send`, a Symbol turned into a block, or text being built.
@@ -98,6 +106,14 @@ impl VirtualMachine {
         if let Some((owner, method)) = self.lookup_method(&receiver, name)
             && !method.is_undefined
         {
+            if let Some(class) = deciding_class
+                && Rc::ptr_eq(&class, &owner)
+            {
+                self.send_caches
+                    .entry(name.to_string())
+                    .or_default()
+                    .store(&class, &method);
+            }
             return self.invoke_method(owner, method, receiver, arguments, position);
         }
         let class = self.builtins().class_of(&receiver);

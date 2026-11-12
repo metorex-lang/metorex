@@ -396,7 +396,8 @@ impl Class {
     /// True when this class object is a singleton class (created by
     /// `class << obj` or `obj.singleton_class`).
     pub fn is_singleton_class(&self) -> bool {
-        self.get_class_var("__singleton__").is_some()
+        let variables = self.class_variables.borrow();
+        !variables.is_empty() && variables.contains_key("__singleton__")
     }
 
     /// True when `other` appears in this module's ancestry (itself, its

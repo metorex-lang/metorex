@@ -165,7 +165,8 @@ pub extern "C-unwind" fn rb_sourcefile() -> *const c_char {
     let machine = interpreter();
     let named = machine
         .current_source_file
-        .clone()
+        .as_deref()
+        .map(str::to_string)
         .or_else(|| {
             machine
                 .reported_current_file()

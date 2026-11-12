@@ -779,3 +779,9 @@ fn test_syntax_do_block_in_parenthesized_condition_execution() {
     let output = run_example("syntax/do_block_in_parenthesized_condition.rb");
     assert_eq!(output, ":large_entry\n:stopped\n:done\n");
 }
+
+#[test]
+fn a_brace_after_a_semicolon_opens_a_hash() {
+    let output = run_example("syntax/brace_after_a_semicolon.rb");
+    assert_eq!(output, "[\"retries\", 3]\n[\"ready\", true]\n[0, 1]\n");
+}

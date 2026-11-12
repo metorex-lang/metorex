@@ -152,7 +152,8 @@ impl VirtualMachine {
     /// executing.
     pub(crate) fn written_in_file(&self) -> String {
         self.current_source_file
-            .clone()
+            .as_deref()
+            .map(str::to_string)
             .or_else(|| {
                 self.reported_current_file()
                     .map(|path| path.display().to_string())
@@ -170,7 +171,8 @@ impl VirtualMachine {
         // file being run when a required file's block is executing.
         let written_in = self
             .current_source_file
-            .clone()
+            .as_deref()
+            .map(str::to_string)
             .map(std::path::PathBuf::from)
             .or_else(|| self.get_current_file().cloned());
         let Some(file) = written_in else {
@@ -270,7 +272,7 @@ impl VirtualMachine {
         self.check_range_ends(&start_value, &end_value, position)?;
         let written_at = literal_ends.then(|| {
             (
-                self.current_source_file.clone().unwrap_or_default(),
+                self.current_source_file.as_deref().map(str::to_string).unwrap_or_default(),
                 position.line,
                 position.column,
             )

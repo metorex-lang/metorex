@@ -119,7 +119,11 @@ pub(crate) fn is_native_module_method(name: &str) -> bool {
 /// Whether a name is one of the functions Kernel carries, which are reachable
 /// both without a receiver and through `Kernel` itself.
 pub(crate) fn is_kernel_private_function(name: &str) -> bool {
-    class_methods::KERNEL_PRIVATE_FUNCTIONS.contains(&name)
+    thread_local! {
+        static KERNEL_PRIVATE: crate::fast_hash::NameSet<&'static str> =
+            class_methods::KERNEL_PRIVATE_FUNCTIONS.iter().copied().collect();
+    }
+    KERNEL_PRIVATE.with(|held| held.contains(name))
 }
 
 /// Whether Enumerable writes a method over `each`, so a class of the

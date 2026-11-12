@@ -191,7 +191,8 @@ impl VirtualMachine {
         }
         let written_in = self
             .current_source_file
-            .clone()
+            .as_deref()
+            .map(str::to_string)
             .or_else(|| {
                 self.reported_current_file()
                     .map(|path| path.display().to_string())

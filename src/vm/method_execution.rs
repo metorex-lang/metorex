@@ -6,7 +6,7 @@
 
 use super::utils::*;
 use super::{CallFrame, VirtualMachine};
-use crate::ast::{Expression, Statement};
+use crate::ast::Expression;
 use crate::class::Class;
 use crate::error::{MetorexError, StackFrame};
 use crate::lexer::Position;
@@ -344,6 +344,9 @@ impl VirtualMachine {
         if arguments.is_empty()
             && self.tracepoints.is_empty()
             && self.coverage.is_none()
+            && method
+                .body_facts
+                .is_plain_reader(|| crate::vm::jit::attributes::plain_reader(&method).is_some())
             && let Some(variable) = crate::vm::jit::attributes::plain_reader(&method)
         {
             self.pending_block = None;
@@ -430,11 +433,12 @@ impl VirtualMachine {
         // declared after it is still in force. Every other method sees the
         // snapshot taken where it was defined, so a refinement added to an
         // already-activated module does not reach it.
-        let defined_in_refinement = method.owner_class.as_ref().is_some_and(|owner| {
-            owner
-                .get_class_var(crate::vm::REFINEMENT_LABEL_KEY)
-                .is_some()
-        });
+        let defined_in_refinement = !method.provenance.captured_refinements.is_empty()
+            && method.owner_class.as_ref().is_some_and(|owner| {
+                owner
+                    .get_class_var(crate::vm::REFINEMENT_LABEL_KEY)
+                    .is_some()
+            });
         let captured_scope: Vec<crate::vm::core::RefinementEntry> = if defined_in_refinement {
             method
                 .provenance
@@ -453,9 +457,16 @@ impl VirtualMachine {
                 })
                 .collect()
         };
-        let mut method_scopes = self.spare_refinement_scopes.pop().unwrap_or_default();
-        method_scopes.push(captured_scope);
-        let caller_scopes = std::mem::replace(&mut self.refinement_scopes, method_scopes);
+        // With no refinements captured and none in force, the body runs
+        // under the scopes in place, which hold none either.
+        let caller_depth = self.refinement_scopes.len();
+        let caller_scopes = if captured_scope.is_empty() && !self.any_refinement_active() {
+            None
+        } else {
+            let mut method_scopes = self.spare_refinement_scopes.pop().unwrap_or_default();
+            method_scopes.push(captured_scope);
+            Some(std::mem::replace(&mut self.refinement_scopes, method_scopes))
+        };
         // A bare `super` hands on the parameters as they stand, except for a
         // method with a parameter that takes its argument apart, which
         // hands on the arguments as they were given.
@@ -589,9 +600,19 @@ impl VirtualMachine {
         self.method_arg_stack.pop();
         self.method_running_stack.pop();
         self.method_running_frames.pop();
-        let mut method_scopes = std::mem::replace(&mut self.refinement_scopes, caller_scopes);
-        method_scopes.clear();
-        self.spare_refinement_scopes.push(method_scopes);
+        match caller_scopes {
+            Some(caller_scopes) => {
+                let mut method_scopes = std::mem::replace(&mut self.refinement_scopes, caller_scopes);
+                method_scopes.clear();
+                self.spare_refinement_scopes.push(method_scopes);
+            }
+            None => {
+                self.refinement_scopes.truncate(caller_depth);
+                if let Some(innermost) = self.refinement_scopes.last_mut() {
+                    innermost.clear();
+                }
+            }
+        }
         self.user_def_nesting = self.user_def_nesting.saturating_sub(1);
 
         let finished = match execution_result {
@@ -948,12 +969,18 @@ impl VirtualMachine {
             .source_location
             .as_ref()
             .and_then(|location| location.filename.as_ref());
-        let saved_file = if written_in == self.current_source_file.as_ref() {
+        let saved_file = if written_in.map(String::as_str) == self.current_source_file.as_deref() {
             None
         } else {
-            let encoding = written_in.and_then(|named| self.file_encodings.get(named).cloned());
+            let (file, encoding) = match written_in {
+                Some(named) => {
+                    let (file, encoding) = self.entered_file(named);
+                    (Some(file), encoding)
+                }
+                None => (None, None),
+            };
             Some((
-                std::mem::replace(&mut self.current_source_file, written_in.cloned()),
+                std::mem::replace(&mut self.current_source_file, file),
                 std::mem::replace(&mut self.current_source_encoding, encoding),
             ))
         };
@@ -1301,11 +1328,7 @@ impl VirtualMachine {
             let Some(default_expr) = default_expr else {
                 continue;
             };
-            let written = Statement::Expression {
-                expression: default_expr.clone(),
-                position: default_expr.position(),
-            };
-            for name in crate::ast::collect_assigned_locals(std::slice::from_ref(&written)) {
+            for name in crate::ast::collect_assigned_locals_in(default_expr) {
                 if self.environment().get(&name).is_none() {
                     self.environment_mut().define(name, Object::Nil);
                 }

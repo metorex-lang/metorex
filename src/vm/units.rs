@@ -336,7 +336,8 @@ impl crate::vm::VirtualMachine {
         let compiled = compile_with_parameters(body, kind, parameters);
         let file = self
             .current_source_file
-            .clone()
+            .as_deref()
+            .map(str::to_string)
             .or_else(|| {
                 self.reported_current_file()
                     .map(|path| path.display().to_string())

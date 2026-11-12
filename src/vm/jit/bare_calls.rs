@@ -124,6 +124,9 @@ impl VirtualMachine {
                 let (called_on, method, receiver, reads) = self.method_on_self(site, name)?;
                 if reads
                     && self.tracepoints.is_empty()
+                    && method
+                        .body_facts
+                        .is_plain_reader(|| super::attributes::plain_reader(&method).is_some())
                     && let Some(variable) = super::attributes::plain_reader(&method)
                     && let View::Instance(instance) = receiver.view()
                 {

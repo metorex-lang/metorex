@@ -519,13 +519,13 @@ impl VirtualMachine {
     }
 
     fn enter_block_file(&mut self, block: &BlockStatement) -> Option<SavedFile> {
-        let written_in = block.source_file.as_deref()?;
-        if self.current_source_file.as_deref() == Some(written_in) {
+        let written_in = block.source_file.as_ref()?;
+        if self.current_source_file.as_deref() == Some(&**written_in) {
             return None;
         }
-        let encoding = self.file_encodings.get(written_in).cloned();
+        let encoding = self.file_encodings.get(&**written_in).cloned();
         Some((
-            self.current_source_file.replace(written_in.to_string()),
+            self.current_source_file.replace(Rc::clone(written_in)),
             std::mem::replace(&mut self.current_source_encoding, encoding),
         ))
     }
@@ -632,7 +632,7 @@ thread_local! {
 }
 
 /// The running file and encoding a block body replaced.
-type SavedFile = (Option<String>, Option<String>);
+type SavedFile = (Option<Rc<str>>, Option<String>);
 
 /// The method a block was written in, as the names a block event reports
 /// for `method_id` and `callee_id`.

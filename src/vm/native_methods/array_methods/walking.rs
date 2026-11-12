@@ -48,7 +48,8 @@ impl VirtualMachine {
         }
         let file = self
             .current_source_file
-            .clone()
+            .as_deref()
+            .map(str::to_string)
             .unwrap_or_else(|| "-".to_string());
         let message = format!(
             "{}:{}: warning: given block not used\n",

@@ -187,14 +187,13 @@ impl VirtualMachine {
     ) -> T {
         let body_source_file = block
             .source_file
-            .as_deref()
-            .map(str::to_string)
+            .clone()
             .or_else(|| self.current_source_file.clone());
         let saved_source_file = std::mem::replace(&mut self.current_source_file, body_source_file);
         let saved_source_encoding = std::mem::replace(
             &mut self.current_source_encoding,
             self.current_source_file
-                .as_ref()
+                .as_deref()
                 .and_then(|named| self.file_encodings.get(named).cloned()),
         );
         let result = run(self);
@@ -362,7 +361,8 @@ impl VirtualMachine {
             None => {
                 let caller = self
                     .current_source_file
-                    .clone()
+                    .as_deref()
+                    .map(str::to_string)
                     .or_else(|| {
                         self.reported_current_file()
                             .map(|path| path.display().to_string())
@@ -451,7 +451,7 @@ impl VirtualMachine {
         self.class_var_cref_stack.push(Some(Rc::clone(class_rc)));
         let prev_file = self.current_file.clone();
         self.current_file = Some(std::path::PathBuf::from(&filename));
-        let prev_source_file = self.current_source_file.replace(filename.clone());
+        let prev_source_file = self.current_source_file.replace(Rc::from(filename.as_str()));
         let saved_nesting = self.user_def_nesting;
         self.user_def_nesting = 0;
         // Code handed to `class_eval` is counted into the file it names when
@@ -473,7 +473,8 @@ impl VirtualMachine {
                 .with_location(Some(format!("{}:{}", position.line, position.column)))
                 .with_source_file(
                     prev_source_file
-                        .clone()
+                        .as_deref()
+                        .map(str::to_string)
                         .or_else(|| prev_file.as_ref().map(|file| file.display().to_string())),
                 ),
         );

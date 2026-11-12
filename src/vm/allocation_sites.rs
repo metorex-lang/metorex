@@ -41,7 +41,7 @@ impl VirtualMachine {
         };
         let file = match &self.current_source_file {
             Some(written) => Some(
-                self.reported_spelling(&std::path::PathBuf::from(written))
+                self.reported_spelling(&std::path::PathBuf::from(&**written))
                     .display()
                     .to_string(),
             ),

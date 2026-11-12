@@ -34,6 +34,8 @@ pub struct BodyFacts {
     places: std::cell::OnceCell<crate::object::CodePlaces>,
     owner_path: std::cell::OnceCell<Rc<str>>,
     takes_a_block: std::cell::OnceCell<bool>,
+    reported_as_c: std::cell::OnceCell<bool>,
+    plain_reader: std::cell::OnceCell<bool>,
     /// Whether another method of the same name uses its block: 0 before it
     /// is known, `NAMESAKE_USES_A_BLOCK` for yes, and otherwise one more
     /// than the method state a no was found under.
@@ -72,6 +74,18 @@ impl BodyFacts {
     /// answers the first time it is asked.
     pub fn takes_a_block(&self, found: impl FnOnce() -> bool) -> bool {
         *self.takes_a_block.get_or_init(found)
+    }
+
+    /// Whether the method only reads one instance variable, as `found`
+    /// answers the first time it is asked.
+    pub fn is_plain_reader(&self, found: impl FnOnce() -> bool) -> bool {
+        *self.plain_reader.get_or_init(found)
+    }
+
+    /// Whether a trace reports the method as one written in C, as `found`
+    /// answers the first time it is asked.
+    pub fn reported_as_c(&self, found: impl FnOnce() -> bool) -> bool {
+        *self.reported_as_c.get_or_init(found)
     }
 
     /// Whether another method of the same name uses its block, as `found`

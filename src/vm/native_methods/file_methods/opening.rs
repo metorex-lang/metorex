@@ -267,7 +267,8 @@ impl VirtualMachine {
                     self.pending_block = None;
                     let file = self
                         .current_source_file
-                        .clone()
+                        .as_deref()
+                        .map(str::to_string)
                         .unwrap_or_else(|| "-".to_string());
                     let message = format!(
                         "{}:{}: warning: File::new() does not take block; use File::open() instead\n",

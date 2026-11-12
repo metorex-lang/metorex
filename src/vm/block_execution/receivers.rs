@@ -63,7 +63,7 @@ impl VirtualMachine {
         // call was made, which is what `__FILE__` answers inside it.
         let named = named.or_else(|| {
             let written_in = previous_source_file
-                .clone()
+                .as_deref()
                 .map(std::path::PathBuf::from)
                 .or_else(|| previous_file.clone())
                 .map(|held| self.reported_spelling(&held).display().to_string())
@@ -91,7 +91,7 @@ impl VirtualMachine {
         );
         if let Some(file) = &named {
             self.current_file = Some(std::path::PathBuf::from(file));
-            self.current_source_file = Some(file.clone());
+            self.current_source_file = Some(std::rc::Rc::from(file.as_str()));
         }
         self.environment_mut().push_isolated_scope();
         for (name, cell) in carried {
@@ -227,8 +227,7 @@ impl VirtualMachine {
         let frame = self.block_frame_at(block, position);
         let body_source_file = block
             .source_file
-            .as_deref()
-            .map(str::to_string)
+            .clone()
             .or_else(|| self.current_source_file.clone());
         let saved_source_file = std::mem::replace(&mut self.current_source_file, body_source_file);
         // A literal in the body is written in the encoding the block's own
@@ -236,7 +235,7 @@ impl VirtualMachine {
         let saved_source_encoding = std::mem::replace(
             &mut self.current_source_encoding,
             self.current_source_file
-                .as_ref()
+                .as_deref()
                 .and_then(|named| self.file_encodings.get(named).cloned()),
         );
         // A `def` in the body defines a method on the receiver alone, and a

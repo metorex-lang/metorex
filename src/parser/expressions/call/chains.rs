@@ -447,7 +447,10 @@ impl Parser<'_> {
                     break;
                 }
             } else if matches!(expr, Expression::Identifier { .. })
-                && !matches!(self.peek().kind, TokenKind::Newline | TokenKind::Comment(_))
+                && !matches!(
+                    self.peek().kind,
+                    TokenKind::Newline | TokenKind::Comment(_) | TokenKind::Semicolon
+                )
             {
                 // Check for trailing-block-only call: foo { block } or foo do block end
                 // (no arguments, but a trailing block on the same line).

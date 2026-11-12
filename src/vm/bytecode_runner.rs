@@ -1275,7 +1275,7 @@ impl VirtualMachine {
                 // per line, and the body belongs to the unit rather than to
                 // each pass over it.
                 let site = (
-                    self.current_source_file.clone().unwrap_or_default(),
+                    self.current_source_file.as_deref().map(str::to_string).unwrap_or_default(),
                     position.line,
                     position.column,
                 );
@@ -1931,7 +1931,7 @@ impl VirtualMachine {
         let calling_frame = self.calling_frame();
         self.refuse_moved_receiver(&receiver, position)?;
         self.attach_block(block);
-        let answered = self.call_native_method(class, &receiver, &site.name, &arguments, position);
+        let answered = self.answer_natively(class, &receiver, &site.name, &arguments, position);
         let reached = match answered {
             Ok(Some(value)) => Ok(value),
             Ok(None) => {

@@ -30,6 +30,45 @@ pub(crate) const TOP_LEVEL_FRAME: u64 = 0;
 /// name.
 pub(crate) type MethodDefinitionKey = (Option<(String, usize, usize)>, String);
 
+/// Entries kept by method frame. Frames run nested, so the one asked for
+/// is almost always the last one entered, which is where a search starts.
+pub(crate) struct FrameEntries<V> {
+    entries: Vec<(u64, V)>,
+}
+
+impl<V> Default for FrameEntries<V> {
+    fn default() -> Self {
+        Self {
+            entries: Vec::new(),
+        }
+    }
+}
+
+impl<V> FrameEntries<V> {
+    fn position(&self, frame: u64) -> Option<usize> {
+        self.entries.iter().rposition(|(held, _)| *held == frame)
+    }
+
+    /// Keep `value` for `frame`, answering what it replaced.
+    pub(crate) fn insert(&mut self, frame: u64, value: V) -> Option<V> {
+        match self.position(frame) {
+            Some(at) => Some(std::mem::replace(&mut self.entries[at].1, value)),
+            None => {
+                self.entries.push((frame, value));
+                None
+            }
+        }
+    }
+
+    pub(crate) fn get(&self, frame: &u64) -> Option<&V> {
+        self.position(*frame).map(|at| &self.entries[at].1)
+    }
+
+    pub(crate) fn remove(&mut self, frame: &u64) -> Option<V> {
+        self.position(*frame).map(|at| self.entries.remove(at).1)
+    }
+}
+
 /// Where a `def` written in a running method's body installs.
 #[derive(Clone)]
 pub(crate) enum Definee {
@@ -60,7 +99,15 @@ pub struct VirtualMachine {
     pub(crate) native_frames: Vec<NativeFrame>,
     /// The names native frames have been recorded under, shared so that
     /// recording one copies no name.
-    pub(crate) native_frame_names: std::collections::HashSet<Rc<str>>,
+    pub(crate) native_frame_names: crate::fast_hash::NameSet<Rc<str>>,
+    /// For each name the interpreter sends without a call site of its own,
+    /// as C code calling into Ruby does, the methods instances reached.
+    pub(crate) send_caches: crate::fast_hash::NameMap<String, Rc<crate::bytecode::call_cache::CallCache>>,
+    /// Classes found to hold no Struct members, by address, with the method
+    /// state they were found under. The weak reference keeps the address
+    /// from naming another class.
+    pub(crate) classes_without_members:
+        crate::fast_hash::AddressMap<usize, (std::rc::Weak<crate::class::Class>, u64)>,
     /// The statement lists running, innermost last, each with the statement
     /// it is on, which a continuation called after its `callcc` returned
     /// runs again from.
@@ -102,7 +149,7 @@ pub struct VirtualMachine {
     pub(crate) fiber_errors: HashMap<usize, (Object, Object)>,
     /// The file each suspended fiber was running code from, which `__FILE__`
     /// and backtraces read again when it is resumed.
-    pub(crate) fiber_source_files: HashMap<usize, Option<String>>,
+    pub(crate) fiber_source_files: HashMap<usize, Option<Rc<str>>>,
 
     /// Where a number variable too big to name a capture has already been
     /// reported, so each place in the source says so once.
@@ -202,7 +249,7 @@ pub struct VirtualMachine {
     pub(crate) open_streams: crate::vm::native_methods::OpenStreams,
     /// The file whose code is running right now, which differs from
     /// `current_file` inside a method defined in another file.
-    pub(crate) current_source_file: Option<String>,
+    pub(crate) current_source_file: Option<Rc<str>>,
     /// The bare names handed to `method_missing`, with the depth of the
     /// call stack each was handed over at. A `super` from that
     /// `method_missing` raises NameError for one of these, as MRI does for a
@@ -219,6 +266,9 @@ pub struct VirtualMachine {
     /// spelling the file was named by. A method's body is written in the file
     /// it was defined in, whatever file is calling it.
     pub(crate) file_encodings: crate::fast_hash::NameMap<String, String>,
+    /// The files code was entered in lately, each shared, with the encoding
+    /// `file_encodings` names for it.
+    pub(crate) entered_files: Vec<(Rc<str>, Option<String>)>,
     /// The spelling each loaded file was named by, against the path its
     /// symlinks resolve to. `__FILE__` and a backtrace name the spelling,
     /// while everything that loads or dedups works from the resolved path.
@@ -361,7 +411,7 @@ pub struct VirtualMachine {
     /// module the method was defined in and the depth of the def scope
     /// stack when it started. A `def` written in the method's body installs
     /// there, unless a class body opened since is deeper.
-    pub(crate) method_definees: crate::fast_hash::NameMap<u64, (usize, Definee)>,
+    pub(crate) method_definees: FrameEntries<(usize, Definee)>,
     /// For a frame `instance_exec` gave a receiver to, how many frames were
     /// borrowed when it did, so the receiver stands while no file has been
     /// loaded since.
@@ -571,9 +621,6 @@ pub struct VirtualMachine {
     /// Emptied run states, kept for the next units run to fill again rather
     /// than allocate.
     pub(crate) spare_run_states: Vec<crate::vm::bytecode_runner::RunState>,
-    /// The file frames name as their source, by the text it was made from,
-    /// so frames entered from the same file share one.
-    pub(crate) frames_file_held: crate::fast_hash::NameMap<String, Rc<str>>,
     /// `frames_file` for code that names no source file, with the current
     /// file it was made for.
     pub(crate) frames_path_held: Option<(PathBuf, Rc<str>)>,
@@ -709,7 +756,9 @@ impl VirtualMachine {
             environment,
             call_stack: Vec::new(),
             native_frames: Vec::new(),
-            native_frame_names: std::collections::HashSet::new(),
+            native_frame_names: Default::default(),
+            send_caches: Default::default(),
+            classes_without_members: Default::default(),
             statement_marks: Vec::new(),
             next_statement_serial: 0,
             continuation_resumes: std::collections::HashMap::new(),
@@ -759,6 +808,7 @@ impl VirtualMachine {
             eval_named_files: Default::default(),
             current_source_encoding: None,
             file_encodings: Default::default(),
+            entered_files: Vec::new(),
             reported_files: std::collections::HashMap::new(),
             timeout_limits: Vec::new(),
             thread_timeout_limits: HashMap::new(),
@@ -867,7 +917,6 @@ impl VirtualMachine {
             spare_refinement_scopes: Vec::new(),
             spare_registers: Vec::new(),
             spare_run_states: Vec::new(),
-            frames_file_held: Default::default(),
             frames_path_held: None,
             def_scope_stack: Vec::new(),
             patterns_built_once: std::collections::HashMap::new(),
@@ -1054,7 +1103,7 @@ impl VirtualMachine {
         location.filename = self
             .loading_embedded_library
             .clone()
-            .or_else(|| self.current_source_file.clone())
+            .or_else(|| self.current_source_file.as_deref().map(str::to_string))
             .or_else(|| {
                 self.reported_current_file()
                     .map(|file| file.display().to_string())

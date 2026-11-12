@@ -156,7 +156,7 @@ impl VirtualMachine {
         } else {
             // The main script is named the way it was given, as
             // `__FILE__` names it.
-            let file = self.current_source_file.clone().or_else(|| {
+            let file = self.current_source_file.as_deref().map(str::to_string).or_else(|| {
                 self.reported_current_file()
                     .map(|path| path.display().to_string())
             });
@@ -706,7 +706,7 @@ impl VirtualMachine {
         // group at all, which Ruby says so about and reads as nil.
         if number_variable_is_too_big(&name) {
             let at = (
-                self.current_source_file.clone().unwrap_or_default(),
+                self.current_source_file.as_deref().map(str::to_string).unwrap_or_default(),
                 position.line,
                 position.column,
             );

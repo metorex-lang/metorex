@@ -66,6 +66,22 @@ fn define_positional_param(
     }
 }
 
+/// `define_positional_param` for a parameter bound to nil before the
+/// defaults ran, which keeps the binding a default's block closed over.
+fn fill_positional_param(
+    vm: &mut VirtualMachine,
+    param: &str,
+    value: Object,
+) -> Result<(), MetorexError> {
+    if param.starts_with(crate::object::DESTRUCTURED_GROUP_PREFIX) {
+        return define_positional_param(vm, param, value);
+    }
+    if !vm.environment_mut().assign_own(param, value.clone()) {
+        vm.environment_mut().define_named(param, value);
+    }
+    Ok(())
+}
+
 /// Bind positional parameters to arguments, handling variadic (splat) parameters.
 ///
 /// When a variadic param is present at index `vi`, parameters before it get one arg each,
@@ -81,11 +97,7 @@ pub(crate) fn bind_params(
     // A default that assigns a local, as `def f(a = b = 1)` does, names that
     // local for the whole body whether or not the default is reached.
     for (_, default_expr) in default_parameters {
-        let written = crate::ast::Statement::Expression {
-            expression: default_expr.clone(),
-            position: default_expr.position(),
-        };
-        for name in crate::ast::collect_assigned_locals(std::slice::from_ref(&written)) {
+        for name in crate::ast::collect_assigned_locals_in(default_expr) {
             if vm.environment().get(&name).is_none() {
                 vm.environment_mut().define(name, Object::Nil);
             }
@@ -95,7 +107,7 @@ pub(crate) fn bind_params(
     // a default that reads its own parameter, `def f(a = a)`, reads nil.
     if !default_parameters.is_empty() {
         for param in params {
-            vm.environment_mut().define(param.clone(), Object::Nil);
+            vm.environment_mut().define_named(param, Object::Nil);
         }
     }
     if let Some((vi, _)) = variadic_param {
@@ -155,7 +167,11 @@ pub(crate) fn bind_params(
                     .cloned()
                     .unwrap_or(Object::Nil)
             };
-            define_positional_param(vm, &parameter_local(params, i), value)?;
+            if default_parameters.is_empty() {
+                define_positional_param(vm, &parameter_local(params, i), value)?;
+            } else {
+                fill_positional_param(vm, &parameter_local(params, i), value)?;
+            }
         }
     } else if let (Some(first_optional), Some(last_optional)) = (
         default_parameters.iter().map(|(index, _)| *index).min(),
@@ -188,7 +204,7 @@ pub(crate) fn bind_params(
                 let index = positional.len().saturating_sub(offset_from_end);
                 positional.get(index).cloned().unwrap_or(Object::Nil)
             };
-            define_positional_param(vm, &parameter_local(params, i), value)?;
+            fill_positional_param(vm, &parameter_local(params, i), value)?;
         }
     } else {
         for i in 0..params.len() {

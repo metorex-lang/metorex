@@ -63,7 +63,7 @@ struct Built {
     bodies: Vec<Weak<Class>>,
     nesting: Option<Vec<Weak<Class>>>,
     method_owner: Option<Option<Weak<Class>>>,
-    source_file: Option<String>,
+    source_file: Option<Rc<str>>,
     current_file: Option<std::path::PathBuf>,
     within: Option<CodePlaces>,
 }
