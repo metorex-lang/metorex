@@ -1899,6 +1899,19 @@ impl VirtualMachine {
         };
         let site = &unit.call_sites[usize::from(site)];
         let base = usize::from(base);
+        if !site.arguments_in_list
+            && !site.has_block
+            && self.tracepoints.is_empty()
+            && !self.was_moved(&run.registers[base])
+            && let Some(value) = answer_without_a_frame(
+                &site.name,
+                &run.registers[base],
+                &run.registers[base + 1..base + 1 + site.argument_count],
+            )
+        {
+            run.registers[base] = value;
+            return Ok(Next::Step);
+        }
         let position = unit.positions.at(at);
         let receiver = run.registers[base].clone();
         let (arguments, block) = call_inputs(site, base, run.registers, run.state);
@@ -1983,6 +1996,40 @@ impl VirtualMachine {
         crate::vm::program::leave_nesting();
         self.note_failed_call(&result, &site.name, written.names_self(), position);
         result
+    }
+}
+
+/// What a native method answers for a call that can neither raise, run a
+/// block, nor change anything, worked out here rather than through the
+/// native tables and a frame of its own. None when the call is not one of
+/// those, which leaves it to the tables.
+fn answer_without_a_frame(name: &str, receiver: &Object, arguments: &[Object]) -> Option<Object> {
+    match (name, arguments) {
+        ("nil?", []) => Some(Object::Bool(matches!(receiver.view(), View::Nil))),
+        ("size" | "length" | "empty?" | "first" | "last", []) => {
+            let View::Array(elements) = receiver.view() else {
+                return None;
+            };
+            let elements = elements.borrow();
+            Some(match name {
+                "empty?" => Object::Bool(elements.is_empty()),
+                "first" => elements.first().cloned().unwrap_or(Object::Nil),
+                "last" => elements.last().cloned().unwrap_or(Object::Nil),
+                _ => Object::Int(i64::try_from(elements.len()).ok()?),
+            })
+        }
+        ("<<" | ">>", [amount]) => {
+            let (View::Int(value), View::Int(amount)) = (receiver.view(), amount.view()) else {
+                return None;
+            };
+            let amount = u32::try_from(amount).ok().filter(|amount| *amount < 63)?;
+            if name == ">>" {
+                return Some(Object::Int(value >> amount));
+            }
+            let shifted = value << amount;
+            (shifted >> amount == value).then_some(Object::Int(shifted))
+        }
+        _ => None,
     }
 }
 

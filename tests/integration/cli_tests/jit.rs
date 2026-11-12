@@ -141,6 +141,19 @@ fn machine_code_calls_what_a_built_in_value_answers_after_a_method_of_its_name_i
 }
 
 #[test]
+fn machine_code_answers_plain_native_calls_as_the_interpreter_does() {
+    let (interpreted, compiled) = interpreted_and_compiled("frameless_native_calls");
+    assert_eq!(
+        interpreted,
+        "[true]\n[false]\n[[0, 0, true, nil, nil]]\n[[3, 3, false, 3, 5]]\n[4]\n[1]\n\
+         [[40, 0]]\n[[-16, -4]]\n[[4611686018427387904, 0]]\n[[13835058055282163712, 0]]\n\
+         [[9223372036854775808, 0]]\n[[0, 4]]\n\
+         [[4722366482869645213696, 295147905179352825856]]\n[[7]]\n100\n"
+    );
+    assert_eq!(compiled, interpreted);
+}
+
+#[test]
 fn machine_code_calls_what_a_top_level_definition_names_after_it_is_redefined() {
     let (interpreted, compiled) = interpreted_and_compiled("top_level_bare_calls");
     assert_eq!(interpreted, "60\n60\n[2]\n");
