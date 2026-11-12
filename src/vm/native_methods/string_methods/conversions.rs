@@ -98,7 +98,7 @@ impl VirtualMachine {
                     ));
                 }
                 let named = string_value.encoding_name();
-                if wide_encoding(&named).is_some() {
+                if wide_encoding(named).is_some() {
                     return Err(crate::vm::errors::simple_exception(
                         "Encoding::CompatibilityError",
                         &format!("ASCII incompatible encoding: {named}"),

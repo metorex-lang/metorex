@@ -214,7 +214,7 @@ impl VirtualMachine {
                     ));
                 }
                 let named = string_value.encoding_name();
-                Ok(Some(self.encoding_object(&named)))
+                Ok(Some(self.encoding_object(named)))
             }
             "size" => {
                 if !arguments.is_empty() {

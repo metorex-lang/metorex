@@ -55,7 +55,9 @@ pub(crate) fn dumped_bytes(bytes: &[u8]) -> String {
                 written.push('\\');
                 written.push(char::from(*byte));
             }
-            b'#' if matches!(bytes.get(at + 1), Some(b'{' | b'$' | b'@')) => written.push_str("\\#"),
+            b'#' if matches!(bytes.get(at + 1), Some(b'{' | b'$' | b'@')) => {
+                written.push_str("\\#")
+            }
             b'\n' => written.push_str("\\n"),
             b'\r' => written.push_str("\\r"),
             b'\t' => written.push_str("\\t"),

@@ -272,7 +272,10 @@ impl VirtualMachine {
         self.check_range_ends(&start_value, &end_value, position)?;
         let written_at = literal_ends.then(|| {
             (
-                self.current_source_file.as_deref().map(str::to_string).unwrap_or_default(),
+                self.current_source_file
+                    .as_deref()
+                    .map(str::to_string)
+                    .unwrap_or_default(),
                 position.line,
                 position.column,
             )

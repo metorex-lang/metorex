@@ -89,10 +89,12 @@ impl VirtualMachine {
             )
             .find(|(_, number)| *number == wanted)
             .map(|(held, _)| held);
-        Ok(match found.or_else(|| self.adopt_inherited_socket(wanted)) {
-            Some(held) => Object::Int(held as i64),
-            None => Object::Nil,
-        })
+        Ok(
+            match found.or_else(|| self.adopt_inherited_socket(wanted)) {
+                Some(held) => Object::Int(held as i64),
+                None => Object::Nil,
+            },
+        )
     }
 
     /// Hold a socket this program did not open, such as one a parent

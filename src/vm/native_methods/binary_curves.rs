@@ -300,8 +300,9 @@ impl VirtualMachine {
             coefficient(3).ok_or_else(refuse)?,
         );
         let curve = Curve { field, a, b };
-        let element =
-            |at: usize| text_of(arguments.get(at)).and_then(|text| curve.field.element_from_hex(&text));
+        let element = |at: usize| {
+            text_of(arguments.get(at)).and_then(|text| curve.field.element_from_hex(&text))
+        };
         let point_at = |at: usize| -> Result<Point, MetorexError> {
             if arguments.get(at).is_none_or(Object::is_nil) {
                 return Ok(None);
@@ -414,7 +415,10 @@ mod tests {
     fn doubling_a_point_matches_openssl() {
         let curve = curve();
         let field = &curve.field;
-        let point = Some((field.element_from_hex(X553).unwrap(), field.element_from_hex(Y553).unwrap()));
+        let point = Some((
+            field.element_from_hex(X553).unwrap(),
+            field.element_from_hex(Y553).unwrap(),
+        ));
         assert!(curve.on_curve(&point.as_ref().unwrap().0, &point.as_ref().unwrap().1));
         let doubled = curve.double(&point).unwrap();
         assert_eq!(field.to_hex(&doubled.0), X554);
@@ -428,7 +432,10 @@ mod tests {
     fn multiplying_the_generator_matches_openssl() {
         let curve = curve();
         let field = &curve.field;
-        let generator = Some((field.element_from_hex(GX).unwrap(), field.element_from_hex(GY).unwrap()));
+        let generator = Some((
+            field.element_from_hex(GX).unwrap(),
+            field.element_from_hex(GY).unwrap(),
+        ));
         let mut scalar = vec![0u8; 70];
         scalar[0] = 0x04;
         let product = curve.multiply(&generator, &scalar).unwrap();

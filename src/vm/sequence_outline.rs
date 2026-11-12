@@ -37,11 +37,7 @@ pub(crate) fn outline_of_source(source: &str) -> Option<Object> {
 /// kind of body it is, and the defaults of its optional positional
 /// parameters, or None where the program does not parse or
 /// holds no such scope. A `top` or `eval` scope is the whole program.
-pub(crate) fn body_of_scope(
-    source: &str,
-    kind: &str,
-    line: usize,
-) -> Option<Found> {
+pub(crate) fn body_of_scope(source: &str, kind: &str, line: usize) -> Option<Found> {
     let (statements, closing) = parsed(source)?;
     if matches!(kind, "top" | "eval") {
         return Some((statements, UnitKind::Plain, Vec::new()));

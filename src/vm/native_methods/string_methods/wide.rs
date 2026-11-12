@@ -156,7 +156,9 @@ pub(crate) fn wide_pieces(bytes: &[u8], shape: WideShape) -> Vec<WidePiece> {
         } else {
             taken.iter().rev().copied().collect()
         };
-        ordered.iter().fold(0u32, |value, byte| (value << 8) | u32::from(*byte))
+        ordered
+            .iter()
+            .fold(0u32, |value, byte| (value << 8) | u32::from(*byte))
     };
     let mut pieces = Vec::new();
     let mut at = 0;

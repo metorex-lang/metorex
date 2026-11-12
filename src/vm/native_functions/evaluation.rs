@@ -19,9 +19,10 @@ impl VirtualMachine {
             match crate::lexer::named_source_encoding(&carried).map(|named| {
                 crate::vm::native_methods::string_methods::canonical_encoding_name(&named)
             }) {
-                Some(named) if named != tagged => {
-                    (crate::vm::native_methods::text_in_encoding(s, &named), named)
-                }
+                Some(named) if named != tagged => (
+                    crate::vm::native_methods::text_in_encoding(s, &named),
+                    named,
+                ),
                 _ => (carried, tagged.to_string()),
             },
         )
@@ -280,7 +281,9 @@ impl VirtualMachine {
             });
             let line = i64::from(at) - 1 + named_lineno;
             self.emit_warning_to_stderr(
-                &format!("{named}:{line}: warning: 'frozen_string_literal' is ignored after any tokens"),
+                &format!(
+                    "{named}:{line}: warning: 'frozen_string_literal' is ignored after any tokens"
+                ),
                 position,
             );
         }
@@ -572,8 +575,7 @@ impl VirtualMachine {
             // A class or method the code defined is a definition rather
             // than a local, and is not carried.
             for (name, cell) in self.environment().current_scope_var_refs().iter() {
-                if !held.has(name)
-                    && !crate::scope::names_a_definition_under(name, &cell.borrow())
+                if !held.has(name) && !crate::scope::names_a_definition_under(name, &cell.borrow())
                 {
                     held.set(name, Rc::clone(cell));
                 }

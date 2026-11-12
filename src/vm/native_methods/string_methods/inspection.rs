@@ -18,7 +18,7 @@ impl VirtualMachine {
             // A number is read off ASCII digits, so an encoding that does not
             // spell those one byte to a letter has no number in it.
             "to_f" | "to_r" | "to_c"
-                if !encoding_is_ascii_compatible(&string_value.encoding_name()) =>
+                if !encoding_is_ascii_compatible(string_value.encoding_name()) =>
             {
                 let message = format!(
                     "ASCII incompatible encoding: {}",
@@ -60,7 +60,7 @@ impl VirtualMachine {
                 // An encoding that spells no ASCII is dumped as the bytes it
                 // holds, since a character of its own has no spelling the
                 // dump could be read back through.
-                if !encoding_is_ascii_compatible(&held) {
+                if !encoding_is_ascii_compatible(held) {
                     for byte in binary_bytes(string_value) {
                         match byte {
                             b'"' => out.push_str("\\\""),
@@ -85,7 +85,7 @@ impl VirtualMachine {
                 // An encoding that spells a character in more than one byte is
                 // carried as the bytes themselves, so the characters are read
                 // back out of them.
-                let held_characters = match wide_encoding(&held) {
+                let held_characters = match wide_encoding(held) {
                     Some(shape) => wide_text(&binary_bytes(string_value), shape),
                     None => string_value.to_text(),
                 };
@@ -128,13 +128,13 @@ impl VirtualMachine {
                 out.push('"');
                 // Text in an encoding that spells ASCII its own way says which
                 // encoding to read the dump back in.
-                if !encoding_is_ascii_compatible(&held) {
+                if !encoding_is_ascii_compatible(held) {
                     out.push_str(&format!(".force_encoding(\"{held}\")"));
                 }
                 // A dump is nothing but ASCII, so it is written in the
                 // encoding it was dumped from when that spells ASCII the same
                 // way, and in US-ASCII when it does not.
-                let writing = if encoding_is_ascii_compatible(&held) {
+                let writing = if encoding_is_ascii_compatible(held) {
                     held
                 } else {
                     &"US-ASCII".to_string()
@@ -172,23 +172,20 @@ impl VirtualMachine {
                 // Ruby's String#inspect output for the common cases. A run of
                 // bytes shows the bytes themselves, since the characters they
                 // would spell are not what the string holds.
-                let binary = matches!(
-                    string_value.encoding_name(),
-                    "ASCII-8BIT" | "BINARY"
-                );
+                let binary = matches!(string_value.encoding_name(), "ASCII-8BIT" | "BINARY");
                 // A string whose characters stand for bytes is written as
                 // those bytes only where they spell nothing in the encoding it
                 // is tagged with; where they spell text, it is written as the
                 // text they spell.
                 let spells_nothing = string_value.holds_bytes()
-                    && wide_encoding(&string_value.encoding_name()).is_none()
+                    && wide_encoding(string_value.encoding_name()).is_none()
                     && !holds_valid_text(string_value);
                 let mut out = String::with_capacity(string_value.as_str().len() + 2);
                 out.push('"');
                 // A dummy encoding reads no characters, so every byte is
                 // named by its value except the controls with names of their
                 // own.
-                if dummy_encoding(&string_value.encoding_name()) {
+                if dummy_encoding(string_value.encoding_name()) {
                     for byte in binary_bytes(string_value) {
                         match named_escape(byte as char) {
                             Some(named) => {
@@ -243,7 +240,9 @@ impl VirtualMachine {
                 // A character an encoding spells in bytes of its own is named
                 // by those bytes together, since the answer cannot show the
                 // character itself.
-                if (held == "EUC-JP" || crate::vm::native_methods::double_byte::double_byte(&held).is_some() || spells_shift_jis(&held))
+                if (held == "EUC-JP"
+                    || crate::vm::native_methods::double_byte::double_byte(held).is_some()
+                    || spells_shift_jis(held))
                     && string_value.holds_bytes()
                 {
                     let bytes = binary_bytes(string_value);
@@ -251,7 +250,9 @@ impl VirtualMachine {
                     while at < bytes.len() {
                         let decoded = if held == "EUC-JP" {
                             crate::vm::native_methods::euc_jp_table::euc_jp_character(&bytes[at..])
-                        } else if let Some(codec) = crate::vm::native_methods::double_byte::double_byte(&held) {
+                        } else if let Some(codec) =
+                            crate::vm::native_methods::double_byte::double_byte(held)
+                        {
                             codec.character(&bytes[at..])
                         } else {
                             crate::vm::native_methods::shift_jis_table::shift_jis_character(
@@ -299,7 +300,7 @@ impl VirtualMachine {
                 // past ASCII by its value, since the answer cannot show the
                 // character the byte spells there.
                 if held != self.inspect_result_encoding()
-                    && crate::vm::native_methods::string_methods::latin_text(b"A", &held).is_some()
+                    && crate::vm::native_methods::string_methods::latin_text(b"A", held).is_some()
                 {
                     let bytes = binary_bytes(string_value);
                     for (at, byte) in bytes.iter().enumerate() {
@@ -332,7 +333,7 @@ impl VirtualMachine {
                 // An encoding that spells a character in more than one byte is
                 // carried as the bytes themselves, so the characters are read
                 // back out of them.
-                let held_text = match wide_encoding(&held) {
+                let held_text = match wide_encoding(held) {
                     Some(shape) => wide_text(&binary_bytes(string_value), shape),
                     // A string whose characters stand for bytes has its text
                     // read back out of them, since the characters they spell

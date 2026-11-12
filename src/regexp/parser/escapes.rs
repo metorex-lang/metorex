@@ -86,7 +86,8 @@ impl Parser {
             'g' if !matches!(self.peek(), Some('<' | '\'')) => {
                 if self.peek().is_some() {
                     let written: String = self.letters.iter().collect();
-                    self.warnings.push(format!("invalid subexp call: /{written}/"));
+                    self.warnings
+                        .push(format!("invalid subexp call: /{written}/"));
                 }
                 Ok(Node::Letter('g'))
             }
@@ -173,7 +174,9 @@ impl Parser {
             }
         }
         if crate::regexp::property_number(&crate::regexp::plain_property_name(&name)).is_none() {
-            return Err(Trouble(format!("invalid character property name {{{name}}}")));
+            return Err(Trouble(format!(
+                "invalid character property name {{{name}}}"
+            )));
         }
         Ok((name, negated))
     }

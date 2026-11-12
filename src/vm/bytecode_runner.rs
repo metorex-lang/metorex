@@ -1275,7 +1275,10 @@ impl VirtualMachine {
                 // per line, and the body belongs to the unit rather than to
                 // each pass over it.
                 let site = (
-                    self.current_source_file.as_deref().map(str::to_string).unwrap_or_default(),
+                    self.current_source_file
+                        .as_deref()
+                        .map(str::to_string)
+                        .unwrap_or_default(),
                     position.line,
                     position.column,
                 );
@@ -1501,7 +1504,9 @@ impl VirtualMachine {
                         _ => None,
                     };
                     if let Some(found) = target {
-                        return Ok(Next::JumpTo(index(found.copied().unwrap_or(table.otherwise))));
+                        return Ok(Next::JumpTo(index(
+                            found.copied().unwrap_or(table.otherwise),
+                        )));
                     }
                 }
             }

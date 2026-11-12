@@ -785,11 +785,12 @@ impl VirtualMachine {
         // an object of a class is.
         let hashes_itself = match object.view() {
             View::Instance(_) => true,
-            View::Class(_) | View::Module(_) => self
-                .lookup_method(object, "hash")
-                .is_some_and(|(_, method)| {
-                    crate::vm::native_methods::object_methods::written_by_program(&method)
-                }),
+            View::Class(_) | View::Module(_) => {
+                self.lookup_method(object, "hash")
+                    .is_some_and(|(_, method)| {
+                        crate::vm::native_methods::object_methods::written_by_program(&method)
+                    })
+            }
             _ => false,
         };
         if !hashes_itself {

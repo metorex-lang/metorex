@@ -189,9 +189,8 @@ impl VirtualMachine {
             Some(given @ View::String(_)) => runtime_error_from(&given.to_object()),
             // An instance of a String subclass is a message too.
             Some(View::Instance(_))
-                if let Some(text) = crate::vm::native_methods::subclasses::string_subclass_value(
-                    &arguments[0],
-                ) =>
+                if let Some(text) =
+                    crate::vm::native_methods::subclasses::string_subclass_value(&arguments[0]) =>
             {
                 let made = runtime_error_from(&text);
                 if let View::Exception(details) = made.view() {
@@ -216,7 +215,13 @@ impl VirtualMachine {
                     Some((class, method)) => {
                         self.invoke_method(class, method, receiver, call_arguments, position)?
                     }
-                    None if self.responds_via_missing(&receiver, "exception", true, position)? => {
+                    None if self.responds_via_missing(
+                        &receiver,
+                        "exception",
+                        true,
+                        position,
+                    )? =>
+                    {
                         self.send_to_object(receiver, "exception", call_arguments, position)?
                     }
                     None => {
@@ -492,8 +497,12 @@ impl VirtualMachine {
             .filter_map(|native| {
                 let key = match native.receiver.view() {
                     None => (0, 0, Rc::clone(&native.name)),
-                    Some(View::Class(class)) => (1, Rc::as_ptr(class) as usize, Rc::clone(&native.name)),
-                    Some(View::Module(module)) => (2, Rc::as_ptr(module) as usize, Rc::clone(&native.name)),
+                    Some(View::Class(class)) => {
+                        (1, Rc::as_ptr(class) as usize, Rc::clone(&native.name))
+                    }
+                    Some(View::Module(module)) => {
+                        (2, Rc::as_ptr(module) as usize, Rc::clone(&native.name))
+                    }
                     Some(receiver) => {
                         let class = self.builtins().class_of(&receiver.to_object());
                         (3, Rc::as_ptr(&class) as usize, Rc::clone(&native.name))

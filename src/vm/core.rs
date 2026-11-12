@@ -102,12 +102,17 @@ pub struct VirtualMachine {
     pub(crate) native_frame_names: crate::fast_hash::NameSet<Rc<str>>,
     /// For each name the interpreter sends without a call site of its own,
     /// as C code calling into Ruby does, the methods instances reached.
-    pub(crate) send_caches: crate::fast_hash::NameMap<String, Rc<crate::bytecode::call_cache::CallCache>>,
+    pub(crate) send_caches:
+        crate::fast_hash::NameMap<String, Rc<crate::bytecode::call_cache::CallCache>>,
     /// Classes found to hold no Struct members, by address, with the method
     /// state they were found under. The weak reference keeps the address
     /// from naming another class.
     pub(crate) classes_without_members:
         crate::fast_hash::AddressMap<usize, (std::rc::Weak<crate::class::Class>, u64)>,
+    /// What `lookup_method` found for a class receiver, by the class's
+    /// address and the name, under the method state the entries were found
+    /// under.
+    pub(crate) class_receiver_lookups: RefCell<crate::vm::method_lookup::ClassReceiverLookups>,
     /// The statement lists running, innermost last, each with the statement
     /// it is on, which a continuation called after its `callcc` returned
     /// runs again from.
@@ -759,6 +764,7 @@ impl VirtualMachine {
             native_frame_names: Default::default(),
             send_caches: Default::default(),
             classes_without_members: Default::default(),
+            class_receiver_lookups: Default::default(),
             statement_marks: Vec::new(),
             next_statement_serial: 0,
             continuation_resumes: std::collections::HashMap::new(),

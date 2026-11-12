@@ -233,7 +233,11 @@ impl VirtualMachine {
             if let Ok(read) =
                 crate::vm::native_methods::regexp_methods::read_pattern(&source, &flags)
             {
-                for warning in read.warnings.iter().filter(|held| !held.starts_with("nested repeat")) {
+                for warning in read
+                    .warnings
+                    .iter()
+                    .filter(|held| !held.starts_with("nested repeat"))
+                {
                     let prefix = self.warning_prefix(0, position);
                     self.emit_warning_to_stderr(&format!("{prefix}{warning}"), position);
                 }
@@ -282,7 +286,10 @@ impl VirtualMachine {
                 Some('s') if written_out => Some("Windows-31J"),
                 _ => None,
             };
-            if let Some(named) = named_by_letter.map(str::to_string).or(source_encoding.map(str::to_string)) {
+            if let Some(named) = named_by_letter
+                .map(str::to_string)
+                .or(source_encoding.map(str::to_string))
+            {
                 self.record_pattern_encoding(&built, named);
             }
             let made = Object::Regex(built, Rc::new(flags));
@@ -421,7 +428,7 @@ impl VirtualMachine {
                 _ => {
                     let text = self.union_string_argument(part, position)?;
                     let named = text.encoding_name();
-                    let standing = if !encoding_reads_alongside_ascii(&named) {
+                    let standing = if !encoding_reads_alongside_ascii(named) {
                         UnionEncoding::AsciiIncompatible(named.to_string())
                     } else if text.is_ascii() {
                         UnionEncoding::AsciiOnly

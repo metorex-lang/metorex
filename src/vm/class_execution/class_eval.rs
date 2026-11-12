@@ -354,8 +354,7 @@ impl VirtualMachine {
                 "UTF-8".to_string(),
             ),
         };
-        let source_encoding =
-            crate::lexer::named_source_encoding(&code).unwrap_or(code_encoding);
+        let source_encoding = crate::lexer::named_source_encoding(&code).unwrap_or(code_encoding);
         let filename = match arguments.get(1) {
             Some(obj) => self.coerce_eval_string(obj, position)?,
             None => {
@@ -451,7 +450,9 @@ impl VirtualMachine {
         self.class_var_cref_stack.push(Some(Rc::clone(class_rc)));
         let prev_file = self.current_file.clone();
         self.current_file = Some(std::path::PathBuf::from(&filename));
-        let prev_source_file = self.current_source_file.replace(Rc::from(filename.as_str()));
+        let prev_source_file = self
+            .current_source_file
+            .replace(Rc::from(filename.as_str()));
         let saved_nesting = self.user_def_nesting;
         self.user_def_nesting = 0;
         // Code handed to `class_eval` is counted into the file it names when

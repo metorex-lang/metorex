@@ -432,10 +432,7 @@ impl crate::vm::VirtualMachine {
                 // thread waits for the main thread to run again. The default
                 // handler raises there too.
                 if !self.thread_current_stack.is_empty()
-                    && !matches!(
-                        self.signal_handlers.get(&name).view(),
-                        Some(View::Nil)
-                    )
+                    && !matches!(self.signal_handlers.get(&name).view(), Some(View::Nil))
                     && !matches!(
                         self.signal_handlers.get(&name).view(),
                         Some(View::String(held)) if *held.as_str() == *"IGNORE"

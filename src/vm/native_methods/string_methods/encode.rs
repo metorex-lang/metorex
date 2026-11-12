@@ -118,9 +118,13 @@ impl VirtualMachine {
                             position,
                         )
                         .map_err(|error| self.with_conversion_ends(error, "UTF-8", &wanted))?,
-                    None if held == "ISO-2022-JP" => {
-                        self.iso_2022_jp_reading(string_value, &wanted, &options, &replacement, position)?
-                    }
+                    None if held == "ISO-2022-JP" => self.iso_2022_jp_reading(
+                        string_value,
+                        &wanted,
+                        &options,
+                        &replacement,
+                        position,
+                    )?,
                     None if spells_shift_jis(&held) && reads_bytes => {
                         let bytes = binary_bytes(string_value);
                         if let Some((broken, after, incomplete)) = shift_jis_problem(&bytes)
@@ -179,7 +183,8 @@ impl VirtualMachine {
                                     dumped_bytes(&undefined)
                                 )
                             };
-                            let error = undefined_conversion(&message, &undefined, "EUC-JP", position);
+                            let error =
+                                undefined_conversion(&message, &undefined, "EUC-JP", position);
                             return Err(self.with_conversion_ends(error, "EUC-JP", "UTF-8"));
                         }
                         euc_jp_text_replacing(&bytes, &replacement)
@@ -282,11 +287,9 @@ impl VirtualMachine {
                     return Ok(Some(Object::String(Rc::new(made))));
                 }
                 if let Some(codec) = crate::vm::native_methods::double_byte::double_byte(&wanted) {
-                    let bytes = codec.bytes(&reading).map_err(
-                        |character| {
-                            self.undefined_conversion_error(character, &held, &wanted, position)
-                        },
-                    )?;
+                    let bytes = codec.bytes(&reading).map_err(|character| {
+                        self.undefined_conversion_error(character, &held, &wanted, position)
+                    })?;
                     let made = crate::object::StringValue::binary(bytes);
                     made.set_encoding(wanted);
                     return Ok(Some(Object::String(Rc::new(made))));
@@ -375,5 +378,4 @@ impl VirtualMachine {
         }
         Ok(read)
     }
-
 }

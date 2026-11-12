@@ -135,7 +135,7 @@ impl VirtualMachine {
             if held != writing {
                 let message =
                     crate::vm::native_methods::string_methods::incompatible_encodings_message(
-                        &writing, &held,
+                        &writing, held,
                     );
                 return Err(crate::vm::errors::simple_exception(
                     "Encoding::CompatibilityError",

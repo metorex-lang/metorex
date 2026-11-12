@@ -44,7 +44,8 @@ impl VirtualMachine {
                     }
                     // Without a block the walk is an Enumerator, as Ruby's is.
                     None => {
-                        let size = self.send_to_object(receiver.clone(), "size", vec![], position)?;
+                        let size =
+                            self.send_to_object(receiver.clone(), "size", vec![], position)?;
                         let enumerator = self.globals().get("Enumerator").unwrap_or(Object::Nil);
                         return self
                             .send_to_object(

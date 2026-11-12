@@ -324,7 +324,7 @@ impl StringValue {
         if self.reads_bytes() {
             let bytes = bytes_of_characters(&text);
             let holds_bytes = self.holds_bytes() && std::str::from_utf8(&bytes).is_err();
-            Self::built(bytes, encoding_place(&encoding), holds_bytes)
+            Self::built(bytes, encoding_place(encoding), holds_bytes)
         } else {
             Self::with_encoding(text, encoding)
         }

@@ -22,11 +22,17 @@ impl VirtualMachine {
     ) -> Option<Rc<Method>> {
         // A `def self.name` comes down the superclass chain, and a module's
         // own methods are not the methods of a class that includes it.
-        if let Some(method) = class_rc.find_inherited_method(&format!("__class__{}", name)) {
+        if let Some(method) = crate::fast_hash::with_joined("__class__", name, |class_level_name| {
+            class_rc.find_inherited_method(class_level_name)
+        }) {
             return Some(method);
         }
-        if let Some(View::Method(method)) =
-            class_rc.get_class_var(&format!("__ext__{}", name)).view()
+        if class_rc.holds_extended_copies.get()
+            && let Some(View::Method(method)) =
+                crate::fast_hash::with_joined("__ext__", name, |copied_name| {
+                    class_rc.get_class_var(copied_name)
+                })
+                .view()
         {
             return Some(method.clone());
         }

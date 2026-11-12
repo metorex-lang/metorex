@@ -45,7 +45,10 @@ impl VirtualMachine {
         // earlier send of the name reached on that class.
         let deciding_class = self.class_deciding_dispatch(&receiver);
         if let Some(class) = &deciding_class
-            && let Some(method) = self.send_caches.get(name).and_then(|cache| cache.find(class))
+            && let Some(method) = self
+                .send_caches
+                .get(name)
+                .and_then(|cache| cache.find(class))
         {
             return self.invoke_method(Rc::clone(class), method, receiver, arguments, position);
         }
@@ -348,6 +351,9 @@ impl VirtualMachine {
             .allocation_counts
             .entry(Rc::as_ptr(&class) as usize)
             .or_insert(0) += 1;
+        if !reaches_core_base(&class) {
+            return self.build_from_plain_class(class, arguments, position);
+        }
         // `new` on a subclass of Module makes a module whose class is that
         // subclass, and runs the subclass's `initialize` with it as `self`.
         if class.name() != "Module"
@@ -494,7 +500,10 @@ impl VirtualMachine {
                 if let View::Instance(made) = object.view() {
                     let mut held = made.borrow_mut();
                     if let Some(first) = held.instance_vars.shift_remove("begin") {
-                        let last = held.instance_vars.shift_remove("end").unwrap_or(Object::Nil);
+                        let last = held
+                            .instance_vars
+                            .shift_remove("end")
+                            .unwrap_or(Object::Nil);
                         let excludes = held
                             .instance_vars
                             .shift_remove("excludes")
@@ -679,6 +688,17 @@ impl VirtualMachine {
             return Ok(object);
         }
 
+        self.build_from_plain_class(class, arguments, position)
+    }
+
+    /// `build_from_class` for a class below none of the core classes whose
+    /// instances it builds in a way of their own.
+    fn build_from_plain_class(
+        &mut self,
+        class: Rc<Class>,
+        arguments: Vec<Object>,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
         // Check if this is an exception class
         if self.is_exception_class(&class) {
             // A SignalException is named by the signal it stands for, which
@@ -1117,6 +1137,32 @@ pub(crate) fn writes_initialize_below_file(class: &Rc<Class>) -> bool {
 }
 
 /// Whether `class` is `name` or descends from it.
+/// Whether `class` is, or descends from, one of the core classes whose
+/// instances `build_from_class` builds in a way of their own.
+fn reaches_core_base(class: &Rc<Class>) -> bool {
+    let mut cursor = Some(Rc::clone(class));
+    while let Some(current) = cursor {
+        if matches!(
+            current.name(),
+            "Module"
+                | "Hash"
+                | "Regexp"
+                | "Array"
+                | "Rational"
+                | "Complex"
+                | "String"
+                | "Range"
+                | "File"
+                | "Proc"
+                | "Set"
+        ) {
+            return true;
+        }
+        cursor = current.superclass();
+    }
+    false
+}
+
 pub(crate) fn descends_from(class: &Rc<Class>, name: &str) -> bool {
     let mut cursor = Some(Rc::clone(class));
     while let Some(current) = cursor {
@@ -1153,7 +1199,7 @@ impl VirtualMachine {
             None => (String::new(), "ASCII-8BIT".to_string()),
             Some(View::String(given)) if given.holds_bytes() => {
                 let made = crate::object::StringValue::of_bytes(
-                    crate::vm::native_methods::string_methods::binary_bytes(&given),
+                    crate::vm::native_methods::string_methods::binary_bytes(given),
                     given.encoding_name(),
                 );
                 if let Some(wanted) = named {
@@ -1175,7 +1221,9 @@ impl VirtualMachine {
             }
             Some(other) => {
                 match crate::vm::native_methods::string_subclass_value(&other.to_object()).view() {
-                    Some(View::String(given)) => (given.to_text(), given.encoding_name().to_string()),
+                    Some(View::String(given)) => {
+                        (given.to_text(), given.encoding_name().to_string())
+                    }
                     _ => return Err(self.string_conversion_error(&other.to_object(), position)),
                 }
             }

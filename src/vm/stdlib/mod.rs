@@ -540,7 +540,10 @@ const EMBEDDED_LIBRARIES: &[(&[&str], &str)] = &[
 /// for `rake/task`, or None for one that is part of Ruby itself.
 pub(crate) fn carried_gem_of(name: &str) -> Option<&'static str> {
     let trimmed = name.strip_suffix(".rb").unwrap_or(name);
-    if EMBEDDED_LIBRARIES.iter().any(|(names, _)| names.contains(&trimmed)) {
+    if EMBEDDED_LIBRARIES
+        .iter()
+        .any(|(names, _)| names.contains(&trimmed))
+    {
         return None;
     }
     GEM_LIBRARIES

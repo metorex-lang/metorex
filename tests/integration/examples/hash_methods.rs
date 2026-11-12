@@ -300,7 +300,10 @@ fn identity_hash_finds_a_key_after_it_changes() {
 #[test]
 fn keys_must_hash_to_integers() {
     let output = run_example("hashes/keys_must_hash_to_integers.rb");
-    assert_eq!(output, "\"no implicit conversion of nil into Integer\"\n".repeat(3) + "1\n");
+    assert_eq!(
+        output,
+        "\"no implicit conversion of nil into Integer\"\n".repeat(3) + "1\n"
+    );
 }
 
 #[test]

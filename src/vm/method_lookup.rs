@@ -255,6 +255,18 @@ impl VirtualMachine {
                 return Ok(answer);
             }
             self.recording_call_cache = Some(Rc::clone(cache));
+        } else if let View::Class(receiving_class) = receiver.view()
+            && !self.any_refinement_active()
+        {
+            if cache.answered_natively(receiving_class, ReceiverKind::ClassObject) {
+                let class = self.builtins().class_of(&receiver);
+                if let Some(answer) =
+                    self.answer_natively(&class, &receiver, method_name, &arguments, position)?
+                {
+                    return Ok(answer);
+                }
+            }
+            self.recording_call_cache = Some(Rc::clone(cache));
         }
         self.call_evaluated_method(receiver, method_name, arguments, written, position)
     }
@@ -557,6 +569,7 @@ impl VirtualMachine {
         let class = self.builtins().class_of(&receiver);
         let kind = match receiver.view() {
             View::Instance(_) => Some(ReceiverKind::Instance),
+            View::Class(_) => (!self.any_refinement_active()).then_some(ReceiverKind::ClassObject),
             _ => self.value_kind_deciding_dispatch(&receiver),
         };
         let native_result =
@@ -572,7 +585,10 @@ impl VirtualMachine {
                 && let Some(kind) = kind
                 && !CALLER_CONSULTED.get()
             {
-                cache.keep_native_answer(&class, kind);
+                match receiver.view() {
+                    View::Class(receiving_class) => cache.keep_native_answer(receiving_class, kind),
+                    _ => cache.keep_native_answer(&class, kind),
+                }
             }
             return Ok(result);
         }
@@ -580,7 +596,8 @@ impl VirtualMachine {
         // Fallback: methods defined on the global Object class (mspec injects
         // describe/it/before/after there).
         if self.class_line_reaches_object(&receiver)
-            && let Some((object_class, method)) = self.object_table_method_for(&receiver, method_name)
+            && let Some((object_class, method)) =
+                self.object_table_method_for(&receiver, method_name)
         {
             // A private one, as every top-level method is, refuses a call
             // written with a receiver.
@@ -1544,6 +1561,133 @@ impl VirtualMachine {
         answers(&class)
     }
 
+    /// `lookup_method` for a class receiver, kept for each class and name
+    /// while the method state stays where it was.
+    fn class_receiver_lookup(
+        &self,
+        class_rc: &Rc<Class>,
+        method_name: &str,
+    ) -> Option<(Rc<Class>, Rc<Method>)> {
+        let state = crate::class::method_state();
+        let address = Rc::as_ptr(class_rc) as usize;
+        {
+            let kept = self.class_receiver_lookups.borrow();
+            if kept.state == state
+                && let Some((held, names)) = kept.classes.get(&address)
+                && std::ptr::eq(held.as_ptr(), Rc::as_ptr(class_rc))
+                && let Some(found) = names.get(method_name)
+            {
+                return found.clone();
+            }
+        }
+        let found = self.find_class_receiver_method(class_rc, method_name);
+        let mut kept = self.class_receiver_lookups.borrow_mut();
+        if kept.state != state || kept.entries >= CLASS_RECEIVER_LOOKUPS_KEPT {
+            kept.classes.clear();
+            kept.entries = 0;
+            kept.state = state;
+        }
+        let entry = kept
+            .classes
+            .entry(address)
+            .or_insert_with(|| (Rc::downgrade(class_rc), Default::default()));
+        if !std::ptr::eq(entry.0.as_ptr(), Rc::as_ptr(class_rc)) {
+            *entry = (Rc::downgrade(class_rc), Default::default());
+        }
+        entry.1.insert(method_name.to_string(), found.clone());
+        kept.entries += 1;
+        found
+    }
+
+    fn find_class_receiver_method(
+        &self,
+        class_rc: &Rc<Class>,
+        method_name: &str,
+    ) -> Option<(Rc<Class>, Rc<Method>)> {
+        // A module-level method (`def self.name`, or one copied in by
+        // `extend`) is checked before walking the singleton class's
+        // superclass chain, so a method from the singleton's ancestors
+        // (e.g. Object#describe, when Object has been reopened) does
+        // not shadow the class's own class-level method.
+        // A method put on the class's own singleton class stands
+        // ahead of one written as `def self.name`, which is how a
+        // later `define_singleton_method` replaces it.
+        if let Some(found) = singleton_prepended_method(class_rc, method_name) {
+            return Some(found);
+        }
+        if let Some(sc) = class_rc.singleton_class_slot().clone()
+            && let Some(method) = sc.find_own_method(method_name)
+        {
+            return Some((sc, method));
+        }
+        if let Some(found) = class_level_method(class_rc, method_name) {
+            return Some(found);
+        }
+        // Walk the receiver's superclass chain, checking each
+        // ancestor's singleton class. Mirrors Ruby's metaclass
+        // chain so `class << Parent; attr_accessor :x; end` is
+        // visible on `Child.x` when `Child < Parent`.
+        let mut cursor = Some(Rc::clone(class_rc));
+        while let Some(current) = cursor {
+            if let Some(sc) = current.singleton_class_slot().clone()
+                && let Some(method) = sc.find_method(method_name)
+            {
+                return Some((sc, method));
+            }
+            cursor = current.superclass();
+        }
+        // What Class and Module themselves define answers before an
+        // instance method of the class does, the way Ruby's singleton
+        // chain reaches Class and Module before Object. A name Module
+        // answers natively counts as one of its own.
+        for global_name in ["Class", "Module"] {
+            if let Some(View::Class(global_class)) = self.globals().get(global_name).view()
+                && let Some(method) = global_class.find_own_method(method_name)
+            {
+                return Some((global_class.clone(), method));
+            }
+        }
+        if crate::vm::native_methods::is_native_module_method(method_name)
+            && let Some(View::Class(module_class)) = self.globals().get("Module").view()
+        {
+            // The stub carries the parameters Module's method takes,
+            // which a block made from it with `&method(name)` counts.
+            let stub = crate::vm::native_methods::native_module_method_stub(method_name)
+                .unwrap_or_else(|| {
+                    crate::object::Method::with_owner(
+                        method_name.to_string(),
+                        Vec::new(),
+                        Vec::new(),
+                        "Module".to_string(),
+                    )
+                });
+            return Some((module_class.clone(), Rc::new(stub)));
+        }
+        // A class answers what Class and its ancestors define for
+        // their instances, never its own instance methods. An
+        // encoding is the exception: each one is kept as a class
+        // below Encoding, and answers what Encoding defines for its
+        // instances.
+        if class_rc
+            .superclass()
+            .is_some_and(|parent| parent.name() == "Encoding")
+            && let Some(method) = class_rc.find_method(method_name)
+        {
+            return Some((Rc::clone(class_rc), method));
+        }
+        // Every class is an instance of `Class`, which descends from
+        // `Module`, so reopening either (`class Module; def
+        // const_added(name); ...`) adds a method every class answers.
+        for global_name in ["Class", "Module"] {
+            if let Some(View::Class(global_class)) = self.globals().get(global_name).view()
+                && let Some(method) = global_class.find_method(method_name)
+            {
+                return Some((global_class.clone(), method));
+            }
+        }
+        None
+    }
+
     pub(crate) fn lookup_method(
         &self,
         receiver: &Object,
@@ -1564,90 +1708,7 @@ impl VirtualMachine {
                 drop(instance_ref);
                 class.find_method(method_name).map(|method| (class, method))
             }
-            View::Class(class_rc) => {
-                // A module-level method (`def self.name`, or one copied in by
-                // `extend`) is checked before walking the singleton class's
-                // superclass chain, so a method from the singleton's ancestors
-                // (e.g. Object#describe, when Object has been reopened) does
-                // not shadow the class's own class-level method.
-                // A method put on the class's own singleton class stands
-                // ahead of one written as `def self.name`, which is how a
-                // later `define_singleton_method` replaces it.
-                if let Some(found) = singleton_prepended_method(class_rc, method_name) {
-                    return Some(found);
-                }
-                if let Some(sc) = class_rc.singleton_class_slot().clone()
-                    && let Some(method) = sc.find_own_method(method_name)
-                {
-                    return Some((sc, method));
-                }
-                if let Some(found) = class_level_method(class_rc, method_name) {
-                    return Some(found);
-                }
-                // Walk the receiver's superclass chain, checking each
-                // ancestor's singleton class. Mirrors Ruby's metaclass
-                // chain so `class << Parent; attr_accessor :x; end` is
-                // visible on `Child.x` when `Child < Parent`.
-                let mut cursor = Some(Rc::clone(class_rc));
-                while let Some(current) = cursor {
-                    if let Some(sc) = current.singleton_class_slot().clone()
-                        && let Some(method) = sc.find_method(method_name)
-                    {
-                        return Some((sc, method));
-                    }
-                    cursor = current.superclass();
-                }
-                // What Class and Module themselves define answers before an
-                // instance method of the class does, the way Ruby's singleton
-                // chain reaches Class and Module before Object. A name Module
-                // answers natively counts as one of its own.
-                for global_name in ["Class", "Module"] {
-                    if let Some(View::Class(global_class)) = self.globals().get(global_name).view()
-                        && let Some(method) = global_class.find_own_method(method_name)
-                    {
-                        return Some((global_class.clone(), method));
-                    }
-                }
-                if crate::vm::native_methods::is_native_module_method(method_name)
-                    && let Some(View::Class(module_class)) = self.globals().get("Module").view()
-                {
-                    // The stub carries the parameters Module's method takes,
-                    // which a block made from it with `&method(name)` counts.
-                    let stub = crate::vm::native_methods::native_module_method_stub(method_name)
-                        .unwrap_or_else(|| {
-                            crate::object::Method::with_owner(
-                                method_name.to_string(),
-                                Vec::new(),
-                                Vec::new(),
-                                "Module".to_string(),
-                            )
-                        });
-                    return Some((module_class.clone(), Rc::new(stub)));
-                }
-                // A class answers what Class and its ancestors define for
-                // their instances, never its own instance methods. An
-                // encoding is the exception: each one is kept as a class
-                // below Encoding, and answers what Encoding defines for its
-                // instances.
-                if class_rc
-                    .superclass()
-                    .is_some_and(|parent| parent.name() == "Encoding")
-                    && let Some(method) = class_rc.find_method(method_name)
-                {
-                    return Some((Rc::clone(class_rc), method));
-                }
-                // Every class is an instance of `Class`, which descends from
-                // `Module`, so reopening either (`class Module; def
-                // const_added(name); ...`) adds a method every class answers.
-                for global_name in ["Class", "Module"] {
-                    if let Some(View::Class(global_class)) = self.globals().get(global_name).view()
-                        && let Some(method) = global_class.find_method(method_name)
-                    {
-                        return Some((global_class.clone(), method));
-                    }
-                }
-                None
-            }
+            View::Class(class_rc) => self.class_receiver_lookup(class_rc, method_name),
             View::Module(module_rc) => {
                 if let Some(sc) = module_rc.singleton_class_slot().clone()
                     && let Some(method) = sc.find_own_method(method_name)
@@ -2046,3 +2107,19 @@ fn aliases_another_name(method: &Method, name: &str) -> bool {
         .as_deref()
         .is_some_and(|target| target != name)
 }
+
+/// How many class and name pairs `lookup_method` keeps the answers of
+/// before starting over.
+const CLASS_RECEIVER_LOOKUPS_KEPT: usize = 4096;
+
+/// The answers `lookup_method` found for class receivers, by the class's
+/// address, under the method state `state`.
+#[derive(Default)]
+pub(crate) struct ClassReceiverLookups {
+    state: u64,
+    entries: usize,
+    classes: crate::fast_hash::AddressMap<usize, (std::rc::Weak<Class>, LookupsByName)>,
+}
+
+/// What `lookup_method` found for one class receiver, by method name.
+type LookupsByName = crate::fast_hash::NameMap<String, Option<(Rc<Class>, Rc<Method>)>>;

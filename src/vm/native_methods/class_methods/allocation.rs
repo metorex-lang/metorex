@@ -184,7 +184,10 @@ impl VirtualMachine {
                 Object::Dict(Rc::new(std::cell::RefCell::new(Default::default()))),
             ))
         } else if descends("Set") {
-            Some((crate::vm::native_methods::SET_SUBCLASS_VAR, Object::empty_set()))
+            Some((
+                crate::vm::native_methods::SET_SUBCLASS_VAR,
+                Object::empty_set(),
+            ))
         } else {
             None
         };

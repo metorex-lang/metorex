@@ -128,8 +128,8 @@ pub(crate) fn subject_text(object: &Object) -> Option<String> {
 pub(crate) fn match_text(string_value: &crate::object::StringValue) -> String {
     let named = string_value.encoding_name();
     if (named == "EUC-JP"
-        || super::double_byte::double_byte(&named).is_some()
-        || super::string_methods::spells_shift_jis(&named))
+        || super::double_byte::double_byte(named).is_some()
+        || super::string_methods::spells_shift_jis(named))
         && !string_value.holds_bytes()
     {
         return super::string_methods::binary_bytes(string_value)
@@ -186,7 +186,7 @@ impl VirtualMachine {
             return Ok(());
         }
         let ascii_compatible =
-            super::class_methods::encoding_reads_alongside_ascii(&string_encoding);
+            super::class_methods::encoding_reads_alongside_ascii(string_encoding);
         let only_ascii = ascii_compatible && text.is_ascii();
         if only_ascii && pattern_encoding == "US-ASCII" {
             return Ok(());
@@ -246,7 +246,8 @@ impl VirtualMachine {
         subject_encoding: Option<String>,
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        let subject_encoding = subject_encoding.or_else(|| self.match_subject_encoding.map(str::to_string));
+        let subject_encoding =
+            subject_encoding.or_else(|| self.match_subject_encoding.map(str::to_string));
         let Some(compiled) = compile(pattern, flags) else {
             self.globals_mut().set(LAST_MATCH, Object::Nil);
             return Ok(None);
@@ -431,8 +432,8 @@ impl VirtualMachine {
                 let encoding = subject.encoding_name();
                 if !super::string_methods::characters_are_text(subject)
                     || encoding == "EUC-JP"
-                    || super::double_byte::double_byte(&encoding).is_some()
-                    || super::string_methods::spells_shift_jis(&encoding)
+                    || super::double_byte::double_byte(encoding).is_some()
+                    || super::string_methods::spells_shift_jis(encoding)
                 {
                     return Ok(Some(Object::Bool(false)));
                 }

@@ -233,7 +233,7 @@ impl VirtualMachine {
                     );
                     // It stands where the block was written.
                     if let (Some(file), Some(line)) = (&block.source_file, block.opened_at) {
-                        *binding.source.borrow_mut() = Some((file.to_string(), line as usize));
+                        *binding.source.borrow_mut() = Some((file.to_string(), line));
                     }
                     return Ok(Some(Object::Binding(Rc::new(binding))));
                 }
@@ -698,7 +698,7 @@ impl VirtualMachine {
                 // encoding that is not ASCII-compatible keeps its encoding
                 // whatever it spells.
                 let ascii_compatible =
-                    crate::vm::native_methods::string_methods::wide_encoding(&text.encoding_name())
+                    crate::vm::native_methods::string_methods::wide_encoding(text.encoding_name())
                         .is_none();
                 let named_in = if ascii_compatible && text.as_str().is_ascii() {
                     "US-ASCII".to_string()

@@ -95,7 +95,7 @@ impl VirtualMachine {
                 // value-derived id, so two literals that are the same value
                 // share one, as Ruby's do.
                 let id = match receiver.view() {
-                    View::Instance(inst) => self.counted_object_id(&inst) as i64,
+                    View::Instance(inst) => self.counted_object_id(inst) as i64,
                     // Two strings holding the same text are two objects, so
                     // each takes an id of its own the first time one is asked
                     // for.
@@ -107,20 +107,20 @@ impl VirtualMachine {
                         }
                         given as i64
                     }
-                    View::Array(arr) => self.counted_object_id(&arr) as i64,
-                    View::Dict(dict) => self.counted_object_id(&dict) as i64,
-                    View::Set(set) => self.counted_object_id(&set) as i64,
-                    View::Class(cls) => self.counted_object_id(&cls) as i64,
-                    View::Module(m) => self.counted_object_id(&m) as i64,
-                    View::Block(block) => self.counted_object_id(&block) as i64,
+                    View::Array(arr) => self.counted_object_id(arr) as i64,
+                    View::Dict(dict) => self.counted_object_id(dict) as i64,
+                    View::Set(set) => self.counted_object_id(set) as i64,
+                    View::Class(cls) => self.counted_object_id(cls) as i64,
+                    View::Module(m) => self.counted_object_id(m) as i64,
+                    View::Block(block) => self.counted_object_id(block) as i64,
                     // A Method and a Binding are objects of their own, so two
                     // that name the same thing have different ids.
-                    View::Method(method) => self.counted_object_id(&method) as i64,
-                    View::Binding(binding) => self.counted_object_id(&binding) as i64,
-                    View::Exception(exc) => self.counted_object_id(&exc) as i64,
+                    View::Method(method) => self.counted_object_id(method) as i64,
+                    View::Binding(binding) => self.counted_object_id(binding) as i64,
+                    View::Exception(exc) => self.counted_object_id(exc) as i64,
                     // An integer past the i64 range is a heap object in Ruby
                     // too, so two of the same value have different ids.
-                    View::BigInt(value) => self.counted_object_id(&value) as i64,
+                    View::BigInt(value) => self.counted_object_id(value) as i64,
                     // Ruby's fixnum object_id. Wrapping keeps the far ends of
                     // the range from overflowing.
                     View::Int(n) => n.wrapping_mul(2).wrapping_add(1),

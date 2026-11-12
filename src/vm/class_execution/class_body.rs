@@ -280,7 +280,13 @@ impl VirtualMachine {
                         self.copy_to_module_function(class, method_name, *def_position)?;
                     }
                 }
-                self.coverage_note_definition(class, *is_class_method, method_name, *def_position, *def_end);
+                self.coverage_note_definition(
+                    class,
+                    *is_class_method,
+                    method_name,
+                    *def_position,
+                    *def_end,
+                );
                 *last_value = Object::symbol(method_name.clone());
             }
             Statement::Assignment { target, value, .. }

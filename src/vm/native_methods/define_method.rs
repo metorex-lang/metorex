@@ -179,7 +179,8 @@ impl VirtualMachine {
         for (original_index, expression) in &block.parameter_defaults {
             let written = &block.parameters[*original_index];
             if let Some(name) = written.strip_prefix(crate::object::KEYWORD_PARAM_PREFIX) {
-                if let Some(keyword) = keyword_parameters.iter_mut().find(|(held, _)| held == name) {
+                if let Some(keyword) = keyword_parameters.iter_mut().find(|(held, _)| held == name)
+                {
                     keyword.1 = Some(expression.clone());
                 }
                 continue;

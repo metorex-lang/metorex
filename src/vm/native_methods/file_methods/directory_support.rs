@@ -306,7 +306,11 @@ fn login_name() -> Option<String> {
     let held = unsafe { libc::getlogin() };
     if !held.is_null() {
         // SAFETY: the pointer is non-null and names a C string.
-        return Some(unsafe { std::ffi::CStr::from_ptr(held) }.to_string_lossy().to_string());
+        return Some(
+            unsafe { std::ffi::CStr::from_ptr(held) }
+                .to_string_lossy()
+                .to_string(),
+        );
     }
     std::env::var("USER").ok()
 }

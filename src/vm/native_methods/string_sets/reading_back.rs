@@ -15,13 +15,11 @@ impl VirtualMachine {
         if from == to {
             return Ok(());
         }
-        if !NOT_ASCII_COMPATIBLE.contains(&from)
-            && !NOT_ASCII_COMPATIBLE.contains(&to)
-        {
+        if !NOT_ASCII_COMPATIBLE.contains(&from) && !NOT_ASCII_COMPATIBLE.contains(&to) {
             return Ok(());
         }
         let message =
-            crate::vm::native_methods::string_methods::incompatible_encodings_message(&from, &to);
+            crate::vm::native_methods::string_methods::incompatible_encodings_message(from, to);
         Err(MetorexError::UncaughtException {
             exception: Object::exception("Encoding::CompatibilityError", message.clone()),
             location: crate::vm::utils::position_to_location(position),

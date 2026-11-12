@@ -89,7 +89,7 @@ impl VirtualMachine {
             took_by_name: false,
         };
         let mut answer =
-            crate::vm::native_methods::string_methods::AnswerText::new(&format_encoding);
+            crate::vm::native_methods::string_methods::AnswerText::new(format_encoding);
         // A character named by its code in an encoding that is not Unicode is
         // written as the bytes the number holds, so the answer carries bytes.
         let mut wrote_bytes = false;
@@ -102,7 +102,7 @@ impl VirtualMachine {
                     plain.push(letters[at]);
                     at += 1;
                 }
-                answer.add(&plain, &format_encoding, position)?;
+                answer.add(&plain, format_encoding, position)?;
                 continue;
             }
             at += 1;
@@ -113,7 +113,7 @@ impl VirtualMachine {
                 ));
             }
             if letters[at] == '%' {
-                answer.add("%", &format_encoding, position)?;
+                answer.add("%", format_encoding, position)?;
                 at += 1;
                 continue;
             }
@@ -134,7 +134,7 @@ impl VirtualMachine {
                 spec,
                 &directive,
                 &mut arguments,
-                &format_encoding,
+                format_encoding,
                 &mut wrote_bytes,
                 position,
             )?;

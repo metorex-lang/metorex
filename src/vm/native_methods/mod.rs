@@ -49,14 +49,14 @@ pub(crate) mod regexp_methods;
 pub(crate) use regexp_methods::{
     LAST_MATCH, capture_reference, comparable_flags, compile, subject_text,
 };
-pub(crate) mod euc_jp_table;
 mod cp949_table;
 pub(crate) mod double_byte;
-pub(crate) mod iso_2022_jp;
+pub(crate) mod euc_jp_table;
 mod euc_kr_table;
 mod gb18030_table;
 mod gbk_table;
 pub(crate) mod glob;
+pub(crate) mod iso_2022_jp;
 pub(crate) mod normalization_table;
 mod set_methods;
 pub(crate) mod shift_jis_table;
@@ -80,7 +80,9 @@ mod fibers;
 mod mutexes;
 mod names;
 mod native_names;
-pub(crate) use native_names::{class_answers_natively, names_a_native_owner, value_answers_natively};
+pub(crate) use native_names::{
+    class_answers_natively, names_a_native_owner, value_answers_natively,
+};
 mod queues;
 pub(crate) mod subclasses;
 mod threads;

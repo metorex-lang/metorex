@@ -19,7 +19,7 @@ pub(crate) fn escaped_point(character: char) -> String {
 pub(crate) fn escaped_text(string_value: &crate::object::StringValue) -> Object {
     // An encoding that spells a character in more than one byte is carried as
     // the bytes themselves, so the characters are read back out of them.
-    let held = match wide_encoding(&string_value.encoding_name()) {
+    let held = match wide_encoding(string_value.encoding_name()) {
         Some(shape) => wide_text(&binary_bytes(string_value), shape),
         None => string_value.to_text(),
     };

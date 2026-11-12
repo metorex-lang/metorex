@@ -443,14 +443,21 @@ fn mentions_frozen_string_literal_after_code(source: &str) -> bool {
 /// `frozen_string_literal`, written alone, `frozen_string_literal: true`,
 /// or among others between `-*-` marks.
 fn is_frozen_string_literal_comment(text: &str) -> bool {
-    let lowered = text.trim().trim_start_matches('#').trim().to_ascii_lowercase();
+    let lowered = text
+        .trim()
+        .trim_start_matches('#')
+        .trim()
+        .to_ascii_lowercase();
     let setting = |written: &str| {
         let written = written.trim().replace('-', "_");
         written
             .strip_prefix("frozen_string_literal")
             .is_some_and(|rest| rest.trim_start().starts_with(':'))
     };
-    match lowered.strip_prefix("-*-").and_then(|inner| inner.strip_suffix("-*-")) {
+    match lowered
+        .strip_prefix("-*-")
+        .and_then(|inner| inner.strip_suffix("-*-"))
+    {
         Some(inner) => inner.split(';').any(setting),
         None => setting(&lowered),
     }

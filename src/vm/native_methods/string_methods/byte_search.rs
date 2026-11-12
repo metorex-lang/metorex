@@ -92,8 +92,8 @@ impl VirtualMachine {
             .is_none()
         {
             let message = crate::vm::native_methods::string_methods::incompatible_encodings_message(
-                &string_value.encoding_name(),
-                &needle.encoding_name(),
+                string_value.encoding_name(),
+                needle.encoding_name(),
             );
             return Err(crate::vm::errors::simple_exception(
                 "Encoding::CompatibilityError",

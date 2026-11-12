@@ -201,7 +201,7 @@ impl VirtualMachine {
         // Text in an encoding that spells ASCII its own way is never read as
         // ASCII, however small the numbers its bytes happen to be.
         let reads_as_ascii =
-            crate::vm::native_methods::string_methods::encoding_is_ascii_compatible(&held)
+            crate::vm::native_methods::string_methods::encoding_is_ascii_compatible(held)
                 && text.as_str().is_ascii();
         if held == writing || reads_as_ascii {
             return Ok(rendered);

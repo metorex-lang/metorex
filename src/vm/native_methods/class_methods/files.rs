@@ -33,7 +33,7 @@ impl VirtualMachine {
                     };
                     if let View::String(held) = arguments[0].view()
                         && !crate::vm::native_methods::string_methods::encoding_is_ascii_compatible(
-                            &held.encoding_name(),
+                            held.encoding_name(),
                         )
                     {
                         let message = format!(
@@ -86,7 +86,7 @@ impl VirtualMachine {
                     // letters in more than one byte cannot be read as a path.
                     if let View::String(held) = arguments[0].view()
                         && !crate::vm::native_methods::string_methods::encoding_is_ascii_compatible(
-                            &held.encoding_name(),
+                            held.encoding_name(),
                         )
                     {
                         let message = format!(

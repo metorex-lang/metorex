@@ -95,12 +95,19 @@ pub extern "C-unwind" fn rb_protect(
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_load_protect(name: Value, wrap: i32, state: *mut i32) {
     extern "C-unwind" fn load_wrapped(name: Value) -> Value {
-        to_value(&kernel_function("load", vec![to_object(name), Object::Bool(true)]))
+        to_value(&kernel_function(
+            "load",
+            vec![to_object(name), Object::Bool(true)],
+        ))
     }
     extern "C-unwind" fn load_plain(name: Value) -> Value {
         to_value(&kernel_function("load", vec![to_object(name)]))
     }
-    rb_protect(if wrap != 0 { load_wrapped } else { load_plain }, name, state);
+    rb_protect(
+        if wrap != 0 { load_wrapped } else { load_plain },
+        name,
+        state,
+    );
 }
 
 /// Raises again what the last `rb_protect` caught.
@@ -219,11 +226,9 @@ pub extern "C-unwind" fn rb_catch_obj(tag: Value, function: *const (), data: Val
     interpreter().catch_tags.pop();
     match answered {
         Ok(value) => value,
-        Err(MetorexError::Throw { tag: thrown, value, .. })
-            if crate::vm::native_functions::throw_tags_match(&live, &thrown) =>
-        {
-            to_value(&value)
-        }
+        Err(MetorexError::Throw {
+            tag: thrown, value, ..
+        }) if crate::vm::native_functions::throw_tags_match(&live, &thrown) => to_value(&value),
         Err(error) => raise(error),
     }
 }

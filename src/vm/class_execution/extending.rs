@@ -23,7 +23,7 @@ impl VirtualMachine {
                 let from_key = format!("__ext_from__{}", method_name);
                 let copied_from_another = matches!(
                     target.get_class_var(&from_key).view(),
-                    Some(View::Module(earlier)) if !Rc::ptr_eq(&earlier, module_rc)
+                    Some(View::Module(earlier)) if !Rc::ptr_eq(earlier, module_rc)
                 );
                 if copied_from_another {
                     target.remove_class_var(&format!("__ext__{}", method_name));

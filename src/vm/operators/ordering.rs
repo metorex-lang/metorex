@@ -541,7 +541,7 @@ fn order_two_strings(
             .position(|(_, canonical, _)| *canonical == named)
             .unwrap_or(usize::MAX)
     };
-    Object::Int(place(&held).cmp(&place(&theirs)) as i64)
+    Object::Int(place(held).cmp(&place(theirs)) as i64)
 }
 
 /// The Ruby method name for an ordering operator.

@@ -142,7 +142,7 @@ impl VirtualMachine {
                         // string's own encoding can spell.
                         View::Int(_) | View::BigInt(_) => {
                             let (letter, binary) = self.appended_codepoint(
-                                &target.encoding_name(),
+                                target.encoding_name(),
                                 argument,
                                 position,
                             )?;
@@ -722,13 +722,13 @@ fn appended_encoding(
     // An empty string keeps its encoding when ASCII is appended and it reads
     // ASCII, and takes the appended text's otherwise.
     if target.as_str().is_empty() {
-        if reads_alongside_ascii(&target.encoding_name()) && other.as_str().is_ascii() {
+        if reads_alongside_ascii(target.encoding_name()) && other.as_str().is_ascii() {
             return Some(None);
         }
         return Some(Some(other.encoding_name().to_string()));
     }
-    if !reads_alongside_ascii(&target.encoding_name())
-        || !reads_alongside_ascii(&other.encoding_name())
+    if !reads_alongside_ascii(target.encoding_name())
+        || !reads_alongside_ascii(other.encoding_name())
     {
         return None;
     }

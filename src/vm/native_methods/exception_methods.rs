@@ -574,7 +574,10 @@ impl VirtualMachine {
                     Some(entry) => entry.clone(),
                     None => format!(
                         "{}:{}:in '{}'",
-                        self.current_source_file.as_deref().map(str::to_string).unwrap_or_default(),
+                        self.current_source_file
+                            .as_deref()
+                            .map(str::to_string)
+                            .unwrap_or_default(),
                         position.line,
                         self.get_current_method_name().unwrap_or("<main>")
                     ),
@@ -822,8 +825,9 @@ impl VirtualMachine {
                 if exc.message_given
                     && let Some(given) = exc.instance_vars.get(crate::vm::MESSAGE_STRING_KEY)
                 {
-                    let characters = crate::vm::native_methods::subclasses::string_subclass_value(given)
-                        .unwrap_or_else(|| given.clone());
+                    let characters =
+                        crate::vm::native_methods::subclasses::string_subclass_value(given)
+                            .unwrap_or_else(|| given.clone());
                     if let View::String(text) = characters.view()
                         && *text.as_str() == *exc.message
                     {

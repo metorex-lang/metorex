@@ -118,7 +118,11 @@ impl VirtualMachine {
             && method.owner.as_deref() == Some("Kernel")
             && let View::Class(held) | View::Module(held) = receiver.view()
         {
-            let kind = if held.is_module() && !held.is_singleton_class() { "Module" } else { "Class" };
+            let kind = if held.is_module() && !held.is_singleton_class() {
+                "Module"
+            } else {
+                "Class"
+            };
             return Ok(Ok(Object::string(format!(
                 "#<{kind}:0x{:016x}>",
                 Rc::as_ptr(held) as usize
@@ -129,11 +133,11 @@ impl VirtualMachine {
         // was cut from, even when the alias has been put back under that same
         // name. There is no body to run either way.
         if let Some(target) = method.provenance.native_alias.clone() {
-            for owner in [Rc::clone(&class), self.builtins().class_of(&receiver)] {
+            for owner in [Rc::clone(&class), self.builtins().class_of(receiver)] {
                 self.through_native_alias = true;
                 let answered = self.call_native_method(
                     owner.as_ref(),
-                    &receiver,
+                    receiver,
                     &target,
                     &arguments,
                     position,
@@ -160,7 +164,7 @@ impl VirtualMachine {
             // answered by the exception's dispatch.
             if matches!(receiver.view(), View::Exception(_))
                 && let Some(result) =
-                    self.call_exception_method(&receiver, &target, &arguments, position)?
+                    self.call_exception_method(receiver, &target, &arguments, position)?
             {
                 return Ok(Ok(result));
             }
@@ -173,14 +177,16 @@ impl VirtualMachine {
                 return self.invoke_class(constructed, arguments, position).map(Ok);
             }
             if let Some(result) =
-                self.call_object_method(&receiver, &target, &arguments, position)?
+                self.call_object_method(receiver, &target, &arguments, position)?
             {
                 return Ok(Ok(result));
             }
             // A Kernel function is reached without a receiver rather than
             // through any class's table, so the stub goes there for it.
             if crate::vm::native_methods::is_kernel_private_function(&target) {
-                return self.call_native_function(&target, arguments, position).map(Ok);
+                return self
+                    .call_native_function(&target, arguments, position)
+                    .map(Ok);
             }
         }
 
@@ -194,10 +200,10 @@ impl VirtualMachine {
             && original != method_name
         {
             let original = original.clone();
-            for owner in [Rc::clone(&class), self.builtins().class_of(&receiver)] {
+            for owner in [Rc::clone(&class), self.builtins().class_of(receiver)] {
                 if let Some(result) = self.call_native_method(
                     owner.as_ref(),
-                    &receiver,
+                    receiver,
                     &original,
                     &arguments,
                     position,
@@ -230,7 +236,7 @@ impl VirtualMachine {
             && method.source_location.is_none()
         {
             self.bound_stub_depth += 1;
-            let answered = self.call_object_method(&receiver, method_name, &arguments, position);
+            let answered = self.call_object_method(receiver, method_name, &arguments, position);
             self.bound_stub_depth -= 1;
             if let Some(result) = answered? {
                 return Ok(Ok(result));
@@ -239,7 +245,6 @@ impl VirtualMachine {
 
         Ok(Err(arguments))
     }
-
 
     fn invoke_method_unguarded(
         &mut self,
@@ -465,7 +470,10 @@ impl VirtualMachine {
         } else {
             let mut method_scopes = self.spare_refinement_scopes.pop().unwrap_or_default();
             method_scopes.push(captured_scope);
-            Some(std::mem::replace(&mut self.refinement_scopes, method_scopes))
+            Some(std::mem::replace(
+                &mut self.refinement_scopes,
+                method_scopes,
+            ))
         };
         // A bare `super` hands on the parameters as they stand, except for a
         // method with a parameter that takes its argument apart, which
@@ -602,7 +610,8 @@ impl VirtualMachine {
         self.method_running_frames.pop();
         match caller_scopes {
             Some(caller_scopes) => {
-                let mut method_scopes = std::mem::replace(&mut self.refinement_scopes, caller_scopes);
+                let mut method_scopes =
+                    std::mem::replace(&mut self.refinement_scopes, caller_scopes);
                 method_scopes.clear();
                 self.spare_refinement_scopes.push(method_scopes);
             }
@@ -1099,7 +1108,7 @@ impl VirtualMachine {
                     .define(block_param.clone(), Object::Nil);
             }
 
-            self.run_compiled_method_body(&method.unit, &method.body, &method, method.lambda_body)
+            self.run_compiled_method_body(&method.unit, &method.body, method, method.lambda_body)
         })();
 
         // An error the interpreter raised in the body takes its backtrace

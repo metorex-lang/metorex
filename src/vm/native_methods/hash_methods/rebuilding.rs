@@ -153,13 +153,13 @@ impl VirtualMachine {
                         Some(value) => picked.push(value),
                         // A missing key reads as the hash's default, which
                         // its default block may compute.
-                        None if method_name == "values_at" => picked.push(
-                            self.evaluate_index_operation(
+                        None if method_name == "values_at" => {
+                            picked.push(self.evaluate_index_operation(
                                 receiver.clone(),
                                 argument.clone(),
                                 position,
-                            )?,
-                        ),
+                            )?)
+                        }
                         None => match &block {
                             Some(block) => {
                                 let block = Rc::clone(block);

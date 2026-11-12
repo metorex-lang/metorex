@@ -229,9 +229,9 @@ impl Node {
             Node::Concat(pieces) => pieces
                 .iter()
                 .try_fold(0usize, |total, piece| Some(total + piece.longest_reach()?)),
-            Node::Alternate(pieces) => pieces
-                .iter()
-                .try_fold(0usize, |longest, piece| Some(longest.max(piece.longest_reach()?))),
+            Node::Alternate(pieces) => pieces.iter().try_fold(0usize, |longest, piece| {
+                Some(longest.max(piece.longest_reach()?))
+            }),
             Node::Repeat { node, most, .. } => {
                 Some(node.longest_reach()? * usize::try_from((*most)?).ok()?)
             }

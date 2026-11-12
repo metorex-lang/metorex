@@ -207,7 +207,7 @@ impl VirtualMachine {
                 // such as UTF-16, names nothing.
                 Some(View::String(held))
                     if !crate::vm::native_methods::string_methods::encoding_is_ascii_compatible(
-                        &held.encoding_name(),
+                        held.encoding_name(),
                     ) =>
                 {
                     return Err(crate::vm::errors::simple_exception(

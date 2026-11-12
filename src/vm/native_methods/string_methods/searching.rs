@@ -64,7 +64,7 @@ impl VirtualMachine {
                             // by byte. An encoding of more than one byte to a
                             // character is read as characters first.
                             let fits =
-                                if let Some(shape) = wide_encoding(&string_value.encoding_name()) {
+                                if let Some(shape) = wide_encoding(string_value.encoding_name()) {
                                     let letters: Vec<char> =
                                         wide_text(&binary_bytes(string_value), shape)
                                             .chars()

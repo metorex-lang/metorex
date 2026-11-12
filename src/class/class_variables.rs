@@ -40,6 +40,10 @@ impl Class {
         if key.starts_with("__ext__") {
             self.holds_extended_copies.set(true);
         }
+        // A method copied in by `extend` answers class-level lookups.
+        if key.starts_with("__ext") {
+            super::methods::method_state_changed();
+        }
         self.class_variables.borrow_mut().insert(key, value);
     }
 
@@ -124,6 +128,9 @@ impl Class {
     pub fn remove_class_var(&self, name: &str) -> Option<crate::object::Object> {
         if super::names_a_constant(name) {
             super::constant_state_changed();
+        }
+        if name.starts_with("__ext") {
+            super::methods::method_state_changed();
         }
         self.class_variables.borrow_mut().shift_remove(name)
     }

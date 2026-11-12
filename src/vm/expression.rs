@@ -109,7 +109,7 @@ impl Interpolation {
         if let View::String(spelled) = value.view()
             && (!spelled.as_str().is_ascii()
                 || crate::vm::native_methods::string_methods::wide_encoding(
-                    &spelled.encoding_name(),
+                    spelled.encoding_name(),
                 )
                 .is_some())
         {
@@ -122,7 +122,7 @@ impl Interpolation {
                 let message =
                     crate::vm::native_methods::string_methods::incompatible_encodings_message(
                         held,
-                        &spelled.encoding_name(),
+                        spelled.encoding_name(),
                     );
                 return Err(MetorexError::UncaughtException {
                     exception: Object::exception("Encoding::CompatibilityError", message.clone()),
@@ -720,7 +720,10 @@ impl VirtualMachine {
     /// two pieces, so the name the code was read under is part of the key.
     fn flip_flop_site(&self, position: Position) -> (String, usize, usize, usize) {
         (
-            self.current_source_file.as_deref().map(str::to_string).unwrap_or_default(),
+            self.current_source_file
+                .as_deref()
+                .map(str::to_string)
+                .unwrap_or_default(),
             (position.line as usize),
             (position.column as usize),
             (position.offset as usize),

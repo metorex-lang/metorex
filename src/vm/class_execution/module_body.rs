@@ -77,7 +77,13 @@ impl VirtualMachine {
                         self.copy_to_module_function(module, method_name, statement.position())?;
                     }
                 }
-                self.coverage_note_definition(module, *is_class_method, method_name, *def_position, *def_end);
+                self.coverage_note_definition(
+                    module,
+                    *is_class_method,
+                    method_name,
+                    *def_position,
+                    *def_end,
+                );
             }
             Statement::Assignment { target, value, .. }
                 if let Expression::Identifier {

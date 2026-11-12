@@ -677,10 +677,7 @@ fn defined_joins_a_modifier_condition_across_lines() {
 #[test]
 fn multiple_assignment_to_a_scoped_constant_setter() {
     let output = run_example("syntax/multiple_assignment_to_a_scoped_constant_setter.rb");
-    assert_eq!(
-        output,
-        "[nil, \"UTC\"]\n[1, \"EST\"]\n[\"CST\", 2]\n"
-    );
+    assert_eq!(output, "[nil, \"UTC\"]\n[1, \"EST\"]\n[\"CST\", 2]\n");
 }
 
 #[test]
@@ -771,7 +768,10 @@ fn test_syntax_when_array_values_execution() {
 #[test]
 fn test_syntax_do_block_in_parenthesized_argument_execution() {
     let output = run_example("syntax/do_block_in_parenthesized_argument.rb");
-    assert_eq!(output, "[\"example0.rb\", \"example1.rb\"]\n[\"A\", \"B\"]\n");
+    assert_eq!(
+        output,
+        "[\"example0.rb\", \"example1.rb\"]\n[\"A\", \"B\"]\n"
+    );
 }
 
 #[test]

@@ -81,7 +81,7 @@ impl VirtualMachine {
                 let mut reached: Vec<usize> = Vec::new();
                 let read = crate::vm::native_methods::regexp_methods::read_subject(
                     &subject,
-                    &string_value.encoding_name(),
+                    string_value.encoding_name(),
                 );
                 let mut cursor = 0usize;
                 while let Some(captured) = compiled.captures_in(&read, &subject, cursor) {

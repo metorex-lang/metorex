@@ -1812,7 +1812,8 @@ impl Compiler {
         self.next_register = held;
         self.unit
             .start_inner_statement(start, last.position(), self.next_register);
-        self.unit.set_start_kind(start, terminal_start(before, last));
+        self.unit
+            .set_start_kind(start, terminal_start(before, last));
         Ok(())
     }
 
@@ -3226,7 +3227,11 @@ impl Compiler {
                 ..
             } => return self.bare_call(callee, arguments, trailing_block.as_deref(), to, position),
             Expression::Array { elements, .. } if elements.len() > LITERAL_CHUNK => {
-                if let Some(values) = elements.iter().map(immutable_literal).collect::<Option<Vec<_>>>() {
+                if let Some(values) = elements
+                    .iter()
+                    .map(immutable_literal)
+                    .collect::<Option<Vec<_>>>()
+                {
                     // A long table of numbers, as a Racc grammar writes, is
                     // copied from one constant rather than built element by
                     // element, which would take an instruction for each.
@@ -3244,7 +3249,8 @@ impl Compiler {
             }
             Expression::Array { elements, .. } => {
                 return self.array_in_chunks(elements, to_register, position);
-            }            Expression::MethodCall {
+            }
+            Expression::MethodCall {
                 receiver,
                 method,
                 arguments,

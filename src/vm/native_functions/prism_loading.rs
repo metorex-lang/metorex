@@ -52,7 +52,10 @@ impl Loading {
     }
 
     fn take(&mut self, count: usize) -> Result<&[u8], MetorexError> {
-        let end = self.at.checked_add(count).filter(|end| *end <= self.bytes.len());
+        let end = self
+            .at
+            .checked_add(count)
+            .filter(|end| *end <= self.bytes.len());
         let Some(end) = end else {
             return Err(self.invalid());
         };
@@ -83,15 +86,16 @@ impl Loading {
 fn integer(value: u128) -> Object {
     match i64::try_from(value) {
         Ok(small) => Object::Int(small),
-        Err(_) => crate::vm::native_methods::from_big(
-            num_bigint::BigInt::from(value),
-        ),
+        Err(_) => crate::vm::native_methods::from_big(num_bigint::BigInt::from(value)),
     }
 }
 
 /// The arguments `__prism_load_node__` and `__prism_load_tokens__` share: the
 /// serialized String and the offset to read from.
-fn serialized_at(arguments: &[Object], position: Position) -> Result<(Vec<u8>, usize), MetorexError> {
+fn serialized_at(
+    arguments: &[Object],
+    position: Position,
+) -> Result<(Vec<u8>, usize), MetorexError> {
     let bytes = match arguments.first().view() {
         Some(View::String(text)) => crate::vm::native_methods::string_methods::binary_bytes(text),
         _ => {
@@ -226,7 +230,8 @@ impl VirtualMachine {
                 vec![loading.source.clone(), start.clone(), length.clone()],
                 position,
             )?;
-            let value = self.send_to_object(text.clone(), "byteslice", vec![start, length], position)?;
+            let value =
+                self.send_to_object(text.clone(), "byteslice", vec![start, length], position)?;
             if matches!(value.view(), View::Nil) {
                 return Err(crate::vm::errors::simple_exception(
                     "RuntimeError",
@@ -248,7 +253,8 @@ impl VirtualMachine {
     fn load_prism_node(&mut self, loading: &mut Loading) -> Result<Object, MetorexError> {
         let position = loading.position;
         let kind = usize::from(loading.byte()?);
-        let Some(&(name, skips_length, fields)) = kind.checked_sub(1).and_then(|at| NODE_TYPES.get(at))
+        let Some(&(name, skips_length, fields)) =
+            kind.checked_sub(1).and_then(|at| NODE_TYPES.get(at))
         else {
             return Err(loading.invalid());
         };
@@ -276,7 +282,11 @@ impl VirtualMachine {
         self.frozen_when_asked(loading, node)
     }
 
-    fn frozen_when_asked(&mut self, loading: &Loading, value: Object) -> Result<Object, MetorexError> {
+    fn frozen_when_asked(
+        &mut self,
+        loading: &Loading,
+        value: Object,
+    ) -> Result<Object, MetorexError> {
         if loading.freeze {
             return self.send_to_object(value, "freeze", Vec::new(), loading.position);
         }
@@ -312,7 +322,11 @@ impl VirtualMachine {
         self.frozen_when_asked(loading, location)
     }
 
-    fn load_prism_constant(&mut self, loading: &mut Loading, index: u64) -> Result<Object, MetorexError> {
+    fn load_prism_constant(
+        &mut self,
+        loading: &mut Loading,
+        index: u64,
+    ) -> Result<Object, MetorexError> {
         let at = (index - 1) as usize;
         if let Some(Some(constant)) = loading.constants.get(at) {
             return Ok(constant.clone());
@@ -330,7 +344,11 @@ impl VirtualMachine {
         Ok(constant)
     }
 
-    fn load_prism_field(&mut self, loading: &mut Loading, field: Field) -> Result<Object, MetorexError> {
+    fn load_prism_field(
+        &mut self,
+        loading: &mut Loading,
+        field: Field,
+    ) -> Result<Object, MetorexError> {
         let position = loading.position;
         match field {
             Field::Node => self.load_prism_node(loading),

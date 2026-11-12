@@ -41,16 +41,16 @@ pub(crate) fn name_text(held: &std::rc::Rc<crate::object::StringValue>) -> Strin
     if named == "EUC-JP" {
         return euc_jp_table::euc_jp_text(&bytes);
     }
-    if string_methods::spells_shift_jis(&named) {
+    if string_methods::spells_shift_jis(named) {
         return shift_jis_table::shift_jis_text(&bytes);
     }
     if named == "ISO-2022-JP" {
         return euc_jp_table::iso_2022_jp_text(&bytes);
     }
-    if let Some(codec) = super::double_byte::double_byte(&named) {
+    if let Some(codec) = super::double_byte::double_byte(named) {
         return codec.text(&bytes);
     }
-    match string_methods::latin_text(&bytes, &named) {
+    match string_methods::latin_text(&bytes, named) {
         Some(text) => text,
         None => held.as_str().to_string(),
     }
@@ -71,7 +71,7 @@ pub(crate) fn text_in_encoding(
 
 /// The characters a string's bytes spell in the encoding it carries.
 pub(crate) fn text_in_encoding_of(held: &std::rc::Rc<crate::object::StringValue>) -> String {
-    decoded_in(held, &held.encoding_name())
+    decoded_in(held, held.encoding_name())
 }
 
 /// The characters a string's bytes spell read in the named encoding.
@@ -86,7 +86,7 @@ fn decoded_in(held: &std::rc::Rc<crate::object::StringValue>, named: &str) -> St
     if named == "ISO-2022-JP" {
         return euc_jp_table::iso_2022_jp_text(&bytes);
     }
-    if let Some(codec) = super::double_byte::double_byte(&named) {
+    if let Some(codec) = super::double_byte::double_byte(named) {
         return codec.text(&bytes);
     }
     if let Some(text) = string_methods::latin_text(&bytes, named) {

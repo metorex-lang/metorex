@@ -50,7 +50,7 @@ impl VirtualMachine {
                         && (!matches!(named, "UTF-8" | "US-ASCII" | "ASCII-8BIT")
                             || writes_otherwise)
                         && crate::vm::native_methods::string_methods::encoding_is_ascii_compatible(
-                            &named,
+                            named,
                         )
                         && !crate::vm::native_methods::string_methods::binary_bytes(s).is_ascii()
                     {
@@ -61,7 +61,9 @@ impl VirtualMachine {
                         let text = Object::String(std::rc::Rc::new(made));
                         let shown = self.send_to_object(text, "inspect", Vec::new(), position)?;
                         let (shown, written_in) = match shown.view() {
-                            View::String(held) => (held.as_str().to_string(), held.encoding_name().to_string()),
+                            View::String(held) => {
+                                (held.as_str().to_string(), held.encoding_name().to_string())
+                            }
                             _ => (String::new(), self.inspect_result_encoding()),
                         };
                         return Ok(Some(Object::String(std::rc::Rc::new(

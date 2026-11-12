@@ -188,11 +188,11 @@ impl VirtualMachine {
         // An object told apart by which object it is hashes from its id,
         // which it is given here if it has none yet.
         let identified = match receiver.view() {
-            View::Instance(instance) => Some(self.counted_object_id(&instance)),
-            View::Class(class) | View::Module(class) => Some(self.counted_object_id(&class)),
-            View::Exception(details) => Some(self.counted_object_id(&details)),
-            View::Block(block) => Some(self.counted_object_id(&block)),
-            View::Binding(binding) => Some(self.counted_object_id(&binding)),
+            View::Instance(instance) => Some(self.counted_object_id(instance)),
+            View::Class(class) | View::Module(class) => Some(self.counted_object_id(class)),
+            View::Exception(details) => Some(self.counted_object_id(details)),
+            View::Block(block) => Some(self.counted_object_id(block)),
+            View::Binding(binding) => Some(self.counted_object_id(binding)),
             _ => None,
         };
         if let Some(id) = identified {

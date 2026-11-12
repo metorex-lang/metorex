@@ -101,7 +101,10 @@ impl VirtualMachine {
                 // A module around the class that autoloads the name loads it
                 // here, ahead of a top-level constant of the same name, as
                 // temple's `class ArrayBuffer < Array` in Generators does.
-                let direct = match parent_scope.as_ref().and_then(|p| p.get_class_var(super_name)) {
+                let direct = match parent_scope
+                    .as_ref()
+                    .and_then(|p| p.get_class_var(super_name))
+                {
                     Some(found) => Some(found),
                     None => self.resolve_constant_with_autoload(super_name)?,
                 };

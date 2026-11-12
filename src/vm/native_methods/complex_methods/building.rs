@@ -29,7 +29,7 @@ impl VirtualMachine {
         for held in positional.iter() {
             if let View::String(text) = held.view() {
                 let named = text.encoding_name();
-                if crate::vm::native_methods::string_methods::wide_encoding(&named).is_some() {
+                if crate::vm::native_methods::string_methods::wide_encoding(named).is_some() {
                     let message = format!("ASCII incompatible encoding: {named}");
                     return Err(MetorexError::UncaughtException {
                         exception: Object::exception(

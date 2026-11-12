@@ -163,5 +163,8 @@ fn an_exception_raised_in_a_rescue_body_leaves_it() {
 #[test]
 fn raise_with_a_string_subclass_raises_a_runtime_error_with_it_as_the_message() {
     let output = run_example("errors/raise_string_subclass.rb");
-    assert_eq!(output, "RuntimeError\n\"Formatter not found.\"\nPresenter\n");
+    assert_eq!(
+        output,
+        "RuntimeError\n\"Formatter not found.\"\nPresenter\n"
+    );
 }

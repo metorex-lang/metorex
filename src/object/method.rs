@@ -98,8 +98,11 @@ impl BodyFacts {
             _ => {}
         }
         let answer = found();
-        self.namesake_uses_a_block
-            .set(if answer { NAMESAKE_USES_A_BLOCK } else { state + 1 });
+        self.namesake_uses_a_block.set(if answer {
+            NAMESAKE_USES_A_BLOCK
+        } else {
+            state + 1
+        });
         answer
     }
 

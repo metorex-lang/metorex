@@ -165,10 +165,14 @@ impl VirtualMachine {
         }
         // The place is named the way `__FILE__` names it, so a script run by
         // a relative path is reported by that path.
-        let file = self.current_source_file.as_deref().map(str::to_string).or_else(|| {
-            self.reported_current_file()
-                .map(|path| path.display().to_string())
-        })?;
+        let file = self
+            .current_source_file
+            .as_deref()
+            .map(str::to_string)
+            .or_else(|| {
+                self.reported_current_file()
+                    .map(|path| path.display().to_string())
+            })?;
         Some(format!("{}:{}", file, position.line))
     }
 

@@ -87,8 +87,7 @@ HostIE3.new.run
 
 #[test]
 fn instance_exec_next_ends_the_block_with_its_value() {
-    let result = run(
-        r#"
+    let result = run(r#"
 class HostIE4
   def run
     instance_exec do
@@ -97,8 +96,7 @@ class HostIE4
   end
 end
 HostIE4.new.run
-"#,
-    );
+"#);
     assert_eq!(result.map(|value| value.to_string()), Some("7".to_string()));
 }
 

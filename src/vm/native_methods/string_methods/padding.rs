@@ -148,7 +148,7 @@ impl VirtualMachine {
                         Some(spelled)
                     }
                 };
-                let kept = chomped_bytes(&bytes, named.as_deref(), &string_value.encoding_name());
+                let kept = chomped_bytes(&bytes, named.as_deref(), string_value.encoding_name());
                 // Text keeps reading as text, and a run of bytes keeps
                 // standing for the bytes it holds.
                 let made = crate::object::StringValue::of_bytes(kept, string_value.encoding_name());

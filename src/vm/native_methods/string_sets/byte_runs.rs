@@ -45,7 +45,7 @@ impl VirtualMachine {
                 ));
             }
         };
-        let runs = split_readable_runs(&bytes, &named);
+        let runs = split_readable_runs(&bytes, named);
         let mut built: Vec<u8> = Vec::with_capacity(bytes.len());
         for run in runs {
             match run {
@@ -67,11 +67,11 @@ impl VirtualMachine {
                             built.extend(binary_bytes(answered));
                         }
                     }
-                    (None, None) => built.extend(stands_in_for(&named)),
+                    (None, None) => built.extend(stands_in_for(named)),
                 },
             }
         }
-        Ok(text_in_encoding(&built, &named))
+        Ok(text_in_encoding(&built, named))
     }
 }
 

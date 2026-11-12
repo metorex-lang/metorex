@@ -468,5 +468,8 @@ fn test_range_start_before_a_nested_class_waits_for_its_end() {
 #[test]
 fn test_property_and_call_escapes_without_a_name_read_as_letters() {
     let output = run_example("regexp/lenient_property_and_call_escapes.rb");
-    assert_eq!(output, "true\nfalse\n[\"a\", \"b\"]\ntrue\ntrue\n\"\\\\g\"\ntrue\ntrue\n");
+    assert_eq!(
+        output,
+        "true\nfalse\n[\"a\", \"b\"]\ntrue\ntrue\n\"\\\\g\"\ntrue\ntrue\n"
+    );
 }

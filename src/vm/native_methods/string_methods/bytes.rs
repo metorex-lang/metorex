@@ -126,7 +126,7 @@ impl VirtualMachine {
                 Ok(Some(
                     crate::vm::native_methods::string_sets::text_in_encoding(
                         cut,
-                        &string_value.encoding_name(),
+                        string_value.encoding_name(),
                     ),
                 ))
             }

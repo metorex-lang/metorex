@@ -242,13 +242,13 @@ pub(crate) fn symbol_inspect_text(value: &crate::object::StringValue) -> String 
     let bytes = binary_bytes(value);
     // An encoding metorex names without reading text through it spells its
     // name byte by byte.
-    if dummy_encoding(&named) {
+    if dummy_encoding(named) {
         let written: String = bytes.iter().map(|byte| format!("\\x{byte:02X}")).collect();
         return format!(":\"{written}\"");
     }
     // An encoding that does not spell ASCII the way ASCII does is read
     // through, and the characters it names are quoted.
-    if let Some(shape) = wide_encoding(&named) {
+    if let Some(shape) = wide_encoding(named) {
         return format!(":{:?}", wide_text(&bytes, shape));
     }
     if matches!(named, "ASCII-8BIT" | "BINARY") && !bytes.is_ascii() {
@@ -372,7 +372,10 @@ pub(crate) fn encoded_characters(string_value: &crate::object::StringValue) -> V
             .iter()
             .map(|character| from_bytes(character))
             .collect(),
-        named if string_value.holds_bytes() && crate::vm::native_methods::double_byte::double_byte(named).is_some() => {
+        named
+            if string_value.holds_bytes()
+                && crate::vm::native_methods::double_byte::double_byte(named).is_some() =>
+        {
             crate::vm::native_methods::double_byte::double_byte(named)
                 .unwrap()
                 .characters(&binary_bytes(string_value))
@@ -384,8 +387,7 @@ pub(crate) fn encoded_characters(string_value: &crate::object::StringValue) -> V
             .as_str()
             .chars()
             .map(|character| {
-                let made =
-                    crate::object::StringValue::with_encoding(character.to_string(), named);
+                let made = crate::object::StringValue::with_encoding(character.to_string(), named);
                 Object::String(Rc::new(made))
             })
             .collect(),
@@ -428,7 +430,7 @@ impl VirtualMachine {
         };
         let written = text.to_text();
         self.encoding_name_argument(&named, position)
-            .map_err(|_| converter_not_found(&string_value.encoding_name(), &written, position))
+            .map_err(|_| converter_not_found(string_value.encoding_name(), &written, position))
     }
 
     /// Whether Ruby carries no converter to or from an encoding.

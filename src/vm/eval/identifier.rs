@@ -665,7 +665,11 @@ impl VirtualMachine {
             // `boom!` and `ready?` can only name methods, so one nothing
             // answers is a NoMethodError, as a call is.
             let could_be_local = !name.ends_with(['!', '?']);
-            let recorded = if could_be_local { name.to_string() } else { String::new() };
+            let recorded = if could_be_local {
+                name.to_string()
+            } else {
+                String::new()
+            };
             self.bare_names_missing.push((recorded, depth));
             let answered = self.invoke_method(
                 owner,

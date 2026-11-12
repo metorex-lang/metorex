@@ -307,7 +307,11 @@ pub(crate) fn bind_block_params(
         for key in &unknown_keywords {
             named.push(vm.get_inspect_representation(key, position)?);
         }
-        let plural = if named.len() == 1 { "keyword" } else { "keywords" };
+        let plural = if named.len() == 1 {
+            "keyword"
+        } else {
+            "keywords"
+        };
         return Err(crate::vm::errors::simple_exception(
             "ArgumentError",
             &format!("unknown {plural}: {}", named.join(", ")),

@@ -570,7 +570,9 @@ fn is_static_value(expression: &Expression) -> bool {
     match expression {
         Expression::StringLiteral { .. } => FROZEN_STRINGS.get(),
         // A string literal in a file that freezes them.
-        Expression::MethodCall { receiver, method, .. } if method == "__frozen_literal__" => {
+        Expression::MethodCall {
+            receiver, method, ..
+        } if method == "__frozen_literal__" => {
             matches!(**receiver, Expression::StringLiteral { .. })
         }
         Expression::Array { elements, .. } => elements.iter().all(is_static_value),
@@ -594,9 +596,7 @@ fn start_line(expression: &Expression) -> usize {
         // An array or hash literal holding only literals is copied whole
         // where it starts. Any other is counted from its first element,
         // which is where the work of building it starts.
-        Expression::Array { .. } | Expression::Dictionary { .. }
-            if is_static_value(expression) =>
-        {
+        Expression::Array { .. } | Expression::Dictionary { .. } if is_static_value(expression) => {
             None
         }
         Expression::Array { elements, .. } => {
@@ -628,7 +628,9 @@ fn is_literal_expression(expression: &Expression) -> bool {
         | Expression::NilLiteral { .. }
         | Expression::Symbol { .. }
         | Expression::BigIntLiteral { .. } => true,
-        Expression::MethodCall { receiver, method, .. } if method == "__frozen_literal__" => {
+        Expression::MethodCall {
+            receiver, method, ..
+        } if method == "__frozen_literal__" => {
             matches!(**receiver, Expression::StringLiteral { .. })
         }
         Expression::Array { elements, .. } => elements.iter().all(is_literal_expression),

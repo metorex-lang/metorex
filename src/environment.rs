@@ -148,7 +148,9 @@ impl Environment {
 
     /// `Scope::assign_own` on the current scope.
     pub fn assign_own(&mut self, name: &str, value: Object) -> bool {
-        self.current_scope_ref().borrow_mut().assign_own(name, value)
+        self.current_scope_ref()
+            .borrow_mut()
+            .assign_own(name, value)
     }
 
     /// Reserves a name for the rest of the current scope ahead of the
@@ -179,7 +181,9 @@ impl Environment {
     /// Binds a name the program did not declare, which `local_variables`
     /// and a Binding leave out.
     pub fn define_hidden(&mut self, name: String, value: Object) {
-        self.current_scope_ref().borrow_mut().define_hidden(name, value);
+        self.current_scope_ref()
+            .borrow_mut()
+            .define_hidden(name, value);
     }
 
     /// The implicit parameters the block running here took, leaving out
@@ -217,7 +221,9 @@ impl Environment {
 
     /// Sets a variable at a specific depth relative to the current scope
     pub fn set_at(&mut self, depth: usize, name: &str, value: Object) -> bool {
-        self.current_scope_ref().borrow_mut().set_at(depth, name, value)
+        self.current_scope_ref()
+            .borrow_mut()
+            .set_at(depth, name, value)
     }
 
     /// Collects all variables from the current scope chain
@@ -275,7 +281,9 @@ impl Environment {
     /// Defines a variable in the current scope with a shared reference
     /// Used when a closure defines a captured variable
     pub fn define_shared(&mut self, name: String, value: std::rc::Rc<std::cell::RefCell<Object>>) {
-        self.current_scope_ref().borrow_mut().define_shared(name, value);
+        self.current_scope_ref()
+            .borrow_mut()
+            .define_shared(name, value);
     }
 
     /// Defines a name a block captured from its definition site. It resolves
@@ -294,11 +302,15 @@ impl Environment {
     /// Read and write through the names a block closed over in the current
     /// scope, without copying them into it.
     pub fn attach_reserved(&mut self, reserved: std::rc::Rc<Vec<String>>) {
-        self.current_scope_ref().borrow_mut().attach_reserved(reserved);
+        self.current_scope_ref()
+            .borrow_mut()
+            .attach_reserved(reserved);
     }
 
     pub fn attach_captured(&mut self, captured: crate::scope::CapturedNames) {
-        self.current_scope_ref().borrow_mut().attach_captured(captured);
+        self.current_scope_ref()
+            .borrow_mut()
+            .attach_captured(captured);
     }
 
     /// Gets a shared reference to a variable

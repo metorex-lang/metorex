@@ -286,7 +286,10 @@ fn locals_holding_methods_are_locals() {
 #[test]
 fn proc_bindings_stand_where_the_block_was_written() {
     let output = run_example("eval/proc_bindings_stand_where_the_block_was_written.rb");
-    assert_eq!(output, "\"proc_bindings_stand_where_the_block_was_written.rb\"\n1\n");
+    assert_eq!(
+        output,
+        "\"proc_bindings_stand_where_the_block_was_written.rb\"\n1\n"
+    );
 }
 
 #[test]

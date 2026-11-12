@@ -500,7 +500,11 @@ impl VirtualMachine {
             "__raise_later__" => {
                 // A thread already told to stop unwinds for that, and what it
                 // is handed after is dropped.
-                if inst.borrow().get_var("__thread_killed").is_some_and(Object::is_truthy) {
+                if inst
+                    .borrow()
+                    .get_var("__thread_killed")
+                    .is_some_and(Object::is_truthy)
+                {
                     return Ok(Some(Object::Nil));
                 }
                 let handed = arguments.to_vec();

@@ -159,7 +159,10 @@ fn variables_interpolate_without_braces() {
 #[test]
 fn a_local_assigned_in_a_branch_is_seen_by_a_block_in_ensure() {
     let output = run_example("parser/local_assigned_in_a_branch_read_in_ensure.rb");
-    assert_eq!(output, "true\n:failed\nnil\n:passed\n[nil, \"local-variable\"]\n");
+    assert_eq!(
+        output,
+        "true\n:failed\nnil\n:passed\n[nil, \"local-variable\"]\n"
+    );
 }
 
 #[test]

@@ -38,6 +38,8 @@ pub struct CallCache {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReceiverKind {
     Instance,
+    /// A class itself, kept by the class it is rather than by `Class`.
+    ClassObject,
     Nil,
     False,
     True,

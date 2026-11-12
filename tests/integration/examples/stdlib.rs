@@ -1533,6 +1533,22 @@ fn test_stdlib_timeout_busy_code_no_parens_execution() {
     assert_eq!(output, TIMEOUT_BUSY_CODE_OUTPUT);
 }
 
+#[test]
+fn a_timeout_passes_a_rescue_of_standard_errors() {
+    let output = run_example("stdlib/timeout_passes_a_rescue_of_standard_errors.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[Timeout::Error, \"execution expired\"]\n",
+            "Timeout::Error\n",
+            "[Timeout::ExitException, Exception, \"execution expired\"]\n",
+            "[:inner, Timeout::Error]\n",
+            ":rescued_inside\n",
+            "true\n",
+        )
+    );
+}
+
 /// The expected output of `runtime/builtin_classes`.
 const BUILTIN_CLASSES: &str = concat!(
     "=== Object Class ===\n",
@@ -2376,7 +2392,10 @@ fn marshal_keeps_a_replaced_set_ivar() {
 #[test]
 fn marshal_links_only_the_same_object() {
     let output = run_example("stdlib/marshal_links_only_the_same_object.rb");
-    assert_eq!(output, "[\"first\", \"second\", \"first\"]\ntrue\nfalse\nfalse\n");
+    assert_eq!(
+        output,
+        "[\"first\", \"second\", \"first\"]\ntrue\nfalse\nfalse\n"
+    );
 }
 
 #[test]

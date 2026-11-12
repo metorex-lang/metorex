@@ -156,10 +156,14 @@ impl VirtualMachine {
         } else {
             // The main script is named the way it was given, as
             // `__FILE__` names it.
-            let file = self.current_source_file.as_deref().map(str::to_string).or_else(|| {
-                self.reported_current_file()
-                    .map(|path| path.display().to_string())
-            });
+            let file = self
+                .current_source_file
+                .as_deref()
+                .map(str::to_string)
+                .or_else(|| {
+                    self.reported_current_file()
+                        .map(|path| path.display().to_string())
+                });
             file.map(|file| {
                 let mut last = shared.file.borrow_mut();
                 match last.as_ref() {
@@ -181,7 +185,13 @@ impl VirtualMachine {
         let written_depth = Some(self.block_nesting_depth());
         let method_nesting = self.method_nesting_stack.last();
         let captured_refinements = self.any_refinement_active().then(|| {
-            Rc::new(self.refinement_scopes.iter().flatten().cloned().collect::<Vec<_>>())
+            Rc::new(
+                self.refinement_scopes
+                    .iter()
+                    .flatten()
+                    .cloned()
+                    .collect::<Vec<_>>(),
+            )
         });
         if let Some(last) = shared.origin.borrow().as_ref()
             && same_classes(&last.captured_def_scope, self.def_scope_stack.iter())
@@ -706,7 +716,10 @@ impl VirtualMachine {
         // group at all, which Ruby says so about and reads as nil.
         if number_variable_is_too_big(&name) {
             let at = (
-                self.current_source_file.as_deref().map(str::to_string).unwrap_or_default(),
+                self.current_source_file
+                    .as_deref()
+                    .map(str::to_string)
+                    .unwrap_or_default(),
                 position.line,
                 position.column,
             );

@@ -65,5 +65,8 @@ fn an_instruction_sequence_lists_the_patterns_its_code_holds() {
 #[test]
 fn a_method_sequence_opens_with_the_code_of_its_parameter_defaults() {
     let output = run_example("ruby_vm/default_hash_argument_opens_with_newhash.rb");
-    assert_eq!(output, "0000 newhash to: 0, shape: 0                (   2)\n");
+    assert_eq!(
+        output,
+        "0000 newhash to: 0, shape: 0                (   2)\n"
+    );
 }

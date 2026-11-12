@@ -455,7 +455,9 @@ fn parameter_names(method: &crate::object::Method) -> Vec<String> {
         .chain(signature.variadic_param.iter().map(|(_, name)| name))
         .filter(|name| {
             name.starts_with(|first: char| first.is_lowercase() || first == '_')
-                && name.chars().all(|character| character.is_alphanumeric() || character == '_')
+                && name
+                    .chars()
+                    .all(|character| character.is_alphanumeric() || character == '_')
         })
         .cloned()
         .collect()

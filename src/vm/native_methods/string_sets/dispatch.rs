@@ -291,7 +291,7 @@ impl VirtualMachine {
                 // character is read as characters before the last one comes
                 // off, and written back out afterwards.
                 if let Some(shape) = crate::vm::native_methods::string_methods::wide_encoding(
-                    &string_value.encoding_name(),
+                    string_value.encoding_name(),
                 ) {
                     use crate::vm::native_methods::string_methods as text_methods;
                     let reading =
@@ -378,8 +378,7 @@ impl VirtualMachine {
                 };
                 let tagged = |piece: String| {
                     Object::String(std::rc::Rc::new(crate::object::StringValue::with_encoding(
-                        piece,
-                        encoding,
+                        piece, encoding,
                     )))
                 };
                 let parts = match found {
@@ -466,9 +465,9 @@ impl VirtualMachine {
                 // which Ruby reports as nil rather than as an error.
                 if compatible_encoding(
                     &text,
-                    &string_value.encoding_name(),
+                    string_value.encoding_name(),
                     &other.as_str(),
-                    &other.encoding_name(),
+                    other.encoding_name(),
                 )
                 .is_none()
                 {
@@ -483,8 +482,8 @@ impl VirtualMachine {
                 if method_name == "casecmp?" {
                     // Only an encoding that spells the whole of Unicode maps
                     // a letter outside ASCII onto another case of itself.
-                    let maps_unicode = unicode_encoding(&string_value.encoding_name())
-                        && unicode_encoding(&other.encoding_name());
+                    let maps_unicode = unicode_encoding(string_value.encoding_name())
+                        && unicode_encoding(other.encoding_name());
                     if !maps_unicode {
                         return Ok(Some(Object::Bool(left == right)));
                     }
@@ -547,14 +546,14 @@ impl VirtualMachine {
                 };
                 let Some(encoding) = compatible_encoding(
                     &text,
-                    &string_value.encoding_name(),
+                    string_value.encoding_name(),
                     &padding,
-                    &pad_encoding,
+                    pad_encoding,
                 ) else {
                     let message =
                         crate::vm::native_methods::string_methods::incompatible_encodings_message(
-                            &string_value.encoding_name(),
-                            &pad_encoding,
+                            string_value.encoding_name(),
+                            pad_encoding,
                         );
                     return Err(MetorexError::UncaughtException {
                         exception: Object::exception(

@@ -458,7 +458,12 @@ fn gzip_unwrap_checked(bytes: &[u8]) -> Result<Vec<u8>, (&'static str, String)> 
     match bytes.get(2) {
         None => return Err(short()),
         Some(8) => {}
-        Some(method) => return Err((GZIP_ERROR, format!("unsupported compression method {method}"))),
+        Some(method) => {
+            return Err((
+                GZIP_ERROR,
+                format!("unsupported compression method {method}"),
+            ));
+        }
     }
     let at = gzip_body_start(bytes).ok_or_else(short)?;
     let body = bytes.get(at..).ok_or_else(short)?;

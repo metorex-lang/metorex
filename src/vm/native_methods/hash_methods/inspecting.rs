@@ -37,7 +37,10 @@ impl VirtualMachine {
             } else {
                 &writing
             };
-            return Ok((format!("{}: {}", shown, rendered_value), writing.to_string()));
+            return Ok((
+                format!("{}: {}", shown, rendered_value),
+                writing.to_string(),
+            ));
         }
         let (rendered_key, writing) = self.rendered_with_encoding(key, position)?;
         Ok((format!("{} => {}", rendered_key, rendered_value), writing))

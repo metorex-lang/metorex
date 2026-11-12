@@ -468,8 +468,7 @@ pub extern "C-unwind" fn rb_ivar_get(object: Value, name: Value) -> Value {
     // An instance's variable is read where the instance keeps it, as MRI
     // reads it, without a call of `instance_variable_get`.
     let named = to_object(id_symbol(name));
-    if let (View::Symbol(held), View::Instance(instance)) =
-        (named.view(), to_object(object).view())
+    if let (View::Symbol(held), View::Instance(instance)) = (named.view(), to_object(object).view())
     {
         let text = held.as_str();
         if let Some(bare) = visible_bare_name(&text) {
@@ -489,8 +488,7 @@ pub extern "C-unwind" fn rb_ivar_set(object: Value, name: Value, value: Value) -
     // An instance that may change takes the variable where it keeps it, as
     // MRI writes it. A frozen one is refused by the call below.
     let named = to_object(id_symbol(name));
-    if let (View::Symbol(held), View::Instance(instance)) =
-        (named.view(), to_object(object).view())
+    if let (View::Symbol(held), View::Instance(instance)) = (named.view(), to_object(object).view())
         && !instance.borrow().frozen
     {
         let text = held.as_str();

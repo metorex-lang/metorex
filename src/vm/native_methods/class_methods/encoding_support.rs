@@ -306,7 +306,7 @@ fn holds_only_ascii(value: &Object) -> bool {
     let Some(text) = as_encoded_text(value) else {
         return false;
     };
-    if !encoding_reads_alongside_ascii(&text.encoding_name()) {
+    if !encoding_reads_alongside_ascii(text.encoding_name()) {
         return false;
     }
     text.is_ascii()

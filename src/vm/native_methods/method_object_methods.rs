@@ -32,12 +32,8 @@ impl VirtualMachine {
         let named = owner.ruby_name().to_string();
         // The target's own class chain answers, not an `is_a?` it may not
         // have, as a BasicObject does not.
-        let answer = self.call_object_type_check_method(
-            target,
-            "is_a?",
-            &[Object::Class(owner)],
-            position,
-        )?;
+        let answer =
+            self.call_object_type_check_method(target, "is_a?", &[Object::Class(owner)], position)?;
         if answer.is_some_and(|held| held.is_truthy()) {
             return Ok(());
         }

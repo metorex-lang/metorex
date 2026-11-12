@@ -98,7 +98,9 @@ impl DoubleByte {
     fn is_whole_four_bytes(&self, bytes: &[u8], at: usize) -> bool {
         self.opens_a_pair(bytes[at])
             && self.opens_four_bytes(bytes, at)
-            && bytes.get(at + 2).is_some_and(|third| self.opens_a_pair(*third))
+            && bytes
+                .get(at + 2)
+                .is_some_and(|third| self.opens_a_pair(*third))
             && Self::is_digit(bytes.get(at + 3))
     }
 
@@ -142,8 +144,8 @@ impl DoubleByte {
                     continue;
                 }
                 let read = &bytes[at..bytes.len().min(at + 4)];
-                let incomplete = read.len() < 4
-                    && read.get(2).is_none_or(|third| self.opens_a_pair(*third));
+                let incomplete =
+                    read.len() < 4 && read.get(2).is_none_or(|third| self.opens_a_pair(*third));
                 return Some((vec![byte], read.get(1).copied(), incomplete));
             }
             match bytes.get(at + 1) {
@@ -191,9 +193,13 @@ impl DoubleByte {
         if index >= SEQUENCES_BELOW_THE_SUPPLEMENTARY_PLANES {
             return char::from_u32(index - SEQUENCES_BELOW_THE_SUPPLEMENTARY_PLANES + 0x10000);
         }
-        let at = runs.partition_point(|(start, _, _)| *start <= index).checked_sub(1)?;
+        let at = runs
+            .partition_point(|(start, _, _)| *start <= index)
+            .checked_sub(1)?;
         let (start, point, length) = runs[at];
-        (index < start + length).then(|| char::from_u32(point + index - start)).flatten()
+        (index < start + length)
+            .then(|| char::from_u32(point + index - start))
+            .flatten()
     }
 
     /// The four bytes a character is spelled with, for an encoding that has
@@ -203,7 +209,9 @@ impl DoubleByte {
         let index = if point >= 0x10000 {
             point - 0x10000 + SEQUENCES_BELOW_THE_SUPPLEMENTARY_PLANES
         } else {
-            let at = runs.partition_point(|(_, first, _)| *first <= point).checked_sub(1)?;
+            let at = runs
+                .partition_point(|(_, first, _)| *first <= point)
+                .checked_sub(1)?;
             let (start, first, length) = runs[at];
             if point >= first + length {
                 return None;

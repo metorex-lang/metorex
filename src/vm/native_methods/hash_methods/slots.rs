@@ -403,9 +403,8 @@ pub(crate) fn keep_pair(built: &mut crate::object::HashEntries, key: Object, val
 /// with, the same for two equal numbers.
 fn folded_hash(number: &num_bigint::BigInt) -> i64 {
     i64::try_from(number).unwrap_or_else(|_| {
-        number
-            .to_signed_bytes_le()
-            .iter()
-            .fold(0i64, |held, byte| held.wrapping_mul(31).wrapping_add(i64::from(*byte)))
+        number.to_signed_bytes_le().iter().fold(0i64, |held, byte| {
+            held.wrapping_mul(31).wrapping_add(i64::from(*byte))
+        })
     })
 }

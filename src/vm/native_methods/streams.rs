@@ -252,7 +252,11 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<bool, MetorexError> {
         loop {
-            let Some(deadline) = self.timeout_limits.iter().map(|(deadline, _, _)| *deadline).min()
+            let Some(deadline) = self
+                .timeout_limits
+                .iter()
+                .map(|(deadline, _, _)| *deadline)
+                .min()
             else {
                 return Ok(wait_until_readable(number));
             };
@@ -268,7 +272,9 @@ impl VirtualMachine {
             if ready > 0 {
                 return Ok(true);
             }
-            if ready < 0 && std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
+            if ready < 0
+                && std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted
+            {
                 return Ok(true);
             }
             self.raise_expired_timeout(position)?;

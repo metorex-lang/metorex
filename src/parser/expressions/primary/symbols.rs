@@ -165,7 +165,9 @@ impl Parser<'_> {
             TokenKind::Raise => Ok(self.symbol_with_setter("raise", symbol_position)),
             TokenKind::AttrReader => Ok(self.symbol_with_setter("attr_reader", symbol_position)),
             TokenKind::AttrWriter => Ok(self.symbol_with_setter("attr_writer", symbol_position)),
-            TokenKind::AttrAccessor => Ok(self.symbol_with_setter("attr_accessor", symbol_position)),
+            TokenKind::AttrAccessor => {
+                Ok(self.symbol_with_setter("attr_accessor", symbol_position))
+            }
             TokenKind::Extend => Ok(self.symbol_with_setter("extend", symbol_position)),
             TokenKind::Alias => Ok(self.symbol_with_setter("alias", symbol_position)),
             TokenKind::Unless => Ok(self.symbol_with_setter("unless", symbol_position)),

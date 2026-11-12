@@ -10,7 +10,7 @@ pub(crate) fn holds_valid_text(string_value: &crate::object::StringValue) -> boo
     // text a byte at a time, so every run of bytes spells characters in it.
     // One that still pairs its bytes is read for that shape all the same.
     let named = string_value.encoding_name();
-    if dummy_encoding(&named) && !pairs_its_bytes(&named) {
+    if dummy_encoding(named) && !pairs_its_bytes(named) {
         return true;
     }
     match named {
@@ -221,22 +221,21 @@ pub(crate) fn strings_comparable(
     }
     // An encoding that does not spell ASCII one byte to a letter, such as
     // UTF-16, goes with no other.
-    if !encoding_is_ascii_compatible(&left.encoding_name())
-        || !encoding_is_ascii_compatible(&right.encoding_name())
+    if !encoding_is_ascii_compatible(left.encoding_name())
+        || !encoding_is_ascii_compatible(right.encoding_name())
     {
         return false;
     }
-    let left_plain =
-        left.as_str().is_ascii() && encoding_is_ascii_compatible(&left.encoding_name());
+    let left_plain = left.as_str().is_ascii() && encoding_is_ascii_compatible(left.encoding_name());
     let right_plain =
-        right.as_str().is_ascii() && encoding_is_ascii_compatible(&right.encoding_name());
+        right.as_str().is_ascii() && encoding_is_ascii_compatible(right.encoding_name());
     if left_plain && right_plain {
         return true;
     }
-    if left_plain && encoding_is_ascii_compatible(&right.encoding_name()) {
+    if left_plain && encoding_is_ascii_compatible(right.encoding_name()) {
         return true;
     }
-    right_plain && encoding_is_ascii_compatible(&left.encoding_name())
+    right_plain && encoding_is_ascii_compatible(left.encoding_name())
 }
 
 /// The Encoding::CompatibilityError Ruby raises for joining text written in
@@ -246,7 +245,7 @@ pub(crate) fn clashing_encodings_error(
     right: &crate::object::StringValue,
     position: Position,
 ) -> MetorexError {
-    let message = incompatible_encodings_message(&left.encoding_name(), &right.encoding_name());
+    let message = incompatible_encodings_message(left.encoding_name(), right.encoding_name());
     crate::vm::errors::simple_exception("Encoding::CompatibilityError", &message, position)
 }
 
@@ -323,8 +322,9 @@ pub(crate) fn character_count(string_value: &crate::object::StringValue) -> i64 
         "EUC-JP" if string_value.holds_bytes() => {
             euc_jp_characters(&binary_bytes(string_value)).len() as i64
         }
-        named if string_value.holds_bytes()
-            && crate::vm::native_methods::double_byte::double_byte(named).is_some() =>
+        named
+            if string_value.holds_bytes()
+                && crate::vm::native_methods::double_byte::double_byte(named).is_some() =>
         {
             crate::vm::native_methods::double_byte::double_byte(named)
                 .unwrap()
@@ -344,12 +344,12 @@ pub(crate) fn character_count(string_value: &crate::object::StringValue) -> i64 
 /// them, and one in UTF-16 or UTF-32, unless the text is all ASCII.
 pub(crate) fn characters_are_text(string_value: &crate::object::StringValue) -> bool {
     let named = string_value.encoding_name();
-    if super::wide::wide_encoding(&named).is_some() {
+    if super::wide::wide_encoding(named).is_some() {
         return false;
     }
-    let pairs_bytes = spells_shift_jis(&named)
+    let pairs_bytes = spells_shift_jis(named)
         || matches!(named, "EUC-JP" | "UTF-8")
-        || crate::vm::native_methods::double_byte::double_byte(&named).is_some();
+        || crate::vm::native_methods::double_byte::double_byte(named).is_some();
     !(pairs_bytes && string_value.holds_bytes()) || string_value.is_ascii()
 }
 
@@ -371,11 +371,16 @@ pub(crate) fn character_units(string_value: &crate::object::StringValue) -> Vec<
         "EUC-JP" if string_value.holds_bytes() => {
             grouped(euc_jp_characters(&binary_bytes(string_value)))
         }
-        named if string_value.holds_bytes() && crate::vm::native_methods::double_byte::double_byte(named).is_some() => grouped(
-            crate::vm::native_methods::double_byte::double_byte(named)
-                .unwrap()
-                .characters(&binary_bytes(string_value)),
-        ),
+        named
+            if string_value.holds_bytes()
+                && crate::vm::native_methods::double_byte::double_byte(named).is_some() =>
+        {
+            grouped(
+                crate::vm::native_methods::double_byte::double_byte(named)
+                    .unwrap()
+                    .characters(&binary_bytes(string_value)),
+            )
+        }
         "UTF-8" if string_value.holds_bytes() => {
             grouped(utf8_characters(&binary_bytes(string_value)))
         }

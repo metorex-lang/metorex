@@ -274,9 +274,9 @@ impl VirtualMachine {
         };
         let aliased = class.method_names().iter().any(|other| {
             other != name
-                && class.find_own_method(other).is_some_and(|held| {
-                    held.provenance.original_name.as_deref() == Some(name)
-                })
+                && class
+                    .find_own_method(other)
+                    .is_some_and(|held| held.provenance.original_name.as_deref() == Some(name))
         });
         if aliased {
             return;

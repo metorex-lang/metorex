@@ -70,10 +70,15 @@ impl VirtualMachine {
         if start.prelude {
             return;
         }
-        let Some(path) = self.current_source_file.as_deref().map(str::to_string).or_else(|| {
-            self.reported_current_file()
-                .map(|file| file.display().to_string())
-        }) else {
+        let Some(path) = self
+            .current_source_file
+            .as_deref()
+            .map(str::to_string)
+            .or_else(|| {
+                self.reported_current_file()
+                    .map(|file| file.display().to_string())
+            })
+        else {
             return;
         };
         // Code `eval` ran has no file to read the line back from, so an error

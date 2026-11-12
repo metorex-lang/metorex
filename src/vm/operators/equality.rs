@@ -32,10 +32,11 @@ impl VirtualMachine {
         // answers from its own method table.
         // A hash compared with an object that can stand for one lets that
         // object answer, which Hash's own `==` arranges.
-        let compares_as_hashes = matches!((left.view(), right.view()), (View::Dict(_), View::Dict(_)))
-            || (matches!(left.view(), View::Dict(_))
-                && matches!(right.view(), View::Instance(_))
-                && self.responds_to(&right, "to_hash"));
+        let compares_as_hashes =
+            matches!((left.view(), right.view()), (View::Dict(_), View::Dict(_)))
+                || (matches!(left.view(), View::Dict(_))
+                    && matches!(right.view(), View::Instance(_))
+                    && self.responds_to(&right, "to_hash"));
         if compares_as_hashes
             && let Some(answer) =
                 self.call_hash_method(&left, "==", std::slice::from_ref(&right), position)?

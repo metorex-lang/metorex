@@ -12,10 +12,13 @@ impl VirtualMachine {
     /// The file the code running now was written in, which a frame
     /// records as the file its call site is in.
     pub(crate) fn file_for_frames(&self) -> Option<String> {
-        self.current_source_file.as_deref().map(str::to_string).or_else(|| {
-            self.reported_current_file()
-                .map(|file| file.display().to_string())
-        })
+        self.current_source_file
+            .as_deref()
+            .map(str::to_string)
+            .or_else(|| {
+                self.reported_current_file()
+                    .map(|file| file.display().to_string())
+            })
     }
 
     /// `file_for_frames` as a shared string, made once for each file.
@@ -38,7 +41,8 @@ impl VirtualMachine {
     /// `named` shared, with the encoding it is written in, as code entered
     /// in that file runs under.
     pub(crate) fn entered_file(&mut self, named: &str) -> (Rc<str>, Option<String>) {
-        if let Some((file, encoding)) = self.entered_files.iter().find(|(file, _)| **file == *named) {
+        if let Some((file, encoding)) = self.entered_files.iter().find(|(file, _)| **file == *named)
+        {
             return (Rc::clone(file), encoding.clone());
         }
         let entry = (Rc::from(named), self.file_encodings.get(named).cloned());

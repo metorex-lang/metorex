@@ -289,10 +289,12 @@ impl VirtualMachine {
                 return match class_rc.superclass() {
                     // A core class descends from an Object of its own, and
                     // the one a program names is what it answers.
-                    Some(parent)
-                        if Rc::ptr_eq(&parent, &self.builtins().object_class) =>
-                    {
-                        Ok(Answered(self.globals().get("Object").unwrap_or(Object::Class(parent))))
+                    Some(parent) if Rc::ptr_eq(&parent, &self.builtins().object_class) => {
+                        Ok(Answered(
+                            self.globals()
+                                .get("Object")
+                                .unwrap_or(Object::Class(parent)),
+                        ))
                     }
                     Some(parent) => Ok(Answered(Object::Class(parent))),
                     // The singleton class of a value, such as a String,

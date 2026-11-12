@@ -175,7 +175,7 @@ impl VirtualMachine {
     ) -> Result<String, MetorexError> {
         if let View::String(text) = held.view() {
             let named = text.encoding_name();
-            if !crate::vm::native_methods::string_methods::encoding_is_ascii_compatible(&named) {
+            if !crate::vm::native_methods::string_methods::encoding_is_ascii_compatible(named) {
                 return Err(crate::vm::errors::simple_exception(
                     "Encoding::CompatibilityError",
                     &format!("ASCII incompatible encoding: {named}"),

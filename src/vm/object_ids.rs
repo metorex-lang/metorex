@@ -56,17 +56,17 @@ impl VirtualMachine {
 /// stands for itself.
 pub(crate) fn reference_address(held: &Object) -> Option<usize> {
     let address = match held.view() {
-        View::Instance(instance) => Rc::as_ptr(&instance) as *const () as usize,
-        View::String(text) => Rc::as_ptr(&text) as *const () as usize,
-        View::Array(elements) => Rc::as_ptr(&elements) as *const () as usize,
-        View::Dict(entries) => Rc::as_ptr(&entries) as *const () as usize,
-        View::Set(members) => Rc::as_ptr(&members) as *const () as usize,
-        View::Class(class) | View::Module(class) => Rc::as_ptr(&class) as *const () as usize,
-        View::Block(block) => Rc::as_ptr(&block) as *const () as usize,
-        View::Method(method) => Rc::as_ptr(&method) as *const () as usize,
-        View::Binding(binding) => Rc::as_ptr(&binding) as *const () as usize,
-        View::Exception(details) => Rc::as_ptr(&details) as *const () as usize,
-        View::BigInt(value) => Rc::as_ptr(&value) as *const () as usize,
+        View::Instance(instance) => Rc::as_ptr(instance) as *const () as usize,
+        View::String(text) => Rc::as_ptr(text) as *const () as usize,
+        View::Array(elements) => Rc::as_ptr(elements) as *const () as usize,
+        View::Dict(entries) => Rc::as_ptr(entries) as *const () as usize,
+        View::Set(members) => Rc::as_ptr(members) as *const () as usize,
+        View::Class(class) | View::Module(class) => Rc::as_ptr(class) as *const () as usize,
+        View::Block(block) => Rc::as_ptr(block) as *const () as usize,
+        View::Method(method) => Rc::as_ptr(method) as *const () as usize,
+        View::Binding(binding) => Rc::as_ptr(binding) as *const () as usize,
+        View::Exception(details) => Rc::as_ptr(details) as *const () as usize,
+        View::BigInt(value) => Rc::as_ptr(value) as *const () as usize,
         _ => return None,
     };
     Some(address)

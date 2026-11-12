@@ -33,8 +33,8 @@ pub(crate) fn encoded_grapheme_clusters(string_value: &crate::object::StringValu
         binary_bytes, wide_bytes, wide_encoding, wide_text,
     };
     let named = string_value.encoding_name();
-    if let Some(shape) = wide_encoding(&named)
-        && !crate::vm::native_methods::string_methods::dummy_encoding(&named)
+    if let Some(shape) = wide_encoding(named)
+        && !crate::vm::native_methods::string_methods::dummy_encoding(named)
     {
         return grapheme_clusters(&wide_text(&binary_bytes(string_value), shape))
             .iter()
@@ -48,7 +48,7 @@ pub(crate) fn encoded_grapheme_clusters(string_value: &crate::object::StringValu
     // An encoding that has one character to the byte has one cluster to the
     // byte with it, since nothing there attaches to anything.
     if matches!(named, "ASCII-8BIT" | "BINARY")
-        || crate::vm::native_methods::string_methods::dummy_encoding(&named)
+        || crate::vm::native_methods::string_methods::dummy_encoding(named)
         || matches!(named, "Shift_JIS" | "Windows-31J" | "MacJapanese")
     {
         return crate::vm::native_methods::string_methods::encoded_characters(string_value);
@@ -57,8 +57,7 @@ pub(crate) fn encoded_grapheme_clusters(string_value: &crate::object::StringValu
         .into_iter()
         .map(|cluster| {
             Object::String(std::rc::Rc::new(crate::object::StringValue::with_encoding(
-                cluster,
-                named,
+                cluster, named,
             )))
         })
         .collect()

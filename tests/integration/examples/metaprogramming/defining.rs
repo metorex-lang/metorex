@@ -225,7 +225,10 @@ fn remove_method_takes_its_visibility() {
 #[test]
 fn bind_checks_basic_objects_by_class() {
     let output = run_example("metaprogramming/bind_checks_basic_objects_by_class.rb");
-    assert_eq!(output, ":plain\n\"bind argument must be an instance of Plain\"\n");
+    assert_eq!(
+        output,
+        ":plain\n\"bind argument must be an instance of Plain\"\n"
+    );
 }
 
 #[test]

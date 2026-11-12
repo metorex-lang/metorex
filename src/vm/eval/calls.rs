@@ -95,8 +95,7 @@ impl VirtualMachine {
         }
         // A local holding a proc is not called by `name(...)` when `self`
         // has a method of that name, as `message = message { ... }` needs.
-        if matches!(local.view(), Some(View::Block(_))) && self.self_defines_method(name)
-        {
+        if matches!(local.view(), Some(View::Block(_))) && self.self_defines_method(name) {
             return Ok(CallRoute::OnSelf);
         }
 

@@ -741,7 +741,9 @@ impl Parser<'_> {
             // Check for block parameter (&block). A bare `&` with no name is
             // an anonymous block parameter, forwarded on by a bare `&`.
             if self.match_token(&[TokenKind::Ampersand]) {
-                if self.check(&[TokenKind::Comma, TokenKind::RParen]) || self.anonymous_parameter_ends_its_line() {
+                if self.check(&[TokenKind::Comma, TokenKind::RParen])
+                    || self.anonymous_parameter_ends_its_line()
+                {
                     crate::parser::push_tight(
                         &mut params,
                         Parameter::block(ANONYMOUS_BLOCK.to_string(), param_pos),

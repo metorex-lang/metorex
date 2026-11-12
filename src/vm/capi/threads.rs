@@ -283,7 +283,10 @@ static HANDED_BACK_READY: std::sync::Condvar = std::sync::Condvar::new();
 /// Make the call a function running without the interpreter handed back, on
 /// the interpreter's thread, which is waiting for that function to return.
 fn run_call_handed_back() {
-    let asked = HANDED_BACK.lock().map(|mut held| held.asked.take()).unwrap_or(None);
+    let asked = HANDED_BACK
+        .lock()
+        .map(|mut held| held.asked.take())
+        .unwrap_or(None);
     let Some((address, argument)) = asked else {
         return;
     };

@@ -34,7 +34,7 @@ struct Buffer {
 
 /// How many NUL bytes end a string in `encoding`: one code unit of it.
 fn terminator_length(string: &StringValue) -> usize {
-    wide_encoding(&string.encoding_name()).map_or(1, |shape| shape.unit())
+    wide_encoding(string.encoding_name()).map_or(1, |shape| shape.unit())
 }
 
 impl Buffer {
@@ -444,7 +444,7 @@ pub extern "C-unwind" fn rb_string_value_cstr(pointer: *mut Value) -> *mut c_cha
     let string = rb_string_value(pointer);
     let held = string_from(string);
     let bytes = binary_bytes(&held);
-    let unit = wide_encoding(&held.encoding_name()).map_or(1, |shape| shape.unit());
+    let unit = wide_encoding(held.encoding_name()).map_or(1, |shape| shape.unit());
     if bytes
         .chunks(unit)
         .any(|chunk| chunk.iter().all(|byte| *byte == 0))
@@ -520,7 +520,7 @@ pub extern "C-unwind" fn rb_str_replace(destination: Value, source: Value) -> Va
 pub extern "C-unwind" fn rb_metorex_adopt_encoding(string: Value, source: Value) {
     let made = string_from(string);
     let named = string_from(source).encoding_name();
-    if matches!(named, "ASCII-8BIT" | "BINARY") || wide_encoding(&named).is_some() {
+    if matches!(named, "ASCII-8BIT" | "BINARY") || wide_encoding(named).is_some() {
         return;
     }
     let bytes = binary_bytes(&made);

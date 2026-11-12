@@ -72,10 +72,10 @@ impl VirtualMachine {
             ));
         };
         let subject = string_value.as_str().to_string();
-        let mut answer = AnswerText::new(&string_value.encoding_name());
+        let mut answer = AnswerText::new(string_value.encoding_name());
         let read = crate::vm::native_methods::regexp_methods::read_subject(
             &subject,
-            &string_value.encoding_name(),
+            string_value.encoding_name(),
         );
         let mut cursor = 0usize;
         let mut last: Option<usize> = None;
@@ -97,7 +97,7 @@ impl VirtualMachine {
             }
             answer.add_held(
                 &subject[cursor..whole.start()],
-                &string_value.encoding_name(),
+                string_value.encoding_name(),
                 string_value.holds_bytes(),
                 position,
             )?;
@@ -131,7 +131,7 @@ impl VirtualMachine {
                 let next = read.next_start(whole.end());
                 answer.add_held(
                     &subject[whole.end()..next],
-                    &string_value.encoding_name(),
+                    string_value.encoding_name(),
                     string_value.holds_bytes(),
                     position,
                 )?;
@@ -153,7 +153,7 @@ impl VirtualMachine {
         let tail = subject[cursor.min(subject.len())..].to_string();
         answer.add_held(
             &tail,
-            &string_value.encoding_name(),
+            string_value.encoding_name(),
             string_value.holds_bytes(),
             position,
         )?;
@@ -189,7 +189,7 @@ impl VirtualMachine {
         // An encoding that spells ASCII over several bytes has no newline to
         // look for, so the string is one line whatever the separator says.
         let whole_only = named.starts_with("UTF-16") || named.starts_with("UTF-32");
-        if !whole_only && dummy_encoding(&named) {
+        if !whole_only && dummy_encoding(named) {
             return Err(crate::vm::errors::simple_exception(
                 "Encoding::ConverterNotFoundError",
                 &format!("code converter not found ({} to UTF-8)", named),
@@ -340,7 +340,11 @@ impl VirtualMachine {
         }
         let written = self.string_needle("sub", held, position)?;
         let filled = fill_replacement(&written.as_str(), subject, captured);
-        Ok((filled, written.encoding_name().to_string(), written.holds_bytes()))
+        Ok((
+            filled,
+            written.encoding_name().to_string(),
+            written.holds_bytes(),
+        ))
     }
 
     /// The text a value stands for and the encoding it is written in, taking

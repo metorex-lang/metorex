@@ -1146,10 +1146,7 @@ fn methods_from_blocks_bind_keyword_defaults() {
 #[test]
 fn test_methods_alias_unary_operators_execution() {
     let output = run_example("methods/alias_unary_operators.rb");
-    assert_eq!(
-        output,
-        "\"-120\"\n\"45\"\n:flipped\n:flipped\n:-@\n:~\n"
-    );
+    assert_eq!(output, "\"-120\"\n\"45\"\n:flipped\n:flipped\n:-@\n:~\n");
 }
 
 #[test]
@@ -1221,7 +1218,10 @@ fn test_public_new_on_a_singleton_class_records_nothing() {
 #[test]
 fn test_singleton_methods_on_collections_answer_before_natives() {
     let output = run_example("methods/singleton_methods_on_collections.rb");
-    assert_eq!(output, ":stubbed\n:stubbed_reject\n:stubbed\n:argv_stub\n1\ntrue\n2\n");
+    assert_eq!(
+        output,
+        ":stubbed\n:stubbed_reject\n:stubbed\n:argv_stub\n1\ntrue\n2\n"
+    );
 }
 
 #[test]

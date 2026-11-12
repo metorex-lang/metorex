@@ -390,7 +390,8 @@ impl<'a> Lexer<'a> {
                                 Some(inner @ ('"' | '\'' | '`')) if opens_a_string(&expr) => {
                                     self.copy_quoted_in_interpolation(inner, &mut expr)?;
                                 }
-                                Some('%') if self.copy_percent_literal_in_interpolation(&mut expr)? => {}
+                                Some('%')
+                                    if self.copy_percent_literal_in_interpolation(&mut expr)? => {}
                                 Some('<') if self.copy_heredoc_in_interpolation(&mut expr) => {}
                                 Some('/') if opens_a_regexp(&expr, &self.peek_several(2)) => {
                                     self.copy_quoted_in_interpolation('/', &mut expr)?;
@@ -505,7 +506,9 @@ fn opens_a_regexp(copied: &str, slash_and_next: &[char]) -> bool {
         Some(last) if "({[,=|&!;~<>?:+-*%^".contains(last) => true,
         Some(_) => {
             before.len() < copied.len()
-                && !slash_and_next.get(1).is_some_and(|next| next.is_whitespace() || *next == '=')
+                && !slash_and_next
+                    .get(1)
+                    .is_some_and(|next| next.is_whitespace() || *next == '=')
         }
     }
 }
@@ -516,14 +519,21 @@ impl<'a> Lexer<'a> {
     /// character is copied with its backslash, and a `#{` in any but a
     /// single-quoted string copies the expression it opens, braces and
     /// strings and all.
-    fn copy_quoted_in_interpolation(&mut self, quote: char, expr: &mut String) -> Result<(), String> {
+    fn copy_quoted_in_interpolation(
+        &mut self,
+        quote: char,
+        expr: &mut String,
+    ) -> Result<(), String> {
         let interpolates = quote != '\'';
         expr.push(quote);
         self.advance();
         loop {
             match self.peek() {
                 None => {
-                    return Err(format!("Unterminated string starting at line {}", self.line));
+                    return Err(format!(
+                        "Unterminated string starting at line {}",
+                        self.line
+                    ));
                 }
                 Some('\\') => {
                     expr.push('\\');
@@ -564,7 +574,9 @@ impl<'a> Lexer<'a> {
         }
         let value_starts_here = match expr.trim_end().chars().last() {
             None => true,
-            Some(last) => !(last.is_alphanumeric() || matches!(last, '_' | ')' | ']' | '}' | '"' | '\'')),
+            Some(last) => {
+                !(last.is_alphanumeric() || matches!(last, '_' | ')' | ']' | '}' | '"' | '\''))
+            }
         };
         if !value_starts_here {
             return false;
@@ -578,14 +590,22 @@ impl<'a> Lexer<'a> {
         );
         self.advance();
         self.advance();
-        let literal = self.try_read_heredoc().and_then(|read| double_quoted_literal(&read));
+        let literal = self
+            .try_read_heredoc()
+            .and_then(|read| double_quoted_literal(&read));
         match literal {
             Some(literal) => {
                 expr.push_str(&literal);
                 true
             }
             None => {
-                (self.chars, self.prepend, self.line, self.column, self.offset) = saved;
+                (
+                    self.chars,
+                    self.prepend,
+                    self.line,
+                    self.column,
+                    self.offset,
+                ) = saved;
                 false
             }
         }
@@ -599,9 +619,12 @@ impl<'a> Lexer<'a> {
     fn copy_percent_literal_in_interpolation(&mut self, expr: &mut String) -> Result<bool, String> {
         let ahead = self.peek_several(3);
         let (prefix, opening) = match ahead.as_slice() {
-            ['%', kind @ ('q' | 'Q' | 'w' | 'W' | 'i' | 'I' | 's' | 'r' | 'x'), opening, ..]
-                if !opening.is_alphanumeric() && !opening.is_whitespace() =>
-            {
+            [
+                '%',
+                kind @ ('q' | 'Q' | 'w' | 'W' | 'i' | 'I' | 's' | 'r' | 'x'),
+                opening,
+                ..,
+            ] if !opening.is_alphanumeric() && !opening.is_whitespace() => {
                 (format!("%{kind}"), *opening)
             }
             ['%', opening @ ('{' | '(' | '[' | '<' | '|' | '!'), ..] => ("%".to_string(), *opening),
@@ -609,7 +632,9 @@ impl<'a> Lexer<'a> {
         };
         let value_starts_here = match expr.trim_end().chars().last() {
             None => true,
-            Some(last) => !(last.is_alphanumeric() || matches!(last, '_' | ')' | ']' | '}' | '"' | '\'')),
+            Some(last) => {
+                !(last.is_alphanumeric() || matches!(last, '_' | ')' | ']' | '}' | '"' | '\''))
+            }
         };
         if !value_starts_here {
             return Ok(false);
@@ -629,7 +654,12 @@ impl<'a> Lexer<'a> {
         let mut depth = 1;
         loop {
             match self.advance() {
-                None => return Err(format!("Unterminated string starting at line {}", self.line)),
+                None => {
+                    return Err(format!(
+                        "Unterminated string starting at line {}",
+                        self.line
+                    ));
+                }
                 Some('\\') => {
                     expr.push('\\');
                     if let Some(escaped) = self.advance() {
@@ -749,7 +779,10 @@ impl<'a> Lexer<'a> {
             points.push(digits);
         }
         for point in points {
-            match u32::from_str_radix(&point, 16).ok().and_then(char::from_u32) {
+            match u32::from_str_radix(&point, 16)
+                .ok()
+                .and_then(char::from_u32)
+            {
                 Some(letter) => text.push(letter),
                 None => {
                     text.push('\\');

@@ -185,10 +185,10 @@ impl<'a> Matcher<'a> {
                 crate::regexp::node::Beginnings::Anywhere => at + 1,
                 crate::regexp::node::Beginnings::AtSearchStart => return None,
                 crate::regexp::node::Beginnings::AtLineStarts => {
-                    match self.letters[at..].iter().position(|letter| *letter == '\n') {
-                        Some(offset) => at + offset + 1,
-                        None => return None,
-                    }
+                    let offset = self.letters[at..]
+                        .iter()
+                        .position(|letter| *letter == '\n')?;
+                    at + offset + 1
                 }
             };
         }
