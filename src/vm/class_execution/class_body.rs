@@ -318,10 +318,7 @@ impl VirtualMachine {
                 if let Expression::Identifier {
                     name: const_name, ..
                 } = &**target
-                    && const_name
-                        .chars()
-                        .next()
-                        .is_some_and(|c| c.is_ascii_uppercase()) =>
+                    && crate::class::names_a_constant(const_name) =>
             {
                 // Constant assignment in class body (e.g., PI = 3.14159).
                 // Lowercase identifiers fall through to the `_` arm and are
@@ -739,8 +736,8 @@ impl VirtualMachine {
         crate::vm::statement::name_constant_value(class, const_name, &const_value);
         class.set_class_var(const_name, const_value);
         let assign_file = self
-            .reported_current_file()
-            .map(|p| p.display().to_string())
+            .frames_file()
+            .map(|file| file.to_string())
             .unwrap_or_default();
         class.set_const_location(const_name, assign_file, assign_pos.line as i64);
         self.trigger_const_added_hook(Object::Class(Rc::clone(class)), const_name, assign_pos)

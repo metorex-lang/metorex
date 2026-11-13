@@ -1,0 +1,11 @@
+# The gems thread_safe's specs load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "thread_safe", path: "../../../../gems/thread_safe"
+gem "rspec"
+gem "simplecov"
+gem "coveralls", "~> 0.8.23"
+
+shipped "logger", "json"

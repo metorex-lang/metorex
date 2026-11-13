@@ -2907,3 +2907,31 @@ fn racc_parses_with_its_c_core_and_reports_a_parse_error() {
         "\"c\"\n14\n18\n\"parse error on value \\\"*\\\" (\\\"*\\\")\"\n"
     );
 }
+
+#[test]
+fn test_method_objects_for_print_write_to_the_current_stdout() {
+    let output = run_example("io/method_objects_for_print_write_to_the_current_stdout.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[Kernel, -1, :print]\n",
+            "to the terminal\n",
+            "\"printed put\\n:shown\\n1\"\n",
+        )
+    );
+}
+
+#[test]
+fn test_index_assignment_through_a_delegator_reaches_method_missing() {
+    let output =
+        run_example("stdlib_libraries/delegator_method_missing_super_handles_index_assignment.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"2\"\n",
+            "2\n",
+            "{1 => \"one\", 2 => \"2\"}\n",
+            "[1, nil, nil, 4]\n",
+        )
+    );
+}

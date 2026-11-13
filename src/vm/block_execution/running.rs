@@ -413,6 +413,10 @@ impl VirtualMachine {
         self.enter_block_nesting(block.captured_nesting.clone());
         let carries_refinements = self.enter_block_refinements(block);
         self.running_block_breaks.push(running_break_flag(block));
+        // A block opened in this body belongs to the method this one was
+        // written in, though a native iterator handed it on with `&block`
+        // from another method is what runs it.
+        let saved_lexical_home = self.lexical_home_frame.replace(block.home_frame);
         let result = match self.enter_block_body(block) {
             Err(error) => Err(error),
             Ok((block_position, declared)) => {
@@ -486,6 +490,7 @@ impl VirtualMachine {
                 }
             }
         };
+        self.lexical_home_frame = saved_lexical_home;
         self.running_block_breaks.pop();
         self.leave_block_nesting();
         self.leave_block_refinements(carries_refinements);

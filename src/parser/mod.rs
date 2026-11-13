@@ -347,7 +347,7 @@ impl<'source> Parser<'source> {
                     && names.contains(name)
             });
             if names_a_method
-                || name.starts_with(|first: char| first.is_ascii_uppercase())
+                || name.starts_with(char::is_uppercase)
                 || labels_an_argument
                 || a_nested_parameter
                 || own.contains(name)

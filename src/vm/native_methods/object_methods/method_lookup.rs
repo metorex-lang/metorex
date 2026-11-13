@@ -191,6 +191,26 @@ impl VirtualMachine {
                     stub.receiver = Some(Box::new(receiver.clone()));
                     return Ok(Some(Object::Method(std::rc::Rc::new(stub))));
                 }
+                // A Kernel function that writes output, such as `print`, is
+                // owned by Kernel, and the stub for it runs the function when
+                // called, writing to whatever `$stdout` holds then.
+                if kernel_owns_it
+                    && !public_only
+                    && matches!(
+                        name_str.as_str(),
+                        "print" | "puts" | "p" | "pp" | "printf" | "warn"
+                    )
+                {
+                    let mut stub = crate::object::Method::with_owner(
+                        name_str.clone(),
+                        vec!["args".to_string()],
+                        vec![],
+                        "Kernel".to_string(),
+                    );
+                    stub.signature.variadic_param = Some((0, "args".to_string()));
+                    stub.receiver = Some(Box::new(receiver.clone()));
+                    return Ok(Some(Object::Method(std::rc::Rc::new(stub))));
+                }
                 // A method the receiver's own class implements natively, such
                 // as an operator on a number, is handed out as a stub bound to
                 // the receiver. `invoke_method` runs the native one.

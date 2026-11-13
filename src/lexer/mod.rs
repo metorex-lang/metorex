@@ -311,6 +311,31 @@ impl<'a> Iterator for Lexer<'a> {
 /// Whether a magic comment on one of the first two lines says the source is
 /// written in bytes. Ruby reads such a file as bytes, so what a numeric
 /// escape names is a byte rather than part of a character.
+/// The tokens of source counted from line one, renumbered so the first line
+/// is `start_line`, which Ruby lets an `eval` name as zero or below. Lines that
+/// fall below one read as line zero.
+pub fn tokens_from_line(tokens: &mut [Token], start_line: i64) {
+    let shift = start_line - 1;
+    if shift == 0 {
+        return;
+    }
+    let moved = |line: i64| (line + shift).max(0);
+    for token in tokens {
+        token.position.line = moved(i64::from(token.position.line)) as u32;
+        if let TokenKind::InterpolatedString(parts) | TokenKind::CommandString(parts) =
+            &mut token.kind
+        {
+            for part in parts {
+                if let InterpolationPart::Expression(_, line) = part
+                    && *line > 0
+                {
+                    *line = moved(*line as i64) as usize;
+                }
+            }
+        }
+    }
+}
+
 /// Whether the source says its string literals are frozen, which the magic
 /// comment `# frozen_string_literal: true` asks for.
 pub(crate) fn freezes_string_literals(source: &str) -> bool {
@@ -322,15 +347,30 @@ pub(crate) fn freezes_string_literals(source: &str) -> bool {
         if !trimmed.starts_with('#') {
             break;
         }
-        let lowered = trimmed.to_ascii_lowercase();
-        let Some(at) = lowered.find("frozen_string_literal") else {
+        let Some(value) = frozen_string_literal_setting(trimmed) else {
             continue;
         };
-        let named = lowered[at + "frozen_string_literal".len()..].trim_start();
-        let named = named.strip_prefix(':').unwrap_or(named).trim_start();
-        return named.starts_with("true");
+        return value.starts_with("true");
     }
     false
+}
+
+/// The value a comment line sets `frozen_string_literal` to, the text after
+/// the name and its colon. The name may be spelled with dashes for
+/// underscores, and a mention of the name with no colon after it sets
+/// nothing.
+fn frozen_string_literal_setting(comment: &str) -> Option<String> {
+    let lowered = comment.to_ascii_lowercase().replace('-', "_");
+    let name = "frozen_string_literal";
+    let mut from = 0;
+    while let Some(found) = lowered[from..].find(name) {
+        let after = &lowered[from + found + name.len()..];
+        if let Some(value) = after.trim_start().strip_prefix(':') {
+            return Some(value.trim_start().to_string());
+        }
+        from += found + name.len();
+    }
+    None
 }
 
 /// What a literal is in a source that says nothing about frozen string
@@ -474,10 +514,7 @@ fn names_string_literal_setting(source: &str) -> bool {
         if !trimmed.starts_with('#') {
             break;
         }
-        if trimmed
-            .to_ascii_lowercase()
-            .contains("frozen_string_literal")
-        {
+        if frozen_string_literal_setting(trimmed).is_some() {
             return true;
         }
     }

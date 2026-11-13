@@ -74,7 +74,7 @@ impl Class {
                 let first = key.chars().next();
                 !key.starts_with('@')
                     && !key.starts_with("__")
-                    && !first.is_some_and(|c| c.is_ascii_uppercase())
+                    && !first.is_some_and(char::is_uppercase)
             })
             .cloned()
             .collect()

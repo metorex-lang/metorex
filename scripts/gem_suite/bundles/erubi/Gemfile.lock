@@ -1,0 +1,31 @@
+PATH
+  remote: ../../../../gems/erubi
+  specs:
+    erubi (1.13.1)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    minitest (6.0.0)
+      prism (~> 1.5)
+    minitest-global_expectations (1.0.2)
+      minitest (> 5)
+    prism (1.9.0)
+
+PLATFORMS
+  arm64-darwin-27
+  ruby
+
+DEPENDENCIES
+  erubi!
+  minitest (= 6.0.0)
+  minitest-global_expectations
+
+CHECKSUMS
+  erubi (1.13.1)
+  minitest (6.0.0) sha256=4ca597fc1d735ea18d2b4b98c5fb1d5a6da4a6f35ddf32bd5fa3eded33a453be
+  minitest-global_expectations (1.0.2) sha256=b0fda8574322d099d91196c74245ed07a257dbe61e4b6962ec1a71d0cee957e3
+  prism (1.9.0) sha256=7b530c6a9f92c24300014919c9dcbc055bf4cdf51ec30aed099b06cd6674ef85
+
+BUNDLED WITH
+  4.0.23

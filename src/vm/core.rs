@@ -394,6 +394,12 @@ pub struct VirtualMachine {
     /// "loading thread" view (sees the autoload as cleared) from the
     /// "other thread" view (sees the autoload as still active).
     pub(crate) autoload_loading: Vec<(Rc<crate::class::Class>, String, Object)>,
+    /// The autoloads whose file loaded or raised without defining the name,
+    /// which stay registered though `$"` lists the file, as Ruby keeps them.
+    pub(crate) autoloads_failed: Vec<(Rc<crate::class::Class>, String)>,
+    /// The autoloads `remove_const` dropped while their file was loading,
+    /// which a failed load leaves dropped.
+    pub(crate) autoloads_removed_while_loading: Vec<(Rc<crate::class::Class>, String)>,
     /// Trailing block passed to the current call (e.g., `foo() do |x| ... end`).
     /// Set before invoke_method/invoke_callable; taken at method body entry.
     pub(crate) pending_block: Option<Object>,
@@ -845,6 +851,8 @@ impl VirtualMachine {
             embedded_libraries_loading: Vec::new(),
             reads_lines: false,
             autoload_loading: Vec::new(),
+            autoloads_failed: Vec::new(),
+            autoloads_removed_while_loading: Vec::new(),
             pending_block: None,
             pending_block_from_ampersand: false,
             recording_call_cache: None,

@@ -373,14 +373,18 @@ impl VirtualMachine {
         // A line of 0 is kept, as Kernel#eval keeps it: ActionView compiles a
         // template from line 0, so the `def` it wraps the template in sits on
         // a line no coverage counts, ahead of the template's own lines.
-        let lineno = match arguments.get(2).view() {
-            Some(View::Int(n)) => n.max(0) as usize,
+        self.note_evaluated_file_encoding(&filename, &source_encoding);
+        let named_line = match arguments.get(2).view() {
+            Some(View::Int(n)) => n,
             _ => 1,
         };
+        let lineno = named_line.max(0) as usize;
 
-        let tokens = crate::lexer::Lexer::with_start_line(&code, lineno)
-            .with_source_encoding(Some(source_encoding.clone()))
-            .tokenize();
+        let tokens = crate::vm::native_functions::evaluation::eval_tokens(
+            crate::lexer::Lexer::with_start_line(&code, lineno.max(1))
+                .with_source_encoding(Some(source_encoding.clone())),
+            named_line,
+        );
         let statements = crate::parser::Parser::new(tokens)
             .inside_eval()
             .with_outer_locals(self.visible_local_names())
@@ -480,9 +484,21 @@ impl VirtualMachine {
                 ),
         );
         class_rc.set_current_visibility("public");
+        // Inside a method the code reads constants through the receiver and
+        // then the modules the method was written in, and so does a block or
+        // a `def` written in it.
+        let nests_in_a_method = !self.method_nesting_stack.is_empty();
+        if nests_in_a_method {
+            let mut nesting = vec![Rc::clone(class_rc)];
+            nesting.extend(self.lexical_nesting());
+            self.method_nesting_stack.push(nesting.into());
+        }
         let previous_source_encoding = self.current_source_encoding.replace(source_encoding);
         let result = self.apply_class_body_statements(class_rc, &statements, position);
         self.current_source_encoding = previous_source_encoding;
+        if nests_in_a_method {
+            self.method_nesting_stack.pop();
+        }
         if let Err(error) = &result {
             self.trace_error_leaving_frame(error);
         }

@@ -265,8 +265,8 @@ impl VirtualMachine {
         // eager bind) so the location is available even mid-load.
         // Reopening a class leaves the place it was first defined.
         let class_def_file = self
-            .reported_current_file()
-            .map(|p| p.display().to_string())
+            .frames_file()
+            .map(|file| file.to_string())
             .unwrap_or_default();
         let recorded_on = match parent_scope.as_ref() {
             Some(parent) => Some(Rc::clone(parent)),

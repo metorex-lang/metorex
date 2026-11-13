@@ -143,11 +143,12 @@ impl VirtualMachine {
             _ => 1,
         };
         let lineno = named_lineno.max(0) as usize;
-        let tokens = crate::lexer::Lexer::with_start_line(&code, lineno)
-            .with_source_encoding(Some(
+        let tokens = eval_tokens(
+            crate::lexer::Lexer::with_start_line(&code, lineno.max(1)).with_source_encoding(Some(
                 crate::lexer::named_source_encoding(&code).unwrap_or_else(|| code_encoding.clone()),
-            ))
-            .tokenize();
+            )),
+            named_lineno,
+        );
         // The code is read with the locals of the scope it runs in.
         let outer_locals = match arguments.get(1).view() {
             Some(View::Binding(held)) => held
@@ -760,4 +761,15 @@ impl VirtualMachine {
             position,
         )))
     }
+}
+
+/// The tokens of evaluated source whose first line is `named_line`. The
+/// lexer counts from `named_line` when it is one or more, and from one
+/// otherwise, renumbered down to the line named.
+pub(crate) fn eval_tokens(lexer: crate::lexer::Lexer, named_line: i64) -> Vec<crate::lexer::Token> {
+    let mut tokens = lexer.tokenize();
+    if named_line < 1 {
+        crate::lexer::tokens_from_line(&mut tokens, named_line);
+    }
+    tokens
 }

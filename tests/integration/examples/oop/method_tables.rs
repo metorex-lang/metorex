@@ -199,3 +199,12 @@ fn a_subclass_reaches_a_class_method_its_parents_singleton_class_redefines() {
     let output = run_example("oop/subclass_reaches_parents_redefined_singleton_method.rb");
     assert_eq!(output, "\"Hello\"\n\"Howdy\"\n\"Hello\"\nnil\n");
 }
+
+#[test]
+fn test_a_class_answers_case_equality_with_its_own_method() {
+    let output = run_example("oop/a_class_with_its_own_case_equality.rb");
+    assert_eq!(
+        output,
+        concat!("[true, true, false]\n", "false\n", ":boolean\n",)
+    );
+}

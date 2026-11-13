@@ -29,19 +29,19 @@ p = Person.new("Bob")
 p.instance_variable_get("name")
 "#,
     );
-    assert!(error.contains("`name' is not allowed as an instance variable name"));
+    assert!(error.contains("'name' is not allowed as an instance variable name"));
 }
 
 #[test]
 fn instance_variable_set_without_at_prefix_raises_name_error() {
     let error = run_err(r#"Object.new.instance_variable_set("name", 1)"#);
-    assert!(error.contains("`name' is not allowed as an instance variable name"));
+    assert!(error.contains("'name' is not allowed as an instance variable name"));
 }
 
 #[test]
 fn instance_variable_set_validates_name_before_frozen_receiver() {
     let error = run_err(r#""".instance_variable_set(:name, 1)"#);
-    assert!(error.contains("`name' is not allowed as an instance variable name"));
+    assert!(error.contains("'name' is not allowed as an instance variable name"));
 }
 
 #[test]
@@ -78,25 +78,25 @@ obj.instance_variable_get(:@été)
 #[test]
 fn instance_variable_get_symbol_without_at_prefix_raises_name_error() {
     let error = run_err("Object.new.instance_variable_get(:name)");
-    assert!(error.contains("`name' is not allowed as an instance variable name"));
+    assert!(error.contains("'name' is not allowed as an instance variable name"));
 }
 
 #[test]
 fn instance_variable_get_bare_at_raises_name_error() {
     let error = run_err(r#"Object.new.instance_variable_get("@")"#);
-    assert!(error.contains("`@' is not allowed as an instance variable name"));
+    assert!(error.contains("'@' is not allowed as an instance variable name"));
 }
 
 #[test]
 fn instance_variable_get_digit_start_raises_name_error() {
     let error = run_err(r#"Object.new.instance_variable_get("@0")"#);
-    assert!(error.contains("`@0' is not allowed as an instance variable name"));
+    assert!(error.contains("'@0' is not allowed as an instance variable name"));
 }
 
 #[test]
 fn instance_variable_get_class_variable_name_raises_name_error() {
     let error = run_err(r#"Object.new.instance_variable_get("@@name")"#);
-    assert!(error.contains("`@@name' is not allowed as an instance variable name"));
+    assert!(error.contains("'@@name' is not allowed as an instance variable name"));
 }
 
 #[test]

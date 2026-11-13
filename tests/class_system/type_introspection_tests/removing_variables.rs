@@ -107,7 +107,7 @@ fn remove_instance_variable_raises_for_an_invalid_name() {
     let error = run_err(&format!(
         "{GREETER}\nGreeter.new.remove_instance_variable(:\"@0\")"
     ));
-    assert!(error.contains("`@0' is not allowed as an instance variable name"));
+    assert!(error.contains("'@0' is not allowed as an instance variable name"));
 }
 
 #[test]
@@ -134,7 +134,7 @@ greeter.remove_instance_variable(:@greeting)
 #[test]
 fn remove_instance_variable_validates_the_name_before_the_frozen_check() {
     let error = run_err("nil.remove_instance_variable(:not_a_variable)");
-    assert!(error.contains("`not_a_variable' is not allowed as an instance variable name"));
+    assert!(error.contains("'not_a_variable' is not allowed as an instance variable name"));
 }
 
 #[test]

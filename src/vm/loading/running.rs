@@ -56,13 +56,10 @@ impl VirtualMachine {
         } else {
             false
         };
-        if record && already_in_features {
+        let in_progress = self.loading_anywhere(&canonical_path.to_string_lossy());
+        if record && (already_in_features || in_progress) {
             // A file that asks for itself while it is still running gets
             // nothing back, and a verbose run says so.
-            let in_progress = self
-                .loading_paths
-                .iter()
-                .any(|(held, _)| held == &canonical_path.to_string_lossy());
             if in_progress && matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true)))
             {
                 let message = format!(
@@ -82,13 +79,12 @@ impl VirtualMachine {
             self.loaded_files.remove(&canonical_path);
         }
 
-        // Mark eagerly in both stores BEFORE executing so a self-recursive
-        // require during the file's own body short-circuits.
+        // The internal set is marked before the body runs, while `$"` lists
+        // the file once the body has finished, after the files it required,
+        // as MRI lists them. A require of the file from its own body finds
+        // it in `loading_paths` meanwhile.
         if record {
             self.mark_file_loaded(canonical_path.clone());
-            if let Some(View::Array(arr)) = self.globals().get("\"").view() {
-                arr.borrow_mut().push(Object::string(listed_str.clone()));
-            }
         }
 
         // A symlink keeps the name it was reached through, while everything
@@ -312,6 +308,12 @@ impl VirtualMachine {
                     |held| !matches!(held.view(), View::String(name) if *name.as_str() == *listed_str),
                 );
             }
+        }
+        if record
+            && result.is_ok()
+            && let Some(View::Array(arr)) = self.globals().get("\"").view()
+        {
+            arr.borrow_mut().push(Object::string(listed_str.clone()));
         }
         let value = result.map_err(|e| {
             let rendered = e.to_string();

@@ -55,6 +55,24 @@ impl VirtualMachine {
         }
     }
 
+    /// A constant name argument as text. A String is read without interning
+    /// it, as Ruby's constant methods look the name up without making a
+    /// Symbol of it. Anything else coerces as `coerce_method_name` does.
+    pub(crate) fn coerce_constant_name(
+        &mut self,
+        arg: &Object,
+        caller: &str,
+        position: Position,
+    ) -> Result<String, MetorexError> {
+        match arg.view() {
+            View::String(s) => {
+                self.refuse_text_no_symbol_holds(s, position)?;
+                Ok(name_text(s))
+            }
+            _ => self.coerce_method_name(arg, caller, position),
+        }
+    }
+
     /// Coerce an object into a method-name `String`. Strings and symbols are
     /// taken at face value; for other receivers we invoke `to_str` (matching
     /// Ruby's implicit type coercion). A receiver that lacks `to_str` raises

@@ -7,8 +7,9 @@ use super::utils::position_to_location;
 use crate::ast::{BinaryOp, Expression, Statement, UnaryOp};
 use crate::error::MetorexError;
 use crate::lexer::Position;
-use crate::object::Object;
+use crate::object::{Class, Object};
 use crate::object::{OptionView, View};
+use std::rc::Rc;
 
 // ============================================================================
 // Control Flow Errors
@@ -80,7 +81,7 @@ pub(super) fn undefined_variable_error(
 
 /// A NameError whose `#name` answers the very object the caller handed over,
 /// which is what `instance_variable_get` and `class_variable_get` report.
-pub(super) fn invalid_name_error(
+pub(crate) fn invalid_name_error(
     message: String,
     name: &Object,
     receiver: &Object,
@@ -98,6 +99,36 @@ pub(super) fn invalid_name_error(
         exception,
         location: position_to_location(position),
         message,
+    }
+}
+
+/// The NameError for a constant name that is not one. Its `name` is the
+/// Symbol of that spelling when the program has made one, and the String
+/// otherwise, as Ruby looks the name up without interning it.
+pub(crate) fn wrong_constant_name_error(
+    name: &str,
+    module: &Rc<Class>,
+    position: Position,
+) -> MetorexError {
+    let named = if crate::symbol_registry::contains(name) {
+        Object::symbol(name)
+    } else {
+        Object::string(name)
+    };
+    invalid_name_error(
+        format!("wrong constant name {name}"),
+        &named,
+        &module_object(module),
+        position,
+    )
+}
+
+/// A class or module as the object Ruby code sees.
+pub(crate) fn module_object(module: &Rc<Class>) -> Object {
+    if module.is_module() {
+        Object::Module(Rc::clone(module))
+    } else {
+        Object::Class(Rc::clone(module))
     }
 }
 

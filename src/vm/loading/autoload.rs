@@ -47,6 +47,14 @@ impl VirtualMachine {
                 }
             }
         }
+        // The file part-way through loading on this thread provides the
+        // name for now, and the registration stays until the load ends.
+        if self.file_loading_on_this_thread(&path) {
+            return None;
+        }
+        if self.autoload_failed(class_rc, name) {
+            return Some(path);
+        }
         if self.path_in_loaded_features(&path) {
             class_rc.remove_autoload(name);
             // Only the direct-require path keeps the cleared name in
@@ -91,7 +99,25 @@ impl VirtualMachine {
                 return !same_thread;
             }
         }
-        !self.path_in_loaded_features(&path)
+        self.autoload_failed(class_rc, name) || !self.path_in_loaded_features(&path)
+    }
+
+    /// Whether the load of the autoload of `name` on `class_rc` ended without
+    /// defining it, which leaves the registration in force.
+    fn autoload_failed(&self, class_rc: &Rc<crate::class::Class>, name: &str) -> bool {
+        self.autoloads_failed
+            .iter()
+            .any(|(held, named)| Rc::ptr_eq(held, class_rc) && named == name)
+    }
+
+    /// Stop treating the autoload of `name` on `class_rc` as failed.
+    pub(crate) fn forget_failed_autoload(
+        &mut self,
+        class_rc: &Rc<crate::class::Class>,
+        name: &str,
+    ) {
+        self.autoloads_failed
+            .retain(|(held, named)| !(Rc::ptr_eq(held, class_rc) && named == name));
     }
 
     /// Whether `path` (after canonicalization) is currently listed in
@@ -116,6 +142,11 @@ impl VirtualMachine {
                 None => return false,
             },
         };
+        // A file this thread is part-way through running is provided as far
+        // as its own autoloads go, though `$"` lists it only once it ends.
+        if self.loading_on_this_thread(&canonical) {
+            return true;
+        }
         if let Some(View::Array(arr)) = self.globals().get("\"").view() {
             arr.borrow()
                 .iter()
@@ -123,6 +154,30 @@ impl VirtualMachine {
         } else {
             false
         }
+    }
+
+    /// Whether the running thread is part-way through loading the file an
+    /// autoload names.
+    fn file_loading_on_this_thread(&mut self, path: &str) -> bool {
+        match std::path::Path::new(path).canonicalize() {
+            Ok(canonical) => self.loading_on_this_thread(&canonical.to_string_lossy()),
+            Err(_) => false,
+        }
+    }
+
+    /// Whether the running thread is part-way through loading the file at
+    /// `canonical`.
+    pub(crate) fn loading_on_this_thread(&mut self, canonical: &str) -> bool {
+        let here = self.running_thread();
+        self.loading_paths
+            .iter()
+            .any(|(held, thread)| held == canonical && on_the_same_thread(thread, &here))
+    }
+
+    /// Whether any thread is part-way through loading the file at
+    /// `canonical`.
+    pub(crate) fn loading_anywhere(&self, canonical: &str) -> bool {
+        self.loading_paths.iter().any(|(held, _)| held == canonical)
     }
 
     /// The object a wrapped load runs against: an Object of its own that
@@ -434,9 +489,26 @@ impl VirtualMachine {
             .retain(|(cls, n, _)| !(Rc::ptr_eq(cls, class_rc) && n == name));
         self.def_scope_stack = saved_def_scope;
         self.body_contexts = saved_bodies;
+        let removed_while_loading = self
+            .autoloads_removed_while_loading
+            .iter()
+            .any(|(held, named)| Rc::ptr_eq(held, class_rc) && named == name);
+        self.autoloads_removed_while_loading
+            .retain(|(held, named)| !(Rc::ptr_eq(held, class_rc) && named == name));
         if let Err(err) = load_result {
-            class_rc.set_autoload(name, &path);
-            if let Ok(canonical) = p.canonicalize() {
+            // A failed load leaves the autoload registered, unless the
+            // program removed it while the file loaded. A file that finished
+            // loading before something around the require raised stays
+            // listed as loaded, and the registration stays in force anyway.
+            if !removed_while_loading {
+                class_rc.set_autoload(name, &path);
+                self.forget_failed_autoload(class_rc, name);
+                self.autoloads_failed
+                    .push((Rc::clone(class_rc), name.to_string()));
+            }
+            if let Ok(canonical) = p.canonicalize()
+                && !self.path_in_loaded_features(&canonical.to_string_lossy())
+            {
                 self.unmark_file_loaded(&canonical);
             }
             // Translate "file missing" runtime errors into a Ruby-level

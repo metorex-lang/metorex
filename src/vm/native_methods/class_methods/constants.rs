@@ -30,7 +30,7 @@ impl VirtualMachine {
                     ));
                 }
                 let const_path =
-                    self.coerce_method_name(&arguments[0], "const_defined?", position)?;
+                    self.coerce_constant_name(&arguments[0], "const_defined?", position)?;
                 let inherit = match arguments.get(1) {
                     None => true,
                     Some(v) => crate::vm::utils::is_truthy(v),
@@ -47,13 +47,9 @@ impl VirtualMachine {
                 let segments: Vec<&str> = rest.split("::").collect();
                 for seg in &segments {
                     if !is_valid_constant_name(seg) {
-                        let msg = format!("wrong constant name {}", const_path);
-                        let exc = Object::exception("NameError", msg.clone());
-                        return Err(MetorexError::UncaughtException {
-                            exception: exc,
-                            location: position_to_location(position),
-                            message: msg,
-                        });
+                        return Err(crate::vm::errors::wrong_constant_name_error(
+                            seg, class_rc, position,
+                        ));
                     }
                 }
                 for (i, seg) in segments.iter().enumerate() {
@@ -89,19 +85,13 @@ impl VirtualMachine {
                 }
                 let was_symbol = matches!(arguments[0].view(), View::Symbol(_));
                 let const_path =
-                    self.coerce_method_name(&arguments[0], "const_source_location", position)?;
+                    self.coerce_constant_name(&arguments[0], "const_source_location", position)?;
                 let inherit = match arguments.get(1) {
                     None => true,
                     Some(v) => crate::vm::utils::is_truthy(v),
                 };
                 let wrong_name = |path: &str| {
-                    let msg = format!("wrong constant name {}", path);
-                    let exc = Object::exception("NameError", msg.clone());
-                    MetorexError::UncaughtException {
-                        exception: exc,
-                        location: position_to_location(position),
-                        message: msg,
-                    }
+                    crate::vm::errors::wrong_constant_name_error(path, class_rc, position)
                 };
                 // A Symbol must be a simple name — scope separators raise.
                 if was_symbol && const_path.contains("::") {
@@ -119,7 +109,7 @@ impl VirtualMachine {
                 let segments: Vec<&str> = rest.split("::").collect();
                 for seg in &segments {
                     if !is_valid_constant_name(seg) {
-                        return Err(wrong_name(&const_path));
+                        return Err(wrong_name(seg));
                     }
                 }
                 let loc_array = |loc: Option<(String, i64)>| {
@@ -218,19 +208,13 @@ impl VirtualMachine {
                     ));
                 }
                 let was_symbol = matches!(arguments[0].view(), View::Symbol(_));
-                let const_path = self.coerce_method_name(&arguments[0], "const_get", position)?;
+                let const_path = self.coerce_constant_name(&arguments[0], "const_get", position)?;
                 let inherit = match arguments.get(1) {
                     None => true,
                     Some(v) => crate::vm::utils::is_truthy(v),
                 };
                 let wrong_name = |path: &str| {
-                    let msg = format!("wrong constant name {}", path);
-                    let exc = Object::exception("NameError", msg.clone());
-                    MetorexError::UncaughtException {
-                        exception: exc,
-                        location: position_to_location(position),
-                        message: msg,
-                    }
+                    crate::vm::errors::wrong_constant_name_error(path, class_rc, position)
                 };
                 if was_symbol && const_path.contains("::") {
                     return Err(wrong_name(&const_path));
@@ -247,7 +231,7 @@ impl VirtualMachine {
                 let segments: Vec<&str> = rest.split("::").collect();
                 for seg in &segments {
                     if !is_valid_constant_name(seg) {
-                        return Err(wrong_name(&const_path));
+                        return Err(wrong_name(seg));
                     }
                 }
                 let mut value = Object::Nil;
@@ -396,13 +380,12 @@ impl VirtualMachine {
                 let const_name = self.coerce_method_name(&arguments[0], "const_set", position)?;
                 self.refuse_unshareable_constant_assignment(&arguments[1], position)?;
                 if !is_valid_constant_name(&const_name) {
-                    let msg = format!("wrong constant name {}", const_name);
-                    let exc = Object::exception("NameError", msg.clone());
-                    return Err(MetorexError::UncaughtException {
-                        exception: exc,
-                        location: position_to_location(position),
-                        message: msg,
-                    });
+                    return Err(crate::vm::errors::invalid_name_error(
+                        format!("wrong constant name {const_name}"),
+                        &arguments[0],
+                        &crate::vm::errors::module_object(class_rc),
+                        position,
+                    ));
                 }
                 self.assign_constant(class_rc, &const_name, arguments[1].clone(), position)?;
                 return Ok(Answered(arguments[1].clone()));
@@ -434,8 +417,8 @@ impl VirtualMachine {
         class_rc.clear_unrealized_autoload(const_name);
         class_rc.set_class_var(const_name, value.clone());
         let assign_file = self
-            .reported_current_file()
-            .map(|p| p.display().to_string())
+            .frames_file()
+            .map(|file| file.to_string())
             .unwrap_or_default();
         class_rc.set_const_location(const_name, assign_file, position.line as i64);
         // Object's constants are top-level constants, published to globals

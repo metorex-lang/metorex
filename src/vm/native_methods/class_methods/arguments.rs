@@ -233,7 +233,7 @@ impl VirtualMachine {
         {
             return Ok(rest.to_string());
         }
-        let msg = format!("`{}' is not allowed as a class variable name", name);
+        let msg = format!("'{name}' is not allowed as a class variable name");
         Err(crate::vm::errors::invalid_name_error(
             msg, arg, receiver, position,
         ))
@@ -256,7 +256,7 @@ impl VirtualMachine {
         {
             return Ok(rest.to_string());
         }
-        let msg = format!("`{}' is not allowed as an instance variable name", name);
+        let msg = format!("'{name}' is not allowed as an instance variable name");
         Err(crate::vm::errors::invalid_name_error(
             msg, arg, receiver, position,
         ))

@@ -35,6 +35,11 @@ impl VirtualMachine {
             let held = self.send_pattern_method(named, "===", vec![value.clone()], position)?;
             return Ok(held.is_truthy());
         }
+        if let Some((class, method)) = self.class_level_operator(named, "===") {
+            let held =
+                self.invoke_method(class, method, named.clone(), vec![value.clone()], position)?;
+            return Ok(held.is_truthy());
+        }
         let matched = self.evaluate_binary_operation(
             &crate::ast::BinaryOp::CaseEqual,
             named.clone(),

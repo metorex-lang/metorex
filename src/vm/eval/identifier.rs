@@ -234,9 +234,7 @@ impl VirtualMachine {
         // A class that does not descend from Object never reaches top-level
         // constants: Ruby finds them among Object's own, which such a class
         // does not inherit. Only the lexical chain answers there.
-        if name.chars().next().is_some_and(|c| c.is_ascii_uppercase())
-            && !self.lexical_scope_reaches_top_level()
-        {
+        if crate::class::names_a_constant(name) && !self.lexical_scope_reaches_top_level() {
             // A method's body reads the scopes open where it was written,
             // which the class bodies running now need not include.
             if !self.autoload_pending_in_lexical_scope(name)
@@ -289,7 +287,7 @@ impl VirtualMachine {
         // which is how a class's own NameError hides Ruby's.
         // A scope with an autoload registered for the name holds it there,
         // and loading it is left to the lookup further on.
-        if name.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+        if crate::class::names_a_constant(name)
             && !self.autoload_pending_in_lexical_scope(name)
             && let Some(val) = self.constant_before_object(name)
         {
@@ -298,7 +296,7 @@ impl VirtualMachine {
         }
         // A scope open where the code was written that autoloads the name
         // holds it ahead of a top-level constant of the same name.
-        if name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
+        if crate::class::names_a_constant(name) {
             for scope in self.lexical_nesting() {
                 if scope.get_class_var(name).is_none()
                     && scope.lookup_autoload(name).is_some()
@@ -380,7 +378,7 @@ impl VirtualMachine {
         // Constants (uppercase) resolve from globals, unless a scope open
         // where the code was written, or an ancestor of the innermost one,
         // holds one of the same name ahead of Object.
-        if name.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+        if crate::class::names_a_constant(name)
             && let Some(val) = self.globals().constant(name)
         {
             CONSTANT_ANSWER.set(Some(ConstantAnswer::AfterLocals));
@@ -395,7 +393,7 @@ impl VirtualMachine {
         // constant at top level (i.e. on globals/Object) rather than on the
         // module that owned the autoload entry, so re-check globals after
         // firing.
-        if name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
+        if crate::class::names_a_constant(name) {
             let scopes: Vec<_> = self.def_scope_stack.iter().rev().cloned().collect();
             for enclosing in scopes {
                 if let Some(val) = self.try_autoload_constant(&enclosing, name)? {
@@ -473,7 +471,7 @@ impl VirtualMachine {
         // class variable of the enclosing class (or the receiver's class),
         // walking the superclass chain — Ruby makes constants inherited from
         // superclasses visible at the child level too.
-        if name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
+        if crate::class::names_a_constant(name) {
             // Walk the lexical def-scope stack (outer class/module bodies) so a
             // nested class/module can reference sibling constants defined in an
             // enclosing module without qualifying them, and so a module can

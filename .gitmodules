@@ -184,3 +184,21 @@
 [submodule "gems/rubocop"]
 	path = gems/rubocop
 	url = https://github.com/rubocop/rubocop
+[submodule "gems/tilt"]
+	path = gems/tilt
+	url = https://github.com/jeremyevans/tilt
+[submodule "gems/erubi"]
+	path = gems/erubi
+	url = https://github.com/jeremyevans/erubi
+[submodule "gems/zeitwerk"]
+	path = gems/zeitwerk
+	url = https://github.com/fxn/zeitwerk
+[submodule "gems/sprockets"]
+	path = gems/sprockets
+	url = https://github.com/rails/sprockets
+[submodule "gems/concurrent-ruby"]
+	path = gems/concurrent-ruby
+	url = https://github.com/ruby-concurrency/concurrent-ruby
+[submodule "gems/thread_safe"]
+	path = gems/thread_safe
+	url = https://github.com/ruby-concurrency/thread_safe

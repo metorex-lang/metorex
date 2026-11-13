@@ -109,8 +109,7 @@ impl VirtualMachine {
         let value = self.eval_identifier(name, position);
         self.program_call_pending = pending;
         let value = value?;
-        if name.starts_with(|first: char| first.is_ascii_uppercase()) && self.in_a_non_main_ractor()
-        {
+        if crate::class::names_a_constant(name) && self.in_a_non_main_ractor() {
             let (owner, found_where_written) = self.constant_owner_name(name);
             self.refuse_unshareable_constant(
                 &format!("{owner}::{name}"),

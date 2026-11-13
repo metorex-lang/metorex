@@ -785,3 +785,27 @@ fn a_brace_after_a_semicolon_opens_a_hash() {
     let output = run_example("syntax/brace_after_a_semicolon.rb");
     assert_eq!(output, "[\"retries\", 3]\n[\"ready\", true]\n[0, 1]\n");
 }
+
+#[test]
+fn test_a_heredoc_may_be_named_with_digits() {
+    let output = run_example("syntax/heredoc_named_with_digits.rb");
+    assert_eq!(
+        output,
+        concat!("[\"first line\", \"second line\\n\"]\n", "\"  THIRD\\n\"\n",)
+    );
+}
+
+#[test]
+fn test_character_literals_take_unicode_escapes() {
+    let output = run_example("syntax/character_literals_with_unicode_escapes.rb");
+    assert_eq!(
+        output,
+        "[\"\\u0018\", \"\\u007F\", \"A\", \"\\t\", \"a\"]\n"
+    );
+}
+
+#[test]
+fn test_a_binary_operator_continues_onto_an_indexed_constant() {
+    let output = run_example("syntax/binary_operator_continued_onto_an_indexed_constant.rb");
+    assert_eq!(output, "28\n");
+}

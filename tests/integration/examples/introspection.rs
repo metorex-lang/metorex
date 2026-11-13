@@ -126,10 +126,10 @@ fn test_introspection_block_given_context_execution() {
 fn test_introspection_instance_variable_get_names() {
     let expected = concat!(
         "hello\nhello\nhello\nnil\nnil\n",
-        "NameError: `@' is not allowed as an instance variable name\n",
-        "NameError: `@0' is not allowed as an instance variable name\n",
-        "NameError: `@@greeting' is not allowed as an instance variable name\n",
-        "NameError: `greeting' is not allowed as an instance variable name\n",
+        "NameError: '@' is not allowed as an instance variable name\n",
+        "NameError: '@0' is not allowed as an instance variable name\n",
+        "NameError: '@@greeting' is not allowed as an instance variable name\n",
+        "NameError: 'greeting' is not allowed as an instance variable name\n",
         "TypeError: no implicit conversion of Integer into String\n"
     );
     let output = run_example("introspection/instance_variable_get_names.rb");
@@ -140,10 +140,10 @@ fn test_introspection_instance_variable_get_names() {
 fn test_introspection_instance_variable_get_names_no_parens() {
     let expected = concat!(
         "hello\nhello\nhello\nnil\nnil\n",
-        "NameError: `@' is not allowed as an instance variable name\n",
-        "NameError: `@0' is not allowed as an instance variable name\n",
-        "NameError: `@@greeting' is not allowed as an instance variable name\n",
-        "NameError: `greeting' is not allowed as an instance variable name\n",
+        "NameError: '@' is not allowed as an instance variable name\n",
+        "NameError: '@0' is not allowed as an instance variable name\n",
+        "NameError: '@@greeting' is not allowed as an instance variable name\n",
+        "NameError: 'greeting' is not allowed as an instance variable name\n",
         "TypeError: no implicit conversion of Integer into String\n"
     );
     let output = run_example("introspection/instance_variable_get_names_no_parens.rb");
@@ -154,11 +154,11 @@ fn test_introspection_instance_variable_get_names_no_parens() {
 fn test_introspection_instance_variable_set_names() {
     let expected = concat!(
         "hi\nhey\nhowdy\nhowdy\n42\n",
-        "NameError: `@' is not allowed as an instance variable name\n",
-        "NameError: `@0' is not allowed as an instance variable name\n",
-        "NameError: `@@greeting' is not allowed as an instance variable name\n",
-        "NameError: `greeting' is not allowed as an instance variable name\n",
-        "NameError: `greeting' is not allowed as an instance variable name\n",
+        "NameError: '@' is not allowed as an instance variable name\n",
+        "NameError: '@0' is not allowed as an instance variable name\n",
+        "NameError: '@@greeting' is not allowed as an instance variable name\n",
+        "NameError: 'greeting' is not allowed as an instance variable name\n",
+        "NameError: 'greeting' is not allowed as an instance variable name\n",
         "FrozenError: can't modify frozen NilClass: nil\n",
         "TypeError: no implicit conversion of Integer into String\n"
     );
@@ -170,11 +170,11 @@ fn test_introspection_instance_variable_set_names() {
 fn test_introspection_instance_variable_set_names_no_parens() {
     let expected = concat!(
         "hi\nhey\nhowdy\nhowdy\n42\n",
-        "NameError: `@' is not allowed as an instance variable name\n",
-        "NameError: `@0' is not allowed as an instance variable name\n",
-        "NameError: `@@greeting' is not allowed as an instance variable name\n",
-        "NameError: `greeting' is not allowed as an instance variable name\n",
-        "NameError: `greeting' is not allowed as an instance variable name\n",
+        "NameError: '@' is not allowed as an instance variable name\n",
+        "NameError: '@0' is not allowed as an instance variable name\n",
+        "NameError: '@@greeting' is not allowed as an instance variable name\n",
+        "NameError: 'greeting' is not allowed as an instance variable name\n",
+        "NameError: 'greeting' is not allowed as an instance variable name\n",
         "FrozenError: can't modify frozen NilClass: nil\n",
         "TypeError: no implicit conversion of Integer into String\n"
     );
@@ -443,7 +443,7 @@ fn test_introspection_remove_instance_variable() {
         "[:@greeting, :@name]\n\"hello\"\n[:@name]\nfalse\n",
         "\"world\"\n[]\n",
         "NameError: instance variable @unknown not defined\n",
-        "NameError: `@0' is not allowed as an instance variable name\n",
+        "NameError: '@0' is not allowed as an instance variable name\n",
         "TypeError\n\"hello\"\nFrozenError\nFrozenError\nNameError\ntrue\n"
     );
     let output = run_example("introspection/remove_instance_variable.rb");
@@ -456,7 +456,7 @@ fn test_introspection_remove_instance_variable_no_parens() {
         "[:@greeting, :@name]\n\"hello\"\n[:@name]\nfalse\n",
         "\"world\"\n[]\n",
         "NameError: instance variable @unknown not defined\n",
-        "NameError: `@0' is not allowed as an instance variable name\n",
+        "NameError: '@0' is not allowed as an instance variable name\n",
         "TypeError\n\"hello\"\nFrozenError\nFrozenError\nNameError\ntrue\n"
     );
     let output = run_example("introspection/remove_instance_variable_no_parens.rb");

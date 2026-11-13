@@ -1024,7 +1024,7 @@ impl VirtualMachine {
                             Err(value) => value,
                         };
                         let name = &unit.locals[slot].text;
-                        if name.starts_with(|first: char| first.is_ascii_uppercase()) {
+                        if crate::class::names_a_constant(name) {
                             let target = Expression::Identifier {
                                 name: name.clone(),
                                 position,

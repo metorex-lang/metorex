@@ -416,7 +416,7 @@ impl VirtualMachine {
                 // Constant-shaped identifiers (`MyClass = ...`) auto-name
                 // anonymous classes/modules on first assignment, matching
                 // Ruby's `klass.name` behavior after binding to a constant.
-                let is_const = name.chars().next().is_some_and(|c| c.is_ascii_uppercase());
+                let is_const = crate::class::names_a_constant(name);
                 if !is_const {
                     self.store_local(name, value);
                     return Ok(());
@@ -447,8 +447,8 @@ impl VirtualMachine {
                 // file's local environment ending. Both record the
                 // assignment site for `Module#const_source_location`.
                 let assign_file = self
-                    .reported_current_file()
-                    .map(|p| p.display().to_string())
+                    .frames_file()
+                    .map(|file| file.to_string())
                     .unwrap_or_default();
                 if is_const && let Some(enclosing) = self.constant_home() {
                     let is_new = enclosing.get_class_var(name).is_none();
@@ -500,8 +500,8 @@ impl VirtualMachine {
                     bound.assign_name_recursive(name);
                 }
                 let assign_file = self
-                    .reported_current_file()
-                    .map(|path| path.display().to_string())
+                    .frames_file()
+                    .map(|file| file.to_string())
                     .unwrap_or_default();
                 self.globals_mut().set(name.clone(), value.clone());
                 self.environment_mut().set(name, value.clone());
@@ -729,10 +729,16 @@ impl VirtualMachine {
                     )?;
                     Ok(())
                 } else {
-                    Err(MetorexError::runtime_error(
-                        "No []= method defined on instance",
-                        position_to_location(*position),
-                    ))
+                    // An object with no `[]=` of its own sends the call on,
+                    // which reaches its `method_missing` or raises
+                    // NoMethodError.
+                    self.send_to_object(
+                        Object::Instance(Rc::clone(instance_rc)),
+                        "[]=",
+                        vec![idx, value],
+                        *position,
+                    )?;
+                    Ok(())
                 }
             }
             View::Class(cls) | View::Module(cls) => {
@@ -1099,8 +1105,8 @@ impl VirtualMachine {
                 }
                 c.set_class_var(name, value);
                 let assign_file = self
-                    .reported_current_file()
-                    .map(|p| p.display().to_string())
+                    .frames_file()
+                    .map(|file| file.to_string())
                     .unwrap_or_default();
                 c.set_const_location(name, assign_file, position.line as i64);
                 self.trigger_const_added_hook(owner_for_hook, name, *position)?;
@@ -1158,7 +1164,7 @@ pub(crate) fn constant_target_matches(target: &Expression, left: &Expression) ->
             Expression::Identifier {
                 name: left_name, ..
             },
-        ) => name == left_name && name.starts_with(|c: char| c.is_ascii_uppercase()),
+        ) => name == left_name && crate::class::names_a_constant(name),
         (
             Expression::ScopeResolution { name, .. },
             Expression::ScopeResolution {

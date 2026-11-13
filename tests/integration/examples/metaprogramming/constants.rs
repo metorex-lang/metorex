@@ -296,3 +296,70 @@ fn test_define_method_top_level_block_reads_object_constants() {
     let output = run_example("constants/define_method_top_level_constant.rb");
     assert_eq!(output, "File\nFile\nFile\n");
 }
+
+#[test]
+fn test_a_name_that_is_no_constant_raises_name_error_naming_it() {
+    let output = run_example("constants/wrong_constant_names_raise_name_error_with_the_name.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[NameError, :\"Foo-bar\", \"wrong constant name Foo-bar\"]\n",
+            "[NameError, :foo, \"wrong constant name foo\"]\n",
+            "[NameError, :foo, \"wrong constant name foo\"]\n",
+            "[NameError, :foo, \"wrong constant name foo\"]\n",
+            "[NameError, :foo, \"wrong constant name foo\"]\n",
+            "[NameError, :foo, \"wrong constant name foo\"]\n",
+            "[NameError, :\"Foo-bar\", \"wrong constant name Foo-bar\"]\n",
+            "[NameError, :foo, \"wrong constant name foo\"]\n",
+            "[NameError, :\"Foo-bar\", \"wrong constant name Foo-bar\"]\n",
+            "[NameError, \"foo\", \"wrong constant name foo\"]\n",
+            "[NameError, \"Foo bar\", \"wrong constant name Foo bar\"]\n",
+            "[NameError, :foo, \"wrong constant name foo\"]\n",
+            "[NameError, :foo, \"wrong constant name foo\"]\n",
+            "[NameError, :foo, \"wrong constant name foo\"]\n",
+            "[NameError, \"Foo bar\", \"wrong constant name Foo bar\"]\n",
+            "[NameError, \"Foo bar\", \"wrong constant name Foo bar\"]\n",
+            "[NameError, \"Foo bar\", \"wrong constant name Foo bar\"]\n",
+            "[NameError, :\"String::Comparable\", \"wrong constant name String::Comparable\"]\n",
+            "[NameError, :foo, \"wrong constant name foo\"]\n",
+            "[NameError, :foo, \"wrong constant name foo\"]\n",
+            "[NameError, :foo, \"'foo' is not allowed as a constant variable name\"]\n",
+            "[NameError, :foo, \"'foo' is not allowed as a class variable name\"]\n",
+            "[NameError, \"foo\", \"'foo' is not allowed as an instance variable name\"]\n",
+            "[NameError, nil, \"autoload must be constant name: Foo-bar\"]\n",
+        )
+    );
+}
+
+#[test]
+fn test_a_name_starting_with_an_uppercase_letter_outside_ascii_is_a_constant() {
+    let output =
+        run_example("constants/constants_that_start_with_an_uppercase_letter_outside_ascii.rb");
+    assert_eq!(
+        output,
+        concat!(
+            ":omega\n",
+            ":anger\n",
+            ":sigma\n",
+            ":sigma\n",
+            "true\n",
+            "\"constant\"\n",
+            ":lower\n",
+            "\"local-variable\"\n",
+            "\"nothing_here.rb\"\n",
+        )
+    );
+}
+
+#[test]
+fn test_a_constant_set_in_a_defined_method_records_the_file_the_block_was_written_in() {
+    let output =
+        run_example("constants/source_location_of_a_constant_set_in_a_defined_method/main.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[:SET_IN_BLOCK, \"definitions.rb\", 5]\n",
+            "[:SET_IN_MACRO, \"definitions.rb\", 9]\n",
+        )
+    );
+}

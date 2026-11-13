@@ -350,6 +350,9 @@ impl VirtualMachine {
                     .map(|file| file.display().to_string())
             })
             .map(|file| (file, position));
+        // A file part-way through loading is not run again, and the
+        // require answers false once any other thread's load of it ends.
+        let in_progress = self.loading_anywhere(&canonical_str);
         self.execute_file(&resolved).map_err(|e| {
             crate::vm::errors::keep_exception(e, |message| {
                 MetorexError::runtime_error(
@@ -359,7 +362,7 @@ impl VirtualMachine {
             })
         })?;
 
-        Ok(Object::Bool(!was_already_loaded))
+        Ok(Object::Bool(!was_already_loaded && !in_progress))
     }
 
     pub(crate) fn require_relative_feature(
@@ -480,6 +483,7 @@ impl VirtualMachine {
                     .map(|file| file.display().to_string())
             })
             .map(|file| (file, position));
+        let in_progress = self.loading_anywhere(&canonical_path.to_string_lossy());
         self.execute_file(&actual_path).map_err(|e| {
             crate::vm::errors::keep_exception(e, |message| {
                 MetorexError::runtime_error(
@@ -489,8 +493,9 @@ impl VirtualMachine {
             })
         })?;
 
-        // Return true if newly loaded, false if already loaded (Ruby behavior)
-        Ok(Object::Bool(!was_already_loaded))
+        // True when this call loaded the file, false when it was loaded
+        // already or is part-way through loading.
+        Ok(Object::Bool(!was_already_loaded && !in_progress))
     }
 }
 

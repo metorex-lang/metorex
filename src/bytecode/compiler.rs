@@ -4001,7 +4001,7 @@ fn open_at(pending: Pending) -> OpenAtHandler {
 }
 
 fn starts_uppercase(name: &str) -> bool {
-    name.starts_with(|first: char| first.is_ascii_uppercase())
+    crate::class::names_a_constant(name)
 }
 
 /// How a call's receiver was written.

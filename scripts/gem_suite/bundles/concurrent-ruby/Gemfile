@@ -1,0 +1,10 @@
+# The gems concurrent-ruby's specs load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "concurrent-ruby", path: "../../../../gems/concurrent-ruby"
+gem "concurrent-ruby-edge", path: "../../../../gems/concurrent-ruby"
+gem "rspec", "~> 3.7"
+gem "timecop", "~> 0.9"
+gem "sigdump", require: false

@@ -12,6 +12,22 @@ impl VirtualMachine {
         text: &std::rc::Rc<crate::object::StringValue>,
         position: Position,
     ) -> Result<Object, MetorexError> {
+        self.refuse_text_no_symbol_holds(text, position)?;
+        crate::symbol_registry::record(&text.as_str());
+        let named = crate::object::StringValue::with_encoding(text.to_text(), text.encoding_name());
+        if text.holds_bytes() {
+            named.mark_bytes();
+        }
+        Ok(Object::Symbol(std::rc::Rc::new(named)))
+    }
+
+    /// Raises EncodingError for a run of bytes that spells no characters in
+    /// its encoding, which no Symbol can be made of.
+    pub(crate) fn refuse_text_no_symbol_holds(
+        &mut self,
+        text: &std::rc::Rc<crate::object::StringValue>,
+        position: Position,
+    ) -> Result<(), MetorexError> {
         if !crate::vm::native_methods::string_methods::holds_valid_text(text) {
             let spelled = Object::String(std::rc::Rc::clone(text));
             let written = self.send_to_object(spelled, "inspect", vec![], position)?;
@@ -26,12 +42,7 @@ impl VirtualMachine {
                 position,
             ));
         }
-        crate::symbol_registry::record(&text.as_str());
-        let named = crate::object::StringValue::with_encoding(text.to_text(), text.encoding_name());
-        if text.holds_bytes() {
-            named.mark_bytes();
-        }
-        Ok(Object::Symbol(std::rc::Rc::new(named)))
+        Ok(())
     }
 }
 

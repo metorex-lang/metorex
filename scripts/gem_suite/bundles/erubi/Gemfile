@@ -1,0 +1,9 @@
+# The gems erubi's tests load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "erubi", path: "../../../../gems/erubi"
+gem "minitest-global_expectations"
+
+shipped "minitest"

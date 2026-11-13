@@ -70,6 +70,8 @@ fi
 HELPERS="$REPO_ROOT/scripts/gem_suite/lib"
 # The rspec command, for the suites written as RSpec specs.
 RSPEC="$REPO_ROOT/scripts/gem_suite/rspec.rb"
+# The minitest command, for the suites run with it.
+MINITEST="$REPO_ROOT/scripts/gem_suite/minitest.rb"
 SUITES=(
   "minitest|test/minitest/test_*.rb|-I lib -I test"
   "test-unit|test/test-*.rb test/*/test-*.rb|-I lib -I test -r test/unit"
@@ -127,6 +129,12 @@ SUITES=(
   "regexp_parser|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC|$REPO_ROOT/scripts/gem_suite/released_generated_files.rb"
   "rubocop-ast|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC|$REPO_ROOT/scripts/gem_suite/released_generated_files.rb"
   "rubocop|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "erubi|test/test.rb|-w -I lib -I test -r bundler/setup"
+  "tilt|test/*_test.rb|-w -I lib -I test -r bundler/setup"
+  "zeitwerk|test/lib/**/test_*.rb|-I lib -I test -r bundler/setup $MINITEST"
+  "sprockets|test/test_*.rb|-w -I lib -I test -r bundler/setup"
+  "concurrent-ruby|spec/**/*_spec.rb|-I lib/concurrent-ruby -I lib/concurrent-ruby-edge -I spec -r bundler/setup $RSPEC"
+  "thread_safe|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
   "racc|test/test_*.rb|--enable-frozen-string-literal -I lib -I test/lib -I $HELPERS -r helper|$REPO_ROOT/scripts/gem_suite/racc_parser_text.rb"
 )
 

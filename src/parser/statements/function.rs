@@ -930,9 +930,7 @@ fn declares_anonymous_block(parameters: &[Parameter]) -> bool {
 /// made of constant names alone.
 fn constant_path(expression: &crate::ast::Expression) -> Option<String> {
     match expression {
-        crate::ast::Expression::Identifier { name, .. }
-            if name.starts_with(|first: char| first.is_ascii_uppercase()) =>
-        {
+        crate::ast::Expression::Identifier { name, .. } if name.starts_with(char::is_uppercase) => {
             Some(name.clone())
         }
         crate::ast::Expression::ScopeResolution {

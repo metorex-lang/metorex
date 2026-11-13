@@ -1,0 +1,32 @@
+# The gems tilt's tests load. The template engines with C extensions,
+# RedCloth, commonmarker, yajl-ruby, rdiscount, redcarpet, herb, and
+# sass-embedded, are left out, so their tests skip under either engine.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "tilt", path: "../../../../gems/tilt"
+gem "erubi", path: "../../../../gems/erubi"
+# From rubygems.org, since the checkout's gemspec defines Builder when
+# Bundler loads it, and markaby then skips its own require of builder.
+gem "builder", "3.3.0"
+gem "nokogiri"
+gem "warning"
+gem "babel-transpiler"
+gem "coffee-script"
+gem "liquid"
+gem "livescript"
+gem "typescript-node"
+gem "pandoc-ruby"
+gem "pdf-reader"
+gem "prawn", ">= 2.0.0"
+gem "radius"
+gem "slim"
+gem "haml", ">= 4"
+gem "markaby"
+gem "asciidoctor"
+gem "kramdown"
+gem "matrix"
+gem "csv"
+
+shipped "minitest", "rdoc", "base64", "logger", "erb", "psych", "stringio", "date", "tsort", "prism", "racc"

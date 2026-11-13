@@ -35,7 +35,7 @@ fn add(names: &mut Vec<String>, name: &str) {
     if name
         .chars()
         .next()
-        .is_some_and(|c| c.is_ascii_uppercase() || c == '@' || c == '$')
+        .is_some_and(|c| c.is_uppercase() || c == '@' || c == '$')
     {
         return;
     }

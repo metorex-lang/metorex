@@ -684,3 +684,57 @@ fn test_bundled_gem_left_out_of_the_bundle_cannot_be_required() {
     let output = run_example("loading/bundled_gem_outside_the_bundle.rb");
     assert_eq!(output, "cannot load such file -- rake\n[1]\n");
 }
+
+#[test]
+fn test_a_required_file_is_listed_after_the_files_it_required() {
+    let output = run_example("loading/loaded_features_after_nested_require/main.rb");
+    assert_eq!(
+        output,
+        concat!("[\"inner.rb\", \"outer.rb\"]\n", "false\n",)
+    );
+}
+
+#[test]
+fn test_an_autoload_whose_file_defines_another_constant() {
+    let output = run_example("loading/autoload_of_a_file_that_defines_another_constant/main.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[true, true, true]\n",
+            "[NameError, :Missing]\n",
+            "[false, false, nil]\n",
+            "true\n",
+            "nil\n",
+            "nil\n",
+            "[NameError, :Missing]\n",
+            "1\n",
+            "nil\n",
+            "[:const_get, :Missing]\n",
+            "[:remove_const, \"constant Object::Missing not defined\"]\n",
+            "1\n",
+            "[true, true, true]\n",
+            "[NameError, :Checked]\n",
+            "[true, true, true]\n",
+            "true\n",
+            "2\n",
+        )
+    );
+}
+
+#[test]
+fn test_an_autoload_by_feature_name_ends_when_the_feature_is_required() {
+    let output = run_example("loading/autoload_by_feature_name_then_required/main.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"feature_template\"\n",
+            "true\n",
+            "[nil, nil, true]\n",
+            "\"FeatureTemplate\"\n",
+            "\"feature_template\"\n",
+            "true\n",
+            "[nil, nil, true]\n",
+            "\"FeatureTemplate\"\n",
+        )
+    );
+}

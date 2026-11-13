@@ -427,6 +427,26 @@ impl Lexer<'_> {
                 let value = u32::from_str_radix(&digits, 16).unwrap_or(0);
                 char::from_u32(value).unwrap_or('\0').to_string()
             }
+            // `?\u0018` names a character by four hex digits, and
+            // `?\u{41}` by the digits between braces.
+            'u' => {
+                let braced = self.peek() == Some('{');
+                if braced {
+                    self.advance();
+                }
+                let mut digits = String::new();
+                while (braced || digits.len() < 4)
+                    && matches!(self.peek(), Some(c) if c.is_ascii_hexdigit())
+                {
+                    digits.push(self.peek().expect("the guard read a digit"));
+                    self.advance();
+                }
+                if braced && self.peek() == Some('}') {
+                    self.advance();
+                }
+                let value = u32::from_str_radix(&digits, 16).unwrap_or(0);
+                char::from_u32(value).unwrap_or('\0').to_string()
+            }
             'e' => "\u{1b}".to_string(),
             'a' => "\u{7}".to_string(),
             'b' => "\u{8}".to_string(),

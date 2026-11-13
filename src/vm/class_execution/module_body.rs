@@ -239,8 +239,8 @@ impl VirtualMachine {
         module.remove_autoload(const_name);
         module.set_class_var(const_name, const_value);
         let assign_file = self
-            .reported_current_file()
-            .map(|p| p.display().to_string())
+            .frames_file()
+            .map(|file| file.to_string())
             .unwrap_or_default();
         module.set_const_location(const_name, assign_file, assign_pos.line as i64);
         self.trigger_const_added_hook(Object::Module(Rc::clone(module)), const_name, assign_pos)?;

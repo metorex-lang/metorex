@@ -376,6 +376,30 @@ impl VirtualMachine {
         answered
     }
 
+    /// The operator a class or module wrote for itself, as `def self.===`
+    /// does, which it answers with rather than the one Module gives every
+    /// class.
+    pub(crate) fn class_level_operator(
+        &self,
+        receiver: &Object,
+        op_name: &str,
+    ) -> Option<(
+        std::rc::Rc<crate::class::Class>,
+        std::rc::Rc<crate::object::Method>,
+    )> {
+        if !matches!(receiver.view(), View::Class(_) | View::Module(_)) {
+            return None;
+        }
+        let (class, method) = self.lookup_method(receiver, op_name)?;
+        let written_by_the_program = !method.is_undefined
+            && !method.body.is_empty()
+            && !matches!(
+                class.name(),
+                "Module" | "Class" | "Object" | "Kernel" | "BasicObject"
+            );
+        written_by_the_program.then_some((class, method))
+    }
+
     pub(crate) fn operate_on_values(
         &mut self,
         op: &BinaryOp,
@@ -400,6 +424,11 @@ impl VirtualMachine {
         // native path already implements, and answering from there
         // would replace every built-in operator with its Ruby-level
         // spelling.
+        if let Some(op_name) = binary_op_method_name(op)
+            && let Some((class, method)) = self.class_level_operator(&left_value, op_name)
+        {
+            return self.invoke_method(class, method, left_value, vec![right_value], *position);
+        }
         if !matches!(left_value.view(), View::Instance(_))
             && let Some(op_name) = binary_op_method_name(op)
             && let Some((class, method)) = self.lookup_own_operator_method(&left_value, op_name)
@@ -556,15 +585,14 @@ impl VirtualMachine {
                 // Top-level constants are Object's own, so a name
                 // written as `Object::Name` reaches one of them before
                 // any module mixed into Object.
-                let top_level = if class_rc.name() == "Object"
-                    && name.starts_with(|held: char| held.is_ascii_uppercase())
-                {
-                    self.globals()
-                        .get(name)
-                        .filter(|held| !matches!(held.view(), View::NativeFunction(_)))
-                } else {
-                    None
-                };
+                let top_level =
+                    if class_rc.name() == "Object" && crate::class::names_a_constant(name) {
+                        self.globals()
+                            .get(name)
+                            .filter(|held| !matches!(held.view(), View::NativeFunction(_)))
+                    } else {
+                        None
+                    };
                 let entry = match top_level {
                     Some(held) => Some((Rc::clone(class_rc), Some(held))),
                     None => self.const_entry_on(class_rc, name, true, false),

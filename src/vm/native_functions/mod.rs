@@ -20,7 +20,7 @@ pub(crate) use support::throw_tags_match;
 mod control_flow;
 mod conversions;
 mod dispatch;
-mod evaluation;
+pub(crate) mod evaluation;
 mod exiting;
 mod fast_paths;
 mod generator;

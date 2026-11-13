@@ -674,3 +674,12 @@ fn a_case_written_with_literal_whens_matches_by_value_and_asks_a_redefined_case_
         )
     );
 }
+
+#[test]
+fn test_return_from_blocks_handed_on_to_a_native_iterator_leaves_the_method() {
+    let output = run_example("control_flow/return_from_nested_blocks_inside_synchronize.rb");
+    assert_eq!(
+        output,
+        concat!(":first\n", ":second\n", "nil\n", ":second\n",)
+    );
+}

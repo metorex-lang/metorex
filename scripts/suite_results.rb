@@ -10,7 +10,8 @@
 #
 # ENGINE is mri or metorex. RESULTS is the file scripts/run_rspec_suite.sh or
 # scripts/run_gem_suites.sh writes, a file's path and the summary line its run
-# printed, a tab apart: RSpec's, test-unit's, or minitest's. A failure counts
+# printed, a tab apart: RSpec's, test-unit's, minitest's, or
+# minitest-reporters'. A failure counts
 # an error with it, and a pending test counts an omission or a skip. `record` stores those counts as the engine's. `differences` lists
 # the files whose Metorex counts differ from MRI's, from RESULTS when it is
 # given and from the stored counts otherwise, and exits 1 when there are any.
@@ -31,7 +32,7 @@ def counts(summary)
     [$1.to_i, $2.to_i, summary[/(\d+) pending/, 1].to_i]
   when /\A(\d+) tests, \d+ assertions, (\d+) failures, (\d+) errors, (\d+) pendings, (\d+) omissions/
     [$1.to_i, $2.to_i + $3.to_i, $4.to_i + $5.to_i]
-  when /\A(\d+) runs, \d+ assertions, (\d+) failures, (\d+) errors, (\d+) skips/
+  when /\A(\d+) (?:runs|tests), \d+ assertions, (\d+) failures, (\d+) errors, (\d+) skips/
     [$1.to_i, $2.to_i + $3.to_i, $4.to_i]
   end
 end

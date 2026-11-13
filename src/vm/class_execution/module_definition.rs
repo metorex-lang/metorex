@@ -192,8 +192,8 @@ impl VirtualMachine {
         // Object, the home of top-level constants.
         if is_new {
             let module_def_file = self
-                .reported_current_file()
-                .map(|p| p.display().to_string())
+                .frames_file()
+                .map(|file| file.to_string())
                 .unwrap_or_default();
             if let Some(parent) = parent_scope.as_ref() {
                 parent.set_const_location(name, module_def_file, position.line as i64);

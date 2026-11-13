@@ -1,0 +1,15 @@
+# The gems zeitwerk's tests load. zeitwerk itself is not named, since its
+# gemspec loads lib/zeitwerk/version.rb from the submodule and the suite's
+# copy of the gem then loads its own, which the suite's warning handler
+# raises on.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "minitest-focus"
+gem "minitest-mock"
+gem "minitest-proveit"
+gem "minitest-reporters"
+gem "warning"
+
+shipped "minitest"

@@ -38,6 +38,22 @@ impl VirtualMachine {
         Some(shared)
     }
 
+    /// Record the encoding source evaluated under the name `file` is written
+    /// in, which the String literals of the methods it defines take when
+    /// they run later.
+    pub(crate) fn note_evaluated_file_encoding(&mut self, file: &str, encoding: &str) {
+        let changed = if encoding == "UTF-8" {
+            self.file_encodings.remove(file).is_some()
+        } else {
+            self.file_encodings
+                .insert(file.to_string(), encoding.to_string())
+                .is_none_or(|held| held != encoding)
+        };
+        if changed {
+            self.entered_files.clear();
+        }
+    }
+
     /// `named` shared, with the encoding it is written in, as code entered
     /// in that file runs under.
     pub(crate) fn entered_file(&mut self, named: &str) -> (Rc<str>, Option<String>) {

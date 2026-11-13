@@ -135,13 +135,12 @@ impl VirtualMachine {
                 }
                 let const_name = self.coerce_name_argument(&arguments[0], position)?;
                 if !is_valid_constant_name(&const_name) {
-                    let msg = format!("wrong constant name {}", const_name);
-                    let exc = Object::exception("NameError", msg.clone());
-                    return Err(MetorexError::UncaughtException {
-                        exception: exc,
-                        location: position_to_location(position),
-                        message: msg,
-                    });
+                    return Err(crate::vm::errors::invalid_name_error(
+                        format!("'{const_name}' is not allowed as a constant variable name"),
+                        &arguments[0],
+                        &crate::vm::errors::module_object(class_rc),
+                        position,
+                    ));
                 }
                 // Only a constant of the receiver itself can be removed, and
                 // a pending autoload counts as one.
@@ -179,6 +178,16 @@ impl VirtualMachine {
                 }
                 let removed_autoload = class_rc.remove_autoload(&const_name);
                 class_rc.clear_unrealized_autoload(&const_name);
+                self.forget_failed_autoload(class_rc, &const_name);
+                if removed_autoload.is_some()
+                    && self
+                        .autoload_loading
+                        .iter()
+                        .any(|(held, named, _)| Rc::ptr_eq(held, class_rc) && *named == const_name)
+                {
+                    self.autoloads_removed_while_loading
+                        .push((Rc::clone(class_rc), const_name.clone()));
+                }
                 // Drop the recorded source location so a subsequent
                 // `autoload` for the same name surfaces *its* location via
                 // `const_source_location` instead of the stale class-def

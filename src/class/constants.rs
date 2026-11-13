@@ -21,7 +21,7 @@ pub fn constant_state() -> u64 {
 
 /// Whether `name` is written as a constant.
 pub(crate) fn names_a_constant(name: &str) -> bool {
-    name.starts_with(|first: char| first.is_ascii_uppercase())
+    name.starts_with(char::is_uppercase)
 }
 
 impl Class {

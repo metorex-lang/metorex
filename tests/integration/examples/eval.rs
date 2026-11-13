@@ -297,3 +297,44 @@ fn classes_defined_through_bindings_are_not_locals() {
     let output = run_example("eval/classes_defined_through_bindings_are_not_locals.rb");
     assert_eq!(output, "false\nTally\ntrue\n");
 }
+
+#[test]
+fn test_class_eval_counts_lines_from_below_one_and_reads_a_dashed_magic_comment() {
+    let output = run_example("eval/class_eval_source_with_a_negative_line_and_a_magic_comment.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[1, true, 2, 2]\n",
+            "\"template.erb:6\"\n",
+            "false\n",
+            "true\n",
+        )
+    );
+}
+
+#[test]
+fn test_class_eval_source_encoding_is_its_literals_encoding() {
+    let output = run_example("eval/class_eval_source_encoding_sets_its_literals_encoding.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[#<Encoding:Shift_JIS>, \"ふが\"]\n",
+            "[#<Encoding:Shift_JIS>, \"ふが\"]\n",
+            "#<Encoding:US-ASCII>\n",
+            "[#<Encoding:Shift_JIS>, #<Encoding:EUC-JP>]\n",
+        )
+    );
+}
+
+#[test]
+fn test_class_eval_strings_read_constants_through_the_receiver_then_the_caller() {
+    let output = run_example("eval/class_eval_string_scope_reaches_a_block_inside_it.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"Bob\", [Person, Compiler]]\n",
+            "\"Bob\"\n",
+            "\"compiler\"\n",
+        )
+    );
+}
