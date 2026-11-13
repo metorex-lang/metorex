@@ -32,14 +32,26 @@ pub type CachedFrameName = (Rc<str>, Rc<str>, Rc<str>, Option<Rc<str>>);
 #[derive(Debug, Default)]
 pub struct BodyFacts {
     places: std::cell::OnceCell<crate::object::CodePlaces>,
-    owner_path: std::cell::OnceCell<Rc<str>>,
+    /// What calls find out about the method the first time they ask, kept
+    /// apart so a method no one calls stays small.
+    called: std::cell::OnceCell<Box<CalledFacts>>,
     takes_a_block: std::cell::OnceCell<bool>,
     reported_as_c: std::cell::OnceCell<bool>,
     plain_reader: std::cell::OnceCell<bool>,
+    /// The name of the file the method was written in, as the machine
+    /// shares it, with the encoding the file names, once a call entered it.
     /// Whether another method of the same name uses its block: 0 before it
     /// is known, `NAMESAKE_USES_A_BLOCK` for yes, and otherwise one more
     /// than the method state a no was found under.
     namesake_uses_a_block: std::cell::Cell<u64>,
+}
+
+/// What `BodyFacts` keeps once the method is called.
+#[derive(Debug, Default)]
+struct CalledFacts {
+    owner_path: std::cell::OnceCell<Rc<str>>,
+    entered_file: std::cell::OnceCell<(Rc<str>, Option<String>)>,
+    core_library: std::cell::OnceCell<bool>,
 }
 
 /// `BodyFacts::namesake_uses_a_block` holding a yes.
@@ -56,7 +68,7 @@ impl BodyFacts {
     /// None for an anonymous one. A permanent name is kept after the first
     /// call, since it cannot change.
     pub fn owner_path(&self, owner: &crate::class::Class) -> Option<Rc<str>> {
-        if let Some(path) = self.owner_path.get() {
+        if let Some(path) = self.called().owner_path.get() {
             return Some(Rc::clone(path));
         }
         let path = owner.ruby_name();
@@ -65,9 +77,28 @@ impl BodyFacts {
         }
         let path: Rc<str> = path.into();
         if owner.has_permanent_name() {
-            let _ = self.owner_path.set(Rc::clone(&path));
+            let _ = self.called().owner_path.set(Rc::clone(&path));
         }
         Some(path)
+    }
+
+    fn called(&self) -> &CalledFacts {
+        self.called.get_or_init(Box::default)
+    }
+
+    /// The shared name of the file the method was written in and the
+    /// encoding it names, as `enter` answers the first time it is asked.
+    pub fn entered_file(
+        &self,
+        enter: impl FnOnce() -> (Rc<str>, Option<String>),
+    ) -> &(Rc<str>, Option<String>) {
+        self.called().entered_file.get_or_init(enter)
+    }
+
+    /// Whether the method is one of the core library's, as `found` answers
+    /// the first time it is asked.
+    pub fn of_the_core_library(&self, found: impl FnOnce() -> bool) -> bool {
+        *self.called().core_library.get_or_init(found)
     }
 
     /// Whether the body reaches the block the method was given, as `found`

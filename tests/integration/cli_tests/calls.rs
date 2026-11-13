@@ -54,3 +54,22 @@ fn calls_leave_the_method_state_where_it_was() {
     let (printed, _) = run_counted("method_state_across_calls");
     assert_eq!(printed, "0\n");
 }
+
+#[test]
+fn a_send_naming_a_reader_reads_the_variable_without_a_call() {
+    let (printed, report) = run_counted("send_to_readers");
+    assert_eq!(
+        printed,
+        concat!(
+            "[3, 100]\n",
+            "100\n",
+            "1000\n",
+            ":missing\n",
+            "\"private method 'keys' called for class Tables\"\n"
+        )
+    );
+    let (calls, _) = calls_and_allocations(&report, "<main> -> Tables#bump");
+    assert_eq!(calls, 100);
+    assert!(!report.contains("-> Tables.keys"), "{report}");
+    assert!(!report.contains("-> Tables#count"), "{report}");
+}

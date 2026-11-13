@@ -44,26 +44,44 @@ impl VirtualMachine {
         let View::String(string_value) = receiver.view() else {
             return Ok(None);
         };
-        // A match the method records cuts its pieces out of this String,
-        // so they carry its encoding.
-        let held = self
-            .match_subject_encoding
-            .replace(string_value.encoding_name());
-        let answered = (|| {
+        self.with_subject_encoding(string_value, |vm| {
             for step in STEPS {
-                if let Some(result) = step(
-                    self,
-                    receiver,
-                    string_value,
-                    method_name,
-                    arguments,
-                    position,
-                )? {
+                if let Some(result) =
+                    step(vm, receiver, string_value, method_name, arguments, position)?
+                {
                     return Ok(Some(result));
                 }
             }
-            self.call_string_set_method(receiver, method_name, arguments, position)
-        })();
+            vm.call_string_set_method(receiver, method_name, arguments, position)
+        })
+    }
+
+    /// `[]` or `slice`, named `method_name`, on the String `receiver`,
+    /// which only the slicing group of String methods answers.
+    pub(crate) fn call_string_slice(
+        &mut self,
+        receiver: &Object,
+        string_value: &Rc<crate::object::StringValue>,
+        method_name: &str,
+        arguments: &[Object],
+        position: Position,
+    ) -> Result<Option<Object>, MetorexError> {
+        self.with_subject_encoding(string_value, |vm| {
+            vm.call_string_slicing_method(receiver, string_value, method_name, arguments, position)
+        })
+    }
+
+    /// Run `run` with `string_value`'s encoding as the one a match it
+    /// records cuts its pieces out under.
+    fn with_subject_encoding<T>(
+        &mut self,
+        string_value: &Rc<crate::object::StringValue>,
+        run: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        let held = self
+            .match_subject_encoding
+            .replace(string_value.encoding_name());
+        let answered = run(self);
         self.match_subject_encoding = held;
         answered
     }

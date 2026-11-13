@@ -1229,3 +1229,12 @@ fn test_file_write_does_not_call_file_open() {
     let output = run_example("io/write_does_not_call_file_open.rb");
     assert_eq!(output, "3\n\"abc\"\n");
 }
+
+#[test]
+fn test_methods_locals_named_like_kernel_functions_execution() {
+    let output = run_example("methods/locals_named_like_kernel_functions.rb");
+    assert_eq!(
+        output,
+        "[[20, 1, \"bcd\", \"ef\"], 7, \"x\"]\n[:written, :out]\n"
+    );
+}

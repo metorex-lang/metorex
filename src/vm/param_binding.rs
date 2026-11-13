@@ -96,6 +96,39 @@ fn fill_positional_param(
     Ok(())
 }
 
+/// Bind the parameter `params` names at `index` to `value`, in its place
+/// among the method's locals when the scope holds them by place. `refill`
+/// says the parameter was bound to nil before the defaults ran.
+fn bind_positional_param(
+    vm: &mut VirtualMachine,
+    params: &[String],
+    index: usize,
+    value: Object,
+    refill: bool,
+) -> Result<(), MetorexError> {
+    let name = parameter_local(params, index);
+    match bind_frame_place(vm, index, &name, value) {
+        Ok(()) => Ok(()),
+        Err(value) if refill => fill_positional_param(vm, &name, value),
+        Err(value) => define_positional_param(vm, &name, value),
+    }
+}
+
+/// Bind the local at `place` among the method's locals to `value` when the
+/// scope holds them by place and `name` is the one there, answering the
+/// value back when not.
+fn bind_frame_place(
+    vm: &mut VirtualMachine,
+    place: usize,
+    name: &str,
+    value: Object,
+) -> Result<(), Object> {
+    vm.environment()
+        .current_scope_ref()
+        .borrow_mut()
+        .bind_frame_place(place, name, value)
+}
+
 /// Bind positional parameters to arguments, handling variadic (splat) parameters.
 ///
 /// When a variadic param is present at index `vi`, parameters before it get one arg each,
@@ -120,8 +153,10 @@ pub(crate) fn bind_params(
     // Every parameter is a local of the method before any default runs, so
     // a default that reads its own parameter, `def f(a = a)`, reads nil.
     if !default_parameters.is_empty() {
-        for param in params {
-            vm.environment_mut().define_named(param, Object::Nil);
+        for (place, param) in params.iter().enumerate() {
+            if let Err(nil) = bind_frame_place(vm, place, param, Object::Nil) {
+                vm.environment_mut().define_named(param, nil);
+            }
         }
     }
     if let Some((vi, _)) = variadic_param {
@@ -181,11 +216,7 @@ pub(crate) fn bind_params(
                     .cloned()
                     .unwrap_or(Object::Nil)
             };
-            if default_parameters.is_empty() {
-                define_positional_param(vm, &parameter_local(params, i), value)?;
-            } else {
-                fill_positional_param(vm, &parameter_local(params, i), value)?;
-            }
+            bind_positional_param(vm, params, i, value, !default_parameters.is_empty())?;
         }
     } else if let (Some(first_optional), Some(last_optional)) = (
         default_parameters.iter().map(|(index, _)| *index).min(),
@@ -218,16 +249,32 @@ pub(crate) fn bind_params(
                 let index = positional.len().saturating_sub(offset_from_end);
                 positional.get(index).cloned().unwrap_or(Object::Nil)
             };
-            fill_positional_param(vm, &parameter_local(params, i), value)?;
+            bind_positional_param(vm, params, i, value, true)?;
         }
     } else {
+        let by_place = vm
+            .environment()
+            .current_scope_ref()
+            .borrow()
+            .frame_leads_with(params);
         for i in 0..params.len() {
             let value = if i < positional.len() {
                 positional[i].clone()
             } else {
                 Object::Nil
             };
-            define_positional_param(vm, &parameter_local(params, i), value)?;
+            if !by_place {
+                bind_positional_param(vm, params, i, value, false)?;
+                continue;
+            }
+            let unbound = vm
+                .environment()
+                .current_scope_ref()
+                .borrow_mut()
+                .bind_frame_parameter(i, value);
+            if let Err(value) = unbound {
+                define_positional_param(vm, &params[i], value)?;
+            }
         }
     }
     Ok(())

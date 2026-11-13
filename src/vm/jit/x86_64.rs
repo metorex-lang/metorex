@@ -519,6 +519,8 @@ pub(super) fn emit(steps: &[Planned]) -> Option<Emitted> {
             } => code.integer(at, *operation, *to, *left, *right, starts_statement),
             Action::Store { to, bits } => code.store(at, *to, *bits),
             Action::Move { to, from } => code.move_value(at, *to, *from),
+            Action::GetLocal { .. } => code.call(at, Callee::Helper(Helper::GetLocal)),
+            Action::SetLocal { .. } => code.call(at, Callee::Helper(Helper::SetLocal)),
             Action::BranchIf { test, when, target } => {
                 code.branch_if_holding(*test, *when, *target);
             }

@@ -20,6 +20,9 @@ fn next_version() -> u64 {
     })
 }
 
+/// The name a scope binds the receiver under.
+const SELF: &str = "self";
+
 /// How many bindings an emptied scope keeps for `define_named`.
 const SPARE_BINDINGS: usize = 64;
 
@@ -74,6 +77,92 @@ pub struct Scope {
     /// this scope binds, reserves, or captures change, which a kept block
     /// compares.
     version: u64,
+    /// The locals of the method body running in this scope, held by their
+    /// place in the body's list rather than by name.
+    frame: Option<Rc<FrameLayout>>,
+    /// What this scope holds for each of the frame's locals.
+    frame_locals: RefCell<Vec<FrameLocal>>,
+    /// How many of `variables` were bound before the frame's locals, which
+    /// `local_variables` lists ahead of them.
+    bound_before_frame: usize,
+    /// Cells of frame locals an earlier use of this scope let go of, which
+    /// nothing else held, kept to bind frame locals again rather than
+    /// allocate.
+    spare_cells: Vec<Rc<RefCell<Object>>>,
+    /// What this scope binds `self` to, which it holds apart from the
+    /// names in `variables` and lists ahead of them.
+    self_cell: Option<Rc<RefCell<Object>>>,
+}
+
+/// A method's parameters, in the order they were written, and then the
+/// locals its body assigns, with where its unit's slots stand among them.
+#[derive(Debug)]
+pub struct FrameLayout {
+    names: Box<[Rc<str>]>,
+    /// The place of the local in each of the unit's slots, or `NO_PLACE`
+    /// for one the scope binds by name.
+    place_of_slot: Box<[u32]>,
+    places: std::cell::OnceCell<crate::fast_hash::NameMap<Rc<str>, u32>>,
+    /// Whether the method's positional parameters stand first, in order,
+    /// once a binding of them has looked.
+    parameters_lead: std::cell::OnceCell<bool>,
+}
+
+/// The place of a slot whose local the scope binds by name.
+const NO_PLACE: u32 = u32::MAX;
+
+impl FrameLayout {
+    /// The layout of `names`, where `slots` names the local in each of the
+    /// unit's slots that is one of them.
+    pub fn new(names: Vec<String>, slots: &[Option<&str>]) -> Self {
+        let place_of_slot = slots
+            .iter()
+            .map(|slot| {
+                slot.and_then(|name| names.iter().position(|held| held == name))
+                    .map_or(NO_PLACE, |place| place as u32)
+            })
+            .collect();
+        FrameLayout {
+            names: names.iter().map(|name| Rc::from(name.as_str())).collect(),
+            place_of_slot,
+            places: std::cell::OnceCell::new(),
+            parameters_lead: std::cell::OnceCell::new(),
+        }
+    }
+
+    /// The place of the local in the unit's `slot`.
+    pub fn place_for_slot(&self, slot: usize) -> Option<usize> {
+        match self.place_of_slot.get(slot) {
+            Some(&place) if place != NO_PLACE => Some(place as usize),
+            _ => None,
+        }
+    }
+
+    /// Where `name` sits among the locals.
+    fn place_of(&self, name: &str) -> Option<usize> {
+        if self.names.len() <= NAMES_FOUND_IN_ORDER {
+            return self.names.iter().position(|held| &**held == name);
+        }
+        let places = self.places.get_or_init(|| {
+            self.names
+                .iter()
+                .enumerate()
+                .map(|(at, held)| (Rc::clone(held), at as u32))
+                .collect()
+        });
+        places.get(name).map(|&at| at as usize)
+    }
+}
+
+/// What a scope holds for one of its frame's locals.
+#[derive(Debug, Clone)]
+enum FrameLocal {
+    /// Nothing: the name is bound by name, or not at all.
+    Unheld,
+    /// Reserved for the assignment further down, reading nil, with the cell
+    /// it reads from once something asked for one.
+    Reserved(Option<Rc<RefCell<Object>>>),
+    Bound(Rc<RefCell<Object>>),
 }
 
 /// The names a block closes over, each with the cell it shares with the
@@ -185,6 +274,211 @@ impl Scope {
         self.parent.as_ref()
     }
 
+    /// Hold `layout`'s locals by place, each reserved for its assignment,
+    /// leaving out any this scope binds by name already when `bound_by_name`
+    /// says it may bind one. A scope holding a frame keeps it, and answers
+    /// false.
+    pub fn attach_frame(&mut self, layout: &Rc<FrameLayout>, bound_by_name: bool) -> bool {
+        if self.frame.is_some() {
+            return false;
+        }
+        let locals = self.frame_locals.get_mut();
+        locals.clear();
+        for name in layout.names.iter() {
+            locals.push(
+                if !(bound_by_name && self.variables.contains_key(&**name)) {
+                    FrameLocal::Reserved(None)
+                } else {
+                    FrameLocal::Unheld
+                },
+            );
+        }
+        self.bound_before_frame = self.variables.len();
+        self.frame = Some(Rc::clone(layout));
+        self.version = next_version();
+        true
+    }
+
+    /// The cell this scope binds `self` in, when `name` is `self` and the
+    /// scope binds it.
+    fn self_ref(&self, name: &str) -> Option<&Rc<RefCell<Object>>> {
+        if name == SELF {
+            self.self_cell.as_ref()
+        } else {
+            None
+        }
+    }
+
+    /// Whether this scope holds `layout`'s locals by place.
+    pub fn holds_frame(&self, layout: &Rc<FrameLayout>) -> bool {
+        self.frame
+            .as_ref()
+            .is_some_and(|held| Rc::ptr_eq(held, layout))
+    }
+
+    /// The cell of the frame local at `place`, binding one holding nil when
+    /// it is reserved, or None when the scope does not hold it by place.
+    pub fn frame_cell(&self, place: usize) -> Option<Rc<RefCell<Object>>> {
+        let mut locals = self.frame_locals.borrow_mut();
+        match locals.get(place)? {
+            FrameLocal::Unheld => None,
+            FrameLocal::Bound(cell) | FrameLocal::Reserved(Some(cell)) => Some(Rc::clone(cell)),
+            FrameLocal::Reserved(None) => {
+                let cell = Rc::new(RefCell::new(Object::Nil));
+                locals[place] = FrameLocal::Reserved(Some(Rc::clone(&cell)));
+                Some(cell)
+            }
+        }
+    }
+
+    /// Write `value` to the frame local at `place`, which ends its
+    /// reservation, answering its cell, or None when the scope does not
+    /// hold it by place.
+    pub fn assign_frame_local(
+        &mut self,
+        place: usize,
+        value: Object,
+    ) -> Option<Rc<RefCell<Object>>> {
+        let local = self.frame_locals.get_mut().get_mut(place)?;
+        let cell = match local {
+            FrameLocal::Unheld => return None,
+            FrameLocal::Bound(cell) => {
+                note_callable_change(&cell.borrow(), &value);
+                *cell.borrow_mut() = value;
+                return Some(Rc::clone(cell));
+            }
+            FrameLocal::Reserved(Some(cell)) => Rc::clone(cell),
+            FrameLocal::Reserved(None) => self
+                .spare_cells
+                .pop()
+                .unwrap_or_else(|| Rc::new(RefCell::new(Object::Nil))),
+        };
+        note_callable_change(&Object::Nil, &value);
+        *cell.borrow_mut() = value;
+        *local = FrameLocal::Bound(Rc::clone(&cell));
+        self.version = next_version();
+        Some(cell)
+    }
+
+    /// Whether the frame this scope holds starts with `parameters`, each
+    /// named once, in the order given.
+    pub fn frame_leads_with(&self, parameters: &[String]) -> bool {
+        let Some(layout) = &self.frame else {
+            return false;
+        };
+        *layout.parameters_lead.get_or_init(|| {
+            parameters.len() <= layout.names.len()
+                && parameters.iter().zip(layout.names.iter()).enumerate().all(
+                    |(at, (parameter, held))| {
+                        **held == **parameter && !parameters[..at].contains(parameter)
+                    },
+                )
+        })
+    }
+
+    /// Write `value` to the frame local at `place`, which `frame_leads_with`
+    /// said holds the parameter, answering the value back when the scope
+    /// does not hold it by place.
+    pub fn bind_frame_parameter(&mut self, place: usize, value: Object) -> Result<(), Object> {
+        if matches!(self.frame_locals.get_mut()[place], FrameLocal::Unheld) {
+            return Err(value);
+        }
+        self.assign_frame_local(place, value);
+        Ok(())
+    }
+
+    /// Write `value` to the frame local at `place` when `name` is the local
+    /// there, keeping the cell it is bound to, answering the value back when
+    /// it is not.
+    pub fn bind_frame_place(
+        &mut self,
+        place: usize,
+        name: &str,
+        value: Object,
+    ) -> Result<(), Object> {
+        let named = self
+            .frame
+            .as_ref()
+            .and_then(|layout| layout.names.get(place))
+            .is_some_and(|held| &**held == name);
+        if !named || matches!(self.frame_locals.get_mut()[place], FrameLocal::Unheld) {
+            return Err(value);
+        }
+        self.assign_frame_local(place, value);
+        Ok(())
+    }
+
+    /// Where `name` is among the frame locals this scope holds.
+    fn frame_place(&self, name: &str) -> Option<usize> {
+        let place = self.frame.as_ref()?.place_of(name)?;
+        let held = !matches!(self.frame_locals.borrow()[place], FrameLocal::Unheld);
+        held.then_some(place)
+    }
+
+    /// The value of the frame local `name`, nil while it is reserved.
+    fn frame_value(&self, name: &str) -> Option<Object> {
+        let place = self.frame_place(name)?;
+        match &self.frame_locals.borrow()[place] {
+            FrameLocal::Bound(cell) | FrameLocal::Reserved(Some(cell)) => {
+                Some(cell.borrow().clone())
+            }
+            _ => Some(Object::Nil),
+        }
+    }
+
+    /// The cell of the frame local `name`, bound when it is reserved.
+    fn frame_ref(&self, name: &str) -> Option<Rc<RefCell<Object>>> {
+        self.frame_cell(self.frame_place(name)?)
+    }
+
+    /// Bind the frame local `name` to `cell`, answering the cell back when
+    /// the scope does not hold `name` by place.
+    fn bind_in_frame(
+        &mut self,
+        name: &str,
+        cell: Rc<RefCell<Object>>,
+    ) -> Option<Rc<RefCell<Object>>> {
+        if name == SELF {
+            self.version = next_version();
+            self.self_cell = Some(cell);
+            return None;
+        }
+        match self.frame_place(name) {
+            Some(place) => {
+                self.version = next_version();
+                self.frame_locals.get_mut()[place] = FrameLocal::Bound(cell);
+                None
+            }
+            None => Some(cell),
+        }
+    }
+
+    /// Visit the names this scope binds in the order they were first bound,
+    /// each with its cell, or None for a frame local still reserved, and
+    /// whether it is reserved for an assignment further down.
+    fn visit_in_order(&self, mut visit: impl FnMut(&str, Option<&Rc<RefCell<Object>>>, bool)) {
+        if let Some(cell) = &self.self_cell {
+            visit(SELF, Some(cell), false);
+        }
+        let before = self.bound_before_frame.min(self.variables.len());
+        let (ahead, after) = self.variables.as_slice().split_at(before);
+        for (name, cell) in ahead {
+            visit(name, Some(cell), self.hoisted_names.contains(name.as_str()));
+        }
+        if let Some(layout) = &self.frame {
+            for (name, local) in layout.names.iter().zip(self.frame_locals.borrow().iter()) {
+                match local {
+                    FrameLocal::Unheld => {}
+                    FrameLocal::Reserved(cell) => visit(name, cell.as_ref(), true),
+                    FrameLocal::Bound(cell) => visit(name, Some(cell), false),
+                }
+            }
+        }
+        for (name, cell) in after {
+            visit(name, Some(cell), self.hoisted_names.contains(name.as_str()));
+        }
+    }
+
     /// Creates a new scope with no parent (global scope)
     pub fn new() -> Self {
         Scope {
@@ -199,6 +493,11 @@ impl Scope {
             spare_bindings: Vec::new(),
             spare_names: Vec::new(),
             version: next_version(),
+            frame: None,
+            frame_locals: RefCell::new(Vec::new()),
+            bound_before_frame: 0,
+            spare_cells: Vec::new(),
+            self_cell: None,
         }
     }
 
@@ -216,6 +515,11 @@ impl Scope {
             spare_bindings: Vec::new(),
             spare_names: Vec::new(),
             version: next_version(),
+            frame: None,
+            frame_locals: RefCell::new(Vec::new()),
+            bound_before_frame: 0,
+            spare_cells: Vec::new(),
+            self_cell: None,
         }
     }
 
@@ -250,6 +554,27 @@ impl Scope {
         if !self.reserved.is_empty() {
             self.reserved = no_reserved_names();
         }
+        if let Some(cell) = self.self_cell.take()
+            && self.spare_cells.len() < SPARE_BINDINGS
+            && Rc::strong_count(&cell) == 1
+            && Rc::weak_count(&cell) == 0
+        {
+            *cell.borrow_mut() = Object::Nil;
+            self.spare_cells.push(cell);
+        }
+        if self.frame.take().is_some() {
+            for local in self.frame_locals.get_mut().drain(..) {
+                if let FrameLocal::Bound(cell) | FrameLocal::Reserved(Some(cell)) = local
+                    && self.spare_cells.len() < SPARE_BINDINGS
+                    && Rc::strong_count(&cell) == 1
+                    && Rc::weak_count(&cell) == 0
+                {
+                    *cell.borrow_mut() = Object::Nil;
+                    self.spare_cells.push(cell);
+                }
+            }
+            self.bound_before_frame = 0;
+        }
         self.version = next_version();
     }
 
@@ -277,6 +602,21 @@ impl Scope {
     /// has one, rather than allocating the name and the cell.
     pub fn define_named(&mut self, name: &str, value: Object) {
         self.version = next_version();
+        if name == SELF {
+            let cell = match self.spare_cells.pop() {
+                Some(cell) => {
+                    *cell.borrow_mut() = value;
+                    cell
+                }
+                None => Rc::new(RefCell::new(value)),
+            };
+            self.self_cell = Some(cell);
+            return;
+        }
+        if self.frame.is_some() && self.frame_place(name).is_some() {
+            self.bind_in_frame(name, Rc::new(RefCell::new(value)));
+            return;
+        }
         self.forget_hidden_and_hoisted(name);
         let (key, cell) = match self.spare_bindings.pop() {
             Some((mut key, cell)) => {
@@ -291,15 +631,16 @@ impl Scope {
     }
 
     pub fn define(&mut self, name: String, value: Object) {
-        self.version = next_version();
-        self.forget_hidden_and_hoisted(&name);
-        self.variables.insert(name, Rc::new(RefCell::new(value)));
+        self.define_shared(name, Rc::new(RefCell::new(value)));
     }
 
     /// Defines a new variable in the current scope with a shared reference
     /// Used when a closure defines a captured variable
     pub fn define_shared(&mut self, name: String, value: Rc<RefCell<Object>>) {
         self.version = next_version();
+        let Some(value) = self.bind_in_frame(&name, value) else {
+            return;
+        };
         self.forget_hidden_and_hoisted(&name);
         self.variables.insert(name, value);
     }
@@ -312,6 +653,9 @@ impl Scope {
         if !self.inherited_names.contains(&name) {
             self.inherited_names.push(name.clone());
         }
+        let Some(value) = self.bind_in_frame(&name, value) else {
+            return;
+        };
         self.variables.insert(name, value);
     }
 
@@ -335,7 +679,9 @@ impl Scope {
     /// Whether this scope binds `name` itself, leaving out what it closed
     /// over.
     pub fn binds(&self, name: &str) -> bool {
-        self.variables.contains_key(name)
+        self.self_ref(name).is_some()
+            || self.variables.contains_key(name)
+            || self.frame_place(name).is_some()
     }
 
     /// The cell a block closed over for `name`, when this scope runs one.
@@ -349,7 +695,11 @@ impl Scope {
         self.version = next_version();
         self.hoisted_names.remove(&name);
         self.hidden_names.insert(name.clone());
-        self.variables.insert(name, Rc::new(RefCell::new(value)));
+        let cell = Rc::new(RefCell::new(value));
+        let Some(cell) = self.bind_in_frame(&name, cell) else {
+            return;
+        };
+        self.variables.insert(name, cell);
     }
 
     /// The implicit parameters this scope's block took, `it` or `_1` to
@@ -371,6 +721,10 @@ impl Scope {
     /// nil, and a block written before the assignment does not close over it.
     pub fn hoist(&mut self, name: &str) {
         self.version = next_version();
+        if let Some(place) = self.frame_place(name) {
+            self.frame_locals.get_mut()[place] = FrameLocal::Reserved(None);
+            return;
+        }
         if !self.hoisted_names.contains(name) {
             let mut held = self.spare_names.pop().unwrap_or_default();
             held.clear();
@@ -401,6 +755,10 @@ impl Scope {
     /// Say that the assignment `name` was reserved for has begun, so code
     /// written in its value closes over the name.
     pub fn unhoist(&mut self, name: &str) {
+        if let Some(place) = self.frame_place(name) {
+            self.unhoist_frame_local(place);
+            return;
+        }
         if let Some(taken) = self.hoisted_names.take(name) {
             self.keep_spare_name(Some(taken));
             self.version = next_version();
@@ -413,10 +771,38 @@ impl Scope {
         }
     }
 
+    /// `unhoist` for the frame local at `place`, answering whether the
+    /// scope holds it by place.
+    pub fn unhoist_frame_local(&mut self, place: usize) -> bool {
+        let Some(local) = self.frame_locals.get_mut().get_mut(place) else {
+            return false;
+        };
+        match local {
+            FrameLocal::Unheld => false,
+            FrameLocal::Bound(_) => true,
+            FrameLocal::Reserved(cell) => {
+                let cell = cell.take().unwrap_or_else(|| {
+                    self.spare_cells
+                        .pop()
+                        .unwrap_or_else(|| Rc::new(RefCell::new(Object::Nil)))
+                });
+                *local = FrameLocal::Bound(cell);
+                self.version = next_version();
+                true
+            }
+        }
+    }
+
     /// Whether `name` is only reserved for a later assignment and has not
     /// been assigned yet. Ruby's parser introduces a local at the assignment
     /// that writes it, so a block written above that line does not see one.
     pub fn is_only_hoisted(&self, name: &str) -> bool {
+        if self.self_ref(name).is_some() {
+            return false;
+        }
+        if let Some(place) = self.frame_place(name) {
+            return matches!(self.frame_locals.borrow()[place], FrameLocal::Reserved(_));
+        }
         if self.variables.contains_key(name) {
             return self.hoisted_names.contains(name);
         }
@@ -432,7 +818,20 @@ impl Scope {
     /// Remove a variable from the current scope only (does not walk parents).
     pub fn undefine(&mut self, name: &str) {
         self.version = next_version();
-        self.variables.shift_remove(name);
+        if name == SELF {
+            self.self_cell = None;
+            return;
+        }
+        if let Some(place) = self.frame_place(name) {
+            self.frame_locals.get_mut()[place] = FrameLocal::Unheld;
+            return;
+        }
+        if let Some(at) = self.variables.get_index_of(name) {
+            self.variables.shift_remove_index(at);
+            if at < self.bound_before_frame {
+                self.bound_before_frame -= 1;
+            }
+        }
     }
 
     /// This scope's names in the order they were first bound.
@@ -443,37 +842,71 @@ impl Scope {
     /// Gets a variable value by traversing the scope chain
     /// Returns None if the variable is not found in any scope
     pub fn get(&self, name: &str) -> Option<Object> {
-        // A method's scope binds `self` before anything else, so the first
-        // binding is looked at before the name is hashed.
-        if name == "self"
-            && let Some((first, cell)) = self.variables.first()
-            && first == "self"
-        {
+        if let Some(value) = self.get_here(name) {
+            return Some(value);
+        }
+        self.parent.as_ref()?.borrow().get(name)
+    }
+
+    /// `get`, taking the root scope to bind no `name` while its address and
+    /// version are what `root_lacks` holds, and noting them there when it
+    /// finds that it binds none.
+    pub fn get_through(
+        &self,
+        name: &str,
+        root_lacks: &std::cell::Cell<(usize, u64)>,
+    ) -> Option<Object> {
+        let Some(parent) = &self.parent else {
+            let root = (std::ptr::from_ref(self) as usize, self.version);
+            if root_lacks.get() == root {
+                return None;
+            }
+            let found = self.get_here(name);
+            if found.is_none() {
+                root_lacks.set(root);
+            }
+            return found;
+        };
+        if let Some(value) = self.get_here(name) {
+            return Some(value);
+        }
+        parent.borrow().get_through(name, root_lacks)
+    }
+
+    /// What this scope itself binds `name` to, or what it closed over.
+    fn get_here(&self, name: &str) -> Option<Object> {
+        if let Some(cell) = self.self_ref(name) {
             return Some(cell.borrow().clone());
         }
         // First, check if the variable exists in this scope
         if let Some(value_ref) = self.variables.get(name) {
             return Some(value_ref.borrow().clone());
         }
+        if self.frame.is_some()
+            && let Some(value) = self.frame_value(name)
+        {
+            return Some(value);
+        }
         if let Some(value_ref) = self.captured_ref(name) {
             return Some(value_ref.borrow().clone());
         }
-
-        // If not found, check the parent scope recursively
-        if let Some(parent) = &self.parent {
-            return parent.borrow().get(name);
-        }
-
-        // Variable not found in any scope
         None
     }
 
     /// Gets a shared reference to a variable by traversing the scope chain
     /// Used for closure capture to enable mutable closures
     pub fn get_ref(&self, name: &str) -> Option<Rc<RefCell<Object>>> {
+        if let Some(cell) = self.self_ref(name) {
+            return Some(Rc::clone(cell));
+        }
         // First, check if the variable exists in this scope
         if let Some(value_ref) = self.variables.get(name) {
             return Some(value_ref.clone());
+        }
+        if self.frame.is_some()
+            && let Some(cell) = self.frame_ref(name)
+        {
+            return Some(cell);
         }
         if let Some(value_ref) = self.captured_ref(name) {
             return Some(value_ref.clone());
@@ -492,6 +925,10 @@ impl Scope {
     /// Returns true if the variable was found and updated, false otherwise
     /// This method will NOT create a new variable if it doesn't exist
     pub fn set(&mut self, name: &str, value: Object) -> bool {
+        if let Some(cell) = self.self_ref(name) {
+            *cell.borrow_mut() = value;
+            return true;
+        }
         // First, check if the variable exists in this scope
         if let Some(value_ref) = self.variables.get(name) {
             note_callable_change(&value_ref.borrow(), &value);
@@ -504,6 +941,10 @@ impl Scope {
                 self.keep_spare_name(Some(taken));
                 self.version = next_version();
             }
+            return true;
+        }
+        if let Some(place) = self.frame_place(name) {
+            self.assign_frame_local(place, value);
             return true;
         }
         if let Some(value_ref) = self.captured_ref(name) {
@@ -533,11 +974,15 @@ impl Scope {
     /// This is useful for closure resolution where we know the exact depth
     pub fn get_at(&self, depth: usize, name: &str) -> Option<Object> {
         if depth == 0 {
+            if let Some(cell) = self.self_ref(name) {
+                return Some(cell.borrow().clone());
+            }
             return self
                 .variables
                 .get(name)
-                .or_else(|| self.captured_ref(name))
-                .map(|v| v.borrow().clone());
+                .map(|v| v.borrow().clone())
+                .or_else(|| self.frame_value(name))
+                .or_else(|| self.captured_ref(name).map(|v| v.borrow().clone()));
         }
 
         if let Some(parent) = &self.parent {
@@ -552,7 +997,13 @@ impl Scope {
     /// Returns true if successful, false if the depth is invalid or variable doesn't exist
     pub fn set_at(&mut self, depth: usize, name: &str, value: Object) -> bool {
         if depth == 0 {
-            if let Some(value_ref) = self.variables.get(name).or_else(|| self.captured_ref(name)) {
+            if let Some(value_ref) = self
+                .self_ref(name)
+                .cloned()
+                .or_else(|| self.variables.get(name).cloned())
+                .or_else(|| self.frame_ref(name))
+                .or_else(|| self.captured_ref(name).cloned())
+            {
                 note_callable_change(&value_ref.borrow(), &value);
                 *value_ref.borrow_mut() = value;
                 return true;
@@ -585,21 +1036,23 @@ impl Scope {
         // Now add this scope's variables (potentially overriding parent values),
         // in the order they were bound, which is the order a block written
         // here reports them in.
-        let bound_in_order = self.ordered_names();
-        for name in bound_in_order {
-            let value_ref = &self.variables[name];
-            all_vars.insert(name.clone(), value_ref.borrow().clone());
-        }
+        self.visit_in_order(|name, cell, _| {
+            let value = cell.map_or(Object::Nil, |cell| cell.borrow().clone());
+            all_vars.insert(name.to_string(), value);
+        });
 
         all_vars
     }
 
     /// Names bound in this scope alone, excluding those a block captured.
     pub fn own_variable_names(&self) -> Vec<String> {
-        self.ordered_names()
-            .filter(|name| !self.hidden_names.contains(*name))
-            .cloned()
-            .collect()
+        let mut names = Vec::new();
+        self.visit_in_order(|name, _, _| {
+            if !self.hidden_names.contains(name) {
+                names.push(name.to_string());
+            }
+        });
+        names
     }
 
     /// Names bound in this scope and the enclosing scopes a Ruby local would
@@ -617,7 +1070,7 @@ impl Scope {
         names.extend(
             self.inherited_names
                 .iter()
-                .filter(|name| self.variables.contains_key(*name))
+                .filter(|name| self.binds(name))
                 .filter(|name| !self.hidden_names.contains(*name))
                 .cloned(),
         );
@@ -641,25 +1094,23 @@ impl Scope {
     /// binding reaches the same reference, so a captured name counts here
     /// even though it is not the block's own.
     pub fn collect_binding_variable_names(&self) -> Vec<String> {
-        let holds_a_local = |name: &String| {
+        let holds_a_local = |name: &str| {
             !self.hidden_names.contains(name)
                 && self
-                    .variables
-                    .get(name)
-                    .is_some_and(|value| !names_a_definition_under(name, &value.borrow()))
+                    .own_value(name)
+                    .is_some_and(|value| !names_a_definition_under(name, &value))
         };
         // A scope's own locals come before the ones it can see through the
         // scopes enclosing it, which is the order Ruby reports them in.
-        let mut names: Vec<String> = self
-            .ordered_names()
-            .filter(|name| !self.inherited_names.contains(*name))
-            .filter(|name| holds_a_local(name))
-            .cloned()
-            .collect();
+        let mut names: Vec<String> = Vec::new();
+        self.visit_in_order(|name, _, _| {
+            if !self.inherited_names.iter().any(|held| held == name) && holds_a_local(name) {
+                names.push(name.to_string());
+            }
+        });
         names.extend(
             self.inherited_names
                 .iter()
-                .filter(|name| self.variables.contains_key(*name))
                 .filter(|name| holds_a_local(name))
                 .cloned(),
         );
@@ -684,7 +1135,7 @@ impl Scope {
         let mut closed_over: Vec<String> = Vec::new();
         if let Some(captured) = &self.captured {
             for (name, value) in captured.iter() {
-                if !self.variables.contains_key(name)
+                if !self.binds(name)
                     && !self.hidden_names.contains(name)
                     && !names_a_definition_under(name, &value.borrow())
                     && !names.iter().any(|listed| listed == name)
@@ -698,6 +1149,11 @@ impl Scope {
         names
     }
 
+    /// Whether this scope is a method's own.
+    pub fn is_method_boundary(&self) -> bool {
+        self.is_method_boundary
+    }
+
     /// Mark this scope as a method boundary.
     pub fn mark_method_boundary(&mut self) {
         self.version = next_version();
@@ -706,16 +1162,25 @@ impl Scope {
 
     /// The reference this scope holds for `name`, ignoring enclosing scopes.
     pub fn own_var_ref(&self, name: &str) -> Option<Rc<RefCell<Object>>> {
+        if let Some(cell) = self.self_ref(name) {
+            return Some(Rc::clone(cell));
+        }
         self.variables
             .get(name)
-            .or_else(|| self.captured_ref(name))
             .cloned()
+            .or_else(|| self.frame_ref(name))
+            .or_else(|| self.captured_ref(name).cloned())
     }
 
     /// Put `value` in the binding this scope holds for `name` itself,
     /// answering whether it holds one.
     pub fn assign_own(&mut self, name: &str, value: Object) -> bool {
-        match self.variables.get(name) {
+        match self
+            .self_ref(name)
+            .cloned()
+            .or_else(|| self.variables.get(name).cloned())
+            .or_else(|| self.frame_ref(name))
+        {
             Some(cell) => {
                 *cell.borrow_mut() = value;
                 true
@@ -726,13 +1191,19 @@ impl Scope {
 
     /// Whether this scope binds or captured `name` itself.
     pub fn holds_own(&self, name: &str) -> bool {
-        self.variables.contains_key(name) || self.captured_ref(name).is_some()
+        self.binds(name) || self.captured_ref(name).is_some()
     }
 
     /// The value this scope binds `name` to itself, without reading through
     /// what it captured or its parent.
     pub fn own_value(&self, name: &str) -> Option<Object> {
-        self.variables.get(name).map(|held| held.borrow().clone())
+        if let Some(cell) = self.self_ref(name) {
+            return Some(cell.borrow().clone());
+        }
+        self.variables
+            .get(name)
+            .map(|held| held.borrow().clone())
+            .or_else(|| self.frame_value(name))
     }
 
     /// Whether this scope is the root of the chain.
@@ -766,15 +1237,17 @@ impl Scope {
         // bound, then what it closed over, then what encloses it. A name
         // already taken stays with the closer scope, and the order is the
         // order `local_variables` reports them in.
-        for name in self.ordered_names() {
+        self.visit_in_order(|name, cell, hoisted| {
             // A name the program never declared is not one a block closes
             // over: a block reading `it` takes the argument it was handed
             // rather than the `it` of the block around it.
-            if self.hoisted_names.contains(name) || self.hidden_names.contains(name) {
-                continue;
+            if let Some(cell) = cell
+                && !hoisted
+                && !self.hidden_names.contains(name)
+            {
+                take(name, cell);
             }
-            take(name, &self.variables[name]);
-        }
+        });
         if let Some(captured) = &self.captured {
             for (name, cell) in captured.iter() {
                 take(name, cell);

@@ -59,20 +59,21 @@ pub(crate) enum CallRoute {
 }
 
 impl VirtualMachine {
-    /// How `name(arguments)` is made, from what the scope binds `name` to
-    /// and what `self` answers.
+    /// How the call `site`, `name(arguments)`, is made, from what the scope
+    /// binds `name` to and what `self` answers.
     pub(crate) fn resolve_bare_call(
         &mut self,
-        name: &str,
-        has_arguments: bool,
-        has_block: bool,
-        has_keyword_splat: bool,
+        site: &crate::bytecode::unit::CallSite,
         position: Position,
     ) -> Result<CallRoute, MetorexError> {
+        let name = site.name.as_str();
+        let has_arguments = site.written_with_arguments;
+        let has_block = site.has_block;
+        let has_keyword_splat = site.keyword_splat;
         // A call written with parentheses names a method, so a local of the
         // same name that holds no callable does not stand in the way of
         // `foobar()` reaching `foobar`, or raising NoMethodError without one.
-        let local = self.environment().get(name);
+        let local = self.environment().get_through(name, &site.root_lacks_name);
         if let Some(held) = &local
             && !matches!(
                 held.view(),

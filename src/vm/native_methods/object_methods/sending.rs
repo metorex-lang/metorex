@@ -100,12 +100,8 @@ impl VirtualMachine {
                         None
                     };
                     if let Some(named) = hidden {
-                        let message = format!(
-                            "{} method '{}' called for an instance of {}",
-                            named,
-                            method,
-                            self.builtins().class_of(receiver).inspect_name()
-                        );
+                        let wording = self.receiver_wording_for(receiver, position);
+                        let message = format!("{named} method '{method}' called for {wording}");
                         let exception = Object::exception("NoMethodError", message.clone());
                         if let View::Exception(cell) = exception.view() {
                             cell.borrow_mut().name = Some(method.clone());

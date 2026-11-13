@@ -195,10 +195,7 @@ impl VirtualMachine {
                         chars[start_idx..end_idx].concat()
                     };
                     // A piece is written in the whole string's encoding.
-                    let piece = crate::object::StringValue::with_encoding(
-                        sliced,
-                        string_value.encoding_name(),
-                    );
+                    let piece = string_value.in_this_encoding(sliced);
                     if string_value.holds_bytes() {
                         piece.mark_bytes();
                     }

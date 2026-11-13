@@ -246,6 +246,48 @@ impl VirtualMachine {
         Ok(Err(arguments))
     }
 
+    /// What `receiver.send(:name)` answers when `method`, found for `name`
+    /// on `class`, is a reader of one instance variable that the native
+    /// methods were already found to answer nothing for, while nothing
+    /// watches calls run. None leaves the call to `invoke_method`.
+    pub(crate) fn sent_reader_answer(
+        &self,
+        class: &Rc<Class>,
+        method: &Method,
+        receiver: &Object,
+    ) -> Option<Object> {
+        if method.is_undefined
+            || method.provenance.c_function.is_some()
+            || method.provenance.bound_self.is_some()
+            || method.provenance.native_alias.is_some()
+            || method.body.is_empty()
+            || !self.tracepoints.is_empty()
+            || self.coverage.is_some()
+            || !method
+                .body_facts
+                .is_plain_reader(|| crate::vm::jit::attributes::plain_reader(method).is_some())
+        {
+            return None;
+        }
+        let called_on_module = match receiver.view() {
+            View::Class(held) | View::Module(held) => Some(Rc::clone(held)),
+            _ => None,
+        };
+        let follows_class = native_answer_follows_class(class, receiver);
+        let state = crate::class::method_state();
+        if !known_native_miss(
+            class,
+            method,
+            called_on_module.as_ref(),
+            state,
+            follows_class,
+        ) {
+            return None;
+        }
+        let variable = crate::vm::jit::attributes::plain_reader(method)?;
+        Some(self.instance_variable_of(receiver, variable))
+    }
+
     fn invoke_method_unguarded(
         &mut self,
         class: Rc<Class>,
@@ -302,14 +344,13 @@ impl VirtualMachine {
             _ => None,
         };
         let state = crate::class::method_state();
-        // The class's ancestors were looked at when the miss was recorded,
-        // and they do not change.
-        let known_miss = match &called_on_module {
-            Some(module) => method
-                .native_miss
-                .recorded(module, state | crate::object::NativeMiss::CALLED_ON_MODULE),
-            None => follows_class && method.native_miss.recorded(&class, state),
-        };
+        let known_miss = known_native_miss(
+            &class,
+            &method,
+            called_on_module.as_ref(),
+            state,
+            follows_class,
+        );
         if !known_miss || cfg!(debug_assertions) {
             let answered =
                 self.answered_natively_first(&class, &method, &receiver, &arguments, position)?;
@@ -786,11 +827,13 @@ impl VirtualMachine {
     /// and last line read. A method of the core library written in Ruby
     /// stands for one MRI writes in C, and sets them in its caller's frame.
     fn in_frame_of_its_own<T>(&mut self, method: &Method, run: impl FnOnce(&mut Self) -> T) -> T {
-        let core_library = method.source_location.as_ref().is_none_or(|written| {
-            written
-                .filename
-                .as_deref()
-                .is_none_or(|file| file == "<internal:prelude>")
+        let core_library = method.body_facts.of_the_core_library(|| {
+            method.source_location.as_ref().is_none_or(|written| {
+                written
+                    .filename
+                    .as_deref()
+                    .is_none_or(|file| file == "<internal:prelude>")
+            })
         });
         if core_library {
             return run(self);
@@ -978,14 +1021,19 @@ impl VirtualMachine {
             .source_location
             .as_ref()
             .and_then(|location| location.filename.as_ref());
-        let saved_file = if written_in.map(String::as_str) == self.current_source_file.as_deref() {
+        let entered =
+            written_in.map(|named| method.body_facts.entered_file(|| self.entered_file(named)));
+        let current = self.current_source_file.as_ref();
+        let in_its_file = match (&entered, current) {
+            (Some((file, _)), Some(current)) => Rc::ptr_eq(file, current) || file == current,
+            (None, None) => true,
+            _ => false,
+        };
+        let saved_file = if in_its_file {
             None
         } else {
-            let (file, encoding) = match written_in {
-                Some(named) => {
-                    let (file, encoding) = self.entered_file(named);
-                    (Some(file), encoding)
-                }
+            let (file, encoding) = match entered {
+                Some((file, encoding)) => (Some(Rc::clone(file)), encoding.clone()),
                 None => (None, None),
             };
             Some((
@@ -1078,6 +1126,7 @@ impl VirtualMachine {
                 method.signature.keyword_rest_parameter.as_deref(),
                 &kwargs,
             )?;
+            self.hold_method_frame(method, from_a_block);
             bind_params(
                 self,
                 &method.parameters,
@@ -1217,6 +1266,7 @@ impl VirtualMachine {
                 function.signature.keyword_rest_parameter.as_deref(),
                 &kwargs,
             )?;
+            self.hold_method_frame(function, false);
             bind_params(
                 self,
                 &function.parameters,
@@ -1410,6 +1460,25 @@ impl VirtualMachine {
         }
 
         Ok(())
+    }
+}
+
+/// Whether the native methods were found to answer nothing by `method`'s
+/// name for a call on `class`, or on `called_on_module` itself, under the
+/// method state `state`. The class's ancestors were looked at when the miss
+/// was recorded, and they do not change.
+fn known_native_miss(
+    class: &Rc<Class>,
+    method: &Method,
+    called_on_module: Option<&Rc<Class>>,
+    state: u64,
+    follows_class: bool,
+) -> bool {
+    match called_on_module {
+        Some(module) => method
+            .native_miss
+            .recorded(module, state | crate::object::NativeMiss::CALLED_ON_MODULE),
+        None => follows_class && method.native_miss.recorded(class, state),
     }
 }
 

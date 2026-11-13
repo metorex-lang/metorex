@@ -1345,3 +1345,33 @@ fn singleton_classes_ask_their_module_to_inspect() {
     let output = run_example("introspection/singleton_classes_ask_their_module_to_inspect.rb");
     assert_eq!(output, "ArgumentError\ntrue\n\"#<Class:Named>\"\n");
 }
+
+#[test]
+fn test_introspection_method_locals_by_place_execution() {
+    let output = run_example("introspection/method_locals_by_place.rb");
+    assert_eq!(
+        output,
+        "[nil, 2, true, 5, [[:taken, :later], 9], [:first, :second, :third, 3], 120]\n"
+    );
+}
+
+#[test]
+fn test_introspection_method_locals_through_names_execution() {
+    let output = run_example("introspection/method_locals_through_names.rb");
+    assert_eq!(output, "[[9, 19, 19], 11, [nil, true, 3], 5, [6, [10]]]\n");
+}
+
+#[test]
+fn test_introspection_method_parameters_by_place_execution() {
+    let output = run_example("introspection/method_parameters_by_place.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[[1, 2, [:first, :second]], [3, 2, [:first, :second, :third, :sum]], ",
+            "[6, :given, [:first, :second, :third, :sum]], nil, [1, [2, 3], 4], ",
+            "[1, :middle, [], 2], [:a, :c], [1, 3, {color: :red}, :block], [1, 2, 3], 5, ",
+            "[1, 2, 10]]\n",
+            "11\n"
+        )
+    );
+}

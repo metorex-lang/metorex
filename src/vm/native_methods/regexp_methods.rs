@@ -906,9 +906,7 @@ impl VirtualMachine {
             return held.string.clone();
         }
         let made = match encoding {
-            Some(named) => {
-                crate::object::StringValue::with_encoding(text.to_string(), named.to_string())
-            }
+            Some(named) => crate::object::StringValue::with_encoding(text.to_string(), named),
             None => crate::object::StringValue::new(text.to_string()),
         };
         if holds_bytes {

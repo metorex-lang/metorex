@@ -215,6 +215,16 @@ impl VirtualMachine {
         let has_block = block.is_some();
         let calling_frame = self.calling_frame();
         self.refuse_moved_receiver(&receiver, position)?;
+        if !has_block
+            && send != "public_send"
+            && let [named] = arguments.as_slice()
+            && let View::Symbol(name) = named.view()
+            && !self.any_refinement_active()
+            && let Some((class, method)) = self.lookup_method(&receiver, &name.as_str())
+            && let Some(answer) = self.sent_reader_answer(&class, &method, &receiver)
+        {
+            return Ok(answer);
+        }
         self.attach_block(block);
         let sent = self
             .call_object_sending_method(&receiver, send, &arguments, position)

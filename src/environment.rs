@@ -208,6 +208,18 @@ impl Environment {
         self.current_scope_ref().borrow().get(name)
     }
 
+    /// `get`, with what `root_lacks` says of the root scope, as
+    /// `Scope::get_through` takes it.
+    pub fn get_through(
+        &self,
+        name: &str,
+        root_lacks: &std::cell::Cell<(usize, u64)>,
+    ) -> Option<Object> {
+        self.current_scope_ref()
+            .borrow()
+            .get_through(name, root_lacks)
+    }
+
     /// Sets a variable value by traversing the scope chain from the current scope
     /// Returns true if the variable was found and updated, false otherwise
     pub fn set(&mut self, name: &str, value: Object) -> bool {

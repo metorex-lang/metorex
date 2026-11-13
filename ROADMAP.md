@@ -170,7 +170,7 @@ The 100 most downloaded gems on rubygems.org (`rubygems.org/stats`, read on 2026
 - [x] Rack and HTTP: rack, rack-test, rack-protection, faraday, faraday-net_http, multipart-post, excon, httpclient, http-cookie, domain_name, connection_pool, and websocket-extensions
 - [x] Text, data, and time: i18n, tzinfo, multi_json, multi_xml, builder, mime-types, mime-types-data, mini_mime, mail, addressable, public_suffix, jwt, dotenv, netrc, and rubyzip
 - [x] Command line and developer tools: thor, rainbow, ruby-progressbar, unicode-display_width, parallel, method_source, coderay, pry, simplecov, docile, and mini_portile2
-- [ ] Ruby parsing and linting: ast, parser, regexp_parser, rubocop-ast, and rubocop
+- [x] Ruby parsing and linting: ast, parser, regexp_parser, rubocop-ast, and rubocop
 - [ ] Templates, loading, and concurrency: tilt, erubi, zeitwerk, sprockets, concurrent-ruby, and thread_safe
 - [ ] Cloud clients: the aws-sdk-ruby repository's aws-sdk-core, aws-sigv4, aws-partitions, aws-eventstream, aws-sdk-s3, and aws-sdk-kms, with jmespath, googleauth, and signet
 - [ ] redis, against a `redis-server` the suite starts on a port of its own, run in the Jenkins branch's pod as a second container beside the build

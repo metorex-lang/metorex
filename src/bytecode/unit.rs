@@ -13,6 +13,9 @@ pub struct Unit {
     /// `locals`, for a method's body. They are bound before the unit runs,
     /// so they are not reserved the way the locals before them are.
     pub parameter_slots_from: Option<usize>,
+    /// The locals a method's body assigns, which the method's scope holds
+    /// by their place here.
+    pub frame_layout: Option<std::rc::Rc<crate::scope::FrameLayout>>,
     /// How often the unit has run and the machine code it was compiled to.
     pub jit: crate::vm::jit::JitSlot,
     /// The source position of each instruction, which backtraces,
@@ -420,6 +423,9 @@ pub struct CallSite {
     /// Symbol written as its first argument.
     pub sends_literal_name: bool,
     pub cache: std::rc::Rc<crate::bytecode::call_cache::CallCache>,
+    /// The root scope, by its address and version, last found to bind no
+    /// name the call's, which a call written without a receiver reads.
+    pub root_lacks_name: std::cell::Cell<(usize, u64)>,
 }
 
 impl CallSite {
@@ -436,6 +442,7 @@ impl CallSite {
             block_argument: false,
             sends_literal_name: false,
             cache: Default::default(),
+            root_lacks_name: Default::default(),
         }
     }
 

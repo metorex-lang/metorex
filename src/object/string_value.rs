@@ -81,7 +81,15 @@ const BINARY_ENCODING_PLACE: u16 = 1;
 /// The place of the encoding named `name` among the encoding names.
 fn encoding_place(name: &str) -> u16 {
     ENCODING_NAMES.with(|names| {
-        if let Some(place) = names.borrow().iter().position(|held| *held == name) {
+        // A name read off a string is the table's own, found by its address
+        // before any is compared by its letters.
+        let held = names.borrow();
+        let found = held
+            .iter()
+            .position(|held| std::ptr::eq(*held, name))
+            .or_else(|| held.iter().position(|held| *held == name));
+        drop(held);
+        if let Some(place) = found {
             return place as u16;
         }
         let mut names = names.borrow_mut();
@@ -305,15 +313,26 @@ impl StringValue {
 
     /// Text tagged with an encoding named outright. Under an encoding that
     /// reads each byte as a character, the text spells the bytes.
-    pub fn with_encoding(text: impl Into<String>, encoding: impl Into<String>) -> Self {
-        let encoding = encoding.into();
+    pub fn with_encoding(text: impl Into<String>, encoding: impl AsRef<str>) -> Self {
+        let encoding = encoding.as_ref();
         let text = text.into();
-        let bytes = if encoding_reads_bytes(&encoding) {
+        let bytes = if encoding_reads_bytes(encoding) {
             bytes_of_characters(&text)
         } else {
             text.into_bytes()
         };
-        Self::built(bytes, encoding_place(&encoding), false)
+        Self::built(bytes, encoding_place(encoding), false)
+    }
+
+    /// `with_encoding`, tagged with the encoding this string is.
+    pub fn in_this_encoding(&self, text: String) -> Self {
+        let place = self.encoding.get();
+        let bytes = if encoding_reads_bytes(encoding_at(place)) {
+            bytes_of_characters(&text)
+        } else {
+            text.into_bytes()
+        };
+        Self::built(bytes, place, false)
     }
 
     /// Text taken from this string, such as what a pattern matched in it,

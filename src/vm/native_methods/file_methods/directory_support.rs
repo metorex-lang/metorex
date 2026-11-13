@@ -293,8 +293,7 @@ pub(crate) fn external_text(text: String, encoding: &str) -> Object {
         return crate::vm::native_methods::pack_format::bytes_to_string(text.as_bytes());
     }
     Object::String(Rc::new(crate::object::StringValue::with_encoding(
-        text,
-        encoding.to_string(),
+        text, encoding,
     )))
 }
 

@@ -369,3 +369,10 @@ fn a_tracepoint_hears_the_native_calls_of_compiled_code() {
     let (compiled, _) = run_example("stdlib_libraries/power_assert_method_chain.rb", &EVERY_UNIT);
     assert_eq!(compiled, interpreted);
 }
+
+#[test]
+fn machine_code_reads_and_writes_locals_as_the_interpreter_does() {
+    let (interpreted, compiled) = interpreted_and_compiled("inline_locals");
+    assert_eq!(interpreted, "[1225, 50, [nil, 1, 1], 20, 6]\n");
+    assert_eq!(compiled, interpreted);
+}

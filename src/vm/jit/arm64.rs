@@ -1,8 +1,9 @@
 //! Machine code for arm64, under the AAPCS64 calling convention. A call
 //! preserves x19 to x28, which hold the context, `step`, the registers'
 //! start, `run_instruction`, where the epoch is, the epoch the unit was
-//! compiled in, and where the signal flag, the collection flag, and the
-//! statement count are.
+//! compiled in, where the signal flag, the collection flag, and the
+//! statement count are, and where the run's cells for the unit's locals
+//! start.
 //!
 //! What runs on the usual path is laid out first, instruction by
 //! instruction, and what runs when a check fails is laid out after it, so
@@ -12,12 +13,12 @@
 //! the function, so each call site is three words.
 
 use super::{
-    AT_OFFSET, Action, COLLECTION_DUE_OFFSET, COMPILED_IN_OFFSET, Callee, Comparison, DEOPTIMIZE,
-    EPOCH_OFFSET, Emitted, FALSE_BITS, Helper, Holding, IntegerOperation, LARGEST_INLINE_WORD,
-    Link, NIL_BITS, Planned, REGISTERS_OFFSET, RETURNED, RUN_INSTRUCTION_OFFSET,
-    SIGNAL_PENDING_OFFSET, STATEMENT_INDEX_OFFSET, STATEMENTS_BETWEEN_CLOCK_READS,
-    STATEMENTS_RUN_OFFSET, STEP_OFFSET, Shared, SharedLayout, Source, Start, TABLE_OFFSET,
-    TRUE_BITS,
+    AT_OFFSET, Action, CELLS_OFFSET, COLLECTION_DUE_OFFSET, COMPILED_IN_OFFSET, Callee, Comparison,
+    DEOPTIMIZE, EPOCH_OFFSET, Emitted, FALSE_BITS, Helper, Holding, IntegerOperation,
+    LARGEST_INLINE_WORD, Link, NIL_BITS, Planned, REGISTERS_OFFSET, RETURNED,
+    RUN_INSTRUCTION_OFFSET, SIGNAL_PENDING_OFFSET, STATEMENT_INDEX_OFFSET,
+    STATEMENTS_BETWEEN_CLOCK_READS, STATEMENTS_RUN_OFFSET, STEP_OFFSET, Shared, SharedLayout,
+    Source, Start, TABLE_OFFSET, TRUE_BITS,
 };
 
 const X0: u32 = 0;
@@ -39,6 +40,7 @@ const COMPILED_IN: u32 = 24;
 const SIGNAL_PENDING: u32 = 25;
 const COLLECTION_DUE: u32 = 26;
 const STATEMENTS_RUN: u32 = 27;
+const CELLS: u32 = 28;
 const FRAME: u32 = 29;
 const LINK: u32 = 30;
 const SP: u32 = 31;
@@ -477,6 +479,34 @@ impl Emitter {
         self.store_register(X14, u32::from(to));
     }
 
+    /// Copy the value of the local in `slot` to register `to`, reading it
+    /// `offset` bytes past where its cell points.
+    fn get_local(&mut self, at: usize, to: u8, slot: u16, offset: u32) {
+        let slow = self.cold_call(at, Callee::Helper(Helper::GetLocal));
+        self.load_64(X9, CELLS, u32::from(slot) * 8);
+        // cbz x9, slow
+        self.branch(0xB400_0000 | X9, slow, BranchKind::Short);
+        self.load_64(X14, X9, offset);
+        self.unless_inline(X14, slow);
+        self.load_register(X15, u32::from(to));
+        self.unless_inline(X15, slow);
+        self.store_register(X14, u32::from(to));
+    }
+
+    /// Copy register `from` to the local in `slot`, writing it `offset`
+    /// bytes past where its cell points.
+    fn set_local(&mut self, at: usize, from: u8, slot: u16, offset: u32) {
+        let slow = self.cold_call(at, Callee::Helper(Helper::SetLocal));
+        self.load_64(X9, CELLS, u32::from(slot) * 8);
+        // cbz x9, slow
+        self.branch(0xB400_0000 | X9, slow, BranchKind::Short);
+        self.load_register(X14, u32::from(from));
+        self.unless_inline(X14, slow);
+        self.load_64(X15, X9, offset);
+        self.unless_inline(X15, slow);
+        self.store_64(X14, X9, offset);
+    }
+
     fn branch_if_holding(&mut self, test: u8, when: Holding, target: usize) {
         self.load_register(X9, u32::from(test));
         match when {
@@ -657,6 +687,8 @@ pub(super) fn emit(steps: &[Planned]) -> Option<Emitted> {
             } => code.integer(at, *operation, *to, *left, *right, starts_statement),
             Action::Store { to, bits } => code.store(at, *to, *bits),
             Action::Move { to, from } => code.move_value(at, *to, *from),
+            Action::GetLocal { to, slot, offset } => code.get_local(at, *to, *slot, *offset),
+            Action::SetLocal { from, slot, offset } => code.set_local(at, *from, *slot, *offset),
             Action::BranchIf { test, when, target } => {
                 code.branch_if_holding(*test, *when, *target);
             }
@@ -781,6 +813,7 @@ pub(super) fn emit_shared(callees: &[Callee]) -> SharedLayout {
     code.load_64(SIGNAL_PENDING, X0, SIGNAL_PENDING_OFFSET);
     code.load_64(COLLECTION_DUE, X0, COLLECTION_DUE_OFFSET);
     code.load_64(STATEMENTS_RUN, X0, STATEMENTS_RUN_OFFSET);
+    code.load_64(CELLS, X0, CELLS_OFFSET);
     // ret
     code.word(0xD65F_03C0);
 

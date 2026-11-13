@@ -73,6 +73,12 @@ impl<'a> UnitRun<'a> {
         self.registers.as_mut_ptr()
     }
 
+    /// Where the cells of the unit's locals start, which machine code reads
+    /// through.
+    pub(crate) fn cells_pointer(&self) -> *const usize {
+        self.state.cells.as_ptr().cast()
+    }
+
     pub(crate) fn unit(&self) -> &'a Unit {
         self.unit
     }
@@ -425,12 +431,59 @@ impl VirtualMachine {
         if unit.parameter_slots_from.is_none_or(|from| slot < from) {
             return None;
         }
-        let cell = self.environment().get_ref(&unit.locals[slot].text)?;
+        let by_place = unit.frame_layout.as_ref().and_then(|layout| {
+            let place = layout.place_for_slot(slot)?;
+            let scope = self.environment().current_scope_ref().borrow();
+            if scope.holds_frame(layout) {
+                scope.frame_cell(place)
+            } else {
+                None
+            }
+        });
+        let cell = match by_place {
+            Some(cell) => cell,
+            None => self.environment().get_ref(&unit.locals[slot].text)?,
+        };
         let plain = !matches!(
             cell.borrow().view(),
             View::NativeFunction(_) | View::Method(_)
         );
         plain.then_some(cell)
+    }
+
+    /// Write `value` to the local in `slot` through the method scope that
+    /// holds `unit`'s locals by place, answering the local's cell, or the
+    /// value back when no scope holds them.
+    fn assign_by_place(
+        &self,
+        unit: &Unit,
+        slot: usize,
+        value: Object,
+    ) -> Result<Rc<RefCell<Object>>, Object> {
+        let Some(layout) = &unit.frame_layout else {
+            return Err(value);
+        };
+        let Some(place) = layout.place_for_slot(slot) else {
+            return Err(value);
+        };
+        let mut scope = self.environment().current_scope_ref().borrow_mut();
+        if !scope.holds_frame(layout) {
+            return Err(value);
+        }
+        scope.assign_frame_local(place, value.clone()).ok_or(value)
+    }
+
+    /// Unhoist the local in `slot` through the scope execution stands in
+    /// when it holds `unit`'s locals by place, answering whether it does.
+    fn unhoist_by_place(&self, unit: &Unit, slot: usize) -> bool {
+        let Some(layout) = &unit.frame_layout else {
+            return false;
+        };
+        let Some(place) = layout.place_for_slot(slot) else {
+            return false;
+        };
+        let mut scope = self.environment().current_scope_ref().borrow_mut();
+        scope.holds_frame(layout) && scope.unhoist_frame_local(place)
     }
 
     /// Say that the assignment of the local in `slot` has begun, unless
@@ -440,7 +493,9 @@ impl VirtualMachine {
         let depth = self.environment().current_depth() + 1;
         if state.unhoisted[slot] != depth {
             state.unhoisted[slot] = depth;
-            self.environment_mut().unhoist(&unit.locals[slot].text);
+            if !self.unhoist_by_place(unit, slot) {
+                self.environment_mut().unhoist(&unit.locals[slot].text);
+            }
         }
     }
 
@@ -806,13 +861,7 @@ impl VirtualMachine {
             }
             Instruction::ResolveCall { site } => {
                 let site = &unit.call_sites[index(site)];
-                let route = self.resolve_bare_call(
-                    &site.name,
-                    site.written_with_arguments,
-                    site.has_block,
-                    site.keyword_splat,
-                    position,
-                )?;
+                let route = self.resolve_bare_call(site, position)?;
                 state.routes.push((route, true));
             }
             Instruction::ResolveScopedCall { namespace, site } => {
@@ -967,6 +1016,13 @@ impl VirtualMachine {
                 match &state.cells[slot] {
                     Some(cell) => *cell.borrow_mut() = value,
                     None => {
+                        let value = match self.assign_by_place(unit, slot, value) {
+                            Ok(cell) => {
+                                state.cells[slot] = Some(cell);
+                                return Ok(Next::Step);
+                            }
+                            Err(value) => value,
+                        };
                         let name = &unit.locals[slot].text;
                         if name.starts_with(|first: char| first.is_ascii_uppercase()) {
                             let target = Expression::Identifier {
@@ -1914,7 +1970,20 @@ impl VirtualMachine {
         }
         let position = unit.positions.at(at);
         let receiver = run.registers[base].clone();
-        let (arguments, block) = call_inputs(site, base, run.registers, run.state);
+        let listed = site.arguments_in_list.then(|| {
+            run.state
+                .arguments
+                .pop()
+                .expect("an argument list was begun")
+                .finish()
+        });
+        let arguments = match &listed {
+            Some(listed) => listed.as_slice(),
+            None => &run.registers[base + 1..base + 1 + site.argument_count],
+        };
+        let block = site
+            .has_block
+            .then(|| run.registers[base + site.block_offset()].clone());
         let ran = crate::vm::program::enter_nesting(position).and_then(|()| {
             let attached = self.attached_block_flags.len();
             let written = written_receiver(site.receiver);
@@ -1939,7 +2008,7 @@ impl VirtualMachine {
         &mut self,
         receiver: Object,
         site: &CallSite,
-        arguments: Vec<Object>,
+        arguments: &[Object],
         block: Option<Object>,
         written: WrittenReceiver,
         position: Position,
@@ -1949,12 +2018,16 @@ impl VirtualMachine {
         let calling_frame = self.calling_frame();
         self.refuse_moved_receiver(&receiver, position)?;
         self.attach_block(block);
-        let answered = self.answer_natively(class, &receiver, &site.name, &arguments, position);
+        let answered = self.answer_natively(class, &receiver, &site.name, arguments, position);
         let reached = match answered {
             Ok(Some(value)) => Ok(value),
-            Ok(None) => {
-                self.call_evaluated_method(receiver, &site.name, arguments, written, position)
-            }
+            Ok(None) => self.call_evaluated_method(
+                receiver,
+                &site.name,
+                arguments.to_vec(),
+                written,
+                position,
+            ),
             Err(error) => Err(error),
         };
         match reached {

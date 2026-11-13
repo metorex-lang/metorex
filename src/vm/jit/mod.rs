@@ -562,6 +562,8 @@ impl Planned {
             | Action::Integer { .. }
             | Action::Store { .. }
             | Action::Move { .. }
+            | Action::GetLocal { .. }
+            | Action::SetLocal { .. }
             | Action::BranchIf { .. }
             | Action::Nothing => true,
         }
@@ -622,6 +624,14 @@ enum Action {
     /// Copy register `from` to register `to` when both hold inline values,
     /// and leave the rest to `run_instruction`.
     Move { to: u8, from: u8 },
+    /// Copy the value of the local in `slot` to register `to` when the run
+    /// holds the local's cell and both hold inline values, reading the
+    /// value `offset` bytes past where the cell's pointer points, and leave
+    /// the rest to `Helper::GetLocal`.
+    GetLocal { to: u8, slot: u16, offset: u32 },
+    /// Copy register `from` to the local in `slot` in the same way, and
+    /// leave the rest to `Helper::SetLocal`.
+    SetLocal { from: u8, slot: u16, offset: u32 },
     /// Branch to `target` when register `test` holds a value of the kind
     /// `when` names.
     BranchIf {
@@ -935,6 +945,16 @@ fn plan(vm: &VirtualMachine, unit: &Unit) -> (Vec<Planned>, Vec<Option<SlotRead>
                 }
                 Instruction::Move { to, from } => Action::Move { to, from },
                 Instruction::CoverBranch { .. } if !counting_branches => Action::Nothing,
+                Instruction::GetLocal { to, slot }
+                    if let Some(offset) = local_value_offset(slot) =>
+                {
+                    Action::GetLocal { to, slot, offset }
+                }
+                Instruction::SetLocal { from, slot }
+                    if let Some(offset) = local_value_offset(slot) =>
+                {
+                    Action::SetLocal { from, slot, offset }
+                }
                 Instruction::GetLocal { .. } => Action::Call(Callee::Helper(Helper::GetLocal)),
                 Instruction::SetLocal { .. } => Action::Call(Callee::Helper(Helper::SetLocal)),
                 Instruction::Unhoist { .. } => Action::Call(Callee::Helper(Helper::Unhoist)),
@@ -992,6 +1012,39 @@ fn plan(vm: &VirtualMachine, unit: &Unit) -> (Vec<Planned>, Vec<Option<SlotRead>
         })
         .collect();
     (steps, slot_reads, loads_symbols)
+}
+
+/// The most slots whose cells the machine code reads itself, which an
+/// offset in one instruction reaches.
+const LOCALS_READ_INLINE: u16 = 4096;
+
+/// Where the machine code reads the value of the local in `slot`, as the
+/// bytes past the address the run's cell for it holds, when it reads it
+/// itself: on arm64, for a slot below `LOCALS_READ_INLINE`, when a cell is
+/// one pointer whose value sits at a fixed place past it.
+fn local_value_offset(slot: u16) -> Option<u32> {
+    if !cfg!(target_arch = "aarch64") || slot >= LOCALS_READ_INLINE {
+        return None;
+    }
+    static OFFSET: std::sync::OnceLock<Option<u32>> = std::sync::OnceLock::new();
+    *OFFSET.get_or_init(|| {
+        type LocalCell = Option<Rc<RefCell<Object>>>;
+        if std::mem::size_of::<LocalCell>() != std::mem::size_of::<usize>()
+            || std::mem::size_of::<Object>() != std::mem::size_of::<u64>()
+        {
+            return None;
+        }
+        let value = Object::Int(7);
+        let expected = value.bits();
+        let cell: LocalCell = Some(Rc::new(RefCell::new(value)));
+        // SAFETY: the cell is one pointer, as checked above.
+        let held = unsafe { std::mem::transmute_copy::<LocalCell, usize>(&cell) };
+        let at = cell.as_ref()?.as_ptr() as usize;
+        let offset = at.checked_sub(held)?;
+        // SAFETY: `at` is where the cell keeps its value, which is alive.
+        let read = unsafe { std::ptr::read(at as *const u64) };
+        (offset % 8 == 0 && offset < 256 && read == expected).then_some(offset as u32)
+    })
 }
 
 /// The bits of the Symbol the cache of name `name` holds, when it was made
@@ -1120,6 +1173,8 @@ struct Context {
     signal_pending: *const u8,
     collection_due: *const u8,
     statements_run: *mut u64,
+    /// Where the run's cells for the unit's locals start.
+    cells: *const usize,
     vm: *mut VirtualMachine,
     run: *mut UnitRun<'static>,
     code: *const MachineCode,
@@ -1138,6 +1193,7 @@ const STATEMENT_INDEX_OFFSET: u32 = 56;
 const SIGNAL_PENDING_OFFSET: u32 = 64;
 const COLLECTION_DUE_OFFSET: u32 = 72;
 const STATEMENTS_RUN_OFFSET: u32 = 80;
+const CELLS_OFFSET: u32 = 88;
 
 /// The statements counted between readings of the clock, a power of two.
 const STATEMENTS_BETWEEN_CLOCK_READS: u64 =
@@ -1176,6 +1232,7 @@ pub(crate) fn run(
         // SAFETY: `vm` is valid, and the field is written only through
         // this pointer while the code runs.
         statements_run: unsafe { std::ptr::addr_of_mut!((*vm).statements_run) },
+        cells: run.cells_pointer(),
         vm,
         run: (run as *mut UnitRun).cast(),
         code,

@@ -127,7 +127,8 @@ pub extern "C-unwind" fn rb_rarray_ptr(array: Value) -> *mut Value {
 
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_rarray_len(array: Value) -> i64 {
-    carry_element_writes_back();
+    // What C wrote into a buffer it was handed changes no Array's length,
+    // so nothing is carried back first.
     with_elements(array, |elements| elements.len() as i64)
 }
 

@@ -169,13 +169,53 @@ impl crate::vm::VirtualMachine {
         body: &crate::ast::Body,
         method: &crate::object::Method,
     ) -> Result<ControlFlow, MetorexError> {
-        let compiled = slot.compiled(|| {
+        let compiled = self.method_unit(slot, body, method);
+        if let Compiled::Unit(unit) = &*compiled
+            && let Some(layout) = &unit.frame_layout
+            && self.hold_frame(layout)
+        {
+            return self.run_unit_flow(unit);
+        }
+        self.run_compiled(&compiled, || body.read_once(first_position))
+    }
+
+    /// What a method's `body` compiles to, compiled the first time.
+    fn method_unit(
+        &self,
+        slot: &UnitSlot,
+        body: &crate::ast::Body,
+        method: &crate::object::Method,
+    ) -> Rc<Compiled> {
+        slot.compiled(|| {
             let parameters = parameter_names(method);
             body.read_once(|statements| {
                 self.compile_body_with_parameters(statements, UnitKind::Method, &parameters)
             })
-        });
-        self.run_compiled(&compiled, || body.read_once(first_position))
+        })
+    }
+
+    /// Have the method scope execution stands in hold the parameters and
+    /// locals of `method`'s body by place, before its arguments are bound.
+    /// The scope binds only its own names by name so far, unless `closed_over`
+    /// says a block's names are bound in it too.
+    pub(crate) fn hold_method_frame(&self, method: &crate::object::Method, closed_over: bool) {
+        if let Compiled::Unit(unit) = &*self.method_unit(&method.unit, &method.body, method)
+            && let Some(layout) = &unit.frame_layout
+        {
+            let mut scope = self.environment().current_scope_ref().borrow_mut();
+            if scope.is_method_boundary() {
+                scope.attach_frame(layout, closed_over);
+            }
+        }
+    }
+
+    /// Have the method scope execution stands in hold `layout`'s locals by
+    /// place, answering whether it holds them.
+    fn hold_frame(&self, layout: &Rc<crate::scope::FrameLayout>) -> bool {
+        let scope = self.environment().current_scope_ref();
+        let mut scope = scope.borrow_mut();
+        scope.holds_frame(layout)
+            || (scope.is_method_boundary() && scope.attach_frame(layout, true))
     }
 
     fn run_compiled(

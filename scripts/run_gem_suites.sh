@@ -32,7 +32,9 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TARGET_DIR="${CARGO_TARGET_DIR:-$REPO_ROOT/target}"
 # METOREX names another binary, such as a release build.
 METOREX="${METOREX:-$TARGET_DIR/debug/metorex}"
-JOBS="${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}"
+# On a Mac, one job per performance core, since a file on an efficiency core
+# runs slower and can pass a spec's own time limit.
+JOBS="${JOBS:-$(sysctl -n hw.perflevel0.physicalcpu 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}"
 # The longest one test file may run before its process is stopped.
 FILE_TIMEOUT="${FILE_TIMEOUT:-300}"
 ENGINE="${ENGINE:-metorex}"

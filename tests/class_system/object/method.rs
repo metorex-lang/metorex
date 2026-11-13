@@ -170,7 +170,8 @@ fn test_method_with_owner_and_location() {
 #[test]
 fn a_method_definition_with_its_reference_counts_fits_in_320_bytes() {
     let counts = 2 * std::mem::size_of::<usize>();
-    assert!(std::mem::size_of::<Method>() + counts <= 320);
+    let size = std::mem::size_of::<Method>() + counts;
+    assert!(size <= 320, "a method takes {size} bytes");
 }
 
 #[test]

@@ -33,6 +33,10 @@ fn integer_from(value: Value) -> BigInt {
 
 /// The number as a C `long`.
 pub(super) fn long_from(value: Value) -> i64 {
+    // An Integer held in the value itself is its bits shifted down.
+    if value & 1 == 1 {
+        return (value as i64) >> 1;
+    }
     let number = integer_from(value);
     i64::try_from(&number)
         .unwrap_or_else(|_| range_error("bignum too big to convert into 'long'".to_string()))

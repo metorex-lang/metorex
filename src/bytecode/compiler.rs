@@ -128,6 +128,32 @@ pub fn compile_with_parameters(
         _ => compiler.statements(body, ANSWER, true)?,
     }
     compiler.emit(Instruction::Return { from: ANSWER as u8 }, end);
+    if of_a_method {
+        let assigned = compiler
+            .unit
+            .parameter_slots_from
+            .unwrap_or(compiler.unit.locals.len());
+        let mut names: Vec<String> = Vec::new();
+        let assigned_names = compiler.unit.locals[..assigned]
+            .iter()
+            .map(|local| &local.text);
+        for name in parameters.iter().chain(assigned_names) {
+            if !names.contains(name) {
+                names.push(name.clone());
+            }
+        }
+        let slots: Vec<Option<&str>> = compiler
+            .unit
+            .locals
+            .iter()
+            .enumerate()
+            .map(|(slot, local)| {
+                (slot < assigned || parameters.contains(&local.text)).then_some(local.text.as_str())
+            })
+            .collect();
+        let layout = crate::scope::FrameLayout::new(names, &slots);
+        compiler.unit.frame_layout = Some(std::rc::Rc::new(layout));
+    }
     compiler.unit.shrink_to_fit();
     Ok(compiler.unit)
 }
@@ -3371,6 +3397,7 @@ impl Compiler {
         let mut native_done = None;
         if method == "[]"
             && let Expression::Identifier { name, .. } = receiver
+            && !self.reads_as_a_local(name)
         {
             let base = self.temporary()?;
             let name_index = self.name(name)?;
@@ -3830,6 +3857,12 @@ impl Compiler {
             Expression::Grouped { expression, .. } => self.cannot_see_locals(expression, assigned),
             _ => false,
         }
+    }
+
+    /// Whether `identifier` reads `name` as one of the unit's locals.
+    fn reads_as_a_local(&self, name: &str) -> bool {
+        self.assigned.iter().any(|held| held == name)
+            || self.parameters.iter().any(|held| held == name)
     }
 
     fn identifier(&mut self, name: &str, to: u8) -> Result<Instruction, &'static str> {

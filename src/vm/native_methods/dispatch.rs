@@ -154,6 +154,19 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
+        // Of the groups of native methods, only the String slicing group
+        // answers these names for a String.
+        if let View::String(string_value) = receiver.view()
+            && matches!(method_name, "[]" | "slice")
+        {
+            return self.call_string_slice(
+                receiver,
+                string_value,
+                method_name,
+                arguments,
+                position,
+            );
+        }
         if let View::Binding(binding) = receiver.view()
             && let Some(answered) =
                 self.call_binding_methods(binding, method_name, arguments, position)?
