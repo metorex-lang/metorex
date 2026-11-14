@@ -773,6 +773,7 @@ module Zlib
 
     def mtime=(held)
       refuse_written_header
+      @mtime_given = true
       super
     end
 
@@ -865,13 +866,13 @@ module Zlib
 
     # The header, which goes out on the first write as a write of its own,
     # and nothing after that. A header given no time of its own carries the
-    # time it was written.
+    # time it was written, and one given 0 carries 0.
     def header_text
       return "".b if @header_sent
       @header_sent = true
       @header_written = true
       stamp = @mtime.nil? ? 0 : @mtime.to_i
-      stamp = Time.now.to_i if stamp.zero?
+      stamp = Time.now.to_i if stamp.zero? && !@mtime_given
       flags = @orig_name.nil? ? 0 : 0x08
       header = [0x1f, 0x8b, 0x08, flags].pack("C4") + [stamp].pack("V") + [0, 0x03].pack("C2")
       header << @orig_name.b << "\0".b unless @orig_name.nil?

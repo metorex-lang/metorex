@@ -301,7 +301,7 @@ impl Parser<'_> {
             let read = self.parse_expression();
             self.assignment_rhs_depth -= 1;
             self.condition_depth -= ends_at_do;
-            let value = read?;
+            let value = self.continue_condition_assignment(read?, ends_at_do)?;
             // `while line = gets and line.size > 1` tests the assignment and
             // then the rest.
             return self.fold_keyword_logic_onto(Expression::BinaryOp {
@@ -338,6 +338,51 @@ impl Parser<'_> {
         }
 
         Ok(expr)
+    }
+
+    /// The value of an assignment in a condition, which may assign in turn,
+    /// as `if stream = streams[key] ||= open(key)` does.
+    pub(crate) fn continue_condition_assignment(
+        &mut self,
+        value: Expression,
+        ends_at_do: usize,
+    ) -> Result<Expression, MetorexError> {
+        if !crate::parser::statements::is_assignable(&value) {
+            return Ok(value);
+        }
+        let operation = if self.check(&[TokenKind::Equal]) {
+            None
+        } else if let Some(operation) = self.compound_assignment_ahead() {
+            Some(operation)
+        } else {
+            return Ok(value);
+        };
+        let position = self.advance().position;
+        self.skip_whitespace();
+        self.condition_depth += ends_at_do;
+        self.assignment_rhs_depth += 1;
+        let read = self.parse_expression();
+        self.assignment_rhs_depth -= 1;
+        self.condition_depth -= ends_at_do;
+        let assigned = self.continue_condition_assignment(read?, ends_at_do)?;
+        let right = match operation {
+            None => assigned,
+            Some(operation) => Expression::BinaryOp {
+                left: Box::new(crate::parser::statements::or_assign_reading(
+                    &operation,
+                    value.clone(),
+                )),
+                op: operation,
+                right: Box::new(assigned),
+                position,
+            },
+        };
+        Ok(Expression::BinaryOp {
+            op: crate::ast::BinaryOp::Assign,
+            left: Box::new(value),
+            right: Box::new(right),
+            position,
+        })
     }
 
     /// `and` and `or`, which bind more loosely than a ternary and share one
@@ -1101,7 +1146,7 @@ impl Parser<'_> {
 fn interpolated_names(parts: &[crate::lexer::InterpolationPart]) -> Vec<String> {
     let mut names = Vec::new();
     for part in parts {
-        let crate::lexer::InterpolationPart::Expression(code, _) = part else {
+        let crate::lexer::InterpolationPart::Expression(code, ..) = part else {
             continue;
         };
         for token in crate::lexer::Lexer::new(code).tokenize() {
@@ -1155,7 +1200,7 @@ fn pattern_interpolated_names(pattern: &str) -> Vec<String> {
 /// value, rather than calling a method of that name.
 fn interpolation_reads_it(parts: &[crate::lexer::InterpolationPart]) -> bool {
     parts.iter().any(|part| {
-        let crate::lexer::InterpolationPart::Expression(code, _) = part else {
+        let crate::lexer::InterpolationPart::Expression(code, ..) = part else {
             return false;
         };
         let tokens = crate::lexer::Lexer::new(code).tokenize();

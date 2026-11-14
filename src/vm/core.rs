@@ -302,6 +302,9 @@ pub struct VirtualMachine {
     /// written a method of the same name. The dispatcher it reaches takes
     /// the flag down, so a call nested inside it is dispatched as usual.
     pub(crate) through_native_alias: bool,
+    /// Set while `clone` makes its copy, so the copy has the original's
+    /// singleton class before `initialize_copy` runs on it, as Ruby's does.
+    pub(crate) clone_copies_singleton: bool,
     /// The instance of a Hash subclass whose backing hash a native Hash
     /// method is working on, with that hash, so a default proc it runs is
     /// handed the instance rather than the hash behind it.
@@ -829,6 +832,7 @@ impl VirtualMachine {
             scheduler_waiting: HashMap::new(),
             bound_stub_depth: 0,
             through_native_alias: false,
+            clone_copies_singleton: false,
             hash_subclass_holder: None,
             current_method_frame: Some(TOP_LEVEL_FRAME),
             iterating_sets: Vec::new(),

@@ -323,3 +323,36 @@ fn test_values_at_reads_a_missing_key_through_the_default_block() {
         "[\"keyword\"]\n[\"a\", \"b\"]\n{keyword: \"keyword\", a: \"a\", b: \"b\"}\n\"start_of_line\"\n[\"start_of_line\"]\n"
     );
 }
+
+#[test]
+fn test_a_long_hash_literal_takes_values_computed_by_operators() {
+    let output = run_example("hashes/long_literal_with_values_computed_by_operators.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "80\n",
+            "[:id, :class, :attribute1]\n",
+            "[:id, :class, :attribute80]\n",
+            "240\n",
+        )
+    );
+}
+
+#[test]
+fn test_string_subclass_keys_find_the_entries_of_the_strings_they_equal() {
+    let output = run_example("hashes/string_subclass_keys_find_string_entries.rb");
+    assert_eq!(
+        output,
+        concat!(
+            ":begin_text\n",
+            ":set_font\n",
+            "nil\n",
+            "true\n",
+            ":move\n",
+            "Token\n",
+            "{\"q\" => 2, \"Q\" => 1}\n",
+            "nil\n",
+            "nil\n",
+        )
+    );
+}

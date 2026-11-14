@@ -185,6 +185,12 @@ impl VirtualMachine {
                 .collection_hash_digest(&backing.to_object(), position)
                 .map(seeded_hash);
         }
+        // An instance of a String subclass hashes as the String it equals.
+        if let Some(text) = crate::vm::native_methods::subclasses::string_subclass_value(receiver)
+            && matches!(text.view(), View::String(_))
+        {
+            return self.hash_digest(&text, position);
+        }
         // An object told apart by which object it is hashes from its id,
         // which it is given here if it has none yet.
         let identified = match receiver.view() {

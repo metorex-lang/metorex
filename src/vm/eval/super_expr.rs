@@ -181,10 +181,15 @@ impl VirtualMachine {
             // Only the receiver's own `def self.name` reaches the copy this
             // way. A method of an extended module goes on through the
             // singleton ancestors below, past the modules extended before it.
+            // One a superclass wrote, running for this class, goes on past
+            // that superclass rather than into what this class extended.
             let running_its_own_class_method =
                 self.method_running_stack.last().is_some_and(|running| {
                     crate::vm::method_lookup::module_own_method(&self_class, &method_name)
                         .is_some_and(|own| Rc::ptr_eq(&own, running))
+                        && self_class
+                            .find_own_method(&format!("__class__{}", method_name))
+                            .is_some_and(|own| Rc::ptr_eq(&own, running))
                 });
             if running_its_own_class_method
                 && let Some(View::Method(extended)) = self_class

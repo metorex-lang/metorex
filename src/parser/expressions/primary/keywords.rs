@@ -110,6 +110,9 @@ impl Parser<'_> {
                 TokenKind::Comment(String::new()),
             ])
             || self.is_at_end()
+            // `super[0..-2]` indexes what the bare call answers, where
+            // `super [1]` passes an Array.
+            || (self.check(&[TokenKind::LBracket]) && !self.peek().had_leading_space)
         {
             // Bare `super` with no arguments and no parens. Also covers
             // `super`-followed-by-binary-op which applies to the result.

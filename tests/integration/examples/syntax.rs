@@ -807,5 +807,40 @@ fn test_character_literals_take_unicode_escapes() {
 #[test]
 fn test_a_binary_operator_continues_onto_an_indexed_constant() {
     let output = run_example("syntax/binary_operator_continued_onto_an_indexed_constant.rb");
-    assert_eq!(output, "28\n");
+    assert_eq!(output, "28\n70\n");
+}
+
+#[test]
+fn test_a_condition_assigns_the_value_of_an_or_assignment() {
+    let output = run_example("syntax/condition_assigns_the_value_of_an_or_assignment.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "store objects\n",
+            "\"object stream\"\n",
+            "\"object stream\"\n",
+            "[2, 2, 3]\n",
+        )
+    );
+}
+
+#[test]
+fn test_assignments_inside_modifier_conditions_and_value_lists() {
+    let output = run_example("syntax/assignments_inside_conditions_and_value_lists.rb");
+    assert_eq!(
+        output,
+        concat!(
+            ":none\n",
+            "[:read, :value]\n",
+            "[:given, :value]\n",
+            ":stored\n",
+            "{entry: nil}\n",
+            "1\n",
+            "2\n",
+            "[[\"script.js\"], [\"hello\", \"console\"]]\n",
+            "[\"hello\", \"console\"]\n",
+            "[1, 2, 3]\n",
+            "2\n",
+        )
+    );
 }

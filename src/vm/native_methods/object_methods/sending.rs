@@ -85,6 +85,19 @@ impl VirtualMachine {
                         Some((owner, _)) => owner,
                         None => self.builtins().class_of(receiver),
                     };
+                    // A singleton class that neither defines nor marks the
+                    // name leaves it to the class the object was made from.
+                    let holder = match holder.superclass() {
+                        Some(made_from)
+                            if holder.is_singleton_class()
+                                && holder.find_own_method(&method).is_none()
+                                && !holder.is_method_restricted(&method)
+                                && !holder.has_public_override(&method) =>
+                        {
+                            made_from
+                        }
+                        _ => holder,
+                    };
                     // A class or module answers through its own copy first,
                     // which `module_function` leaves public.
                     let module_copy_is_public =

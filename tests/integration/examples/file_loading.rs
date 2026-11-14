@@ -738,3 +738,14 @@ fn test_an_autoload_by_feature_name_ends_when_the_feature_is_required() {
         )
     );
 }
+
+#[test]
+fn test_an_autoload_satisfied_by_a_require_stays_satisfied_after_its_directory_leaves_the_load_path()
+ {
+    let output =
+        run_example("loading/autoload_satisfied_by_a_require_from_a_removed_directory/main.rb");
+    assert_eq!(
+        output,
+        "true\nnil\nnil\n[RemovedDirectoryTemplate, RemovedDirectoryHelpers]\n"
+    );
+}

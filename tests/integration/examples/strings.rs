@@ -895,3 +895,18 @@ fn test_unary_plus_copy_keeps_bytes_that_are_no_characters() {
         "[170]\n[170]\n[194, 170]\n[99, 97, 102, 195, 169]\n"
     );
 }
+
+#[test]
+fn test_literals_inside_interpolation_follow_the_frozen_string_literal_comment() {
+    let output = run_example("strings/frozen_literals_inside_interpolation.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"true\"\n",
+            "\"true\"\n",
+            "\"true\"\n",
+            "\"true\\n\"\n",
+            ":true\n"
+        )
+    );
+}

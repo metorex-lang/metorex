@@ -39,20 +39,34 @@ impl VirtualMachine {
             let inst_rc = Instance::new(Rc::clone(class_rc));
             return Ok(Answered(Object::Instance(inst_rc)));
         }
-        if method_name == "new"
-            && (class_rc.name() == "Thread::Queue" || class_rc.name() == "Thread::SizedQueue")
-        {
+        // A subclass of either makes a queue too, as concurrent-ruby's
+        // TimeoutQueue does.
+        if method_name == "new" && class_named_in_chain(class_rc, "Thread::Queue") {
             use crate::object::Instance;
+            let sized = class_named_in_chain(class_rc, "Thread::SizedQueue");
             let inst_rc = Instance::new(Rc::clone(class_rc));
             inst_rc.borrow_mut().set_var(
                 "__queue_items".to_string(),
                 Object::Array(Rc::new(std::cell::RefCell::new(Vec::new()))),
             );
+            // A subclass that writes its own `initialize` is handed the
+            // arguments.
+            if let Some(initialize) = class_rc.find_method("initialize")
+                && crate::vm::method_execution::written_by_the_program(&initialize)
+            {
+                let made = Object::Instance(inst_rc);
+                self.invoke_method(
+                    Rc::clone(class_rc),
+                    initialize,
+                    made.clone(),
+                    arguments.to_vec(),
+                    position,
+                )?;
+                return Ok(Answered(made));
+            }
             // `Queue.new(enumerable)` starts the queue off with what the
             // enumerable holds, in the order it holds them.
-            if class_rc.name() == "Thread::Queue"
-                && let Some(held) = arguments.first()
-            {
+            if !sized && let Some(held) = arguments.first() {
                 let seeded = self.queue_seed_argument(held, position)?;
                 inst_rc
                     .borrow_mut()
@@ -60,7 +74,7 @@ impl VirtualMachine {
             }
             // `SizedQueue.new(n)` says how many the queue holds, which it
             // reports whether or not anything ever waits on it.
-            if class_rc.name() == "Thread::SizedQueue" {
+            if sized {
                 let counted = match arguments.first() {
                     Some(held) => self.queue_capacity_argument(held, position)?,
                     None => {

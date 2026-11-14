@@ -477,7 +477,11 @@ fn split_parts(body: &str, first_line: usize, keeps_escaped_hash: bool) -> Vec<I
                     expr.push(ec);
                 }
             }
-            parts.push(InterpolationPart::Expression(expr, line));
+            parts.push(InterpolationPart::Expression(
+                expr,
+                line,
+                Default::default(),
+            ));
         } else if ch == '#'
             && let upcoming = chars.clone().take(1024).collect::<Vec<char>>()
             && let length = super::strings::short_variable_length(&upcoming)
@@ -487,7 +491,11 @@ fn split_parts(body: &str, first_line: usize, keeps_escaped_hash: bool) -> Vec<I
                 parts.push(InterpolationPart::Text(std::mem::take(&mut current)));
             }
             let named: String = chars.by_ref().take(length).collect();
-            parts.push(InterpolationPart::Expression(named, line));
+            parts.push(InterpolationPart::Expression(
+                named,
+                line,
+                Default::default(),
+            ));
         } else {
             current.push(ch);
         }

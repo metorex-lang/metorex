@@ -194,7 +194,7 @@ fn test_lexer_interpolation_newline_inside() {
         token.kind,
         TokenKind::InterpolatedString(vec![
             InterpolationPart::Text("hello ".to_string()),
-            InterpolationPart::Expression("name\n".to_string(), 1),
+            InterpolationPart::Expression("name\n".to_string(), 1, Default::default()),
         ])
     );
 }

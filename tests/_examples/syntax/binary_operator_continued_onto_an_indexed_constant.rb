@@ -8,3 +8,10 @@ lowercase_cp = "b".ord
 total_weight += width *
   WEIGHT_LOWERCASE[lowercase_cp - 'a'.ord]
 p total_weight
+# The same with a method call ahead of the operator, which a `*` before a
+# line break does not pass a splat to.
+Metrics = Struct.new(:advance_width)
+metrics = Metrics.new(3)
+total_weight += metrics.advance_width *
+  WEIGHT_LOWERCASE[lowercase_cp - 'a'.ord]
+p total_weight

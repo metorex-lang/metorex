@@ -457,7 +457,10 @@ impl VirtualMachine {
                     // be called. A marking further up the chain belongs to
                     // another definition of the same name.
                     is_private = false;
-                } else if !is_private {
+                } else if !is_private || class.is_singleton_class() {
+                    // A singleton class marks nothing of its own here, so the
+                    // class it was made from, which may have made the name
+                    // public again, decides.
                     let mut current = class.superclass();
                     while let Some(sc) = current {
                         if sc.has_public_override(method_name) {
@@ -484,6 +487,11 @@ impl VirtualMachine {
                         View::Nil => "nil".to_string(),
                         View::Bool(held) => held.to_string(),
                         _ if self.is_the_main_object(&receiver) => "main".to_string(),
+                        // An object with a singleton class is named as it
+                        // inspects.
+                        View::Instance(_) if class.is_singleton_class() => {
+                            self.receiver_wording_for(&receiver, position)
+                        }
                         _ => format!("an instance of {}", class.inspect_name()),
                     };
                     let msg = format!(
@@ -1761,7 +1769,7 @@ impl VirtualMachine {
                 if let Some(named) = reopened_class_name(receiver)
                     && let Some(View::Class(reopened)) = self.globals().get(named).view()
                     && let Some(method) = reopened.find_method(method_name)
-                    && !method.body.is_empty()
+                    && (!method.body.is_empty() || aliases_another_name(&method, method_name))
                     && !self.object_method_hides_native(receiver, method_name, &method)
                 {
                     return Some((reopened.clone(), method));

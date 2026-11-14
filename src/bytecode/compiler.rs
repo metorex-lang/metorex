@@ -20,9 +20,14 @@ const ANSWER: usize = 0;
 /// The registers an instruction can name without an `Extend`.
 const REGISTER_LIMIT: usize = 256;
 
-/// How many elements or pairs of a long Array or Hash literal are built at
-/// a time.
+/// How many elements of a long Array literal are built at a time.
 const LITERAL_CHUNK: usize = 64;
+
+/// How many pairs of a long Hash literal are built at a time, which hold
+/// as many registers as a chunk of an Array's elements does, so a value
+/// computed with an operator keeps its operands in the registers an
+/// operator can name.
+const HASH_LITERAL_CHUNK: usize = LITERAL_CHUNK / 2;
 
 /// How many holes of a long interpolated String are joined at a time.
 const INTERPOLATION_CHUNK: usize = 32;
@@ -2981,7 +2986,7 @@ impl Compiler {
             }
             Expression::Dictionary { entries, .. } => {
                 let entries = crate::vm::expression::flattened_entries(entries);
-                let mut chunks = entries.chunks(LITERAL_CHUNK);
+                let mut chunks = entries.chunks(HASH_LITERAL_CHUNK);
                 let shape = self.hash_shape(chunks.next().unwrap_or(&[]))?;
                 let shape = wide(Some(self.unit.hash(shape)))?;
                 self.emit(

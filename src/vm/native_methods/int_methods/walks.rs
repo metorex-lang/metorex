@@ -140,6 +140,13 @@ impl VirtualMachine {
                 // Without a block the walk is handed back as an Enumerator
                 // whatever the endpoint is, and only asking it for a size
                 // reports that it cannot count to one it does not understand.
+                // A limit past the machine word walks one Integer at a time,
+                // the values past it bignums.
+                if matches!(arguments[0].view(), View::BigInt(_)) {
+                    return self
+                        .walk_one_integer_at_a_time(receiver, method_name, &arguments[0], position)
+                        .map(Some);
+                }
                 let numeric_limit = matches!(arguments[0].view(), View::Int(_) | View::Float(_));
                 if !numeric_limit && self.pending_block.is_none() {
                     // Ruby writes a value it holds without an object of its
@@ -277,6 +284,65 @@ impl VirtualMachine {
                 Ok(Some(Object::Int(*n)))
             }
             _ => Ok(None),
+        }
+    }
+
+    /// `upto` or `downto` from `receiver` to a limit where either is past
+    /// the machine word, or an Enumerator over that walk without a block.
+    pub(crate) fn walk_one_integer_at_a_time(
+        &mut self,
+        receiver: &Object,
+        method_name: &str,
+        limit: &Object,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
+        let rising = method_name == "upto";
+        let viewed = self.pending_block.take();
+        let Some(View::Block(block)) = viewed.view() else {
+            let (low, high) = if rising {
+                (receiver.clone(), limit.clone())
+            } else {
+                (limit.clone(), receiver.clone())
+            };
+            let span = self.send_to_object(high, "-", vec![low], position)?;
+            let whole = self.send_to_object(span, "floor", vec![], position)?;
+            let counted = self.send_to_object(whole, "+", vec![Object::Int(1)], position)?;
+            let size = match self
+                .send_to_object(counted.clone(), "<", vec![Object::Int(0)], position)?
+                .is_truthy()
+            {
+                true => Object::Int(0),
+                false => counted,
+            };
+            return self.build_enumerator_of_size(
+                receiver.clone(),
+                method_name,
+                vec![limit.clone()],
+                size,
+                position,
+            );
+        };
+        let (passed, step) = if rising { (">", 1) } else { ("<", -1) };
+        let mut current = receiver.clone();
+        loop {
+            if self
+                .send_to_object(current.clone(), passed, vec![limit.clone()], position)?
+                .is_truthy()
+            {
+                return Ok(receiver.clone());
+            }
+            match self.execute_block_with_control_flow(block, vec![current.clone()], position)? {
+                crate::vm::ControlFlow::Break { value, .. } => return Ok(value),
+                crate::vm::ControlFlow::Return { value, position } => {
+                    return Err(MetorexError::NonLocalReturn {
+                        value,
+                        location: crate::vm::utils::position_to_location(position),
+                        home_frame: block.home_frame,
+                    });
+                }
+                _ => {}
+            }
+            current = self.send_to_object(current, "+", vec![Object::Int(step)], position)?;
         }
     }
 }

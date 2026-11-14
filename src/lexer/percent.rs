@@ -396,7 +396,11 @@ impl<'a> Lexer<'a> {
                                     &mut content,
                                 )));
                             }
-                            parts.push(super::InterpolationPart::Expression(named, hole_line));
+                            parts.push(super::InterpolationPart::Expression(
+                                named,
+                                hole_line,
+                                Default::default(),
+                            ));
                         }
                         None => content.push('#'),
                     }
@@ -409,6 +413,7 @@ impl<'a> Lexer<'a> {
                 parts.push(super::InterpolationPart::Expression(
                     self.read_percent_hole(),
                     hole_line,
+                    Default::default(),
                 ));
             } else if ch == open && open != close {
                 depth += 1;

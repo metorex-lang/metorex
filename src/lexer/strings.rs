@@ -377,7 +377,11 @@ impl<'a> Lexer<'a> {
                                     depth -= 1;
                                     if depth == 0 {
                                         self.advance();
-                                        parts.push(InterpolationPart::Expression(expr, hole_line));
+                                        parts.push(InterpolationPart::Expression(
+                                            expr,
+                                            hole_line,
+                                            Default::default(),
+                                        ));
                                         break;
                                     } else {
                                         expr.push('}');
@@ -409,7 +413,11 @@ impl<'a> Lexer<'a> {
                             parts.push(InterpolationPart::Text(current_text.clone()));
                             current_text.clear();
                         }
-                        parts.push(InterpolationPart::Expression(named, self.line));
+                        parts.push(InterpolationPart::Expression(
+                            named,
+                            self.line,
+                            Default::default(),
+                        ));
                     } else {
                         // Not interpolation, just a # character
                         current_text.push('#');
@@ -872,7 +880,7 @@ fn double_quoted_literal(read: &TokenKind) -> Option<String> {
             for part in parts {
                 match part {
                     InterpolationPart::Text(text) => write_text(text, &mut literal),
-                    InterpolationPart::Expression(code, _) => {
+                    InterpolationPart::Expression(code, ..) => {
                         literal.push_str("#{");
                         literal.push_str(code);
                         literal.push('}');

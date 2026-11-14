@@ -120,7 +120,7 @@ module Digest
     end
 
     def initialize(string = nil)
-      @message = ""
+      @message = "".b
       update string unless string.nil?
     end
 
@@ -129,7 +129,9 @@ module Digest
     end
 
     def update(string)
-      @message = @message + Digest.coerce_message(string)
+      # The message is the bytes of each string given, whatever its
+      # encoding.
+      @message = @message + Digest.coerce_message(string).b
       self
     end
 
@@ -138,7 +140,7 @@ module Digest
     end
 
     def reset
-      @message = ""
+      @message = "".b
       self
     end
 

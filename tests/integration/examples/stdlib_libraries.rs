@@ -2935,3 +2935,21 @@ fn test_index_assignment_through_a_delegator_reaches_method_missing() {
         )
     );
 }
+
+#[test]
+fn test_string_io_write_counts_bytes_and_keeps_a_binary_buffer_binary() {
+    let output = run_example("io/string_io_write_counts_bytes_and_keeps_a_binary_buffer.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "7\n",
+            "4\n",
+            "3\n",
+            "\"\\xE2\\x80\\x9Ca\\xE2\\x80\\x9Dx\\xE2\\x80\\x9C\\xE2\\x80\\x9C\\xE2\\x80\\x9C\"\n",
+            "#<Encoding:BINARY (ASCII-8BIT)>\n",
+            "7\n",
+            "\"“b”\"\n",
+            "#<Encoding:UTF-8>\n",
+        )
+    );
+}

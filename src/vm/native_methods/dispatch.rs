@@ -681,6 +681,18 @@ impl VirtualMachine {
             return Ok(Some(result));
         }
 
+        // An instance of a subclass of Queue or SizedQueue answers the same
+        // methods as one of the class it was made from, as concurrent-ruby's
+        // TimeoutQueue does.
+        if let View::Instance(instance) = receiver.view()
+            && !matches!(class.name(), "Thread::Queue" | "Thread::SizedQueue")
+            && super::class_methods::class_named_in_chain(&instance.borrow().class, "Thread::Queue")
+            && let Some(result) =
+                self.call_queue_method(receiver, method_name, arguments, position)?
+        {
+            return Ok(Some(result));
+        }
+
         // Dispatch to the appropriate class-specific method implementation
         match class.name() {
             "Object" | "Proc" | "Method" => {

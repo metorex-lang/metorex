@@ -701,6 +701,16 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
         let method_name: &str = &method.name;
+        // An alias of a native method under another name, as
+        // `alias_method :to_s, :join`, answers what the method it names does.
+        if method
+            .provenance
+            .native_alias
+            .as_deref()
+            .is_some_and(|target| target != method_name)
+        {
+            return Ok(None);
+        }
         // An instance of a String, Array, Set, or Hash subclass answers the
         // native table through the collection it is backed by, so a method the
         // subclass writes itself has to run its own body rather than be

@@ -201,6 +201,13 @@ impl Parser<'_> {
         &mut self,
     ) -> Result<crate::ast::Expression, crate::error::MetorexError> {
         let expr = self.parse_condition_operands()?;
+        // `return unless key ||= interpolation` tests what the compound
+        // assignment leaves in the name.
+        if crate::parser::statements::is_assignable(&expr)
+            && self.compound_assignment_ahead().is_some()
+        {
+            return self.continue_condition_assignment(expr, 0);
+        }
         if self.match_token(&[crate::lexer::TokenKind::Equal]) {
             self.skip_whitespace();
             let value = self.parse_expression()?;

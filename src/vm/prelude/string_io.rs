@@ -778,9 +778,13 @@ class StringIO
     written = 0
     values.each do |value|
       text = __for_writing__ value.to_s
-      # Text the buffer cannot be joined with is written as its bytes, and
-      # the buffer keeps its own encoding.
-      text = text.b.force_encoding(@string.encoding) if Encoding.compatible?(@string, text).nil?
+      # Text the buffer cannot be joined with, or text written to or from
+      # binary, is written as its bytes, and the buffer keeps its own
+      # encoding.
+      as_bytes = Encoding.compatible?(@string, text).nil? ||
+        (@encoding || @string.encoding) == Encoding::BINARY ||
+        text.encoding == Encoding::BINARY
+      text = text.b.force_encoding(@string.encoding) if as_bytes
       @position = @string.length if @appends
       landing = @position
       if landing > @string.length
@@ -794,7 +798,7 @@ class StringIO
         @string.replace(@string[0, landing] + text + (@string[landing + text.length..-1] || ""))
       end
       @position = landing + text.length
-      written = written + text.length
+      written = written + text.bytesize
     end
     written
   end

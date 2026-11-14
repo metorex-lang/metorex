@@ -8,8 +8,20 @@ pub enum InterpolationPart {
     Text(String),
     /// The expression inside `#{}`, with the source line its `#{` was
     /// written on. Zero where the line is not known, which falls back to the
-    /// line the literal itself starts on.
-    Expression(String, usize),
+    /// line the literal itself starts on. The string literal setting is
+    /// that of the source the literal is written in, which its own literals
+    /// follow.
+    Expression(String, usize, StringLiteralSetting),
+}
+
+/// Whether the string literals of a source are frozen, mutable, or chilled,
+/// as its `frozen_string_literal` comment or the command line decides.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum StringLiteralSetting {
+    #[default]
+    Chilled,
+    Frozen,
+    Mutable,
 }
 
 /// Represents the position of a token in the source code
@@ -303,7 +315,7 @@ impl fmt::Display for TokenKind {
                 for part in parts {
                     match part {
                         InterpolationPart::Text(s) => write!(f, "{}", s)?,
-                        InterpolationPart::Expression(e, _) => write!(f, "#{{{}}}", e)?,
+                        InterpolationPart::Expression(e, ..) => write!(f, "#{{{}}}", e)?,
                     }
                 }
                 write!(f, "`")
@@ -313,7 +325,7 @@ impl fmt::Display for TokenKind {
                 for part in parts {
                     match part {
                         InterpolationPart::Text(s) => write!(f, "{}", s)?,
-                        InterpolationPart::Expression(e, _) => write!(f, "{{{}}}", e)?,
+                        InterpolationPart::Expression(e, ..) => write!(f, "{{{}}}", e)?,
                     }
                 }
                 write!(f, "\"")

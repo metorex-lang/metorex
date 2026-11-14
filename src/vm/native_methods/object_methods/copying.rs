@@ -39,6 +39,7 @@ impl VirtualMachine {
         receiver: &Object,
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
+        let carries_singleton = std::mem::take(&mut self.clone_copies_singleton);
         match receiver.view() {
             // Complex and Rational are value objects: there is nothing
             // to copy, so Ruby answers the receiver itself.
@@ -90,6 +91,9 @@ impl VirtualMachine {
                     new_inst.borrow().take_names_listed_by(&inst);
                     Object::Instance(new_inst)
                 };
+                if carries_singleton {
+                    carry_singleton_class(receiver, &copy);
+                }
                 // The copy gets `initialize_copy` with the original, so
                 // a class can deep-copy what the shallow copy shared. A class
                 // that undefined it has a copy that cannot be finished.
@@ -303,20 +307,6 @@ impl VirtualMachine {
                 copied.chill(notice);
             }
         }
-        // A singleton class travels with a clone, so a method defined on the
-        // original answers on the copy too.
-        if let (View::Instance(original), View::Instance(copied)) = (receiver.view(), copy.view()) {
-            let singleton = original.borrow().singleton_class();
-            if let Some(singleton) = singleton {
-                let copied_singleton = std::rc::Rc::new(crate::class::Class::duplicate(&singleton));
-                copied_singleton.take_ownership_of_methods_from(&singleton);
-                copied.borrow().set_singleton_class(Some(copied_singleton));
-            }
-            let methods = original.borrow().singleton_methods();
-            for (name, method) in methods {
-                copied.borrow().define_singleton_method(name, method);
-            }
-        }
         // A collection keeps its singleton methods against its address, so
         // they are carried across the same way a class's are.
         if !matches!(receiver.view(), View::Instance(_)) {
@@ -392,5 +382,23 @@ impl VirtualMachine {
             wording,
             position,
         ))
+    }
+}
+
+/// Give an instance's copy the original's singleton class and singleton
+/// methods.
+fn carry_singleton_class(receiver: &Object, copy: &Object) {
+    let (View::Instance(original), View::Instance(copied)) = (receiver.view(), copy.view()) else {
+        return;
+    };
+    let singleton = original.borrow().singleton_class();
+    if let Some(singleton) = singleton {
+        let copied_singleton = std::rc::Rc::new(crate::class::Class::duplicate(&singleton));
+        copied_singleton.take_ownership_of_methods_from(&singleton);
+        copied.borrow().set_singleton_class(Some(copied_singleton));
+    }
+    let methods = original.borrow().singleton_methods();
+    for (name, method) in methods {
+        copied.borrow().define_singleton_method(name, method);
     }
 }

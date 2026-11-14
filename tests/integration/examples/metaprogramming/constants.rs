@@ -363,3 +363,12 @@ fn test_a_constant_set_in_a_defined_method_records_the_file_the_block_was_writte
         )
     );
 }
+
+#[test]
+fn test_include_reads_a_module_path_through_the_ancestors_of_each_namespace() {
+    let output = run_example("constants/include_names_a_module_through_an_included_namespace.rb");
+    assert_eq!(
+        output,
+        "[Markup::Parsers::Markup, Markup::Parsers::Helpers, Markup]\n"
+    );
+}

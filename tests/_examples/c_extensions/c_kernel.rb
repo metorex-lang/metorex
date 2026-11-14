@@ -27,6 +27,15 @@ def keywords(*positional, **named, &block)
   [positional, named, block&.call]
 end
 
+# A public method of the same shape, which `rb_funcall_with_block` reaches
+# where the private top-level one is refused, as MRI's calls in public.
+class KeywordTaker
+  def keywords(*positional, **named, &block)
+    [positional, named, block&.call]
+  end
+end
+taker = KeywordTaker.new
+
 directory = Dir.mktmpdir
 require(build_extension("c_kernel.c", "c_kernel", directory))
 kernel = CKernel.new
@@ -116,9 +125,10 @@ p(kernel.call_with_keywords(self, :keywords, [1, { b: 2 }]))
 report { kernel.call_with_keywords(self, :keywords, [1, 2]) }
 p(kernel.call_public(Hidden.new, :shown))
 report { kernel.call_public(Hidden.new, :concealed) }
-p(kernel.call_with_block(self, :keywords, [1], proc { :from_block }))
-p(kernel.call_with_block(self, :keywords, [1], nil))
-p(kernel.call_with_block_and_keywords(self, :keywords, [1, { c: 3 }], proc { :both }))
+p(kernel.call_with_block(taker, :keywords, [1], proc { :from_block }))
+p(kernel.call_with_block(taker, :keywords, [1], nil))
+p(kernel.call_with_block_and_keywords(taker, :keywords, [1, { c: 3 }], proc { :both }))
+report { kernel.call_with_block(self, :keywords, [1], proc {}) }
 report { kernel.call_with_block(Hidden.new, :concealed, [], proc {}) }
 p(kernel.check_call(Hidden.new, :shown))
 p(kernel.check_call(Hidden.new, :absent))

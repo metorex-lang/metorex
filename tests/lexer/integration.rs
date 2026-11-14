@@ -104,12 +104,12 @@ fn test_lexer_string_interpolation_complex() {
             assert_eq!(parts[0], InterpolationPart::Text("Hello ".to_string()));
             assert_eq!(
                 parts[1],
-                InterpolationPart::Expression("name".to_string(), 1)
+                InterpolationPart::Expression("name".to_string(), 1, Default::default())
             );
             assert_eq!(parts[2], InterpolationPart::Text(", you are ".to_string()));
             assert_eq!(
                 parts[3],
-                InterpolationPart::Expression("age".to_string(), 1)
+                InterpolationPart::Expression("age".to_string(), 1, Default::default())
             );
             assert_eq!(parts[4], InterpolationPart::Text(" years old".to_string()));
         }

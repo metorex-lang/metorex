@@ -1238,3 +1238,9 @@ fn test_methods_locals_named_like_kernel_functions_execution() {
         "[[20, 1, \"bcd\", \"ef\"], 7, \"x\"]\n[:written, :out]\n"
     );
 }
+
+#[test]
+fn a_forked_child_knows_its_own_process_id() {
+    let output = run_example("io/forked_child_knows_its_own_process_id.rb");
+    assert_eq!(output, "[true, true]\n0\ntrue\ntrue\n");
+}

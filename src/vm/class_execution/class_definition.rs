@@ -287,6 +287,9 @@ impl VirtualMachine {
         // until the closing `end`. Repeated at the end is harmless and
         // keeps the existing exit semantics.
         let class_obj_pre = Object::Class(Rc::clone(&class));
+        if is_new {
+            self.forget_autoload_a_definition_replaces(parent_scope.as_ref(), name);
+        }
         if let Some(parent) = parent_scope.as_ref() {
             parent.set_class_var(name, class_obj_pre);
         } else {

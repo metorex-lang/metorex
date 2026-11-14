@@ -59,10 +59,10 @@ impl Parser<'_> {
                 }
                 // `"#{}"` interpolates nothing at all, which reads as the
                 // empty string rather than as an expression.
-                InterpolationPart::Expression(expr_str, _) if expr_str.trim().is_empty() => {
+                InterpolationPart::Expression(expr_str, ..) if expr_str.trim().is_empty() => {
                     ast_parts.push(crate::ast::node::InterpolationPart::Text(String::new()));
                 }
-                InterpolationPart::Expression(expr_str, written_on) => {
+                InterpolationPart::Expression(expr_str, written_on, literal_setting) => {
                     // Parse the embedded expression as a fresh token stream,
                     // numbered from the interpolated string's line so `__LINE__`
                     // inside `#{...}` reflects the real source line.
@@ -73,7 +73,8 @@ impl Parser<'_> {
                         } else {
                             position.line as usize
                         },
-                    );
+                    )
+                    .with_string_literal_setting(literal_setting);
                     let expr_tokens = expr_lexer.tokenize();
                     let mut expr_parser = self.nested_parser(expr_tokens);
                     let expr = expr_parser.parse_interpolated_code(position)?;
@@ -419,8 +420,10 @@ impl Parser<'_> {
                 crate::lexer::InterpolationPart::Text(text) => {
                     built.push(crate::ast::InterpolationPart::Text(text));
                 }
-                crate::lexer::InterpolationPart::Expression(source, _) => {
-                    let inner = crate::lexer::Lexer::new(&source).tokenize();
+                crate::lexer::InterpolationPart::Expression(source, _, literal_setting) => {
+                    let inner = crate::lexer::Lexer::new(&source)
+                        .with_string_literal_setting(literal_setting)
+                        .tokenize();
                     let Ok(mut statements) = self.nested_parser(inner).parse() else {
                         return plain;
                     };

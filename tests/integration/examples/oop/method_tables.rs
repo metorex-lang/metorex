@@ -208,3 +208,82 @@ fn test_a_class_answers_case_equality_with_its_own_method() {
         concat!("[true, true, false]\n", "false\n", ":boolean\n",)
     );
 }
+
+#[test]
+fn test_aliases_of_native_methods_answer_for_nil_true_and_false() {
+    let output = run_example("oop/aliases_of_native_methods_on_nil_true_and_false.rb");
+    assert_eq!(
+        output,
+        "true\ntrue\n[\"nil\", \"true\", \"false\"]\n\"nil\"\n\"nil\"\n"
+    );
+}
+
+#[test]
+fn test_an_array_subclass_answers_an_alias_named_after_another_native_method() {
+    let output = run_example("oop/array_subclass_aliases_to_s_to_join.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"<p>text</p>\"\n",
+            "<p>text</p>\n",
+            "\"<p>text</p>\"\n",
+            "\"<p>text</p>\"\n",
+            "\"ab\"\n",
+        )
+    );
+}
+
+#[test]
+fn test_a_bracket_against_a_bare_super_indexes_its_answer() {
+    let output = run_example("oop/super_followed_by_an_index.rb");
+    assert_eq!(output, "\"#<Base value:42>\"\n5\n2\n");
+}
+
+#[test]
+fn test_include_leaves_a_module_a_superclass_has_where_the_superclass_has_it() {
+    let output = run_example("oop/include_skips_a_module_a_superclass_has.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[Single, Comparable, Serial, Real, Abstract, Service]\n",
+            ":real\n",
+            "true\n",
+            "[Comparable, Serial, Service, Kernel]\n",
+        )
+    );
+}
+
+#[test]
+fn test_class_method_super_goes_past_a_module_a_subclass_extended() {
+    let output = run_example("oop/class_method_super_past_a_module_a_subclass_extended.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[:safe, :mid, :root]\n",
+            "[:own_child, :safe, :mid, :root]\n",
+            "checked Value\n",
+            "barrier\n",
+            "1\n",
+        )
+    );
+}
+
+#[test]
+fn test_a_public_override_holds_for_an_object_with_a_singleton_class() {
+    let output = run_example("oop/public_override_holds_after_a_singleton_class_is_made.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[:unscheduled]\n",
+            "[:pending]\n",
+            "protected method 'secret' called for #<Guarded:0x>\n",
+            "private method 'hidden' called for #<Guarded:0x>\n",
+        )
+    );
+}
+
+#[test]
+fn test_clone_has_the_singleton_methods_while_initialize_copy_runs() {
+    let output = run_example("oop/clone_has_singleton_methods_during_initialize_copy.rb");
+    assert_eq!(output, "[:stubbed]\n[:synchronize]\n[:stubbed]\n");
+}

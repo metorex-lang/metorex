@@ -316,6 +316,30 @@ impl VirtualMachine {
     /// registration and unmark the file so a retry can re-execute. Returns
     /// `Ok(None)` when there is no autoload and the caller should fall
     /// through to a NameError or other fallback.
+    /// A class or module defined outside the autoload of its name takes the
+    /// place of that autoload, as a plain `require` of the autoload's file
+    /// does.
+    pub(crate) fn forget_autoload_a_definition_replaces(
+        &mut self,
+        scope: Option<&Rc<crate::class::Class>>,
+        name: &str,
+    ) {
+        let owner = match scope {
+            Some(scope) => Rc::clone(scope),
+            None => match self.globals().get("Object").view() {
+                Some(View::Class(object_class)) => Rc::clone(object_class),
+                _ => return,
+            },
+        };
+        let autoloading = self
+            .autoload_loading
+            .iter()
+            .any(|(cls, n, _)| Rc::ptr_eq(cls, &owner) && n == name);
+        if !autoloading && owner.get_autoload(name).is_some() {
+            owner.remove_autoload(name);
+        }
+    }
+
     pub(crate) fn try_autoload_constant(
         &mut self,
         class_rc: &Rc<crate::class::Class>,

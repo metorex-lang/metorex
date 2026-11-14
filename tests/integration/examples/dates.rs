@@ -292,3 +292,9 @@ fn iso8601_cuts_off_extra_digits() {
         "\"2024-01-02T03:04:05.678Z\"\n\"678\"\n(6789/10000)\n678900000\n\"1970-01-01T00:00:00.999Z\"\n"
     );
 }
+
+#[test]
+fn test_parsing_without_a_year_does_not_call_a_replaced_today() {
+    let output = run_example("dates/parse_without_a_year_after_today_is_replaced.rb");
+    assert_eq!(output, "3\n\"2020-01-02\"\n10\n12\ntrue\nfalse\n");
+}

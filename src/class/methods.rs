@@ -230,7 +230,22 @@ impl Class {
                 last_seen.insert(Rc::as_ptr(module), at);
             }
         }
+        // A module a superclass already has stays where the superclass has
+        // it, as Ruby's `include` skips a module the ancestors hold.
         let mut placed: std::collections::HashSet<*const Class> = std::collections::HashSet::new();
+        if !self.is_module() {
+            let mut above = self.superclass();
+            while let Some(ancestor) = above {
+                for module in ancestor
+                    .linear_mixins()
+                    .iter()
+                    .chain(ancestor.transitive_prepends().iter())
+                {
+                    placed.insert(Rc::as_ptr(module));
+                }
+                above = ancestor.superclass();
+            }
+        }
         let mut chain: Vec<Rc<Class>> = Vec::new();
         for (at, expansion) in expansions.iter().enumerate() {
             for module in expansion {

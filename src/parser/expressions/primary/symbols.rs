@@ -258,8 +258,9 @@ impl Parser<'_> {
                         InterpolationPart::Text(text) => {
                             ast_parts.push(crate::ast::node::InterpolationPart::Text(text));
                         }
-                        InterpolationPart::Expression(expr_str, _) => {
-                            let expr_lexer = Lexer::new(&expr_str);
+                        InterpolationPart::Expression(expr_str, _, literal_setting) => {
+                            let expr_lexer =
+                                Lexer::new(&expr_str).with_string_literal_setting(literal_setting);
                             let expr_tokens = expr_lexer.tokenize();
                             let mut expr_parser = self.nested_parser(expr_tokens);
                             let expr = expr_parser.parse_expression()?;

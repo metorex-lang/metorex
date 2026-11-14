@@ -19,7 +19,8 @@
 # there, named after the file. FILE_TIMEOUT is the longest one file may run,
 # 300 seconds unless set, and SANDBOX_FILE_TIMEOUT the longest one of
 # simplecov's sandbox spec files or RuboCop's command line spec files may,
-# 900 unless set.
+# 900 unless set, and STRESS_FILE_TIMEOUT the longest thread_safe's
+# torture spec may, 1800 unless set.
 #
 # A gem with a directory under scripts/gem_suite/bundles runs with
 # BUNDLE_GEMFILE naming the Gemfile there, whose gems
@@ -147,6 +148,10 @@ ONE_AT_A_TIME=(excon mini_portile2)
 # RuboCop's command line spec files, each of which runs RuboCop over a
 # project once per example.
 SANDBOX_FILE_TIMEOUT="${SANDBOX_FILE_TIMEOUT:-900}"
+# The longest thread_safe's torture spec may run, which takes a cache through
+# millions of operations from 40 threads and runs for about 40 seconds under
+# MRI and 15 minutes under Metorex.
+STRESS_FILE_TIMEOUT="${STRESS_FILE_TIMEOUT:-1800}"
 one_at_a_time() {
   local held
   for held in "${ONE_AT_A_TIME[@]}"; do
@@ -220,6 +225,7 @@ run_one() {
   local limit="$FILE_TIMEOUT"
   case "$name" in
     simplecov/spec/sandbox/* | rubocop/spec/rubocop/cli/* | rubocop/spec/rubocop/cli_spec.rb | rubocop/spec/rubocop/server/*) limit="$SANDBOX_FILE_TIMEOUT" ;;
+    thread_safe/spec/thread_safe/cache_loops_spec.rb) limit="$STRESS_FILE_TIMEOUT" ;;
   esac
   local command
   if [ "$ENGINE" = "mri" ]; then
@@ -265,7 +271,7 @@ run_files() {
 export -f run_one run_files
 NO_PREPARE=none
 export -f bundle_path_of
-export MRI WORK_DIR REPO_ROOT BUNDLES GEM_BUNDLES METOREX FILE_TIMEOUT SANDBOX_FILE_TIMEOUT ENGINE NO_PREPARE
+export MRI WORK_DIR REPO_ROOT BUNDLES GEM_BUNDLES METOREX FILE_TIMEOUT SANDBOX_FILE_TIMEOUT STRESS_FILE_TIMEOUT ENGINE NO_PREPARE
 # net-imap's helper measures coverage with SimpleCov unless told not to.
 export SIMPLECOV_DISABLE=1
 # A test that omits itself under CI would count differently there than in

@@ -131,12 +131,16 @@ impl VirtualMachine {
                     View::Class(c) | View::Module(c) => Rc::clone(c),
                     _ => return Ok(None),
                 };
-                if let Some(v) = class_rc.get_class_var(part) {
-                    current = v;
-                } else if let Some(v) = self.try_autoload_constant(&class_rc, part)? {
-                    current = v;
-                } else {
-                    return Ok(None);
+                // A segment reaches the constants of the namespace's
+                // ancestors too, as `Ns::Name` does.
+                let found = match self.const_entry_on(&class_rc, part, true, false) {
+                    Some((_, Some(held))) => Some(held),
+                    Some((owner, None)) => self.try_autoload_constant(&owner, part)?,
+                    None => self.try_autoload_constant(&class_rc, part)?,
+                };
+                match found {
+                    Some(held) => current = held,
+                    None => return Ok(None),
                 }
             }
             return Ok(Some(current));

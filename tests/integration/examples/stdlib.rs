@@ -1998,7 +1998,10 @@ fn string_io_read_with_a_length_reads_an_ascii_run_in_one_piece() {
 #[test]
 fn a_gzip_header_carries_the_time_it_was_written() {
     let output = run_example("stdlib/gzip_header_time.rb");
-    assert_eq!(output, "true\ntrue\n1700000000\n");
+    assert_eq!(
+        output,
+        "true\ntrue\n1700000000\n[31, 139, 8, 0, 0, 0, 0, 0]\n26\n"
+    );
 }
 
 #[test]
@@ -2520,4 +2523,22 @@ fn test_stdlib_open3_capture_options_hash_execution() {
             "\"entry three\\nnote\\n\"\n#<Encoding:BINARY (ASCII-8BIT)>\ntrue\n",
         )
     );
+}
+
+#[test]
+fn test_a_digest_takes_the_bytes_of_strings_in_several_encodings() {
+    let output = run_example("stdlib/digest_of_text_in_several_encodings.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"60edf05b871ff84efe9cc45c1085def8a23819a8\"\n",
+            "\"470c6a91bceaaff82f7e55a077a22682d7dddc3180cc3e4d24b9b3f6aae5c52d\"\n",
+        )
+    );
+}
+
+#[test]
+fn test_queue_subclasses_make_queues_and_answer_queue_methods() {
+    let output = run_example("stdlib/queue_subclasses_answer_queue_methods.rb");
+    assert_eq!(output, "1\n2\nnil\n0\n3\n2\n:a\n\"jobs\"\n:job\ntrue\n");
 }

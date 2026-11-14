@@ -22,7 +22,7 @@ mod percent;
 mod regex_lit;
 mod strings;
 
-pub use token::{InterpolationPart, Position, Token, TokenKind};
+pub use token::{InterpolationPart, Position, StringLiteralSetting, Token, TokenKind};
 
 use std::iter::Peekable;
 use std::str::Chars;
@@ -131,6 +131,35 @@ impl<'a> Lexer<'a> {
         self
     }
 
+    /// Read string literals as the source around this code reads them, for
+    /// the code inside a `#{}`.
+    pub fn with_string_literal_setting(mut self, setting: StringLiteralSetting) -> Self {
+        self.frozen_literals = setting == StringLiteralSetting::Frozen;
+        self.mutable_literals = setting == StringLiteralSetting::Mutable;
+        self
+    }
+
+    fn stamp_string_literal_setting(&self, kind: &mut TokenKind) {
+        if let TokenKind::InterpolatedString(parts) | TokenKind::CommandString(parts) = kind {
+            let setting = self.string_literal_setting();
+            for part in parts {
+                if let InterpolationPart::Expression(_, _, held) = part {
+                    *held = setting;
+                }
+            }
+        }
+    }
+
+    fn string_literal_setting(&self) -> StringLiteralSetting {
+        if self.frozen_literals {
+            StringLiteralSetting::Frozen
+        } else if self.mutable_literals {
+            StringLiteralSetting::Mutable
+        } else {
+            StringLiteralSetting::Chilled
+        }
+    }
+
     pub fn for_prelude(source: &'a str) -> Self {
         let mut made = Self::with_start_line(source, 1);
         made.prelude = true;
@@ -235,7 +264,8 @@ impl<'a> Lexer<'a> {
 
     /// Get the next token from the source code, updating regex disambiguation state.
     pub fn next_token(&mut self) -> Token {
-        let token = self.next_token_inner();
+        let mut token = self.next_token_inner();
+        self.stamp_string_literal_setting(&mut token.kind);
         match &token.kind {
             // Newlines reset expression context for slash-vs-regex purposes:
             // a `/` at the start of a fresh line should be parsed as a regex
@@ -326,7 +356,7 @@ pub fn tokens_from_line(tokens: &mut [Token], start_line: i64) {
             &mut token.kind
         {
             for part in parts {
-                if let InterpolationPart::Expression(_, line) = part
+                if let InterpolationPart::Expression(_, line, _) = part
                     && *line > 0
                 {
                     *line = moved(*line as i64) as usize;

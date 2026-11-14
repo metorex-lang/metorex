@@ -15,7 +15,7 @@ fn test_lexer_interpolated_string_simple() {
             assert_eq!(parts[0], InterpolationPart::Text("hello ".to_string()));
             assert_eq!(
                 parts[1],
-                InterpolationPart::Expression("name".to_string(), 1)
+                InterpolationPart::Expression("name".to_string(), 1, Default::default())
             );
         }
         _ => panic!("Expected InterpolatedString, got {:?}", token.kind),
@@ -30,11 +30,20 @@ fn test_lexer_interpolated_string_multiple() {
     match token.kind {
         TokenKind::InterpolatedString(parts) => {
             assert_eq!(parts.len(), 5);
-            assert_eq!(parts[0], InterpolationPart::Expression("x".to_string(), 1));
+            assert_eq!(
+                parts[0],
+                InterpolationPart::Expression("x".to_string(), 1, Default::default())
+            );
             assert_eq!(parts[1], InterpolationPart::Text(" + ".to_string()));
-            assert_eq!(parts[2], InterpolationPart::Expression("y".to_string(), 1));
+            assert_eq!(
+                parts[2],
+                InterpolationPart::Expression("y".to_string(), 1, Default::default())
+            );
             assert_eq!(parts[3], InterpolationPart::Text(" = ".to_string()));
-            assert_eq!(parts[4], InterpolationPart::Expression("z".to_string(), 1));
+            assert_eq!(
+                parts[4],
+                InterpolationPart::Expression("z".to_string(), 1, Default::default())
+            );
         }
         _ => panic!("Expected InterpolatedString, got {:?}", token.kind),
     }
@@ -50,7 +59,7 @@ fn test_lexer_interpolated_string_at_start() {
             assert_eq!(parts.len(), 2);
             assert_eq!(
                 parts[0],
-                InterpolationPart::Expression("greeting".to_string(), 1)
+                InterpolationPart::Expression("greeting".to_string(), 1, Default::default())
             );
             assert_eq!(parts[1], InterpolationPart::Text(", world!".to_string()));
         }
@@ -69,7 +78,7 @@ fn test_lexer_interpolated_string_at_end() {
             assert_eq!(parts[0], InterpolationPart::Text("result: ".to_string()));
             assert_eq!(
                 parts[1],
-                InterpolationPart::Expression("value".to_string(), 1)
+                InterpolationPart::Expression("value".to_string(), 1, Default::default())
             );
         }
         _ => panic!("Expected InterpolatedString, got {:?}", token.kind),
@@ -86,7 +95,7 @@ fn test_lexer_interpolated_string_only_expression() {
             assert_eq!(parts.len(), 1);
             assert_eq!(
                 parts[0],
-                InterpolationPart::Expression("value".to_string(), 1)
+                InterpolationPart::Expression("value".to_string(), 1, Default::default())
             );
         }
         _ => panic!("Expected InterpolatedString, got {:?}", token.kind),
@@ -123,7 +132,7 @@ fn test_lexer_interpolated_string_with_complex_expression() {
             assert_eq!(parts[0], InterpolationPart::Text("result: ".to_string()));
             assert_eq!(
                 parts[1],
-                InterpolationPart::Expression("x + y * 2".to_string(), 1)
+                InterpolationPart::Expression("x + y * 2".to_string(), 1, Default::default())
             );
         }
         _ => panic!("Expected InterpolatedString, got {:?}", token.kind),

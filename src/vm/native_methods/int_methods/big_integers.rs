@@ -5,8 +5,8 @@ use crate::object::View;
 
 impl VirtualMachine {
     /// The Integer methods that have an exact answer for a value past the
-    /// i64 range. `times`, `upto`, and `downto` are absent: a loop over that
-    /// many values never finishes, so nothing here can stand in for one.
+    /// i64 range. `times` is absent: a loop over that many values never
+    /// finishes, so nothing here can stand in for one.
     pub(crate) fn call_big_int_method(
         &mut self,
         value: &Rc<num_bigint::BigInt>,
@@ -28,6 +28,19 @@ impl VirtualMachine {
             }
         };
         match method_name {
+            "upto" | "downto" => {
+                if arguments.len() != 1 {
+                    return Err(method_argument_error(
+                        method_name,
+                        1,
+                        arguments.len(),
+                        position,
+                    ));
+                }
+                let receiver = Object::BigInt(Rc::clone(value));
+                self.walk_one_integer_at_a_time(&receiver, method_name, &arguments[0], position)
+                    .map(Some)
+            }
             "to_s" | "inspect" if !arguments.is_empty() => {
                 if arguments.len() != 1 {
                     return Err(method_argument_error(

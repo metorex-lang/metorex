@@ -376,18 +376,18 @@ class Date
     raise Date::Error, "invalid date" if fields.empty?
     # A week date fills what it leaves out from the week this is read in.
     if fields.key?(:cweek) || fields.key?(:cwday)
-      now = Date.today(start)
+      now = current_day(start)
       return Date.commercial(fields[:cwyear] || now.cwyear, fields[:cweek] || now.cweek,
                              fields[:cwday] || 1, start)
     end
-    return Date.ordinal(fields[:year] || Date.today(start).year, fields[:yday], start) if fields[:yday]
+    return Date.ordinal(fields[:year] || current_day(start).year, fields[:yday], start) if fields[:yday]
     if fields.key?(:wday) && !fields.key?(:mon) && !fields.key?(:mday) &&
        !fields.key?(:year)
-      now = Date.today(start)
+      now = current_day(start)
       landing = fields[:wday] == 0 ? 7 : fields[:wday]
       return Date.commercial(now.cwyear, now.cweek, landing, start)
     end
-    now = Date.today(start)
+    now = current_day(start)
     year = fields[:year] || now.year
     month = fields[:mon] || (fields.key?(:year) ? 1 : now.month)
     Date.civil(year, month, fields[:mday] || 1, start)
@@ -596,26 +596,26 @@ class Date
              end
     end
     if fields.key?(:mon) || fields.key?(:mday)
-      now = Date.today(start)
+      now = current_day(start)
       opening = year.nil? ? now.month : 1
       return Date.civil(year || now.year, fields[:mon] || opening, fields[:mday] || 1, start)
     end
-    return Date.ordinal(year || Date.today(start).year, fields[:yday], start) if fields.key?(:yday)
+    return Date.ordinal(year || current_day(start).year, fields[:yday], start) if fields.key?(:yday)
     cwyear = fields[:cwyear]
     if cwyear.nil? && fields.key?(:cwyear_short)
       cwyear = complete_year(fields[:cwyear_short], true)
     end
     if !cwyear.nil? || fields.key?(:cweek) || fields.key?(:cwday)
-      now = Date.today(start)
+      now = current_day(start)
       return Date.commercial(cwyear || now.cwyear, fields[:cweek] || 1,
                              fields[:cwday] || 1, start)
     end
     if fields.key?(:week_sunday) || fields.key?(:week_monday) ||
        (!year.nil? && fields.key?(:wday))
-      return week_of(year || Date.today(start).year, fields, start)
+      return week_of(year || current_day(start).year, fields, start)
     end
     if fields.key?(:wday)
-      now = Date.today(start)
+      now = current_day(start)
       return Date.from_jd(now.jd - now.wday + fields[:wday], start)
     end
     return Date.civil(year, 1, 1, start) unless year.nil?
@@ -642,6 +642,15 @@ class Date
     now = Time.now
     civil(now.year, now.month, now.day, start)
   end
+
+  # The day a date read without a year or a month falls back on, which a
+  # program that replaces `Date.today`, as timecop does, leaves alone, since
+  # MRI reads it in C.
+  def self.current_day(start)
+    now = Time.now
+    Date.civil(now.year, now.month, now.day, start)
+  end
+  private_class_method :current_day
 
   def self.valid_civil?(year, month, day, start = ITALY)
     !valid_civil_jd(year, month, day, start).nil?

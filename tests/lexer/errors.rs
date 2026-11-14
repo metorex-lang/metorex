@@ -175,7 +175,7 @@ fn test_lexer_interpolation_reads_code_across_lines() {
         token.kind,
         TokenKind::InterpolatedString(vec![
             InterpolationPart::Text("a".to_string()),
-            InterpolationPart::Expression("\n1\n".to_string(), 1),
+            InterpolationPart::Expression("\n1\n".to_string(), 1, Default::default()),
             InterpolationPart::Text("b".to_string()),
         ])
     );
@@ -193,7 +193,7 @@ fn test_lexer_interpolation_nested_braces() {
             assert_eq!(parts.len(), 1);
             assert_eq!(
                 parts[0],
-                InterpolationPart::Expression("{x}".to_string(), 1)
+                InterpolationPart::Expression("{x}".to_string(), 1, Default::default())
             );
         }
         _ => panic!("Expected InterpolatedString, got {:?}", token.kind),

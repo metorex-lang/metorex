@@ -216,7 +216,7 @@ impl Parser<'_> {
             let mut elements = vec![expr];
             while self.match_token(&[crate::lexer::TokenKind::Comma]) {
                 self.skip_whitespace();
-                elements.push(self.parse_expression_with_lambda()?);
+                elements.push(self.value_list_element()?);
             }
             let array = crate::ast::Expression::Array { elements, position };
             self.wrap_with_rescue_modifier(array)
@@ -225,6 +225,41 @@ impl Parser<'_> {
             // the right-hand side rather than to the assignment.
             self.wrap_with_rescue_modifier(expr)
         }
+    }
+
+    /// One value after a comma on the right of an assignment, which may
+    /// assign in turn, as `sources = ["a.js"], names = ["b"]` assigns
+    /// `names` and puts its value in the list.
+    fn value_list_element(&mut self) -> Result<crate::ast::Expression, MetorexError> {
+        let element = self.parse_expression_with_lambda()?;
+        if !is_assignable(&element) {
+            return Ok(element);
+        }
+        let operation = if self.check(&[TokenKind::Equal]) {
+            None
+        } else if let Some(operation) = self.compound_assignment_ahead() {
+            Some(operation)
+        } else {
+            return Ok(element);
+        };
+        let position = self.advance().position;
+        self.skip_whitespace();
+        let assigned = self.value_list_element()?;
+        let right = match operation {
+            None => assigned,
+            Some(operation) => crate::ast::Expression::BinaryOp {
+                left: Box::new(or_assign_reading(&operation, element.clone())),
+                op: operation,
+                right: Box::new(assigned),
+                position,
+            },
+        };
+        Ok(crate::ast::Expression::BinaryOp {
+            op: BinaryOp::Assign,
+            left: Box::new(element),
+            right: Box::new(right),
+            position,
+        })
     }
 
     /// A `class` or `module` definition with a call written onto its `end`,

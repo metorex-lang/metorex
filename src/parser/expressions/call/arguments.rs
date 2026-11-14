@@ -281,6 +281,9 @@ impl Parser<'_> {
         matches!(self.peek().kind, TokenKind::Star | TokenKind::StarStar)
             && self.peek().had_leading_space
             && !self.peek_ahead(1).had_leading_space
+            // An operator that ends the line continues the expression onto
+            // the next one.
+            && !matches!(self.peek_ahead(1).kind, TokenKind::Newline | TokenKind::EOF)
     }
 
     /// Whether the `:` at the cursor opens a symbol argument. A name follows

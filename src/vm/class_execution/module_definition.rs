@@ -180,6 +180,9 @@ impl VirtualMachine {
         } else {
             Object::Module(Rc::clone(&module))
         };
+        if is_new {
+            self.forget_autoload_a_definition_replaces(parent_scope.as_ref(), name);
+        }
         if let Some(parent) = parent_scope.as_ref() {
             parent.set_class_var(name, module_obj_pre);
         } else {

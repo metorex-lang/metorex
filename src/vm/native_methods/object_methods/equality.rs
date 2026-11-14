@@ -103,7 +103,10 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let copy = self.copy_for(receiver, position)?;
+                self.clone_copies_singleton = method_name == "clone";
+                let copy = self.copy_for(receiver, position);
+                self.clone_copies_singleton = false;
+                let copy = copy?;
                 // `dup` answers a range that is not frozen, while `clone`
                 // keeps the frozen state the original carried.
                 if let Some(View::Range { mark, .. }) = copy.view()

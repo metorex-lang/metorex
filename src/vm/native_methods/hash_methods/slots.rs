@@ -24,10 +24,13 @@ impl VirtualMachine {
             return Ok(format!("{HASHED_SLOT_PREFIX}i{id}").into());
         }
         if !self.key_hashes_for_itself(key) {
-            return Ok((crate::vm::utils::object_to_dict_key(key)
-                .unwrap_or_default()
-                .to_string())
-            .into());
+            let placed_by = self.string_subclass_key_text(key);
+            return Ok(
+                (crate::vm::utils::object_to_dict_key(placed_by.as_ref().unwrap_or(key))
+                    .unwrap_or_default()
+                    .to_string())
+                .into(),
+            );
         }
         self.hashed_slot(key, position, |candidate| {
             pairs
@@ -114,7 +117,7 @@ impl VirtualMachine {
     /// primitives reading back from their slot names.
     pub(crate) fn key_hashes_for_itself(&mut self, key: &Object) -> bool {
         if matches!(key.view(), View::Instance(_)) {
-            return true;
+            return self.string_subclass_key_text(key).is_none();
         }
         // Ruby places the immediates by value without asking them, so a
         // `TrueClass#hash` written in the program is never reached.
@@ -134,6 +137,14 @@ impl VirtualMachine {
         // Array by its elements and a Range by its ends, so it is placed by
         // its hash too.
         self.responds_to(key, "hash")
+    }
+
+    /// The text an instance of a String subclass is placed by as a key,
+    /// which is that of the String it equals. Ruby hashes every String key
+    /// by its text, whatever `#hash` a subclass writes.
+    fn string_subclass_key_text(&self, key: &Object) -> Option<Object> {
+        let text = crate::vm::native_methods::subclasses::string_subclass_value(key)?;
+        matches!(text.view(), View::String(_)).then_some(text)
     }
 
     /// The object id a hash comparing by identity places a key by. It is
