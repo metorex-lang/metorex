@@ -202,3 +202,15 @@
 [submodule "gems/thread_safe"]
 	path = gems/thread_safe
 	url = https://github.com/ruby-concurrency/thread_safe
+[submodule "gems/aws-sdk-ruby"]
+	path = gems/aws-sdk-ruby
+	url = https://github.com/aws/aws-sdk-ruby
+[submodule "gems/jmespath"]
+	path = gems/jmespath
+	url = https://github.com/jmespath/jmespath.rb
+[submodule "gems/googleauth"]
+	path = gems/googleauth
+	url = https://github.com/googleapis/google-auth-library-ruby
+[submodule "gems/signet"]
+	path = gems/signet
+	url = https://github.com/googleapis/signet

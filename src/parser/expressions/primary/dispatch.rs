@@ -128,7 +128,10 @@ impl Parser<'_> {
                 let (parts, holds_bytes) =
                     self.adjacent_string_parts(vec![InterpolationPart::Text(value)], false);
                 if holds_bytes && let Some(spelled) = only_text(&parts) {
-                    return Ok(joined_bytes_literal(spelled, position));
+                    return Ok(literals::frozen(
+                        joined_bytes_literal(spelled, position),
+                        position,
+                    ));
                 }
                 match only_text(&parts) {
                     Some(value) => Ok(Expression::MethodCall {
@@ -439,7 +442,9 @@ impl Parser<'_> {
                     };
                     parts.push(InterpolationPart::Text(written))
                 }
-                TokenKind::ByteString(next) if all_text(&parts) => {
+                TokenKind::ByteString(next) | TokenKind::FrozenByteString(next)
+                    if all_text(&parts) =>
+                {
                     if !holds_bytes {
                         for part in parts.iter_mut() {
                             if let InterpolationPart::Text(text) = part {

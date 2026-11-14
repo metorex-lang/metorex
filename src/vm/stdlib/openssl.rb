@@ -191,6 +191,30 @@ class HMAC
       ::Digest.__pbkdf2__ OpenSSL::Digest.canonical_name(named), held, seasoning, rounds, wanted
     end
 
+    # RFC 5869's extract and expand steps, the expansion at most 255 blocks
+    # of the digest long.
+    def self.hkdf(ikm, salt:, info:, length:, hash:)
+      material = OpenSSL::KDF.coerced ikm, "ikm"
+      seasoning = OpenSSL::KDF.coerced salt, "salt"
+      context = OpenSSL::KDF.coerced info, "info"
+      wanted = OpenSSL::KDF.counted length, "length"
+      raise ArgumentError, "length must be non-negative" if wanted < 0
+      raise KDFError, "EVP_PKEY_derive: invalid key length" if wanted == 0
+      named = OpenSSL::Digest.canonical_name(hash.respond_to?(:name) ? hash.name : hash.to_s)
+      width = OpenSSL::Digest.digest(named, "").bytesize
+      raise KDFError, "EVP_PKEY_derive" if wanted > width * 255
+      key = OpenSSL::HMAC.digest(named, seasoning.b, material.b)
+      made = "".b
+      block = "".b
+      counter = 1
+      while made.bytesize < wanted
+        block = OpenSSL::HMAC.digest(named, key, block + context.b + counter.chr.b).b
+        made << block
+        counter += 1
+      end
+      made.byteslice(0, wanted)
+    end
+
     SCRYPT_KEYWORDS = %i[salt N r p length].freeze
 
     # scrypt takes every one of its parameters by keyword. N, the size of
@@ -268,36 +292,48 @@ class HMAC
     end
   end
 
-  # A cipher named the way OpenSSL names one. AES in CBC mode is carried,
-  # with keys of 128, 192, and 256 bits, padded as PKCS#7 pads, and other
-  # names are refused.
+  # A cipher named the way OpenSSL names one. AES in CBC, ECB, CTR, and GCM
+  # modes is carried, with keys of 128, 192, and 256 bits, CBC and ECB padded
+  # as PKCS#7 pads, and other names are refused.
   class Cipher
     class CipherError < OpenSSLError; end
 
     BLOCK = 16
+    GCM_IV_BYTES = 12
     KEY_BYTES = { "128" => 16, "192" => 24, "256" => 32 }.freeze
 
     def self.ciphers
-      %w[aes-128-cbc aes-128-ctr aes-192-cbc aes-192-ctr aes-256-cbc aes-256-ctr]
+      %w[128 192 256].flat_map { |bits| %w[cbc ctr ecb gcm].map { |mode| "aes-#{bits}-#{mode}" } }
     end
 
     attr_reader :name, :key_len
 
     def initialize name
       @name = name.to_s.upcase
-      bits, mode = @name.match(/\AAES-(128|192|256)-(CBC|CTR)\z/)&.captures
+      bits, mode = @name.match(/\AAES-(128|192|256)-(CBC|CTR|ECB|GCM)\z/)&.captures
       raise CipherError, "unsupported cipher algorithm (#{name})" if bits.nil?
-      @counting = mode == "CTR"
+      @galois = mode == "GCM"
+      @counting = mode == "CTR" || @galois
       @key_len = KEY_BYTES[bits]
+      @codebook = mode == "ECB"
+      @iv_len = if @galois then GCM_IV_BYTES elsif @codebook then 0 else BLOCK end
       @padding = 1
       @encrypting = true
-      @iv = ("\0" * BLOCK).b
+      @iv = ("\0" * @iv_len).b
       @chain = @iv
       @pending = "".b
       @unused = "".b
+      @auth_data = "".b
     end
 
-    def iv_len = BLOCK
+    attr_reader :iv_len
+
+    def iv_len=(length)
+      raise CipherError, "cipher does not support AEAD" unless @galois
+      @iv_len = Integer(length)
+    end
+
+    def authenticated? = @galois
 
     def key_len = @key_len
 
@@ -322,10 +358,26 @@ class HMAC
 
     def iv=(iv)
       iv = iv.to_str
-      raise ArgumentError, "iv must be #{BLOCK} bytes" unless iv.bytesize == BLOCK
+      raise ArgumentError, "iv must be #{@iv_len} bytes" unless iv.bytesize == @iv_len
       @iv = iv.b
       @unused = "".b
       @chain = @iv
+    end
+
+    def auth_data=(data)
+      raise CipherError, "AEAD not supported by this cipher" unless @galois
+      @auth_data = data.to_str.b
+    end
+
+    def auth_tag=(tag)
+      raise CipherError, "authentication tag not supported by this cipher" unless @galois
+      @auth_tag = tag.to_str.b
+    end
+
+    def auth_tag(length = BLOCK)
+      raise CipherError, "authentication tag not supported by this cipher" unless @galois
+      raise CipherError, "retrieving the authentication tag failed" if @auth_tag.nil?
+      @auth_tag.byteslice(0, length)
     end
 
     def random_key
@@ -333,7 +385,7 @@ class HMAC
     end
 
     def random_iv
-      self.iv = OpenSSL::Random.random_bytes(BLOCK)
+      self.iv = OpenSSL::Random.random_bytes(@iv_len)
     end
 
     def padding=(padding)
@@ -344,6 +396,7 @@ class HMAC
       data = data.to_str
       raise ArgumentError, "data must not be empty" if data.empty?
       raise CipherError, "key not set" if @key.nil?
+      return sealed(data.b) if @galois
       return counted(data.b) if @counting
 
       @pending << data.b
@@ -355,6 +408,7 @@ class HMAC
 
     def final
       raise CipherError, "key not set" if @key.nil?
+      return finish_galois if @galois
       return "".b if @counting
 
       if @encrypting && @padding != 0
@@ -376,7 +430,57 @@ class HMAC
       @chain = @iv
       @pending = "".b
       @unused = "".b
+      @ciphertext = nil
       self
+    end
+
+    # GCM counts from the block after J0, which a 12-byte iv makes by adding
+    # a counter of 1 and any other iv makes by GHASH. The ciphertext is kept
+    # so `final` can hash it with the additional data into the tag.
+    def sealed(data)
+      start_galois if @ciphertext.nil?
+      output = counted(data)
+      @ciphertext << (@encrypting ? output : data)
+      output
+    end
+
+    def start_galois
+      @hash_key = OpenSSL.__aes_block__(@key, ("\0" * BLOCK).b)
+      @first_counter =
+        if @iv.bytesize == GCM_IV_BYTES
+          @iv + [1].pack("N")
+        else
+          galois_hash(@iv, [0, @iv.bytesize * 8].pack("Q>Q>"))
+        end
+      @chain = galois_increment(@first_counter)
+      @unused = "".b
+      @ciphertext = "".b
+    end
+
+    def finish_galois
+      start_galois if @ciphertext.nil?
+      lengths = [@auth_data.bytesize * 8, @ciphertext.bytesize * 8].pack("Q>Q>")
+      sum = galois_hash(galois_padded(@auth_data) + @ciphertext, lengths)
+      tag = OpenSSL.__aes_block__(@key, @first_counter).bytes.zip(sum.bytes).map { |left, right| left ^ right }.pack("C*")
+      @ciphertext = nil
+      if @encrypting
+        @auth_tag = tag
+      elsif @auth_tag.nil? || @auth_tag.empty? || !OpenSSL.fixed_length_secure_compare(tag.byteslice(0, @auth_tag.bytesize), @auth_tag)
+        raise CipherError, "AEAD authentication tag verification failed"
+      end
+      "".b
+    end
+
+    def galois_hash(data, lengths)
+      OpenSSL.__ghash__(@hash_key, ("\0" * BLOCK).b, galois_padded(data) + lengths)
+    end
+
+    def galois_padded(data)
+      data + ("\0" * ((BLOCK - data.bytesize % BLOCK) % BLOCK)).b
+    end
+
+    def galois_increment(block)
+      block.byteslice(0, 12) + [(block.byteslice(12, 4).unpack1("N") + 1) % (1 << 32)].pack("N")
     end
 
     # Runs `data` through the keystream, taking first what the last call left
@@ -391,7 +495,7 @@ class HMAC
       end
       return answer if data.empty?
 
-      output, @chain, @unused = OpenSSL.__aes_ctr__(@key, @chain, data)
+      output, @chain, @unused = OpenSSL.__aes_ctr__(@key, @chain, data, @galois ? 4 : BLOCK)
       answer << output
     end
 
@@ -399,6 +503,11 @@ class HMAC
       return "".b if length.zero?
       taken = @pending.byteslice(0, length)
       @pending = @pending.byteslice(length, @pending.bytesize - length)
+      # A codebook runs each block alone, as a chain begun afresh at every one.
+      if @codebook
+        zero = ("\0" * BLOCK).b
+        return (0...length).step(BLOCK).map { |at| OpenSSL.__aes_cbc__(@key, zero, taken.byteslice(at, BLOCK), @encrypting)[0] }.join.b
+      end
       answer, @chain = OpenSSL.__aes_cbc__(@key, @chain, taken, @encrypting)
       answer.b
     end
@@ -1876,6 +1985,153 @@ module OpenSSL
         padding >= 8 && bytes == "\x00\x01".b + ("\xFF".b * padding) + "\x00".b + prefix + hash
       end
 
+      PKCS1_PADDING = 1
+      SSLV23_PADDING = 2
+      NO_PADDING = 3
+      PKCS1_OAEP_PADDING = 4
+
+      def public_encrypt(data, padding = PKCS1_PADDING)
+        width = __width__
+        padded = __padded__(data.to_str.b, padding, width, "EVP_PKEY_encrypt")
+        __public_power__(padded, width)
+      end
+
+      def private_decrypt(data, padding = PKCS1_PADDING)
+        raise PKeyError, "private key needed." unless private?
+        width = __width__
+        data = data.to_str.b
+        raise PKeyError, "EVP_PKEY_decrypt: data greater than mod len" if data.bytesize > width
+        if data.unpack1("H*").to_i(16) >= @n
+          raise PKeyError, "EVP_PKEY_decrypt: data too large for modulus"
+        end
+        decoded = __private_power__(data, width)
+        case padding
+        when NO_PADDING then decoded
+        when PKCS1_OAEP_PADDING
+          __oaep_decoded__(decoded, width) || raise(PKeyError, "EVP_PKEY_decrypt: oaep decoding error")
+        else __type_two_decoded__(decoded) || __implicitly_rejected__(data, width)
+        end
+      end
+
+      def private_encrypt(data, padding = PKCS1_PADDING)
+        raise PKeyError, "private key needed." unless private?
+        width = __width__
+        data = data.to_str.b
+        padded = if padding == NO_PADDING
+                   data
+                 elsif data.bytesize > width - 11
+                   raise PKeyError, "EVP_PKEY_sign: provider signature failure (RSA sign:)"
+                 else
+                   "\x00\x01".b + ("\xFF".b * (width - data.bytesize - 3)) + "\x00".b + data
+                 end
+        __private_power__(padded, width)
+      end
+
+      def public_decrypt(data, padding = PKCS1_PADDING)
+        width = __width__
+        recovered = __public_power__(data.to_str.b, width)
+        return recovered if padding == NO_PADDING
+
+        separator = recovered.index("\x00".b, 2)
+        unless recovered.start_with?("\x00\x01".b) && separator && separator >= 10 &&
+               recovered.byteslice(2, separator - 2).bytes.all?(0xFF)
+          raise PKeyError, "EVP_PKEY_verify_recover: provider signature failure (RSA verify_recover:)"
+        end
+        recovered.byteslice(separator + 1..)
+      end
+
+      def __width__
+        (@n.bit_length + 7) / 8
+      end
+      private :__width__
+
+      def __public_power__(encoded, width)
+        OpenSSL::ASN1.__integer_bytes__(encoded.unpack1("H*").to_i(16).pow(@e, @n)).rjust(width, "\x00".b)
+      end
+      private :__public_power__
+
+      # The message laid out to fill a key's width the way `padding` lays it
+      # out: PKCS #1 v1.5's type 2 block with random filler, OAEP with SHA-1,
+      # or the message alone.
+      def __padded__(data, padding, width, operation)
+        case padding
+        when NO_PADDING
+          raise PKeyError, "#{operation}: data too large for key size" if data.bytesize > width
+          raise PKeyError, "#{operation}: data too small for key size" if data.bytesize < width
+          data
+        when PKCS1_OAEP_PADDING
+          raise PKeyError, "#{operation}: data too large for key size" if data.bytesize > width - 42
+          hashed = OpenSSL::Digest.digest("SHA1", "").b
+          block = hashed + ("\x00".b * (width - data.bytesize - 42)) + "\x01".b + data
+          seed = OpenSSL::Random.random_bytes(20).b
+          masked_block = __xor__(block, __mgf1__("SHA1", seed, block.bytesize))
+          masked_seed = __xor__(seed, __mgf1__("SHA1", masked_block, 20))
+          "\x00".b + masked_seed + masked_block
+        else
+          raise PKeyError, "#{operation}: data too large for key size" if data.bytesize > width - 11
+          filler = "".b
+          while filler.bytesize < width - data.bytesize - 3
+            filler << OpenSSL::Random.random_bytes(width).b.delete("\x00".b)
+          end
+          "\x00\x02".b + filler.byteslice(0, width - data.bytesize - 3) + "\x00".b + data
+        end
+      end
+      private :__padded__
+
+      def __oaep_decoded__(decoded, width)
+        return nil unless decoded.getbyte(0).zero?
+        masked_seed = decoded.byteslice(1, 20)
+        masked_block = decoded.byteslice(21..)
+        seed = __xor__(masked_seed, __mgf1__("SHA1", masked_block, 20))
+        block = __xor__(masked_block, __mgf1__("SHA1", seed, masked_block.bytesize))
+        return nil unless block.byteslice(0, 20) == OpenSSL::Digest.digest("SHA1", "").b
+        rest = block.byteslice(20..)
+        marker = rest.index(/[^\x00]/n)
+        return nil if marker.nil? || rest.getbyte(marker) != 1
+        rest.byteslice(marker + 1..)
+      end
+      private :__oaep_decoded__
+
+      def __type_two_decoded__(decoded)
+        return nil unless decoded.start_with?("\x00\x02".b)
+        separator = decoded.index("\x00".b, 2)
+        return nil if separator.nil? || separator < 10
+        decoded.byteslice(separator + 1..)
+      end
+      private :__type_two_decoded__
+
+      # What OpenSSL answers in place of a PKCS #1 v1.5 block that does not
+      # decode: a message drawn from the private key and the ciphertext, so
+      # a wrong key or a forged ciphertext cannot be told from a right one.
+      def __implicitly_rejected__(ciphertext, width)
+        exponent = [@d.to_s(16).rjust(width * 2, "0")].pack("H*")
+        derived = OpenSSL::HMAC.digest("SHA256", OpenSSL::Digest.digest("SHA256", exponent),
+                                       ciphertext.rjust(width, "\x00".b))
+        lengths = __rejection_bytes__(derived, "length", 256, 2048).unpack("n*")
+        message = __rejection_bytes__(derived, "message", width, width * 8)
+        most = width - 10
+        mask = most
+        [1, 2, 4, 8, 16].each { |shift| mask |= mask >> shift }
+        chosen = 0
+        lengths.each do |candidate|
+          candidate &= mask
+          chosen = candidate if candidate < most
+        end
+        message.byteslice(width - chosen, chosen)
+      end
+      private :__implicitly_rejected__
+
+      def __rejection_bytes__(derived, label, length, bits)
+        made = "".b
+        counter = 0
+        while made.bytesize < length
+          made << OpenSSL::HMAC.digest("SHA256", derived, [counter].pack("n") + label.b + [bits].pack("n")).b
+          counter += 1
+        end
+        made.byteslice(0, length)
+      end
+      private :__rejection_bytes__
+
       def __digested__(digest, data)
         named = OpenSSL::Digest.canonical_name(digest.respond_to?(:name) ? digest.name : digest.to_s)
         prefix = DIGEST_INFO[named]
@@ -2142,6 +2398,7 @@ module OpenSSL
                      when "X509v3 Extended Key Usage" then extended_key_usage(value)
                      when "Netscape Comment" then [OpenSSL::ASN1.__encoded__(22, value.to_s.b), value.to_s]
                      when "X509v3 CRL Distribution Points" then crl_distribution_points(value)
+                     when "X509v3 Subject Alternative Name", "X509v3 Issuer Alternative Name" then alternative_names(value)
                      end
         if der.nil?
           raise ExtensionError, "#{oid} = #{value}: error in extension (name=#{oid}, value=#{value})"
@@ -2212,6 +2469,31 @@ module OpenSSL
         end
         der = OpenSSL::ASN1.__sequence__(*points)
         [der, nil]
+      end
+
+      # The names a certificate also goes by, written `DNS:host`,
+      # `email:address`, `URI:location`, or `IP:address` and separated by
+      # commas.
+      def alternative_names(value)
+        entries = value.to_s.split(",").map { |held| held.strip.split(":", 2) }
+        return nil if entries.empty?
+        names = entries.map do |kind, held|
+          return nil if held.nil?
+          if kind == "IP"
+            require "ipaddr"
+            address = begin
+              IPAddr.new(held)
+            rescue IPAddr::Error
+              return nil
+            end
+            OpenSSL::ASN1.__encoded__(0x87, address.hton.b)
+          elsif GENERAL_NAME_TAGS.key?(kind)
+            OpenSSL::ASN1.__encoded__(GENERAL_NAME_TAGS[kind], held.b)
+          else
+            return nil
+          end
+        end
+        [OpenSSL::ASN1.__sequence__(*names), nil]
       end
 
       def hex(bytes)

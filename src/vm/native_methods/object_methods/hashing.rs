@@ -26,7 +26,8 @@ impl VirtualMachine {
             )),
             View::Array(items) => Ok(marked(2, items.borrow().len())),
             View::Set(items) => Ok(marked(3, items.borrow().len())),
-            _ => self.hash_digest(held, position),
+            // Anything else contributes what its own `#hash` answers.
+            _ => self.element_hash_number(held, position),
         }
     }
 

@@ -117,3 +117,21 @@ fn aliases_of_struct_brackets_keep_struct_methods_after_a_redefinition() {
         )
     );
 }
+
+#[test]
+fn test_an_empty_initialize_of_a_struct_runs_and_takes_a_hash() {
+    let output = run_example("struct/empty_initialize_takes_a_hash.rb");
+    assert_eq!(
+        output,
+        "#<struct Empty>\n#<struct Empty>\n#<struct One a=nil>\n#<struct >\n[]\n"
+    );
+}
+
+#[test]
+fn test_struct_each_stops_on_break_and_return() {
+    let output = run_example("struct/each_stops_on_break_and_return.rb");
+    assert_eq!(
+        output,
+        "false\n[false]\ntrue\n:stopped\n:is_truncated\n10\n"
+    );
+}

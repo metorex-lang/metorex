@@ -176,9 +176,8 @@ impl VirtualMachine {
                 // the thread still holding it.
                 let stopped = match wanted {
                     None => self.sleep_until_woken(true, position),
-                    Some(_) => {
-                        self.wait_for_other_threads(position);
-                        Ok(())
+                    Some(seconds) => {
+                        self.sleep_for_length(std::time::Duration::from_secs_f64(seconds), position)
                     }
                 };
                 self.call_mutex_method(receiver, "lock", &[], position)?;

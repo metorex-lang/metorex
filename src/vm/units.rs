@@ -158,7 +158,25 @@ impl crate::vm::VirtualMachine {
             Some(slot) => slot.compiled(|| self.compile_body(body, kind)),
             None => Rc::new(self.compile_body(body, kind)),
         };
+        // A body with more calls, names, or instructions than one unit's
+        // operands reach runs a statement at a time, each in a unit of its own.
+        if matches!(&*compiled, Compiled::Refused(_)) && body.len() > 1 {
+            return self.run_statements_alone(body);
+        }
         self.run_compiled(&compiled, || first_position(body))
+    }
+
+    /// Run each of `body`'s statements alone, in turn, answering how the
+    /// last ended, or how the first that jumped did.
+    fn run_statements_alone(&mut self, body: &[Statement]) -> Result<ControlFlow, MetorexError> {
+        let mut ended = ControlFlow::Value(crate::object::Object::Nil);
+        for statement in body {
+            ended = self.run_statement(statement)?;
+            if !matches!(ended, ControlFlow::Value(_)) {
+                break;
+            }
+        }
+        Ok(ended)
     }
 
     /// Run a method's `body` through what it compiled to, answering how it
@@ -175,6 +193,15 @@ impl crate::vm::VirtualMachine {
             && self.hold_frame(layout)
         {
             return self.run_unit_flow(unit);
+        }
+        if matches!(&*compiled, Compiled::Refused(_)) {
+            return body.read_once(|statements| {
+                if statements.len() > 1 {
+                    self.run_statements_alone(statements)
+                } else {
+                    Err(too_deep(first_position(statements)))
+                }
+            });
         }
         self.run_compiled(&compiled, || body.read_once(first_position))
     }

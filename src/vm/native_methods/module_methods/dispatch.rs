@@ -292,6 +292,12 @@ impl VirtualMachine {
         if module_rc.name() == "OpenSSL" && method_name == "__aes_ctr__" {
             return self.aes_ctr(arguments, position).map(Some);
         }
+        if module_rc.name() == "OpenSSL" && method_name == "__ghash__" {
+            return self.gcm_ghash(arguments, position).map(Some);
+        }
+        if module_rc.name() == "OpenSSL" && method_name == "__aes_block__" {
+            return self.aes_block(arguments, position).map(Some);
+        }
         if module_rc.name() == "OpenSSL" && method_name == "__ec2m__" {
             return self.binary_curve(arguments, position).map(Some);
         }

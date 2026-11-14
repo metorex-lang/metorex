@@ -1,0 +1,20 @@
+# The gems googleauth's specs and tests load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "googleauth", path: "../../../../gems/googleauth"
+gem "signet", path: "../../../../gems/signet"
+gem "fakefs", ">= 1.0", "< 4"
+gem "fakeredis", "~> 0.5"
+gem "logging", "~> 2.0"
+gem "minitest", "~> 5.14"
+gem "minitest-focus", "~> 1.1"
+gem "pstore", "~> 0.2.1"
+gem "rack-test", "~> 2.0"
+gem "redis", ">= 4.0", "< 6"
+gem "rspec", "~> 3.0"
+gem "webmock", "~> 3.8"
+gem "multi_json"
+
+shipped "base64", "logger", "json", "uri", "net-http"

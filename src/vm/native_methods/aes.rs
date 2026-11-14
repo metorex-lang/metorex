@@ -207,8 +207,14 @@ fn cbc(key: &[u8], chain: &[u8], data: &[u8], encrypting: bool) -> Option<(Vec<u
 
 /// Runs `data` through AES in CTR mode from the block `counter`, answering the
 /// output, the counter of the block after the last one used, and the bytes of
-/// the last block's keystream that `data` left unused.
-fn ctr(key: &[u8], counter: &[u8], data: &[u8]) -> Option<(Vec<u8>, Vec<u8>, Vec<u8>)> {
+/// the last block's keystream that `data` left unused. The counter steps in
+/// its last `counting_bytes` bytes, all 16 in CTR mode and 4 in GCM.
+fn ctr(
+    key: &[u8],
+    counter: &[u8],
+    data: &[u8],
+    counting_bytes: usize,
+) -> Option<(Vec<u8>, Vec<u8>, Vec<u8>)> {
     let round_keys = expand_key(key)?;
     if counter.len() != BLOCK_BYTES {
         return None;
@@ -227,7 +233,7 @@ fn ctr(key: &[u8], counter: &[u8], data: &[u8]) -> Option<(Vec<u8>, Vec<u8>, Vec
                 .map(|(byte, key)| byte ^ key),
         );
         unused = keystream[chunk.len()..].to_vec();
-        for byte in current.iter_mut().rev() {
+        for byte in current.iter_mut().rev().take(counting_bytes) {
             *byte = byte.wrapping_add(1);
             if *byte != 0 {
                 break;
@@ -237,9 +243,42 @@ fn ctr(key: &[u8], counter: &[u8], data: &[u8]) -> Option<(Vec<u8>, Vec<u8>, Vec
     Some((output, current.to_vec(), unused))
 }
 
+/// The product of two elements of GCM's field, GF(2^128), with the bits of
+/// each block read from the first byte's high bit.
+fn gcm_multiply(left: u128, right: u128) -> u128 {
+    const REDUCTION: u128 = 0xe1 << 120;
+    let mut product = 0u128;
+    let mut shifted = right;
+    for bit in 0..128 {
+        if (left >> (127 - bit)) & 1 == 1 {
+            product ^= shifted;
+        }
+        shifted = if shifted & 1 == 1 {
+            (shifted >> 1) ^ REDUCTION
+        } else {
+            shifted >> 1
+        };
+    }
+    product
+}
+
+/// GHASH under `hash_key` over `data`, whose length is a whole number of
+/// blocks, continued from `state`.
+fn ghash(hash_key: &[u8], state: &[u8], data: &[u8]) -> Option<Vec<u8>> {
+    let hash_key = u128::from_be_bytes(hash_key.try_into().ok()?);
+    let mut sum = u128::from_be_bytes(state.try_into().ok()?);
+    if !data.len().is_multiple_of(BLOCK_BYTES) {
+        return None;
+    }
+    for chunk in data.chunks(BLOCK_BYTES) {
+        sum = gcm_multiply(sum ^ u128::from_be_bytes(chunk.try_into().ok()?), hash_key);
+    }
+    Some(sum.to_be_bytes().to_vec())
+}
+
 impl VirtualMachine {
-    /// `OpenSSL.__aes_ctr__(key, counter, data)` answers the output, the next
-    /// counter, and the unused keystream, as a triple.
+    /// `OpenSSL.__aes_ctr__(key, counter, data, counting_bytes = 16)` answers
+    /// the output, the next counter, and the unused keystream, as a triple.
     pub(crate) fn aes_ctr(
         &mut self,
         arguments: &[Object],
@@ -256,8 +295,16 @@ impl VirtualMachine {
                 position,
             ));
         };
-        let Some((output, next, unused)) = ctr(&key.bytes(), &counter.bytes(), &data.bytes())
-        else {
+        let counting_bytes = match arguments.get(3).view() {
+            Some(View::Int(width)) if (1..=16).contains(&width) => width as usize,
+            _ => BLOCK_BYTES,
+        };
+        let Some((output, next, unused)) = ctr(
+            &key.bytes(),
+            &counter.bytes(),
+            &data.bytes(),
+            counting_bytes,
+        ) else {
             return Err(MetorexError::runtime_error(
                 "AES runs a key of 16, 24, or 32 bytes from a counter of one block".to_string(),
                 crate::vm::utils::position_to_location(position),
@@ -300,5 +347,60 @@ impl VirtualMachine {
             super::pack_format::bytes_to_string(&output),
             super::pack_format::bytes_to_string(&next),
         ]))
+    }
+
+    /// `OpenSSL.__ghash__(hash_key, state, data)` answers GHASH over `data`,
+    /// whole blocks, continued from the block `state`.
+    pub(crate) fn gcm_ghash(
+        &mut self,
+        arguments: &[Object],
+        position: Position,
+    ) -> Result<Object, MetorexError> {
+        let (Some(View::String(hash_key)), Some(View::String(state)), Some(View::String(data))) = (
+            arguments.first().view(),
+            arguments.get(1).view(),
+            arguments.get(2).view(),
+        ) else {
+            return Err(crate::vm::errors::argument_count_error(
+                crate::vm::errors::Arity::Exact(3),
+                arguments.len(),
+                position,
+            ));
+        };
+        let Some(sum) = ghash(&hash_key.bytes(), &state.bytes(), &data.bytes()) else {
+            return Err(MetorexError::runtime_error(
+                "GHASH runs a key and state of one block over whole blocks".to_string(),
+                crate::vm::utils::position_to_location(position),
+            ));
+        };
+        Ok(super::pack_format::bytes_to_string(&sum))
+    }
+
+    /// `OpenSSL.__aes_block__(key, block)` answers one block encrypted.
+    pub(crate) fn aes_block(
+        &mut self,
+        arguments: &[Object],
+        position: Position,
+    ) -> Result<Object, MetorexError> {
+        let (Some(View::String(key)), Some(View::String(block))) =
+            (arguments.first().view(), arguments.get(1).view())
+        else {
+            return Err(crate::vm::errors::argument_count_error(
+                crate::vm::errors::Arity::Exact(2),
+                arguments.len(),
+                position,
+            ));
+        };
+        let (Some(round_keys), Ok(mut held)) = (
+            expand_key(&key.bytes()),
+            <[u8; BLOCK_BYTES]>::try_from(&block.bytes()[..]),
+        ) else {
+            return Err(MetorexError::runtime_error(
+                "AES runs a key of 16, 24, or 32 bytes over one block".to_string(),
+                crate::vm::utils::position_to_location(position),
+            ));
+        };
+        encrypt_block(&mut held, &round_keys);
+        Ok(super::pack_format::bytes_to_string(&held))
     }
 }

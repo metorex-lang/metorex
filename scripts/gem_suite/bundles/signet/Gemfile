@@ -1,0 +1,10 @@
+# The gems signet's specs load.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "signet", path: "../../../../gems/signet"
+gem "rspec"
+gem "multi_json"
+
+shipped "base64", "logger", "json", "uri", "net-http"

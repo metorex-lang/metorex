@@ -2953,3 +2953,12 @@ fn test_string_io_write_counts_bytes_and_keeps_a_binary_buffer_binary() {
         )
     );
 }
+
+#[test]
+fn test_file_path_methods_work_with_file_and_dir_replaced() {
+    let output = run_example("io/file_methods_work_with_file_and_dir_replaced.rb");
+    assert_eq!(
+        output,
+        "\"/a/c\"\ntrue\n\"/a/b\"\ntrue\n\"a/b/c/d\"\ntrue\n\"fake\"\n\"/b\"\n"
+    );
+}

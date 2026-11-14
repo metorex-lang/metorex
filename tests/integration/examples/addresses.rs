@@ -121,3 +121,15 @@ fn ipaddr_include_reads_a_string_for_its_own_family_and_compares_whole_networks(
         "true\nfalse\nIPAddr::InvalidAddressError\nfalse\ntrue\n"
     );
 }
+
+#[test]
+fn ipaddr_reads_loopback_addresses_and_resolved_local_names() {
+    let output = run_example("addresses/ipaddr_loopback_and_resolved_names.rb");
+    assert_eq!(
+        output,
+        "true\ntrue\ntrue\ntrue\n\
+         #<IPAddr: IPv4:169.254.170.23/255.255.255.255>\n\
+         [\"127.0.0.1\", \"::1\"]\n\
+         #<IPAddr: IPv6:0000:0000:0000:0000:0000:0000:0000:0001/ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff>\n"
+    );
+}

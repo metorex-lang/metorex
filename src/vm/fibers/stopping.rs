@@ -214,7 +214,7 @@ pub(crate) fn ends_the_program(died_of: &Object) -> bool {
     };
     matches!(
         details.borrow().exception_type.as_str(),
-        "SystemExit" | "Interrupt" | "SignalException" | "NoMemoryError" | "SystemStackError"
+        "SystemExit" | "Interrupt" | "SignalException"
     )
 }
 

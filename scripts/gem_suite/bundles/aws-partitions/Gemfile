@@ -1,0 +1,4 @@
+# The gems aws-partitions's specs load.
+source "https://rubygems.org"
+
+eval_gemfile "../aws_sdk_ruby.rb"

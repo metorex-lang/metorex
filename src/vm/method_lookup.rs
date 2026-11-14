@@ -1769,7 +1769,7 @@ impl VirtualMachine {
                 if let Some(named) = reopened_class_name(receiver)
                     && let Some(View::Class(reopened)) = self.globals().get(named).view()
                     && let Some(method) = reopened.find_method(method_name)
-                    && (!method.body.is_empty() || aliases_another_name(&method, method_name))
+                    && answers_for_itself(&method, method_name)
                     && !self.object_method_hides_native(receiver, method_name, &method)
                 {
                     return Some((reopened.clone(), method));
@@ -1782,7 +1782,7 @@ impl VirtualMachine {
                     // A body-less stub stands in for a native method, so it
                     // must not shadow the implementation, unless it is an
                     // alias reaching one under a name of its own.
-                    && (!method.body.is_empty() || aliases_another_name(&method, method_name))
+                    && answers_for_itself(&method, method_name)
                     && !self.object_method_hides_native(receiver, method_name, &method)
                 {
                     return Some((class, method));
@@ -2114,6 +2114,15 @@ fn aliases_another_name(method: &Method, name: &str) -> bool {
         .native_alias
         .as_deref()
         .is_some_and(|target| target != name)
+}
+
+/// Whether a method found on a reopened class answers for itself rather
+/// than standing in for a native one: it has a body, it is a C extension's
+/// function, or it aliases a native method under another name.
+fn answers_for_itself(method: &Method, name: &str) -> bool {
+    !method.body.is_empty()
+        || method.provenance.c_function.is_some()
+        || aliases_another_name(method, name)
 }
 
 /// How many class and name pairs `lookup_method` keeps the answers of

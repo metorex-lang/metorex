@@ -444,3 +444,9 @@ fn test_bytecode_parallel_assignments_execution() {
         )
     );
 }
+
+#[test]
+fn bodies_past_a_unit_operand_limit_run_a_statement_at_a_time() {
+    let output = run_example("bytecode/bodies_past_a_unit_operand_limit.rb");
+    assert_eq!(output, "70000\n70005\n70000\n[70001]\n");
+}

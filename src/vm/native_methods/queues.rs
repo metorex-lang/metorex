@@ -145,6 +145,18 @@ impl VirtualMachine {
                             .set_var("__queue_waiting".to_string(), Object::Int(waiting));
                     }
                     waited?;
+                    // A queue closed while this waited takes nothing, even
+                    // when room was made on it after it closed.
+                    if matches!(
+                        inst.borrow().get_var("__queue_closed").view(),
+                        Some(View::Bool(true))
+                    ) {
+                        return Err(crate::vm::errors::simple_exception(
+                            "ClosedQueueError",
+                            "queue closed",
+                            _position,
+                        ));
+                    }
                     // A limit on how long to wait that passes with the queue
                     // still full answers nothing rather than putting anyway.
                     if wait_for.is_some() && items_arr.borrow().len() >= most {

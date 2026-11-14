@@ -103,38 +103,38 @@ class File
   # Whether a name says where it is from the root, rather than from wherever
   # the program happens to be. A `~` says nothing about the root.
   def self.absolute_path?(name)
-    File.__path_text__(name).start_with? File::SEPARATOR
+    self.__path_text__(name).start_with? SEPARATOR
   end
 
   # The name a path names from the root, with `.` and `..` read out. A
   # relative one is read from the directory given, or from the one the
   # program is working in, and a `~` is a name like any other.
   def self.absolute_path(name, directory = nil)
-    held = File.__path_text__ name
+    held = self.__path_text__ name
     tag = held.encoding
-    unless held.start_with? File::SEPARATOR
-      base = directory.nil? ? Dir.__working_directory__ : File.absolute_path(directory)
-      held = held.empty? ? base : File.join(base, held)
+    unless held.start_with? SEPARATOR
+      base = directory.nil? ? self.__working_directory__ : self.absolute_path(directory)
+      held = held.empty? ? base : self.join(base, held)
     end
-    File.__without_dots__(held).force_encoding(tag)
+    self.__without_dots__(held).force_encoding(tag)
   end
 
   # The name a path names from the root, with `~`, `.`, and `..` read out and
   # the runs of separators inside it collapsed. The leading run is left as it
   # was written, which is what Ruby does with `//host/share`.
   def self.expand_path(name, directory = nil)
-    held = File.__path_text__ name
+    held = self.__path_text__ name
     tag = held.encoding
     # A library metorex carries names its files under a root of its own,
     # which `require` reads them from.
     if held == "<metorex>" || held.start_with?("<metorex>/")
       rest = held.delete_prefix("<metorex>")
-      answered = rest.empty? ? +"<metorex>" : "<metorex>" + File.__without_dots__(rest)
+      answered = rest.empty? ? +"<metorex>" : "<metorex>" + self.__without_dots__(rest)
       return answered.force_encoding(tag)
     end
     if held.start_with? "~"
-      held = File.__expanded_home__ held
-    elsif !held.start_with? File::SEPARATOR
+      held = self.__expanded_home__ held
+    elsif !held.start_with? SEPARATOR
       # Reading the directory the program works in means writing its name
       # ahead of this one, which text in an encoding without ASCII cannot
       # stand beside.
@@ -142,10 +142,10 @@ class File
         raise Encoding::CompatibilityError,
               "ASCII incompatible encoding: #{Encoding.default_external}"
       end
-      base = directory.nil? ? Dir.__working_directory__ : File.expand_path(directory)
-      held = held.empty? ? base : File.join(base, held)
+      base = directory.nil? ? self.__working_directory__ : self.expand_path(directory)
+      held = held.empty? ? base : self.join(base, held)
     end
-    answered = File.__without_dots__ held
+    answered = self.__without_dots__ held
     answered.force_encoding tag
     answered
   end
@@ -153,7 +153,7 @@ class File
   # A name opening with `~` read as the home directory it names: the one the
   # program belongs to, or the one the user named after it does.
   def self.__expanded_home__(held)
-    at = held.index File::SEPARATOR
+    at = held.index SEPARATOR
     head = at.nil? ? held : held[0, at]
     rest = at.nil? ? "" : held[at, held.length - at]
     return Dir.home(head[1, head.length - 1]) + rest unless head == "~"
@@ -164,7 +164,7 @@ class File
     if named.empty?
       raise ArgumentError, "couldn't find HOME environment -- expanding `~'"
     end
-    unless named.start_with? File::SEPARATOR
+    unless named.start_with? SEPARATOR
       raise ArgumentError, "non-absolute home"
     end
     named + rest
@@ -174,12 +174,12 @@ class File
   def self.__without_dots__(held)
     leading = ""
     rest = held
-    while rest.start_with? File::SEPARATOR
-      leading = leading + File::SEPARATOR
+    while rest.start_with? SEPARATOR
+      leading = leading + SEPARATOR
       rest = rest[1, rest.length - 1]
     end
     walked = []
-    rest.split(File::SEPARATOR).each do |part|
+    rest.split(SEPARATOR).each do |part|
       next if part.empty? || part == "."
       if part == ".."
         # Nothing stands above the root, so a step up from there is no step
@@ -195,14 +195,14 @@ class File
       end
       walked.push part
     end
-    answered = leading + walked.join(File::SEPARATOR)
+    answered = leading + walked.join(SEPARATOR)
     answered.empty? ? "." : answered
   end
 
   # A file cut down to the count of bytes it is told to keep, or filled out
   # with zero bytes to reach it.
   def self.truncate(name, length)
-    path = File.__path_text__ name
+    path = self.__path_text__ name
     counted = length
     unless counted.is_a? Integer
       unless counted.respond_to? :to_int
@@ -237,8 +237,8 @@ class File
     return "" if parts.empty?
     held = ""
     parts.each_with_index do |part, index|
-      spelled = File.__joined_part__ part, []
-      held = index == 0 ? spelled : File.__join_two__(held, spelled)
+      spelled = self.__joined_part__ part, []
+      held = index == 0 ? spelled : self.__join_two__(held, spelled)
     end
     held.dup
   end
@@ -253,8 +253,8 @@ class File
       inside = walking + [part]
       held = ""
       part.each_with_index do |inner, index|
-        spelled = File.__joined_part__ inner, inside
-        held = index == 0 ? spelled : File.__join_two__(held, spelled)
+        spelled = self.__joined_part__ inner, inside
+        held = index == 0 ? spelled : self.__join_two__(held, spelled)
       end
       return held
     end
@@ -277,7 +277,7 @@ class File
   # left as the part carrying it wrote it, and where both carry one the right
   # part's stands.
   def self.__join_two__(left, right)
-    separator = File::SEPARATOR
+    separator = SEPARATOR
     if left.end_with?(separator) && right.start_with?(separator)
       trimmed = left
       while trimmed.end_with? separator

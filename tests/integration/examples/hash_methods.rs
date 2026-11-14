@@ -356,3 +356,9 @@ fn test_string_subclass_keys_find_the_entries_of_the_strings_they_equal() {
         )
     );
 }
+
+#[test]
+fn test_hash_keys_holding_objects_hash_from_their_values_own_hash() {
+    let output = run_example("hashes/hash_keys_holding_objects_with_their_own_hash.rb");
+    assert_eq!(output, "true\n:found\nnil\n1\n[:first]\n");
+}

@@ -480,3 +480,21 @@ fn test_threads_constants_stay_home_across_threads_execution() {
     let output = run_example("threads/constants_stay_home_across_threads/main.rb");
     assert_eq!(output, "Ledger::Adapters::NullTransaction\n[]\n");
 }
+
+#[test]
+fn test_mutex_sleep_waits_its_length_unless_woken() {
+    let output = run_example("threads/mutex_sleep_waits_its_length_unless_woken.rb");
+    assert_eq!(output, "[:other, :sleeper]\n:signaled\n");
+}
+
+#[test]
+fn test_sized_queue_closed_while_a_producer_waits_raises_in_the_producer() {
+    let output = run_example("threads/sized_queue_closed_while_a_producer_waits.rb");
+    assert_eq!(output, "\"sleep\"\nfalse\n[ClosedQueueError]\n");
+}
+
+#[test]
+fn test_memory_and_stack_errors_end_only_their_thread() {
+    let output = run_example("threads/memory_and_stack_errors_end_only_their_thread.rb");
+    assert_eq!(output, "nil\n:alive\nnil\n:still\n");
+}

@@ -1,6 +1,5 @@
 # Random values in the shapes a program usually wants them: hex digits, raw
 # bytes, base64 text, and numbers within a range.
-require 'base64'
 
 # The draw itself, written outside the module so `rand` names the one the
 # language gives rather than the module's own.
@@ -31,11 +30,11 @@ module SecureRandom
   end
 
   def self.base64(count = nil)
-    Base64.strict_encode64(random_bytes(count))
+    [random_bytes(count)].pack("m0")
   end
 
   def self.urlsafe_base64(count = nil, padding = false)
-    written = Base64.urlsafe_encode64(random_bytes(count))
+    written = [random_bytes(count)].pack("m0").tr("+/", "-_")
     padding ? written : written.gsub("=", "")
   end
 

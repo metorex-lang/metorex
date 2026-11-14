@@ -264,7 +264,18 @@ impl VirtualMachine {
                             member_value(receiver, member),
                         ])]
                     };
-                    self.execute_block_with_control_flow(block, args, position)?;
+                    match self.execute_block_with_control_flow(block, args, position)? {
+                        // `break` ends the walk, and `each` answers its value.
+                        crate::vm::ControlFlow::Break { value, .. } => return Ok(Some(value)),
+                        crate::vm::ControlFlow::Return { value, position } => {
+                            return Err(MetorexError::NonLocalReturn {
+                                value,
+                                location: crate::vm::utils::position_to_location(position),
+                                home_frame: block.home_frame,
+                            });
+                        }
+                        _ => {}
+                    }
                 }
                 Ok(Some(receiver.clone()))
             }
@@ -350,6 +361,8 @@ impl VirtualMachine {
                 let anonymous = name.is_empty() || name.contains("#<");
                 Ok(Some(Object::string(if anonymous {
                     format!("#<struct {}>", body)
+                } else if body.is_empty() {
+                    format!("#<struct {}>", name)
                 } else {
                     format!("#<struct {} {}>", name, body)
                 })))

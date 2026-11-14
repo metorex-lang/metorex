@@ -136,6 +136,16 @@ SUITES=(
   "sprockets|test/test_*.rb|-w -I lib -I test -r bundler/setup"
   "concurrent-ruby|spec/**/*_spec.rb|-I lib/concurrent-ruby -I lib/concurrent-ruby-edge -I spec -r bundler/setup $RSPEC"
   "thread_safe|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "aws-sdk-ruby/gems/aws-sdk-core|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC|$REPO_ROOT/scripts/gem_suite/aws_sdk_ruby_siblings.rb"
+  "aws-sdk-ruby/gems/aws-sigv4|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC|$REPO_ROOT/scripts/gem_suite/aws_sdk_ruby_siblings.rb"
+  "aws-sdk-ruby/gems/aws-partitions|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC|$REPO_ROOT/scripts/gem_suite/aws_sdk_ruby_siblings.rb"
+  "aws-sdk-ruby/gems/aws-eventstream|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC|$REPO_ROOT/scripts/gem_suite/aws_sdk_ruby_siblings.rb"
+  "aws-sdk-ruby/gems/aws-sdk-s3|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC|$REPO_ROOT/scripts/gem_suite/aws_sdk_ruby_siblings.rb"
+  "aws-sdk-ruby/gems/aws-sdk-kms|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC|$REPO_ROOT/scripts/gem_suite/aws_sdk_ruby_siblings.rb"
+  "jmespath|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "googleauth|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "googleauth|test/**/*_test.rb|-I lib -I test -r bundler/setup"
+  "signet|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
   "racc|test/test_*.rb|--enable-frozen-string-literal -I lib -I test/lib -I $HELPERS -r helper|$REPO_ROOT/scripts/gem_suite/racc_parser_text.rb"
 )
 

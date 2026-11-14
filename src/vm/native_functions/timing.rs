@@ -105,7 +105,7 @@ impl VirtualMachine {
 
     /// Wait until `length` passes or something wakes the thread, giving
     /// every other thread turns until then.
-    fn sleep_for_length(
+    pub(crate) fn sleep_for_length(
         &mut self,
         length: std::time::Duration,
         position: Position,
@@ -113,12 +113,19 @@ impl VirtualMachine {
         if self.running_a_thread_body() && !self.alone_after_fork {
             return self.sleep_until_woken_within(Some(length), false, position);
         }
+        let main = self.running_thread();
+        if let View::Instance(held) = main.view() {
+            held.borrow_mut()
+                .set_var(crate::vm::fibers::WOKEN.to_string(), Object::Bool(false));
+        }
         let deadline = std::time::Instant::now() + length;
         loop {
             self.wait_for_other_threads(position);
             self.raise_if_thread_killed(position)?;
             self.deliver_pending_signals(position)?;
-            if std::time::Instant::now() >= deadline {
+            let woken = matches!(main.view(), View::Instance(held)
+                if matches!(held.borrow().get_var(crate::vm::fibers::WOKEN).view(), Some(View::Bool(true))));
+            if woken || std::time::Instant::now() >= deadline {
                 return Ok(());
             }
         }

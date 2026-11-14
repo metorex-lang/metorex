@@ -55,7 +55,10 @@ class RubyRelease
   def default_gem_version(name)
     gemspec = Dir.glob(path("{lib,ext}", "**", "#{name}.gemspec")).first
     abort "#{name} is not a default gem of Ruby #{version}" unless gemspec
-    Dir.chdir(File.dirname(gemspec)) { Gem::Specification.load(gemspec).version.to_s }
+    # A gemspec directly under lib, as ipaddr's is, finds its library from
+    # the release root, where ruby-core loads it.
+    directory = File.dirname(gemspec) == path("lib") ? root : File.dirname(gemspec)
+    Dir.chdir(directory) { Gem::Specification.load(gemspec).version.to_s }
   end
 end
 

@@ -298,3 +298,24 @@ fn test_parsing_without_a_year_does_not_call_a_replaced_today() {
     let output = run_example("dates/parse_without_a_year_after_today_is_replaced.rb");
     assert_eq!(output, "3\n\"2020-01-02\"\n10\n12\ntrue\nfalse\n");
 }
+
+#[test]
+fn basic_iso_dates_and_times_are_read_by_their_digit_counts() {
+    let output = run_example("dates/basic_iso_date_and_time.rb");
+    assert_eq!(
+        output,
+        "{year: 2015, mon: 8, mday: 30, hour: 12, min: 36, sec: 0, zone: \"Z\", offset: 0}\n\
+         {year: 2015, mon: 8, mday: 30}\n\
+         {year: 2015, mon: 8, mday: 30, hour: 12}\n\
+         {year: 123456}\n\
+         2015-08-30 12:36:00 UTC\n\
+         {year: 2016, mon: 1, mday: 1, hour: 11, min: 22, sec: 33, zone: \"Z\", offset: 0}\n\
+         {year: 2016, mon: 1, mday: 1, hour: 11, min: 22, zone: \"+0900\", offset: 32400}\n\
+         {year: 2016, mon: 1, mday: 1, hour: 11}\n\
+         {mon: 1, mday: 1, hour: 11, min: 22}\n\
+         2016-01-01 11:22:33 UTC\n\
+         {hour: 12, mday: 30, min: 36, mon: 8, offset: 0, sec: 0, year: 2015, zone: \"Z\"}\n\
+         {year: 2015, mon: 8, mday: 30}\n\
+         2015-08-30 12:36:00 UTC\n"
+    );
+}

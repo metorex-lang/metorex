@@ -159,6 +159,9 @@ class Date
   # empty hash when the text names no date at all.
   def self._parse(text, comp = true)
     text = coerce_to_string(text)
+    basic = parse_basic_date_time(text, comp)
+    return basic unless basic.nil?
+
     clock = {}
     text = take_clock(text, clock)
     week = {}
@@ -166,6 +169,42 @@ class Date
     found = parse_calendar(text, comp, clock)
     return found if week.empty?
     found.merge(clock).merge(week)
+  end
+
+  # ISO 8601's basic format, a run of date digits joined by a T to a run of
+  # clock digits, `20160101T112233Z`, read by how many digits each run has.
+  def self.parse_basic_date_time(text, comp)
+    pattern = /(?<![\d\-+:\/.])([-+]?)(\d{2,8})t(\d{6}|\d{4}|\d{2})(?![\d:])(?:[,.](\d+))?(?:\s*(z\b|[-+]\d{1,4}\b))?/i
+    return nil if (text =~ pattern).nil?
+
+    sign, day, time, fraction, zone = $1, $2, $3, $4, $5
+    found = {}
+    case day.length
+    when 2 then found[:mday] = day.to_i
+    when 3 then found[:yday] = day.to_i
+    when 4 then found[:mon], found[:mday] = day[0, 2].to_i, day[2, 2].to_i
+    when 5
+      found[:year] = complete_year("#{sign}#{day[0, 2]}".to_i, comp)
+      found[:yday] = day[2, 3].to_i
+    when 6
+      found[:year] = complete_year("#{sign}#{day[0, 2]}".to_i, comp)
+      found[:mon], found[:mday] = day[2, 2].to_i, day[4, 2].to_i
+    when 7
+      found[:year] = "#{sign}#{day[0, 4]}".to_i
+      found[:yday] = day[4, 3].to_i
+    when 8
+      found[:year] = "#{sign}#{day[0, 4]}".to_i
+      found[:mon], found[:mday] = day[4, 2].to_i, day[6, 2].to_i
+    end
+    found[:hour] = time[0, 2].to_i
+    found[:min] = time[2, 2].to_i if time.length >= 4
+    found[:sec] = time[4, 2].to_i if time.length == 6
+    found[:sec_fraction] = Rational(fraction.to_i, 10 ** fraction.length) unless fraction.nil?
+    unless zone.nil?
+      found[:zone] = zone
+      found[:offset] = (DateTime.read_offset(zone_text(zone)) * 86400).to_i
+    end
+    found
   end
 
   # An ISO 8601 week date the text carries, `2020-W01-2` or `-W-2`, taken
@@ -424,10 +463,23 @@ class Date
         directive = format[index]
         index += 1
       end
-      at = read_directive(directive, text, at, found)
+      at = read_directive(directive, text, at, found, number_follows?(format, index))
       return nil if at.nil?
     end
     found
+  end
+
+  # Whether the template goes on with digits or a directive that reads a
+  # number, so a directive before it with no fixed width reads its usual
+  # width and leaves the digits after it to that one.
+  def self.number_follows?(format, index)
+    return false if index >= format.length
+    return true if digit?(format[index])
+    return false unless format[index] == "%"
+
+    index += 1
+    index += 1 while index < format.length && "-_0^#:".include?(format[index])
+    index < format.length && (digit?(format[index]) || "CDdeFGgHIjkLlMmNQRrSsTUuVvWwXxYy".include?(format[index]))
   end
 
   # A template with its combining directives written out in the primitive
@@ -473,10 +525,10 @@ class Date
 
   # Read what one directive names out of the text, record it, and answer
   # where reading stopped. Answers nil when the text does not match.
-  def self.read_directive(directive, text, at, found)
+  def self.read_directive(directive, text, at, found, number_follows)
     case directive
-    when "Y" then read_into(found, :year, text, at, 10, true)
-    when "G" then read_into(found, :cwyear, text, at, 10, true)
+    when "Y" then read_into(found, :year, text, at, number_follows ? 4 : 10, true)
+    when "G" then read_into(found, :cwyear, text, at, number_follows ? 4 : 10, true)
     when "s" then read_into(found, :seconds, text, at, 12, true)
     when "C" then read_into(found, :century, text, at, 2, false)
     when "y" then read_into(found, :year_short, text, at, 2, false)

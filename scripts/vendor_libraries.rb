@@ -1,6 +1,6 @@
 # Copies the default gems MRI writes in Ruby that metorex carries unchanged,
-# erb, json, net-http, net-protocol, open-uri, optparse, psych, tempfile,
-# tmpdir, uri, yaml, and openssl's buffering.rb, into
+# erb, ipaddr, json, net-http, net-protocol, open-uri, optparse, psych,
+# tempfile, tmpdir, uri, yaml, and openssl's buffering.rb, into
 # src/vm/stdlib, where
 # `require` finds each file by feature name through the table in
 # src/vm/stdlib/mod.rs.
@@ -17,6 +17,7 @@ lib = release.path("lib")
 
 GEMS = {
   "erb" => %w[erb.rb erb/*.rb],
+  "ipaddr" => %w[ipaddr.rb],
   "net-http" => %w[net/http.rb net/https.rb net/http/*.rb],
   "net-protocol" => %w[net/protocol.rb],
   "open-uri" => %w[open-uri.rb],

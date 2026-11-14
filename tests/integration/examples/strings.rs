@@ -910,3 +910,12 @@ fn test_literals_inside_interpolation_follow_the_frozen_string_literal_comment()
         )
     );
 }
+
+#[test]
+fn test_adjacent_frozen_literals_holding_bytes_join_into_one() {
+    let output = run_example("strings/adjacent_frozen_literals_holding_bytes.rb");
+    assert_eq!(
+        output,
+        "32\n#<Encoding:UTF-8>\nfalse\n15\n17\n32\n32\n2\n[228, 227]\n4\n7\ntrue\n6\ntrue\n"
+    );
+}

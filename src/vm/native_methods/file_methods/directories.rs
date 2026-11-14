@@ -16,9 +16,11 @@ impl VirtualMachine {
     ) -> Result<Option<Object>, MetorexError> {
         // ── Dir methods ─────────────────────────────────────────────────────
         // `__working_directory__` is the name the core library reads it by,
-        // which a program that replaces `Dir.pwd` leaves alone.
-        if class_rc.name() == "Dir"
-            && matches!(method_name, "pwd" | "getwd" | "__working_directory__")
+        // which a program that replaces `Dir.pwd` leaves alone. File answers
+        // it too, so File's own methods reach it with `Dir` replaced.
+        if (class_rc.name() == "Dir"
+            && matches!(method_name, "pwd" | "getwd" | "__working_directory__"))
+            || (class_rc.name() == "File" && method_name == "__working_directory__")
         {
             let cwd = std::env::current_dir()
                 .map(|p| p.to_string_lossy().to_string())

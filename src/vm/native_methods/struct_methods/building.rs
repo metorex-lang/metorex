@@ -33,10 +33,10 @@ impl VirtualMachine {
         match method_name {
             // A class of the program's own that wrote its own `initialize`
             // shapes the instance itself, so construction goes the ordinary
-            // way and reaches that method.
+            // way and reaches that method, even one whose body is empty.
             "new"
                 if class_rc.find_method("initialize").is_some_and(|found| {
-                    !found.body.is_empty()
+                    (!found.body.is_empty() || found.source_location.is_some())
                         && found
                             .owner_class
                             .as_ref()

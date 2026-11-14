@@ -2542,3 +2542,93 @@ fn test_queue_subclasses_make_queues_and_answer_queue_methods() {
     let output = run_example("stdlib/queue_subclasses_answer_queue_methods.rb");
     assert_eq!(output, "1\n2\nnil\n0\n3\n2\n:a\n\"jobs\"\n:job\ntrue\n");
 }
+
+#[test]
+fn test_securerandom_writes_base64_without_loading_base64() {
+    let output = run_example("stdlib/securerandom_leaves_base64_unloaded.rb");
+    assert_eq!(output, "nil\n16\ntrue\n\"constant\"\n");
+}
+
+#[test]
+fn test_aes_in_galois_counter_mode_seals_and_checks_its_tag() {
+    let output = run_example("stdlib/openssl_aes_galois_counter_mode.rb");
+    assert_eq!(
+        output,
+        "[12, 32, 1, true, \"AES-256-GCM\"]\n\
+         \"d009cf59dcc05b9aaecb71abea46d2ca41472660cb19dabf3f5bae909c2dbf86c7b4f9619992b70ad24ed8\"\n\
+         \"ddc5a051b850ce266e6a3dab52460426\"\n\
+         \"ddc5a051b850ce266e6a3dab\"\n\
+         \"The quick brown fox jumps over the lazy dog\"\n\
+         \"6efe031b01a6b4d18921b2ff39c73c081b9daa8c63b80a5d9f0f658e4e73b36b194892c8432f7ea5\"\n\
+         \"10c685dddd1d98d0bb9bb0936cc608af\"\n\
+         \"AEAD authentication tag verification failed\"\n\
+         0\n\
+         \"456992b34e41b8076218776038ba23d0\"\n\
+         false\n\
+         OpenSSL::Cipher::CipherError\n\
+         \"authentication tag not supported by this cipher\"\n"
+    );
+}
+
+#[test]
+fn test_json_writes_nil_true_and_false_through_its_own_methods() {
+    let output = run_example("stdlib/json_of_nil_true_and_false.rb");
+    assert_eq!(
+        output,
+        "\"null\"\n\"true\"\n\"false\"\nJSON::Ext::Generator::GeneratorMethods::NilClass\n\"{\\\"body_field\\\":null}\"\n"
+    );
+}
+
+#[test]
+fn test_openssl_extension_factory_builds_alternative_names() {
+    let output = run_example("stdlib/openssl_subject_alternative_names.rb");
+    assert_eq!(
+        output,
+        "\"subjectAltName\"\n\"DNS:localhost\"\nfalse\n\
+         \"DNS:example.com, IP Address:127.0.0.1\"\n\
+         \"email:a@example.com, URI:https://example.com/, IP Address:0:0:0:0:0:0:0:1\"\n\
+         \"30190603551d1204123010820e63612e6578616d706c652e636f6d\"\n\
+         OpenSSL::X509::ExtensionError\n"
+    );
+}
+
+#[test]
+fn test_openssl_rsa_encrypts_and_decrypts_with_each_padding() {
+    let output = run_example("stdlib/openssl_rsa_encryption.rb");
+    assert_eq!(
+        output,
+        "\"wrapped key\"\n\
+         \"74e7a24ac2a8840970dd70a5ac05faaf866f143f5b29836cc9f96366d5d7a3fe327229986941fdb3b04fd3a79e\"\n\
+         \"secret\"\n\"secret\"\n\"signed\"\n128\n\
+         \"EVP_PKEY_encrypt: data too large for key size\"\n\
+         \"EVP_PKEY_encrypt: data too large for key size\"\n\
+         \"EVP_PKEY_encrypt: data too small for key size\"\n\
+         \"EVP_PKEY_decrypt: data greater than mod len\"\n\
+         \"private key needed.\"\n\
+         \"EVP_PKEY_decrypt: oaep decoding error\"\n"
+    );
+}
+
+#[test]
+fn test_aes_in_electronic_codebook_mode_runs_each_block_alone() {
+    let output = run_example("stdlib/openssl_aes_electronic_codebook_mode.rb");
+    assert_eq!(
+        output,
+        "0\n16\n\"AES-256-ECB\"\n\
+         \"38cae8ad270e4c7024213b458156307b253135c14c25d0c54ab44e2bb9aba36f\"\n\
+         \"38cae8ad270e4c7024213b458156307b38cae8ad270e4c7024213b458156307b\"\n\
+         \"xxxxxxxxxxxxxxxxxxxx\"\n\"AES-256-ECB\"\ntrue\n"
+    );
+}
+
+#[test]
+fn test_openssl_kdf_hkdf_extracts_and_expands() {
+    let output = run_example("stdlib/openssl_kdf_hkdf.rb");
+    assert_eq!(
+        output,
+        "\"3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865\"\n\
+         \"60ed0b819793aba3c33a17021859ac9708e0644e3b78992e6eae96e16465604a482ad7574d682e6be37dfeffbc79d9619d717ebfa2814128c9cd832791e405733dade3aebc2e\"\n\
+         \"EVP_PKEY_derive: invalid key length\"\n\"EVP_PKEY_derive\"\n8160\n\
+         ArgumentError\n\"length must be non-negative\"\n"
+    );
+}
