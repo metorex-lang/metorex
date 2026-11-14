@@ -172,7 +172,7 @@ The 100 most downloaded gems on rubygems.org (`rubygems.org/stats`, read on 2026
 - [x] Command line and developer tools: thor, rainbow, ruby-progressbar, unicode-display_width, parallel, method_source, coderay, pry, simplecov, docile, and mini_portile2
 - [x] Ruby parsing and linting: ast, parser, regexp_parser, rubocop-ast, and rubocop
 - [x] Templates, loading, and concurrency: tilt, erubi, zeitwerk, sprockets, concurrent-ruby, and thread_safe
-- [ ] Cloud clients: the aws-sdk-ruby repository's aws-sdk-core, aws-sigv4, aws-partitions, aws-eventstream, aws-sdk-s3, and aws-sdk-kms, with jmespath, googleauth, and signet
+- [x] Cloud clients: the aws-sdk-ruby repository's aws-sdk-core, aws-sigv4, aws-partitions, aws-eventstream, aws-sdk-s3, and aws-sdk-kms, with jmespath, googleauth, and signet
 - [ ] redis, against a `redis-server` the suite starts on a port of its own, run in the Jenkins branch's pod as a second container beside the build
 - [ ] Native extensions: nokogiri, ffi, nio4r, puma, websocket-driver, msgpack, unf_ext, and rb-fsevent build against Metorex's C API, and their suites and those of the pure Ruby gems that need them (loofah, crass, unf) pass
 - [ ] Rails: the rails repository's activesupport, activemodel, activerecord on SQLite, actionpack, actionview, actionmailer, activejob, actioncable, activestorage, railties, and rails, with globalid, rails-dom-testing, rails-html-sanitizer, and sprockets-rails

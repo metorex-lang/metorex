@@ -17,8 +17,8 @@ use super::{
 const FIRST_COLLECTION_AT: usize = 2048;
 
 /// The share of the objects that survived earlier collections that a
-/// collection waits for the program to make before it runs: a thirty-second.
-const OLD_ENTRIES_PER_YOUNG_ONE: usize = 32;
+/// collection waits for the program to make before it runs: a quarter.
+const OLD_ENTRIES_PER_YOUNG_ONE: usize = 4;
 
 /// How much the objects that survived collections grow before a collection
 /// covers them too, rather than only the objects made since the last one.

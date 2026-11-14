@@ -183,7 +183,7 @@ aws-sdk-ruby/gems/aws-sdk-s3/spec/encryptionv3/kms_cipher_provider_spec.rb	5	0	0
 aws-sdk-ruby/gems/aws-sdk-s3/spec/endpoint_provider_spec.rb	608	0	0	608	0	0
 aws-sdk-ruby/gems/aws-sdk-s3/spec/express_credentials_provider_spec.rb	7	0	0	7	0	0
 aws-sdk-ruby/gems/aws-sdk-s3/spec/express_credentials_spec.rb	7	0	0	7	0	0
-aws-sdk-ruby/gems/aws-sdk-s3/spec/file_downloader_spec.rb	27	0	0	27	1	0
+aws-sdk-ruby/gems/aws-sdk-s3/spec/file_downloader_spec.rb	27	0	0	27	0	0
 aws-sdk-ruby/gems/aws-sdk-s3/spec/file_part_spec.rb	9	0	0	9	0	0
 aws-sdk-ruby/gems/aws-sdk-s3/spec/file_uploader_spec.rb	7	0	0	7	0	0
 aws-sdk-ruby/gems/aws-sdk-s3/spec/legacy_signer_spec.rb	2	2	0	2	2	0

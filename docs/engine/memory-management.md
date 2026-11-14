@@ -13,7 +13,7 @@ counting cannot.
   above zero and everything those reach. The rest are cycles nothing outside
   them refers to, and they are freed.
 - A collection runs once the program has made 2,048 objects, or a
-  thirty-second as many as earlier collections left alive when that is more,
+  quarter as many as earlier collections left alive when that is more,
   and when the program calls `GC.start`.
   It looks only at the objects made since the last one, until the objects
   left alive have grown eightfold since a collection last covered them all.
