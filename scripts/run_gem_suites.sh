@@ -98,6 +98,12 @@ SUITES=(
   "domain_name|test/test_*.rb|-I lib -I test"
   "connection_pool|test/test_*.rb|-I lib -I test"
   "websocket-extensions|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "websocket-driver|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup -r websocket_mask $RSPEC"
+  "msgpack|spec/*_spec.rb spec/cruby/*_spec.rb|-I lib -I spec -r bundler/setup -r msgpack/msgpack $RSPEC"
+  "unf_ext|test/test_*.rb|-I lib -I test -r unf_ext.so"
+  "unf|test/test_*.rb|-I lib -I test"
+  "rb-fsevent|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "nio4r|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup -r nio4r_ext $RSPEC"
   "i18n|test/**/*_test.rb|-w -I lib -I test -r bundler/setup"
   "tzinfo|test/ts_all_ruby_format1.rb test/ts_all_ruby_format2.rb test/ts_all_zoneinfo.rb|-w -I lib -r bundler/setup"
   "multi_json|test/**/*_test.rb|-I lib -I test"
@@ -148,6 +154,16 @@ SUITES=(
   "signet|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
   "redis|test/redis/*_test.rb test/distributed/*_test.rb test/modules/*_test.rb|-I lib -I test -r bundler/setup"
   "racc|test/test_*.rb|--enable-frozen-string-literal -I lib -I test/lib -I $HELPERS -r helper|$REPO_ROOT/scripts/gem_suite/racc_parser_text.rb"
+)
+
+# The C extensions of each gem, by the extconf.rb that builds each. Before
+# the gem's files run, each is built under the engine they run with, outside
+# the checkout, and installed into a directory each file has on its load path.
+EXTENSIONS=(
+  "websocket-driver|ext/websocket-driver/extconf.rb"
+  "msgpack|ext/msgpack/extconf.rb"
+  "unf_ext|ext/unf_ext/extconf.rb"
+  "nio4r|ext/nio4r/extconf.rb"
 )
 
 # The gems whose test files run one after another, since each of them
@@ -227,6 +243,25 @@ BUNDLE
   chmod +x "$WORK_DIR/bin/bundle"
   export PATH="$WORK_DIR/bin:$PATH"
 fi
+if [ "$ENGINE" = "mri" ]; then
+  ENGINE_COMMAND="$MRI"
+else
+  ENGINE_COMMAND="$METOREX"
+fi
+for row in "${EXTENSIONS[@]}"; do
+  IFS='|' read -r gem extconfs <<< "$row"
+  wanted "$gem" || continue
+  for extconf in $extconfs; do
+    build_dir="$WORK_DIR/builds/$gem/${extconf//[\/.]/_}"
+    mkdir -p "$build_dir"
+    if ! (cd "$build_dir" && "$ENGINE_COMMAND" "$REPO_ROOT/gems/$gem/$extconf" && make &&
+      make install sitearchdir="$WORK_DIR/extensions/$gem") > "$build_dir/build.log" 2>&1 < /dev/null; then
+      cat "$build_dir/build.log" >&2
+      echo "run_gem_suites.sh: building $gem's $extconf failed" >&2
+      exit 2
+    fi
+  done
+done
 QUEUE="$WORK_DIR/queue.tsv"
 : > "$QUEUE"
 for row in "${SUITES[@]}"; do
@@ -268,11 +303,9 @@ run_one() {
     simplecov/spec/sandbox/* | rubocop/spec/rubocop/cli/* | rubocop/spec/rubocop/cli_spec.rb | rubocop/spec/rubocop/server/*) limit="$SANDBOX_FILE_TIMEOUT" ;;
     thread_safe/spec/thread_safe/cache_loops_spec.rb) limit="$STRESS_FILE_TIMEOUT" ;;
   esac
-  local command
-  if [ "$ENGINE" = "mri" ]; then
-    command=("$MRI")
-  else
-    command=("$METOREX")
+  local command=("$ENGINE_COMMAND")
+  if [ -d "$WORK_DIR/extensions/$gem" ]; then
+    arguments="-I $WORK_DIR/extensions/$gem $arguments"
   fi
   (
     cd "$run_dir"
@@ -312,7 +345,7 @@ run_files() {
 export -f run_one run_files
 NO_PREPARE=none
 export -f bundle_path_of
-export MRI WORK_DIR REPO_ROOT BUNDLES GEM_BUNDLES METOREX FILE_TIMEOUT SANDBOX_FILE_TIMEOUT STRESS_FILE_TIMEOUT ENGINE NO_PREPARE
+export ENGINE_COMMAND MRI WORK_DIR REPO_ROOT BUNDLES GEM_BUNDLES METOREX FILE_TIMEOUT SANDBOX_FILE_TIMEOUT STRESS_FILE_TIMEOUT ENGINE NO_PREPARE
 # net-imap's helper measures coverage with SimpleCov unless told not to.
 export SIMPLECOV_DISABLE=1
 # A test that omits itself under CI would count differently there than in

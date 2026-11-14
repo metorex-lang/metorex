@@ -362,3 +362,9 @@ fn test_hash_keys_holding_objects_hash_from_their_values_own_hash() {
     let output = run_example("hashes/hash_keys_holding_objects_with_their_own_hash.rb");
     assert_eq!(output, "true\n:found\nnil\n1\n[:first]\n");
 }
+
+#[test]
+fn equal_string_keys_share_one_frozen_copy_across_hashes() {
+    let output = run_example("hashes/string_keys_shared_across_hashes.rb");
+    assert_eq!(output, "true\ntrue\nfalse\nfalse\ntrue\n");
+}

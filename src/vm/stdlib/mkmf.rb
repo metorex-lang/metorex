@@ -44,6 +44,11 @@ module MakeMakefile
   LIBARG = "-l%s"
   LIBPATHFLAG = " -L%s"
 
+  # The endings of the sources an extension is built from when $srcs names
+  # none, and of those compiled as C++.
+  CXX_EXT = %w[cc mm cxx cpp].freeze
+  SRC_EXT = (%w[c m] + CXX_EXT).freeze
+
   # The libraries every program links against already, which need no check.
   COMMON_LIBS = [].freeze
 
@@ -638,7 +643,7 @@ module MakeMakefile
     # by path, and no VPATH is written, so objects an earlier build left in
     # the source directory are not taken for this build's.
     source_directory = srcprefix ? File.join($srcdir, srcprefix) : $srcdir
-    sources = $srcs ? $srcs.map { |source| source_path(source, source_directory) } : Dir.glob(File.join(source_directory, "*.c")).sort
+    sources = $srcs ? $srcs.map { |source| source_path(source, source_directory) } : Dir.glob(File.join(source_directory, "*.{#{SRC_EXT.join(",")}}")).sort
     objects = $objs || sources.map { |source| File.basename(source, ".*") + ".o" }
     dlext = RbConfig::CONFIG["DLEXT"]
     link_flags = if RbConfig::CONFIG["host_os"].include?("darwin")
@@ -659,10 +664,12 @@ module MakeMakefile
     makefile << "ruby = #{RbConfig.ruby}\n"
     makefile << "RUBY = $(ruby)\n"
     makefile << "CC = #{RbConfig::CONFIG["CC"]}\n"
+    makefile << "CXX = #{RbConfig::CONFIG["CXX"]}\n"
     makefile << "optflags = #{CONFIG["optflags"]}\n"
     makefile << "debugflags = #{CONFIG["debugflags"]}\n"
     makefile << "warnflags = #{CONFIG["warnflags"]}\n"
     makefile << "CFLAGS = -fPIC $(optflags) $(debugflags) $(warnflags) #{$CFLAGS}\n"
+    makefile << "CXXFLAGS = -fPIC $(optflags) $(debugflags) #{$CXXFLAGS}\n"
     makefile << "INCFLAGS = -I. #{$INCFLAGS}\n"
     makefile << "RUBY_EXTCONF_H = #{$extconf_h}\n"
     prefix_include = srcprefix ? ["-I#{source_directory}"] : []
@@ -681,14 +688,18 @@ module MakeMakefile
     makefile << "all: $(DLLIB)\n"
     makefile << "\n"
     makefile << "$(DLLIB): $(OBJS)\n"
-    makefile << "\t$(CC) $(DLDFLAGS) -o $@ $(OBJS) $(LIBS)\n"
+    # A library with C++ in it is linked by the C++ compiler, which brings
+    # in the C++ standard library.
+    linker = sources.any? { |source| cxx_source?(source) } ? "$(CXX)" : "$(CC)"
+    makefile << "\t#{linker} $(DLDFLAGS) -o $@ $(OBJS) $(LIBS)\n"
     # An object is made again when the header the checks wrote changes, as
     # it does when extconf.rb runs again.
     made_from = $extconf_h ? " #{$extconf_h}" : ""
     sources.zip(objects).each do |source, object|
       makefile << "\n"
       makefile << "#{object}: #{source}#{made_from}\n"
-      makefile << "\t$(CC) $(CPPFLAGS) $(CFLAGS) -c #{source} -o #{object}\n"
+      compile = cxx_source?(source) ? "$(CXX) $(CPPFLAGS) $(CXXFLAGS)" : "$(CC) $(CPPFLAGS) $(CFLAGS)"
+      makefile << "\t#{compile} -c #{source} -o #{object}\n"
     end
     makefile << "\n"
     # `make install`, as RubyGems runs it after building, copies the library
@@ -708,6 +719,10 @@ module MakeMakefile
 
   def compiler
     RbConfig::CONFIG["CC"]
+  end
+
+  def cxx_source?(source)
+    CXX_EXT.include?(File.extname(source).delete_prefix("."))
   end
 
   def darwin?
@@ -802,6 +817,7 @@ $defs = []
 $libs = ""
 $LIBPATH = []
 $CFLAGS = ""
+$CXXFLAGS = ""
 $CPPFLAGS = ""
 $LDFLAGS = ""
 $LIBS = ""

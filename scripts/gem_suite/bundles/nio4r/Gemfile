@@ -1,0 +1,6 @@
+# The gems nio4r's specs load. nio4r itself is left out, since its specs load
+# it from the checkout, and its extension is built by
+# scripts/run_gem_suites.sh under the engine the specs run with.
+source "https://rubygems.org"
+
+gem "rspec", "~> 3.7"

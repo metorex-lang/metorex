@@ -1941,3 +1941,18 @@ fn test_c_extensions_onigmo_properties_execution() {
         )
     );
 }
+
+#[test]
+fn test_c_extensions_c_plus_plus_execution() {
+    let output = run_example("c_extensions/c_plus_plus.rb");
+    assert_eq!(output, "QUIET PLEASE\n");
+}
+
+#[test]
+fn test_c_extensions_c_header_macros_execution() {
+    let output = run_example("c_extensions/c_header_macros.rb");
+    assert_eq!(
+        output,
+        "[\"café\", #<Encoding:UTF-8>]\nEnumerator\n[:left, :right]\n1\n2\n"
+    );
+}

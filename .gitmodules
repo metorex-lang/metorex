@@ -217,3 +217,36 @@
 [submodule "gems/redis"]
 	path = gems/redis
 	url = https://github.com/redis/redis-rb
+[submodule "gems/websocket-driver"]
+	path = gems/websocket-driver
+	url = https://github.com/faye/websocket-driver-ruby
+[submodule "gems/msgpack"]
+	path = gems/msgpack
+	url = https://github.com/msgpack/msgpack-ruby
+[submodule "gems/unf_ext"]
+	path = gems/unf_ext
+	url = https://github.com/knu/ruby-unf_ext
+[submodule "gems/unf"]
+	path = gems/unf
+	url = https://github.com/knu/ruby-unf
+[submodule "gems/rb-fsevent"]
+	path = gems/rb-fsevent
+	url = https://github.com/guard/rb-fsevent
+[submodule "gems/nio4r"]
+	path = gems/nio4r
+	url = https://github.com/socketry/nio4r
+[submodule "gems/puma"]
+	path = gems/puma
+	url = https://github.com/puma/puma
+[submodule "gems/ffi"]
+	path = gems/ffi
+	url = https://github.com/ffi/ffi
+[submodule "gems/nokogiri"]
+	path = gems/nokogiri
+	url = https://github.com/sparklemotion/nokogiri
+[submodule "gems/crass"]
+	path = gems/crass
+	url = https://github.com/rgrove/crass
+[submodule "gems/loofah"]
+	path = gems/loofah
+	url = https://github.com/flavorjones/loofah

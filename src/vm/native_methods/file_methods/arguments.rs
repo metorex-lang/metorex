@@ -176,7 +176,6 @@ pub(crate) fn names_a_path(method_name: &str) -> bool {
     matches!(
         method_name,
         "exist?"
-            | "exists?"
             | "file?"
             | "directory?"
             | "executable?"

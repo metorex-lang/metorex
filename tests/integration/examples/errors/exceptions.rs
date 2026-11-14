@@ -723,3 +723,19 @@ fn an_empty_method_a_module_gives_an_exception_class_answers_nil() {
         )
     );
 }
+
+#[test]
+fn the_name_error_kernel_method_raises_names_the_receivers_class() {
+    let output = run_example("errors/method_error_names_the_class.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "undefined method 'missing' for class '#<Class:Plain>'\n",
+            "undefined method 'missing' for class 'String'\n",
+            "undefined method 'missing' for class 'Module'\n",
+            "undefined method 'missing' for class '#<Class:WithOwnMethod>'\n",
+            "undefined method 'missing' for class '#<Class:Math>'\n",
+            "undefined method 'missing' for class '#<Class:#<Object:0x>>'\n",
+        )
+    );
+}

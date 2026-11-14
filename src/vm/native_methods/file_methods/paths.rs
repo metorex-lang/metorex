@@ -27,7 +27,7 @@ impl VirtualMachine {
                 Ok(Some(Object::Int(deleted)))
             }
             // File.binwrite(path, content) writes the bytes the content
-            "exist?" | "exists?" => {
+            "exist?" => {
                 if arguments.len() != 1 {
                     return Err(method_argument_error(
                         "exist?",

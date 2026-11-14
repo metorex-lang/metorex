@@ -44,6 +44,18 @@ class BasicSocket < IO
   private :__write_all__
 
   # Write what fits without waiting, refusing only when nothing does.
+  # As much of the text as the socket takes in one write, or the would-block
+  # answer when it takes none.
+  def __write_now__(command, text, exception)
+    bytes = text.to_s.b
+    return 0 if bytes.empty?
+    wrote = Socket.__net__(command, @handle, bytes, 0)
+    return wrote unless wrote.zero?
+    raise IO::EAGAINWaitWritable, "write would block" if exception
+    :wait_writable
+  end
+  private :__write_now__
+
   def __send_now__(command, text)
     wrote = Socket.__net__(command, @handle, text, 0)
     raise Errno::EAGAIN, "sendmsg(2) would block" if wrote.zero?
@@ -1670,7 +1682,7 @@ class TCPSocket < IPSocket
   end
   def write_nonblock(text, exception: true)
     self.nonblock = true unless RUBY_PLATFORM.include? "linux"
-    write text
+    __write_now__ "write", text, exception
   end
 
   # Whether the other end has finished, waiting until something arrives or
@@ -1963,7 +1975,7 @@ class UNIXSocket < BasicSocket
   end
 
   def write_nonblock(text, exception: true)
-    write text
+    __write_now__ "unix_write", text, exception
   end
 
   def send(message, flags = 0, _destination = nil)
@@ -3117,7 +3129,8 @@ class Socket
 
   def write_nonblock(text, exception: true)
     self.nonblock = true unless RUBY_PLATFORM.include? "linux"
-    write text
+    return write text if datagram?
+    __write_now__ unix? ? "unix_write" : "write", text, exception
   end
 
   # A message carried on its own names where it came from.

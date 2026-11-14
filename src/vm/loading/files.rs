@@ -160,7 +160,13 @@ impl VirtualMachine {
         // MRI loads these through RubyGems, and lists them under paths of
         // their own, so they are left out of `$LOADED_FEATURES` here.
         let listing = std::mem::replace(&mut self.lists_carried_features, false);
-        let answer = self.require_library(name);
+        // It is found as `require` finds a name, C extensions included.
+        let answer = self
+            .require_feature(
+                vec![Object::string(name.to_string())],
+                crate::lexer::Position::default(),
+            )
+            .map(|_| ());
         self.lists_carried_features = listing;
         self.environment_mut().pop_scope();
         answer

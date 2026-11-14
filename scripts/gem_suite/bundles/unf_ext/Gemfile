@@ -1,0 +1,13 @@
+# The gems unf_ext's tests load, which its helper sets up through Bundler.
+# unf_ext itself is left out, since its tests load it from the checkout, and
+# its extension is built by scripts/run_gem_suites.sh under the engine the
+# tests run with.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+group :development do
+  gem "test-unit", SHIPPED_VERSIONS.fetch("test-unit")
+end
+
+shipped "power_assert"

@@ -53,6 +53,7 @@ extern "C" {
 #else
 #define ANYARGS
 #endif
+#define RUBY_METHOD_FUNC(func) ((VALUE (*)(ANYARGS))(func))
 
 #define SIZEOF_INT __SIZEOF_INT__
 #define SIZEOF_SHORT __SIZEOF_SHORT__
@@ -663,6 +664,14 @@ typedef VALUE rb_enumerator_size_func(VALUE object, VALUE arguments, VALUE enume
 VALUE rb_enumeratorize(VALUE object, VALUE method, int count, const VALUE *arguments);
 VALUE rb_enumeratorize_with_size(VALUE object, VALUE method, int count, const VALUE *arguments,
                                  rb_enumerator_size_func *size_function);
+#define SIZED_ENUMERATOR(obj, argc, argv, size_fn)                                                 \
+    rb_enumeratorize_with_size((obj), ID2SYM(rb_frame_this_func()), (argc), (argv),               \
+                               (rb_enumerator_size_func *)(size_fn))
+#define RETURN_SIZED_ENUMERATOR(obj, argc, argv, size_fn)                                          \
+    do {                                                                                           \
+        if (!rb_block_given_p()) return SIZED_ENUMERATOR(obj, argc, argv, size_fn);                \
+    } while (0)
+#define RETURN_ENUMERATOR(obj, argc, argv) RETURN_SIZED_ENUMERATOR(obj, argc, argv, 0)
 
 #define INTEGER_PACK_MSWORD_FIRST 0x01
 #define INTEGER_PACK_LSWORD_FIRST 0x02

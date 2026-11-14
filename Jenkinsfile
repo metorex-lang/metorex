@@ -345,6 +345,11 @@ pipeline {
               },
               'cloud clients': {
                 sh 'JOBS=1 scripts/run_gem_suites.sh aws-sdk-ruby/gems/aws-sdk-core aws-sdk-ruby/gems/aws-sigv4 aws-sdk-ruby/gems/aws-partitions aws-sdk-ruby/gems/aws-eventstream aws-sdk-ruby/gems/aws-sdk-s3 aws-sdk-ruby/gems/aws-sdk-kms jmespath googleauth signet'
+              },
+              // rb-fsevent watches files through macOS's FSEvents and is left
+              // out on Linux.
+              'native extensions': {
+                sh 'JOBS=1 scripts/run_gem_suites.sh websocket-driver msgpack unf_ext unf nio4r'
               }
             )
           }

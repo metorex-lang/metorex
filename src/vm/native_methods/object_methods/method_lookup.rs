@@ -311,8 +311,21 @@ impl VirtualMachine {
                     stub.owner_class = Some(kernel.clone());
                     return Ok(Some(Object::Method(std::rc::Rc::new(stub))));
                 }
-                let cls = self.builtins().class_of(receiver);
-                let msg = format!("undefined method '{}' for class '{}'", name_str, cls.name());
+                // The message names the singleton class when the receiver
+                // has one, as every class does, and its class otherwise.
+                let module_has_own_methods = matches!(receiver.view(), View::Module(_))
+                    && matches!(self.singleton_method_names(receiver).view(),
+                        View::Array(names) if !names.borrow().is_empty());
+                let named_class = if matches!(receiver.view(), View::Class(_))
+                    || module_has_own_methods
+                    || self.singleton_given(receiver)
+                {
+                    Object::Class(self.singleton_class_of(receiver))
+                } else {
+                    self.send_to_object(receiver.clone(), "class", Vec::new(), position)?
+                };
+                let shown = self.send_to_object(named_class, "inspect", Vec::new(), position)?;
+                let msg = format!("undefined method '{}' for class '{}'", name_str, shown);
                 let exc = Object::exception("NameError", msg.clone());
                 Err(MetorexError::UncaughtException {
                     exception: exc,

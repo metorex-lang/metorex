@@ -3287,8 +3287,31 @@ module OpenSSL
                     :servername_cb, :client_cert_cb, :alpn_protocols, :alpn_select_cb,
                     :npn_protocols, :npn_select_cb, :session_new_cb, :session_get_cb,
                     :session_remove_cb, :renegotiation_cb, :keylog_cb, :tmp_dh_callback, :security_level
-      attr_writer :ciphersuites, :ecdh_curves, :groups, :sigalgs, :client_sigalgs, :tmp_dh,
-                  :min_version, :max_version
+      attr_writer :ciphersuites, :ecdh_curves, :groups, :sigalgs, :client_sigalgs, :tmp_dh
+
+      # A version is an Integer, nil for no limit, or the name of one, such
+      # as :TLS1_2, which reads OpenSSL::SSL::TLS1_2_VERSION.
+      def min_version=(version)
+        @min_version = __protocol_version__(version)
+      end
+
+      def max_version=(version)
+        @max_version = __protocol_version__(version)
+      end
+
+      def __protocol_version__(version)
+        case version
+        when nil, Integer then version
+        when Symbol, String
+          name = "#{version}_VERSION"
+          unless OpenSSL::SSL.const_defined?(name, false)
+            raise ArgumentError, "unrecognized version #{version.to_s.inspect}"
+          end
+          OpenSSL::SSL.const_get(name, false)
+        else raise TypeError, "no implicit conversion of #{version.class} into String"
+        end
+      end
+      private :__protocol_version__
 
       # The newest protocol version the context allows, which OpenSSL has no
       # reader for. Zero or nil sets no limit.
@@ -3579,13 +3602,29 @@ module OpenSSL
 
       def syswrite(data)
         data = data.to_s
+        if @unsent_records
+          __io__(:write, @unsent_records)
+          @unsent_records = nil
+        end
         records = OpenSSL.__tls__(:write, @connection, data.b)
         __io__(:write, records)
         data.bytesize
       end
 
+      # The records a write could not hand the socket in full wait in
+      # @unsent_records, and the next call, which repeats the same data as
+      # OpenSSL asks, sends them in place of encrypting it again.
       def syswrite_nonblock(data, exception: true)
-        syswrite(data)
+        data = data.to_s
+        @unsent_records ||= OpenSSL.__tls__(:write, @connection, data.b)
+        written = __io__(:write_nonblock, @unsent_records, exception: false)
+        if written == :wait_writable || written < @unsent_records.bytesize
+          @unsent_records = @unsent_records.byteslice(written..) unless written == :wait_writable
+          raise SSLErrorWaitWritable, "write would block" if exception
+          return :wait_writable
+        end
+        @unsent_records = nil
+        data.bytesize
       end
 
       def sysclose

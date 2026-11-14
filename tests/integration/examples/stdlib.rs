@@ -2632,3 +2632,22 @@ fn test_openssl_kdf_hkdf_extracts_and_expands() {
          ArgumentError\n\"length must be non-negative\"\n"
     );
 }
+
+#[test]
+fn an_ssl_context_takes_protocol_versions_by_name() {
+    let output = run_example("stdlib/openssl_context_version_names.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"TLSv1.3\"\n",
+            "[ArgumentError, \"unrecognized version \\\"TLS9\\\"\"]\n",
+            "[TypeError, \"no implicit conversion of Float into String\"]\n",
+        )
+    );
+}
+
+#[test]
+fn an_ssl_socket_write_nonblock_raises_once_the_socket_is_full() {
+    let output = run_example("stdlib/openssl_write_nonblock_fills_the_socket.rb");
+    assert_eq!(output, "true\ntrue\nnil\n:wait_writable\n");
+}

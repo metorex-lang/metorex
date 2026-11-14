@@ -708,3 +708,19 @@ fn expanding_paths_leaves_a_replaced_pwd_alone() {
     let output = run_example("filesystem/expanding_paths_leaves_a_replaced_pwd_alone.rb");
     assert_eq!(output, "0\ntrue\nfalse\n");
 }
+
+#[test]
+fn file_and_dir_answer_no_exists_predicate() {
+    let output = run_example("filesystem/no_exists_predicate.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "false\n",
+            "false\n",
+            "undefined method 'exists?' for class File\n",
+            "undefined method 'exists?' for class '#<Class:File>'\n",
+            "undefined method 'exists?' for class Dir\n",
+            "undefined method 'exists?' for class '#<Class:Dir>'\n",
+        )
+    );
+}

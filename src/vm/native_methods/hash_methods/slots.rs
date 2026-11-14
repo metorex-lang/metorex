@@ -244,7 +244,7 @@ impl VirtualMachine {
             let stored = if rendered.starts_with("\u{1}i") {
                 key.clone()
             } else {
-                stored_key_object(key)
+                self.shared_key_object(key)
             };
             if !crate::vm::utils::is_primitive_key(key)
                 || rendered.starts_with(HASHED_SLOT_PREFIX)
@@ -324,6 +324,44 @@ impl VirtualMachine {
             }
         }
         Ok((slot.to_string(), None))
+    }
+}
+
+impl VirtualMachine {
+    /// The object a hash keeps for a key it was handed: for a String not yet
+    /// frozen, a frozen copy shared by every hash given an equal key, unless
+    /// the key carries instance variables of its own.
+    fn shared_key_object(&mut self, key: &Object) -> Object {
+        let View::String(text) = key.view() else {
+            return key.clone();
+        };
+        let has_variables = Self::collection_address(key)
+            .and_then(|address| self.collection_variables.get(&address))
+            .is_some_and(|held| !held.is_empty());
+        if text.is_frozen() || has_variables {
+            return stored_key_object(key);
+        }
+        let index = (text.as_str().to_string(), text.encoding_name().to_string());
+        if let Some(found) = self.deduped_strings.get(&index) {
+            return Object::String(Rc::clone(found));
+        }
+        if let Some(found) = self
+            .hash_key_strings
+            .get(&index)
+            .and_then(std::rc::Weak::upgrade)
+        {
+            return Object::String(found);
+        }
+        let copied = stored_key_object(key);
+        if let View::String(made) = copied.view() {
+            if self.hash_key_strings.len() >= self.hash_key_strings_sweep_at {
+                self.hash_key_strings
+                    .retain(|_, held| held.strong_count() > 0);
+                self.hash_key_strings_sweep_at = (self.hash_key_strings.len() * 2).max(1024);
+            }
+            self.hash_key_strings.insert(index, Rc::downgrade(made));
+        }
+        copied
     }
 }
 

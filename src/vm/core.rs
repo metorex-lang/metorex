@@ -245,6 +245,14 @@ pub struct VirtualMachine {
     /// The frozen strings `dedup` and `-@` share, keyed by the text and the
     /// encoding it is written in. Two equal strings deduplicate to one object.
     pub(crate) deduped_strings: HashMap<(String, String), Rc<crate::object::StringValue>>,
+    /// The frozen copies a hash made of the String keys it was handed, by
+    /// text and encoding, shared by every hash given an equal key. They are
+    /// held weakly, so a key no hash keeps any more is let go.
+    pub(crate) hash_key_strings:
+        HashMap<(String, String), std::rc::Weak<crate::object::StringValue>>,
+    /// The size of `hash_key_strings` past which it is next swept of the
+    /// copies let go.
+    pub(crate) hash_key_strings_sweep_at: usize,
     /// How many times the program has built an instance of each class, which
     /// is what the object space reports in place of walking a heap.
     pub(crate) allocation_counts: HashMap<usize, i64>,
@@ -815,6 +823,8 @@ impl VirtualMachine {
             class_var_home: Vec::new(),
             class_var_cref_stack: Vec::new(),
             deduped_strings: HashMap::new(),
+            hash_key_strings: HashMap::new(),
+            hash_key_strings_sweep_at: 1024,
             allocation_counts: HashMap::new(),
             open_sockets: Default::default(),
             open_streams: Default::default(),

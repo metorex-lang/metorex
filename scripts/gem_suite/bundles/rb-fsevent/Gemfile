@@ -1,0 +1,6 @@
+# The gems rb-fsevent's specs load, and rake, which the spec helper runs to
+# build the fsevent_watch program.
+source "https://rubygems.org"
+
+gem "rspec", "~> 3.6"
+gem "rake"

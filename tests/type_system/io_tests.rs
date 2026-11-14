@@ -133,9 +133,9 @@ fn file_exist_returns_false_for_missing() {
 }
 
 #[test]
-fn file_exists_alias() {
-    let result = run(r#"File.exists?("Cargo.toml")"#);
-    assert_eq!(result, Some(Object::Bool(true)));
+fn file_has_no_exists_alias() {
+    let err = run_err(r#"File.exists?("Cargo.toml")"#);
+    assert!(err.contains("undefined method 'exists?' for class File"));
 }
 
 #[test]

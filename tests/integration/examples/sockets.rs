@@ -252,3 +252,19 @@ fn eof_and_readpartial_wait_for_a_server_in_another_process() {
     let output = run_example("sockets/eof_waits_for_another_process.rb");
     assert_eq!(output, "\"checked\"\n");
 }
+
+#[test]
+fn write_nonblock_raises_wait_writable_on_a_full_socket() {
+    let output = run_example("sockets/write_nonblock_on_a_full_socket.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "IO::EAGAINWaitWritable\n",
+            "\"Resource temporarily unavailable - write would block\"\n",
+            "true\n",
+            "0\n",
+            "IO::EAGAINWaitWritable\n",
+            "\"Resource temporarily unavailable - write would block\"\n",
+        )
+    );
+}

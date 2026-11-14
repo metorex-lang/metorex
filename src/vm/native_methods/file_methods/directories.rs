@@ -264,7 +264,7 @@ impl VirtualMachine {
                 named, &message, position,
             ));
         }
-        if class_rc.name() == "Dir" && (method_name == "exist?" || method_name == "exists?") {
+        if class_rc.name() == "Dir" && method_name == "exist?" {
             if arguments.len() != 1 {
                 return Err(method_argument_error(
                     method_name,
