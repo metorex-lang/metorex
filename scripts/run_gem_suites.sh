@@ -146,12 +146,14 @@ SUITES=(
   "googleauth|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
   "googleauth|test/**/*_test.rb|-I lib -I test -r bundler/setup"
   "signet|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "redis|test/redis/*_test.rb test/distributed/*_test.rb test/modules/*_test.rb|-I lib -I test -r bundler/setup"
   "racc|test/test_*.rb|--enable-frozen-string-literal -I lib -I test/lib -I $HELPERS -r helper|$REPO_ROOT/scripts/gem_suite/racc_parser_text.rb"
 )
 
 # The gems whose test files run one after another, since each of them
-# starts a server on the same fixed port.
-ONE_AT_A_TIME=(excon mini_portile2)
+# starts a server on the same fixed port, or, for redis, empties the
+# databases of the one server every file shares.
+ONE_AT_A_TIME=(excon mini_portile2 redis)
 
 # The longest one of simplecov's sandbox spec files may run, each of which
 # boots a Rails application and runs its tests once per example, or one of
@@ -191,7 +193,26 @@ wanted() {
 }
 
 WORK_DIR=$(mktemp -d -t metorex_gem_suites.XXXXXX)
-trap 'rm -rf "$WORK_DIR"' EXIT
+REDIS_PID=""
+trap '[ -n "$REDIS_PID" ] && kill "$REDIS_PID" 2> /dev/null && wait "$REDIS_PID"; rm -rf "$WORK_DIR"' EXIT
+# redis's suite connects to a server on port 6381 and through the unix
+# socket REDIS_SOCKET_PATH names. With REDIS_SOCKET_PATH set, a server
+# started elsewhere is used, as Jenkins starts one beside the build.
+if wanted redis && [ -z "${REDIS_SOCKET_PATH:-}" ]; then
+  export REDIS_SOCKET_PATH="$WORK_DIR/redis.sock"
+  redis-server "$REPO_ROOT/gems/redis/test/support/redis.conf" --port 6381 \
+    --unixsocket "$REDIS_SOCKET_PATH" --unixsocketperm 700 --dir "$WORK_DIR" \
+    --logfile "$WORK_DIR/redis.log" &
+  REDIS_PID=$!
+  for _ in $(seq 50); do
+    redis-cli -s "$REDIS_SOCKET_PATH" ping > /dev/null 2>&1 && break
+    sleep 0.1
+  done
+  if ! redis-cli -s "$REDIS_SOCKET_PATH" ping > /dev/null 2>&1; then
+    echo "run_gem_suites.sh: redis-server did not start, see $WORK_DIR/redis.log" >&2
+    exit 2
+  fi
+fi
 # A test that starts `ruby` by name, as thor's do, starts Metorex in a
 # Metorex run, through a link named `ruby` ahead of the others on PATH.
 if [ "$ENGINE" = "metorex" ]; then

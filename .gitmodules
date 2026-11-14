@@ -214,3 +214,6 @@
 [submodule "gems/signet"]
 	path = gems/signet
 	url = https://github.com/googleapis/signet
+[submodule "gems/redis"]
+	path = gems/redis
+	url = https://github.com/redis/redis-rb

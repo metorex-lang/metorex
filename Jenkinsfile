@@ -2,7 +2,21 @@
 // node that holds its build cache under /home/k8s/metorex-ci-cache, so the
 // cache is warm on every run.
 
-def buildPod(String node, String cpuRequest, String cpuLimit) {
+def buildPod(String node, String cpuRequest, String cpuLimit, boolean withRedis = false) {
+  // With withRedis, a redis-server runs as a second container on port 6381,
+  // as redis's suite expects, and listens on a unix socket under /redis, which
+  // both containers mount. It is started without the image's entrypoint, which
+  // would load the modules the official image carries, so it answers as a
+  // server built without them does.
+  def redisContainer = '''
+        - name: redis
+          image: redis:8.10.3
+          command: ["redis-server"]
+          args: ["--port", "6381", "--unixsocket", "/redis/redis.sock", "--unixsocketperm", "777",
+                 "--dir", "/redis", "--save", "", "--appendonly", "no", "--enable-debug-command", "yes"]
+          volumeMounts:
+            - name: redis-socket
+              mountPath: /redis'''
   return """
     apiVersion: v1
     kind: Pod
@@ -34,12 +48,16 @@ def buildPod(String node, String cpuRequest, String cpuLimit) {
               memory: 8Gi
           volumeMounts:
             - name: cache
-              mountPath: /cache
+              mountPath: /cache${withRedis ? '''
+            - name: redis-socket
+              mountPath: /redis''' + redisContainer : ''}
       volumes:
         - name: cache
           hostPath:
             path: /home/k8s/metorex-ci-cache
-            type: Directory
+            type: Directory${withRedis ? '''
+        - name: redis-socket
+          emptyDir: {}''' : ''}
   """
 }
 
@@ -282,7 +300,7 @@ pipeline {
       agent {
         kubernetes {
           defaultContainer 'ci'
-          yaml buildPod('risa', '4', '8')
+          yaml buildPod('risa', '4', '8', true)
         }
       }
       environment {
@@ -321,6 +339,9 @@ pipeline {
               },
               'templates, loading, and concurrency': {
                 sh 'JOBS=1 scripts/run_gem_suites.sh tilt erubi zeitwerk sprockets concurrent-ruby thread_safe'
+              },
+              'redis': {
+                sh 'REDIS_SOCKET_PATH=/redis/redis.sock JOBS=1 scripts/run_gem_suites.sh redis'
               },
               'cloud clients': {
                 sh 'JOBS=1 scripts/run_gem_suites.sh aws-sdk-ruby/gems/aws-sdk-core aws-sdk-ruby/gems/aws-sigv4 aws-sdk-ruby/gems/aws-partitions aws-sdk-ruby/gems/aws-eventstream aws-sdk-ruby/gems/aws-sdk-s3 aws-sdk-ruby/gems/aws-sdk-kms jmespath googleauth signet'

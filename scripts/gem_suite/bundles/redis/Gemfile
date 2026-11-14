@@ -1,0 +1,10 @@
+# The gems redis's tests load. The suite runs with its pure Ruby driver, so
+# hiredis-client, which its own Gemfile names for the hiredis runs, is left out.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "redis", path: "../../../../gems/redis"
+gem "mocha"
+
+shipped "minitest"

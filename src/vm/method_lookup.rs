@@ -2117,12 +2117,18 @@ fn aliases_another_name(method: &Method, name: &str) -> bool {
 }
 
 /// Whether a method found on a reopened class answers for itself rather
-/// than standing in for a native one: it has a body, it is a C extension's
-/// function, or it aliases a native method under another name.
+/// than standing in for a native one: it has a body, the program wrote it
+/// with an empty one, it is a C extension's function, or it aliases a
+/// native method under another name.
 fn answers_for_itself(method: &Method, name: &str) -> bool {
     !method.body.is_empty()
         || method.provenance.c_function.is_some()
         || aliases_another_name(method, name)
+        || method
+            .source_location
+            .as_ref()
+            .and_then(|written| written.filename.as_deref())
+            .is_some_and(|file| !file.starts_with(crate::vm::INTERNAL_FILE_PREFIX))
 }
 
 /// How many class and name pairs `lookup_method` keeps the answers of

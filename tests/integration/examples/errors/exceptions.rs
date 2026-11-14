@@ -711,3 +711,15 @@ fn test_errors_exception_initialize_called_again_execution() {
         )
     );
 }
+
+#[test]
+fn an_empty_method_a_module_gives_an_exception_class_answers_nil() {
+    let output = run_example("errors/empty_module_method_on_an_exception.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[CommandFailure, \"WRONGTYPE bad key\", \"WRONGTYPE\", nil]\n",
+            "[WrongType, \"WRONGTYPE bad key\", \"WRONGTYPE\", nil]\n",
+        )
+    );
+}
