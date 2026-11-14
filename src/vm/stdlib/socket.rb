@@ -146,11 +146,6 @@ class BasicSocket < IO
   end
   private :resolving_names?
 
-  def local_address
-    named = Socket.__net__ "address", @handle, "", 0
-    named.nil? ? nil : Addrinfo.stream(named[0], named[1])
-  end
-
   # What a reverse-lookup argument may be: nothing, a boolean, or one of the
   # two names Ruby answers to. Anything else is refused.
   def self.check_reverse_lookup(wanted)
@@ -1929,10 +1924,6 @@ class UNIXSocket < BasicSocket
     alias_method :socketpair, :pair
   end
 
-  def inspect
-    "#<UNIXSocket:fd #{fileno}>"
-  end
-
   def read(length = nil)
     __read_fully__(length) { |wanted| __read_once__ wanted }
   end
@@ -2185,20 +2176,6 @@ class UDPSocket < IPSocket
       raise Errno::EAFNOSUPPORT, "socket(2)"
     end
     super Socket.__net__("udp_fresh", 0, @family == Socket::AF_INET6 ? "6" : "4", 0)
-  end
-
-  # Where this end sits, and where the other end does, as a socket carrying
-  # each message on its own names them.
-  def local_address
-    named = Socket.__net__ "udp_address", @handle, "", 0
-    raise Errno::ENOTCONN, "socket is not connected" if named.nil?
-    Addrinfo.built named[0], named[1], Socket::SOCK_DGRAM, 0
-  end
-
-  def remote_address
-    named = Socket.__net__ "udp_peer", @handle, "", 0
-    raise Errno::ENOTCONN, "socket is not connected" if named.nil?
-    Addrinfo.built named[0], named[1], Socket::SOCK_DGRAM, 0
   end
 
   # Where something should send to reach this socket.

@@ -249,7 +249,7 @@ impl VirtualMachine {
 impl VirtualMachine {
     /// Under `$VERBOSE`, Ruby reports a `def` that replaces a method the
     /// program wrote on the same class, and where the old one was written,
-    /// unless an alias still reaches the old method.
+    /// unless the old method is an alias or an alias still reaches it.
     pub(crate) fn warn_method_redefined(
         &mut self,
         class: &Rc<crate::class::Class>,
@@ -272,12 +272,18 @@ impl VirtualMachine {
         else {
             return;
         };
-        let aliased = class.method_names().iter().any(|other| {
-            other != name
-                && class
-                    .find_own_method(other)
-                    .is_some_and(|held| held.provenance.original_name.as_deref() == Some(name))
-        });
+        let is_alias_of_another = old
+            .provenance
+            .original_name
+            .as_deref()
+            .is_some_and(|original| original != name);
+        let aliased = is_alias_of_another
+            || class.method_names().iter().any(|other| {
+                other != name
+                    && class
+                        .find_own_method(other)
+                        .is_some_and(|held| held.provenance.original_name.as_deref() == Some(name))
+            });
         if aliased {
             return;
         }

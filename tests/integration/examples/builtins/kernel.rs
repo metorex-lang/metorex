@@ -633,6 +633,12 @@ fn marshal_round_trips_set_subclasses_and_variables() {
 }
 
 #[test]
+fn pp_of_a_set_holding_itself_stops_at_the_cycle() {
+    let output = run_example("builtins/pp_of_a_set_holding_itself.rb");
+    assert_eq!(output, "Set[1, Set[...]]\nSet[]\n");
+}
+
+#[test]
 fn set_inspect_renders_members_and_names_subclasses() {
     let output = run_example("builtins/set_inspect_with_members_and_subclasses.rb");
     assert_eq!(

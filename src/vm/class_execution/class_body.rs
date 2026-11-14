@@ -295,13 +295,6 @@ impl VirtualMachine {
                 let initial_value = self.evaluate_expression(value)?;
                 class_body_instance_variable(class, var_name, initial_value);
             }
-            Statement::Expression {
-                expression: Expression::InstanceVariable { name: var_name, .. },
-                ..
-            } => {
-                // Instance variable declaration without assignment
-                class.declare_instance_var(var_name);
-            }
             Statement::AttrReader { attributes, .. } => {
                 let names = self.resolve_attribute_names(attributes, position)?;
                 self.define_attribute_methods(class, "attr_reader", &names, position)?;

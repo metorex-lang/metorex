@@ -55,14 +55,6 @@ class Rational
   private :marshal_dump
 end
 
-class Set
-  # `pp` calls this instead of `pretty_print` for a set that holds itself, so
-  # printing one stops rather than descending forever.
-  def pretty_print_cycle(printer)
-    printer.text("Set[...]")
-  end
-end
-
 class Fiber
   # Raise an exception in this fiber, built from the arguments the way
   # `Kernel#raise` builds one, where the fiber stands.

@@ -171,6 +171,16 @@ one_at_a_time() {
 }
 
 WANTED=("$@")
+for named in ${WANTED[@]+"${WANTED[@]}"}; do
+  listed=""
+  for row in "${SUITES[@]}"; do
+    [ "${row%%|*}" = "$named" ] && listed=1
+  done
+  if [ -z "$listed" ]; then
+    echo "run_gem_suites.sh: no suite is listed for $named" >&2
+    exit 2
+  fi
+done
 wanted() {
   [ ${#WANTED[@]} -eq 0 ] && return 0
   local held

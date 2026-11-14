@@ -272,10 +272,12 @@ pipeline {
 
     // Each group of gem suites is a branch of its own, so a failing group
     // shows by name. A branch fails when a file passes fewer examples than
-    // scripts/gem_suite_results.tsv records for Metorex.
+    // scripts/gem_suite_results.tsv records for Metorex, and prints the row
+    // to write for a file that passes more. The branches share the pod's
+    // CPUs, so each runs as many files at once as its share of the work.
     stage('gems') {
       options {
-        timeout(time: 30, unit: 'MINUTES')
+        timeout(time: 180, unit: 'MINUTES')
       }
       agent {
         kubernetes {
@@ -286,7 +288,6 @@ pipeline {
       environment {
         CARGO_TARGET_DIR = '/cache/target-rspec'
         METOREX = '/cache/target-rspec/suites/metorex'
-        JOBS = '8'
         CHECK = '1'
         // rexml's linear performance tests parse documents of up to 200,000
         // characters, which takes this node longer than the default 300.
@@ -297,13 +298,32 @@ pipeline {
           // power_assert's gemspec lists its files through git.
           sh 'git --version'
           sh 'cargo build --profile suites'
+          sh 'scripts/install_gem_suite_gems.sh'
           script {
             parallel(
               'bundled gems': {
-                sh 'scripts/run_gem_suites.sh minitest test-unit power_assert rake rexml rss net-imap net-pop net-smtp'
+                sh 'JOBS=1 scripts/run_gem_suites.sh minitest test-unit power_assert rake rexml rss net-imap net-pop net-smtp'
               },
               'gems Ruby ships': {
-                sh 'scripts/run_gem_suites.sh racc base64 json bigdecimal'
+                sh 'JOBS=1 scripts/run_gem_suites.sh racc base64 json bigdecimal'
+              },
+              'rack and HTTP': {
+                sh 'JOBS=1 scripts/run_gem_suites.sh rack rack-test sinatra/rack-protection faraday faraday-net_http multipart-post excon httpclient http-cookie domain_name connection_pool websocket-extensions'
+              },
+              'text, data, and time': {
+                sh 'JOBS=1 scripts/run_gem_suites.sh i18n tzinfo multi_json multi_xml builder mime-types mini_mime mail addressable public_suffix jwt dotenv netrc rubyzip'
+              },
+              'command line and developer tools': {
+                sh 'JOBS=1 scripts/run_gem_suites.sh thor rainbow ruby-progressbar unicode-display_width parallel method_source coderay pry simplecov docile mini_portile2'
+              },
+              'ruby parsing and linting': {
+                sh 'JOBS=3 scripts/run_gem_suites.sh ast parser regexp_parser rubocop-ast rubocop'
+              },
+              'templates, loading, and concurrency': {
+                sh 'JOBS=1 scripts/run_gem_suites.sh tilt erubi zeitwerk sprockets concurrent-ruby thread_safe'
+              },
+              'cloud clients': {
+                sh 'JOBS=1 scripts/run_gem_suites.sh aws-sdk-ruby/gems/aws-sdk-core aws-sdk-ruby/gems/aws-sigv4 aws-sdk-ruby/gems/aws-partitions aws-sdk-ruby/gems/aws-eventstream aws-sdk-ruby/gems/aws-sdk-s3 aws-sdk-ruby/gems/aws-sdk-kms jmespath googleauth signet'
               }
             )
           }

@@ -17,3 +17,8 @@ end
 class Shape
   def size = 2
 end
+class Shape
+  def width = 1
+  alias_method :breadth, :width
+  def breadth = 2
+end

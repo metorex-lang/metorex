@@ -344,3 +344,12 @@ fn test_metaprogramming_kernel_module_functions_execution() {
     let output = run_example("metaprogramming/kernel_module_functions.rb");
     assert_eq!(output, "true\ntrue\ntrue\ntrue\ntrue\nfalse\nfalse\n");
 }
+
+#[test]
+fn class_eval_block_reads_class_instance_variables() {
+    let output = run_example("metaprogramming/class_eval_block_reads_class_instance_variables.rb");
+    assert_eq!(
+        output,
+        "nil\n\"loaded\"\n\"loaded\"\nnil\n\"loaded\"\n\"loaded\"\n"
+    );
+}
