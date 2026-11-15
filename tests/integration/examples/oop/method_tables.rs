@@ -240,6 +240,12 @@ fn test_a_bracket_against_a_bare_super_indexes_its_answer() {
 }
 
 #[test]
+fn super_two_blocks_deep_reaches_the_parent_of_the_method_it_was_written_in() {
+    let output = run_example("oop/super_in_nested_blocks_of_an_operator_method.rb");
+    assert_eq!(output, "[1, 2, 3]\n");
+}
+
+#[test]
 fn test_include_leaves_a_module_a_superclass_has_where_the_superclass_has_it() {
     let output = run_example("oop/include_skips_a_module_a_superclass_has.rb");
     assert_eq!(

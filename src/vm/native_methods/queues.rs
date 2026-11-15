@@ -131,8 +131,11 @@ impl VirtualMachine {
                         }
                         last_round = Some(self.statements_run);
                         self.wait_for_other_threads(_position);
-                        if let Err(killed) = self.raise_if_thread_killed(_position) {
-                            waited = Err(killed);
+                        if let Err(stopped) = self
+                            .raise_if_thread_killed(_position)
+                            .and_then(|_| self.deliver_pending_signals(_position))
+                        {
+                            waited = Err(stopped);
                             break;
                         }
                     }
@@ -275,8 +278,11 @@ impl VirtualMachine {
                     }
                     last_round = Some(self.statements_run);
                     self.wait_for_other_threads(_position);
-                    if let Err(killed) = self.raise_if_thread_killed(_position) {
-                        waited = Err(killed);
+                    if let Err(stopped) = self
+                        .raise_if_thread_killed(_position)
+                        .and_then(|_| self.deliver_pending_signals(_position))
+                    {
+                        waited = Err(stopped);
                         break;
                     }
                 }

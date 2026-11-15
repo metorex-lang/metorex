@@ -370,6 +370,7 @@ pub(super) const SOURCE: &str = r##"
     raise IOError, "closed stream" if closed?
     __drain__
     @line_buffered = nil
+    @wrote_through_buffer = nil
     self
   end
 
@@ -583,9 +584,20 @@ pub(super) const SOURCE: &str = r##"
 
   # Wait until there is something to read, or until the wait runs out. A
   # timeout of nil waits for as long as it takes.
+  # Bytes already read ahead, or put back with `ungetc`, can be read right
+  # away, and are answered with true rather than the stream.
   def wait_readable(timeout = nil)
+    raise IOError, "closed stream" if closed?
+    return true if __read_pending__
     __wait_ready__("read", timeout)
   end
+
+  def __read_pending__
+    return true unless @peeked.nil? || @peeked.empty?
+    handle = __stream_handle__
+    !handle.nil? && IO.__stream__("read_pending", handle, "", 0)
+  end
+  private :__read_pending__
 
   def wait_writable(timeout = nil)
     __wait_ready__("write", timeout)

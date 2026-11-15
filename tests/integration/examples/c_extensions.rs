@@ -535,6 +535,15 @@ fn test_c_extensions_c_exceptions_execution() {
 }
 
 #[test]
+fn error_classes_a_c_extension_defines_are_told_apart() {
+    let output = run_example("c_extensions/c_error_classes.rb");
+    assert_eq!(
+        output,
+        "CErrorClasses::ParseError\n\"cannot parse text\"\ntrue\nfalse\nfalse\n:parse\n"
+    );
+}
+
+#[test]
 fn test_c_extensions_c_exceptions_no_parens_execution() {
     let output = run_example("c_extensions/c_exceptions_no_parens.rb");
     assert_eq!(output, C_EXCEPTIONS_OUTPUT);

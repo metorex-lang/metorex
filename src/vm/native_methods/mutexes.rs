@@ -104,6 +104,10 @@ impl VirtualMachine {
                     }
                     last_round = Some(self.statements_run);
                     self.wait_for_other_threads(position);
+                    if let Err(signalled) = self.deliver_pending_signals(position) {
+                        waited = Err(signalled);
+                        break;
+                    }
                     if self.thread_told_to_stop() {
                         break;
                     }

@@ -46,7 +46,6 @@ fn symbol_to_proc_block(sym: &str) -> BlockStatement {
 /// so a callable given the wrong number of arguments still says so.
 fn method_to_proc_block(target: &Object, position: Position) -> BlockStatement {
     let mut parameters = Vec::new();
-    let mut parameter_defaults = Vec::new();
     let mut forwarded = Vec::new();
     let written_in_ruby = |method: &crate::object::Method| {
         method.source_location.is_some() || !method.body.is_empty()
@@ -54,31 +53,29 @@ fn method_to_proc_block(target: &Object, position: Position) -> BlockStatement {
     if let View::Method(method) = target.view()
         && written_in_ruby(method)
     {
-        let optional: std::collections::HashSet<usize> = method
+        // The parameters from the first optional one or the splat on are
+        // forwarded as a splat, so the method fills in its own defaults for
+        // the ones the block was not given.
+        let gathered_from = method
             .signature
             .default_parameters
             .iter()
             .map(|(index, _)| *index)
-            .collect();
-        // The splat's own name sits among the positional ones, and it is
-        // forwarded as a splat rather than as one more positional.
-        let splat_at = method
-            .signature
-            .variadic_param
-            .as_ref()
-            .map(|(index, _)| *index);
-        for index in 0..method.parameters.len() {
-            if splat_at == Some(index) {
-                continue;
-            }
+            .chain(
+                method
+                    .signature
+                    .variadic_param
+                    .as_ref()
+                    .map(|(index, _)| *index),
+            )
+            .min()
+            .unwrap_or(method.parameters.len());
+        for index in 0..gathered_from {
             let name = format!("__method_proc_p{index}");
-            if optional.contains(&index) {
-                parameter_defaults.push((parameters.len(), Expression::NilLiteral { position }));
-            }
             parameters.push(name.clone());
             forwarded.push(Expression::Identifier { name, position });
         }
-        if method.signature.variadic_param.is_some() {
+        if gathered_from < method.parameters.len() {
             let name = "__method_proc_rest".to_string();
             parameters.push(format!("*{name}"));
             forwarded.push(Expression::Splat {
@@ -123,7 +120,6 @@ fn method_to_proc_block(target: &Object, position: Position) -> BlockStatement {
         }],
         Default::default(),
     );
-    made.parameter_defaults = parameter_defaults;
     // A Method takes its arguments exactly, so the block standing for one is
     // a lambda rather than an ordinary block.
     made.is_lambda = true;

@@ -56,6 +56,20 @@ class BasicSocket < IO
   end
   private :__write_now__
 
+  # As much of the text as one write takes, waiting first until the
+  # connection has room for some of it.
+  def __write_when_room__(command, text)
+    raise IOError, "closed stream" if closed?
+    bytes = text.to_s.b
+    return 0 if bytes.empty?
+    loop do
+      wrote = Socket.__net__(command, @handle, bytes.byteslice(0, WRITE_PIECE), 0)
+      return wrote unless wrote.zero?
+      sleep 0.001 until Socket.__net__("ready?", @handle, "", 1)
+    end
+  end
+  private :__write_when_room__
+
   def __send_now__(command, text)
     wrote = Socket.__net__(command, @handle, text, 0)
     raise Errno::EAGAIN, "sendmsg(2) would block" if wrote.zero?
@@ -181,6 +195,10 @@ class BasicSocket < IO
   # The number the operating system holds this socket under.
   def fileno
     Socket.__net__ "fileno", @handle, "", 0
+  end
+
+  def to_i
+    fileno
   end
 
   # A socket keeps its descriptor in a registry of its own rather than in the
@@ -1743,6 +1761,11 @@ class TCPSocket < IPSocket
     texts.sum { |text| __write_all__ "write", text.to_s }
   end
 
+  def syswrite(text)
+    __write_when_room__ "write", text
+  end
+  alias_method :sysread, :readpartial
+
 
   # Read what has arrived over the connection, paired with where the other
   # end sits. A buffer handed in takes the place of its own characters.
@@ -1794,16 +1817,21 @@ end
 
 # A socket waiting for connections to be made to it.
 class TCPServer < BasicSocket
-  def initialize(host, port = nil)
-    named, wanted = port.nil? ? [nil, host] : [host, port]
+  # A port written out as nil is any free port on the host, and a single
+  # argument is the port alone.
+  NO_PORT = Object.new.freeze
+  private_constant :NO_PORT
+
+  def initialize(host, port = NO_PORT)
+    named, wanted = port.equal?(NO_PORT) ? [nil, host] : [host, port.nil? ? 0 : port]
     if block_given?
       warn "warning: TCPServer::new() does not take block; use TCPServer::open() instead"
     end
     super Socket.__net__("listen", 0, Socket.resolved(named).first, Socket.port_number(wanted))
   end
 
-  def self.open(host, port = nil)
-    held = new host, port
+  def self.open(host, port = NO_PORT)
+    held = port.equal?(NO_PORT) ? new(host) : new(host, port)
     return held unless block_given?
     begin
       yield held
@@ -1973,6 +2001,11 @@ class UNIXSocket < BasicSocket
   def write(*texts)
     texts.sum { |text| __write_all__ "unix_write", text.to_s }
   end
+
+  def syswrite(text)
+    __write_when_room__ "unix_write", text
+  end
+  alias_method :sysread, :readpartial
 
   def write_nonblock(text, exception: true)
     __write_now__ "unix_write", text, exception

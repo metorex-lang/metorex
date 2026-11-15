@@ -58,6 +58,13 @@ impl OpenStreams {
         }
     }
 
+    /// Whether an earlier read left bytes waiting for the next one.
+    fn holds_read_ahead(&self, handle: u64) -> bool {
+        self.waiting
+            .get(&handle)
+            .is_some_and(|held| !held.is_empty())
+    }
+
     /// Hand bytes back to a stream. A stream that can be wound back is wound
     /// back, so where it stands is what it reports. A pipe cannot be, so what
     /// was read ahead is kept for the next read instead.
@@ -450,7 +457,9 @@ impl VirtualMachine {
                     return Err(closed_error(position));
                 };
                 // SAFETY: `number` is a descriptor this program holds open.
-                let copied = unsafe { libc::dup(number) };
+                // The copy stands above the three standard streams and is
+                // closed when the program runs another one, as Ruby's is.
+                let copied = unsafe { libc::fcntl(number, libc::F_DUPFD_CLOEXEC, 3) };
                 if copied < 0 {
                     return Err(stream_error(
                         &std::io::Error::last_os_error(),
@@ -809,6 +818,8 @@ impl VirtualMachine {
             // A socket keeps its descriptor in a registry of its own, so it
             // is waited on by the descriptor's number, which the handle
             // carries here.
+            // Whether an earlier read left bytes for the next one.
+            "read_pending" => Ok(Object::Bool(self.open_streams.holds_read_ahead(handle))),
             "wait_descriptor" | "wait" => {
                 let number = if &*action.as_str() == "wait_descriptor" {
                     handle as RawFd

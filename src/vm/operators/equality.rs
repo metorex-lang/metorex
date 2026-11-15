@@ -443,14 +443,16 @@ impl VirtualMachine {
         if let Some(class_rc) = class_rc_opt {
             if let View::Exception(exc_ref) = right.view() {
                 // Check if exception type matches or is a subclass
+                // The class an exception carries places it. One with
+                // none is placed by its type name.
                 let exc_type = exc_ref.borrow().exception_type.clone();
-                if exc_type == class_rc.name() {
+                let carried = exc_ref.borrow().class.clone().map(Object::Class);
+                if carried.is_none() && exc_type == class_rc.name() {
                     return Ok(Object::Bool(true));
                 }
                 // Check the exception class hierarchy. A namespaced
                 // type such as `Errno::EINVAL` is a constant on its
                 // module rather than a top-level name.
-                let carried = exc_ref.borrow().class.clone().map(Object::Class);
                 let resolved = match carried {
                     Some(class) => Some(class),
                     None => match self.globals().get(&exc_type).view() {

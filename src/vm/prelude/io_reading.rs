@@ -494,10 +494,11 @@ pub(super) const SOURCE: &str = r##"
   end
   private :__take_ready__
 
-  # Written straight to the descriptor. A stream that has written through its
-  # own buffer says so, since the two writes may land out of order.
+  # Written straight to the descriptor. A stream that does not sync and has
+  # written since its last flush says so, since the two writes may land out
+  # of order.
   def syswrite(text)
-    if @wrote_through_buffer
+    if @wrote_through_buffer && !sync
       warn "warning: syswrite for buffered IO"
     end
     held = __write_texts__ [text.to_s], false, WRITE_WHEN_ROOM

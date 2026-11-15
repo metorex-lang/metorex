@@ -360,6 +360,20 @@ fn test_callables_method_proc_blocks_execution() {
 }
 
 #[test]
+fn a_method_handed_as_a_block_keeps_its_optional_defaults() {
+    let output = run_example("callables/method_block_keeps_optional_defaults.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[[[\"a\", #<Encoding:UTF-8>], [\"1\", #<Encoding:UTF-8>]], ",
+            "[[\"b\", #<Encoding:UTF-8>], [\"2\", #<Encoding:UTF-8>]]]\n",
+            "[[\"x\", #<Encoding:UTF-8>]]\n",
+            "[[[\"k\", \"v\"], #<Encoding:UTF-8>]]\n"
+        )
+    );
+}
+
+#[test]
 fn test_callables_method_proc_blocks_no_parens_execution() {
     let output = run_example("callables/method_proc_blocks_no_parens.rb");
     assert_eq!(output, METHOD_PROC_BLOCKS_OUTPUT);

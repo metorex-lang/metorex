@@ -1,5 +1,20 @@
 // The calls that reach the operating system directly.
 
+/// A new socket of the family and kind given, closed when the program runs
+/// another one, as every descriptor Ruby opens is, so a child process does
+/// not keep it open after the program closes it.
+pub(crate) fn fresh_socket(family: libc::c_int, kind: libc::c_int) -> libc::c_int {
+    // SAFETY: socket(2) makes a descriptor and changes nothing else, and
+    // the flag is set only on the one it made.
+    unsafe {
+        let descriptor = libc::socket(family, kind, 0);
+        if descriptor >= 0 {
+            libc::fcntl(descriptor, libc::F_SETFD, libc::FD_CLOEXEC);
+        }
+        descriptor
+    }
+}
+
 /// Send one descriptor over a socket named by a path, alongside a single
 /// byte, which is what the message needs to carry the control data.
 pub(crate) fn send_descriptor(socket: i32, descriptor: i32) -> isize {

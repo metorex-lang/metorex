@@ -171,3 +171,9 @@ fn test_interrupt_raises_in_the_main_thread_of_a_fork_and_of_the_process() {
         "\"DEFAULT\"\n\"READY\\n\"\n\"interrupted Interrupt\\n\"\n0\ninterrupted\n\"\"\n2\n"
     );
 }
+
+#[test]
+fn a_signal_exception_raised_from_a_trap_ends_the_process_by_that_signal() {
+    let output = run_example("signals/signal_exception_raised_from_a_trap_ends_quietly.rb");
+    assert_eq!(output, "[true, 15, \"\"]\n".repeat(5));
+}

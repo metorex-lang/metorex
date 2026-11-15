@@ -23,7 +23,7 @@ impl VirtualMachine {
         // SAFETY: the descriptor is taken over by the listener built from
         // it, which closes it when it goes.
         let held = unsafe {
-            let descriptor = libc::socket(family, libc::SOCK_STREAM, 0);
+            let descriptor = fresh_socket(family, libc::SOCK_STREAM);
             if descriptor < 0 {
                 let problem = std::io::Error::last_os_error();
                 return Err(crate::vm::errors::simple_exception(
@@ -56,7 +56,7 @@ impl VirtualMachine {
         // SAFETY: the descriptor is taken over by the socket built from it,
         // which closes it when it goes.
         let held = unsafe {
-            let descriptor = libc::socket(family, libc::SOCK_DGRAM, 0);
+            let descriptor = fresh_socket(family, libc::SOCK_DGRAM);
             if descriptor < 0 {
                 let problem = std::io::Error::last_os_error();
                 return Err(crate::vm::errors::simple_exception(

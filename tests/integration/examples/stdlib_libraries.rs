@@ -2962,3 +2962,21 @@ fn test_file_path_methods_work_with_file_and_dir_replaced() {
         "\"/a/c\"\ntrue\n\"/a/b\"\ntrue\n\"a/b/c/d\"\ntrue\n\"fake\"\n\"/b\"\n"
     );
 }
+
+#[test]
+fn wait_readable_answers_for_bytes_already_read_ahead_from_a_pipe() {
+    let output = run_example("io/popen_wait_readable_then_gets.rb");
+    assert_eq!(
+        output,
+        "[\"line 0\\n\", \"line 1\\n\", \"line 2\\n\", \"line 3\\n\", \"line 4\\n\", \"line 5\\n\"]\n\"nil\"\n\"true\"\n\"x\"\n"
+    );
+}
+
+#[test]
+fn syswrite_warns_only_after_an_unsynced_write_that_was_not_flushed() {
+    let output = run_example("io/syswrite_after_a_synced_write.rb");
+    assert_eq!(
+        output,
+        "\"synced raw held after flush\"\nprinted\nsyswritten\n"
+    );
+}

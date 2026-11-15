@@ -248,6 +248,24 @@ fn write_takes_several_strings() {
 }
 
 #[test]
+fn sockets_read_and_write_with_sysread_and_syswrite() {
+    let output = run_example("sockets/tcp_socket_subclass_writes_after_nodelay.rb");
+    assert_eq!(
+        output,
+        "RequestSocket\n\"GET / HTTP/1.1\\r\\n\\r\\n\"\ntrue\n19\n\"HTTP/1.1 200 OK\\r\\n\\r\\n\"\n4\n\"ping\"\n"
+    );
+}
+
+#[test]
+fn a_sockets_to_i_is_its_fileno() {
+    let output = run_example("sockets/socket_to_i_is_its_fileno.rb");
+    assert_eq!(
+        output,
+        "[TCPServer, true, true]\n[TCPSocket, true, true]\n[TCPSocket, true, true]\n[Socket, true, true]\n1\n"
+    );
+}
+
+#[test]
 fn eof_and_readpartial_wait_for_a_server_in_another_process() {
     let output = run_example("sockets/eof_waits_for_another_process.rb");
     assert_eq!(output, "\"checked\"\n");
@@ -267,4 +285,23 @@ fn write_nonblock_raises_wait_writable_on_a_full_socket() {
             "\"Resource temporarily unavailable - write would block\"\n",
         )
     );
+}
+
+#[test]
+fn new_sockets_and_copies_are_closed_in_a_program_run_with_exec() {
+    let output = run_example("sockets/fresh_sockets_close_on_exec.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[:stream, true]\n[:datagram, true]\n[:copy, true]\n",
+            "[:stream, \"closed\"]\n[:datagram, \"closed\"]\n[:copy, \"closed\"]\n",
+            "true\n"
+        )
+    );
+}
+
+#[test]
+fn a_tcp_server_given_a_nil_port_listens_on_a_free_one() {
+    let output = run_example("sockets/tcp_server_with_a_nil_port.rb");
+    assert_eq!(output, "[true, \"127.0.0.1\"]\ntrue\ntrue\n");
 }

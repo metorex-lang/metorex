@@ -140,8 +140,13 @@ impl VirtualMachine {
         position: crate::lexer::Position,
     ) -> Rc<crate::object::BlockOrigin> {
         let defining_method = self.enclosing_method_names();
+        // A block opened inside another block belongs to the method the
+        // outer block was written in, whichever method is running that one.
         let defining_class = if defining_method.is_some() {
-            self.method_owner_stack.last().cloned().flatten()
+            match self.call_stack.last() {
+                Some(top) if top.block_depth() > 0 => top.owner_class().cloned(),
+                _ => self.method_owner_stack.last().cloned().flatten(),
+            }
         } else {
             None
         };
