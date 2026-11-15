@@ -1,23 +1,58 @@
-// The key derivation and signatures TLS 1.3 runs on: HKDF over SHA-256
-// (RFC 5869, with TLS 1.3's labels), and RSA signatures in PSS and in
-// PKCS #1 v1.5 form (RFC 8017).
+// The key derivation and signatures TLS 1.3 runs on: HKDF over SHA-256 or
+// SHA-384 (RFC 5869, with TLS 1.3's labels), and RSA signatures in PSS and
+// in PKCS #1 v1.5 form (RFC 8017).
 
 use num_bigint::BigUint;
 
-use crate::vm::native_methods::digest_algorithms::{hmac, sha256};
+use crate::vm::native_methods::digest_algorithms::{hmac, sha256, sha384};
 
+/// The length of a SHA-256 digest, which RSA signatures here hash with.
 pub const HASH_LENGTH: usize = 32;
 
-pub fn hkdf_extract(salt: &[u8], keying: &[u8]) -> Vec<u8> {
+/// The hash a TLS 1.3 cipher suite derives its keys with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Hash {
+    Sha256,
+    Sha384,
+}
+
+impl Hash {
+    pub fn name(self) -> &'static str {
+        match self {
+            Hash::Sha256 => "SHA256",
+            Hash::Sha384 => "SHA384",
+        }
+    }
+
+    pub fn length(self) -> usize {
+        match self {
+            Hash::Sha256 => 32,
+            Hash::Sha384 => 48,
+        }
+    }
+
+    pub fn digest(self, message: &[u8]) -> Vec<u8> {
+        match self {
+            Hash::Sha256 => sha256(message),
+            Hash::Sha384 => sha384(message),
+        }
+    }
+
+    pub fn hmac(self, key: &[u8], message: &[u8]) -> Vec<u8> {
+        hmac(self.name(), key, message).unwrap_or_default()
+    }
+}
+
+pub fn hkdf_extract(hash: Hash, salt: &[u8], keying: &[u8]) -> Vec<u8> {
     let salt = if salt.is_empty() {
-        vec![0u8; HASH_LENGTH]
+        vec![0u8; hash.length()]
     } else {
         salt.to_vec()
     };
-    hmac("SHA256", &salt, keying).unwrap_or_default()
+    hash.hmac(&salt, keying)
 }
 
-pub fn hkdf_expand(secret: &[u8], info: &[u8], length: usize) -> Vec<u8> {
+pub fn hkdf_expand(hash: Hash, secret: &[u8], info: &[u8], length: usize) -> Vec<u8> {
     let mut output = Vec::with_capacity(length);
     let mut previous = Vec::new();
     let mut counter = 1u8;
@@ -25,7 +60,7 @@ pub fn hkdf_expand(secret: &[u8], info: &[u8], length: usize) -> Vec<u8> {
         let mut input = previous.clone();
         input.extend_from_slice(info);
         input.push(counter);
-        previous = hmac("SHA256", secret, &input).unwrap_or_default();
+        previous = hash.hmac(secret, &input);
         output.extend_from_slice(&previous);
         counter += 1;
     }
@@ -35,7 +70,13 @@ pub fn hkdf_expand(secret: &[u8], info: &[u8], length: usize) -> Vec<u8> {
 
 /// HKDF-Expand-Label, which writes the label and context the way TLS 1.3
 /// asks.
-pub fn expand_label(secret: &[u8], label: &str, context: &[u8], length: usize) -> Vec<u8> {
+pub fn expand_label(
+    hash: Hash,
+    secret: &[u8],
+    label: &str,
+    context: &[u8],
+    length: usize,
+) -> Vec<u8> {
     let full = format!("tls13 {label}");
     let mut info = Vec::new();
     info.extend_from_slice(&(length as u16).to_be_bytes());
@@ -43,7 +84,7 @@ pub fn expand_label(secret: &[u8], label: &str, context: &[u8], length: usize) -
     info.extend_from_slice(full.as_bytes());
     info.push(context.len() as u8);
     info.extend_from_slice(context);
-    hkdf_expand(secret, &info, length)
+    hkdf_expand(hash, secret, &info, length)
 }
 
 /// TLS 1.2's PRF (RFC 5246, section 5): P_SHA256 over the label and seed.
@@ -62,8 +103,8 @@ pub fn prf(secret: &[u8], label: &str, seed: &[u8], length: usize) -> Vec<u8> {
     output
 }
 
-pub fn derive_secret(secret: &[u8], label: &str, transcript: &[u8]) -> Vec<u8> {
-    expand_label(secret, label, &sha256(transcript), HASH_LENGTH)
+pub fn derive_secret(hash: Hash, secret: &[u8], label: &str, transcript: &[u8]) -> Vec<u8> {
+    expand_label(hash, secret, label, &hash.digest(transcript), hash.length())
 }
 
 /// An RSA key, its private exponent present when it can sign.

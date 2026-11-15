@@ -43,18 +43,6 @@ fn times_x(value: u8) -> u8 {
     (value << 1) ^ if value & 0x80 != 0 { 0x1b } else { 0 }
 }
 
-fn multiply(mut left: u8, mut right: u8) -> u8 {
-    let mut product = 0;
-    while right != 0 {
-        if right & 1 != 0 {
-            product ^= left;
-        }
-        left = times_x(left);
-        right >>= 1;
-    }
-    product
-}
-
 /// The round keys a key of 16, 24, or 32 bytes expands to, a block each.
 pub(crate) fn expand_key(key: &[u8]) -> Option<Vec<[u8; BLOCK_BYTES]>> {
     let words_in_key = match key.len() {
@@ -128,19 +116,32 @@ fn shift_rows(state: &mut [u8; BLOCK_BYTES], backwards: bool) {
     }
 }
 
-fn mix_columns(state: &mut [u8; BLOCK_BYTES], factors: [u8; 4]) {
+/// Each column times the polynomial {03}x^3 + {01}x^2 + {01}x + {02}, with
+/// 2a + 3b + c + d written as a + (a + b + c + d) + 2(a + b).
+fn mix_columns(state: &mut [u8; BLOCK_BYTES]) {
     for column in state.chunks_mut(4) {
-        let held = [column[0], column[1], column[2], column[3]];
-        for (row, byte) in column.iter_mut().enumerate() {
-            *byte = (0..4).fold(0, |sum, step| {
-                sum ^ multiply(factors[(step + 4 - row) % 4], held[step])
-            });
-        }
+        let [a, b, c, d] = [column[0], column[1], column[2], column[3]];
+        let all = a ^ b ^ c ^ d;
+        column[0] = a ^ all ^ times_x(a ^ b);
+        column[1] = b ^ all ^ times_x(b ^ c);
+        column[2] = c ^ all ^ times_x(c ^ d);
+        column[3] = d ^ all ^ times_x(d ^ a);
     }
 }
 
-const MIX: [u8; 4] = [2, 3, 1, 1];
-const UNMIX: [u8; 4] = [14, 11, 13, 9];
+/// The inverse of `mix_columns`: its polynomial is the forward one times
+/// {04}x^2 + {05}, so each column takes that factor first.
+fn unmix_columns(state: &mut [u8; BLOCK_BYTES]) {
+    for column in state.chunks_mut(4) {
+        let even = times_x(times_x(column[0] ^ column[2]));
+        let odd = times_x(times_x(column[1] ^ column[3]));
+        column[0] ^= even;
+        column[1] ^= odd;
+        column[2] ^= even;
+        column[3] ^= odd;
+    }
+    mix_columns(state);
+}
 
 pub(crate) fn encrypt_block(block: &mut [u8; BLOCK_BYTES], round_keys: &[[u8; BLOCK_BYTES]]) {
     let rounds = round_keys.len() - 1;
@@ -151,7 +152,7 @@ pub(crate) fn encrypt_block(block: &mut [u8; BLOCK_BYTES], round_keys: &[[u8; BL
         }
         shift_rows(block, false);
         if round != rounds {
-            mix_columns(block, MIX);
+            mix_columns(block);
         }
         add_round_key(block, round_key);
     }
@@ -171,7 +172,7 @@ fn decrypt_block(
         }
         add_round_key(block, &round_keys[round]);
         if round != 0 {
-            mix_columns(block, UNMIX);
+            unmix_columns(block);
         }
     }
 }

@@ -246,10 +246,18 @@ BUNDLE
   chmod +x "$WORK_DIR/bin/bundle"
   export PATH="$WORK_DIR/bin:$PATH"
 fi
+# An extension built under Metorex links the OpenSSL that MRI was configured
+# with, as one built under MRI does. Otherwise mkmf takes whichever one
+# pkg-config finds first.
+EXTCONF_ARGS=()
 if [ "$ENGINE" = "mri" ]; then
   ENGINE_COMMAND="$MRI"
 else
   ENGINE_COMMAND="$METOREX"
+  openssl_dir="$("$MRI" -e 'print RbConfig::CONFIG["configure_args"].to_s[/--with-openssl-dir=([^\s\x27]+)/, 1]')"
+  if [ -n "$openssl_dir" ]; then
+    EXTCONF_ARGS+=("--with-openssl-dir=$openssl_dir")
+  fi
 fi
 for row in "${EXTENSIONS[@]}"; do
   IFS='|' read -r gem extconfs <<< "$row"
@@ -257,7 +265,7 @@ for row in "${EXTENSIONS[@]}"; do
   for extconf in $extconfs; do
     build_dir="$WORK_DIR/builds/$gem/${extconf//[\/.]/_}"
     mkdir -p "$build_dir"
-    if ! (cd "$build_dir" && "$ENGINE_COMMAND" "$REPO_ROOT/gems/$gem/$extconf" && make &&
+    if ! (cd "$build_dir" && "$ENGINE_COMMAND" "$REPO_ROOT/gems/$gem/$extconf" ${EXTCONF_ARGS[@]+"${EXTCONF_ARGS[@]}"} && make &&
       make install sitearchdir="$WORK_DIR/extensions/$gem") > "$build_dir/build.log" 2>&1 < /dev/null; then
       cat "$build_dir/build.log" >&2
       echo "run_gem_suites.sh: building $gem's $extconf failed" >&2

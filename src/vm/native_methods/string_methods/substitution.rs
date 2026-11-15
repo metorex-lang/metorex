@@ -25,17 +25,11 @@ impl VirtualMachine {
                 }
                 // The copy is written in the same encoding, and reads what
                 // it holds the same way.
-                let copy = Object::string(string_value.as_str().to_string());
-                if let View::String(made) = copy.view() {
-                    made.set_encoding(string_value.encoding_name());
-                    if string_value.holds_bytes() {
-                        made.mark_bytes();
-                    }
-                    // A copy of a packed string names the same run of text,
-                    // which is what lets `unpack` read a pointer out of it.
-                    made.set_pointer(string_value.pointer());
-                }
-                Ok(Some(copy))
+                let made = string_value.copy_of();
+                // A copy of a packed string names the same run of text,
+                // which is what lets `unpack` read a pointer out of it.
+                made.set_pointer(string_value.pointer());
+                Ok(Some(Object::String(std::rc::Rc::new(made))))
             }
             // `scan` walks every match of a pattern. Without capture
             // groups each match is the text it matched, and with them each is
@@ -167,7 +161,7 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                Ok(Some(Object::Bool(string_value.as_str().is_empty())))
+                Ok(Some(Object::Bool(string_value.byte_len() == 0)))
             }
             _ => Ok(None),
         }

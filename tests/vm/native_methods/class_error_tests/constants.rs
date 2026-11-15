@@ -296,7 +296,7 @@ fn signal_trap_runs_its_handler_when_another_process_sends_the_signal() {
 
 #[test]
 fn signal_trap_leaves_a_signal_it_never_caught_to_the_system() {
-    let result = run("Signal.trap(:USR1, \"IGNORE\")");
+    let result = run("Signal.trap(:WINCH, \"IGNORE\")");
     assert_eq!(result, Some(Object::string("SYSTEM_DEFAULT")));
 }
 

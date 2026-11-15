@@ -2995,3 +2995,12 @@ fn closing_a_popen_stream_after_its_child_was_waited_for() {
     let output = run_example("io/popen_close_after_the_child_was_reaped.rb");
     assert_eq!(output, "\"ready\\n\"\n0\nnil\ntrue\n");
 }
+
+#[test]
+fn pem_lines_of_a_certificate_and_a_crl_hold_64_characters() {
+    let output = run_example("stdlib_libraries/openssl_pem_line_width.rb");
+    assert_eq!(
+        output,
+        "-----BEGIN CERTIFICATE-----\n64\n-----END CERTIFICATE-----\n11\n-----BEGIN X509 CRL-----\n64\n-----END X509 CRL-----\n"
+    );
+}

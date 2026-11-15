@@ -204,6 +204,22 @@ impl VirtualMachine {
                 crate::tls::connection::TLS1_3 => Object::string("TLSv1.3"),
                 _ => Object::Nil,
             }),
+            "suites" => {
+                let names: Vec<String> = match arguments.get(2).view() {
+                    Some(View::Array(listed)) => listed
+                        .borrow()
+                        .iter()
+                        .filter_map(|held| match held.view() {
+                            View::String(text) => Some(text.as_str().to_string()),
+                            _ => None,
+                        })
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                connection.limit_suites(&names);
+                Ok(Object::Nil)
+            }
+            "cipher" => Ok(Object::string(connection.cipher_name())),
             "feed" => {
                 let result = connection.feed(&bytes_of(arguments.get(2)));
                 Ok(self.tls_progress(number, result))

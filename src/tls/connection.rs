@@ -1,18 +1,22 @@
 // TLS 1.3 (RFC 8446) and TLS 1.2 (RFC 5246) as a client or a server, with
 // no I/O of its own: the bytes read from the peer are fed in, and the bytes
 // to send and the application data read come back out. TLS 1.3 speaks one
-// cipher suite, TLS_AES_128_GCM_SHA256, and TLS 1.2 speaks
+// cipher suites, TLS_AES_128_GCM_SHA256 and TLS_CHACHA20_POLY1305_SHA256,
+// preferring the first, and TLS 1.2 speaks
 // TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256. Both agree keys with X25519 and
 // prove the server's certificate with rsa_pss_rsae_sha256, and TLS 1.2 also
 // with rsa_pkcs1_sha256. A server can ask the client for a certificate,
 // which the client proves the same way.
 
-use super::crypto::{self, HASH_LENGTH, RsaKey};
+use super::chacha20_poly1305::ChaCha20Poly1305;
+use super::crypto::{self, HASH_LENGTH, Hash, RsaKey};
 use super::gcm::Gcm;
 use super::x25519;
-use crate::vm::native_methods::digest_algorithms::{hmac, sha256};
+use crate::vm::native_methods::digest_algorithms::sha256;
 
 const TLS_AES_128_GCM_SHA256: u16 = 0x1301;
+const TLS_AES_256_GCM_SHA384: u16 = 0x1302;
+const TLS_CHACHA20_POLY1305_SHA256: u16 = 0x1303;
 const TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256: u16 = 0xC02F;
 /// The cipher suite value a client lists to ask for secure renegotiation
 /// without sending the extension (RFC 5746).
@@ -114,9 +118,41 @@ enum Stage {
     Closed,
 }
 
+/// The cipher sealing records, by the suite agreed on.
+enum Aead {
+    Gcm(Gcm),
+    ChaCha20Poly1305(ChaCha20Poly1305),
+}
+
+impl Aead {
+    fn seal(&self, nonce: &[u8; 12], additional: &[u8], plaintext: &[u8]) -> Vec<u8> {
+        match self {
+            Aead::Gcm(cipher) => cipher.seal(nonce, additional, plaintext),
+            Aead::ChaCha20Poly1305(cipher) => cipher.seal(nonce, additional, plaintext),
+        }
+    }
+
+    fn open(&self, nonce: &[u8; 12], additional: &[u8], sealed: &[u8]) -> Option<Vec<u8>> {
+        match self {
+            Aead::Gcm(cipher) => cipher.open(nonce, additional, sealed),
+            Aead::ChaCha20Poly1305(cipher) => cipher.open(nonce, additional, sealed),
+        }
+    }
+}
+
+/// The hash a TLS 1.3 suite derives its keys and checks its transcript
+/// with.
+fn suite_hash(suite: u16) -> Hash {
+    if suite == TLS_AES_256_GCM_SHA384 {
+        Hash::Sha384
+    } else {
+        Hash::Sha256
+    }
+}
+
 /// The keys one direction of the connection protects records with.
 struct Direction {
-    gcm: Gcm,
+    gcm: Aead,
     iv: [u8; 12],
     sequence: u64,
     /// TLS 1.2 records keep their content type in the header, send the
@@ -131,13 +167,27 @@ const TAG_LENGTH: usize = 16;
 const EXPLICIT_NONCE_LENGTH: usize = 8;
 
 impl Direction {
-    fn new(secret: &[u8]) -> Direction {
-        let key = crypto::expand_label(secret, "key", &[], 16);
-        let iv_bytes = crypto::expand_label(secret, "iv", &[], 12);
+    fn new(secret: &[u8], suite: u16) -> Direction {
+        let hash = suite_hash(suite);
+        let iv_bytes = crypto::expand_label(hash, secret, "iv", &[], 12);
         let mut iv = [0u8; 12];
         iv.copy_from_slice(&iv_bytes);
+        let gcm = match suite {
+            TLS_CHACHA20_POLY1305_SHA256 => {
+                let key = crypto::expand_label(hash, secret, "key", &[], 32);
+                Aead::ChaCha20Poly1305(ChaCha20Poly1305::new(&key).expect("a 32-byte key"))
+            }
+            TLS_AES_256_GCM_SHA384 => {
+                let key = crypto::expand_label(hash, secret, "key", &[], 32);
+                Aead::Gcm(Gcm::new(&key).expect("a 32-byte key"))
+            }
+            _ => {
+                let key = crypto::expand_label(hash, secret, "key", &[], 16);
+                Aead::Gcm(Gcm::new(&key).expect("a 16-byte key"))
+            }
+        };
         Direction {
-            gcm: Gcm::new(&key).expect("a 16-byte key"),
+            gcm,
             iv,
             sequence: 0,
             explicit_nonce: false,
@@ -150,7 +200,7 @@ impl Direction {
         let mut iv = [0u8; 12];
         iv[..4].copy_from_slice(salt);
         Direction {
-            gcm: Gcm::new(key).expect("a 16-byte key"),
+            gcm: Aead::Gcm(Gcm::new(key).expect("a 16-byte key")),
             iv,
             sequence: 0,
             explicit_nonce: true,
@@ -303,6 +353,11 @@ pub struct Connection {
     signature_scheme: u16,
     /// The key share a TLS 1.2 server sent in its ServerKeyExchange.
     server_share: [u8; 32],
+    /// The TLS 1.3 cipher suite agreed on.
+    suite: u16,
+    /// The TLS 1.3 cipher suites this side agrees to, in the order a
+    /// client offers them.
+    allowed_suites: Vec<u16>,
 }
 
 fn random_bytes<const N: usize>() -> [u8; N] {
@@ -449,6 +504,12 @@ impl Connection {
             point_formats_offered: false,
             signature_scheme: RSA_PSS_RSAE_SHA256,
             server_share: [0; 32],
+            suite: TLS_AES_128_GCM_SHA256,
+            allowed_suites: vec![
+                TLS_AES_256_GCM_SHA384,
+                TLS_CHACHA20_POLY1305_SHA256,
+                TLS_AES_128_GCM_SHA256,
+            ],
         }
     }
 
@@ -466,6 +527,30 @@ impl Connection {
     /// The version agreed on, or zero before the hellos.
     pub fn version(&self) -> u16 {
         self.version
+    }
+
+    /// Hold TLS 1.3 to the cipher suites OpenSSL names, in that order,
+    /// leaving out those not spoken here.
+    pub fn limit_suites(&mut self, names: &[String]) {
+        self.allowed_suites = names
+            .iter()
+            .filter_map(|name| match name.as_str() {
+                "TLS_AES_128_GCM_SHA256" => Some(TLS_AES_128_GCM_SHA256),
+                "TLS_AES_256_GCM_SHA384" => Some(TLS_AES_256_GCM_SHA384),
+                "TLS_CHACHA20_POLY1305_SHA256" => Some(TLS_CHACHA20_POLY1305_SHA256),
+                _ => None,
+            })
+            .collect();
+    }
+
+    /// The name OpenSSL gives the cipher suite agreed on.
+    pub fn cipher_name(&self) -> &'static str {
+        match (self.version, self.suite) {
+            (TLS1_2, _) => "ECDHE-RSA-AES128-GCM-SHA256",
+            (_, TLS_CHACHA20_POLY1305_SHA256) => "TLS_CHACHA20_POLY1305_SHA256",
+            (_, TLS_AES_256_GCM_SHA384) => "TLS_AES_256_GCM_SHA384",
+            _ => "TLS_AES_128_GCM_SHA256",
+        }
     }
 
     /// The chain and key a client answers a CertificateRequest with.
@@ -524,7 +609,9 @@ impl Connection {
         body.extend(with_length(1, &random_bytes::<32>()));
         let mut suites = Vec::new();
         if speaks_1_3 {
-            push_u16(&mut suites, TLS_AES_128_GCM_SHA256);
+            for suite in &self.allowed_suites {
+                push_u16(&mut suites, *suite);
+            }
         }
         if speaks_1_2 {
             push_u16(&mut suites, TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256);
@@ -834,32 +921,48 @@ impl Connection {
         if version == TLS1_2 {
             return self.read_tls12_server_hello(message, suite);
         }
-        if suite != TLS_AES_128_GCM_SHA256 {
+        if !self.allowed_suites.contains(&suite) {
             return Err(failure(alert::HANDSHAKE_FAILURE, "no shared cipher"));
         }
+        self.suite = suite;
         self.version = version;
         let Some(peer_share) = peer_share else {
             return Err(failure(alert::HANDSHAKE_FAILURE, "no shared group"));
         };
         self.transcript.extend_from_slice(message);
         self.enter_handshake_keys(&peer_share);
-        self.reading = Some(Direction::new(&self.server_handshake_secret.clone()));
-        self.writing = Some(Direction::new(&self.client_handshake_secret.clone()));
+        self.reading = Some(Direction::new(
+            &self.server_handshake_secret.clone(),
+            self.suite,
+        ));
+        self.writing = Some(Direction::new(
+            &self.client_handshake_secret.clone(),
+            self.suite,
+        ));
         self.stage = Stage::WaitEncryptedExtensions;
         Ok(())
     }
 
     fn enter_handshake_keys(&mut self, peer_share: &[u8; 32]) {
         let shared = x25519::x25519(&self.secret_key, peer_share);
-        let early = crypto::hkdf_extract(&[], &[0u8; HASH_LENGTH]);
-        let derived = crypto::derive_secret(&early, "derived", &[]);
-        self.handshake_secret = crypto::hkdf_extract(&derived, &shared);
-        self.client_handshake_secret =
-            crypto::derive_secret(&self.handshake_secret, "c hs traffic", &self.transcript);
-        self.server_handshake_secret =
-            crypto::derive_secret(&self.handshake_secret, "s hs traffic", &self.transcript);
-        let derived = crypto::derive_secret(&self.handshake_secret, "derived", &[]);
-        self.master_secret = crypto::hkdf_extract(&derived, &[0u8; HASH_LENGTH]);
+        let hash = suite_hash(self.suite);
+        let early = crypto::hkdf_extract(hash, &[], &vec![0u8; hash.length()]);
+        let derived = crypto::derive_secret(hash, &early, "derived", &[]);
+        self.handshake_secret = crypto::hkdf_extract(hash, &derived, &shared);
+        self.client_handshake_secret = crypto::derive_secret(
+            suite_hash(self.suite),
+            &self.handshake_secret,
+            "c hs traffic",
+            &self.transcript,
+        );
+        self.server_handshake_secret = crypto::derive_secret(
+            suite_hash(self.suite),
+            &self.handshake_secret,
+            "s hs traffic",
+            &self.transcript,
+        );
+        let derived = crypto::derive_secret(hash, &self.handshake_secret, "derived", &[]);
+        self.master_secret = crypto::hkdf_extract(hash, &derived, &vec![0u8; hash.length()]);
     }
 
     /// The certificates of a Certificate message, leaf first.
@@ -917,7 +1020,7 @@ impl Connection {
             b"TLS 1.3, client CertificateVerify"
         });
         content.push(0);
-        content.extend_from_slice(&sha256(&self.transcript));
+        content.extend_from_slice(&suite_hash(self.suite).digest(&self.transcript));
         content
     }
 
@@ -952,8 +1055,9 @@ impl Connection {
     }
 
     fn finished_data(&self, secret: &[u8]) -> Vec<u8> {
-        let key = crypto::expand_label(secret, "finished", &[], HASH_LENGTH);
-        hmac("SHA256", &key, &sha256(&self.transcript)).unwrap_or_default()
+        let hash = suite_hash(self.suite);
+        let key = crypto::expand_label(hash, secret, "finished", &[], hash.length());
+        hash.hmac(&key, &hash.digest(&self.transcript))
     }
 
     fn read_server_finished(
@@ -966,10 +1070,18 @@ impl Connection {
             return Err(failure(alert::DECRYPT_ERROR, "digest check failed"));
         }
         self.transcript.extend_from_slice(message);
-        let client_application =
-            crypto::derive_secret(&self.master_secret, "c ap traffic", &self.transcript);
-        let server_application =
-            crypto::derive_secret(&self.master_secret, "s ap traffic", &self.transcript);
+        let client_application = crypto::derive_secret(
+            suite_hash(self.suite),
+            &self.master_secret,
+            "c ap traffic",
+            &self.transcript,
+        );
+        let server_application = crypto::derive_secret(
+            suite_hash(self.suite),
+            &self.master_secret,
+            "s ap traffic",
+            &self.transcript,
+        );
         let mut flight = Vec::new();
         if let Some(context) = self.certificate_request.take() {
             let certificate = self.certificate_message(&context);
@@ -987,8 +1099,8 @@ impl Connection {
         flight.extend(finished);
         let records = self.sealed_records(HANDSHAKE, &flight);
         progress.outgoing.extend(records);
-        self.reading = Some(Direction::new(&server_application));
-        self.writing = Some(Direction::new(&client_application));
+        self.reading = Some(Direction::new(&server_application, self.suite));
+        self.writing = Some(Direction::new(&client_application, self.suite));
         self.stage = Stage::Established;
         Ok(())
     }
@@ -1006,7 +1118,10 @@ impl Connection {
         let suites = reader.vector(2)?;
         reader.vector(1)?;
         let lists = |wanted: u16| suites.chunks(2).any(|suite| suite == wanted.to_be_bytes());
-        let offered = lists(TLS_AES_128_GCM_SHA256);
+        let offered = suites
+            .chunks(2)
+            .map(|pair| u16::from_be_bytes([pair[0], pair[1]]))
+            .find(|suite| self.allowed_suites.contains(suite));
         let offered_tls12_suite = lists(TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256);
         self.renegotiation_info_offered = lists(TLS_EMPTY_RENEGOTIATION_INFO_SCSV);
         let mut listed_versions: Option<Vec<u16>> = None;
@@ -1100,9 +1215,10 @@ impl Connection {
             return Err(failure(alert::PROTOCOL_VERSION, "unsupported protocol"));
         }
         self.version = TLS1_3;
-        if !offered {
+        let Some(suite) = offered else {
             return Err(failure(alert::HANDSHAKE_FAILURE, "no shared cipher"));
-        }
+        };
+        self.suite = suite;
         let Some(peer_share) = share else {
             return Err(failure(alert::MISSING_EXTENSION, "no suitable key share"));
         };
@@ -1120,8 +1236,14 @@ impl Connection {
             .outgoing
             .extend(self.plain_record(HANDSHAKE, &hello));
         self.enter_handshake_keys(&peer_share);
-        self.reading = Some(Direction::new(&self.client_handshake_secret.clone()));
-        self.writing = Some(Direction::new(&self.server_handshake_secret.clone()));
+        self.reading = Some(Direction::new(
+            &self.client_handshake_secret.clone(),
+            self.suite,
+        ));
+        self.writing = Some(Direction::new(
+            &self.server_handshake_secret.clone(),
+            self.suite,
+        ));
         let mut flight = handshake_message(ENCRYPTED_EXTENSIONS, &with_length(2, &[]));
         self.transcript.extend_from_slice(&flight);
         if self.request_certificate {
@@ -1142,14 +1264,19 @@ impl Connection {
         progress
             .outgoing
             .extend(self.sealed_records(HANDSHAKE, &flight));
-        let server_application =
-            crypto::derive_secret(&self.master_secret, "s ap traffic", &self.transcript);
+        let server_application = crypto::derive_secret(
+            suite_hash(self.suite),
+            &self.master_secret,
+            "s ap traffic",
+            &self.transcript,
+        );
         self.pending_client_secret = Some(crypto::derive_secret(
+            suite_hash(self.suite),
             &self.master_secret,
             "c ap traffic",
             &self.transcript,
         ));
-        self.writing = Some(Direction::new(&server_application));
+        self.writing = Some(Direction::new(&server_application, self.suite));
         self.stage = if self.request_certificate {
             Stage::WaitClientCertificate
         } else {
@@ -1175,7 +1302,7 @@ impl Connection {
         push_u16(&mut body, TLS1_2);
         body.extend_from_slice(&self.server_random);
         body.extend(with_length(1, session));
-        push_u16(&mut body, TLS_AES_128_GCM_SHA256);
+        push_u16(&mut body, self.suite);
         body.push(0);
         let mut listed = extension(EXTENSION_SUPPORTED_VERSIONS, &TLS1_3.to_be_bytes());
         let mut share = Vec::new();
@@ -1219,7 +1346,7 @@ impl Connection {
         let Some(client_application) = self.pending_client_secret.take() else {
             return Err(failure(alert::INTERNAL_ERROR, "no client secret"));
         };
-        self.reading = Some(Direction::new(&client_application));
+        self.reading = Some(Direction::new(&client_application, self.suite));
         self.stage = Stage::Established;
         Ok(())
     }

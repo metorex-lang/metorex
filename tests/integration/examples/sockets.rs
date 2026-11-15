@@ -335,3 +335,33 @@ fn a_tcp_server_taken_up_from_a_unix_listener_answers_its_path() {
     let output = run_example("sockets/tcp_server_for_fd_of_a_unix_listener.rb");
     assert_eq!(output, "TCPServer\ntrue\ntrue\ntrue\n");
 }
+
+#[test]
+fn a_tls_client_held_below_tls_1_2_refuses_to_connect() {
+    let output = run_example("sockets/tls_client_held_below_tls_1_2.rb");
+    let refusal = "\"SSL_connect returned=1 errno=0 state=error: no protocols available\", \"\\x15\\x03\\x03\\x00\\x02\\x02F\"]\n";
+    assert_eq!(
+        output,
+        format!("[:SSL3, {refusal}[:TLS1, {refusal}[:TLS1_1, {refusal}")
+    );
+}
+
+#[test]
+fn a_tls_client_sends_the_issuers_its_ca_file_holds() {
+    let output = run_example("sockets/tls_client_sends_the_chain_its_ca_file_completes.rb");
+    assert_eq!(output, "\"ok\"\n[\"/CN=Unknown CA\", \"/CN=client\"]\n");
+}
+
+#[test]
+fn tls_1_3_agrees_on_chacha20_poly1305_when_a_side_asks_for_it() {
+    let output = run_example("sockets/tls_1_3_chooses_chacha20_poly1305.rb");
+    assert_eq!(
+        output,
+        "[\"PING\", [\"TLS_AES_256_GCM_SHA384\", \"TLSv1.3\", 256, 256]]\n\
+         [\"PING\", [\"TLS_CHACHA20_POLY1305_SHA256\", \"TLSv1.3\", 256, 256]]\n\
+         [\"PING\", [\"TLS_CHACHA20_POLY1305_SHA256\", \"TLSv1.3\", 256, 256]]\n\
+         [\"PING\", [\"TLS_AES_128_GCM_SHA256\", \"TLSv1.3\", 128, 128]]\n\
+         [\"TLS_AES_128_GCM_SHA256\", \"TLS_CHACHA20_POLY1305_SHA256\"]\n\
+         \"SSL_CTX_set_ciphersuites: no cipher match\"\n"
+    );
+}

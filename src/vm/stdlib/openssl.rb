@@ -2648,7 +2648,7 @@ module OpenSSL
       end
 
       def to_pem
-        "-----BEGIN CERTIFICATE-----\n#{[to_der].pack("m64")}-----END CERTIFICATE-----\n"
+        "-----BEGIN CERTIFICATE-----\n#{[to_der].pack("m48")}-----END CERTIFICATE-----\n"
       end
       alias to_s to_pem
 
@@ -2700,7 +2700,7 @@ module OpenSSL
 
       def public_key=(key)
         @der = nil
-        @public_key = key.public_key
+        @public_key = OpenSSL::PKey.read(key.public_to_der)
       end
 
       def not_before
@@ -2915,7 +2915,7 @@ module OpenSSL
       end
 
       def to_pem
-        "-----BEGIN X509 CRL-----\n#{[to_der].pack("m64")}-----END X509 CRL-----\n"
+        "-----BEGIN X509 CRL-----\n#{[to_der].pack("m48")}-----END X509 CRL-----\n"
       end
       alias to_s to_pem
 
@@ -3257,10 +3257,14 @@ module OpenSSL
     TLS1_2_VERSION = 0x0303
     TLS1_3_VERSION = 0x0304
 
-    # The cipher suite each version speaks, as SSLSocket#cipher and
-    # SSLContext#ciphers describe it.
-    CIPHER = ["TLS_AES_128_GCM_SHA256", "TLSv1.3", 128, 128].freeze
-    CIPHER_TLS1_2 = ["ECDHE-RSA-AES128-GCM-SHA256", "TLSv1.2", 128, 128].freeze
+    # The cipher suites spoken here, with the key bits SSLSocket#cipher and
+    # SSLContext#ciphers report for each.
+    CIPHER_BITS = {
+      "TLS_AES_256_GCM_SHA384" => [256, 256],
+      "TLS_CHACHA20_POLY1305_SHA256" => [256, 256],
+      "TLS_AES_128_GCM_SHA256" => [128, 128],
+      "ECDHE-RSA-AES128-GCM-SHA256" => [128, 128]
+    }.freeze
 
     # The settings a TLS connection is made under.
     class SSLContext
@@ -3288,7 +3292,7 @@ module OpenSSL
                     :servername_cb, :client_cert_cb, :alpn_protocols, :alpn_select_cb,
                     :npn_protocols, :npn_select_cb, :session_new_cb, :session_get_cb,
                     :session_remove_cb, :renegotiation_cb, :keylog_cb, :tmp_dh_callback, :security_level
-      attr_writer :ciphersuites, :ecdh_curves, :groups, :sigalgs, :client_sigalgs, :tmp_dh
+      attr_writer :ecdh_curves, :groups, :sigalgs, :client_sigalgs, :tmp_dh
 
       # A version is an Integer, nil for no limit, or the name of one, such
       # as :TLS1_2, which reads OpenSSL::SSL::TLS1_2_VERSION.
@@ -3363,8 +3367,27 @@ module OpenSSL
         self.min_version = self.max_version = version
       end
 
+      # The TLS 1.3 suites OpenSSL knows, of which those in CIPHER_BITS are
+      # spoken here.
+      TLS1_3_SUITES = %w[
+        TLS_AES_256_GCM_SHA384 TLS_CHACHA20_POLY1305_SHA256 TLS_AES_128_GCM_SHA256
+        TLS_AES_128_CCM_SHA256 TLS_AES_128_CCM_8_SHA256
+      ].freeze
+      private_constant :TLS1_3_SUITES
+
+      def ciphersuites=(names)
+        listed = names.is_a?(Array) ? names.map(&:to_s) : names.to_s.split(":")
+        raise SSLError, "SSL_CTX_set_ciphersuites: no cipher match" if (listed & TLS1_3_SUITES).empty?
+        @ciphersuites = listed & CIPHER_BITS.keys
+      end
+
+      def __ciphersuites__
+        @ciphersuites || CIPHER_BITS.keys.grep(/\ATLS_/)
+      end
+
       def ciphers
-        [CIPHER.dup, CIPHER_TLS1_2.dup]
+        names = __ciphersuites__ + CIPHER_BITS.keys.grep_v(/\ATLS_/)
+        names.map { |name| [name, name.start_with?("TLS_") ? "TLSv1.3" : "TLSv1.2", *CIPHER_BITS[name]] }
       end
 
       # The words an OpenSSL cipher string names groups of ciphers by.
@@ -3671,12 +3694,11 @@ module OpenSSL
       end
 
       def cipher
-        return nil unless @state == :established
-        (@version == "TLSv1.2" ? CIPHER_TLS1_2 : CIPHER).dup
+        @cipher && [@cipher, @version, *CIPHER_BITS.fetch(@cipher)]
       end
 
       def ssl_version
-        @state == :established ? @version : nil
+        @version
       end
 
       def state
@@ -3711,6 +3733,7 @@ module OpenSSL
         if mode == :server && @connection.nil? && refuse_older_protocol(label, blocking, exception) == :wait_readable
           return :wait_readable
         end
+        refuse_to_offer_older_protocol(label) if mode == :client && @connection.nil?
         if @connection.nil?
           @mode = mode
           if mode == :server && @context.servername_cb
@@ -3734,6 +3757,7 @@ module OpenSSL
                           OpenSSL.__tls__(:server, chain, key.n.to_i, key.e.to_i, key.d.to_i, @context.verify_mode.to_i)
                         end
           OpenSSL.__tls__(:versions, @connection, @context.__min_version__.to_i, @context.__max_version__.to_i)
+          OpenSSL.__tls__(:suites, @connection, @context.__ciphersuites__)
           @state = :handshake
           opening = OpenSSL.__tls__(:start, @connection)
           __io__(:write, opening) unless opening.empty?
@@ -3771,12 +3795,29 @@ module OpenSSL
       end
 
       # The chain and RSA key a client proves itself with when the server
-      # asks, or nothing when the context holds none.
+      # asks, or nothing when the context holds none. A context with no
+      # extra chain certificates sends the issuers its trusted
+      # certificates name, up to the root.
       def client_certificate
         key = @context.key
         return [] if @context.cert.nil? || !key.respond_to?(:n)
-        chain = [@context.cert, *@context.extra_chain_cert].map(&:to_der)
+        extra = Array(@context.extra_chain_cert)
+        extra = issuers_of(@context.cert) if extra.empty?
+        chain = [@context.cert, *extra].map(&:to_der)
         [chain, key.n.to_i, key.e.to_i, key.d.to_i]
+      end
+
+      def issuers_of(certificate)
+        trusted = @context.__trusted_store__.__trusted__
+        issuers = []
+        current = certificate
+        until current.issuer.to_der == current.subject.to_der
+          issuer = trusted.find { |held| held.subject.to_der == current.issuer.to_der && !issuers.include?(held) }
+          break if issuer.nil?
+          issuers << issuer
+          current = issuer
+        end
+        issuers
       end
 
       # The protocol_version alert, in a record of its own.
@@ -3798,6 +3839,17 @@ module OpenSSL
         raise SSLError, "#{label} returned=1 errno=0 #{peer_text}state=error: no protocols available"
       end
       private :refuse_older_protocol
+
+      # A client held to a version older than TLS 1.2 has no version to
+      # offer, and sends the protocol_version alert in place of a hello.
+      def refuse_to_offer_older_protocol(label)
+        highest = @context.__max_version__.to_i
+        return if highest.zero? || highest >= OpenSSL::SSL::TLS1_2_VERSION
+        __io__(:write, PROTOCOL_VERSION_ALERT)
+        @state = :failed
+        raise SSLError, "#{label} returned=1 errno=0 #{peer_text}state=error: no protocols available"
+      end
+      private :refuse_to_offer_older_protocol
 
       # Call the IO's own method, past any module extending that one IO.
       # OpenSSL reads and writes the descriptor itself, so a wrapper a
@@ -3836,7 +3888,10 @@ module OpenSSL
         @plaintext << read
         @peer_closed ||= closed
         @state = state
-        @version ||= OpenSSL.__tls__(:version, @connection) if state == :established
+        if state == :established
+          @version ||= OpenSSL.__tls__(:version, @connection)
+          @cipher ||= OpenSSL.__tls__(:cipher, @connection)
+        end
         raise SSLError, "#{label} returned=1 errno=0 #{peer_text}state=error: #{problem}" if state == :failed
         decide_chain(label) if state == :decide
       end

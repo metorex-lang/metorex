@@ -206,7 +206,7 @@ impl VirtualMachine {
                             ),
                         );
                     }
-                    if target.as_str().is_ascii() && !other.as_str().is_ascii() {
+                    if target.is_ascii() && !other.is_ascii() {
                         target.set_encoding(other.encoding_name());
                         if other.holds_bytes() {
                             target.mark_bytes();
@@ -710,7 +710,7 @@ fn appended_encoding(
     target: &crate::object::StringValue,
     other: &crate::object::StringValue,
 ) -> Option<Option<String>> {
-    if other.as_str().is_empty() || target.encoding_name() == other.encoding_name() {
+    if other.byte_len() == 0 || target.encoding_name() == other.encoding_name() {
         return Some(None);
     }
     let reads_alongside_ascii = |named: &str| {
@@ -721,8 +721,8 @@ fn appended_encoding(
     };
     // An empty string keeps its encoding when ASCII is appended and it reads
     // ASCII, and takes the appended text's otherwise.
-    if target.as_str().is_empty() {
-        if reads_alongside_ascii(target.encoding_name()) && other.as_str().is_ascii() {
+    if target.byte_len() == 0 {
+        if reads_alongside_ascii(target.encoding_name()) && other.is_ascii() {
             return Some(None);
         }
         return Some(Some(other.encoding_name().to_string()));
@@ -732,10 +732,10 @@ fn appended_encoding(
     {
         return None;
     }
-    if other.as_str().is_ascii() {
+    if other.is_ascii() {
         return Some(None);
     }
-    if target.as_str().is_ascii() {
+    if target.is_ascii() {
         return Some(Some(other.encoding_name().to_string()));
     }
     None

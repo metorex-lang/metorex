@@ -358,6 +358,15 @@ impl StringValue {
         )
     }
 
+    /// A new string holding the same bytes, read the same way.
+    pub fn copy_of(&self) -> Self {
+        Self::built(
+            self.bytes().to_vec(),
+            encoding_place(self.encoding_name()),
+            self.holds_bytes(),
+        )
+    }
+
     /// Bytes tagged binary.
     pub fn binary(bytes: Vec<u8>) -> Self {
         Self::built(bytes, BINARY_ENCODING_PLACE, true)

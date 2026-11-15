@@ -1,3 +1,4 @@
+mod chacha20_poly1305_tests;
 mod connection_tests;
 mod gcm_tests;
 mod key_derivation_tests;
