@@ -117,7 +117,7 @@ TCPSocket.new("127.0.0.1", 1)
 }
 
 #[test]
-fn writing_through_a_connection_that_was_closed_is_refused() {
+fn writing_through_a_connection_that_was_closed_raises_io_error() {
     let error = run_err(
         r#"
 require 'socket'
@@ -131,7 +131,7 @@ ensure
 end
 "#,
     );
-    assert!(error.contains("closed connection"), "{error}");
+    assert!(error.contains("IOError: closed stream"), "{error}");
 }
 
 #[test]

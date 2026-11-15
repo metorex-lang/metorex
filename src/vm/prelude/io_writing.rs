@@ -699,15 +699,19 @@ pub(super) const SOURCE: &str = r##"
       action = "wait_descriptor"
     end
     left = waited
+    # The pause between checks starts short and doubles, so an answer that
+    # comes at once is seen at once and a long wait checks less often.
+    pause = 1
     loop do
       ready = 0
       ready |= READABLE if events & READABLE != 0 && IO.__stream__(action, handle, "read", 0)
       ready |= WRITABLE if events & WRITABLE != 0 && IO.__stream__(action, handle, "write", 0)
       ready |= PRIORITY if events & PRIORITY != 0 && IO.__stream__(action, handle, "priority", 0)
       return ready if ready != 0 || left == 0
-      slice = left < 0 || left > WAIT_SLICE_MS ? WAIT_SLICE_MS : left
+      slice = left < 0 || left > pause ? pause : left
       sleep slice / 1000.0
       left -= slice if left > 0
+      pause = WAIT_SLICE_MS if (pause *= 2) > WAIT_SLICE_MS
     end
   end
   private :__ready_events__

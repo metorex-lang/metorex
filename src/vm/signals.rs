@@ -6,7 +6,7 @@ use crate::object::{OptionView, View};
 /// The signals `Signal.list` reports, in the order Ruby lists them. Numbers
 /// come from libc so each platform reports its own values.
 pub(crate) fn signal_table() -> Vec<(&'static str, i32)> {
-    vec![
+    let mut table = vec![
         ("EXIT", 0),
         ("HUP", libc::SIGHUP),
         ("INT", libc::SIGINT),
@@ -14,6 +14,9 @@ pub(crate) fn signal_table() -> Vec<(&'static str, i32)> {
         ("ILL", libc::SIGILL),
         ("TRAP", libc::SIGTRAP),
         ("ABRT", libc::SIGABRT),
+        ("IOT", libc::SIGIOT),
+        #[cfg(target_vendor = "apple")]
+        ("EMT", libc::SIGEMT),
         ("FPE", libc::SIGFPE),
         ("KILL", libc::SIGKILL),
         ("BUS", libc::SIGBUS),
@@ -40,7 +43,10 @@ pub(crate) fn signal_table() -> Vec<(&'static str, i32)> {
         // Ruby lists the older spelling of SIGCHLD alongside it. It comes
         // last so a lookup by number answers the name the signal goes by.
         ("CLD", libc::SIGCHLD),
-    ]
+    ];
+    #[cfg(target_vendor = "apple")]
+    table.push(("INFO", libc::SIGINFO));
+    table
 }
 
 /// The number a signal name stands for. Accepts the bare name and the `SIG`
@@ -241,7 +247,7 @@ impl crate::vm::VirtualMachine {
         if !ANY_PENDING.load(std::sync::atomic::Ordering::SeqCst) {
             return Ok(());
         }
-        if !self.signals_for_main_thread.is_empty() && self.thread_current_stack.is_empty() {
+        if !self.signals_for_main_thread.is_empty() && self.on_main_thread() {
             let waiting = std::mem::take(&mut self.signals_for_main_thread);
             settle_pending_flag();
             for number in waiting {
@@ -249,6 +255,11 @@ impl crate::vm::VirtualMachine {
                     self.run_signal_handler(name, number, position)?;
                 }
             }
+        }
+        // A handler runs on the main thread, so a signal that arrives during
+        // another thread's turn waits for the main thread's.
+        if !self.on_main_thread() {
+            return Ok(());
         }
         let own = CATCHER.with(|own| *own);
         let mut mine = Vec::new();
@@ -431,7 +442,7 @@ impl crate::vm::VirtualMachine {
                 // Handlers run on the main thread, so one sent from another
                 // thread waits for the main thread to run again. The default
                 // handler raises there too.
-                if !self.thread_current_stack.is_empty()
+                if !self.on_main_thread()
                     && !matches!(self.signal_handlers.get(&name).view(), Some(View::Nil))
                     && !matches!(
                         self.signal_handlers.get(&name).view(),

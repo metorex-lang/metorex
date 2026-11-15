@@ -26,6 +26,7 @@ class BasicSocket < IO
   # Write all of `text`, waiting for room whenever the connection's buffer
   # is full. The wait sleeps, so another thread runs meanwhile.
   def __write_all__(command, text)
+    raise IOError, "closed stream" if closed?
     bytes = text.b
     sent = 0
     while sent < bytes.bytesize
@@ -272,10 +273,16 @@ class BasicSocket < IO
     @lineno = held.to_i
   end
 
+  # A socket taken up from the descriptor of a unix one, as TCPServer.for_fd
+  # does with a listener a service manager handed over, answers its path.
   def getsockname
     named = Socket.__net__ "address", @handle, "", 0
-    return Socket.sockaddr_in 0, "0.0.0.0" if named.nil?
-    Socket.sockaddr_in named[1], named[0]
+    return Socket.sockaddr_in named[1], named[0] unless named.nil?
+
+    path = Socket.__net__ "unix_address", @handle, "", 0
+    return Socket.sockaddr_un path if path.is_a?(String)
+
+    Socket.sockaddr_in 0, "0.0.0.0"
   end
 
   def getpeername
@@ -1274,7 +1281,7 @@ class Addrinfo
   # when one is given.
   def bind
     held = Socket.new @afamily, @socktype == 0 ? Socket::SOCK_STREAM : @socktype
-    held.bind Socket.sockaddr_in(@port.nil? ? 0 : @port, @address)
+    held.bind sockaddr_to_bind
     return held unless block_given?
     begin
       yield held
@@ -1348,10 +1355,17 @@ class Addrinfo
     family_addrinfo(*args).connect_from(self, **options, &block)
   end
 
+  def sockaddr_to_bind
+    return Socket.sockaddr_un(@address) if @afamily == Socket::AF_UNIX
+
+    Socket.sockaddr_in(@port.nil? ? 0 : @port, @address)
+  end
+  private :sockaddr_to_bind
+
   # A socket bound to this address and waiting for connections to it.
   def listen(backlog = 5)
     held = Socket.new @afamily, Socket::SOCK_STREAM
-    held.bind Socket.sockaddr_in(@port.nil? ? 0 : @port, @address)
+    held.bind sockaddr_to_bind
     held.listen backlog
     return held unless block_given?
     begin
@@ -1696,7 +1710,12 @@ class TCPSocket < IPSocket
   end
 
   def read_nonblock(length = nil, buffer = nil, exception: true)
-    recv_nonblock length, 0, buffer, exception: exception
+    held = recv_nonblock length, 0, buffer, exception: exception
+    return held unless held.nil?
+
+    buffer&.clear
+    raise EOFError, "end of file reached" if exception
+    nil
   end
   def write_nonblock(text, exception: true)
     self.nonblock = true unless RUBY_PLATFORM.include? "linux"

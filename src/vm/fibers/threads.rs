@@ -75,7 +75,11 @@ impl VirtualMachine {
             crate::vm::jit::assumptions_changed();
         }
         let outer = std::mem::replace(&mut self.timeout_limits, own);
+        // Trap handlers run on the main thread, so a thread given a turn
+        // while one runs is not in trap context itself.
+        let handlers_running = std::mem::take(&mut self.trap_handlers_running);
         let stepped = self.fiber_resume(handle, carried, started_with, position);
+        self.trap_handlers_running = handlers_running;
         let left = std::mem::replace(&mut self.timeout_limits, outer);
         if !left.is_empty() {
             self.thread_timeout_limits.insert(handle, left);
@@ -317,6 +321,9 @@ impl VirtualMachine {
         deadlockable: bool,
         position: Position,
     ) -> Result<(), MetorexError> {
+        if self.on_thread_that_forked() {
+            return self.main_sleeps_until_woken(deadlockable, position);
+        }
         if !self.running_a_thread_body() {
             // A fiber of a thread's own that waits holds the whole thread up,
             // so the wait is handed out to whoever resumed the fiber.

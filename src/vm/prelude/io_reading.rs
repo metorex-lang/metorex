@@ -469,7 +469,7 @@ pub(super) const SOURCE: &str = r##"
       end
       return __fill_buffer__(target, __take_ready__(wanted))
     end
-    unless IO.__stream__("ready?", __stream_handle__, "nonblock", 0)
+    unless __read_pending__ || IO.__stream__("ready?", __stream_handle__, "nonblock", 0)
       return :wait_readable unless exception
       raise IO::EAGAINWaitReadable, "read would block"
     end

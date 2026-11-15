@@ -498,3 +498,18 @@ fn test_memory_and_stack_errors_end_only_their_thread() {
     let output = run_example("threads/memory_and_stack_errors_end_only_their_thread.rb");
     assert_eq!(output, "nil\n:alive\nnil\n:still\n");
 }
+
+#[test]
+fn threads_a_child_forked_from_a_thread_starts_all_run() {
+    let output = run_example("threads/threads_in_a_child_forked_from_a_thread.rb");
+    assert_eq!(
+        output,
+        "[\"ping\\n\", \"ping\\n\", \"ping\\n\", \"done\\n\"]\ntrue\n"
+    );
+}
+
+#[test]
+fn a_thread_a_child_was_forked_from_waits_until_woken() {
+    let output = run_example("threads/forked_thread_waits_until_woken.rb");
+    assert_eq!(output, "\"woken\\n\"\n\"ready\\n\"\n\"trapped\\n\"\ntrue\n");
+}

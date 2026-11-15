@@ -772,6 +772,14 @@ impl VirtualMachine {
         // keeps running there, and is still one to wait on.
         let forking = self.thread_current_stack.last().cloned();
         self.alone_after_fork = self.running_a_thread_body();
+        self.thread_that_forked = if self.alone_after_fork {
+            forking.clone()
+        } else {
+            None
+        };
+        // The thread that forked may have been given its turn by a round of
+        // turns in the parent, which the child never returns to.
+        self.stepping_threads = false;
         for thread in std::mem::take(&mut self.pending_threads) {
             let is_forking = matches!(
                 (thread.view(), forking.view()),

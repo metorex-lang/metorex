@@ -611,6 +611,9 @@ pub struct VirtualMachine {
     /// one. That thread is the only one the child has, so it waits in place
     /// rather than handing the turn to threads that are not there.
     pub(crate) alone_after_fork: bool,
+    /// The thread that called `fork` in a process forked from a thread other
+    /// than the main one, which is the child's main thread.
+    pub(crate) thread_that_forked: Option<Object>,
     /// Signals a thread other than the main one sent this process, waiting
     /// for the main thread to run their handlers.
     pub(crate) signals_for_main_thread: Vec<i32>,
@@ -923,11 +926,18 @@ impl VirtualMachine {
             forced_pattern_encodings: HashMap::new(),
             collection_variables: HashMap::new(),
             collection_variable_owners: HashMap::new(),
-            // The interpreter answers for an interrupt itself, so that one
-            // reads as written for from the start while every other signal
-            // is still the operating system's to answer.
+            // The signals Ruby installs its own handler for read as written
+            // for from the start, while every other signal is still the
+            // operating system's to answer.
             signal_handlers: HashMap::from([
                 ("INT".to_string(), Object::string("DEFAULT".to_string())),
+                ("HUP".to_string(), Object::string("DEFAULT".to_string())),
+                ("QUIT".to_string(), Object::string("DEFAULT".to_string())),
+                ("TERM".to_string(), Object::string("DEFAULT".to_string())),
+                ("ALRM".to_string(), Object::string("DEFAULT".to_string())),
+                ("USR1".to_string(), Object::string("DEFAULT".to_string())),
+                ("USR2".to_string(), Object::string("DEFAULT".to_string())),
+                ("CHLD".to_string(), Object::string("DEFAULT".to_string())),
                 // A broken pipe is set aside at the start, which is what
                 // makes a write to one an error the program hears about
                 // rather than the end of it.
@@ -936,6 +946,7 @@ impl VirtualMachine {
             signals_for_main_thread: Vec::new(),
             trap_handlers_running: 0,
             alone_after_fork: false,
+            thread_that_forked: None,
             traced_globals: HashMap::new(),
             seeded_global_names,
             load_wrap_depth: 0,

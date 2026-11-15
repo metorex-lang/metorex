@@ -126,7 +126,13 @@ impl VirtualMachine {
                 move || std::net::TcpStream::connect((host.as_str(), port as u16)),
                 position,
             )
-            .map_err(|problem| refused(position, format!("connect({text}:{port}): {problem}")))?;
+            .map_err(|problem| {
+                crate::vm::errors::simple_exception(
+                    errno_class(&problem),
+                    &format!("connect({text}:{port}): {problem}"),
+                    position,
+                )
+            })?;
         let _ = held.set_read_timeout(Some(POLL_LIMIT));
         let named = self.open_sockets.next;
         self.open_sockets.next += 1;

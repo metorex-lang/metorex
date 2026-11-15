@@ -749,3 +749,9 @@ fn test_an_autoload_satisfied_by_a_require_stays_satisfied_after_its_directory_l
         "true\nnil\nnil\n[RemovedDirectoryTemplate, RemovedDirectoryHelpers]\n"
     );
 }
+
+#[test]
+fn a_gem_with_extensions_and_no_compiled_library_in_lib_lists_lib_first() {
+    let output = run_example("require/gem_with_extensions_lists_lib_first.rb");
+    assert_eq!(output, "2\ntrue\ntrue\n");
+}

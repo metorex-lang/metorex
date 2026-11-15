@@ -186,7 +186,8 @@ impl VirtualMachine {
     /// Hand the turn over from inside a thread, from its own body or from a
     /// fiber it resumed, and raise whatever was handed to it meanwhile.
     pub(crate) fn hand_over_turn(&mut self, position: Position) -> Result<(), MetorexError> {
-        if self.alone_after_fork {
+        if self.on_thread_that_forked() {
+            self.wait_for_other_threads(position);
             return self.raise_if_thread_killed(position);
         }
         if !self.running_a_thread_body() {
@@ -284,13 +285,10 @@ impl VirtualMachine {
     }
 
     pub(crate) fn wait_for_other_threads(&mut self, position: Position) {
-        // A process forked from a thread has no other thread to hand the
-        // turn to, so the wait goes on in place.
-        if self.alone_after_fork {
-            std::thread::sleep(std::time::Duration::from_millis(1));
-            return;
-        }
-        if self.running_a_thread_body() {
+        // In a process forked from a thread, that thread is the main one and
+        // gives the threads the child started their turns itself.
+        let forked_main = self.alone_after_fork && self.on_main_thread();
+        if self.running_a_thread_body() && !forked_main {
             // A thread that hands control over while it waits is asleep for
             // as long as the wait lasts, which is what `status` reports.
             let running = self.thread_current_stack.last().cloned();
@@ -310,7 +308,8 @@ impl VirtualMachine {
         // A fiber a thread resumed holds the whole thread up while it waits,
         // so the wait is handed out to the thread, which gives the others
         // their turns and resumes the fiber afterwards.
-        if self.fiber_current_handle() != ROOT_FIBER
+        if !forked_main
+            && self.fiber_current_handle() != ROOT_FIBER
             && self
                 .fiber_frames
                 .iter()
@@ -328,13 +327,17 @@ impl VirtualMachine {
                 .borrow_mut()
                 .set_var("__thread_waiting".to_string(), Object::Bool(true));
         }
+        let statements_before = self.statements_run;
         let stepped = self.step_pending_threads(position);
         if let View::Instance(instance) = running.view() {
             instance
                 .borrow_mut()
                 .set_var("__thread_waiting".to_string(), Object::Bool(false));
         }
-        if !stepped {
+        // Threads that only looked again at what they wait on ran no
+        // statement, so the round pauses rather than starting the next at
+        // once.
+        if !stepped || self.statements_run == statements_before {
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
     }
@@ -375,6 +378,10 @@ impl VirtualMachine {
         let mut turns = 0;
         let mut last_round = None;
         loop {
+            // The main thread waiting here runs the handler of a signal that
+            // arrived during the other thread's last turn. The handler may
+            // finish the thread, so that is asked after it.
+            self.deliver_pending_signals(position)?;
             if self.fibers.get(handle).is_some_and(|state| state.finished) {
                 break;
             }
@@ -419,7 +426,7 @@ impl VirtualMachine {
                     self.finish_thread(thread, value.clone());
                     // In a process forked from it, the thread that forked
                     // is the whole program, which ends with it.
-                    if self.alone_after_fork {
+                    if self.is_thread_that_forked(thread) {
                         let status = self.run_at_exit_handlers(0, None);
                         std::process::exit(status);
                     }
@@ -507,10 +514,40 @@ impl VirtualMachine {
     /// Whether handing control over would let something else run: another
     /// thread waiting for a turn, or the one that made this one.
     pub(crate) fn other_threads_are_waiting(&self) -> bool {
-        if self.alone_after_fork {
-            return false;
+        if self.alone_after_fork && self.on_main_thread() {
+            return self
+                .pending_threads
+                .iter()
+                .any(|thread| !self.is_thread_that_forked(thread));
         }
         self.running_a_thread_body() || !self.pending_threads.is_empty()
+    }
+
+    /// Whether `thread` called `fork` to make this process from a thread
+    /// other than the main one.
+    pub(crate) fn is_thread_that_forked(&self, thread: &Object) -> bool {
+        match (thread.view(), self.thread_that_forked.view()) {
+            (View::Instance(thread), Some(View::Instance(forked))) => {
+                std::rc::Rc::ptr_eq(thread, forked)
+            }
+            _ => false,
+        }
+    }
+
+    /// Whether the body of the thread this process was forked from is what
+    /// is running, which has no thread to hand the turn back to.
+    pub(crate) fn on_thread_that_forked(&self) -> bool {
+        self.alone_after_fork && self.on_main_thread() && self.running_a_thread_body()
+    }
+
+    /// Whether the main thread is the one running: the program's own, or in
+    /// a process forked from another thread, the one that forked.
+    pub(crate) fn on_main_thread(&self) -> bool {
+        match self.thread_current_stack.as_slice() {
+            [] => true,
+            [running] => self.is_thread_that_forked(running),
+            _ => false,
+        }
     }
 
     pub(crate) fn running_a_thread_body(&self) -> bool {

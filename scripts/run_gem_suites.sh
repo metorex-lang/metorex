@@ -20,7 +20,8 @@
 # 300 seconds unless set, and SANDBOX_FILE_TIMEOUT the longest one of
 # simplecov's sandbox spec files or RuboCop's command line spec files may,
 # 900 unless set, and STRESS_FILE_TIMEOUT the longest thread_safe's
-# torture spec may, 1800 unless set.
+# torture spec may, 1800 unless set. FILES, a space-separated list of test
+# files as the table's patterns name them, runs only those.
 #
 # A gem with a directory under scripts/gem_suite/bundles runs with
 # BUNDLE_GEMFILE naming the Gemfile there, whose gems
@@ -282,6 +283,13 @@ for row in "${SUITES[@]}"; do
   files=$(for pattern in "${pattern_list[@]}"; do
     (cd "$REPO_ROOT/gems/$gem" && compgen -G "$pattern" || true) | sort
   done)
+  if [ -n "${FILES:-}" ]; then
+    files=$(for file in $files; do
+      for held in $FILES; do
+        if [ "$file" = "$held" ]; then echo "$file"; fi
+      done
+    done)
+  fi
   if one_at_a_time "$gem"; then
     printf '%s\t%s\t%s\t%s\n' "$gem" "$(echo $files)" "$arguments" "$prepare" >> "$QUEUE"
   else

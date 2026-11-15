@@ -2980,3 +2980,18 @@ fn syswrite_warns_only_after_an_unsynced_write_that_was_not_flushed() {
         "\"synced raw held after flush\"\nprinted\nsyswritten\n"
     );
 }
+
+#[test]
+fn read_nonblock_takes_bytes_gets_read_ahead_from_a_pipe() {
+    let output = run_example("io/read_nonblock_after_gets_reads_what_was_read_ahead.rb");
+    assert_eq!(
+        output,
+        "\"b\"\n\"1:0\\n\"\ntrue\n\"c\"\n\"2\\n\"\n:wait_readable\nnil\n"
+    );
+}
+
+#[test]
+fn closing_a_popen_stream_after_its_child_was_waited_for() {
+    let output = run_example("io/popen_close_after_the_child_was_reaped.rb");
+    assert_eq!(output, "\"ready\\n\"\n0\nnil\ntrue\n");
+}

@@ -70,17 +70,27 @@ module Gem
   # Such a gem puts nothing on the load path, and holds no file a `require`
   # could activate it for, so a library it would have provided and metorex
   # does not is a LoadError rather than an activation that finds nothing.
-  # The libraries built for metorex come ahead of the gem's own directories,
-  # where installing it copied the ones built for MRI.
+  # The libraries built for metorex come ahead of the gem's own directories
+  # when installing it copied the ones built for MRI there.
   module MetorexRequirePaths
     def full_require_paths
       return [] if Gem.provided_by_metorex?(name)
 
       paths = super
-      return paths unless have_extensions?
+      return paths unless have_extensions? && holds_libraries_built_for_mri?(paths)
 
       [extension_dir] | paths
     end
+
+    def holds_libraries_built_for_mri?(paths)
+      return @holds_libraries_built_for_mri unless @holds_libraries_built_for_mri.nil?
+
+      pattern = "**/*.#{RbConfig::CONFIG["DLEXT"]}"
+      @holds_libraries_built_for_mri = (paths - [extension_dir]).any? do |dir|
+        !Dir.glob(pattern, base: dir).empty?
+      end
+    end
+    private :holds_libraries_built_for_mri?
 
     def contains_requirable_file?(file)
       Gem.provided_by_metorex?(name) ? false : super

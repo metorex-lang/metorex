@@ -177,3 +177,61 @@ fn a_signal_exception_raised_from_a_trap_ends_the_process_by_that_signal() {
     let output = run_example("signals/signal_exception_raised_from_a_trap_ends_quietly.rb");
     assert_eq!(output, "[true, 15, \"\"]\n".repeat(5));
 }
+
+#[test]
+fn trap_answers_default_for_the_signals_ruby_handles_itself() {
+    let output = run_example("signals/trap_answers_the_handler_ruby_starts_with.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"USR1\", \"DEFAULT\", \"IGNORE\", \"SYSTEM_DEFAULT\"]\n",
+            "[\"USR2\", \"DEFAULT\", \"IGNORE\", \"SYSTEM_DEFAULT\"]\n",
+            "[\"INT\", \"DEFAULT\", \"IGNORE\", \"SYSTEM_DEFAULT\"]\n",
+            "[\"TERM\", \"DEFAULT\", \"IGNORE\", \"SYSTEM_DEFAULT\"]\n",
+            "[\"HUP\", \"DEFAULT\", \"IGNORE\", \"SYSTEM_DEFAULT\"]\n",
+            "[\"QUIT\", \"DEFAULT\", \"IGNORE\", \"SYSTEM_DEFAULT\"]\n",
+            "[\"PIPE\", nil, \"IGNORE\", \"SYSTEM_DEFAULT\"]\n",
+            "[\"CHLD\", \"DEFAULT\", \"IGNORE\", \"SYSTEM_DEFAULT\"]\n",
+            "[\"ALRM\", \"DEFAULT\", \"IGNORE\", \"SYSTEM_DEFAULT\"]\n",
+            "[\"WINCH\", \"SYSTEM_DEFAULT\", \"IGNORE\", \"SYSTEM_DEFAULT\"]\n",
+            "[\"TTIN\", \"SYSTEM_DEFAULT\", \"IGNORE\", \"SYSTEM_DEFAULT\"]\n",
+        )
+    );
+}
+
+#[test]
+fn a_thread_locks_a_mutex_while_a_trap_handler_waits_for_it() {
+    let output = run_example("signals/thread_locks_a_mutex_while_a_trap_handler_runs.rb");
+    assert_eq!(output, ":locked\n\"can't be called from trap context\"\n");
+}
+
+#[test]
+fn a_signal_from_another_process_runs_its_handler_on_the_main_thread() {
+    let output =
+        run_example("signals/handler_runs_on_the_main_thread_while_another_thread_works.rb");
+    assert_eq!(output, "[:main, \"SIGTERM\", true]\n[]\n");
+}
+
+#[test]
+fn a_handler_joining_the_thread_main_is_joining_leaves_main_its_answer() {
+    let output = run_example("signals/handler_joins_the_thread_main_is_joining.rb");
+    assert_eq!(output, "[:handler, :done]\n[:main, :done]\n");
+}
+
+#[test]
+fn signal_list_names_iot_and_the_platforms_own_signals() {
+    let output = run_example("signals/signal_list_aliases_and_platform_signals.rb");
+    assert_eq!(output, "true\n\"ABRT\"\ntrue\n\"INFO\"\n");
+}
+
+#[test]
+fn a_child_forked_from_a_thread_runs_its_trap_handlers() {
+    let output = run_example("signals/trap_in_a_child_forked_from_a_thread.rb");
+    assert_eq!(output, "\"ready\\n\"\n\"trapped\\n\"\n");
+}
+
+#[test]
+fn term_stops_a_worker_forked_from_a_thread() {
+    let output = run_example("signals/term_stops_a_worker_forked_from_a_thread.rb");
+    assert_eq!(output, "\"ping\\n\"\n\"stopped\\n\"\ntrue\n");
+}

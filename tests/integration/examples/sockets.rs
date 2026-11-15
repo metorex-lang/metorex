@@ -305,3 +305,33 @@ fn a_tcp_server_given_a_nil_port_listens_on_a_free_one() {
     let output = run_example("sockets/tcp_server_with_a_nil_port.rb");
     assert_eq!(output, "[true, \"127.0.0.1\"]\ntrue\ntrue\n");
 }
+
+#[test]
+fn writing_a_closed_socket_raises_io_error() {
+    let output = run_example("sockets/write_after_close_raises_io_error.rb");
+    assert_eq!(output, "IOError: closed stream\nIOError: closed stream\n");
+}
+
+#[test]
+fn read_nonblock_raises_eof_error_once_the_peer_closes() {
+    let output = run_example("sockets/read_nonblock_after_the_peer_closes.rb");
+    assert_eq!(output, "\"hi\"\nEOFError: end of file reached\nnil\n");
+}
+
+#[test]
+fn a_unix_addrinfo_listens_on_its_path() {
+    let output = run_example("sockets/addrinfo_unix_listen.rb");
+    assert_eq!(output, "Socket\ntrue\n\"hello\"\n");
+}
+
+#[test]
+fn a_failed_connect_raises_the_errno_the_system_reported() {
+    let output = run_example("sockets/connect_reports_the_errno_the_system_gave.rb");
+    assert_eq!(output, "Errno::ECONNREFUSED\nErrno::EADDRNOTAVAIL\n");
+}
+
+#[test]
+fn a_tcp_server_taken_up_from_a_unix_listener_answers_its_path() {
+    let output = run_example("sockets/tcp_server_for_fd_of_a_unix_listener.rb");
+    assert_eq!(output, "TCPServer\ntrue\ntrue\ntrue\n");
+}

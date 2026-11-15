@@ -7,6 +7,8 @@ class IO
   # The name of the stream that keeps nothing it is given and reads back as
   # empty, which every system carries under this name.
   NULL = "/dev/null"
+  SELECT_PAUSE_LIMIT = 0.02
+  private_constant :SELECT_PAUSE_LIMIT
 
   # Which of the streams handed in have something to read, or room to write,
   # right now. Nothing is ready answers nil, which is what a caller waits on.
@@ -28,6 +30,9 @@ class IO
       raise ArgumentError, "time interval must not be negative" if waited < 0
       deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + waited
     end
+    # The pause between checks starts short and doubles, so a stream that
+    # becomes ready at once is seen at once and a long wait checks less often.
+    pause = 0.001
     loop do
       ready_readers = (readers || []).select { |held| IO.__ready__ held, false }
       ready_writers = (writers || []).select { |held| IO.__ready__ held, true }
@@ -39,10 +44,14 @@ class IO
       unless deadline.nil?
         return nil if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
       end
-      # Nothing is ready yet. Handing control over is what lets another
-      # thread write to one of these streams or close it. With no thread to
-      # hand over to, another process may still write, so the wait goes on.
-      sleep 0.001 unless Thread.__hand_over__
+      # Nothing is ready yet. Sleeping hands control over, which is what lets
+      # another thread write to one of these streams or close it, and another
+      # process may write meanwhile too.
+      unless deadline.nil?
+        pause = [pause, deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)].min
+      end
+      sleep pause if pause > 0
+      pause = [pause * 2, SELECT_PAUSE_LIMIT].min
     end
   end
 
@@ -613,7 +622,11 @@ class IO
       @closed = true unless frozen?
     end
     # A stream joined to a forked child waits for it, which is what sets `$?`.
-    Process.waitpid @__popen_pid unless @__popen_pid.nil?
+    # A child the program already waited for leaves nothing to wait on.
+    begin
+      Process.waitpid @__popen_pid unless @__popen_pid.nil?
+    rescue Errno::ECHILD
+    end
     nil
   end
 

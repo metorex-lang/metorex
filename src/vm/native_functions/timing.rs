@@ -110,7 +110,7 @@ impl VirtualMachine {
         length: std::time::Duration,
         position: Position,
     ) -> Result<(), MetorexError> {
-        if self.running_a_thread_body() && !self.alone_after_fork {
+        if self.running_a_thread_body() && !self.on_thread_that_forked() {
             return self.sleep_until_woken_within(Some(length), false, position);
         }
         let main = self.running_thread();
