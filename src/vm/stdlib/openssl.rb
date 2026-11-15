@@ -3257,9 +3257,10 @@ module OpenSSL
     TLS1_2_VERSION = 0x0303
     TLS1_3_VERSION = 0x0304
 
-    # The one cipher suite the connection speaks, as SSLSocket#cipher and
+    # The cipher suite each version speaks, as SSLSocket#cipher and
     # SSLContext#ciphers describe it.
     CIPHER = ["TLS_AES_128_GCM_SHA256", "TLSv1.3", 128, 128].freeze
+    CIPHER_TLS1_2 = ["ECDHE-RSA-AES128-GCM-SHA256", "TLSv1.2", 128, 128].freeze
 
     # The settings a TLS connection is made under.
     class SSLContext
@@ -3313,9 +3314,18 @@ module OpenSSL
       end
       private :__protocol_version__
 
-      # The newest protocol version the context allows, which OpenSSL has no
-      # reader for. Zero or nil sets no limit.
-      def __max_version__ = @max_version
+      # The oldest and newest protocol versions the context allows, which
+      # OpenSSL has no reader for. Zero or nil sets no limit, and the
+      # OP_NO_TLSv1_2 and OP_NO_TLSv1_3 options narrow them.
+      def __min_version__
+        return OpenSSL::SSL::TLS1_3_VERSION if (options.to_i & OpenSSL::SSL::OP_NO_TLSv1_2) != 0 && @min_version.to_i < OpenSSL::SSL::TLS1_3_VERSION
+        @min_version
+      end
+
+      def __max_version__
+        return OpenSSL::SSL::TLS1_2_VERSION if (options.to_i & OpenSSL::SSL::OP_NO_TLSv1_3) != 0 && (@max_version.to_i.zero? || @max_version > OpenSSL::SSL::TLS1_2_VERSION)
+        @max_version
+      end
 
       def initialize(version = nil)
         @options = 0x120000
@@ -3354,7 +3364,7 @@ module OpenSSL
       end
 
       def ciphers
-        [CIPHER.dup]
+        [CIPHER.dup, CIPHER_TLS1_2.dup]
       end
 
       # The words an OpenSSL cipher string names groups of ciphers by.
@@ -3661,11 +3671,12 @@ module OpenSSL
       end
 
       def cipher
-        @state == :established ? CIPHER.dup : nil
+        return nil unless @state == :established
+        (@version == "TLSv1.2" ? CIPHER_TLS1_2 : CIPHER).dup
       end
 
       def ssl_version
-        @state == :established ? "TLSv1.3" : nil
+        @state == :established ? @version : nil
       end
 
       def state
@@ -3722,6 +3733,7 @@ module OpenSSL
                           chain = [@context.cert, *@context.extra_chain_cert].map(&:to_der)
                           OpenSSL.__tls__(:server, chain, key.n.to_i, key.e.to_i, key.d.to_i, @context.verify_mode.to_i)
                         end
+          OpenSSL.__tls__(:versions, @connection, @context.__min_version__.to_i, @context.__max_version__.to_i)
           @state = :handshake
           opening = OpenSSL.__tls__(:start, @connection)
           __io__(:write, opening) unless opening.empty?
@@ -3770,12 +3782,12 @@ module OpenSSL
       # The protocol_version alert, in a record of its own.
       PROTOCOL_VERSION_ALERT = [0x15, 0x03, 0x03, 0x00, 0x02, 0x02, 0x46].pack("C*").freeze
 
-      # A server held to a version older than TLS 1.3, the only one spoken
+      # A server held to a version older than TLS 1.2, the oldest one spoken
       # here, reads the client's hello and refuses it the way OpenSSL refuses
       # a client offering no version the server allows.
       def refuse_older_protocol(label, blocking, exception)
         highest = @context.__max_version__.to_i
-        return if highest.zero? || highest >= OpenSSL::SSL::TLS1_3_VERSION
+        return if highest.zero? || highest >= OpenSSL::SSL::TLS1_2_VERSION
         hello = read_io(blocking)
         if hello == :wait_readable
           raise SSLErrorWaitReadable, "read would block" if exception
@@ -3824,6 +3836,7 @@ module OpenSSL
         @plaintext << read
         @peer_closed ||= closed
         @state = state
+        @version ||= OpenSSL.__tls__(:version, @connection) if state == :established
         raise SSLError, "#{label} returned=1 errno=0 #{peer_text}state=error: #{problem}" if state == :failed
         decide_chain(label) if state == :decide
       end

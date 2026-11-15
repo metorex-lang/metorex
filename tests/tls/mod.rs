@@ -3,6 +3,7 @@ mod gcm_tests;
 mod key_derivation_tests;
 mod key_vectors;
 mod rsa_tests;
+mod tls12_connection_tests;
 mod x25519_tests;
 
 fn bytes(hex: &str) -> Vec<u8> {

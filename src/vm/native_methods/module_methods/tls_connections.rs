@@ -107,6 +107,10 @@ impl VirtualMachine {
     ///   certificate when the verify mode has VERIFY_PEER.
     /// * `:hello_name, record` answers the server name the ClientHello in
     ///   the record asks for, or nil.
+    /// * `:versions, number, min, max` holds the connection to those
+    ///   protocol versions, where zero sets no limit.
+    /// * `:version, number` answers the version agreed on, such as
+    ///   "TLSv1.3", or nil before the hellos.
     /// * `:start, number` answers the bytes a client opens with.
     /// * `:feed, number, bytes` and `:decide, number, alert` answer what
     ///   `tls_progress` describes. The alert refuses the server's chain,
@@ -187,6 +191,19 @@ impl VirtualMachine {
         };
         match command.as_str() {
             "start" => Ok(binary(connection.start())),
+            "versions" => {
+                let limit = |at: usize| match arguments.get(at).view() {
+                    Some(View::Int(version)) => version as u16,
+                    _ => 0,
+                };
+                connection.limit_versions(limit(2), limit(3));
+                Ok(Object::Nil)
+            }
+            "version" => Ok(match connection.version() {
+                crate::tls::connection::TLS1_2 => Object::string("TLSv1.2"),
+                crate::tls::connection::TLS1_3 => Object::string("TLSv1.3"),
+                _ => Object::Nil,
+            }),
             "feed" => {
                 let result = connection.feed(&bytes_of(arguments.get(2)));
                 Ok(self.tls_progress(number, result))

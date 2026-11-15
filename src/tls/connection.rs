@@ -1,9 +1,11 @@
-// TLS 1.3 (RFC 8446) as a client or a server, with no I/O of its own: the
-// bytes read from the peer are fed in, and the bytes to send and the
-// application data read come back out. It offers and accepts one cipher
-// suite, TLS_AES_128_GCM_SHA256, agrees keys with X25519, and proves the
-// server's certificate with rsa_pss_rsae_sha256. A server can ask the client
-// for a certificate, which the client proves the same way.
+// TLS 1.3 (RFC 8446) and TLS 1.2 (RFC 5246) as a client or a server, with
+// no I/O of its own: the bytes read from the peer are fed in, and the bytes
+// to send and the application data read come back out. TLS 1.3 speaks one
+// cipher suite, TLS_AES_128_GCM_SHA256, and TLS 1.2 speaks
+// TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256. Both agree keys with X25519 and
+// prove the server's certificate with rsa_pss_rsae_sha256, and TLS 1.2 also
+// with rsa_pkcs1_sha256. A server can ask the client for a certificate,
+// which the client proves the same way.
 
 use super::crypto::{self, HASH_LENGTH, RsaKey};
 use super::gcm::Gcm;
@@ -11,6 +13,17 @@ use super::x25519;
 use crate::vm::native_methods::digest_algorithms::{hmac, sha256};
 
 const TLS_AES_128_GCM_SHA256: u16 = 0x1301;
+const TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256: u16 = 0xC02F;
+/// The cipher suite value a client lists to ask for secure renegotiation
+/// without sending the extension (RFC 5746).
+const TLS_EMPTY_RENEGOTIATION_INFO_SCSV: u16 = 0x00FF;
+pub const TLS1_2: u16 = 0x0303;
+pub const TLS1_3: u16 = 0x0304;
+/// The last 8 bytes of the random a server able to speak TLS 1.3 sends when
+/// it agrees to TLS 1.2 (RFC 8446, section 4.1.3).
+const DOWNGRADE_TO_TLS1_2: &[u8; 8] = b"DOWNGRD\x01";
+/// The curve_type of a ServerKeyExchange naming its group.
+const NAMED_CURVE: u8 = 3;
 const GROUP_X25519: u16 = 0x001d;
 const RSA_PSS_RSAE_SHA256: u16 = 0x0804;
 const RSA_PKCS1_SHA256: u16 = 0x0401;
@@ -25,16 +38,21 @@ const SERVER_HELLO: u8 = 2;
 const NEW_SESSION_TICKET: u8 = 4;
 const ENCRYPTED_EXTENSIONS: u8 = 8;
 const CERTIFICATE: u8 = 11;
+const SERVER_KEY_EXCHANGE: u8 = 12;
 const CERTIFICATE_REQUEST: u8 = 13;
+const SERVER_HELLO_DONE: u8 = 14;
 const CERTIFICATE_VERIFY: u8 = 15;
+const CLIENT_KEY_EXCHANGE: u8 = 16;
 const FINISHED: u8 = 20;
 const KEY_UPDATE: u8 = 24;
 
 const EXTENSION_SERVER_NAME: u16 = 0;
 const EXTENSION_SUPPORTED_GROUPS: u16 = 10;
+const EXTENSION_EC_POINT_FORMATS: u16 = 11;
 const EXTENSION_SIGNATURE_ALGORITHMS: u16 = 13;
 const EXTENSION_SUPPORTED_VERSIONS: u16 = 43;
 const EXTENSION_KEY_SHARE: u16 = 51;
+const EXTENSION_RENEGOTIATION_INFO: u16 = 0xff01;
 
 /// The most plaintext one record carries.
 const RECORD_LIMIT: usize = 16384;
@@ -52,6 +70,7 @@ pub mod alert {
     pub const UNEXPECTED_MESSAGE: u8 = 10;
     pub const BAD_RECORD_MAC: u8 = 20;
     pub const HANDSHAKE_FAILURE: u8 = 40;
+    pub const ILLEGAL_PARAMETER: u8 = 47;
     pub const BAD_CERTIFICATE: u8 = 42;
     pub const CERTIFICATE_EXPIRED: u8 = 45;
     pub const CERTIFICATE_UNKNOWN: u8 = 46;
@@ -79,6 +98,8 @@ enum Stage {
     WaitEncryptedExtensions,
     WaitCertificate,
     WaitCertificateVerify,
+    WaitServerKeyExchange,
+    WaitServerHelloDone,
     WaitServerFinished,
     /// The server's chain has been read and proved, and the program decides
     /// whether it trusts it.
@@ -86,6 +107,7 @@ enum Stage {
     ServerStart,
     WaitClientHello,
     WaitClientCertificate,
+    WaitClientKeyExchange,
     WaitClientCertificateVerify,
     WaitClientFinished,
     Established,
@@ -97,7 +119,16 @@ struct Direction {
     gcm: Gcm,
     iv: [u8; 12],
     sequence: u64,
+    /// TLS 1.2 records keep their content type in the header, send the
+    /// nonce's last 8 bytes in front of the ciphertext, and authenticate
+    /// the sequence number and the plaintext's length (RFC 5288).
+    explicit_nonce: bool,
 }
+
+/// The tag GCM adds to each sealed record.
+const TAG_LENGTH: usize = 16;
+/// The nonce bytes a TLS 1.2 record carries in front of its ciphertext.
+const EXPLICIT_NONCE_LENGTH: usize = 8;
 
 impl Direction {
     fn new(secret: &[u8]) -> Direction {
@@ -109,6 +140,20 @@ impl Direction {
             gcm: Gcm::new(&key).expect("a 16-byte key"),
             iv,
             sequence: 0,
+            explicit_nonce: false,
+        }
+    }
+
+    /// A TLS 1.2 direction, from its key and the 4-byte salt the key block
+    /// gives as its IV.
+    fn tls12(key: &[u8], salt: &[u8]) -> Direction {
+        let mut iv = [0u8; 12];
+        iv[..4].copy_from_slice(salt);
+        Direction {
+            gcm: Gcm::new(key).expect("a 16-byte key"),
+            iv,
+            sequence: 0,
+            explicit_nonce: true,
         }
     }
 
@@ -119,6 +164,78 @@ impl Direction {
         }
         self.sequence += 1;
         nonce
+    }
+
+    /// The additional data a TLS 1.2 record authenticates.
+    fn tls12_additional(sequence: u64, kind: u8, length: usize) -> Vec<u8> {
+        let mut additional = sequence.to_be_bytes().to_vec();
+        additional.push(kind);
+        push_u16(&mut additional, TLS1_2);
+        push_u16(&mut additional, length as u16);
+        additional
+    }
+
+    /// One record carrying `chunk` as content of type `kind`.
+    fn seal(&mut self, kind: u8, chunk: &[u8]) -> Vec<u8> {
+        if self.explicit_nonce {
+            let sequence = self.sequence;
+            let nonce = self.nonce();
+            let additional = Self::tls12_additional(sequence, kind, chunk.len());
+            let mut record = vec![kind];
+            push_u16(&mut record, TLS1_2);
+            push_u16(
+                &mut record,
+                (EXPLICIT_NONCE_LENGTH + chunk.len() + TAG_LENGTH) as u16,
+            );
+            record.extend_from_slice(&sequence.to_be_bytes());
+            record.extend(self.gcm.seal(&nonce, &additional, chunk));
+            return record;
+        }
+        let mut inner = chunk.to_vec();
+        inner.push(kind);
+        let mut record = vec![APPLICATION_DATA];
+        push_u16(&mut record, TLS1_2);
+        push_u16(&mut record, (inner.len() + TAG_LENGTH) as u16);
+        let nonce = self.nonce();
+        let sealed = self.gcm.seal(&nonce, &record, &inner);
+        record.extend(sealed);
+        record
+    }
+
+    /// The content type and plaintext of a sealed record, header included.
+    fn open(&mut self, record: &[u8]) -> Result<(u8, Vec<u8>), TlsError> {
+        let bad_mac = || failure(alert::BAD_RECORD_MAC, "bad record mac");
+        if self.explicit_nonce {
+            let body = &record[5..];
+            if body.len() < EXPLICIT_NONCE_LENGTH + TAG_LENGTH {
+                return Err(bad_mac());
+            }
+            let mut nonce = self.iv;
+            nonce[4..].copy_from_slice(&body[..EXPLICIT_NONCE_LENGTH]);
+            let additional = Self::tls12_additional(
+                self.sequence,
+                record[0],
+                body.len() - EXPLICIT_NONCE_LENGTH - TAG_LENGTH,
+            );
+            self.sequence += 1;
+            let plaintext = self
+                .gcm
+                .open(&nonce, &additional, &body[EXPLICIT_NONCE_LENGTH..])
+                .ok_or_else(bad_mac)?;
+            return Ok((record[0], plaintext));
+        }
+        let nonce = self.nonce();
+        let mut inner = self
+            .gcm
+            .open(&nonce, &record[..5], &record[5..])
+            .ok_or_else(bad_mac)?;
+        while inner.last() == Some(&0) {
+            inner.pop();
+        }
+        let Some(kind) = inner.pop() else {
+            return Err(failure(alert::UNEXPECTED_MESSAGE, "unexpected message"));
+        };
+        Ok((kind, inner))
     }
 }
 
@@ -167,6 +284,25 @@ pub struct Connection {
     /// The context of the CertificateRequest a client was sent, which its
     /// Certificate answers with.
     certificate_request: Option<Vec<u8>>,
+    /// The oldest and newest versions this side agrees to.
+    min_version: u16,
+    max_version: u16,
+    /// The version agreed on, or zero before the hellos.
+    version: u16,
+    client_random: [u8; 32],
+    server_random: [u8; 32],
+    /// The stage a handshake paused for the chain decision goes on to.
+    after_decision: Stage,
+    /// TLS 1.2 keys that take effect once the peer's ChangeCipherSpec is
+    /// read, and once this side sends its own.
+    pending_reading: Option<Direction>,
+    pending_writing: Option<Direction>,
+    /// What a TLS 1.2 server read from the ClientHello and answers in kind.
+    renegotiation_info_offered: bool,
+    point_formats_offered: bool,
+    signature_scheme: u16,
+    /// The key share a TLS 1.2 server sent in its ServerKeyExchange.
+    server_share: [u8; 32],
 }
 
 fn random_bytes<const N: usize>() -> [u8; N] {
@@ -301,7 +437,35 @@ impl Connection {
             request_certificate: false,
             require_certificate: false,
             certificate_request: None,
+            min_version: TLS1_2,
+            max_version: TLS1_3,
+            version: 0,
+            client_random: random_bytes(),
+            server_random: random_bytes(),
+            after_decision: Stage::Established,
+            pending_reading: None,
+            pending_writing: None,
+            renegotiation_info_offered: false,
+            point_formats_offered: false,
+            signature_scheme: RSA_PSS_RSAE_SHA256,
+            server_share: [0; 32],
         }
+    }
+
+    /// Hold the connection to versions from `min` to `max`, where zero
+    /// sets no limit.
+    pub fn limit_versions(&mut self, min: u16, max: u16) {
+        if min != 0 {
+            self.min_version = min.clamp(TLS1_2, TLS1_3);
+        }
+        if max != 0 {
+            self.max_version = max.clamp(TLS1_2, TLS1_3);
+        }
+    }
+
+    /// The version agreed on, or zero before the hellos.
+    pub fn version(&self) -> u16 {
+        self.version
     }
 
     /// The chain and key a client answers a CertificateRequest with.
@@ -352,11 +516,20 @@ impl Connection {
     }
 
     fn client_hello(&self) -> Vec<u8> {
+        let speaks_1_3 = self.max_version >= TLS1_3;
+        let speaks_1_2 = self.min_version <= TLS1_2;
         let mut body = Vec::new();
-        push_u16(&mut body, 0x0303);
-        body.extend_from_slice(&random_bytes::<32>());
+        push_u16(&mut body, TLS1_2);
+        body.extend_from_slice(&self.client_random);
         body.extend(with_length(1, &random_bytes::<32>()));
-        body.extend(with_length(2, &TLS_AES_128_GCM_SHA256.to_be_bytes()));
+        let mut suites = Vec::new();
+        if speaks_1_3 {
+            push_u16(&mut suites, TLS_AES_128_GCM_SHA256);
+        }
+        if speaks_1_2 {
+            push_u16(&mut suites, TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256);
+        }
+        body.extend(with_length(2, &suites));
         body.extend(with_length(1, &[0]));
         let mut listed = Vec::new();
         if let Some(name) = &self.server_name
@@ -366,10 +539,23 @@ impl Connection {
             entry.extend(with_length(2, name.as_bytes()));
             listed.extend(extension(EXTENSION_SERVER_NAME, &with_length(2, &entry)));
         }
-        listed.extend(extension(
-            EXTENSION_SUPPORTED_VERSIONS,
-            &with_length(1, &0x0304u16.to_be_bytes()),
-        ));
+        if speaks_1_3 {
+            let mut versions = TLS1_3.to_be_bytes().to_vec();
+            if speaks_1_2 {
+                push_u16(&mut versions, TLS1_2);
+            }
+            listed.extend(extension(
+                EXTENSION_SUPPORTED_VERSIONS,
+                &with_length(1, &versions),
+            ));
+        }
+        if speaks_1_2 {
+            listed.extend(extension(EXTENSION_EC_POINT_FORMATS, &with_length(1, &[0])));
+            listed.extend(extension(
+                EXTENSION_RENEGOTIATION_INFO,
+                &with_length(1, &[]),
+            ));
+        }
         listed.extend(extension(
             EXTENSION_SUPPORTED_GROUPS,
             &with_length(2, &GROUP_X25519.to_be_bytes()),
@@ -381,10 +567,12 @@ impl Connection {
             EXTENSION_SIGNATURE_ALGORITHMS,
             &with_length(2, &algorithms),
         ));
-        let mut share = Vec::new();
-        push_u16(&mut share, GROUP_X25519);
-        share.extend(with_length(2, &x25519::public_key(&self.secret_key)));
-        listed.extend(extension(EXTENSION_KEY_SHARE, &with_length(2, &share)));
+        if speaks_1_3 {
+            let mut share = Vec::new();
+            push_u16(&mut share, GROUP_X25519);
+            share.extend(with_length(2, &x25519::public_key(&self.secret_key)));
+            listed.extend(extension(EXTENSION_KEY_SHARE, &with_length(2, &share)));
+        }
         body.extend(with_length(2, &listed));
         handshake_message(CLIENT_HELLO, &body)
     }
@@ -393,7 +581,7 @@ impl Connection {
         let mut written = Vec::new();
         for chunk in body.chunks(RECORD_LIMIT) {
             written.push(kind);
-            push_u16(&mut written, 0x0303);
+            push_u16(&mut written, TLS1_2);
             written.extend(with_length(2, chunk));
         }
         written
@@ -410,15 +598,7 @@ impl Connection {
             let Some(direction) = self.writing.as_mut() else {
                 return self.plain_record(kind, body);
             };
-            let mut inner = chunk.to_vec();
-            inner.push(kind);
-            let mut header = vec![APPLICATION_DATA];
-            push_u16(&mut header, 0x0303);
-            push_u16(&mut header, (inner.len() + 16) as u16);
-            let nonce = direction.nonce();
-            let sealed = direction.gcm.seal(&nonce, &header, &inner);
-            written.extend_from_slice(&header);
-            written.extend_from_slice(&sealed);
+            written.extend(direction.seal(kind, chunk));
         }
         written
     }
@@ -465,11 +645,7 @@ impl Connection {
                 ..Progress::default()
             });
         }
-        self.stage = if self.is_client {
-            Stage::WaitServerFinished
-        } else {
-            Stage::WaitClientFinished
-        };
+        self.stage = self.after_decision;
         // The Finished that came with the chain, and any record after it,
         // may already have been read.
         let mut progress = Progress::default();
@@ -504,23 +680,18 @@ impl Connection {
             }
             let record: Vec<u8> = self.unread.drain(..5 + length).collect();
             let kind = record[0];
-            let (kind, body) = match (kind, self.reading.as_mut()) {
-                (CHANGE_CIPHER_SPEC, _) => continue,
-                (APPLICATION_DATA, Some(direction)) => {
-                    let nonce = direction.nonce();
-                    let Some(mut inner) = direction.gcm.open(&nonce, &record[..5], &record[5..])
-                    else {
-                        return Err(failure(alert::BAD_RECORD_MAC, "bad record mac"));
-                    };
-                    while inner.last() == Some(&0) {
-                        inner.pop();
-                    }
-                    let Some(kind) = inner.pop() else {
-                        return Err(failure(alert::UNEXPECTED_MESSAGE, "unexpected message"));
-                    };
-                    (kind, inner)
+            if kind == CHANGE_CIPHER_SPEC {
+                // TLS 1.3 sends it only for middleboxes to read.
+                if let Some(direction) = self.pending_reading.take() {
+                    self.reading = Some(direction);
                 }
-                (_, _) => (kind, record[5..].to_vec()),
+                continue;
+            }
+            let (kind, body) = match self.reading.as_mut() {
+                Some(direction) if direction.explicit_nonce || kind == APPLICATION_DATA => {
+                    direction.open(&record)?
+                }
+                _ => (kind, record[5..].to_vec()),
             };
             match kind {
                 HANDSHAKE => {
@@ -584,6 +755,9 @@ impl Connection {
     ) -> Result<(), TlsError> {
         let kind = message[0];
         let body = &message[4..];
+        if self.version == TLS1_2 {
+            return self.handle_tls12_handshake(message, progress);
+        }
         match (self.stage, kind) {
             (Stage::WaitServerHello, SERVER_HELLO) => self.read_server_hello(message, body),
             (Stage::WaitEncryptedExtensions, ENCRYPTED_EXTENSIONS) => {
@@ -625,19 +799,22 @@ impl Connection {
 
     fn read_server_hello(&mut self, message: &[u8], body: &[u8]) -> Result<(), TlsError> {
         let mut reader = Reader::new(body);
-        reader.take(2)?;
-        reader.take(32)?;
+        let mut version = reader.number(2)? as u16;
+        self.server_random.copy_from_slice(reader.take(32)?);
         reader.vector(1)?;
         let suite = reader.number(2)? as u16;
         reader.take(1)?;
-        if suite != TLS_AES_128_GCM_SHA256 {
-            return Err(failure(alert::HANDSHAKE_FAILURE, "no shared cipher"));
-        }
+        let listed = if reader.done() {
+            Vec::new()
+        } else {
+            extensions(reader.vector(2)?)?
+        };
         let mut peer_share = None;
-        let mut version = 0x0303;
-        for (kind, extension_body) in extensions(reader.vector(2)?)? {
+        for (kind, extension_body) in listed {
             match kind {
-                EXTENSION_SUPPORTED_VERSIONS => version = Reader::new(extension_body).number(2)?,
+                EXTENSION_SUPPORTED_VERSIONS => {
+                    version = Reader::new(extension_body).number(2)? as u16
+                }
                 EXTENSION_KEY_SHARE => {
                     let mut share = Reader::new(extension_body);
                     let group = share.number(2)? as u16;
@@ -651,9 +828,16 @@ impl Connection {
                 _ => {}
             }
         }
-        if version != 0x0304 {
+        if version < self.min_version || version > self.max_version {
             return Err(failure(alert::PROTOCOL_VERSION, "unsupported protocol"));
         }
+        if version == TLS1_2 {
+            return self.read_tls12_server_hello(message, suite);
+        }
+        if suite != TLS_AES_128_GCM_SHA256 {
+            return Err(failure(alert::HANDSHAKE_FAILURE, "no shared cipher"));
+        }
+        self.version = version;
         let Some(peer_share) = peer_share else {
             return Err(failure(alert::HANDSHAKE_FAILURE, "no shared group"));
         };
@@ -759,6 +943,11 @@ impl Connection {
         }
         self.transcript.extend_from_slice(message);
         self.stage = Stage::WaitCertificateDecision;
+        self.after_decision = if self.is_client {
+            Stage::WaitServerFinished
+        } else {
+            Stage::WaitClientFinished
+        };
         Ok(())
     }
 
@@ -811,30 +1000,52 @@ impl Connection {
         progress: &mut Progress,
     ) -> Result<(), TlsError> {
         let mut reader = Reader::new(body);
-        reader.take(2)?;
-        reader.take(32)?;
+        let legacy_version = reader.number(2)? as u16;
+        self.client_random.copy_from_slice(reader.take(32)?);
         let session = reader.vector(1)?.to_vec();
         let suites = reader.vector(2)?;
         reader.vector(1)?;
-        let offered = suites
-            .chunks(2)
-            .any(|suite| suite == TLS_AES_128_GCM_SHA256.to_be_bytes());
-        let mut speaks_1_3 = false;
+        let lists = |wanted: u16| suites.chunks(2).any(|suite| suite == wanted.to_be_bytes());
+        let offered = lists(TLS_AES_128_GCM_SHA256);
+        let offered_tls12_suite = lists(TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256);
+        self.renegotiation_info_offered = lists(TLS_EMPTY_RENEGOTIATION_INFO_SCSV);
+        let mut listed_versions: Option<Vec<u16>> = None;
         let mut share = None;
         let mut signs_with_pss = false;
+        let mut signs_with_pkcs1 = false;
+        let mut signature_algorithms_listed = false;
+        let mut groups_name_x25519 = true;
         if !reader.done() {
             for (kind, extension_body) in extensions(reader.vector(2)?)? {
                 match kind {
                     EXTENSION_SUPPORTED_VERSIONS => {
                         let versions = Reader::new(extension_body).vector(1)?;
-                        speaks_1_3 = versions.chunks(2).any(|version| version == [3, 4]);
+                        listed_versions = Some(
+                            versions
+                                .chunks(2)
+                                .filter(|version| version.len() == 2)
+                                .map(|version| u16::from_be_bytes([version[0], version[1]]))
+                                .collect(),
+                        );
                     }
                     EXTENSION_SIGNATURE_ALGORITHMS => {
                         let algorithms = Reader::new(extension_body).vector(2)?;
+                        signature_algorithms_listed = true;
                         signs_with_pss = algorithms
                             .chunks(2)
                             .any(|algorithm| algorithm == RSA_PSS_RSAE_SHA256.to_be_bytes());
+                        signs_with_pkcs1 = algorithms
+                            .chunks(2)
+                            .any(|algorithm| algorithm == RSA_PKCS1_SHA256.to_be_bytes());
                     }
+                    EXTENSION_SUPPORTED_GROUPS => {
+                        let groups = Reader::new(extension_body).vector(2)?;
+                        groups_name_x25519 = groups
+                            .chunks(2)
+                            .any(|group| group == GROUP_X25519.to_be_bytes());
+                    }
+                    EXTENSION_EC_POINT_FORMATS => self.point_formats_offered = true,
+                    EXTENSION_RENEGOTIATION_INFO => self.renegotiation_info_offered = true,
                     EXTENSION_KEY_SHARE => {
                         let mut shares = Reader::new(Reader::new(extension_body).vector(2)?);
                         while !shares.done() {
@@ -858,9 +1069,37 @@ impl Connection {
                 }
             }
         }
+        let allowed = |version: u16| version >= self.min_version && version <= self.max_version;
+        let speaks_1_3 = allowed(TLS1_3)
+            && listed_versions
+                .as_ref()
+                .is_some_and(|versions| versions.contains(&TLS1_3));
+        let speaks_1_2 = allowed(TLS1_2)
+            && match &listed_versions {
+                Some(versions) => versions.contains(&TLS1_2),
+                None => legacy_version >= TLS1_2,
+            };
+        if !speaks_1_3 && speaks_1_2 {
+            if !offered_tls12_suite || !groups_name_x25519 {
+                return Err(failure(alert::HANDSHAKE_FAILURE, "no shared cipher"));
+            }
+            self.signature_scheme = if signs_with_pss {
+                RSA_PSS_RSAE_SHA256
+            } else if signs_with_pkcs1 || !signature_algorithms_listed {
+                RSA_PKCS1_SHA256
+            } else {
+                return Err(failure(
+                    alert::HANDSHAKE_FAILURE,
+                    "no suitable signature algorithm",
+                ));
+            };
+            self.transcript.extend_from_slice(message);
+            return self.send_tls12_server_flight(progress);
+        }
         if !speaks_1_3 {
             return Err(failure(alert::PROTOCOL_VERSION, "unsupported protocol"));
         }
+        self.version = TLS1_3;
         if !offered {
             return Err(failure(alert::HANDSHAKE_FAILURE, "no shared cipher"));
         }
@@ -933,12 +1172,12 @@ impl Connection {
 
     fn server_hello(&self, session: &[u8]) -> Vec<u8> {
         let mut body = Vec::new();
-        push_u16(&mut body, 0x0303);
-        body.extend_from_slice(&random_bytes::<32>());
+        push_u16(&mut body, TLS1_2);
+        body.extend_from_slice(&self.server_random);
         body.extend(with_length(1, session));
         push_u16(&mut body, TLS_AES_128_GCM_SHA256);
         body.push(0);
-        let mut listed = extension(EXTENSION_SUPPORTED_VERSIONS, &0x0304u16.to_be_bytes());
+        let mut listed = extension(EXTENSION_SUPPORTED_VERSIONS, &TLS1_3.to_be_bytes());
         let mut share = Vec::new();
         push_u16(&mut share, GROUP_X25519);
         share.extend(with_length(2, &x25519::public_key(&self.secret_key)));
@@ -985,6 +1224,8 @@ impl Connection {
         Ok(())
     }
 }
+
+mod tls12;
 
 /// The server name a ClientHello asks for, read from the record that carries
 /// it, so a server can choose its certificate before answering.

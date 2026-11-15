@@ -840,7 +840,7 @@ nio4r/spec/nio/acceptables_spec.rb	1	0	0	1	0	0
 nio4r/spec/nio/bytebuffer_spec.rb	42	0	0	42	0	0
 nio4r/spec/nio/monitor_spec.rb	17	0	0	17	0	0
 nio4r/spec/nio/selectables/pipe_spec.rb	5	0	0	5	0	0
-nio4r/spec/nio/selectables/ssl_socket_spec.rb	10	0	0	10	5	0
+nio4r/spec/nio/selectables/ssl_socket_spec.rb	10	0	0	10	0	0
 nio4r/spec/nio/selectables/tcp_socket_spec.rb	8	0	0	8	0	0
 nio4r/spec/nio/selectables/udp_socket_spec.rb	4	0	1	4	0	1
 nio4r/spec/nio/selector_spec.rb	25	0	0	25	0	0

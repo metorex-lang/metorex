@@ -179,7 +179,7 @@ The 100 most downloaded gems on rubygems.org (`rubygems.org/stats`, read on 2026
   - [x] msgpack
   - [x] unf_ext and unf
   - [x] rb-fsevent
-  - [ ] nio4r
+  - [x] nio4r
   - [ ] puma
   - [ ] ffi
   - [ ] nokogiri, with crass and loofah

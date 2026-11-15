@@ -2634,6 +2634,18 @@ fn test_openssl_kdf_hkdf_extracts_and_expands() {
 }
 
 #[test]
+fn a_context_held_to_tls_1_2_agrees_to_tls_1_2() {
+    let output = run_example("stdlib/openssl_tls_1_2_handshake.rb");
+    let agreed = "\"ping\"\n\"pong\"\n[\"TLSv1.2\", \"TLSv1.2\"]\n\"TLSv1.2\"\n";
+    assert_eq!(
+        output,
+        format!(
+            "{agreed}{agreed}{agreed}{agreed}\"/CN=127.0.0.1\"\n[:server, \"state=error: unsupported protocol\"]\n"
+        )
+    );
+}
+
+#[test]
 fn an_ssl_context_takes_protocol_versions_by_name() {
     let output = run_example("stdlib/openssl_context_version_names.rb");
     assert_eq!(

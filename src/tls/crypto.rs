@@ -46,6 +46,22 @@ pub fn expand_label(secret: &[u8], label: &str, context: &[u8], length: usize) -
     hkdf_expand(secret, &info, length)
 }
 
+/// TLS 1.2's PRF (RFC 5246, section 5): P_SHA256 over the label and seed.
+pub fn prf(secret: &[u8], label: &str, seed: &[u8], length: usize) -> Vec<u8> {
+    let mut labeled = label.as_bytes().to_vec();
+    labeled.extend_from_slice(seed);
+    let mut output = Vec::with_capacity(length);
+    let mut chained = hmac("SHA256", secret, &labeled).unwrap_or_default();
+    while output.len() < length {
+        let mut input = chained.clone();
+        input.extend_from_slice(&labeled);
+        output.extend(hmac("SHA256", secret, &input).unwrap_or_default());
+        chained = hmac("SHA256", secret, &chained).unwrap_or_default();
+    }
+    output.truncate(length);
+    output
+}
+
 pub fn derive_secret(secret: &[u8], label: &str, transcript: &[u8]) -> Vec<u8> {
     expand_label(secret, label, &sha256(transcript), HASH_LENGTH)
 }
