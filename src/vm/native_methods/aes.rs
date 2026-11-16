@@ -100,18 +100,13 @@ fn add_round_key(state: &mut [u8; BLOCK_BYTES], round_key: &[u8; BLOCK_BYTES]) {
     }
 }
 
-/// The state is held column by column, so row `row` of column `column` is
-/// byte `column * 4 + row`.
-fn shift_rows(state: &mut [u8; BLOCK_BYTES], backwards: bool) {
+/// The inverse of ShiftRows. The state is held column by column, so row
+/// `row` of column `column` is byte `column * 4 + row`.
+fn unshift_rows(state: &mut [u8; BLOCK_BYTES]) {
     let held = *state;
     for row in 1..4 {
         for column in 0..4 {
-            let from = if backwards {
-                (column + 4 - row) % 4
-            } else {
-                (column + row) % 4
-            };
-            state[column * 4 + row] = held[from * 4 + row];
+            state[column * 4 + row] = held[(column + 4 - row) % 4 * 4 + row];
         }
     }
 }
@@ -143,18 +138,71 @@ fn unmix_columns(state: &mut [u8; BLOCK_BYTES]) {
     mix_columns(state);
 }
 
+/// SubBytes and MixColumns for one byte at the top of a column: the column
+/// {02}s, s, s, {03}s as a big-endian word. The byte at each other row
+/// gives the same word rotated right by 8 bits a row.
+const ROUND_TABLE: [u32; 256] = {
+    let mut table = [0u32; 256];
+    let mut index = 0;
+    while index < 256 {
+        let substituted = SUBSTITUTION[index];
+        let doubled = (substituted << 1) ^ if substituted & 0x80 != 0 { 0x1b } else { 0 };
+        let tripled = doubled ^ substituted;
+        table[index] = u32::from_be_bytes([doubled, substituted, substituted, tripled]);
+        index += 1;
+    }
+    table
+};
+
+fn round_words(round_key: &[u8; BLOCK_BYTES]) -> [u32; 4] {
+    std::array::from_fn(|column| {
+        u32::from_be_bytes([
+            round_key[column * 4],
+            round_key[column * 4 + 1],
+            round_key[column * 4 + 2],
+            round_key[column * 4 + 3],
+        ])
+    })
+}
+
+/// A round of SubBytes, ShiftRows, and MixColumns over the state's columns
+/// as words, each output column taking row `row` from the column `row`
+/// places along.
+fn mixed_round(columns: [u32; 4]) -> [u32; 4] {
+    std::array::from_fn(|column| {
+        ROUND_TABLE[(columns[column] >> 24) as usize]
+            ^ ROUND_TABLE[(columns[(column + 1) % 4] >> 16) as usize & 0xff].rotate_right(8)
+            ^ ROUND_TABLE[(columns[(column + 2) % 4] >> 8) as usize & 0xff].rotate_right(16)
+            ^ ROUND_TABLE[columns[(column + 3) % 4] as usize & 0xff].rotate_right(24)
+    })
+}
+
+/// The last round's SubBytes and ShiftRows, which leaves out MixColumns.
+fn last_round(columns: [u32; 4]) -> [u32; 4] {
+    std::array::from_fn(|column| {
+        u32::from_be_bytes([
+            SUBSTITUTION[(columns[column] >> 24) as usize],
+            SUBSTITUTION[(columns[(column + 1) % 4] >> 16) as usize & 0xff],
+            SUBSTITUTION[(columns[(column + 2) % 4] >> 8) as usize & 0xff],
+            SUBSTITUTION[columns[(column + 3) % 4] as usize & 0xff],
+        ])
+    })
+}
+
+fn with_round_key(columns: [u32; 4], round_key: &[u8; BLOCK_BYTES]) -> [u32; 4] {
+    let key = round_words(round_key);
+    std::array::from_fn(|column| columns[column] ^ key[column])
+}
+
 pub(crate) fn encrypt_block(block: &mut [u8; BLOCK_BYTES], round_keys: &[[u8; BLOCK_BYTES]]) {
     let rounds = round_keys.len() - 1;
-    add_round_key(block, &round_keys[0]);
-    for (round, round_key) in round_keys.iter().enumerate().skip(1) {
-        for byte in block.iter_mut() {
-            *byte = SUBSTITUTION[*byte as usize];
-        }
-        shift_rows(block, false);
-        if round != rounds {
-            mix_columns(block);
-        }
-        add_round_key(block, round_key);
+    let mut columns = with_round_key(round_words(block), &round_keys[0]);
+    for round_key in &round_keys[1..rounds] {
+        columns = with_round_key(mixed_round(columns), round_key);
+    }
+    columns = with_round_key(last_round(columns), &round_keys[rounds]);
+    for (column, word) in columns.iter().enumerate() {
+        block[column * 4..column * 4 + 4].copy_from_slice(&word.to_be_bytes());
     }
 }
 
@@ -166,7 +214,7 @@ fn decrypt_block(
     let rounds = round_keys.len() - 1;
     add_round_key(block, &round_keys[rounds]);
     for round in (0..rounds).rev() {
-        shift_rows(block, true);
+        unshift_rows(block);
         for byte in block.iter_mut() {
             *byte = inverse[*byte as usize];
         }

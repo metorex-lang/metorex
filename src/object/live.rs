@@ -360,6 +360,12 @@ pub fn collection_due() -> bool {
     DUE.with(Cell::get)
 }
 
+/// Have a collection run at the next statement, for memory held outside
+/// the objects the list counts.
+pub fn ask_for_collection() {
+    DUE.with(|due| due.set(true));
+}
+
 /// Whether collections run, which `GC.disable` and `GC.enable` switch.
 pub fn collecting() -> bool {
     ENABLED.with(Cell::get)

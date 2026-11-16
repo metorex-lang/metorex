@@ -976,7 +976,7 @@ puma/test/test_integration_cluster.rb	56	0	0	56	0	0
 puma/test/test_integration_pumactl.rb	12	0	0	12	1	0
 puma/test/test_integration_single.rb	21	0	0	21	1	0
 puma/test/test_integration_ssl.rb	8	0	0	8	0	0
-puma/test/test_integration_ssl_session.rb	8	0	0	-	-	-
+puma/test/test_integration_ssl_session.rb	8	0	0	8	0	0
 puma/test/test_iobuffer.rb	4	0	0	4	0	0
 puma/test/test_json_serialization.rb	16	0	0	16	0	0
 puma/test/test_launcher.rb	9	0	0	9	0	0

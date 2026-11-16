@@ -22,7 +22,8 @@ fn established() -> (Connection, Connection) {
     let flight = server.feed(&hello).unwrap().outgoing;
     client.feed(&flight).unwrap();
     let finished = client.decide_certificate(None).unwrap().outgoing;
-    server.feed(&finished).unwrap();
+    let tickets = server.feed(&finished).unwrap().outgoing;
+    client.feed(&tickets).unwrap();
     (client, server)
 }
 

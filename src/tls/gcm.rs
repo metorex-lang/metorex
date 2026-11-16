@@ -8,7 +8,8 @@ const BLOCK: usize = 16;
 /// A key expanded once, for sealing and opening many records.
 pub struct Gcm {
     round_keys: Vec<[u8; BLOCK]>,
-    hash_key: u128,
+    /// The hash key times each 4-bit value, whose first bit is x^0.
+    hash_multiples: [u128; 16],
 }
 
 fn block_value(bytes: &[u8]) -> u128 {
@@ -17,45 +18,82 @@ fn block_value(bytes: &[u8]) -> u128 {
     u128::from_be_bytes(held)
 }
 
-/// Multiplication in GF(2^128) with the bit order GCM uses.
-fn multiply(left: u128, right: u128) -> u128 {
+/// The value times x in GF(2^128) with the bit order GCM uses, where
+/// each step toward the low end of the block is one power of x higher.
+fn times_x(value: u128) -> u128 {
     const REDUCTION: u128 = 0xE1 << 120;
-    let mut product = 0u128;
-    let mut shifted = right;
-    for bit in 0..128 {
-        if (left >> (127 - bit)) & 1 == 1 {
-            product ^= shifted;
-        }
-        let carried = shifted & 1 == 1;
-        shifted >>= 1;
-        if carried {
-            shifted ^= REDUCTION;
-        }
+    if value & 1 == 1 {
+        (value >> 1) ^ REDUCTION
+    } else {
+        value >> 1
     }
-    product
 }
+
+/// What the four bits shifted off the low end of a value carry back in when
+/// it is multiplied by x^4, by those bits.
+const FOLDED_BACK: [u128; 16] = {
+    let mut table = [0u128; 16];
+    let mut bits = 0;
+    while bits < 16 {
+        let mut value = bits as u128;
+        let mut step = 0;
+        while step < 4 {
+            const REDUCTION: u128 = 0xE1 << 120;
+            value = if value & 1 == 1 {
+                (value >> 1) ^ REDUCTION
+            } else {
+                value >> 1
+            };
+            step += 1;
+        }
+        table[bits] = value;
+        bits += 1;
+    }
+    table
+};
 
 impl Gcm {
     pub fn new(key: &[u8]) -> Option<Gcm> {
         let round_keys = expand_key(key)?;
         let mut zero = [0u8; BLOCK];
         encrypt_block(&mut zero, &round_keys);
+        let mut hash_multiples = [0u128; 16];
+        hash_multiples[8] = u128::from_be_bytes(zero);
+        for bit in [4, 2, 1] {
+            hash_multiples[bit] = times_x(hash_multiples[bit * 2]);
+        }
+        for value in 1..16 {
+            let high = 1 << (u32::BITS - 1 - (value as u32).leading_zeros());
+            hash_multiples[value] = hash_multiples[high] ^ hash_multiples[value ^ high];
+        }
         Some(Gcm {
             round_keys,
-            hash_key: u128::from_be_bytes(zero),
+            hash_multiples,
         })
+    }
+
+    /// The value times the hash key, four bits at a time from the highest
+    /// power of x down.
+    fn times_hash_key(&self, value: u128) -> u128 {
+        let mut product = 0u128;
+        for nibble in 0..32 {
+            let bits = (value >> (4 * nibble)) & 0xF;
+            product = (product >> 4) ^ FOLDED_BACK[(product & 0xF) as usize];
+            product ^= self.hash_multiples[bits as usize];
+        }
+        product
     }
 
     fn ghash(&self, additional: &[u8], ciphertext: &[u8]) -> u128 {
         let mut state = 0u128;
         for chunk in additional.chunks(BLOCK) {
-            state = multiply(state ^ block_value(chunk), self.hash_key);
+            state = self.times_hash_key(state ^ block_value(chunk));
         }
         for chunk in ciphertext.chunks(BLOCK) {
-            state = multiply(state ^ block_value(chunk), self.hash_key);
+            state = self.times_hash_key(state ^ block_value(chunk));
         }
         let lengths = ((additional.len() as u128 * 8) << 64) | (ciphertext.len() as u128 * 8);
-        multiply(state ^ lengths, self.hash_key)
+        self.times_hash_key(state ^ lengths)
     }
 
     /// The counter block for a nonce, numbered from `counter`.

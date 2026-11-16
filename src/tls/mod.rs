@@ -5,6 +5,7 @@ pub mod chacha20_poly1305;
 pub mod connection;
 pub mod crypto;
 pub mod gcm;
+pub mod session;
 pub mod x25519;
 
 pub use connection::{Connection, Progress, TlsError};

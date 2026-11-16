@@ -919,3 +919,39 @@ fn test_adjacent_frozen_literals_holding_bytes_join_into_one() {
         "32\n#<Encoding:UTF-8>\nfalse\n15\n17\n32\n32\n2\n[228, 227]\n4\n7\ntrue\n6\ntrue\n"
     );
 }
+
+#[test]
+fn binary_strings_append_and_cut_bytes_as_they_are() {
+    let output = run_example("strings/binary_append_and_slice_bang.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"\\xFF\\x00abc\\xE2\\x82\\xACde\"\n",
+            "#<Encoding:BINARY (ASCII-8BIT)>\n",
+            "10\n",
+            "\"\\xC3\\xA9\"\n",
+            "#<Encoding:BINARY (ASCII-8BIT)>\n",
+            "\"ab\\xFFcd\\x80\"\n",
+            "#<Encoding:BINARY (ASCII-8BIT)>\n",
+            "\"\\xFF\\x01\\xFF\\x01\"\n",
+            "\"\\x00\\x01\"\n",
+            "\"\\x02\\x03\\x04\\x05\"\n",
+            "\"\\x04\\x05\"\n",
+            "\"\\x02\\x03\"\n",
+            "\"\"\n",
+            "\"\\x02\\x03\"\n",
+            "nil\n",
+            "\"\\x02\\x03\"\n",
+            "nil\n",
+            "\"\\x02\\x03\"\n",
+            "nil\n",
+            "\"\\x02\\x03\"\n",
+            "\"\"\n",
+            "\"\\x02\\x03\"\n",
+            "#<Encoding:BINARY (ASCII-8BIT)>\n",
+            "\"\"\n",
+            "\"él\"\n",
+            "\"hlo\"\n",
+        )
+    );
+}

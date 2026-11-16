@@ -136,6 +136,16 @@ impl VirtualMachine {
                                     );
                                 }
                             }
+                            // Bytes go onto bytes as they are, without being
+                            // read as characters and spelled back.
+                            if target.reads_bytes() && other.reads_bytes() {
+                                if !added.is_empty() {
+                                    target.append_text(&std::mem::take(&mut added));
+                                }
+                                let extra = other.bytes().to_vec();
+                                target.append_bytes(&extra);
+                                continue;
+                            }
                             added.push_str(&other.to_text());
                         }
                         // A number names a codepoint, which has to be one the
@@ -484,6 +494,9 @@ impl VirtualMachine {
         let View::String(target) = receiver.view() else {
             return Ok(None);
         };
+        if let Some(cut) = cut_binary_span(target, arguments) {
+            return Ok(Some(cut));
+        }
         let held = target.to_text();
         let taken = self.call_string_method(receiver, "slice", arguments, position)?;
         let viewed = taken.clone();
@@ -706,6 +719,33 @@ impl VirtualMachine {
 /// The encoding an append answers with: `Some(None)` to keep the one the
 /// string already has, `Some(Some(name))` to take the other's, and `None`
 /// when the two cannot be read alongside each other.
+/// `slice!(start, length)` on a binary string, where each character is a
+/// byte, cut without reading the string as characters. None for any other
+/// string or arguments.
+fn cut_binary_span(target: &crate::object::StringValue, arguments: &[Object]) -> Option<Object> {
+    if target.encoding_name() != "ASCII-8BIT" {
+        return None;
+    }
+    let [first, second] = arguments else {
+        return None;
+    };
+    let (View::Int(start), View::Int(length)) = (first.view(), second.view()) else {
+        return None;
+    };
+    let size = target.byte_len() as i64;
+    let start = if start < 0 { start + size } else { start };
+    if start < 0 || start > size || length < 0 {
+        return Some(Object::Nil);
+    }
+    let end = start.saturating_add(length).min(size) as usize;
+    let mut bytes = target.bytes().to_vec();
+    let taken: Vec<u8> = bytes.drain(start as usize..end).collect();
+    target.replace_bytes(bytes);
+    Some(Object::String(std::rc::Rc::new(
+        crate::object::StringValue::binary(taken),
+    )))
+}
+
 fn appended_encoding(
     target: &crate::object::StringValue,
     other: &crate::object::StringValue,

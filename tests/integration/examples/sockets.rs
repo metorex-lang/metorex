@@ -365,3 +365,22 @@ fn tls_1_3_agrees_on_chacha20_poly1305_when_a_side_asks_for_it() {
          \"SSL_CTX_set_ciphersuites: no cipher match\"\n"
     );
 }
+
+#[test]
+fn a_tls_client_resumes_a_session_from_session_new_cb_over_tls_1_2_and_1_3() {
+    let output = run_example("sockets/tls_session_resumption.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"PING\", \"TLSv1.2\", false, false, 1, \"/CN=localhost\"]\n",
+            "-----BEGIN SSL SESSION PARAMETERS-----\n",
+            "true\n",
+            "[\"PING\", \"TLSv1.2\", true, true, 0, \"/CN=localhost\"]\n",
+            "[\"PING\", \"TLSv1.3\", false, false, 2, \"/CN=localhost\"]\n",
+            "-----BEGIN SSL SESSION PARAMETERS-----\n",
+            "true\n",
+            "[\"PING\", \"TLSv1.3\", true, true, 1, \"/CN=localhost\"]\n",
+            "\"unknown type: no start line (Expecting: SSL SESSION PARAMETERS)\"\n",
+        )
+    );
+}

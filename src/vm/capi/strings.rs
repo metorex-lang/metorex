@@ -30,6 +30,10 @@ struct Buffer {
     area: Vec<u8>,
     handed: Vec<u8>,
     external: Option<*mut c_char>,
+    /// How many changes to strings had been made when `handed` was last
+    /// checked against the string. While none has been made since, the
+    /// string still holds `handed`.
+    checked_at: u64,
 }
 
 /// How many NUL bytes end a string in `encoding`: one code unit of it.
@@ -39,12 +43,15 @@ fn terminator_length(string: &StringValue) -> usize {
 
 impl Buffer {
     fn holding(current: Vec<u8>, terminator: usize) -> Buffer {
-        let mut area = current.clone();
+        count_bytes_copied(current.len());
+        let mut area = Vec::with_capacity(current.len() + terminator);
+        area.extend_from_slice(&current);
         area.resize(current.len() + terminator, 0);
         Buffer {
             area,
             handed: current,
             external: None,
+            checked_at: crate::object::string_value::string_changes_made(),
         }
     }
 
@@ -52,6 +59,7 @@ impl Buffer {
     /// growing it when it is too small and ending it with the terminator.
     fn take(&mut self, current: Vec<u8>, terminator: usize) {
         let needed = current.len() + terminator;
+        count_bytes_copied(current.len());
         if self.area.len() < needed {
             self.area.resize(needed, 0);
         }
@@ -79,6 +87,24 @@ thread_local! {
     /// How many changes to strings the buffers had seen when they were last
     /// brought up to date with their strings.
     static CHANGES_SEEN: Cell<u64> = const { Cell::new(0) };
+    /// The bytes copied into buffers since a collection was last asked for.
+    static BYTES_COPIED: Cell<usize> = const { Cell::new(0) };
+}
+
+/// The bytes copied into buffers after which a collection is asked for, so
+/// strings C was handed and no longer reaches, and their buffers, are let
+/// go of. A collection otherwise comes after a count of objects made,
+/// however large each is.
+const BYTES_COPIED_BEFORE_A_COLLECTION: usize = 256 * 1024 * 1024;
+
+fn count_bytes_copied(count: usize) {
+    let total = BYTES_COPIED.with(Cell::get) + count;
+    if total >= BYTES_COPIED_BEFORE_A_COLLECTION {
+        crate::object::live::ask_for_collection();
+        BYTES_COPIED.with(|copied| copied.set(0));
+    } else {
+        BYTES_COPIED.with(|copied| copied.set(total));
+    }
 }
 
 /// Let go of the buffer of a string C no longer reaches.
@@ -270,8 +296,8 @@ pub(super) fn carry_changes_in() {
 fn with_buffer<T>(string: Value, with: impl FnOnce(&mut Buffer, &StringValue) -> T) -> T {
     carry_own_writes_back(string);
     let held = string_from(string);
-    let current = binary_bytes(&held);
     let terminator = terminator_length(&held);
+    let changes = crate::object::string_value::string_changes_made();
     HANDED_SINCE_CROSSING.with(|held| held.borrow_mut().insert(string));
     HANDED_IN_FRAME.with(|held| {
         if let Some(frame) = held.borrow_mut().last_mut() {
@@ -282,9 +308,13 @@ fn with_buffer<T>(string: Value, with: impl FnOnce(&mut Buffer, &StringValue) ->
         let mut buffers = buffers.borrow_mut();
         let buffer = buffers
             .entry(string)
-            .or_insert_with(|| Buffer::holding(current.clone(), terminator));
-        if buffer.handed != current {
-            buffer.take(current, terminator);
+            .or_insert_with(|| Buffer::holding(binary_bytes(&held), terminator));
+        if buffer.checked_at != changes {
+            let current = binary_bytes(&held);
+            if buffer.handed != current {
+                buffer.take(current, terminator);
+            }
+            buffer.checked_at = changes;
         }
         with(buffer, &held)
     })

@@ -5,6 +5,7 @@
 use super::*;
 use crate::object::{OptionView, View};
 use crate::tls::crypto::RsaKey;
+use crate::tls::session::Session;
 use crate::tls::{Connection, Progress, TlsError};
 use num_bigint::BigUint;
 
@@ -67,7 +68,8 @@ impl VirtualMachine {
 
     /// What a feed or a decision answers: the bytes to send, the
     /// application data read, whether the peer closed its side, the
-    /// connection's state, and the failure's message when it failed. A
+    /// connection's state, the failure's message when it failed, and the
+    /// bytes of each session a client was given since the last answer. A
     /// failure found here also sends the peer the alert that names it.
     fn tls_progress(&mut self, number: usize, result: Result<Progress, TlsError>) -> Object {
         let Some(connection) = self.tls_connections.get_mut(&number) else {
@@ -80,6 +82,13 @@ impl VirtualMachine {
                 Object::Bool(progress.peer_closed),
                 Self::tls_state(connection),
                 Object::Nil,
+                Object::array(
+                    connection
+                        .take_new_sessions()
+                        .iter()
+                        .map(|session| binary(session.to_bytes()))
+                        .collect(),
+                ),
             ]),
             Err(problem) => {
                 let outgoing = if connection.is_closed() {
@@ -93,6 +102,7 @@ impl VirtualMachine {
                     Object::Bool(false),
                     Object::symbol("failed"),
                     Object::string(problem.message),
+                    Object::array(Vec::new()),
                 ])
             }
         }
@@ -105,6 +115,9 @@ impl VirtualMachine {
     ///   number. The certificates are DER, leaf first, and n, e, and d are
     ///   the RSA key that proves them. A server asks for the client's
     ///   certificate when the verify mode has VERIFY_PEER.
+    /// * `:session_fields, bytes` answers the id, the second it began, and
+    ///   the lifetime of the session the bytes hold, or nil when they hold
+    ///   none.
     /// * `:hello_name, record` answers the server name the ClientHello in
     ///   the record asks for, or nil.
     /// * `:versions, number, min, max` holds the connection to those
@@ -119,6 +132,10 @@ impl VirtualMachine {
     /// * `:close, number` answers the alert that closes the connection.
     /// * `:peer_chain, number` and `:requested_name, number` answer what
     ///   the peer sent.
+    /// * `:resume, number, bytes` has a client offer the session the bytes
+    ///   hold, `:reused, number` answers whether the handshake resumed it,
+    ///   and `:session, number` answers the bytes of the session the
+    ///   connection runs in, or nil before it is established.
     /// * `:free, number` forgets the connection.
     pub(crate) fn tls_command(
         &mut self,
@@ -165,6 +182,16 @@ impl VirtualMachine {
             let number = self.next_tls_connection;
             self.tls_connections.insert(number, connection);
             return Ok(Object::Int(number as i64));
+        }
+        if command == "session_fields" {
+            return Ok(match Session::from_bytes(&bytes_of(arguments.get(1))) {
+                Some(session) => Object::array(vec![
+                    binary(session.id),
+                    Object::Int((session.issued_at / 1000) as i64),
+                    Object::Int(i64::from(session.lifetime)),
+                ]),
+                None => Object::Nil,
+            });
         }
         if command == "hello_name" {
             return Ok(
@@ -220,6 +247,17 @@ impl VirtualMachine {
                 Ok(Object::Nil)
             }
             "cipher" => Ok(Object::string(connection.cipher_name())),
+            "resume" => {
+                if let Some(session) = Session::from_bytes(&bytes_of(arguments.get(2))) {
+                    connection.offer_session(session);
+                }
+                Ok(Object::Nil)
+            }
+            "reused" => Ok(Object::Bool(connection.is_resumed())),
+            "session" => Ok(match connection.session() {
+                Some(session) => binary(session.to_bytes()),
+                None => Object::Nil,
+            }),
             "feed" => {
                 let result = connection.feed(&bytes_of(arguments.get(2)));
                 Ok(self.tls_progress(number, result))

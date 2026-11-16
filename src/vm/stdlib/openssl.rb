@@ -3531,23 +3531,46 @@ module OpenSSL
     end
     module_function :verify_wildcard
 
-    # The session an established connection runs in. Sessions are not
-    # resumed, so each holds only what names it.
+    # The session an established connection runs in, which a later
+    # connection given it with SSLSocket#session= offers to resume.
     class Session
       class SessionError < OpenSSL::OpenSSLError; end
 
-      attr_reader :id, :time
-      attr_accessor :timeout
+      PEM_HEADER = "-----BEGIN SSL SESSION PARAMETERS-----"
+      PEM_FOOTER = "-----END SSL SESSION PARAMETERS-----"
 
-      def initialize(socket)
-        raise SessionError, "SSL session is not available" if socket.cipher.nil?
-        @id = SecureRandom.bytes(32)
-        @time = Time.now
-        @timeout = 7200
+      attr_reader :id
+      attr_accessor :time, :timeout
+
+      def initialize(source)
+        if source.is_a?(SSLSocket)
+          @der = source.__session_bytes__
+          raise SessionError, "SSL session is not available" if @der.nil?
+        else
+          text = source.to_str.b
+          @der = if text.include?(PEM_HEADER)
+                   text[/#{PEM_HEADER}(.*?)#{PEM_FOOTER}/m, 1].to_s.unpack1("m")
+                 else
+                   text
+                 end
+        end
+        fields = OpenSSL.__tls__(:session_fields, @der)
+        if fields.nil?
+          raise ArgumentError, "unknown type: ASN1 lib" if text.include?(PEM_HEADER)
+          raise ArgumentError, "unknown type: no start line (Expecting: SSL SESSION PARAMETERS)"
+        end
+        @id, issued, @timeout = fields
+        @time = Time.at(issued)
+      end
+
+      def to_der = @der.dup
+
+      def to_pem
+        "#{PEM_HEADER}\n#{[@der].pack("m48")}#{PEM_FOOTER}\n"
       end
 
       def ==(other)
-        other.is_a?(Session) && id == other.id
+        other.is_a?(Session) && to_der == other.to_der
       end
     end
 
@@ -3710,12 +3733,12 @@ module OpenSSL
       end
 
       def session
-        @established_session ||= SSL::Session.new(self)
-      rescue SSL::Session::SessionError
-        nil
+        @session_bytes && SSL::Session.new(self)
       end
 
-      def session_reused? = false
+      def __session_bytes__ = @session_bytes
+
+      def session_reused? = @reused ? true : false
       def alpn_protocol = nil
       def npn_protocol = nil
       def close_read = nil
@@ -3758,6 +3781,7 @@ module OpenSSL
                         end
           OpenSSL.__tls__(:versions, @connection, @context.__min_version__.to_i, @context.__max_version__.to_i)
           OpenSSL.__tls__(:suites, @connection, @context.__ciphersuites__)
+          OpenSSL.__tls__(:resume, @connection, @session.to_der) if mode == :client && @session.is_a?(SSL::Session)
           @state = :handshake
           opening = OpenSSL.__tls__(:start, @connection)
           __io__(:write, opening) unless opening.empty?
@@ -3883,17 +3907,33 @@ module OpenSSL
       # Send what the connection answered, keep the data it read, and carry
       # on through a chain decision or a failure.
       def advance(progress, label)
-        outgoing, read, closed, state, problem = progress
+        outgoing, read, closed, state, problem, sessions = progress
         __io__(:write, outgoing) unless outgoing.empty?
         @plaintext << read
         @peer_closed ||= closed
         @state = state
-        if state == :established
-          @version ||= OpenSSL.__tls__(:version, @connection)
-          @cipher ||= OpenSSL.__tls__(:cipher, @connection)
+        if state == :established && @version.nil?
+          @version = OpenSSL.__tls__(:version, @connection)
+          @cipher = OpenSSL.__tls__(:cipher, @connection)
+          @reused = OpenSSL.__tls__(:reused, @connection)
+          @session_bytes = OpenSSL.__tls__(:session, @connection)
+          if @reused && @peer_cert_chain.nil?
+            chain = OpenSSL.__tls__(:peer_chain, @connection)
+            @peer_cert_chain = chain.map { |der| OpenSSL::X509::Certificate.new(der) } unless chain.empty?
+          end
         end
+        sessions&.each { |bytes| take_session(bytes) }
         raise SSLError, "#{label} returned=1 errno=0 #{peer_text}state=error: #{problem}" if state == :failed
         decide_chain(label) if state == :decide
+      end
+
+      # A client hands a session the server gave it to the context's
+      # session_new_cb when the context caches client sessions.
+      def take_session(bytes)
+        @session_bytes = bytes
+        return unless @mode == :client && @context.session_new_cb
+        return if (@context.session_cache_mode.to_i & SSLContext::SESSION_CACHE_CLIENT).zero?
+        @context.session_new_cb.call([self, Session.new(bytes)])
       end
 
       # Verify the server's chain against the certificates the context

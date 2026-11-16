@@ -11,6 +11,7 @@
 use super::chacha20_poly1305::ChaCha20Poly1305;
 use super::crypto::{self, HASH_LENGTH, Hash, RsaKey};
 use super::gcm::Gcm;
+use super::session::{Session, now_in_milliseconds};
 use super::x25519;
 use crate::vm::native_methods::digest_algorithms::sha256;
 
@@ -54,9 +55,19 @@ const EXTENSION_SERVER_NAME: u16 = 0;
 const EXTENSION_SUPPORTED_GROUPS: u16 = 10;
 const EXTENSION_EC_POINT_FORMATS: u16 = 11;
 const EXTENSION_SIGNATURE_ALGORITHMS: u16 = 13;
+const EXTENSION_SESSION_TICKET: u16 = 35;
+const EXTENSION_PRE_SHARED_KEY: u16 = 41;
+const EXTENSION_PSK_KEY_EXCHANGE_MODES: u16 = 45;
 const EXTENSION_SUPPORTED_VERSIONS: u16 = 43;
 const EXTENSION_KEY_SHARE: u16 = 51;
 const EXTENSION_RENEGOTIATION_INFO: u16 = 0xff01;
+
+/// The psk_key_exchange_modes value for resuming with a key share too.
+const PSK_DHE_KE: u8 = 1;
+/// The seconds a server keeps a session it gives a ticket for.
+const TICKET_LIFETIME: u32 = 7200;
+/// The tickets a TLS 1.3 server sends after a handshake, as OpenSSL does.
+const TICKETS_SENT: u8 = 2;
 
 /// The most plaintext one record carries.
 const RECORD_LIMIT: usize = 16384;
@@ -120,7 +131,7 @@ enum Stage {
 
 /// The cipher sealing records, by the suite agreed on.
 enum Aead {
-    Gcm(Gcm),
+    Gcm(Box<Gcm>),
     ChaCha20Poly1305(ChaCha20Poly1305),
 }
 
@@ -179,11 +190,11 @@ impl Direction {
             }
             TLS_AES_256_GCM_SHA384 => {
                 let key = crypto::expand_label(hash, secret, "key", &[], 32);
-                Aead::Gcm(Gcm::new(&key).expect("a 32-byte key"))
+                Aead::Gcm(Box::new(Gcm::new(&key).expect("a 32-byte key")))
             }
             _ => {
                 let key = crypto::expand_label(hash, secret, "key", &[], 16);
-                Aead::Gcm(Gcm::new(&key).expect("a 16-byte key"))
+                Aead::Gcm(Box::new(Gcm::new(&key).expect("a 16-byte key")))
             }
         };
         Direction {
@@ -200,7 +211,7 @@ impl Direction {
         let mut iv = [0u8; 12];
         iv[..4].copy_from_slice(salt);
         Direction {
-            gcm: Aead::Gcm(Gcm::new(key).expect("a 16-byte key")),
+            gcm: Aead::Gcm(Box::new(Gcm::new(key).expect("a 16-byte key"))),
             iv,
             sequence: 0,
             explicit_nonce: true,
@@ -358,6 +369,28 @@ pub struct Connection {
     /// The TLS 1.3 cipher suites this side agrees to, in the order a
     /// client offers them.
     allowed_suites: Vec<u16>,
+    /// The session a client offers to resume.
+    offered_session: Option<Session>,
+    /// Whether the handshake resumed a session.
+    resumed: bool,
+    /// The pre-shared key a TLS 1.3 handshake resumes with.
+    psk: Option<Vec<u8>>,
+    /// The session the connection runs in, once established.
+    session: Option<Session>,
+    /// Sessions a client was given and the program has not taken.
+    new_sessions: Vec<Session>,
+    /// The session ids of the hellos.
+    sent_session_id: Vec<u8>,
+    server_session_id: Vec<u8>,
+    /// Whether a TLS 1.2 server sends a NewSessionTicket: for a client, the
+    /// server said so in its hello, and for a server, the client asked.
+    ticket_expected: bool,
+    /// The lifetime and ticket of a TLS 1.2 NewSessionTicket read.
+    tls12_ticket: Option<(u32, Vec<u8>)>,
+    /// The TLS 1.3 secret each ticket's pre-shared key comes from.
+    resumption_secret: Vec<u8>,
+    /// Whether a TLS 1.3 client agrees to resume with a key share.
+    psk_modes_offered: bool,
 }
 
 fn random_bytes<const N: usize>() -> [u8; N] {
@@ -510,6 +543,17 @@ impl Connection {
                 TLS_CHACHA20_POLY1305_SHA256,
                 TLS_AES_128_GCM_SHA256,
             ],
+            offered_session: None,
+            resumed: false,
+            psk: None,
+            session: None,
+            new_sessions: Vec::new(),
+            sent_session_id: Vec::new(),
+            server_session_id: Vec::new(),
+            ticket_expected: false,
+            tls12_ticket: None,
+            resumption_secret: Vec::new(),
+            psk_modes_offered: false,
         }
     }
 
@@ -594,7 +638,14 @@ impl Connection {
             };
             return Vec::new();
         }
-        let hello = self.client_hello();
+        self.sent_session_id = match &self.offered_session {
+            Some(session) if session.version == TLS1_2 && !session.id.is_empty() => {
+                session.id.clone()
+            }
+            _ => random_bytes::<32>().to_vec(),
+        };
+        let mut hello = self.client_hello();
+        self.bind_psk(&mut hello);
         self.transcript.extend_from_slice(&hello);
         self.stage = Stage::WaitServerHello;
         self.plain_record(HANDSHAKE, &hello)
@@ -606,7 +657,7 @@ impl Connection {
         let mut body = Vec::new();
         push_u16(&mut body, TLS1_2);
         body.extend_from_slice(&self.client_random);
-        body.extend(with_length(1, &random_bytes::<32>()));
+        body.extend(with_length(1, &self.sent_session_id));
         let mut suites = Vec::new();
         if speaks_1_3 {
             for suite in &self.allowed_suites {
@@ -642,6 +693,10 @@ impl Connection {
                 EXTENSION_RENEGOTIATION_INFO,
                 &with_length(1, &[]),
             ));
+            listed.extend(extension(
+                EXTENSION_SESSION_TICKET,
+                &self.offered_tls12_ticket(),
+            ));
         }
         listed.extend(extension(
             EXTENSION_SUPPORTED_GROUPS,
@@ -659,6 +714,14 @@ impl Connection {
             push_u16(&mut share, GROUP_X25519);
             share.extend(with_length(2, &x25519::public_key(&self.secret_key)));
             listed.extend(extension(EXTENSION_KEY_SHARE, &with_length(2, &share)));
+            listed.extend(extension(
+                EXTENSION_PSK_KEY_EXCHANGE_MODES,
+                &with_length(1, &[PSK_DHE_KE]),
+            ));
+            // The pre-shared key goes last, as its binder covers the rest.
+            if let Some(offer) = self.psk_offer() {
+                listed.extend(extension(EXTENSION_PRE_SHARED_KEY, &offer));
+            }
         }
         body.extend(with_length(2, &listed));
         handshake_message(CLIENT_HELLO, &body)
@@ -849,7 +912,11 @@ impl Connection {
             (Stage::WaitServerHello, SERVER_HELLO) => self.read_server_hello(message, body),
             (Stage::WaitEncryptedExtensions, ENCRYPTED_EXTENSIONS) => {
                 self.transcript.extend_from_slice(message);
-                self.stage = Stage::WaitCertificate;
+                self.stage = if self.resumed {
+                    Stage::WaitServerFinished
+                } else {
+                    Stage::WaitCertificate
+                };
                 Ok(())
             }
             (Stage::WaitCertificate, CERTIFICATE_REQUEST) => {
@@ -874,8 +941,12 @@ impl Connection {
             (Stage::WaitClientCertificateVerify, CERTIFICATE_VERIFY) => {
                 self.read_certificate_verify(message, body)
             }
-            (Stage::WaitClientFinished, FINISHED) => self.read_client_finished(message, body),
-            (Stage::Established, NEW_SESSION_TICKET) => Ok(()),
+            (Stage::WaitClientFinished, FINISHED) => {
+                self.read_client_finished(message, body, progress)
+            }
+            (Stage::Established, NEW_SESSION_TICKET) if self.is_client => {
+                self.read_new_session_ticket(body)
+            }
             (Stage::Established, KEY_UPDATE) => Err(failure(
                 alert::UNEXPECTED_MESSAGE,
                 "key updates are not supported",
@@ -888,7 +959,7 @@ impl Connection {
         let mut reader = Reader::new(body);
         let mut version = reader.number(2)? as u16;
         self.server_random.copy_from_slice(reader.take(32)?);
-        reader.vector(1)?;
+        self.server_session_id = reader.vector(1)?.to_vec();
         let suite = reader.number(2)? as u16;
         reader.take(1)?;
         let listed = if reader.done() {
@@ -897,8 +968,13 @@ impl Connection {
             extensions(reader.vector(2)?)?
         };
         let mut peer_share = None;
+        let mut psk_chosen = false;
         for (kind, extension_body) in listed {
             match kind {
+                EXTENSION_SESSION_TICKET => self.ticket_expected = true,
+                EXTENSION_PRE_SHARED_KEY => {
+                    psk_chosen = Reader::new(extension_body).number(2)? == 0;
+                }
                 EXTENSION_SUPPORTED_VERSIONS => {
                     version = Reader::new(extension_body).number(2)? as u16
                 }
@@ -929,6 +1005,9 @@ impl Connection {
         let Some(peer_share) = peer_share else {
             return Err(failure(alert::HANDSHAKE_FAILURE, "no shared group"));
         };
+        if psk_chosen {
+            self.resume_with_psk()?;
+        }
         self.transcript.extend_from_slice(message);
         self.enter_handshake_keys(&peer_share);
         self.reading = Some(Direction::new(
@@ -946,7 +1025,11 @@ impl Connection {
     fn enter_handshake_keys(&mut self, peer_share: &[u8; 32]) {
         let shared = x25519::x25519(&self.secret_key, peer_share);
         let hash = suite_hash(self.suite);
-        let early = crypto::hkdf_extract(hash, &[], &vec![0u8; hash.length()]);
+        let early = crypto::hkdf_extract(
+            hash,
+            &[],
+            &self.psk.clone().unwrap_or_else(|| vec![0u8; hash.length()]),
+        );
         let derived = crypto::derive_secret(hash, &early, "derived", &[]);
         self.handshake_secret = crypto::hkdf_extract(hash, &derived, &shared);
         self.client_handshake_secret = crypto::derive_secret(
@@ -1101,7 +1184,14 @@ impl Connection {
         progress.outgoing.extend(records);
         self.reading = Some(Direction::new(&server_application, self.suite));
         self.writing = Some(Direction::new(&client_application, self.suite));
+        self.resumption_secret = crypto::derive_secret(
+            suite_hash(self.suite),
+            &self.master_secret,
+            "res master",
+            &self.transcript,
+        );
         self.stage = Stage::Established;
+        self.hold_session();
         Ok(())
     }
 
@@ -1130,6 +1220,8 @@ impl Connection {
         let mut signs_with_pkcs1 = false;
         let mut signature_algorithms_listed = false;
         let mut groups_name_x25519 = true;
+        let mut offered_ticket = None;
+        let mut psk_offer = None;
         if !reader.done() {
             for (kind, extension_body) in extensions(reader.vector(2)?)? {
                 match kind {
@@ -1160,6 +1252,19 @@ impl Connection {
                             .any(|group| group == GROUP_X25519.to_be_bytes());
                     }
                     EXTENSION_EC_POINT_FORMATS => self.point_formats_offered = true,
+                    EXTENSION_SESSION_TICKET => offered_ticket = Some(extension_body.to_vec()),
+                    EXTENSION_PSK_KEY_EXCHANGE_MODES => {
+                        self.psk_modes_offered =
+                            Reader::new(extension_body).vector(1)?.contains(&PSK_DHE_KE);
+                    }
+                    EXTENSION_PRE_SHARED_KEY => {
+                        let mut offer = Reader::new(extension_body);
+                        let mut identities = Reader::new(offer.vector(2)?);
+                        let ticket = identities.vector(2)?.to_vec();
+                        let binders = offer.vector(2)?;
+                        let binder = Reader::new(binders).vector(1)?.to_vec();
+                        psk_offer = Some((ticket, binder, 2 + binders.len()));
+                    }
                     EXTENSION_RENEGOTIATION_INFO => self.renegotiation_info_offered = true,
                     EXTENSION_KEY_SHARE => {
                         let mut shares = Reader::new(Reader::new(extension_body).vector(2)?);
@@ -1208,6 +1313,15 @@ impl Connection {
                     "no suitable signature algorithm",
                 ));
             };
+            self.ticket_expected = offered_ticket.is_some();
+            if let Some(ticket) = offered_ticket
+                && !session.is_empty()
+                && let Some(resumed) =
+                    Self::open_ticket(&ticket).filter(|held| held.version == TLS1_2)
+            {
+                self.transcript.extend_from_slice(message);
+                return self.resume_tls12_session(resumed, session, progress);
+            }
             self.transcript.extend_from_slice(message);
             return self.send_tls12_server_flight(progress);
         }
@@ -1228,6 +1342,10 @@ impl Connection {
                 "no suitable signature algorithm",
             ));
         }
+        if let Some((ticket, binder, binders_length)) = psk_offer {
+            let truncated = &message[..message.len() - binders_length];
+            self.accept_psk(&ticket, &binder, truncated)?;
+        }
         self.transcript.extend_from_slice(message);
         self.client_share = Some(peer_share);
         let hello = self.server_hello(&session);
@@ -1246,17 +1364,20 @@ impl Connection {
         ));
         let mut flight = handshake_message(ENCRYPTED_EXTENSIONS, &with_length(2, &[]));
         self.transcript.extend_from_slice(&flight);
-        if self.request_certificate {
+        let requests_certificate = self.request_certificate && !self.resumed;
+        if requests_certificate {
             let request = Self::certificate_request_message();
             self.transcript.extend_from_slice(&request);
             flight.extend_from_slice(&request);
         }
-        let certificate = self.certificate_message(&[]);
-        self.transcript.extend_from_slice(&certificate);
-        flight.extend_from_slice(&certificate);
-        let verify = self.certificate_verify_message(true)?;
-        self.transcript.extend_from_slice(&verify);
-        flight.extend_from_slice(&verify);
+        if !self.resumed {
+            let certificate = self.certificate_message(&[]);
+            self.transcript.extend_from_slice(&certificate);
+            flight.extend_from_slice(&certificate);
+            let verify = self.certificate_verify_message(true)?;
+            self.transcript.extend_from_slice(&verify);
+            flight.extend_from_slice(&verify);
+        }
         let finished =
             handshake_message(FINISHED, &self.finished_data(&self.server_handshake_secret));
         self.transcript.extend_from_slice(&finished);
@@ -1277,7 +1398,7 @@ impl Connection {
             &self.transcript,
         ));
         self.writing = Some(Direction::new(&server_application, self.suite));
-        self.stage = if self.request_certificate {
+        self.stage = if requests_certificate {
             Stage::WaitClientCertificate
         } else {
             Stage::WaitClientFinished
@@ -1309,6 +1430,9 @@ impl Connection {
         push_u16(&mut share, GROUP_X25519);
         share.extend(with_length(2, &x25519::public_key(&self.secret_key)));
         listed.extend(extension(EXTENSION_KEY_SHARE, &share));
+        if self.resumed {
+            listed.extend(extension(EXTENSION_PRE_SHARED_KEY, &0u16.to_be_bytes()));
+        }
         body.extend(with_length(2, &listed));
         handshake_message(SERVER_HELLO, &body)
     }
@@ -1338,7 +1462,12 @@ impl Connection {
         Ok(handshake_message(CERTIFICATE_VERIFY, &body))
     }
 
-    fn read_client_finished(&mut self, message: &[u8], body: &[u8]) -> Result<(), TlsError> {
+    fn read_client_finished(
+        &mut self,
+        message: &[u8],
+        body: &[u8],
+        progress: &mut Progress,
+    ) -> Result<(), TlsError> {
         if body != self.finished_data(&self.client_handshake_secret) {
             return Err(failure(alert::DECRYPT_ERROR, "digest check failed"));
         }
@@ -1348,10 +1477,13 @@ impl Connection {
         };
         self.reading = Some(Direction::new(&client_application, self.suite));
         self.stage = Stage::Established;
+        self.hold_session();
+        self.send_session_tickets(progress);
         Ok(())
     }
 }
 
+mod resumption;
 mod tls12;
 
 /// The server name a ClientHello asks for, read from the record that carries

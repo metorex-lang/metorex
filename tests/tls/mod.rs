@@ -3,6 +3,7 @@ mod connection_tests;
 mod gcm_tests;
 mod key_derivation_tests;
 mod key_vectors;
+mod resumption_tests;
 mod rsa_tests;
 mod tls12_connection_tests;
 mod x25519_tests;

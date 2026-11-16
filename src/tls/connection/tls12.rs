@@ -47,9 +47,21 @@ impl Connection {
                 self.transcript.extend_from_slice(message);
                 self.send_tls12_client_flight(progress)
             }
+            (Stage::WaitServerFinished, NEW_SESSION_TICKET) if self.ticket_expected => {
+                let mut reader = Reader::new(body);
+                let lifetime = reader.number(4)? as u32;
+                let ticket = reader.vector(2)?.to_vec();
+                self.tls12_ticket = Some((lifetime, ticket));
+                self.transcript.extend_from_slice(message);
+                Ok(())
+            }
             (Stage::WaitServerFinished, FINISHED) => {
                 self.check_tls12_finished(message, "server finished")?;
+                if self.resumed {
+                    self.send_tls12_change_and_finished("client finished", progress);
+                }
                 self.stage = Stage::Established;
+                self.hold_tls12_session();
                 Ok(())
             }
             (Stage::WaitClientCertificate, CERTIFICATE) => {
@@ -81,16 +93,18 @@ impl Connection {
             }
             (Stage::WaitClientFinished, FINISHED) => {
                 self.check_tls12_finished(message, "client finished")?;
-                progress
-                    .outgoing
-                    .extend(self.plain_record(CHANGE_CIPHER_SPEC, &[1]));
-                self.writing = self.pending_writing.take();
-                let finished = self.tls12_finished("server finished");
-                self.transcript.extend_from_slice(&finished);
-                progress
-                    .outgoing
-                    .extend(self.sealed_records(HANDSHAKE, &finished));
+                if !self.resumed {
+                    if self.ticket_expected {
+                        let ticket = self.tls12_ticket_message();
+                        self.transcript.extend_from_slice(&ticket);
+                        progress
+                            .outgoing
+                            .extend(self.plain_record(HANDSHAKE, &ticket));
+                    }
+                    self.send_tls12_change_and_finished("server finished", progress);
+                }
                 self.stage = Stage::Established;
+                self.hold_tls12_session();
                 Ok(())
             }
             _ => Err(failure(alert::UNEXPECTED_MESSAGE, "unexpected message")),
@@ -112,8 +126,116 @@ impl Connection {
         }
         self.version = TLS1_2;
         self.transcript.extend_from_slice(message);
+        if let Some(session) = self
+            .offered_session
+            .clone()
+            .filter(|held| held.version == TLS1_2)
+            && self.server_session_id == self.sent_session_id
+        {
+            self.resumed = true;
+            self.master_secret = session.secret.clone();
+            self.peer_certificates = session.peer_certificates.clone();
+            self.session = Some(session);
+            let (client, server) = self.tls12_directions();
+            self.pending_reading = Some(server);
+            self.pending_writing = Some(client);
+            self.stage = Stage::WaitServerFinished;
+            return Ok(());
+        }
         self.stage = Stage::WaitCertificate;
         Ok(())
+    }
+
+    /// This side's ChangeCipherSpec, then its Finished under the new keys.
+    fn send_tls12_change_and_finished(&mut self, label: &str, progress: &mut Progress) {
+        progress
+            .outgoing
+            .extend(self.plain_record(CHANGE_CIPHER_SPEC, &[1]));
+        self.writing = self.pending_writing.take();
+        let finished = self.tls12_finished(label);
+        self.transcript.extend_from_slice(&finished);
+        progress
+            .outgoing
+            .extend(self.sealed_records(HANDSHAKE, &finished));
+    }
+
+    /// A server resumes the session a client's ticket holds: its hello
+    /// echoes the client's session id, and its ChangeCipherSpec and
+    /// Finished follow at once.
+    pub(super) fn resume_tls12_session(
+        &mut self,
+        session: Session,
+        session_id: Vec<u8>,
+        progress: &mut Progress,
+    ) -> Result<(), TlsError> {
+        self.version = TLS1_2;
+        self.resumed = true;
+        self.ticket_expected = false;
+        self.master_secret = session.secret.clone();
+        self.peer_certificates = session.peer_certificates.clone();
+        self.session = Some(session);
+        let hello = self.tls12_server_hello(&session_id);
+        self.transcript.extend_from_slice(&hello);
+        progress
+            .outgoing
+            .extend(self.plain_record(HANDSHAKE, &hello));
+        let (client, server) = self.tls12_directions();
+        self.pending_reading = Some(client);
+        self.pending_writing = Some(server);
+        self.send_tls12_change_and_finished("server finished", progress);
+        self.stage = Stage::WaitClientFinished;
+        Ok(())
+    }
+
+    /// A NewSessionTicket holding the session, sealed with the server's
+    /// ticket key.
+    fn tls12_ticket_message(&self) -> Vec<u8> {
+        let session = Session {
+            version: TLS1_2,
+            suite: TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+            id: Vec::new(),
+            secret: self.master_secret.clone(),
+            ticket: Vec::new(),
+            age_add: 0,
+            issued_at: now_in_milliseconds(),
+            lifetime: TICKET_LIFETIME,
+            peer_certificates: self.peer_certificates.clone(),
+        };
+        let mut body = TICKET_LIFETIME.to_be_bytes().to_vec();
+        body.extend(with_length(2, &Self::seal_ticket(&session)));
+        handshake_message(NEW_SESSION_TICKET, &body)
+    }
+
+    /// The session a TLS 1.2 connection runs in, which a client hands to
+    /// the program when the server gave it a way to resume.
+    fn hold_tls12_session(&mut self) {
+        // A resumed session goes on with the ticket it was offered with.
+        let ticket = self.tls12_ticket.take();
+        if self.resumed {
+            return;
+        }
+        let (lifetime, ticket) = ticket.unwrap_or((TICKET_LIFETIME, Vec::new()));
+        // A client names a session it has only a ticket for by the ticket's
+        // hash, as OpenSSL does.
+        let id = Some(self.server_session_id.clone())
+            .filter(|id| !id.is_empty() || ticket.is_empty())
+            .unwrap_or_else(|| sha256(&ticket).to_vec());
+        let resumable = !id.is_empty();
+        let session = Session {
+            version: TLS1_2,
+            suite: TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+            id,
+            secret: self.master_secret.clone(),
+            ticket,
+            age_add: 0,
+            issued_at: now_in_milliseconds(),
+            lifetime,
+            peer_certificates: self.peer_certificates.clone(),
+        };
+        if self.is_client && resumable {
+            self.new_sessions.push(session.clone());
+        }
+        self.session = Some(session);
     }
 
     /// The certificates of a TLS 1.2 Certificate message, leaf first.
@@ -225,6 +347,12 @@ impl Connection {
         randoms.extend_from_slice(&self.server_random);
         self.master_secret =
             crypto::prf(&premaster, "master secret", &randoms, MASTER_SECRET_LENGTH);
+        self.tls12_directions()
+    }
+
+    /// The keys each side writes with, from the master secret and both
+    /// randoms. Answers the client's and the server's directions.
+    fn tls12_directions(&self) -> (Direction, Direction) {
         let mut seed = self.server_random.to_vec();
         seed.extend_from_slice(&self.client_random);
         let block = crypto::prf(
@@ -314,26 +442,7 @@ impl Connection {
         if self.max_version >= TLS1_3 {
             self.server_random[24..].copy_from_slice(DOWNGRADE_TO_TLS1_2);
         }
-        let mut hello = Vec::new();
-        push_u16(&mut hello, TLS1_2);
-        hello.extend_from_slice(&self.server_random);
-        hello.extend(with_length(1, &[]));
-        push_u16(&mut hello, TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256);
-        hello.push(0);
-        let mut listed = Vec::new();
-        if self.renegotiation_info_offered {
-            listed.extend(extension(
-                EXTENSION_RENEGOTIATION_INFO,
-                &with_length(1, &[]),
-            ));
-        }
-        if self.point_formats_offered {
-            listed.extend(extension(EXTENSION_EC_POINT_FORMATS, &with_length(1, &[0])));
-        }
-        if !listed.is_empty() {
-            hello.extend(with_length(2, &listed));
-        }
-        let mut flight = handshake_message(SERVER_HELLO, &hello);
+        let mut flight = self.tls12_server_hello(&[]);
         flight.extend(self.tls12_certificate_message());
         let parameters = self.key_exchange_parameters();
         let mut exchange = parameters.clone();
@@ -361,6 +470,32 @@ impl Connection {
             Stage::WaitClientKeyExchange
         };
         Ok(())
+    }
+
+    fn tls12_server_hello(&self, session_id: &[u8]) -> Vec<u8> {
+        let mut hello = Vec::new();
+        push_u16(&mut hello, TLS1_2);
+        hello.extend_from_slice(&self.server_random);
+        hello.extend(with_length(1, session_id));
+        push_u16(&mut hello, TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256);
+        hello.push(0);
+        let mut listed = Vec::new();
+        if self.renegotiation_info_offered {
+            listed.extend(extension(
+                EXTENSION_RENEGOTIATION_INFO,
+                &with_length(1, &[]),
+            ));
+        }
+        if self.point_formats_offered {
+            listed.extend(extension(EXTENSION_EC_POINT_FORMATS, &with_length(1, &[0])));
+        }
+        if self.ticket_expected {
+            listed.extend(extension(EXTENSION_SESSION_TICKET, &[]));
+        }
+        if !listed.is_empty() {
+            hello.extend(with_length(2, &listed));
+        }
+        handshake_message(SERVER_HELLO, &hello)
     }
 
     fn read_client_key_exchange(&mut self, message: &[u8], body: &[u8]) -> Result<(), TlsError> {
