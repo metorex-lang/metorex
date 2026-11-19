@@ -122,6 +122,10 @@ static VALUE category_warn(VALUE self, VALUE category, VALUE message) {
   rb_category_warn((rb_warning_category_t)NUM2INT(category), "%s", StringValueCStr(message));
   return Qnil;
 }
+static VALUE category_warning(VALUE self, VALUE category, VALUE message) {
+  rb_category_warning((rb_warning_category_t)NUM2INT(category), "%s", StringValueCStr(message));
+  return Qnil;
+}
 static VALUE map_with_own_block(VALUE self, VALUE array) {
   return rb_block_call(array, rb_intern("map"), 0, NULL, (rb_block_call_func_t)NULL, Qnil);
 }
@@ -172,6 +176,7 @@ void Init_c_kernel(void) {
   rb_define_method(cls, "format_values", format_values, 2);
   rb_define_method(cls, "backtrace", backtrace, 0);
   rb_define_method(cls, "category_warn", category_warn, 2);
+  rb_define_method(cls, "category_warning", category_warning, 2);
   rb_define_method(cls, "map_with_own_block", map_with_own_block, 1);
   rb_define_method(cls, "end_proc", end_proc, 1);
   rb_define_method(cls, "vm_exit_hook", vm_exit_hook, 0);

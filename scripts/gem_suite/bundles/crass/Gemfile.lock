@@ -1,0 +1,28 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    drb (2.2.3)
+    json (2.18.0)
+    minitest (6.1.0)
+      drb (~> 2.0)
+      prism (>= 1.5, < 3)
+    prism (2.1.0)
+    prism (2.1.0-arm64-darwin)
+
+PLATFORMS
+  arm64-darwin
+  ruby
+
+DEPENDENCIES
+  json (= 2.18.0)
+  minitest (~> 6.0)
+
+CHECKSUMS
+  drb (2.2.3)
+  json (2.18.0)
+  minitest (6.1.0)
+  prism (2.1.0)
+  prism (2.1.0-arm64-darwin)
+
+BUNDLED WITH
+  4.0.23

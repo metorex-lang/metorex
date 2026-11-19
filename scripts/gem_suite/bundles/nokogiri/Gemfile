@@ -1,0 +1,13 @@
+# The gems nokogiri's tests load. nokogiri itself is left out, since its
+# tests load it from the checkout, and its extension is built by
+# scripts/run_gem_suites.sh under the engine the tests run with, against the
+# libxml2 and libxslt the system provides.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "mini_portile2", "~> 2.8.2"
+gem "minitest", "~> 6.0"
+gem "minitest-mock"
+
+shipped "racc"

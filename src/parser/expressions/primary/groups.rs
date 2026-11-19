@@ -327,10 +327,38 @@ impl Parser<'_> {
         self.expect(TokenKind::RBracket, "Expected ']' after array elements")?;
 
         if !entries.is_empty() {
-            elements.push(Expression::Dictionary {
+            let only_splats = entries
+                .iter()
+                .all(|(key, _)| matches!(key, Expression::KeywordSplat { .. }));
+            let gathered = Expression::Dictionary {
                 entries,
                 position: token_position,
-            });
+            };
+            if only_splats {
+                // `[1, **held]` leaves the Hash out when what it spreads is
+                // empty, as `[*([held] - [{}])]` does.
+                let empty = Expression::Dictionary {
+                    entries: Vec::new(),
+                    position: token_position,
+                };
+                elements.push(Expression::Splat {
+                    expression: Box::new(Expression::BinaryOp {
+                        op: crate::ast::BinaryOp::Subtract,
+                        left: Box::new(Expression::Array {
+                            elements: vec![gathered],
+                            position: token_position,
+                        }),
+                        right: Box::new(Expression::Array {
+                            elements: vec![empty],
+                            position: token_position,
+                        }),
+                        position: token_position,
+                    }),
+                    position: token_position,
+                });
+            } else {
+                elements.push(gathered);
+            }
         }
 
         Ok(Expression::Array {
@@ -341,6 +369,19 @@ impl Parser<'_> {
 
     /// Parse one `key: value` or `key => value` pair, or a plain element.
     fn parse_array_item(&mut self) -> Result<ArrayItem, MetorexError> {
+        // `**held` spreads a Hash into the trailing one.
+        if self.check(&[TokenKind::StarStar]) {
+            let star = self.advance().position;
+            self.skip_whitespace();
+            let spread = self.parse_expression()?;
+            return Ok(ArrayItem::Pair(
+                Expression::KeywordSplat {
+                    expression: Box::new(spread),
+                    position: star,
+                },
+                Expression::NilLiteral { position: star },
+            ));
+        }
         // `ident: value` — the shorthand whose key is a Symbol.
         if matches!(self.peek().kind, TokenKind::Ident(_))
             && matches!(self.peek_ahead(1).kind, TokenKind::Colon)

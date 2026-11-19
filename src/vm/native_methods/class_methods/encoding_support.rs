@@ -276,11 +276,46 @@ impl VirtualMachine {
     /// after it does, and so does one in any encoding but US-ASCII.
     pub(crate) fn pattern_fixes_encoding(&self, pattern: &Rc<String>, flags: &str) -> bool {
         let named = flags.contains('u') || flags.contains('e') || flags.contains('s');
-        // A `\u` escape names a character outside ASCII whether or not the
-        // pattern spells it out.
-        let spelled = !pattern.is_ascii() || pattern.contains("\\u");
+        // A `\u` escape naming a character outside ASCII fixes the
+        // encoding whether or not the pattern spells the character out.
+        let spelled = !pattern.is_ascii() || escapes_past_ascii(pattern);
         named || spelled || self.pattern_encoding_name(pattern, flags) != "US-ASCII"
     }
+}
+
+/// Whether a `\uXXXX` or `\u{...}` escape in a pattern names a code point
+/// outside ASCII. An escaped backslash starts no escape.
+fn escapes_past_ascii(pattern: &str) -> bool {
+    let bytes = pattern.as_bytes();
+    let mut at = 0;
+    while at + 1 < bytes.len() {
+        if bytes[at] != b'\\' {
+            at += 1;
+            continue;
+        }
+        if bytes[at + 1] != b'u' {
+            at += 2;
+            continue;
+        }
+        let rest = &pattern[at + 2..];
+        let named: Vec<&str> = match rest.strip_prefix('{') {
+            Some(braced) => braced
+                .split('}')
+                .next()
+                .unwrap_or("")
+                .split_whitespace()
+                .collect(),
+            None => vec![rest.get(..4).unwrap_or("")],
+        };
+        if named
+            .iter()
+            .any(|digits| u32::from_str_radix(digits, 16).is_ok_and(|code| code >= 0x80))
+        {
+            return true;
+        }
+        at += 2;
+    }
+    false
 }
 
 /// The text behind a String or a Symbol, which is what an encoding

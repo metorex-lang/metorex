@@ -388,3 +388,16 @@ fn test_upto_and_downto_walk_past_the_machine_word() {
         )
     );
 }
+
+#[test]
+fn negative_integer_powers_are_rational() {
+    let output = run_example("numbers/negative_integer_powers_are_rational.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[(1/8), (-1/8), (1/100), (1/4), (1/1180591620717411303424)]\n",
+            "[1, -1, 1, 1]\n",
+            "(1250/1)\n",
+        )
+    );
+}

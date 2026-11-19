@@ -1178,3 +1178,18 @@ fn test_encodings_encode_to_binary_takes_ascii_alone_execution() {
         )
     );
 }
+
+#[test]
+fn encodings_are_found_matched_by_case_equality_and_adopted_by_an_appended_string() {
+    let output = run_example("encodings/encodings_are_found_matched_and_adopted.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"UTF-8\", \"Shift_JIS\", \"ISO-8859-1\"]\n",
+            "[true, true, true, false]\n",
+            ":encoding\n",
+            "[\"abnyú\", #<Encoding:UTF-8>, true, [121, 195, 186]]\n",
+            "[#<Encoding:UTF-16LE>, true]\n",
+        )
+    );
+}

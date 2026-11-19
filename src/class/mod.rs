@@ -3,7 +3,7 @@
 pub(crate) use crate::object::{Method, Object};
 
 pub use constants::constant_state;
-pub(crate) use constants::{constant_state_changed, names_a_constant};
+pub(crate) use constants::{constant_state_changed, named_deprecated_somewhere, names_a_constant};
 pub use methods::{MethodGuard, method_state};
 pub use shape::Class;
 pub(crate) use shape::{MethodCache, STALE_LOOKUP};

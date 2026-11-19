@@ -165,6 +165,14 @@ impl VirtualMachine {
         }
         let states = (crate::class::constant_state(), crate::class::method_state());
         let (value, answer) = self.eval_identifier_answered(name, position)?;
+        // A deprecated constant warns when its read is looked up rather than
+        // answered from the cache, as MRI's constant cache has it.
+        if crate::class::named_deprecated_somewhere(name)
+            && !matches!(answer, Some(ConstantAnswer::Local))
+            && let Some(owner) = self.lexical_constant_owner(name)
+        {
+            self.warn_deprecated_constant(&owner, name, position);
+        }
         // A lookup that loaded a file or ran a hook may have changed what
         // it read, so its answer is kept only when nothing changed.
         let unchanged = states == (crate::class::constant_state(), crate::class::method_state());
@@ -802,6 +810,49 @@ impl VirtualMachine {
             }
             Some(_) if self.code_written_at_top_level() => Vec::new(),
             _ => self.def_scope_stack.iter().rev().cloned().collect(),
+        }
+    }
+
+    /// The class holding the constant a bare `name` read here finds: a
+    /// scope open where the code was written, an ancestor of the innermost
+    /// one, or Object.
+    fn lexical_constant_owner(&self, name: &str) -> Option<Rc<crate::class::Class>> {
+        let nesting = self.lexical_nesting();
+        if let Some(scope) = nesting
+            .iter()
+            .find(|scope| scope.get_class_var(name).is_some())
+        {
+            return Some(Rc::clone(scope));
+        }
+        let mut cursor = nesting.first().cloned();
+        while let Some(class) = cursor {
+            if class.name() == "Object" {
+                break;
+            }
+            let holder = class
+                .transitive_prepends()
+                .into_iter()
+                .find(|prepended| prepended.get_class_var(name).is_some())
+                .or_else(|| {
+                    class
+                        .get_class_var(name)
+                        .is_some()
+                        .then(|| Rc::clone(&class))
+                })
+                .or_else(|| {
+                    class
+                        .transitive_mixins()
+                        .into_iter()
+                        .find(|mixin| mixin.get_class_var(name).is_some())
+                });
+            if holder.is_some() {
+                return holder;
+            }
+            cursor = class.superclass();
+        }
+        match self.globals().get("Object").view() {
+            Some(View::Class(object_class)) => Some(Rc::clone(object_class)),
+            _ => None,
         }
     }
 

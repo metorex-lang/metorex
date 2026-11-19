@@ -6,6 +6,14 @@ thread_local! {
     /// A number every change to a constant or an autoload registration
     /// moves on, so a constant read under an earlier one is not trusted.
     static CONSTANT_STATE: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// Each name any class has marked deprecated.
+    static DEPRECATED_NAMES: std::cell::RefCell<std::collections::HashSet<String>> =
+        std::cell::RefCell::new(std::collections::HashSet::new());
+}
+
+/// Whether some class has marked a constant of this name deprecated.
+pub(crate) fn named_deprecated_somewhere(name: &str) -> bool {
+    DEPRECATED_NAMES.with(|names| names.borrow().contains(name))
 }
 
 /// Mark every cached constant read out of date.
@@ -134,10 +142,12 @@ impl Class {
     /// Mark `name` as deprecated — reading it warns but still returns the
     /// value.
     pub fn mark_deprecated_constant(&self, name: impl Into<String>) {
+        let name = name.into();
+        DEPRECATED_NAMES.with(|names| names.borrow_mut().insert(name.clone()));
         self.rare_for_writing()
             .deprecated_constants
             .borrow_mut()
-            .insert(name.into());
+            .insert(name);
     }
 
     /// Whether `name` is marked deprecated on this class.

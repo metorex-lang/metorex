@@ -248,6 +248,16 @@ impl VirtualMachine {
     ) -> Result<Option<Object>, MetorexError> {
         let subject_encoding =
             subject_encoding.or_else(|| self.match_subject_encoding.map(str::to_string));
+        // A pattern held as the bytes of a multibyte encoding, as one made
+        // from a Shift_JIS string is, is read into its characters as the
+        // subject in that encoding is.
+        let read_pattern = match subject_encoding.as_deref() {
+            Some(named) if !pattern.is_ascii() => {
+                multibyte_reading(pattern, named).map(|(wide, _)| wide)
+            }
+            _ => None,
+        };
+        let pattern = read_pattern.as_deref().unwrap_or(pattern);
         let Some(compiled) = compile(pattern, flags) else {
             self.globals_mut().set(LAST_MATCH, Object::Nil);
             return Ok(None);

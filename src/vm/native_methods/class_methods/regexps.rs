@@ -37,6 +37,18 @@ impl VirtualMachine {
             let made = crate::object::StringValue::with_encoding(escaped, tagged);
             // Characters standing for bytes go on standing for them in the
             // pattern built out of them.
+            if !source.is_ascii() && !matches!(named, "UTF-8" | "ASCII-8BIT") {
+                // The characters are escaped as text and written back in the
+                // source's own encoding, such as Shift_JIS.
+                let spelled = Object::string(made.as_str().to_string());
+                let encoded = self.send_to_object(
+                    spelled,
+                    "encode",
+                    vec![Object::string(named.to_string())],
+                    position,
+                )?;
+                return Ok(Answered(encoded));
+            }
             if matches!(arguments[0].view(), View::String(held) if held.holds_bytes()) {
                 made.mark_bytes();
             }

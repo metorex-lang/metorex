@@ -44,7 +44,7 @@ impl VirtualMachine {
                 if self.names_an_encoding(receiver) {
                     return Ok(Some(Object::Bool(matches!(
                         target_class.name(),
-                        "Encoding" | "Object" | "BasicObject"
+                        "Encoding" | "Object" | "Kernel" | "BasicObject"
                     ))));
                 }
                 // A module made by `new` on a subclass of Module is a kind of

@@ -1,0 +1,9 @@
+# The gems crass's tests load. crass is left out, since the tests load it
+# from the checkout.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "minitest", "~> 6.0"
+
+shipped "json"

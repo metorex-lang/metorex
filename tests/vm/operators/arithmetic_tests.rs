@@ -179,7 +179,10 @@ fn multiply_type_error_string_times_string() {
 
 #[test]
 fn power_int_negative_exponent() {
-    assert!(matches!(run("2**-1").view(), Some(View::Float(_))));
+    assert!(matches!(
+        run("2**-1 == Rational(1, 2)").view(),
+        Some(View::Bool(true))
+    ));
 }
 
 #[test]

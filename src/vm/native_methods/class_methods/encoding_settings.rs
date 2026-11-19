@@ -217,7 +217,11 @@ impl VirtualMachine {
                     ));
                 }
                 Some(View::String(held)) => held.as_str().to_string(),
-                Some(View::Class(held)) if held.name().contains('-') => {
+                Some(View::Class(held))
+                    if held
+                        .superclass()
+                        .is_some_and(|parent| parent.name() == "Encoding") =>
+                {
                     return Ok(Answered(arguments[0].clone()));
                 }
                 // An encoding is named by a String, and a Symbol is not one.

@@ -473,3 +473,30 @@ fn test_property_and_call_escapes_without_a_name_read_as_letters() {
         "true\nfalse\n[\"a\", \"b\"]\ntrue\ntrue\n\"\\\\g\"\ntrue\ntrue\n"
     );
 }
+
+#[test]
+fn ascii_unicode_escapes_leave_a_pattern_encoding_unfixed() {
+    let output = run_example("regexp/ascii_unicode_escapes_leave_the_encoding_unfixed.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[[#<Encoding:US-ASCII>, false], [#<Encoding:UTF-8>, true], [#<Encoding:US-ASCII>, false], [#<Encoding:UTF-8>, true], [#<Encoding:US-ASCII>, false]]\n",
+            "1\n",
+            "1\n",
+        )
+    );
+}
+
+#[test]
+fn shift_jis_patterns_match_shift_jis_text_and_escape_in_its_encoding() {
+    let output = run_example("regexp/shift_jis_patterns_match_shift_jis_text.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[#<Encoding:Shift_JIS>, [130, 177, 130, 241]]\n",
+            "[3, 3, 0]\n",
+            "[149, 92, 92, 46]\n",
+            "[[233, 92, 46], #<Encoding:ISO-8859-1>]\n",
+        )
+    );
+}

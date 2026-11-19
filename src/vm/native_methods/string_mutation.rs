@@ -126,6 +126,12 @@ impl VirtualMachine {
                             match appended_encoding(target, other) {
                                 Some(Some(named)) => {
                                     target.set_encoding(named);
+                                    // An ASCII string taking the encoding of
+                                    // text appended to it reads as that text
+                                    // does, whatever bytes it held before.
+                                    if !other.holds_bytes() {
+                                        target.clear_bytes();
+                                    }
                                 }
                                 Some(None) => {}
                                 None => {
@@ -760,9 +766,13 @@ fn appended_encoding(
         )
     };
     // An empty string keeps its encoding when ASCII is appended and it reads
-    // ASCII, and takes the appended text's otherwise.
+    // ASCII, and takes the appended text's otherwise. Text in a wide UTF
+    // form is never ASCII, whatever characters it holds.
     if target.byte_len() == 0 {
-        if reads_alongside_ascii(target.encoding_name()) && other.is_ascii() {
+        if reads_alongside_ascii(target.encoding_name())
+            && reads_alongside_ascii(other.encoding_name())
+            && other.is_ascii()
+        {
             return Some(None);
         }
         return Some(Some(other.encoding_name().to_string()));

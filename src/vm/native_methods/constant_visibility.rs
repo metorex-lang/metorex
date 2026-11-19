@@ -60,12 +60,27 @@ impl VirtualMachine {
         name: &str,
         position: Position,
     ) {
-        if !class_rc.is_deprecated_constant(name) || !self.warning_category_enabled("deprecated") {
+        if !self.warning_category_enabled("deprecated") {
             return;
         }
+        // The constant may be found on an ancestor, which is the class
+        // that marked it and the one the warning names.
+        let owner = match self.const_entry_on(class_rc, name, true, false) {
+            Some((owner, _)) => owner,
+            None => Rc::clone(class_rc),
+        };
+        if !owner.is_deprecated_constant(name) {
+            return;
+        }
+        // Object's own constants are written `::NAME`.
+        let holder = match constant_owner(&owner) {
+            named if named == "Object" => String::new(),
+            named => named,
+        };
         let message = format!(
-            "warning: constant {}::{} is deprecated",
-            constant_owner(class_rc),
+            "{}constant {}::{} is deprecated",
+            self.warning_prefix(0, position),
+            holder,
             name
         );
         self.emit_warning_to_stderr(&message, position);

@@ -845,6 +845,7 @@ typedef enum {
   RB_WARN_CATEGORY_PERFORMANCE
 } rb_warning_category_t;
 void rb_metorex_category_warn(rb_warning_category_t category, VALUE message);
+void rb_metorex_category_warning(rb_warning_category_t category, VALUE message);
 
 VALUE rb_class_new_instance(int count, const VALUE *values, VALUE klass);
 VALUE rb_class_new_instance_kw(int count, const VALUE *values, VALUE klass, int keywords);

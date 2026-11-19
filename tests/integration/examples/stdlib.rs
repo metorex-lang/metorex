@@ -2082,6 +2082,12 @@ fn mkmf_finds_a_type_signedness_and_reads_the_configuration_header() {
 }
 
 #[test]
+fn mkmf_tells_whether_a_source_preprocesses() {
+    let output = run_example("stdlib/mkmf_try_cpp.rb");
+    assert_eq!(output, "true\nfalse\nfalse\n");
+}
+
+#[test]
 fn cgi_escape_writes_each_reserved_byte_in_hex_and_unescape_reads_it_back() {
     let output = run_example("stdlib/cgi_escape_reads_bytes.rb");
     assert_eq!(

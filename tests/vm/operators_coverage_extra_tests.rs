@@ -490,9 +490,9 @@ fn int_div_non_exact_returns_float() {
 }
 
 #[test]
-fn int_power_negative_returns_float() {
-    let result = run("2 ** -1");
-    assert!(matches!(result.view(), Some(View::Float(_))));
+fn int_power_negative_returns_rational() {
+    let result = run("(2 ** -1).class == Rational");
+    assert!(matches!(result.view(), Some(View::Bool(true))));
 }
 
 #[test]

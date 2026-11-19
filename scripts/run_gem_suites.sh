@@ -107,6 +107,9 @@ SUITES=(
   "nio4r|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup -r nio4r_ext $RSPEC"
   "puma|test/test_*.rb|-I lib -I test -r bundler/setup"
   "ffi|spec/ffi/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "nokogiri|test/test_*.rb test/*/test_*.rb test/*/*/test_*.rb|-I lib -I test -r bundler/setup"
+  "crass|test/test_*.rb|-w --enable-frozen-string-literal -I lib -I test -r bundler/setup"
+  "loofah|test/**/test_*.rb|-I lib -I test -I $REPO_ROOT/gems/crass/lib -I $REPO_ROOT/gems/nokogiri/lib -r bundler/setup"
   "i18n|test/**/*_test.rb|-w -I lib -I test -r bundler/setup"
   "tzinfo|test/ts_all_ruby_format1.rb test/ts_all_ruby_format2.rb test/ts_all_zoneinfo.rb|-w -I lib -r bundler/setup"
   "multi_json|test/**/*_test.rb|-I lib -I test"
@@ -159,9 +162,13 @@ SUITES=(
   "racc|test/test_*.rb|--enable-frozen-string-literal -I lib -I test/lib -I $HELPERS -r helper|$REPO_ROOT/scripts/gem_suite/racc_parser_text.rb"
 )
 
-# The C extensions of each gem, by the extconf.rb that builds each. Before
-# the gem's files run, each is built under the engine they run with, outside
-# the checkout, and installed into a directory each file has on its load path.
+# The C extensions of each gem, by the extconf.rb that builds each, and the
+# arguments it takes. Before the gem's files run, each is built under the
+# engine they run with, outside the checkout, and installed into a directory
+# each file has on its load path. nokogiri's links the libxml2 and libxslt
+# the system provides and compiles the gumbo parser from the checkout, where
+# its own build would download and compile both libraries. loofah's tests
+# load nokogiri's.
 EXTENSIONS=(
   "websocket-driver|ext/websocket-driver/extconf.rb"
   "msgpack|ext/msgpack/extconf.rb"
@@ -169,6 +176,8 @@ EXTENSIONS=(
   "nio4r|ext/nio4r/extconf.rb"
   "puma|ext/puma_http11/extconf.rb"
   "ffi|ext/ffi_c/extconf.rb"
+  "nokogiri|ext/nokogiri/extconf.rb|--use-system-libraries --gumbo-dev"
+  "loofah|../nokogiri/ext/nokogiri/extconf.rb|--use-system-libraries --gumbo-dev"
 )
 
 # The gems whose test files run one after another, since each of them
@@ -262,12 +271,12 @@ else
   fi
 fi
 for row in "${EXTENSIONS[@]}"; do
-  IFS='|' read -r gem extconfs <<< "$row"
+  IFS='|' read -r gem extconfs extconf_arguments <<< "$row"
   wanted "$gem" || continue
   for extconf in $extconfs; do
     build_dir="$WORK_DIR/builds/$gem/${extconf//[\/.]/_}"
     mkdir -p "$build_dir"
-    if ! (cd "$build_dir" && "$ENGINE_COMMAND" "$REPO_ROOT/gems/$gem/$extconf" ${EXTCONF_ARGS[@]+"${EXTCONF_ARGS[@]}"} && make &&
+    if ! (cd "$build_dir" && "$ENGINE_COMMAND" "$REPO_ROOT/gems/$gem/$extconf" ${EXTCONF_ARGS[@]+"${EXTCONF_ARGS[@]}"} $extconf_arguments && make &&
       make install sitearchdir="$WORK_DIR/extensions/$gem") > "$build_dir/build.log" 2>&1 < /dev/null; then
       cat "$build_dir/build.log" >&2
       echo "run_gem_suites.sh: building $gem's $extconf failed" >&2

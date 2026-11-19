@@ -149,6 +149,11 @@ kernel.category_warn 3, "performance"
 $VERBOSE = nil
 kernel.category_warn 1, "silenced"
 $VERBOSE = false
+kernel.category_warning 1, "quiet while not verbose"
+$VERBOSE = true
+kernel.category_warning 1, "verbose deprecated"
+kernel.category_warning 2, "verbose experimental is off"
+$VERBOSE = false
 warnings = $stderr.string
 $stderr = STDERR
 puts warnings.gsub(/^.*:(\d+): /, "line \\1: ")

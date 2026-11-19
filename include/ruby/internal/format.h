@@ -243,6 +243,14 @@ static inline void rb_category_warn(rb_warning_category_t category, const char *
   rb_metorex_category_warn(category, message);
 }
 
+static inline void rb_category_warning(rb_warning_category_t category, const char *format, ...) {
+  va_list arguments;
+  va_start(arguments, format);
+  VALUE message = rb_vsprintf(format, arguments);
+  va_end(arguments);
+  rb_metorex_category_warning(category, message);
+}
+
 /* An error inside the interpreter or an extension that it cannot go on
  * from: the message goes to stderr and the process aborts. */
 NORETURN(static inline void rb_bug(const char *format, ...));

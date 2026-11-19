@@ -372,3 +372,21 @@ fn test_include_reads_a_module_path_through_the_ancestors_of_each_namespace() {
         "[Markup::Parsers::Markup, Markup::Parsers::Helpers, Markup]\n"
     );
 }
+
+#[test]
+fn deprecated_constants_warn_through_subclasses_bare_names_and_the_top_level() {
+    let output =
+        run_example("constants/deprecated_constants_warn_through_subclasses_and_bare_names.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[1, 1, 1, 1, 2, 1, 1]\n",
+            "line 20: warning: constant Base::OLD is deprecated\n",
+            "line 20: warning: constant Base::OLD is deprecated\n",
+            "line 14: warning: constant Base::OLD is deprecated\n",
+            "line 20: warning: constant ::TOP is deprecated\n",
+            "line 22: warning: constant Base::OLD is deprecated\n",
+            "line 22: warning: constant Base::OLD is deprecated\n",
+        )
+    );
+}

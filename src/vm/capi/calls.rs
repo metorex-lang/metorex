@@ -302,6 +302,17 @@ pub extern "C-unwind" fn rb_make_backtrace() -> Value {
     to_value(&kernel_function("caller", vec![Object::Int(0)]))
 }
 
+/// Warns as `rb_metorex_category_warn` does while `$VERBOSE` is true.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_metorex_category_warning(category: i32, message: Value) {
+    if matches!(
+        interpreter().globals().get("VERBOSE").view(),
+        Some(View::Bool(true))
+    ) {
+        rb_metorex_category_warn(category, message);
+    }
+}
+
 /// Warns as `rb_warn` does when `Warning[]` says the category is on, and
 /// says nothing while `$VERBOSE` is nil.
 #[unsafe(no_mangle)]

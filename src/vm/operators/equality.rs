@@ -440,6 +440,16 @@ impl VirtualMachine {
         {
             return Ok(Object::Bool(left.equals(&right)));
         }
+        // An encoding is an instance of Encoding and of what Encoding
+        // inherits, as `is_a?` answers.
+        if let Some(class_rc) = class_rc_opt
+            && self.names_an_encoding(&right)
+        {
+            return Ok(Object::Bool(matches!(
+                class_rc.name(),
+                "Encoding" | "Object" | "Kernel" | "BasicObject"
+            )));
+        }
         if let Some(class_rc) = class_rc_opt {
             if let View::Exception(exc_ref) = right.view() {
                 // Check if exception type matches or is a subclass

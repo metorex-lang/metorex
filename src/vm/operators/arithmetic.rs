@@ -134,6 +134,16 @@ impl VirtualMachine {
             ) => {
                 let a = left.as_big_integer().expect("integer-kinded");
                 let b = right.as_big_integer().expect("integer-kinded");
+                // A negative power of an integer other than 0, 1 or -1 is
+                // the Rational one over the positive power.
+                if matches!(op, BinaryOp::Power)
+                    && b < num_bigint::BigInt::from(0)
+                    && a.magnitude() > &num_bigint::BigUint::from(1u8)
+                {
+                    let denominator = integer_arithmetic(op, a, -b, position)?;
+                    let denominator = denominator.as_big_integer().expect("integer-kinded");
+                    return self.make_rational(1, denominator, position);
+                }
                 integer_arithmetic(op, a, b, position)
             }
             // An Integer receiver refuses a zero divisor whether or not the
@@ -308,7 +318,7 @@ fn integer_arithmetic(
             if left == BigInt::from(1) {
                 return Ok(Object::Int(1));
             }
-            if left == BigInt::from(-1) && right >= BigInt::from(0) {
+            if left == BigInt::from(-1) {
                 let odd = right.bit(0);
                 return Ok(Object::Int(if odd { -1 } else { 1 }));
             }

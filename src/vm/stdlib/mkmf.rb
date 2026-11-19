@@ -72,12 +72,15 @@ module MakeMakefile
     class << self
       attr_accessor :quiet
 
-      # The log is opened, emptied, in the directory the first check runs
-      # in, and written to there from then on.
+      # The log is opened, emptied, in the directory the first check is
+      # made from, and written to there from then on.
       def write(text)
-        opened = @path
+        File.open(place, @written ? "a" : "w") { |log| log.write(text) }
+        @written = true
+      end
+
+      def place
         @path ||= File.expand_path("mkmf.log")
-        File.open(@path, opened ? "a" : "w") { |log| log.write(text) }
       end
     end
   end
@@ -418,6 +421,14 @@ module MakeMakefile
   end
 
   alias try_header try_compile
+
+  # Whether the source preprocesses.
+  def try_cpp(source, options = "", werror: nil, **_options)
+    options = [options, config_string("WERRORFLAG")].compact.join(" ") if werror
+    build_check(source) do |file|
+      run_quietly("#{compiler} -E #{include_flags} #{platform_definition} #{preprocessor_flags} #{$CFLAGS} #{options} #{file} -o conftest.i", werror: werror)
+    end
+  end
 
   # Whether the source links against the `rb_*` functions the metorex
   # binary exports, as an extension does. The source links into a shared
@@ -823,6 +834,7 @@ module MakeMakefile
   # Write the check's source, with the headers every check starts with, to
   # a directory of its own and answer what the block does with it.
   def build_check(source)
+    Logging.place
     Dir.mktmpdir("mkmf") do |directory|
       Dir.chdir(directory) do
         File.write("conftest.c", "#{COMMON_HEADERS}\n#{source}")

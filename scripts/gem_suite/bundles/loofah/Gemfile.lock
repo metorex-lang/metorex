@@ -1,0 +1,23 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    json (2.18.0)
+    minitest (5.27.0)
+    racc (1.8.1)
+
+PLATFORMS
+  arm64-darwin-27
+  ruby
+
+DEPENDENCIES
+  json (= 2.18.0)
+  minitest (~> 5.14)
+  racc (= 1.8.1)
+
+CHECKSUMS
+  json (2.18.0)
+  minitest (5.27.0)
+  racc (1.8.1)
+
+BUNDLED WITH
+  4.0.23

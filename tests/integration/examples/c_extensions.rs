@@ -1478,6 +1478,7 @@ const C_KERNEL_OUTPUT: &str = concat!(
     "line 145: warning: uncategorized\n",
     "line 146: warning: deprecated\n",
     "line 148: warning: performance\n",
+    "line 154: warning: verbose deprecated\n",
     "[2, 3]\n",
     "Enumerator\n",
     "end of script\n",

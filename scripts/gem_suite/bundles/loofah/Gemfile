@@ -1,0 +1,10 @@
+# The gems loofah's tests load. loofah, crass, and nokogiri are left out,
+# since the tests load each from its checkout, and nokogiri's extension is
+# built by scripts/run_gem_suites.sh under the engine the tests run with.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "minitest", "~> 5.14"
+
+shipped "json", "racc"

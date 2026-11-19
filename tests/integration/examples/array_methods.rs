@@ -318,3 +318,21 @@ fn a_join_keeps_a_string_as_it_was_when_taken() {
     let output = run_example("array_methods/join_after_a_piece_changes.rb");
     assert_eq!(output, "\"first-appended\"\n\"first!\"\n\"name,text,3\"\n");
 }
+
+#[test]
+fn array_literal_spreads_a_hash_with_a_double_splat() {
+    let output = run_example("array_methods/array_literal_spreads_a_hash_with_a_double_splat.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[1, {size: 2}]\n",
+            "[1]\n",
+            "[]\n",
+            "[1, 2, {size: 2}]\n",
+            "[1, {\"kind\" => :a, size: 2}]\n",
+            "[1, {color: :red, size: 2}]\n",
+            "[[1, 2]]\n",
+            "[[1], {size: 3}]\n",
+        )
+    );
+}
