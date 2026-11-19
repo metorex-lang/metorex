@@ -43,6 +43,7 @@ typedef struct rb_io {
 } rb_io_t;
 
 rb_io_t *rb_metorex_io_struct(VALUE io);
+FILE *rb_io_stdio_file(rb_io_t *fptr);
 VALUE rb_io_taint_check(VALUE io);
 void rb_io_check_closed(rb_io_t *fptr);
 NORETURN(void rb_eof_error(void));

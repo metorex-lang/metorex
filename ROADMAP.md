@@ -181,7 +181,7 @@ The 100 most downloaded gems on rubygems.org (`rubygems.org/stats`, read on 2026
   - [x] rb-fsevent
   - [x] nio4r
   - [ ] puma
-  - [ ] ffi
+  - [x] ffi
   - [ ] nokogiri, with crass and loofah
 - [ ] Rails: the rails repository's activesupport, activemodel, activerecord on SQLite, actionpack, actionview, actionmailer, activejob, actioncable, activestorage, railties, and rails, with globalid, rails-dom-testing, rails-html-sanitizer, and sprockets-rails
 - [ ] The ruby-bench benchmarks that need gems run under `benchmarks/compare.rb`

@@ -49,9 +49,17 @@ impl VirtualMachine {
                 Ok(Some(receiver.clone()))
             }
             View::Instance(inst_rc) => {
+                // A class whose allocator is written in C makes the copy
+                // through it, as MRI does, so the copy holds C data of its
+                // own for `initialize_copy` to fill.
+                let class = std::rc::Rc::clone(&inst_rc.borrow().class);
+                let allocated = match self.allocate_through_c(&class, position)?.view() {
+                    Some(View::Instance(made)) => Some(std::rc::Rc::clone(made)),
+                    _ => None,
+                };
                 let copy = {
                     let inst = inst_rc.borrow();
-                    let new_inst = crate::object::Instance::new(std::rc::Rc::clone(&inst.class));
+                    let new_inst = allocated.unwrap_or_else(|| crate::object::Instance::new(class));
                     for (k, v) in &inst.instance_vars {
                         // The characters or elements behind a subclass of a
                         // primitive belong to the instance, so the copy gets

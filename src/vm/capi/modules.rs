@@ -141,6 +141,17 @@ pub extern "C-unwind" fn rb_const_set(module: Value, name: Value, value: Value) 
     or_raise(interpreter().assign_constant(&class, &named, to_object(value), called_from()));
 }
 
+/// Removes the constant from `module`, answering what it held, as
+/// `Module#remove_const` does.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_const_remove(module: Value, name: Value) -> Value {
+    let arguments = vec![
+        Object::symbol("remove_const"),
+        Object::symbol(symbol_name(name)),
+    ];
+    to_value(&call(to_object(module), "__send__", arguments))
+}
+
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_define_global_const(name: *const c_char, value: Value) {
     let object_class = to_value(&top_level_module("Object"));

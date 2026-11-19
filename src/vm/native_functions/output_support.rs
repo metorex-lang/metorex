@@ -120,7 +120,7 @@ impl VirtualMachine {
                 return Ok(());
             }
         }
-        write_to_standard_stream(stream, text).map_err(|problem| {
+        write_to_standard_stream(stream, text.as_bytes()).map_err(|problem| {
             crate::vm::errors::simple_exception("Errno::EBADF", &bad_descriptor(&problem), position)
         })
     }
@@ -138,7 +138,7 @@ fn bad_descriptor(problem: &std::io::Error) -> String {
 
 /// Write to one of the standard streams. A stream whose other end has gone
 /// ends the program the way the signal would.
-pub(crate) fn write_to_standard_stream(stream: &str, text: &str) -> std::io::Result<()> {
+pub(crate) fn write_to_standard_stream(stream: &str, text: &[u8]) -> std::io::Result<()> {
     use std::io::Write as _;
     // Whatever the standard library holds for the stream goes out first, so
     // the text lands after it. The text itself is written to the descriptor
@@ -151,7 +151,7 @@ pub(crate) fn write_to_standard_stream(stream: &str, text: &str) -> std::io::Res
         let _ = std::io::stdout().flush();
         1
     };
-    let mut left = text.as_bytes();
+    let mut left = text;
     while !left.is_empty() {
         // SAFETY: the pointer and length name the bytes still to write.
         let written = unsafe { libc::write(descriptor, left.as_ptr().cast(), left.len()) };

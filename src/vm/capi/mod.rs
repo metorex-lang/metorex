@@ -48,6 +48,7 @@ mod numerics;
 mod objects;
 mod oniguruma;
 mod procs;
+mod ractors;
 mod ranges;
 mod regexps;
 mod sequences;

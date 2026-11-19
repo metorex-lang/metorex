@@ -84,11 +84,22 @@ pub extern "C-unwind" fn rb_thread_create(function: *const (), data: *mut c_void
     to_value(&call(thread_class(), "new", Vec::new()))
 }
 
-/// Whether this operating system thread is one the interpreter runs.
+/// Whether this operating system thread is one the interpreter runs, or
+/// one running a function `rb_thread_call_without_gvl` was handed for a
+/// Ruby thread, as MRI runs that function on the Ruby thread's own.
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn ruby_native_thread_p() -> i32 {
-    on_interpreter_thread() as i32
+    (on_interpreter_thread() || CALL_WITHOUT_GVL.with(std::cell::Cell::get) != 0) as i32
 }
+
+thread_local! {
+    /// The number of the `rb_thread_call_without_gvl` call this operating
+    /// system thread runs the function of, or 0 on any other thread.
+    static CALL_WITHOUT_GVL: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The number the next `rb_thread_call_without_gvl` call takes.
+static NEXT_CALL_WITHOUT_GVL: AtomicUsize = AtomicUsize::new(1);
 
 /// Whether this operating system thread holds the interpreter, which a
 /// function `rb_thread_call_without_gvl` runs does not.
@@ -166,10 +177,12 @@ pub extern "C-unwind" fn rb_thread_call_without_gvl(
     let finished = Arc::new(AtomicBool::new(false));
     let answer = Arc::new(AtomicUsize::new(0));
     let (address, argument) = (function as usize, data as usize);
+    let call_number = NEXT_CALL_WITHOUT_GVL.fetch_add(1, Ordering::SeqCst);
     let worker = {
         let finished = Arc::clone(&finished);
         let answer = Arc::clone(&answer);
         std::thread::spawn(move || {
+            CALL_WITHOUT_GVL.with(|held| held.set(call_number));
             // SAFETY: the headers declare the function as taking a pointer
             // and answering one.
             let function: extern "C" fn(*mut c_void) -> *mut c_void =
@@ -190,7 +203,7 @@ pub extern "C-unwind" fn rb_thread_call_without_gvl(
             unblock(unblock_data);
         }
     };
-    let stopped = wait_until(&finished, interrupts_the_call, unblock_now);
+    let stopped = wait_until(call_number, &finished, interrupts_the_call, unblock_now);
     let _ = worker.join();
     if let Some(stopped) = stopped {
         raise(stopped);
@@ -204,6 +217,7 @@ pub extern "C-unwind" fn rb_thread_call_without_gvl(
 /// returns, since the interrupt is lost when it arrives before the call
 /// starts waiting. Answers the error that killed the thread, if one did.
 fn wait_until(
+    call_number: usize,
     finished: &AtomicBool,
     repeat_unblock: bool,
     unblock: impl Fn(),
@@ -219,7 +233,7 @@ fn wait_until(
     let mut stopped = None;
     let mut signals_seen = crate::vm::signals::signals_taken();
     while !finished.load(Ordering::SeqCst) {
-        run_call_handed_back();
+        run_calls_handed_back(call_number);
         instance
             .borrow_mut()
             .set_var("__thread_waiting".to_string(), Object::Bool(true));
@@ -266,41 +280,48 @@ fn wait_until(
     stopped
 }
 
-/// A call `rb_thread_call_with_gvl` made from the thread running a
-/// function without the interpreter, waiting for the interpreter's thread to
-/// make it: the function and its argument, and then what it answered.
+/// The calls `rb_thread_call_with_gvl` made from threads running functions
+/// without the interpreter, waiting for the interpreter's thread to make
+/// them: by the number of the `rb_thread_call_without_gvl` call each came
+/// from, the function and its argument, and then what each answered.
 struct HandedBack {
-    asked: Option<(usize, usize)>,
-    answered: Option<usize>,
+    asked: Vec<(usize, usize, usize)>,
+    answered: Vec<(usize, usize)>,
 }
 
 static HANDED_BACK: std::sync::Mutex<HandedBack> = std::sync::Mutex::new(HandedBack {
-    asked: None,
-    answered: None,
+    asked: Vec::new(),
+    answered: Vec::new(),
 });
 static HANDED_BACK_READY: std::sync::Condvar = std::sync::Condvar::new();
 
-/// Make the call a function running without the interpreter handed back, on
-/// the interpreter's thread, which is waiting for that function to return.
-fn run_call_handed_back() {
-    let asked = HANDED_BACK
-        .lock()
-        .map(|mut held| held.asked.take())
-        .unwrap_or(None);
-    let Some((address, argument)) = asked else {
-        return;
-    };
-    let answer = keeping_call_state(|| {
-        // SAFETY: the headers declare the function as taking a pointer and
-        // answering one.
-        let function: extern "C-unwind" fn(*mut c_void) -> *mut c_void =
-            unsafe { std::mem::transmute(address as *const ()) };
-        function(argument as *mut c_void) as usize
-    });
-    if let Ok(mut held) = HANDED_BACK.lock() {
-        held.answered = Some(answer);
+/// Make the calls the function of `rb_thread_call_without_gvl` call
+/// `call_number` handed back, on the interpreter's thread, in the Ruby
+/// thread waiting for that function to return.
+fn run_calls_handed_back(call_number: usize) {
+    loop {
+        let asked = HANDED_BACK.lock().ok().and_then(|mut held| {
+            let at = held
+                .asked
+                .iter()
+                .position(|(from, _, _)| *from == call_number)?;
+            Some(held.asked.remove(at))
+        });
+        let Some((_, address, argument)) = asked else {
+            return;
+        };
+        let answer = keeping_call_state(|| {
+            // SAFETY: the headers declare the function as taking a pointer
+            // and answering one.
+            let function: extern "C-unwind" fn(*mut c_void) -> *mut c_void =
+                unsafe { std::mem::transmute(address as *const ()) };
+            function(argument as *mut c_void) as usize
+        });
+        if let Ok(mut held) = HANDED_BACK.lock() {
+            held.answered.push((call_number, answer));
+        }
+        HANDED_BACK_READY.notify_all();
     }
-    HANDED_BACK_READY.notify_all();
 }
 
 /// `rb_thread_call_with_gvl`: calls `function` with `data` where the
@@ -319,14 +340,19 @@ pub extern "C-unwind" fn rb_thread_call_with_gvl(
             unsafe { std::mem::transmute(function) };
         return function(data);
     }
+    let call_number = CALL_WITHOUT_GVL.with(std::cell::Cell::get);
     let Ok(mut held) = HANDED_BACK.lock() else {
         return std::ptr::null_mut();
     };
-    held.asked = Some((function as usize, data as usize));
-    held.answered = None;
+    held.asked
+        .push((call_number, function as usize, data as usize));
     loop {
-        if let Some(answer) = held.answered.take() {
-            return answer as *mut c_void;
+        if let Some(at) = held
+            .answered
+            .iter()
+            .position(|(from, _)| *from == call_number)
+        {
+            return held.answered.remove(at).1 as *mut c_void;
         }
         held = match HANDED_BACK_READY.wait(held) {
             Ok(next) => next,

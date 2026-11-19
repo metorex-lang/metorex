@@ -24,6 +24,14 @@ static VALUE count(VALUE self) {
   return INT2FIX(held->count);
 }
 
+static VALUE counter_copy(VALUE self, VALUE other) {
+  struct counter *mine, *theirs;
+  TypedData_Get_Struct(self, struct counter, &counter_type, mine);
+  TypedData_Get_Struct(other, struct counter, &counter_type, theirs);
+  mine->count = theirs->count;
+  return self;
+}
+
 static VALUE increment(VALUE self) {
   struct counter *held;
   TypedData_Get_Struct(self, struct counter, &counter_type, held);
@@ -95,6 +103,7 @@ void Init_c_data(void) {
   rb_define_alloc_func(counter, allocate_counter);
   rb_define_method(counter, "count", count, 0);
   rb_define_method(counter, "increment", increment, 0);
+  rb_define_method(counter, "initialize_copy", counter_copy, 1);
 
   VALUE data = rb_define_class("CData", rb_cObject);
   rb_define_method(data, "wrap_typed", wrap_typed, 1);

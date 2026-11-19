@@ -722,6 +722,42 @@ impl VirtualMachine {
         }
     }
 
+    /// The method every object answers that `super` reaches past the
+    /// receiver's ancestors, as a C method's `rb_call_super` does too.
+    /// `None` when there is none.
+    pub(crate) fn super_to_object_method(
+        &mut self,
+        self_val: &Object,
+        method_name: &str,
+        evaluated_args: &[Object],
+        position: Position,
+    ) -> Result<Option<Object>, MetorexError> {
+        // A struct's own methods come before the ones every object has, so
+        // `super` from a struct subclass's `==` compares the members rather
+        // than the two objects.
+        if let View::Instance(instance) = self_val.view()
+            && crate::vm::native_methods::struct_members(&instance.borrow().class).is_some()
+            && !matches!(method_name, "method_missing" | "initialize")
+        {
+            let backing = self.builtins().class_of(self_val);
+            if let Some(result) = self.call_native_method(
+                backing.as_ref(),
+                self_val,
+                method_name,
+                evaluated_args,
+                position,
+            )? {
+                return Ok(Some(result));
+            }
+        }
+        // `method_missing` reached through `super` reports the method as one
+        // nothing defines, which the caller writes.
+        if method_name == "method_missing" {
+            return Ok(None);
+        }
+        self.call_object_method(self_val, method_name, evaluated_args, position)
+    }
+
     /// What `super` reaches once no ancestor defines the method: the
     /// methods every object answers, which live in the native tables.
     fn super_past_every_ancestor(
@@ -731,29 +767,8 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         let self_val = self.environment().get("self").unwrap_or(Object::Nil);
-        // A struct's own methods come before the ones every object has, so
-        // `super` from a struct subclass's `==` compares the members rather
-        // than the two objects.
-        if let View::Instance(instance) = self_val.view()
-            && crate::vm::native_methods::struct_members(&instance.borrow().class).is_some()
-            && !matches!(method_name, "method_missing" | "initialize")
-        {
-            let backing = self.builtins().class_of(&self_val);
-            if let Some(result) = self.call_native_method(
-                backing.as_ref(),
-                &self_val,
-                method_name,
-                &evaluated_args,
-                position,
-            )? {
-                return Ok(result);
-            }
-        }
-        // `method_missing` reached through `super` reports the method as one
-        // nothing defines, which the branch below writes.
-        if method_name != "method_missing"
-            && let Some(result) =
-                self.call_object_method(&self_val, method_name, &evaluated_args, position)?
+        if let Some(result) =
+            self.super_to_object_method(&self_val, method_name, &evaluated_args, position)?
         {
             return Ok(result);
         }

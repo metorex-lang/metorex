@@ -2063,6 +2063,25 @@ fn mkmf_finds_inline_c_api_functions_and_builds_nothing_for_an_extension_without
 }
 
 #[test]
+fn mkmf_finds_a_type_signedness_and_reads_the_configuration_header() {
+    let output = run_example("stdlib/mkmf_signedness_and_config_header.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "true\n",
+            "true\n",
+            "checking signedness of size_t... unsigned\n",
+            "1\n",
+            "checking signedness of ptrdiff_t... signed\n",
+            "-1\n",
+            "checking signedness of no_such_type_t... failed\n",
+            "nil\n",
+            "[\"-DSIGNEDNESS_OF_SIZE_T=+1\", \"-DSIGNEDNESS_OF_PTRDIFF_T=-1\"]\n",
+        )
+    );
+}
+
+#[test]
 fn cgi_escape_writes_each_reserved_byte_in_hex_and_unescape_reads_it_back() {
     let output = run_example("stdlib/cgi_escape_reads_bytes.rb");
     assert_eq!(

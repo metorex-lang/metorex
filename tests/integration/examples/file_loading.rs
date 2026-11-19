@@ -563,7 +563,8 @@ fn test_require_installed_gems_extensions_no_parens_execution() {
 }
 
 #[test]
-fn an_installed_json_of_another_version_than_the_carried_one_is_built_and_loaded() {
+fn an_installed_json_of_another_version_than_the_carried_one_or_an_installed_fiddle_is_built_and_loaded()
+ {
     let output = run_example_with_installed_gems("require/installed_json_versions.rb");
     assert_eq!(
         output,
@@ -571,6 +572,7 @@ fn an_installed_json_of_another_version_than_the_carried_one_is_built_and_loaded
             "[\"2.7.1\", false, true]\n",
             "[\"2.18.0\", true, false]\n",
             "[\"2.18.0\", true, false]\n",
+            "[\"1.1.8\", true]\n",
         )
     );
 }

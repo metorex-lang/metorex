@@ -362,9 +362,13 @@ module MakeMakefile
   end
 
   # Print what is being checked for, run the check, and print its answer.
+  # A check named check_*, as check_signedness, reads "checking signedness
+  # of", and the rest "checking for".
   def checking_for(subject, format = nil)
-    message "%s", "checking for #{subject}... "
-    Logging.write("checking for #{subject}... -------------------- ")
+    caller_name = caller_locations(1, 1).first.base_label.to_s
+    said = "checking #{"for " unless caller_name.start_with?("check")}#{subject}... "
+    message "%s", said
+    Logging.write("#{said}-------------------- ")
     answer = yield
     result = format ? format % answer : (answer ? "yes" : "no")
     message "%s\n", result
@@ -409,7 +413,7 @@ module MakeMakefile
   def try_compile(source, options = "", werror: nil, **_options)
     options = [options, config_string("WERRORFLAG")].compact.join(" ") if werror
     build_check(source) do |file|
-      run_quietly("#{compiler} #{include_flags} #{preprocessor_flags} #{$CFLAGS} #{options} -c #{file} -o conftest.o", werror: werror)
+      run_quietly("#{compiler} #{include_flags} #{platform_definition} #{preprocessor_flags} #{$CFLAGS} #{options} -c #{file} -o conftest.o", werror: werror)
     end
   end
 
@@ -650,6 +654,27 @@ module MakeMakefile
     end
   end
 
+  # Whether -1 cast to the type reads below zero, written to the defines as
+  # SIGNEDNESS_OF_<TYPE> of -1 or +1. Answers that number, or nil when the
+  # type is not known.
+  def check_signedness(type, headers = nil, options = "")
+    signed = nil
+    checking_for("signedness of #{type}", "%s") do
+      signed = [-1, 1].find do |sign|
+        try_compile(<<~SOURCE, options)
+          #{cpp_include(headers)}
+          int conftest_const[((#{type})-1 #{sign.negative? ? "<" : ">"} 0) ? 1 : -1];
+          #{MAIN_DOES_NOTHING}
+        SOURCE
+      end
+      next "failed" unless signed
+
+      $defs.push(format("-DSIGNEDNESS_OF_%s=%+d", type.tr_cpp, signed))
+      signed.negative? ? "signed" : "unsigned"
+    end
+    signed
+  end
+
   def create_makefile(target, srcprefix = nil)
     # The sources sit under $(srcdir), the directory the extconf.rb was run
     # from, unless the extconf.rb named them in $srcs. The objects and the
@@ -692,7 +717,7 @@ module MakeMakefile
     makefile << "RUBY_EXTCONF_H = #{$extconf_h}\n"
     prefix_include = srcprefix ? ["-I#{source_directory}"] : []
     definitions = $extconf_h ? ["-DRUBY_EXTCONF_H=\\\"$(RUBY_EXTCONF_H)\\\""] : $defs
-    makefile << "CPPFLAGS = $(INCFLAGS) #{[*prefix_include, *definitions, preprocessor_flags].join(" ")}".rstrip << "\n"
+    makefile << "CPPFLAGS = $(INCFLAGS) #{[*prefix_include, platform_definition, *definitions, preprocessor_flags].join(" ")}".rstrip << "\n"
     makefile << "DLDFLAGS = #{[link_flags, $DLDFLAGS, CONFIG["EXTDLDFLAGS"], library_paths, $LDFLAGS].map(&:strip).reject(&:empty?).join(" ")}\n"
     makefile << "LIBS = #{libraries}\n"
     makefile << "DLLIB = #{"#{target}.#{dlext}" if library}\n"
@@ -788,6 +813,13 @@ module MakeMakefile
     $CPPFLAGS.gsub(/\$\(\w+\)/, "").split.join(" ")
   end
 
+  # RUBY_PLATFORM, which MRI's ruby/config.h names for the machine Ruby was
+  # built on, given as the machine metorex runs on, since metorex's headers
+  # are not written per machine.
+  def platform_definition
+    "-DRUBY_PLATFORM=\\\"#{RbConfig::CONFIG["arch"]}\\\""
+  end
+
   # Write the check's source, with the headers every check starts with, to
   # a directory of its own and answer what the block does with it.
   def build_check(source)
@@ -825,6 +857,8 @@ end
 $arg_config = []
 $config_dirs = {}
 $srcdir = $configure_args["--srcdir"] || File.dirname($0)
+$hdrdir = RbConfig::CONFIG["rubyhdrdir"]
+$arch_hdrdir = RbConfig::CONFIG["rubyarchhdrdir"]
 $INCFLAGS = "-I$(hdrdir) -I$(srcdir)"
 $VPATH = %w[$(srcdir)]
 $srcs = nil

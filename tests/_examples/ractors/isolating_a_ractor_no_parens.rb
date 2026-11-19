@@ -18,6 +18,7 @@ p attempt { Ractor.new { first + second } }
 p attempt { Ractor.new { first = 5 } }
 p Ractor.new { counted = 1; [1].map { |step| step + counted } }.value
 p Ractor.new { [1].map { |first| first } }.value
+p Ractor.new({ first: 3 }) { |held| held[:first] }.value
 
 $setting = 1
 class Box

@@ -1022,6 +1022,7 @@ const C_CLASSES_OUTPUT: &str = concat!(
     "[\"hello\", \"hello hello \", true]\n",
     "NoMethodError: super: no superclass method 'nothing_above' for an instance of LoudGreeting\n",
     "[true, nil]\n",
+    "[true, Freezing]\n",
     "[\"Outer::Inner\", \"File::Stat\"]\n",
     "[Outer::Inner, Outer]\n",
     "ArgumentError: undefined class/module Outer::Missing\n",
@@ -1071,6 +1072,7 @@ const C_DATA_OUTPUT: &str = concat!(
     "[5, \"first\", 6]\n",
     "[5, 5]\n",
     "true\n",
+    "[6, 7, \"first\"]\n",
     "[1024, [true, \"counter\", true, true]]\n",
     "[true, \"counter\", true, true]\n",
     "7\n",
@@ -1109,6 +1111,7 @@ const C_THREADS_OUTPUT: &str = concat!(
     "[true, :woken]\n",
     "ThreadError: killed thread\n",
     "[[true, true], false]\n",
+    "[[true, false, true], [true, false, true]]\n",
     "42\n",
     "\"sleep\"\n",
     "true\n",
@@ -1127,6 +1130,28 @@ fn test_c_extensions_c_threads_execution() {
 fn test_c_extensions_c_threads_no_parens_execution() {
     let output = run_example("c_extensions/c_threads_no_parens.rb");
     assert_eq!(output, C_THREADS_OUTPUT);
+}
+
+/// The expected output of both `c_extensions/c_ractors` variants.
+const C_RACTORS_OUTPUT: &str = concat!(
+    "[false, false, nil, nil]\n",
+    "[true, \"main\", \"main\", 1]\n",
+    "[[false, false, nil, nil], nil, [true, :other, :other, 1]]\n",
+    "[true, \"main\", \"main\", 1]\n",
+    "[false, true, true, true]\n",
+    "[true, true, true, false]\n",
+);
+
+#[test]
+fn test_c_extensions_c_ractors_execution() {
+    let output = run_example("c_extensions/c_ractors.rb");
+    assert_eq!(output, C_RACTORS_OUTPUT);
+}
+
+#[test]
+fn test_c_extensions_c_ractors_no_parens_execution() {
+    let output = run_example("c_extensions/c_ractors_no_parens.rb");
+    assert_eq!(output, C_RACTORS_OUTPUT);
 }
 
 /// The expected output of both `c_extensions/c_hashes` variants.

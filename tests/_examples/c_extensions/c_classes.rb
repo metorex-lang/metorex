@@ -46,6 +46,11 @@ class Hosting
   include Hooked
 end
 p([Hosting.include?(Hooked), Hooked.included(Hosting)])
+class Freezing
+end
+classes.super_calling(Freezing, "freeze")
+frozen = Freezing.new.freeze
+p([frozen.frozen?, frozen.class])
 
 module Outer
   class Inner

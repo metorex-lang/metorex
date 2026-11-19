@@ -334,6 +334,11 @@ impl<'source> Parser<'source> {
                     tokens[index - 1].kind,
                     TokenKind::Dot | TokenKind::SafeDot | TokenKind::ColonColon | TokenKind::Def
                 );
+            // `:a` is the symbol, written as a colon and the name with
+            // nothing between them.
+            let names_a_symbol = index > 0
+                && matches!(tokens[index - 1].kind, TokenKind::Colon)
+                && !tokens[index].had_leading_space;
             let labels_an_argument = matches!(
                 tokens.get(index + 1),
                 Some(next) if matches!(next.kind, TokenKind::Colon) && !next.had_leading_space
@@ -347,6 +352,7 @@ impl<'source> Parser<'source> {
                     && names.contains(name)
             });
             if names_a_method
+                || names_a_symbol
                 || name.starts_with(char::is_uppercase)
                 || labels_an_argument
                 || a_nested_parameter

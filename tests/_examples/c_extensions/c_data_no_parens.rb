@@ -24,6 +24,9 @@ counter = CDataCounter.new("first")
 p [counter.count, counter.label, counter.increment.count]
 p [CDataSubcounter.new("second").count, CDataCounter.allocate.count]
 p ObjectSpace.memsize_of(counter) > 106
+copied = counter.dup
+copied.increment
+p [counter.count, copied.count, copied.label]
 
 typed = data.wrap_typed(1024)
 p [data.as_base(typed), data.describe(typed)]

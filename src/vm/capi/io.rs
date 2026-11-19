@@ -43,6 +43,8 @@ pub struct RbFdset {
 thread_local! {
     /// The `rb_io_t` handed to C for each IO.
     static HANDED: RefCell<HashMap<Value, Box<RbIo>>> = RefCell::new(HashMap::new());
+    /// The stdio stream opened over each IO's descriptor for C, one per IO.
+    static STDIO_FILES: RefCell<HashMap<Value, usize>> = RefCell::new(HashMap::new());
 }
 
 fn io_error(message: &str) -> ! {
@@ -163,6 +165,29 @@ pub extern "C-unwind" fn rb_metorex_io_struct(io: Value) -> *mut RbIo {
         held.path = path;
         &mut **held as *mut RbIo
     })
+}
+
+/// A stdio stream over the IO's descriptor, opened the first time C asks
+/// and answered again after, in the mode the IO was opened in.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_io_stdio_file(fptr: *mut RbIo) -> *mut libc::FILE {
+    let io = handed_io(fptr);
+    if let Some(held) = STDIO_FILES.with(|files| files.borrow().get(&io).copied()) {
+        return held as *mut libc::FILE;
+    }
+    let mode = rb_io_mode(io);
+    let opened_as: &[u8] = match (mode & FMODE_READABLE != 0, mode & FMODE_WRITABLE != 0) {
+        (true, true) => b"r+\0",
+        (false, true) => b"w\0",
+        _ => b"r\0",
+    };
+    // SAFETY: the descriptor is the IO's own and the mode a C string.
+    let file = unsafe { libc::fdopen(descriptor(io), opened_as.as_ptr() as *const c_char) };
+    if file.is_null() {
+        io_error("could not open a stdio stream over the descriptor");
+    }
+    STDIO_FILES.with(|files| files.borrow_mut().insert(io, file as usize));
+    file
 }
 
 fn handed_io(fptr: *mut RbIo) -> Value {

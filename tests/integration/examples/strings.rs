@@ -758,6 +758,12 @@ fn a_large_binary_body_reads_and_splits_on_a_pattern_with_a_limit() {
 }
 
 #[test]
+fn the_standard_output_writes_a_binary_string_as_its_bytes() {
+    let output = run_example("io/standard_output_writes_a_binary_string_as_its_bytes.rb");
+    assert_eq!(output, "[234, 1, 255, 254, 195, 169]\n");
+}
+
+#[test]
 fn a_copy_of_a_binary_string_writes_its_own_bytes_to_a_pipe() {
     let output = run_example("io/pipe_writes_a_binary_string_copy_as_its_bytes.rb");
     assert_eq!(output, "[227, 129, 130]\n");

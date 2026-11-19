@@ -43,6 +43,7 @@ const ISOLATING_A_RACTOR_OUTPUT: &str = concat!(
     "[ArgumentError, \"can not isolate a Proc because it accesses outer variables (first).\"]\n",
     "[2]\n",
     "[1]\n",
+    "3\n",
     "[Ractor::IsolationError, \"can not access global variable $setting from non-main Ractor\"]\n",
     "[Ractor::IsolationError, \"can not access global variable $setting from non-main Ractor\"]\n",
     "IO\n",

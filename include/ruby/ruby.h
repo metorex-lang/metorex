@@ -55,27 +55,7 @@ extern "C" {
 #endif
 #define RUBY_METHOD_FUNC(func) ((VALUE (*)(ANYARGS))(func))
 
-#define SIZEOF_INT __SIZEOF_INT__
-#define SIZEOF_SHORT __SIZEOF_SHORT__
-#define SIZEOF_LONG __SIZEOF_LONG__
-#define SIZEOF_LONG_LONG __SIZEOF_LONG_LONG__
-#define SIZEOF_VOIDP __SIZEOF_POINTER__
-#define SIZEOF_SIZE_T __SIZEOF_SIZE_T__
-#define SIZEOF_DOUBLE __SIZEOF_DOUBLE__
-#define SIZEOF_UINT64_T 8
-#ifdef __SIZEOF_INT128__
-#define int128_t __int128
-#define uint128_t unsigned __int128
-#define SIZEOF_INT128_T __SIZEOF_INT128__
-#define SIZEOF_UINT128_T __SIZEOF_INT128__
-#endif
-#define SIZEOF_TIME_T __SIZEOF_LONG__
-#define SIZEOF_VALUE SIZEOF_VOIDP
-#define HAVE_LONG_LONG 1
-#define HAVE_UNISTD_H 1
-#define HAVE_STDBOOL_H 1
-#define RUBY_INTEGER_UNIFICATION 1
-#define LONG_LONG long long
+#include "ruby/config.h"
 
 typedef uintptr_t VALUE;
 typedef uintptr_t ID;
@@ -95,6 +75,10 @@ typedef pid_t rb_pid_t;
 #define Qnil ((VALUE)0x08)
 #define Qtrue ((VALUE)0x14)
 #define Qundef ((VALUE)0x24)
+#define RUBY_Qfalse Qfalse
+#define RUBY_Qnil Qnil
+#define RUBY_Qtrue Qtrue
+#define RUBY_Qundef Qundef
 
 #define RTEST(v) (((VALUE)(v) & ~Qnil) != 0)
 #define RB_TEST(v) RTEST(v)
@@ -160,6 +144,7 @@ ID rb_intern2(const char *text, long length);
 ID rb_intern_str(VALUE string);
 #define rb_intern_const(text) rb_intern(text)
 #define CONST_ID(var, text) ((var) = rb_intern(text))
+#define RUBY_CONST_ID(var, text) CONST_ID(var, text)
 VALUE rb_id2str(ID id);
 VALUE rb_sym2str(VALUE symbol);
 VALUE rb_to_symbol(VALUE value);
@@ -279,6 +264,7 @@ VALUE rb_const_get_from(VALUE module, ID name);
 int rb_const_defined(VALUE module, ID name);
 int rb_const_defined_at(VALUE module, ID name);
 void rb_const_set(VALUE module, ID name, VALUE value);
+VALUE rb_const_remove(VALUE module, ID name);
 void rb_define_global_const(const char *name, VALUE value);
 void rb_define_alias(VALUE module, const char *new_name, const char *old_name);
 void rb_alias(VALUE module, ID new_name, ID old_name);
@@ -490,6 +476,8 @@ const char *rb_obj_classname(VALUE object);
 VALUE rb_obj_freeze(VALUE object);
 #define RB_OBJ_FREEZE(v) rb_obj_freeze((VALUE)(v))
 #define OBJ_FREEZE(v) RB_OBJ_FREEZE(v)
+#define RB_OBJ_FREEZE_RAW(v) RB_OBJ_FREEZE(v)
+#define OBJ_FREEZE_RAW(v) RB_OBJ_FREEZE_RAW(v)
 VALUE rb_obj_frozen_p(VALUE object);
 void rb_check_frozen(VALUE object);
 VALUE rb_obj_id(VALUE object);
@@ -514,6 +502,8 @@ VALUE rb_any_to_s(VALUE object);
 VALUE rb_equal(VALUE first, VALUE second);
 VALUE rb_class_inherited_p(VALUE module, VALUE other);
 VALUE rb_require(const char *feature);
+void rb_ext_ractor_safe(bool flag);
+#define HAVE_RB_EXT_RACTOR_SAFE 1
 VALUE rb_f_notimplement(int count, const VALUE *values, VALUE object, VALUE marker);
 VALUE rb_attr_get(VALUE object, ID name);
 VALUE rb_obj_instance_variables(VALUE object);
@@ -624,12 +614,15 @@ const VALUE *rb_rarray_ptr(VALUE array);
 #define RARRAY_LEN(v) rb_rarray_len((VALUE)(v))
 #define rb_array_len(v) rb_rarray_len((VALUE)(v))
 #define RARRAY_PTR(v) ((VALUE *)rb_rarray_ptr((VALUE)(v)))
+#define RARRAY_CONST_PTR(v) ((const VALUE *)RARRAY_PTR(v))
 VALUE rb_ary_new_from_values(long count, const VALUE *values);
 VALUE rb_ary_entry(VALUE array, long offset);
 #define RARRAY_LENINT(v) ((int)RARRAY_LEN(v))
 VALUE rb_ary_new(void);
 VALUE rb_ary_new_capa(long capacity);
 #define rb_ary_new2 rb_ary_new_capa
+static inline VALUE rb_ary_hidden_new(long capacity) { return rb_obj_hide(rb_ary_new_capa(capacity)); }
+#define rb_ary_tmp_new rb_ary_hidden_new
 VALUE rb_ary_push(VALUE array, VALUE element);
 VALUE rb_ary_pop(VALUE array);
 void rb_ary_store(VALUE array, long index, VALUE element);

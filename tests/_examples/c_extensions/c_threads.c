@@ -50,6 +50,20 @@ static VALUE native_elsewhere(VALUE self) {
   return checked_elsewhere ? Qtrue : Qfalse;
 }
 
+static void *current_thread(void *unused) { return (void *)rb_thread_current(); }
+static void *check_without_lock(void *data) {
+  VALUE *seen = data;
+  seen[0] = ruby_native_thread_p() ? Qtrue : Qfalse;
+  seen[1] = ruby_thread_has_gvl_p() ? Qtrue : Qfalse;
+  seen[2] = (VALUE)rb_thread_call_with_gvl(current_thread, NULL);
+  return NULL;
+}
+static VALUE native_without_lock(VALUE self) {
+  VALUE seen[3];
+  rb_thread_call_without_gvl(check_without_lock, seen, RUBY_UBF_IO, NULL);
+  return rb_ary_new_from_args(3, seen[0], seen[1], seen[2] == rb_thread_current() ? Qtrue : Qfalse);
+}
+
 static void *read_one(void *data) {
   int descriptor = *(int *)data;
   char byte = ' ';
@@ -115,6 +129,7 @@ void Init_c_threads(void) {
   rb_define_method(klass, "create", create, 2);
   rb_define_method(klass, "native_here", native_here, 0);
   rb_define_method(klass, "native_elsewhere", native_elsewhere, 0);
+  rb_define_method(klass, "native_without_lock", native_without_lock, 0);
   rb_define_method(klass, "blocking_read", blocking_read, 0);
   rb_define_method(klass, "interrupted_read", interrupted_read, 0);
   rb_define_method(klass, "sum_without_lock", sum_without_lock, 2);

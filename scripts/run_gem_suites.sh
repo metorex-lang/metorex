@@ -106,6 +106,7 @@ SUITES=(
   "rb-fsevent|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
   "nio4r|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup -r nio4r_ext $RSPEC"
   "puma|test/test_*.rb|-I lib -I test -r bundler/setup"
+  "ffi|spec/ffi/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
   "i18n|test/**/*_test.rb|-w -I lib -I test -r bundler/setup"
   "tzinfo|test/ts_all_ruby_format1.rb test/ts_all_ruby_format2.rb test/ts_all_zoneinfo.rb|-w -I lib -r bundler/setup"
   "multi_json|test/**/*_test.rb|-I lib -I test"
@@ -167,6 +168,7 @@ EXTENSIONS=(
   "unf_ext|ext/unf_ext/extconf.rb"
   "nio4r|ext/nio4r/extconf.rb"
   "puma|ext/puma_http11/extconf.rb"
+  "ffi|ext/ffi_c/extconf.rb"
 )
 
 # The gems whose test files run one after another, since each of them

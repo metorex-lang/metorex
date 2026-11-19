@@ -36,6 +36,7 @@ p [threads.wakeup(sleeper).equal?(sleeper), sleeper.value]
 report { threads.wakeup sleeper }
 
 p [threads.native_here, threads.native_elsewhere]
+p [threads.native_without_lock, Thread.new { threads.native_without_lock }.value]
 p threads.sum_without_lock(40, 2)
 
 reader = Thread.new { threads.blocking_read }

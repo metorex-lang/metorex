@@ -110,9 +110,14 @@ impl VirtualMachine {
                 Some(View::String(held)) => held.as_str().to_string(),
                 _ => String::new(),
             };
+            // The string's bytes go out as they are, so a binary string is
+            // not written as the characters its bytes would be in Latin-1.
             let text = match arguments.get(1).view() {
-                Some(View::String(held)) => held.as_str().to_string(),
-                other => other.map(|held| held.to_string()).unwrap_or_default(),
+                Some(View::String(held)) => held.bytes().to_vec(),
+                other => other
+                    .map(|held| held.to_string())
+                    .unwrap_or_default()
+                    .into_bytes(),
             };
             if let Err(problem) =
                 crate::vm::native_functions::write_to_standard_stream(&named, &text)

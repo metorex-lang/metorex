@@ -1,0 +1,9 @@
+# The gems ffi's specs load. ffi itself is left out, since its specs load
+# it from the checkout, and its extension is built by
+# scripts/run_gem_suites.sh under the engine the specs run with. bigdecimal
+# and fiddle are what its long double and callback interop specs load.
+source "https://rubygems.org"
+
+gem "bigdecimal"
+gem "fiddle"
+gem "rspec", "~> 3.7"

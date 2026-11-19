@@ -6,7 +6,8 @@
 # extensions were built for MRI. A gem whose library metorex carries, such as
 # prism, is left to the copy metorex carries when another gem depends on it,
 # and an installed copy of one whose extensions metorex provides is not put on
-# the load path, except a json of another version than the one carried.
+# the load path, except a json of another version than the one carried, or
+# an installed fiddle.
 
 module Gem
   def self.default_dir
@@ -53,10 +54,12 @@ module Gem
   REX_ANSWERS_FOR = %w[rspec rspec-core rspec-expectations rspec-mocks rspec-support].freeze
 
   # The gems whose carried copy stands in only for an installed copy of the
-  # same version, with the version carried. An installed copy of another
-  # version has its extensions built for metorex and is loaded, as MRI
-  # loads the version a bundle locks, unless the build fails.
-  CARRIED_VERSIONS = { "json" => "2.18.0" }.freeze
+  # same version, with the version carried, or nil for fiddle, whose carried
+  # copy is a part of the gem that stands in for no version of it. An
+  # installed copy of another version has its extensions built for metorex
+  # and is loaded, as MRI loads the version a bundle locks, unless the build
+  # fails.
+  CARRIED_VERSIONS = { "json" => "2.18.0", "fiddle" => nil }.freeze
 
   # Whether metorex provides a gem of this name, and of this version when
   # one is given, itself, so an installed copy is left off the load path in

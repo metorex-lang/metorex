@@ -216,6 +216,18 @@ fn super_with(arguments: Vec<Object>) -> Value {
     {
         return to_value(&result);
     }
+    // An instance method reaches the ones every object has, as
+    // `Object#freeze` for ffi's `FFI::Function#freeze`.
+    if !matches!(running.receiver.view(), View::Class(_) | View::Module(_))
+        && let Some(result) = or_raise(machine.super_to_object_method(
+            &running.receiver,
+            &running.name,
+            &arguments,
+            position,
+        ))
+    {
+        return to_value(&result);
+    }
     // With nothing above it, the call goes to a `method_missing` the
     // program wrote.
     if let Some((owner, handler)) = machine.lookup_method(&running.receiver, "method_missing")
