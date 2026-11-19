@@ -203,6 +203,19 @@ fn super_with(arguments: Vec<Object>) -> Value {
             position,
         )));
     }
+    // A class or module method reaches the core library's own, as
+    // `Module#included` for json's String generator methods.
+    if let View::Class(class) | View::Module(class) = running.receiver.view()
+        && let Some(result) = or_raise(machine.super_to_core_method(
+            &Rc::clone(class),
+            &running.receiver,
+            &running.name,
+            arguments.clone(),
+            position,
+        ))
+    {
+        return to_value(&result);
+    }
     // With nothing above it, the call goes to a `method_missing` the
     // program wrote.
     if let Some((owner, handler)) = machine.lookup_method(&running.receiver, "method_missing")

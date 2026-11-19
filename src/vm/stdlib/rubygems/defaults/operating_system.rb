@@ -6,7 +6,7 @@
 # extensions were built for MRI. A gem whose library metorex carries, such as
 # prism, is left to the copy metorex carries when another gem depends on it,
 # and an installed copy of one whose extensions metorex provides is not put on
-# the load path.
+# the load path, except a json of another version than the one carried.
 
 module Gem
   def self.default_dir
@@ -52,16 +52,32 @@ module Gem
   # siblings load it.
   REX_ANSWERS_FOR = %w[rspec rspec-core rspec-expectations rspec-mocks rspec-support].freeze
 
-  # Whether metorex provides a gem of this name itself, so an installed copy
-  # is left off the load path in favor of metorex's own: one whose C
-  # extensions an installed copy built for MRI, or one of RSpec's.
-  def self.provided_by_metorex?(name)
-    (EXTENSIONS_METOREX_PROVIDES.include?(name) && carried?(name)) || REX_ANSWERS_FOR.include?(name)
+  # The gems whose carried copy stands in only for an installed copy of the
+  # same version, with the version carried. An installed copy of another
+  # version has its extensions built for metorex and is loaded, as MRI
+  # loads the version a bundle locks, unless the build fails.
+  CARRIED_VERSIONS = { "json" => "2.18.0" }.freeze
+
+  # Whether metorex provides a gem of this name, and of this version when
+  # one is given, itself, so an installed copy is left off the load path in
+  # favor of metorex's own: one whose C extensions an installed copy built
+  # for MRI, or one of RSpec's.
+  def self.provided_by_metorex?(name, version = nil)
+    return true if REX_ANSWERS_FOR.include?(name)
+    return false unless EXTENSIONS_METOREX_PROVIDES.include?(name) && carried?(name)
+
+    version.nil? || !CARRIED_VERSIONS.key?(name) || CARRIED_VERSIONS[name] == version.to_s
+  end
+
+  # Whether the carried copy stands in for an installed copy of this gem
+  # whose extensions did not build for metorex.
+  def self.carried_when_unbuilt?(name)
+    CARRIED_VERSIONS.key?(name) && carried?(name)
   end
 
   module MetorexStubSpecification
     def extensions
-      Gem.provided_by_metorex?(name) ? [] : super
+      Gem.provided_by_metorex?(name, version) ? [] : super
     end
   end
 
@@ -74,7 +90,7 @@ module Gem
   # when installing it copied the ones built for MRI there.
   module MetorexRequirePaths
     def full_require_paths
-      return [] if Gem.provided_by_metorex?(name)
+      return [] if Gem.provided_by_metorex?(name, version) || unbuilt_with_a_carried_copy?
 
       paths = super
       return paths unless have_extensions? && holds_libraries_built_for_mri?(paths)
@@ -93,8 +109,21 @@ module Gem
     private :holds_libraries_built_for_mri?
 
     def contains_requirable_file?(file)
-      Gem.provided_by_metorex?(name) ? false : super
+      Gem.provided_by_metorex?(name, version) ? false : super
     end
+
+    # Whether the carried copy is loaded in place of this gem because its
+    # extensions did not build for metorex, building them first if no
+    # build has been tried.
+    def unbuilt_with_a_carried_copy?
+      return false unless Gem.carried_when_unbuilt?(name) && have_extensions?
+      return false if File.exist?(gem_build_complete_path)
+
+      spec = is_a?(Specification) ? self : to_spec
+      spec.missing_extensions?
+      !File.exist?(gem_build_complete_path)
+    end
+    private :unbuilt_with_a_carried_copy?
   end
 
   BasicSpecification.prepend(MetorexRequirePaths)
@@ -105,13 +134,14 @@ module Gem
     # none of its own, since the gem it is building would count as missing
     # its extensions there too.
     def missing_extensions?
-      return false if Gem.provided_by_metorex?(name)
+      return false if Gem.provided_by_metorex?(name, version)
       return false unless super
-      return true if @extensions_tried_for_metorex || ENV[BUILDING_EXTENSIONS]
+      # The carried copy stands in for one whose extensions do not build.
+      return !Gem.carried_when_unbuilt?(name) if @extensions_tried_for_metorex || ENV[BUILDING_EXTENSIONS]
 
       @extensions_tried_for_metorex = true
       build_extensions_for_metorex
-      super
+      super && !Gem.carried_when_unbuilt?(name)
     end
 
     def activate

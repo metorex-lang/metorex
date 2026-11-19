@@ -1021,6 +1021,7 @@ fn test_c_extensions_c_modules_no_parens_execution() {
 const C_CLASSES_OUTPUT: &str = concat!(
     "[\"hello\", \"hello hello \", true]\n",
     "NoMethodError: super: no superclass method 'nothing_above' for an instance of LoudGreeting\n",
+    "[true, nil]\n",
     "[\"Outer::Inner\", \"File::Stat\"]\n",
     "[Outer::Inner, Outer]\n",
     "ArgumentError: undefined class/module Outer::Missing\n",
@@ -1732,7 +1733,7 @@ const C_STRINGS_OUTPUT: &str = concat!(
     "#<Encoding:UTF-8>\n",
     "[164, 162]\n",
     "true\n",
-    "[false, String, [0, 0, 0], #<Encoding:BINARY (ASCII-8BIT)>]\n",
+    "[false, String, false, [0, 0, 0], #<Encoding:BINARY (ASCII-8BIT)>]\n",
     "[false, false, true, false, \"made\"]\n",
     "true\n",
     "Text\n",

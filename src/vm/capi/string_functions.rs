@@ -138,6 +138,12 @@ pub extern "C-unwind" fn rb_str_tmp_new(length: i64) -> Value {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_obj_hide(object: Value) -> Value {
+    HIDDEN.with(|held| held.borrow_mut().insert(object));
+    object
+}
+
+#[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_obj_reveal(object: Value, _klass: Value) -> Value {
     HIDDEN.with(|held| held.borrow_mut().remove(&object));
     object

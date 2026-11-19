@@ -38,6 +38,15 @@ loud = LoudGreeting.new
 p [LouderGreeting.new.text, loud.repeat(2), loud.itself_from_super.equal?(loud)]
 report { loud.nothing_above }
 
+# A C `included` hook on a module reaches Module#included through super.
+module Hooked
+end
+classes.super_calling_with Hooked.singleton_class, "included"
+class Hosting
+  include Hooked
+end
+p [Hosting.include?(Hooked), Hooked.included(Hosting)]
+
 module Outer
   class Inner
   end

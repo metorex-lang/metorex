@@ -38,7 +38,8 @@ int rb_enc_str_asciicompat_p(VALUE string);
 typedef unsigned int OnigCodePoint;
 /* metorex keeps no coderange on a string, so reading one works it out and
    setting one is dropped. */
-#define ENC_CODERANGE(string) rb_enc_str_coderange(string)
+#define RB_ENC_CODERANGE(string) rb_enc_str_coderange(string)
+#define ENC_CODERANGE(string) RB_ENC_CODERANGE(string)
 #define ENC_CODERANGE_CLEAN_P(range) ((range) == ENC_CODERANGE_7BIT || (range) == ENC_CODERANGE_VALID)
 #define ENC_CODERANGE_SET(string, range) ((void)(string), (void)(range))
 #define ENC_CODERANGE_ASCIIONLY(string) (rb_enc_str_coderange(string) == ENC_CODERANGE_7BIT)
@@ -116,12 +117,17 @@ static inline void rb_enc_raise(rb_encoding *encoding, VALUE klass, const char *
   rb_metorex_enc_raise(encoding, klass, message);
 }
 
+static inline VALUE rb_enc_vsprintf(rb_encoding *encoding, const char *format, va_list arguments) {
+  VALUE made = rb_vsprintf(format, arguments);
+  rb_enc_associate(made, encoding);
+  return made;
+}
+
 static inline VALUE rb_enc_sprintf(rb_encoding *encoding, const char *format, ...) {
   va_list arguments;
   va_start(arguments, format);
-  VALUE made = rb_vsprintf(format, arguments);
+  VALUE made = rb_enc_vsprintf(encoding, format, arguments);
   va_end(arguments);
-  rb_enc_associate(made, encoding);
   return made;
 }
 

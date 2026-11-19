@@ -209,8 +209,8 @@ impl VirtualMachine {
         // Mark this path as actively executing so autoload can tell
         // "file is mid-load" apart from "file already loaded".
         let loading_on = self.running_thread();
-        self.loading_paths
-            .push((canonical_path.to_string_lossy().into_owned(), loading_on));
+        let loading_named = canonical_path.to_string_lossy().into_owned();
+        self.begin_loading(loading_named.clone(), loading_on.clone());
 
         // A loaded file's statements run at top level, whatever method the
         // load was called from, so `Module.nesting` inside it follows the
@@ -296,7 +296,7 @@ impl VirtualMachine {
             }
         }
         self.current_source_file = previous_source_file;
-        self.loading_paths.pop();
+        self.finish_loading(&loading_named, &loading_on);
         self.current_file = previous_file;
         self.current_source_encoding = previous_source_encoding;
         // A file that fails part-way through was never loaded, so the
@@ -342,6 +342,9 @@ impl VirtualMachine {
     ) -> Result<bool, MetorexError> {
         let feature = format!("<metorex>/{}.rb", name);
         let marker = std::path::PathBuf::from(&feature);
+        // Another thread part-way through running the library is waited
+        // for, as a file on disk is, so this one reads what it defines.
+        self.wait_for_the_file_being_loaded(&marker);
         if self.is_file_loaded(&marker) {
             return Ok(false);
         }
@@ -356,6 +359,8 @@ impl VirtualMachine {
             Some(statements) => statements,
             None => parse_embedded_library(name, source)?,
         };
+        let loading_on = self.running_thread();
+        self.begin_loading(feature.clone(), loading_on.clone());
         // A library metorex carries runs at top level however deep the
         // `require` was written, so a `module Foo` at its top names ::Foo
         // rather than nesting inside the class or module body it was asked
@@ -375,13 +380,14 @@ impl VirtualMachine {
             .current_source_file
             .replace(Rc::from(crate::vm::stdlib::embedded_library_file(name)));
         let caller_method_nesting = std::mem::take(&mut self.user_def_nesting);
-        self.embedded_libraries_loading.push(feature);
+        self.embedded_libraries_loading.push(feature.clone());
         // Its top level has locals of its own, and `main` as `self`, whatever
         // object the `require` was called on.
         self.environment_mut().push_isolated_scope();
         let result = self.execute_program(&statements);
         self.environment_mut().pop_scope();
         self.embedded_libraries_loading.pop();
+        self.finish_loading(&feature, &loading_on);
         self.user_def_nesting = caller_method_nesting;
         self.current_source_file = caller_source;
         self.loading_embedded_library = caller_library;

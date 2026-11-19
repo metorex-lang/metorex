@@ -2045,6 +2045,24 @@ fn mkmf_checks_link_against_the_interpreter_and_write_the_extconf_header() {
 }
 
 #[test]
+fn mkmf_finds_inline_c_api_functions_and_builds_nothing_for_an_extension_without_sources() {
+    let output = run_example("stdlib/mkmf_inline_functions_and_empty_extension.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "checking for rb_enc_raise() in ruby.h... yes\n",
+            "true\n",
+            "checking for rb_enc_vsprintf() in ruby.h... yes\n",
+            "true\n",
+            "creating Makefile\n",
+            "[true, true]\n",
+            "[]\n",
+            "[]\n",
+        )
+    );
+}
+
+#[test]
 fn cgi_escape_writes_each_reserved_byte_in_hex_and_unescape_reads_it_back() {
     let output = run_example("stdlib/cgi_escape_reads_bytes.rb");
     assert_eq!(

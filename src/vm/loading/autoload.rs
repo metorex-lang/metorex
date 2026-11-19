@@ -174,6 +174,23 @@ impl VirtualMachine {
             .any(|(held, thread)| held == canonical && on_the_same_thread(thread, &here))
     }
 
+    /// Record that `thread` is part-way through loading `named`.
+    pub(crate) fn begin_loading(&mut self, named: String, thread: Object) {
+        self.loading_paths.push((named, thread));
+    }
+
+    /// Take back the record `begin_loading` made, which is not the last one
+    /// when another thread began a load of its own meanwhile.
+    pub(crate) fn finish_loading(&mut self, named: &str, thread: &Object) {
+        if let Some(at) = self
+            .loading_paths
+            .iter()
+            .rposition(|(held, loader)| held == named && on_the_same_thread(loader, thread))
+        {
+            self.loading_paths.remove(at);
+        }
+    }
+
     /// Whether any thread is part-way through loading the file at
     /// `canonical`.
     pub(crate) fn loading_anywhere(&self, canonical: &str) -> bool {

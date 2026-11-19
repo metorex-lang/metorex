@@ -43,7 +43,7 @@ static VALUE str_new(VALUE self, VALUE bytes, VALUE encoding) {
 static VALUE str_new_cstr(VALUE self, VALUE encoding) { return rb_enc_str_new_cstr("literal", encoding_arg(encoding)); }
 static VALUE str_new_static(VALUE self) { return rb_enc_str_new_static("static", 6, NULL); }
 static VALUE coderange(VALUE self, VALUE string) {
-  switch (rb_enc_str_coderange(string)) {
+  switch (RB_ENC_CODERANGE(string)) {
   case ENC_CODERANGE_7BIT: return ID2SYM(rb_intern("seven_bit"));
   case ENC_CODERANGE_VALID: return ID2SYM(rb_intern("valid"));
   default: return ID2SYM(rb_intern("broken"));

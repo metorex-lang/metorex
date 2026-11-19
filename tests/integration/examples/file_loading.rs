@@ -42,6 +42,13 @@ fn test_require_deduplication_execution() {
 }
 
 #[test]
+fn a_require_from_a_second_thread_waits_for_the_load_another_thread_is_running() {
+    let expected = "[true, true, true]\n1\n[true, true, true]\n1\n[true, true, true]\n";
+    let output = run_example("require/concurrent_require.rb");
+    assert_eq!(output, expected);
+}
+
+#[test]
 fn test_require_nested_execution() {
     let expected = "util_a loaded\nutil_b loaded\nmain file\n";
     let output = run_example("require/nested.rb");
@@ -553,6 +560,19 @@ fn test_require_installed_gems_extensions_execution() {
 fn test_require_installed_gems_extensions_no_parens_execution() {
     let output = run_example_with_installed_gems("require/installed_gems_extensions_no_parens.rb");
     assert_eq!(output, INSTALLED_GEMS_EXTENSIONS);
+}
+
+#[test]
+fn an_installed_json_of_another_version_than_the_carried_one_is_built_and_loaded() {
+    let output = run_example_with_installed_gems("require/installed_json_versions.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"2.7.1\", false, true]\n",
+            "[\"2.18.0\", true, false]\n",
+            "[\"2.18.0\", true, false]\n",
+        )
+    );
 }
 
 /// The expected output of both `require/autoload_and_require` variants.

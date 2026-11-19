@@ -51,7 +51,10 @@ static VALUE tmp_class(VALUE self) {
   VALUE made = rb_str_tmp_new(3);
   VALUE hidden = RBASIC_CLASS(made);
   rb_obj_reveal(made, rb_cString);
-  return rb_ary_new_from_args(3, hidden, RBASIC_CLASS(made), made);
+  VALUE revealed = RBASIC_CLASS(made);
+  VALUE rehidden = RBASIC_CLASS(rb_obj_hide(made));
+  rb_obj_reveal(made, rb_cString);
+  return rb_ary_new_from_args(4, hidden, revealed, rehidden, made);
 }
 static VALUE copies(VALUE self, VALUE string) {
   return rb_ary_new_from_args(4, rb_str_dup(string), rb_str_new3(string), rb_str_new4(string), rb_str_new5(string, "made", 4));

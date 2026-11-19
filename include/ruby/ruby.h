@@ -564,6 +564,7 @@ VALUE rb_str_buf_new(long capacity);
 VALUE rb_str_buf_new_cstr(const char *text);
 #define rb_str_buf_new2 rb_str_buf_new_cstr
 VALUE rb_str_tmp_new(long length);
+VALUE rb_obj_hide(VALUE object);
 VALUE rb_obj_reveal(VALUE object, VALUE klass);
 size_t rb_str_capacity(VALUE string);
 void rb_str_modify(VALUE string);

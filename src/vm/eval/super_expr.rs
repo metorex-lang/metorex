@@ -306,112 +306,14 @@ impl VirtualMachine {
                 }
                 current = cls.superclass();
             }
-            // The mixin hooks have real default implementations rather than
-            // no-op ones: `super` from an override performs the default.
-            match method_name.as_str() {
-                "append_features" | "prepend_features" => {
-                    if let Some(View::Class(target) | View::Module(target)) =
-                        evaluated_args.first().view()
-                    {
-                        let target = Rc::clone(target);
-                        self.default_append_features(&target, &self_class, position)?;
-                        return Ok(Object::Module(self_class));
-                    }
-                }
-                "extend_object" => {
-                    if let Some(target) = evaluated_args.first() {
-                        let target = target.clone();
-                        self.default_extend_object(&target, &self_class, position)?;
-                        return Ok(Object::Module(self_class));
-                    }
-                }
-                _ => {}
-            }
-            // No superclass class method. The Module and Class hooks have
-            // silent no-op default implementations, so `super` from an
-            // override of one of them returns nil. Any other unresolved
-            // class-method super is an error.
-            if matches!(
-                method_name.as_str(),
-                "inherited"
-                    | "included"
-                    | "extended"
-                    | "prepended"
-                    | "const_added"
-                    | "method_added"
-                    | "method_removed"
-                    | "method_undefined"
-                    | "singleton_method_added"
-                    | "singleton_method_removed"
-                    | "singleton_method_undefined"
-            ) {
-                return Ok(Object::Nil);
-            }
-            // An override of `allocate` reaches the core library's, which
-            // makes the instance.
-            if method_name == "allocate" {
-                return self.allocate_instance(&self_class, position);
-            }
-            // An override of `new` on a class reaches the core library's,
-            // which allocates the instance and runs `initialize`.
-            if method_name == "new" && matches!(self_object.view(), View::Class(_)) {
-                return self.invoke_class(Rc::clone(&self_class), evaluated_args, position);
-            }
-            // BasicObject#method_missing raises NoMethodError for the name.
-            if method_name == "method_missing" {
-                return self.super_past_every_ancestor(&method_name, evaluated_args, position);
-            }
-            if method_name == "const_missing"
-                && let [View::Symbol(name) | View::String(name)] = evaluated_args
-                    .iter()
-                    .map(Object::view)
-                    .collect::<Vec<_>>()
-                    .as_slice()
-            {
-                let name = name.as_str().to_string();
-                return self.default_const_missing(&self_class, &name, position);
-            }
-            // Any other class method the core library writes natively
-            // answers a `super` from an override of it, and so does a module
-            // method, such as the `Process._fork` a prepended module wraps.
-            if matches!(self_object.view(), View::Module(_))
-                && let Some(result) = self.call_module_methods(
-                    &self_class,
-                    &self_object,
-                    &method_name,
-                    &evaluated_args,
-                    position,
-                )?
-            {
+            if let Some(result) = self.super_to_core_method(
+                &self_class,
+                &self_object,
+                &method_name,
+                evaluated_args,
+                position,
+            )? {
                 return Ok(result);
-            }
-            if let Some(result) =
-                self.call_class_methods(&self_class, &method_name, &evaluated_args, position)?
-            {
-                return Ok(result);
-            }
-            // Past Module and Object a class object's ancestors end in
-            // Kernel, whose methods metorex writes natively, among the
-            // methods every object has or as functions.
-            let is_function = matches!(
-                self.globals().get(&method_name).view(),
-                Some(View::NativeFunction(_))
-            );
-            if !is_function
-                && let Some(result) =
-                    self.call_object_method(&self_object, &method_name, &evaluated_args, position)?
-            {
-                return Ok(result);
-            }
-            if crate::vm::native_methods::is_native_kernel_method(&method_name) {
-                if method_name == "warn" {
-                    return self.kernel_warn_for(
-                        Some(&self_object.clone()),
-                        evaluated_args,
-                        position,
-                    );
-                }
-                return self.call_native_function(&method_name, evaluated_args, position);
             }
             return Err(MetorexError::runtime_error(
                 format!(
@@ -656,6 +558,133 @@ impl VirtualMachine {
             evaluated_args,
             position,
         )
+    }
+
+    /// What `super` from a class or module method reaches once no
+    /// ancestor's method table holds the name: the core library's hooks and
+    /// the class, module, and Kernel methods it writes natively. `None` when
+    /// none of them answers.
+    pub(crate) fn super_to_core_method(
+        &mut self,
+        self_class: &Rc<Class>,
+        self_object: &Object,
+        method_name: &str,
+        evaluated_args: Vec<Object>,
+        position: Position,
+    ) -> Result<Option<Object>, MetorexError> {
+        // The mixin hooks have real default implementations rather than
+        // no-op ones: `super` from an override performs the default.
+        match method_name {
+            "append_features" | "prepend_features" => {
+                if let Some(View::Class(target) | View::Module(target)) =
+                    evaluated_args.first().view()
+                {
+                    let target = Rc::clone(target);
+                    self.default_append_features(&target, self_class, position)?;
+                    return Ok(Some(Object::Module(Rc::clone(self_class))));
+                }
+            }
+            "extend_object" => {
+                if let Some(target) = evaluated_args.first() {
+                    let target = target.clone();
+                    self.default_extend_object(&target, self_class, position)?;
+                    return Ok(Some(Object::Module(Rc::clone(self_class))));
+                }
+            }
+            _ => {}
+        }
+        // The Module and Class hooks have silent no-op default
+        // implementations, so `super` from an override of one of them
+        // returns nil.
+        if matches!(
+            method_name,
+            "inherited"
+                | "included"
+                | "extended"
+                | "prepended"
+                | "const_added"
+                | "method_added"
+                | "method_removed"
+                | "method_undefined"
+                | "singleton_method_added"
+                | "singleton_method_removed"
+                | "singleton_method_undefined"
+        ) {
+            return Ok(Some(Object::Nil));
+        }
+        // An override of `allocate` reaches the core library's, which
+        // makes the instance.
+        if method_name == "allocate" {
+            return self.allocate_instance(self_class, position).map(Some);
+        }
+        // An override of `new` on a class reaches the core library's,
+        // which allocates the instance and runs `initialize`.
+        if method_name == "new" && matches!(self_object.view(), View::Class(_)) {
+            return self
+                .invoke_class(Rc::clone(self_class), evaluated_args, position)
+                .map(Some);
+        }
+        // BasicObject#method_missing raises NoMethodError for the name.
+        if method_name == "method_missing" {
+            return self
+                .super_past_every_ancestor(method_name, evaluated_args, position)
+                .map(Some);
+        }
+        if method_name == "const_missing"
+            && let [View::Symbol(name) | View::String(name)] = evaluated_args
+                .iter()
+                .map(Object::view)
+                .collect::<Vec<_>>()
+                .as_slice()
+        {
+            let name = name.as_str().to_string();
+            return self
+                .default_const_missing(self_class, &name, position)
+                .map(Some);
+        }
+        // Any other class method the core library writes natively
+        // answers a `super` from an override of it, and so does a module
+        // method, such as the `Process._fork` a prepended module wraps.
+        if matches!(self_object.view(), View::Module(_))
+            && let Some(result) = self.call_module_methods(
+                self_class,
+                self_object,
+                method_name,
+                &evaluated_args,
+                position,
+            )?
+        {
+            return Ok(Some(result));
+        }
+        if let Some(result) =
+            self.call_class_methods(self_class, method_name, &evaluated_args, position)?
+        {
+            return Ok(Some(result));
+        }
+        // Past Module and Object a class object's ancestors end in
+        // Kernel, whose methods metorex writes natively, among the
+        // methods every object has or as functions.
+        let is_function = matches!(
+            self.globals().get(method_name).view(),
+            Some(View::NativeFunction(_))
+        );
+        if !is_function
+            && let Some(result) =
+                self.call_object_method(self_object, method_name, &evaluated_args, position)?
+        {
+            return Ok(Some(result));
+        }
+        if crate::vm::native_methods::is_native_kernel_method(method_name) {
+            if method_name == "warn" {
+                return self
+                    .kernel_warn_for(Some(self_object), evaluated_args, position)
+                    .map(Some);
+            }
+            return self
+                .call_native_function(method_name, evaluated_args, position)
+                .map(Some);
+        }
+        Ok(None)
     }
 
     /// `super` from a method whose `self` is a built-in value rather than an

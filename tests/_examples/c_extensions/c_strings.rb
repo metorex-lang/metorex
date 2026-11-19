@@ -61,8 +61,8 @@ Encoding.default_internal = "EUC-JP"
 p(strings.external_with("\xE3\x81\x82".b, "UTF-8").bytes)
 Encoding.default_internal = nil
 p(strings.locale_strings.map(&:encoding).uniq == [Encoding.find("locale")])
-hidden, revealed, tmp = strings.tmp_class
-p([hidden, revealed, tmp.bytes, tmp.encoding])
+hidden, revealed, rehidden, tmp = strings.tmp_class
+p([hidden, revealed, rehidden, tmp.bytes, tmp.encoding])
 
 source = "copy"
 dup, shared, frozen, classed = strings.copies(source)

@@ -55,6 +55,13 @@ module MakeMakefile
   # What every source a check compiles starts with.
   COMMON_HEADERS = "#include \"ruby.h\"\n"
 
+  # The headers that declare the C API, some of whose functions, such as
+  # rb_enc_raise, are static inline functions there, with no symbol in the
+  # binary for a check that links against the name alone to find, as it
+  # finds the one MRI's libruby exports.
+  C_API_HEADERS = %w[ruby/encoding.h ruby/io.h ruby/re.h ruby/thread.h ruby/util.h ruby/debug.h ruby/vm.h ruby/version.h]
+    .map { |header| "#include \"#{header}\"\n" }.join
+
   # Whether `message` keeps quiet, which `$VERBOSE` overrides, and the
   # mkmf.log every check writes its commands, their output and the program
   # it checked to, as MRI's mkmf does.
@@ -449,12 +456,19 @@ module MakeMakefile
       #{MAIN_DOES_NOTHING}
       int t(void) { #{declared["volatile p"]}; p = (#{declared[nil]})#{func}; return !p; }
     SOURCE
-    taken || (call && try_link(<<~SOURCE, options))
+    taken ||= call && try_link(<<~SOURCE, options)
       #{headers}
       extern int t(void);
       #{MAIN_DOES_NOTHING}
       #{"extern void #{call};" if declared}
       int t(void) { #{prepared}#{call}; return 0; }
+    SOURCE
+    taken || (declared && try_link(<<~SOURCE, options))
+      #{C_API_HEADERS}
+      #{headers}
+      extern int t(void);
+      #{MAIN_DOES_NOTHING}
+      int t(void) { #{declared["volatile p"]}; p = (#{declared[nil]})#{func}; return !p; }
     SOURCE
   end
 
@@ -645,6 +659,10 @@ module MakeMakefile
     source_directory = srcprefix ? File.join($srcdir, srcprefix) : $srcdir
     sources = $srcs ? $srcs.map { |source| source_path(source, source_directory) } : Dir.glob(File.join(source_directory, "*.{#{SRC_EXT.join(",")}}")).sort
     objects = $objs || sources.map { |source| File.basename(source, ".*") + ".o" }
+    # An extconf.rb next to no sources, as json's top one is, makes no
+    # library, as MRI's mkmf does, where linking one would install an empty
+    # library that `require` finds ahead of the Ruby file of the same name.
+    library = !objects.empty?
     dlext = RbConfig::CONFIG["DLEXT"]
     link_flags = if RbConfig::CONFIG["host_os"].include?("darwin")
       "-bundle"
@@ -677,7 +695,7 @@ module MakeMakefile
     makefile << "CPPFLAGS = $(INCFLAGS) #{[*prefix_include, *definitions, preprocessor_flags].join(" ")}".rstrip << "\n"
     makefile << "DLDFLAGS = #{[link_flags, $DLDFLAGS, CONFIG["EXTDLDFLAGS"], library_paths, $LDFLAGS].map(&:strip).reject(&:empty?).join(" ")}\n"
     makefile << "LIBS = #{libraries}\n"
-    makefile << "DLLIB = #{target}.#{dlext}\n"
+    makefile << "DLLIB = #{"#{target}.#{dlext}" if library}\n"
     makefile << "TARGET_SO = $(DLLIB)\n"
     makefile << "DESTDIR =\n"
     makefile << "sitearchdir = #{RbConfig::CONFIG["sitearchdir"]}\n"
@@ -687,11 +705,13 @@ module MakeMakefile
     makefile << "\n"
     makefile << "all: $(DLLIB)\n"
     makefile << "\n"
-    makefile << "$(DLLIB): $(OBJS)\n"
-    # A library with C++ in it is linked by the C++ compiler, which brings
-    # in the C++ standard library.
-    linker = sources.any? { |source| cxx_source?(source) } ? "$(CXX)" : "$(CC)"
-    makefile << "\t#{linker} $(DLDFLAGS) -o $@ $(OBJS) $(LIBS)\n"
+    if library
+      makefile << "$(DLLIB): $(OBJS)\n"
+      # A library with C++ in it is linked by the C++ compiler, which brings
+      # in the C++ standard library.
+      linker = sources.any? { |source| cxx_source?(source) } ? "$(CXX)" : "$(CC)"
+      makefile << "\t#{linker} $(DLDFLAGS) -o $@ $(OBJS) $(LIBS)\n"
+    end
     # An object is made again when the header the checks wrote changes, as
     # it does when extconf.rb runs again.
     made_from = $extconf_h ? " #{$extconf_h}" : ""
@@ -705,8 +725,7 @@ module MakeMakefile
     # `make install`, as RubyGems runs it after building, copies the library
     # to where `sitearchdir` and the extension's name put it.
     makefile << "install: $(DLLIB)\n"
-    makefile << "\tmkdir -p $(RUBYARCHDIR)\n"
-    makefile << "\tcp $(DLLIB) $(RUBYARCHDIR)\n"
+    makefile << "\tmkdir -p $(RUBYARCHDIR)\n\tcp $(DLLIB) $(RUBYARCHDIR)\n" if library
     makefile << "\n"
     makefile << "clean:\n"
     makefile << "\trm -f $(OBJS) $(DLLIB)#{" #{$cleanfiles.join(" ")}" unless $cleanfiles.empty?}\n"

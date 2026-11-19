@@ -28,6 +28,7 @@ Dir.mktmpdir do |directory|
     create_header
     puts File.read("extconf.h")
 
+    File.write("checked.c", "void Init_checked(void) {}\n")
     create_makefile("checked")
     makefile = File.read("Makefile")
     puts makefile[/^RUBY_EXTCONF_H = .*/]
@@ -44,7 +45,6 @@ Dir.mktmpdir do |directory|
 
     # `make install` copies the library to where sitearchdir and the
     # extension's name put it, as RubyGems runs it after a build.
-    File.write("checked.c", "void Init_checked(void) {}\n")
     File.write("Makefile", makefile)
     installed = File.join(directory, "installed")
     system("make", "-s", "install", "sitearchdir=#{installed}", out: File::NULL, err: File::NULL)
