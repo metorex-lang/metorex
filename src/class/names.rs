@@ -73,6 +73,20 @@ impl Class {
     /// Clearing also drops the derived `#<Module:0x…>::N` form, leaving the
     /// module with no name at all.
     pub fn set_temporary_name(&self, name: Option<String>) {
+        self.set_temporary_name_once(name, &mut std::collections::HashSet::new());
+    }
+
+    /// The cascade behind `set_temporary_name`. `visited` holds each module
+    /// already renamed, so a constant that refers back to an enclosing module
+    /// does not send the walk around the cycle again.
+    fn set_temporary_name_once(
+        &self,
+        name: Option<String>,
+        visited: &mut std::collections::HashSet<*const Class>,
+    ) {
+        if !visited.insert(self as *const Class) {
+            return;
+        }
         match &name {
             Some(_) => *self.rare_for_writing().temporary_name.borrow_mut() = name.clone(),
             None => {
@@ -102,7 +116,8 @@ impl Class {
             if nested.has_permanent_name() {
                 continue;
             }
-            nested.set_temporary_name(name.as_ref().map(|n| format!("{}::{}", n, key)));
+            nested
+                .set_temporary_name_once(name.as_ref().map(|n| format!("{}::{}", n, key)), visited);
         }
     }
 
