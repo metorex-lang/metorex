@@ -122,7 +122,7 @@ impl VirtualMachine {
                 if let Some(existing) = class_rc.singleton_class_slot().clone() {
                     return existing;
                 }
-                let is_module = matches!(receiver.view(), View::Module(_));
+                let is_module = class_rc.is_module();
                 // Per Ruby: the singleton class of a Class K has K's parent's
                 // singleton class as its superclass (not K's parent itself).
                 // Build that chain on demand by recursing through `superclass`.

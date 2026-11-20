@@ -120,6 +120,29 @@ fn test_oop_set_temporary_name_cycle_execution() {
 }
 
 #[test]
+fn test_oop_module_singleton_ancestors_probe_execution() {
+    let output = run_example("oop/module_singleton_ancestors_probe.rb");
+    assert_eq!(
+        output,
+        "[#<Class:Plain>, Module, Object, Kernel, BasicObject]\n\
+         [#<Class:SelfExt>, SelfExt, Module, Object, Kernel, BasicObject]\n\
+         Module\n"
+    );
+}
+
+#[test]
+fn test_oop_module_prepended_singleton_ancestors_execution() {
+    let output = run_example("oop/module_prepended_singleton_ancestors.rb");
+    assert_eq!(
+        output,
+        "Prepended\n\
+         [#<Class:SelfExtending>, SelfExtending, Prepended, Module, Object]\n\
+         []\n\
+         [Prepended, Module, Object]\n"
+    );
+}
+
+#[test]
 fn test_oop_module_function_and_alias_warning_execution() {
     let output = run_example("oop/module_function_and_alias_warning.rb");
     let file = "tests/_examples/oop/module_function_and_alias_warning.rb";
