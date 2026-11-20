@@ -8,7 +8,7 @@
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 METOREX="${METOREX:-$REPO_ROOT/target/release/metorex}"
-TEST_DIR=$(ls -d "$REPO_ROOT"/target/ruby-release/ruby-*/test/psych 2>/dev/null | tail -1)
+TEST_DIR=$(ls -d "$REPO_ROOT"/target/ruby-release/ruby-*/test/psych 2>/dev/null | sort -V | tail -1)
 HELPERS="$REPO_ROOT/scripts/gem_suite/lib"
 LOG_DIR="${LOG_DIR:-$(mktemp -d)}"
 FILE_TIMEOUT="${FILE_TIMEOUT:-120}"

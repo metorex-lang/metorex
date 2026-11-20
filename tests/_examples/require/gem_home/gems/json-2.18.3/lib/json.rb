@@ -1,5 +1,5 @@
 require "json/ext/parser"
 
 module JSON
-  VERSION = "2.18.0 as installed"
+  VERSION = "2.18.3 as installed"
 end

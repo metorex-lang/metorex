@@ -7,7 +7,9 @@
 
 root = File.expand_path("..", __dir__)
 release = File.join(root, "target", "ruby-release")
-header = Dir.glob(File.join(release, "ruby-*", "enc", "unicode", "*", "name2ctype.h")).max
+header = Dir.glob(File.join(release, "ruby-*", "enc", "unicode", "*", "name2ctype.h")).max_by do |path|
+  Gem::Version.new(path.delete_prefix("#{release}/ruby-").split("/").first)
+end
 abort "no name2ctype.h under #{release}; unpack the release first" if header.nil?
 
 # The header is written for the C preprocessor. MRI builds it with both

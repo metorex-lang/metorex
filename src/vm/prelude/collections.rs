@@ -648,10 +648,18 @@ class Set
   # of them.
   def classify
     return Enumerator.over(self, :classify, [], size) unless block_given?
-    grouped = Hash.new { |held, key| held[key] = Set.new }
+    grouped = Hash.new { |held, key| held[key] = subset }
     each { |element| grouped[yield element].add(element) }
     grouped
   end
+
+  # An empty set of self's class that compares its elements as self does.
+  def subset
+    made = self.class.allocate
+    made.compare_by_identity if compare_by_identity?
+    made
+  end
+  private :subset
 
   # The set of subsets a block cuts self into. A block of one parameter groups
   # by what it answers, and a block of two groups the elements it relates.
@@ -670,7 +678,7 @@ class Set
     grouped = {}
     walked.each_with_index do |element, index|
       root = group_root(group_of, index)
-      grouped[root] = Set.new unless grouped.key?(root)
+      grouped[root] = subset unless grouped.key?(root)
       grouped[root].add(element)
     end
     Set.new(grouped.values)
@@ -693,7 +701,7 @@ class Set
 
   # A copy of self with every set it holds opened up into its own elements.
   def flatten
-    Set.new(flattened_elements(self, []))
+    flattened_elements(self, []).each_with_object(subset) { |element, made| made.add(element) }
   end
 
   # Opens up every set self holds, answering self when that changed anything
@@ -701,7 +709,7 @@ class Set
   def flatten!
     flattened = flattened_elements(self, [])
     return nil if flattened.size == size && flattened.all? { |element| include?(element) }
-    replace(Set.new(flattened))
+    replace(flatten)
     self
   end
 

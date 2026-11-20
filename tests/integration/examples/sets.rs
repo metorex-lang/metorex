@@ -91,12 +91,21 @@ fn test_sets_eql_members_no_parens_execution() {
 
 /// The expected output of both `sets/identity_operands` variants.
 const IDENTITY_OPERANDS_OUTPUT: &str =
-    "2\ntrue\ntrue\ntrue\ntrue\nfalse\n\"value must be enumerable\"\nSet[10, 20]\n2\n";
+    "2\ntrue\ntrue\ntrue\ntrue\ntrue\n\"value must be enumerable\"\nSet[10, 20]\n2\n";
 
 #[test]
 fn test_sets_identity_operands_execution() {
     let output = run_example("sets/identity_operands.rb");
     assert_eq!(output, IDENTITY_OPERANDS_OUTPUT);
+}
+
+#[test]
+fn test_sets_identity_subsets_execution() {
+    let output = run_example("sets/identity_subsets.rb");
+    assert_eq!(
+        output,
+        "[true, true]\n[true, true]\n[true, true]\ntrue\ntrue\n[1, 2, 3, 4]\ntrue\ntrue\ntrue\ntrue\n1\n1\n[Tagged, Tagged]\n[Tagged, Tagged]\nTagged\n"
+    );
 }
 
 #[test]

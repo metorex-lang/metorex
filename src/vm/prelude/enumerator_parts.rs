@@ -3,7 +3,7 @@ class Enumerator::EmptyWalk
   include Enumerable
 
   def each
-    self
+    nil
   end
 end
 
@@ -24,10 +24,8 @@ class Enumerator::MethodWalk
     end
     # A lazy method given a block adds a step instead of walking, so the step
     # it answers without one is walked in its place.
-    unless yielded || !answered.is_a?(Enumerator::Lazy)
-      @receiver.send(@method_name, *@arguments).each { |*values| walker.call(*values) }
-    end
-    self
+    return answered if yielded || !answered.is_a?(Enumerator::Lazy)
+    @receiver.send(@method_name, *@arguments).each { |*values| walker.call(*values) }
   end
 end
 

@@ -59,7 +59,7 @@ module Gem
   # installed copy of another version has its extensions built for metorex
   # and is loaded, as MRI loads the version a bundle locks, unless the build
   # fails.
-  CARRIED_VERSIONS = { "json" => "2.18.0", "fiddle" => nil }.freeze
+  CARRIED_VERSIONS = { "json" => "2.18.3", "fiddle" => nil }.freeze
 
   # Whether metorex provides a gem of this name, and of this version when
   # one is given, itself, so an installed copy is left off the load path in

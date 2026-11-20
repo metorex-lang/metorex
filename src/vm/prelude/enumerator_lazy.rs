@@ -8,6 +8,8 @@ class Enumerator::Lazy < Enumerator
     @kind = nil
     @callable = nil
     @count = nil
+    @shown = source
+    @label = nil
     self
   end
   private :initialize
@@ -22,8 +24,19 @@ class Enumerator::Lazy < Enumerator
     made.instance_variable_set(:@kind, nil)
     made.instance_variable_set(:@callable, nil)
     made.instance_variable_set(:@count, nil)
+    made.instance_variable_set(:@shown, source)
+    made.instance_variable_set(:@label, nil)
     made
   end
+
+  # Name the method a lazy walk was built by, which `inspect` shows after the
+  # walk it was called on.
+  def named(by, name, arguments)
+    @shown = by
+    @label = arguments.empty? ? name.to_s : "#{name}(#{arguments.map(&:inspect).join(", ")})"
+    self
+  end
+  protected :named
 
   # How many values a step leaves behind. A step that decides what to keep
   # cannot say, so it reports nil.
@@ -42,11 +55,12 @@ class Enumerator::Lazy < Enumerator
   private :step_size
 
   # Add one step to the walk, which is what every lazy method answers.
-  def with_step(kind, callable = nil, count = nil)
+  def with_step(kind, callable = nil, count = nil, name = kind, arguments = [])
     built = Enumerator::Lazy.build(self, step_size(kind, count))
     built.instance_variable_set(:@kind, kind)
     built.instance_variable_set(:@callable, callable)
     built.instance_variable_set(:@count, count)
+    built.named(self, name, arguments) unless name.nil?
     built
   end
   private :with_step
@@ -65,15 +79,22 @@ class Enumerator::Lazy < Enumerator
 
   # A block names the count the walk will hand out.
   def to_enum(method_name = :each, *args, &size)
-    Enumerator::Lazy.build(Enumerator::MethodWalk.new(self, method_name, args), size.nil? ? nil : size.call)
+    walk = Enumerator::Lazy.build(Enumerator::MethodWalk.new(self, method_name, args), size.nil? ? nil : size.call)
+    walk.named(self, method_name, args)
   end
 
   def enum_for(method_name = :each, *args, &size)
     to_enum(method_name, *args, &size)
   end
 
+  # Without a block, the index counts from zero as `with_index(0)` does.
+  def each_with_index(&block)
+    return with_step(:with_index, nil, 0, :each_with_index, [0]) if block.nil?
+    super(&block)
+  end
+
   # Enumerable's own methods answer a lazy walk here when given no block.
-  [:each_with_index, :each_with_object, :with_object, :each_slice, :each_entry, :each_cons].each do |name|
+  [:each_with_object, :with_object, :each_slice, :each_entry, :each_cons].each do |name|
     define_method(name) do |*args, &block|
       return to_enum(name, *args) if block.nil?
       super(*args, &block)
@@ -98,7 +119,7 @@ class Enumerator::Lazy < Enumerator
     previous = nil
     # Each walk of a zip starts the other sources over.
     alongside_walks = @count.map { |other| other.to_enum(:each) } if @kind == :zip
-    walk_source(*args) do |values|
+    answered = walk_source(*args) do |values|
       case @kind
       when nil
         yield(*values)
@@ -224,30 +245,31 @@ class Enumerator::Lazy < Enumerator
         yield grouped
       end
     end
-    self
+    # A walk with no step of its own answers what its source's `each` does.
+    @kind.nil? && @transform.nil? ? answered : nil
   end
 
   # The elements the step below hands up. A Lazy built with a block runs it
   # against a yielder, which is how `Enumerator::Lazy.new(obj) { |y, v| }` reads.
   def walk_source(*args)
-    if @transform.nil?
-      @source.each(*args) { |*values| yield values }
-      return self
-    end
+    return @source.each(*args) { |*values| yield values } if @transform.nil?
+
     collector = Enumerator::LazyYielder.new
     @source.each(*args) do |*values|
       collector.clear
       @transform.call(collector, *values)
       collector.collected.each { |value| yield [value] }
     end
-    self
+    nil
   end
   private :walk_source
 
   def take(count)
     raise ArgumentError, "attempt to take negative size" if count < 0
-    return Enumerator::Lazy.build(Enumerator::EmptyWalk.new, 0) if count == 0
-    with_step(:take, nil, count)
+    if count == 0
+      return Enumerator::Lazy.build(Enumerator::EmptyWalk.new, 0).named(self, :take, [count])
+    end
+    with_step(:take, nil, count, :take, [count])
   end
 
   def first(*count)
@@ -281,7 +303,7 @@ class Enumerator::Lazy < Enumerator
 
   def collect(&block)
     raise ArgumentError, "tried to call lazy collect without a block" if block.nil?
-    with_step(:map, block)
+    with_step(:map, block, nil, :collect)
   end
 
   def select(&block)
@@ -291,12 +313,12 @@ class Enumerator::Lazy < Enumerator
 
   def filter(&block)
     raise ArgumentError, "tried to call lazy filter without a block" if block.nil?
-    with_step(:select, block)
+    with_step(:select, block, nil, :filter)
   end
 
   def find_all(&block)
     raise ArgumentError, "tried to call lazy find_all without a block" if block.nil?
-    with_step(:select, block)
+    with_step(:select, block, nil, :find_all)
   end
 
   def reject(&block)
@@ -316,7 +338,7 @@ class Enumerator::Lazy < Enumerator
 
   def collect_concat(&block)
     raise ArgumentError, "tried to call lazy collect_concat without a block" if block.nil?
-    with_step(:flat_map, block)
+    with_step(:flat_map, block, nil, :collect_concat)
   end
 
   def compact
@@ -330,7 +352,7 @@ class Enumerator::Lazy < Enumerator
 
   def drop(count)
     raise ArgumentError, "attempt to drop negative size" if count < 0
-    with_step(:drop, nil, count)
+    with_step(:drop, nil, count, :drop, [count])
   end
 
   def drop_while(&block)
@@ -339,11 +361,11 @@ class Enumerator::Lazy < Enumerator
   end
 
   def grep(pattern, &block)
-    with_step(:grep, block, pattern)
+    with_step(:grep, block, pattern, :grep, [pattern])
   end
 
   def grep_v(pattern, &block)
-    with_step(:grep_v, block, pattern)
+    with_step(:grep_v, block, pattern, :grep_v, [pattern])
   end
 
   def uniq(&block)
@@ -351,27 +373,27 @@ class Enumerator::Lazy < Enumerator
   end
 
   def chunk(&block)
-    with_step(:chunk, block)
+    with_step(:chunk, block, nil, nil)
   end
 
   def chunk_while(&block)
     raise ArgumentError, "tried to call lazy chunk_while without a block" if block.nil?
-    with_step(:chunk_while, block)
+    with_step(:chunk_while, block, nil, nil)
   end
 
   def slice_when(&block)
     raise ArgumentError, "tried to call lazy slice_when without a block" if block.nil?
-    with_step(:slice_when, block)
+    with_step(:slice_when, block, nil, nil)
   end
 
   def slice_before(&block)
     raise ArgumentError, "tried to call lazy slice_before without a block" if block.nil?
-    with_step(:slice_before, block)
+    with_step(:slice_before, block, nil, nil)
   end
 
   def slice_after(&block)
     raise ArgumentError, "tried to call lazy slice_after without a block" if block.nil?
-    with_step(:slice_after, block)
+    with_step(:slice_after, block, nil, nil)
   end
 
   def with_index(offset = 0, &block)
@@ -379,7 +401,7 @@ class Enumerator::Lazy < Enumerator
     unless start.is_a?(Integer)
       raise TypeError, "no implicit conversion of #{start.class} into Integer"
     end
-    with_step(:with_index, block, start)
+    with_step(:with_index, block, start, :with_index, [start])
   end
 
   # A lazy zip pulls one value at a time from the others, so a walk with no
@@ -401,7 +423,7 @@ class Enumerator::Lazy < Enumerator
       end
       other.respond_to?(:next) ? other : other.to_enum(:each)
     end
-    with_step(:zip, nil, stepped)
+    with_step(:zip, nil, stepped, :zip, others)
   end
 
   # The elements pulled out of the walk so far. `next` and `peek` read from
@@ -434,7 +456,8 @@ class Enumerator::Lazy < Enumerator
 
   def inspect
     return "#<#{self.class}: uninitialized>" if @source.nil?
-    "#<Enumerator::Lazy: #{@source.inspect}>"
+    return "#<Enumerator::Lazy: #{@shown.inspect}>" if @label.nil?
+    "#<Enumerator::Lazy: #{@shown.inspect}:#{@label}>"
   end
 end
 

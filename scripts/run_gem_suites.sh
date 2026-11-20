@@ -6,7 +6,7 @@
 #   scripts/run_gem_suites.sh [GEM...]
 #
 # GEM is a name the table below lists, the gem's directory under gems/. With none named, every suite runs.
-# Each gem is a submodule at the release tag of the version Ruby 4.0.7
+# Each gem is a submodule at the release tag of the version Ruby 4.0.10
 # ships, and its suite runs against its own library, which goes on the load
 # path ahead of the one Metorex carries.
 #

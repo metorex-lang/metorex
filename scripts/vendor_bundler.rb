@@ -45,6 +45,30 @@ text = File.read(stub)
 abort "bundler/stub_specification.rb no longer answers missing_extensions? as #{answered.inspect}" unless text.include?(answered)
 File.write(stub, text.sub(answered, answered.sub("      true\n", "      stub.missing_extensions?\n")))
 
+# Metorex loads no library compiled for MRI, so Bundler takes the RUBY
+# platform variant of every gem and builds its extensions, except a gem whose
+# library metorex provides itself.
+force_platform = File.join(stdlib, "bundler", "force_platform.rb")
+defaulted = <<-RUBY
+    # variant unless the name is explicitly allowlisted.
+
+    def default_force_ruby_platform
+      return false unless RUBY_ENGINE == "truffleruby"
+RUBY
+text = File.read(force_platform)
+abort "bundler/force_platform.rb no longer defaults as #{defaulted.inspect}" unless text.include?(defaulted)
+File.write(force_platform, text.sub(defaulted, <<-RUBY))
+    # variant unless the name is explicitly allowlisted.
+    #
+    # Metorex loads no library compiled for MRI, so it takes the RUBY platform
+    # variant of every gem and builds its extensions, except a gem whose
+    # library it provides itself, where the variant installed is never loaded.
+
+    def default_force_ruby_platform
+      return !Gem.provided_by_metorex?(name) if Gem.respond_to?(:provided_by_metorex?)
+      return false unless RUBY_ENGINE == "truffleruby"
+RUBY
+
 executable = File.join(stdlib, "bundler", "metorex", "bundle.rb")
 FileUtils.mkdir_p(File.dirname(executable))
 File.write(executable, File.read(release.path("libexec", "bundle")))

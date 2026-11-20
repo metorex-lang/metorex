@@ -20,6 +20,8 @@ ENV LANG=C.UTF-8
 # a port named by its service reads. `tzdata` and `tzdata-legacy` carry the
 # zones a time in a named place is read against, down to the older names a
 # spec still writes. `libyaml-dev` is what Ruby loads YAML through.
+# `libffi-dev` is what ffi's extension calls C through, and `libxml2-dev`
+# and `libxslt1-dev` are the libraries nokogiri's extension links against.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
        binutils \
@@ -28,6 +30,9 @@ RUN apt-get update \
        curl \
        git \
        libcrypt-dev \
+       libffi-dev \
+       libxml2-dev \
+       libxslt1-dev \
        libyaml-dev \
        mold \
        netbase \
@@ -42,7 +47,7 @@ RUN apt-get update \
 # release metorex reports itself as. Ubuntu carries no package for it, so the
 # build the CI runner installs is unpacked here, which is the same Ruby by the
 # same route rather than one built from source.
-ARG RUBY_VERSION=4.0.7
+ARG RUBY_VERSION=4.0.10
 ARG TARGETARCH
 RUN case "$TARGETARCH" in \
       amd64) built_for=x64 ;; \

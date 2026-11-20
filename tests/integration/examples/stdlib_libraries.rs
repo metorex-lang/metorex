@@ -1921,7 +1921,7 @@ fn test_stdlib_libraries_colorized_code_no_parens_execution() {
 }
 
 const PRISM_PARSING_OUTPUT: &str = concat!(
-    "\"1.8.1\"\n",
+    "\"1.8.2\"\n",
     "true\n",
     "[:def_node, :call_node]\n",
     ":total\n",

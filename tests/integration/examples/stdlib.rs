@@ -1674,7 +1674,7 @@ fn test_an_invalid_rubyopt_switch_is_reported_under_the_name_the_interpreter_was
 }
 
 /// The expected output of both `runtime/release_named` variants.
-const RELEASE_NAMED: &str = concat!("\"4.0.7\"\n", "0\n", "\"2026-09-15\"\n", "true\n");
+const RELEASE_NAMED: &str = concat!("\"4.0.10\"\n", "0\n", "\"2026-11-19\"\n", "true\n");
 
 #[test]
 fn test_runtime_release_named_execution() {

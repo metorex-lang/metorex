@@ -517,12 +517,12 @@ pub(crate) fn reported_as_c(method: &crate::object::Method) -> bool {
     })
 }
 
-/// The line MRI 4.0.7's trace_point.rb defines `TracePoint#disable` on, and
+/// The line MRI 4.0.10's trace_point.rb defines `TracePoint#disable` on, and
 /// the line of its body it runs first.
 const TRACE_POINT_DISABLE_LINE: usize = 297;
 const TRACE_POINT_DISABLE_FIRST_LINE: usize = 299;
 
-/// The unary operators MRI 4.0.7 writes in Ruby in its numeric.rb, by the
+/// The unary operators MRI 4.0.10 writes in Ruby in its numeric.rb, by the
 /// class each is defined on, with the lines a trace reports for its call
 /// and for its return.
 pub(crate) const NUMERIC_UNARY_METHODS: &[(&str, &str, usize, usize)] = &[

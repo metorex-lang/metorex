@@ -1,4 +1,4 @@
-// Written by scripts/vendor_rubygems.rb from RubyGems 4.0.20 as Ruby 4.0.7 ships it.
+// Written by scripts/vendor_rubygems.rb from RubyGems 4.0.20 as Ruby 4.0.10 ships it.
 
 /// The files of RubyGems, by the feature name each is required as.
 pub(crate) const RUBYGEMS_LIBRARIES: &[(&str, &str)] = &[

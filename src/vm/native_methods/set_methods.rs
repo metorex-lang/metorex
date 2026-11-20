@@ -154,14 +154,10 @@ impl VirtualMachine {
                         position,
                     ));
                 }
-                let other = self.set_operand(&arguments[0], position)?;
-                let other = &other;
-                let result: indexmap::IndexSet<ObjectHash> = set_rc
-                    .borrow()
-                    .intersection(&other.borrow())
-                    .cloned()
-                    .collect();
-                Ok(Some(Object::Set(Rc::new(RefCell::new(result)))))
+                let other = self.operand_placed_like(set_rc, &arguments[0], position)?;
+                let result: indexmap::IndexSet<ObjectHash> =
+                    set_rc.borrow().intersection(&other).cloned().collect();
+                Ok(Some(self.set_placed_like(set_rc, result)))
             }
             "difference" => {
                 if arguments.len() != 1 {
@@ -475,6 +471,7 @@ impl VirtualMachine {
                 };
                 let elements: Vec<ObjectHash> = set_rc.borrow().iter().cloned().collect();
                 let kept_rc = Rc::new(RefCell::new(indexmap::IndexSet::<ObjectHash>::new()));
+                let by_identity = self.set_by_identity(set_rc);
                 let mut changed = false;
                 for held in elements {
                     let answer =
@@ -483,9 +480,12 @@ impl VirtualMachine {
                     match method_name {
                         "map!" | "collect!" => {
                             drop(kept);
-                            let mapped = self
-                                .placed_in_set(&kept_rc, &answer, position)?
-                                .ok_or_else(|| unhashable(&answer, position))?;
+                            let mapped = if by_identity {
+                                ObjectHash::by_identity(&answer)
+                            } else {
+                                self.placed_in_set(&kept_rc, &answer, position)?
+                            }
+                            .ok_or_else(|| unhashable(&answer, position))?;
                             changed |= mapped != held;
                             kept_rc.borrow_mut().insert(mapped);
                         }
@@ -507,10 +507,6 @@ impl VirtualMachine {
                 }
                 let kept = kept_rc.borrow().clone();
                 *set_rc.borrow_mut() = kept;
-                // The values a block maps to are placed by what they hold.
-                if matches!(method_name, "map!" | "collect!") {
-                    self.identity_sets.remove(&(Rc::as_ptr(set_rc) as usize));
-                }
                 // The bang forms answer nil when they changed nothing.
                 if matches!(method_name, "select!" | "filter!" | "reject!") && !changed {
                     return Ok(Some(Object::Nil));

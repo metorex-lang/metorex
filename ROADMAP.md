@@ -126,8 +126,17 @@ Metorex's peak memory is above 1.5× CRuby's on 46 of the 50 rows of the README'
   - Acceptance: running it on the 4.0.6 tree a second time leaves those files unchanged
 - [x] Metorex is Ruby 4.0.7: the version constants in `src/lib.rs`, the encoding, core method name, native arity, and parser tables, RubyGems, the vendored gems and prism, with the tests and docs that name 4.0.6 updated. The `ruby/spec` submodule already carries the spec 4.0.7 added, the EncodingError for an interpolated Symbol with invalid bytes
   - Acceptance: `metorex -v` reports 4.0.7, every generated file names 4.0.7 in its header, and `cargo test` and `scripts/run_ruby_spec.sh` pass
-- [ ] CI and the container run MRI 4.0.7, where `.github/workflows/ci.yml` and `docker/Dockerfile` pin 4.0.1 today
-  - Acceptance: both name 4.0.7 and the CI run that installs it passes
+- [ ] CI and the container run MRI 4.0.10, where `.github/workflows/ci.yml` and `docker/Dockerfile` pinned 4.0.1
+  - Acceptance: both name 4.0.10 and the CI run that installs it passes
+
+## Ruby 4.0.10
+
+- [x] Metorex is Ruby 4.0.10: the version constants, prism 1.8.2, json 2.18.3, and the generated tables, with `Enumerator::Lazy#each_with_index` defined on Lazy, and the Sets that `classify`, `divide`, `flatten`, `&`, `^`, and `map!` build from a Set that compares by identity also comparing by identity
+  - Acceptance: `metorex -v` reports 4.0.10, every generated file names 4.0.10 in its header, the changed spec files of the 4.0.10 tarball pass, and `cargo test` passes
+- [ ] The `ruby/spec` submodule carries the specs 4.0.10 added, and the `json` gem suite runs at v2.18.3
+  - Acceptance: `scripts/run_ruby_spec.sh` passes and `scripts/run_gem_suites.sh json` matches MRI 4.0.10's counts
+- [ ] The gem suite lockfiles lock json 2.18.3 and prism 1.8.2, and `scripts/gem_suite_results.tsv` holds MRI 4.0.10's counts
+  - Acceptance: `CHECK=1 scripts/run_gem_suites.sh` passes
 
 ## RSpec parity
 

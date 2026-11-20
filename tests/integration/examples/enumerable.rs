@@ -64,6 +64,15 @@ fn test_enumerable_lazy_walks_no_parens_execution() {
     assert_eq!(output, LAZY_WALKS_OUTPUT);
 }
 
+#[test]
+fn test_enumerable_lazy_inspect_and_each_with_index_execution() {
+    let output = run_example("enumerable/lazy_inspect_and_each_with_index.rb");
+    assert_eq!(
+        output,
+        "#<Enumerator::Lazy: 1..3>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:map>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:collect>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:select>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:filter>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:find_all>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:collect_concat>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:take(2)>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:take(0)>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:drop(1)>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:with_index(0)>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:with_index(1)>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:each_with_index(0)>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:zip([4])>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:zip>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:each_slice(2)>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:each_cons(2)>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:with_object(1)>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:compact>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:uniq>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:grep(Integer)>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:grep_v(1)>\n#<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:each>\n#<Enumerator::Lazy: #<Enumerator::Lazy: #<Enumerator::Lazy: #<Enumerator::Lazy: 1..3>:map>:take_while>:flat_map>\n3\n[[1, 0], [2, 1], [3, 2]]\n[0, 2, 6]\n[[1, 0], [2, 1]]\n[1, 3, 5]\n[[[1, 0], 0], [[2, 1], 1], [[3, 2], 2]]\n[3, 8]\n[[1, 0], [2, 1], [3, 2]]\nEnumerator::Lazy\ntrue\n1..3\nnil\n1..3\nnil\nnil\n#<Enumerator::Lazy: [1]>\nnil\n"
+    );
+}
+
 /// The expected output of both `enumerable/stepping_and_products` variants.
 const STEPPING_AND_PRODUCTS_OUTPUT: &str = "Enumerator::ArithmeticSequence\n[1, 4, 7, 10]\n[1, 10, 3, false]\n\"(1.step(10, 3))\"\n4\n[1, 5, 9]\n[1, 4, 7, 10]\n9\n9\n\"((1..10).step(3))\"\ntrue\nInfinity\n[1, 3, 5, 7, 9]\n\"((1..10).%(2))\"\ntrue\n[[1, :a], [1, :b], [2, :a], [2, :b]]\n4\n\"#<Enumerator::Product: [[1, 2], [:a, :b]]>\"\n4\n[[:a, 1], [:b, 1], [:a, 2], [:b, 2]]\n\"done\"\n[[1, 2], [3]]\nProc\n[1, [2, 3], [4]]\nNoMethodError\n\"undefined method 'each_entry' for an instance of Object\"\n";
 

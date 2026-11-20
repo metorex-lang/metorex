@@ -570,8 +570,8 @@ fn an_installed_json_of_another_version_than_the_carried_one_or_an_installed_fid
         output,
         concat!(
             "[\"2.7.1\", false, true]\n",
-            "[\"2.18.0\", true, false]\n",
-            "[\"2.18.0\", true, false]\n",
+            "[\"2.18.3\", true, false]\n",
+            "[\"2.18.3\", true, false]\n",
             "[\"1.1.8\", true]\n",
         )
     );

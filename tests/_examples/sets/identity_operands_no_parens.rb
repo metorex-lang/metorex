@@ -12,7 +12,7 @@ exclusive = tracked ^ Set[second]
 p exclusive.compare_by_identity?
 
 # `replace` takes the identity setting of the Set it copies, and `map!`
-# goes back to comparing by value.
+# keeps comparing by identity.
 plain = Set.new [1]
 plain.replace tracked
 p plain.compare_by_identity?

@@ -1,4 +1,4 @@
-// Written by scripts/vendor_bundler.rb from Bundler 4.0.20 as Ruby 4.0.7 ships it.
+// Written by scripts/vendor_bundler.rb from Bundler 4.0.20 as Ruby 4.0.10 ships it.
 
 /// The files of Bundler, by the feature name each is required as.
 pub(crate) const BUNDLER_LIBRARIES: &[(&str, &str)] = &[

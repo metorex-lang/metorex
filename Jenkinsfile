@@ -349,7 +349,7 @@ pipeline {
               // rb-fsevent watches files through macOS's FSEvents and is left
               // out on Linux.
               'native extensions': {
-                sh 'JOBS=1 scripts/run_gem_suites.sh websocket-driver msgpack unf_ext unf nio4r'
+                sh 'JOBS=1 scripts/run_gem_suites.sh websocket-driver msgpack unf_ext unf nio4r ffi nokogiri crass loofah'
               }
             )
           }

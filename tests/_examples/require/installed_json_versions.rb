@@ -2,7 +2,7 @@
 # copy. Another version is built for metorex and loaded, and one whose
 # extensions do not build is left to the carried copy too. An installed
 # fiddle is built and loaded in place of the part of it metorex carries.
-%w[2.7.1 2.18.0 2.6.0].each do |version|
+%w[2.7.1 2.18.3 2.6.0].each do |version|
   shown = IO.popen([Gem.ruby, "-e", <<~RUBY], err: File::NULL, &:read)
     gem "json", "= #{version}"
     require "json"

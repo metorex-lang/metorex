@@ -1,4 +1,4 @@
-// Written by scripts/generate_core_method_names.rb from Ruby 4.0.7.
+// Written by scripts/generate_core_method_names.rb from Ruby 4.0.10.
 
 /// The instance methods a core class or module defines in Ruby, by
 /// visibility, which the method listings of a built-in value draw from.
@@ -479,6 +479,7 @@ pub(crate) const CORE_METHODS: &[CoreMethods] = &[
             "compact",
             "drop",
             "drop_while",
+            "each_with_index",
             "eager",
             "enum_for",
             "filter",
@@ -507,6 +508,7 @@ pub(crate) const CORE_METHODS: &[CoreMethods] = &[
             "_enumerable_collect_concat",
             "_enumerable_drop",
             "_enumerable_drop_while",
+            "_enumerable_each_with_index",
             "_enumerable_filter",
             "_enumerable_filter_map",
             "_enumerable_find_all",

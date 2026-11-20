@@ -1,10 +1,10 @@
-// Written by scripts/prism_node_fields.rb from Prism 1.8.1's
+// Written by scripts/prism_node_fields.rb from Prism 1.8.2's
 // prism/serialize.rb. Run the script again rather than editing this file.
 
 use super::prism_loading::Field::{self, *};
 
 /// The serialization version this table reads.
-pub(crate) const SERIALIZATION_VERSION: [u8; 3] = [1, 8, 1];
+pub(crate) const SERIALIZATION_VERSION: [u8; 3] = [1, 8, 2];
 
 /// Each node type, numbered from 1: its class under Prism, whether a
 /// four-byte length comes before its flags, and the fields after them.

@@ -1,4 +1,4 @@
-// Written by scripts/vendor_prism.rb from prism 1.8.1 as Ruby 4.0.7 ships it.
+// Written by scripts/vendor_prism.rb from prism 1.8.2 as Ruby 4.0.10 ships it.
 
 /// The files of prism's Ruby library, by the feature name each is required as.
 pub(crate) const PRISM_LIBRARIES: &[(&str, &str)] = &[

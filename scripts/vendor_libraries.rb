@@ -52,4 +52,12 @@ versions = sources.map do |name, base, patterns|
   "#{name} #{release.default_gem_version(name)}"
 end
 
+# RubyGems leaves an installed json of the version carried here to the
+# carried copy, and builds any other version for metorex.
+defaults = File.join(stdlib, "rubygems", "defaults", "operating_system.rb")
+carried = /"json" => "[^"]+"/
+text = File.read(defaults)
+abort "rubygems/defaults/operating_system.rb no longer names json's carried version" unless text.match?(carried)
+File.write(defaults, text.sub(carried, %("json" => "#{release.default_gem_version("json")}")))
+
 puts "#{versions.join(", ")} as Ruby #{release.version} ships them"
