@@ -214,6 +214,10 @@ pub struct VirtualMachine {
     /// The fibers holding the interpreter, innermost last. A fiber suspends
     /// through the handle the innermost frame carries.
     pub(crate) fiber_frames: Vec<crate::vm::fibers::FiberFrame>,
+    /// For each fiber whose stack is running a chain of fibers, the fiber the
+    /// chain was entered at and how. A fiber that ran out after being reached
+    /// by a transfer goes back along the resumes these record.
+    pub(crate) fiber_chains: std::collections::HashMap<usize, (usize, crate::vm::fibers::Handoff)>,
     /// The fiber the program starts on, which every other one is resumed
     /// from. It is made the first time something asks for it.
     pub(crate) root_fiber: Option<Object>,
@@ -817,6 +821,7 @@ impl VirtualMachine {
             hash_walk_looped: false,
             fibers: Vec::new(),
             fiber_frames: Vec::new(),
+            fiber_chains: std::collections::HashMap::new(),
             root_fiber: None,
             root_storage: None,
             script_path: None,

@@ -239,16 +239,21 @@ impl VirtualMachine {
             !matches!((held.view(), thread.view()), (View::Instance(a), View::Instance(b))
                 if std::rc::Rc::ptr_eq(a, b))
         });
-        self.release_locks_held_by(thread);
-        // A fiber a scheduler holds until the thread ends is let go. The
-        // thread is over, so there is nowhere to raise what that raises.
+        let released = self.release_locks_held_by(thread);
+        // A fiber a scheduler holds until the thread ends, or until a lock
+        // the thread held is let go, is let go. The thread is over, so there
+        // is nowhere to raise what that raises.
         let _ = self.scheduler_unblock_all(thread, Position::new(0, 0, 0));
+        for mutex in released {
+            let _ = self.scheduler_unblock(&mutex, Position::new(0, 0, 0));
+        }
     }
 
     /// Let go of every lock a thread still holds. Ruby releases a thread's
     /// mutexes when it ends, so a lock its body never unlocked stops blocking
     /// whoever waits for it next.
-    pub(crate) fn release_locks_held_by(&mut self, thread: &Object) {
+    pub(crate) fn release_locks_held_by(&mut self, thread: &Object) -> Vec<Object> {
+        let mut released = Vec::new();
         for mutex in self.taken_mutexes.iter().filter_map(std::rc::Weak::upgrade) {
             let holder = mutex.borrow().get_var("__mutex_thread").cloned();
             let held = matches!(
@@ -262,8 +267,10 @@ impl VirtualMachine {
                 mutex
                     .borrow_mut()
                     .set_var("__mutex_locked".to_string(), Object::Bool(false));
+                released.push(Object::Instance(mutex));
             }
         }
+        released
     }
 
     /// Hand control over while waiting for something outside the program. A

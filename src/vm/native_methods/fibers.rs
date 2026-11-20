@@ -28,12 +28,24 @@ impl VirtualMachine {
         };
         match method_name {
             "resume" => {
+                if handle != self.fiber_current_handle()
+                    && self.fibers.get(handle).is_some_and(|state| {
+                        state.transferring && !state.finished && state.relaying.is_none()
+                    })
+                {
+                    return Err(crate::vm::errors::simple_exception(
+                        "FiberError",
+                        "attempt to resume a transferring fiber",
+                        position,
+                    ));
+                }
                 let stepped =
                     self.fiber_resume(handle, receiver.clone(), arguments.to_vec(), position)?;
                 match stepped {
                     crate::vm::fibers::FiberStep::Suspended(handed) => Ok(Some(match handed {
                         crate::vm::fibers::SuspendOutput::Yielded(value) => value,
-                        crate::vm::fibers::SuspendOutput::TransferTo { .. } => Object::Nil,
+                        crate::vm::fibers::SuspendOutput::TransferTo { .. }
+                        | crate::vm::fibers::SuspendOutput::ReturnTo { .. } => Object::Nil,
                     })),
                     crate::vm::fibers::FiberStep::Finished(value) => Ok(Some(value)),
                     crate::vm::fibers::FiberStep::Failed(trouble) => Err(trouble),
@@ -45,23 +57,22 @@ impl VirtualMachine {
                 match stepped {
                     crate::vm::fibers::FiberStep::Suspended(handed) => Ok(Some(match handed {
                         crate::vm::fibers::SuspendOutput::Yielded(value) => value,
-                        crate::vm::fibers::SuspendOutput::TransferTo { .. } => Object::Nil,
+                        crate::vm::fibers::SuspendOutput::TransferTo { .. }
+                        | crate::vm::fibers::SuspendOutput::ReturnTo { .. } => Object::Nil,
                     })),
                     crate::vm::fibers::FiberStep::Finished(value) => Ok(Some(value)),
                     crate::vm::fibers::FiberStep::Failed(trouble) => Err(trouble),
                 }
             }
-            "kill" => {
-                self.fiber_kill(handle, position);
-                Ok(Some(Object::Nil))
-            }
+            "kill" => Ok(Some(self.fiber_kill(handle, receiver.clone(), position)?)),
             "__raise__" => {
                 let raised = self.build_raise_exception(arguments, position)?;
                 let stepped = self.fiber_raise(handle, receiver.clone(), raised, position)?;
                 match stepped {
                     crate::vm::fibers::FiberStep::Suspended(handed) => Ok(Some(match handed {
                         crate::vm::fibers::SuspendOutput::Yielded(value) => value,
-                        crate::vm::fibers::SuspendOutput::TransferTo { .. } => Object::Nil,
+                        crate::vm::fibers::SuspendOutput::TransferTo { .. }
+                        | crate::vm::fibers::SuspendOutput::ReturnTo { .. } => Object::Nil,
                     })),
                     crate::vm::fibers::FiberStep::Finished(value) => Ok(Some(value)),
                     crate::vm::fibers::FiberStep::Failed(trouble) => Err(trouble),

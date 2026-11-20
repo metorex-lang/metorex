@@ -5,44 +5,81 @@ use crate::object::{OptionView, View};
 
 impl VirtualMachine {
     /// Stop a fiber where it stands, unwinding whatever it was part-way
-    /// through so its `ensure` blocks run. A fiber that has already run out
-    /// is left alone.
-    pub(crate) fn fiber_kill(&mut self, handle: usize, position: Position) {
+    /// through so its `ensure` blocks run. It answers the fiber, or `false`
+    /// when the fiber was told to stop before.
+    pub(crate) fn fiber_kill(
+        &mut self,
+        handle: usize,
+        fiber: Object,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
         if handle == ROOT_FIBER {
-            return;
+            return Ok(fiber);
         }
+        self.fiber_check_thread(handle, position)?;
         let Some(state) = self.fibers.get_mut(handle) else {
-            return;
+            return Ok(fiber);
         };
-        if state.finished {
-            return;
+        if state.killed {
+            return Ok(Object::Bool(false));
         }
-        // A fiber holding the interpreter is stopped when control comes back
-        // to it rather than where it stands, since the stack it is on is the
-        // one running.
-        if self.fiber_frames.iter().any(|frame| frame.handle == handle) {
-            self.fibers[handle].killing = true;
-            return;
+        state.killed = true;
+        if state.finished {
+            return Ok(fiber);
+        }
+        // The fiber running stops at once.
+        if handle == self.fiber_current_handle() {
+            return Err(MetorexError::UncaughtException {
+                exception: Object::exception(FIBER_KILLED, "fiber killed".to_string()),
+                location: crate::vm::utils::position_to_location(position),
+                message: "fiber killed".to_string(),
+            });
+        }
+        self.fiber_unwind(handle, position)?;
+        Ok(fiber)
+    }
+
+    /// Hand control to a fiber that is to stop, so the suspend it is parked
+    /// in raises and the `ensure` blocks it is inside run. One waiting in
+    /// `Fiber.yield` is resumed and one that transferred is transferred to.
+    pub(crate) fn fiber_unwind(
+        &mut self,
+        handle: usize,
+        position: Position,
+    ) -> Result<(), MetorexError> {
+        // A fiber part-way through resuming another is stopped when control
+        // comes back to it, since the stack it is on is still running.
+        if self.fiber_frames.iter().any(|frame| frame.handle == handle)
+            || self.fibers[handle].relaying.is_some()
+        {
+            self.fibers[handle].kill_deferred = true;
+            return Ok(());
         }
         let state = &mut self.fibers[handle];
         // A fiber that has not started yet has nothing to unwind.
         if state.held.is_none() {
             state.finished = true;
             state.running = None;
-            return;
+            return Ok(());
         }
-        // A fiber part-way through is resumed once more with the word that it
-        // is being stopped. The suspend it is parked in reports that as an
-        // exception, so the `ensure` blocks it is inside run the way they
-        // would had the body raised.
         state.killing = true;
+        let yielding = state.yielding;
         let object = state.object.clone().unwrap_or(Object::Nil);
-        let _ = self.fiber_step(handle, object, Vec::new(), Handoff::Resume, position);
-        if let Some(state) = self.fibers.get_mut(handle) {
+        let stepped = if yielding {
+            self.fiber_resume(handle, object, Vec::new(), position)
+        } else {
+            self.fiber_transfer(handle, object, Vec::new(), position)
+        };
+        if let Some(state) = self.fibers.get_mut(handle)
+            && state.finished
+        {
             state.killing = false;
-            state.finished = true;
             state.running = None;
             state.held = None;
+        }
+        match stepped? {
+            FiberStep::Failed(trouble) => Err(trouble),
+            _ => Ok(()),
         }
     }
 

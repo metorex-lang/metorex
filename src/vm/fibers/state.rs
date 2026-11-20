@@ -35,6 +35,12 @@ pub(crate) enum SuspendOutput {
         fiber: Object,
         given: Vec<Object>,
     },
+    /// Control going back to a fiber further down the stack, which a fiber
+    /// reached by a transfer hands on when it runs out.
+    ReturnTo {
+        handle: usize,
+        given: Vec<Object>,
+    },
 }
 /// What a fiber's block answers when it runs out.
 pub(crate) type FiberOutput = Result<Object, MetorexError>;
@@ -104,6 +110,16 @@ pub(crate) struct FiberState {
     /// Whether the fiber is being stopped, which is what the suspend it is
     /// parked in reports rather than handing a value back.
     pub(crate) killing: bool,
+    /// Whether `Fiber#kill` has been called on the fiber, which a second call
+    /// answers `false` for.
+    pub(crate) killed: bool,
+    /// Whether the fiber was told to stop while it held the interpreter or
+    /// was part-way through resuming another, which stops it the next time
+    /// it hands control back.
+    pub(crate) kill_deferred: bool,
+    /// Whether the fiber last handed control on by a transfer, which a
+    /// `resume` may not answer.
+    pub(crate) transferring: bool,
     /// Whether the fiber was asked to block rather than hand control to a
     /// scheduler when it waits on something.
     pub(crate) blocking: bool,

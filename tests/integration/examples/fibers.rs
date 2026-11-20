@@ -97,3 +97,40 @@ fn test_fibers_scheduler_hooks_no_parens_execution() {
     let output = run_example("fibers/scheduler_hooks_no_parens.rb");
     assert_eq!(output, SCHEDULER_HOOKS_OUTPUT);
 }
+
+#[test]
+fn test_fibers_killing_execution() {
+    let output = run_example("fibers/killing.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "true\n",
+            "false\n",
+            "false\n",
+            "\"from ensure\"\n",
+            "[false, false]\n",
+            "[:runner_resumed]\n",
+            "[]\n",
+            "false\n",
+            "\"fiber called across threads\"\n",
+        )
+    );
+}
+
+#[test]
+fn test_fibers_transfer_return_chain_execution() {
+    let output = run_example("fibers/transfer_return_chain.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[:leaf_end, :outer_after_transfer]\n",
+            "\"attempt to resume a transferring fiber\"\n",
+        )
+    );
+}
+
+#[test]
+fn test_fibers_scheduler_unblock_on_thread_death_execution() {
+    let output = run_example("fibers/scheduler_unblock_on_thread_death.rb");
+    assert_eq!(output, concat!("1\n", "true\n", ":locked\n"));
+}
