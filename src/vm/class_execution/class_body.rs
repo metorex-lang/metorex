@@ -860,6 +860,10 @@ impl VirtualMachine {
                 crate::vm::native_methods::class_methods::aliasing::natively_answering_class(
                     class, &old_name,
                 );
+            // The native fallback below warns for itself.
+            if native.is_none() && new_name != old_name && class.find_method(&old_name).is_some() {
+                self.warn_method_redefined(class, &new_name, position);
+            }
             if native.is_none() && class.alias_method(&new_name, &old_name) {
                 let hook = Self::method_added_hook_for(class);
                 self.invoke_class_hook(class, hook, &new_name, position)?;

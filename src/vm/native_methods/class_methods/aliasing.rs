@@ -14,6 +14,9 @@ impl VirtualMachine {
         old_name: &str,
         position: Position,
     ) -> Result<(), MetorexError> {
+        if new_name != old_name {
+            self.warn_method_redefined(class_rc, new_name, position);
+        }
         let new_name = new_name.to_string();
         let old_name = old_name.to_string();
         // A core class that answers the name natively comes ahead of the

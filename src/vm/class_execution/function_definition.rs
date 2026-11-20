@@ -262,7 +262,7 @@ impl VirtualMachine {
         let Some(old) = class.find_own_method(name) else {
             return;
         };
-        if old.is_undefined || old.body.is_empty() {
+        if old.is_undefined {
             return;
         }
         let Some(written) = old

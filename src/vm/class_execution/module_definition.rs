@@ -74,7 +74,7 @@ impl VirtualMachine {
         // naming the parent later renames it too.
         let parent_is_anonymous = parent_scope
             .as_ref()
-            .is_some_and(|p| p.ruby_name().is_empty());
+            .is_some_and(|p| !p.has_permanent_name());
         let full_name = match parent_scope.as_ref() {
             Some(p) => format!("{}::{}", p.inspect_name(), name),
             None => name.to_string(),

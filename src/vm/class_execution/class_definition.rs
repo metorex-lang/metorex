@@ -247,7 +247,18 @@ impl VirtualMachine {
                     }
                     None => name.to_string(),
                 };
-                let new_class = Class::new(full_name, superclass);
+                // Under a module with no permanent name the class stays
+                // anonymous underneath, so naming the parent renames it too.
+                let parent_is_anonymous = parent_scope
+                    .as_ref()
+                    .is_some_and(|p| !p.has_permanent_name());
+                let new_class = if parent_is_anonymous {
+                    let class = Class::new(String::new(), superclass);
+                    class.set_assigned_name_if_anonymous(&full_name);
+                    class
+                } else {
+                    Class::new(full_name, superclass)
+                };
                 if let Some(sc) = new_class.superclass() {
                     sc.add_subclass(&new_class);
                 }

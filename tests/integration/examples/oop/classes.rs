@@ -120,6 +120,31 @@ fn test_oop_set_temporary_name_cycle_execution() {
 }
 
 #[test]
+fn test_oop_module_function_and_alias_warning_execution() {
+    let output = run_example("oop/module_function_and_alias_warning.rb");
+    let file = "tests/_examples/oop/module_function_and_alias_warning.rb";
+    assert_eq!(
+        output,
+        format!(
+            "false\n[:test]\n\"hello\"\nNoMethodError\n:test\n\
+             {file}:35: warning: method redefined; discarding old second\n\
+             {file}:34: warning: previous definition of second was here\n\
+             {file}:43: warning: method redefined; discarding old fourth\n\
+             {file}:42: warning: previous definition of fourth was here\n"
+        )
+    );
+}
+
+#[test]
+fn test_oop_set_temporary_name_nested_definition_execution() {
+    let output = run_example("oop/set_temporary_name_nested_definition.rb");
+    assert_eq!(
+        output,
+        "\"inner\"\n\"middle\"\n\"middle::Inner\"\n\"Named::Middle\"\n\"Named::Middle::Inner\"\n\"widget\"\n\"Holder::Widget\"\n"
+    );
+}
+
+#[test]
 fn test_struct_basics_execution() {
     let expected = "1\n2\n[1, 2]\n[:x, :y]\n2\n1\n2\n1\n10\n20\n#<struct Point x=10, y=20>\ntrue\nfalse\nnil\n[:x, :y]\n[10, 20]\n10\n20\nx=10\ny=20\n42\ntrue\nexample.com\n80\nstruct size differs\nno member 'missing' in struct\n1\n10\n[10, 20]\na\n[\"a\", \"b\"]\n#<struct Pair left=\"a\", right=\"b\">\n";
     let output = run_example("oop/struct_basics.rb");

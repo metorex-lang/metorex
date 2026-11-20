@@ -457,6 +457,20 @@ impl VirtualMachine {
                     // be called. A marking further up the chain belongs to
                     // another definition of the same name.
                     is_private = false;
+                } else if let Some(extended) = class
+                    .is_singleton_class()
+                    .then(|| {
+                        class
+                            .linear_mixins()
+                            .iter()
+                            .find(|module| module.find_own_method(method_name).is_some())
+                            .cloned()
+                    })
+                    .flatten()
+                {
+                    // A module the object was extended with supplies the
+                    // method, so its marking is the one in force.
+                    is_private = self.refuses_explicit_receiver(&extended, method_name);
                 } else if !is_private || class.is_singleton_class() {
                     // A singleton class marks nothing of its own here, so the
                     // class it was made from, which may have made the name
