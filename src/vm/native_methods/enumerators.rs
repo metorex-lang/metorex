@@ -97,11 +97,20 @@ pub(crate) fn carry_string_encoding(
     // the two have in common, as `sub` and `gsub` do with what replaces a
     // match, `encode` is named an encoding outright, `inspect` writes its
     // answer in the encoding answers are written in, and `scrub` builds its
-    // answer from bytes in the string's own encoding, so each is already
-    // tagged.
+    // answer from bytes in the string's own encoding, as `chars` does with
+    // each character, so each is already tagged.
     if matches!(
         method_name,
-        "center" | "ljust" | "rjust" | "+" | "encode" | "inspect" | "sub" | "gsub" | "scrub"
+        "center"
+            | "ljust"
+            | "rjust"
+            | "+"
+            | "encode"
+            | "inspect"
+            | "sub"
+            | "gsub"
+            | "scrub"
+            | "chars"
     ) {
         return answer;
     }

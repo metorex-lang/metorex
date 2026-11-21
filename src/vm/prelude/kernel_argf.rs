@@ -453,6 +453,14 @@ class ArgfStream
         $FILENAME = nil
         return nil
       end
+      if __generic_input__?
+        $FILENAME = "-"
+        line = @current.public_send(:gets, *separator, **keywords)
+        return line if line.nil?
+        @lineno = self.__lineno__ + 1
+        $. = @lineno
+        return $_ = line
+      end
       $FILENAME = @current.path
       line = @current.gets(*separator, **keywords)
       if line.nil?
@@ -477,6 +485,11 @@ class ArgfStream
   end
 
   def readline(*separator, **keywords)
+    self.__open_current__
+    if __generic_input__?
+      $FILENAME = "-"
+      return @current.public_send(:readline, *separator, **keywords)
+    end
     line = self.gets(*separator, **keywords)
     raise EOFError, "end of file reached" if line.nil?
     line
@@ -484,29 +497,71 @@ class ArgfStream
 
   # Every line of every file, read as though the list were one file. A
   # separator stands in for the newline, the way `IO#each_line` takes one.
-  def each_line(*separator, &block)
-    return to_enum(:each_line, *separator) if block.nil?
-    while (line = self.gets(*separator))
-      block.call line
+  def each_line(*separator, **keywords, &block)
+    return to_enum(:each_line, *separator, **keywords) if block.nil?
+    loop do
+      self.__open_current__
+      break if @current.nil?
+      unless __generic_input__?
+        line = self.gets(*separator, **keywords)
+        break if line.nil?
+        block.call line
+        next
+      end
+      $FILENAME = "-"
+      @current.public_send(:each_line, *separator, **keywords) do |line|
+        @lineno = self.__lineno__ + 1
+        block.call line
+      end
+      break unless __next_after_generic_input__
     end
     self
   end
 
-  def each(*separator, &block)
-    self.each_line(*separator, &block)
+  def each(*separator, **keywords, &block)
+    self.each_line(*separator, **keywords, &block)
   end
 
   def readlines(*args, **keywords)
     collected = []
-    while (line = self.gets(*args, **keywords))
-      collected.push line
+    loop do
+      self.__open_current__
+      break if @current.nil?
+      unless __generic_input__?
+        line = self.gets(*args, **keywords)
+        break if line.nil?
+        collected.push line
+        next
+      end
+      $FILENAME = "-"
+      collected.concat @current.public_send(:readlines, *args, **keywords)
+      break unless __next_after_generic_input__
     end
     collected
   end
 
-  def to_a(*args)
-    self.readlines
+  def to_a(*args, **keywords)
+    self.readlines(*args, **keywords)
   end
+
+  # Standard input replaced by an object that is not an IO is read through
+  # that object's own public methods.
+  def __generic_input__?
+    @reading_stdin && !@current.is_a?(IO)
+  end
+  private :__generic_input__?
+
+  # Move on from a non-IO standard input that has been read to the end,
+  # answering whether another name is left to read.
+  def __next_after_generic_input__
+    if self.__names__.empty?
+      @drained = true
+      return false
+    end
+    @current = nil
+    true
+  end
+  private :__next_after_generic_input__
 
   # `read(length)` stops at the count it was asked for, crossing into the next
   # file only when the one being read runs out first. With no count it drains

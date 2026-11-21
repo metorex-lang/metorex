@@ -368,6 +368,16 @@ pub(crate) fn encoded_characters(string_value: &crate::object::StringValue) -> V
                 .map(|character| from_bytes(character))
                 .collect()
         }
+        "UTF-8" if string_value.holds_bytes() => {
+            super::validity::utf8_characters(&binary_bytes(string_value))
+                .into_iter()
+                .map(|character| {
+                    Object::String(Rc::new(crate::object::StringValue::of_bytes(
+                        character, named,
+                    )))
+                })
+                .collect()
+        }
         "EUC-JP" if string_value.holds_bytes() => euc_jp_characters(&binary_bytes(string_value))
             .iter()
             .map(|character| from_bytes(character))

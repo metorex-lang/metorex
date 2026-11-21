@@ -3004,3 +3004,23 @@ fn pem_lines_of_a_certificate_and_a_crl_hold_64_characters() {
         "-----BEGIN CERTIFICATE-----\n64\n-----END CERTIFICATE-----\n11\n-----BEGIN X509 CRL-----\n64\n-----END X509 CRL-----\n"
     );
 }
+
+#[test]
+fn test_stdlib_libraries_string_io_byte_limits_execution() {
+    let output = run_example("stdlib_libraries/string_io_byte_limits.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"é\", \"éé\", \"ab\", 8]\n",
+            "[\"👍\", 4]\n",
+            "[[159], 2]\n",
+            "[\"あ\", \"いa\"]\n",
+            "[\"aé\", 3]\n",
+            "\"éé\"\n",
+            "[\"éé\", \"é\"]\n",
+            "[\"éé\", \"é\"]\n",
+            "[\"éa\", \"\", \"b\"]\n",
+            "[\"a\", \"\", \"b\", \"\"]\n",
+        )
+    );
+}

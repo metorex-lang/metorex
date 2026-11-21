@@ -725,7 +725,7 @@ module Zlib
     # The name and time a member was written with, which sit in its header.
     def read_header(held)
       return if held.length < 10
-      stamp = held[4, 4].each_char.map { |byte| byte.ord }
+      stamp = held[4, 4].bytes
       seconds = stamp[0] + (stamp[1] << 8) + (stamp[2] << 16) + (stamp[3] << 24)
       @mtime = Time.at seconds
       flags = held[3].ord

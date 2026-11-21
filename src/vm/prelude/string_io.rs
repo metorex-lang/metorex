@@ -619,6 +619,9 @@ class StringIO
     return "" if limit == 0
     return read_wide_line(separator, limit, chomp) unless @wide_position.nil?
     return nil if @position >= @string.length
+    if !limit.nil? && !single_byte_characters? && separator != ""
+      return read_limited_line(separator, limit, chomp)
+    end
     line = if separator.is_a?(String) && !separator.empty?
       # The search starts at the cursor, so a read copies its line alone
       # rather than all that is left.
@@ -657,6 +660,33 @@ class StringIO
   end
   private :read_line
 
+  # A line cut short by a limit, which counts bytes. A limit that lands
+  # inside a character takes the rest of that character too.
+  def read_limited_line(separator, limit, chomp)
+    start = pos
+    rest = @string.byteslice(start, @string.bytesize - start)
+    length = rest.bytesize
+    unless separator.nil?
+      cut = rest.b.index(separator.b)
+      length = cut + separator.bytesize unless cut.nil?
+    end
+    if limit < length
+      covered = 0
+      rest.byteslice(0, limit + 8).each_char do |character|
+        break if covered >= limit
+        covered += character.bytesize
+      end
+      length = covered
+    end
+    line = rest.byteslice(0, length)
+    self.pos = start + length
+    @lineno = @lineno + 1
+    return line unless chomp
+    return line.chomp if separator == "\n" || separator.nil?
+    line.chomp(separator)
+  end
+  private :read_limited_line
+
   # A line of a UTF-16 or UTF-32 buffer, read by bytes from where the stream
   # stands, which need not fall on a character.
   def read_wide_line(separator, limit, chomp)
@@ -687,7 +717,7 @@ class StringIO
     return each_line_enumerator(separator, limit, chomp) unless block_given?
     while (line = read_line(separator, limit, chomp))
       # A limit of zero reads nothing, so there is no next line to reach.
-      break if line.empty?
+      break if limit == 0
       yield line
     end
     self
@@ -699,7 +729,7 @@ class StringIO
     collected = []
     while (line = read_line(separator, limit, chomp))
       # A limit of zero reads nothing, so there is no next line to reach.
-      break if line.empty?
+      break if limit == 0
       collected.push line
     end
     collected.each
@@ -716,8 +746,6 @@ class StringIO
     raise ArgumentError, "invalid limit: 0 for readlines" if limit == 0
     collected = []
     while (line = read_line(separator, limit, chomp))
-      # A limit of zero reads nothing, so there is no next line to reach.
-      break if line.empty?
       collected.push(line)
     end
     collected

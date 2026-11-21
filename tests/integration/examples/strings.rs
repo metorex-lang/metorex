@@ -961,3 +961,21 @@ fn binary_strings_append_and_cut_bytes_as_they_are() {
         )
     );
 }
+
+#[test]
+fn test_strings_broken_utf8_characters_execution() {
+    let output = run_example("strings/broken_utf8_characters.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[159]\n",
+            "[159, 97]\n",
+            "[255, 159]\n",
+            "[159, 145, 141, 97, 98]\n",
+            "[[159], [145], [141], [97], [98]]\n",
+            "[[240], [159], [145]]\n",
+            "[[255], [254], [97], [195]]\n",
+            "[[\"é\", #<Encoding:UTF-8>, true], [\"\\x9F\", #<Encoding:UTF-8>, false], [\"a\", #<Encoding:UTF-8>, true]]\n",
+        )
+    );
+}

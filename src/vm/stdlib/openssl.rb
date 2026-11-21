@@ -165,7 +165,7 @@ class HMAC
 
     # The key with every byte of it masked by the same value.
     def self.masked(key, mask)
-      key.each_char.map { |held| (held.ord ^ mask).chr }.join
+      key.bytes.map { |held| (held ^ mask).chr }.join
     end
   end
 

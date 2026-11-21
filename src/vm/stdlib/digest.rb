@@ -344,10 +344,8 @@ module Digest
     string.to_str
   end
 
-  # Each character of a digest stands for one byte, so the encoding reads the
-  # characters rather than the bytes a text encoding would spell them with.
   def self.hexencode(string)
-    Digest.coerce_message(string).each_char.map { |held| "%02x" % held.ord }.join
+    Digest.coerce_message(string).bytes.map { |held| "%02x" % held }.join
   end
 
   # The name of a file to read, which is either a String or something that
@@ -361,9 +359,8 @@ module Digest
     name.to_str
   end
 
-  # The bytes a string stands for, one to a character.
   def self.message_bytes(string)
-    Digest.coerce_message(string).each_char.map { |held| held.ord }
+    Digest.coerce_message(string).bytes
   end
 
   # Bubble Babble names a string in syllables, which is easier to read aloud

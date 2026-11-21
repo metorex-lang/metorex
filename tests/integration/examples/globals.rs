@@ -214,3 +214,30 @@ fn test_verbose_reassignment_and_redefinition_warnings_name_both_places() {
         "definitions.rb:2: warning: already initialized constant LIMIT\ndefinitions.rb:1: warning: previous definition of LIMIT was here\ndefinitions.rb:5: warning: already initialized constant Settings::NAME\ndefinitions.rb:4: warning: previous definition of NAME was here\ndefinitions.rb:7: warning: already initialized constant Settings::NAME\ndefinitions.rb:5: warning: previous definition of NAME was here\ndefinitions.rb:8: warning: already initialized constant Settings::Box::SIZE\ndefinitions.rb:8: warning: previous definition of SIZE was here\ndefinitions.rb:10: warning: method redefined; discarding old greet\ndefinitions.rb:9: warning: previous definition of greet was here\ndefinitions.rb:18: warning: method redefined; discarding old size\ndefinitions.rb:15: warning: previous definition of size was here\n"
     );
 }
+
+#[test]
+fn test_globals_argf_generic_stdin_execution() {
+    let output = run_example("globals/argf_generic_stdin.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"a\"\n",
+            "\"b\"\n",
+            "[1, \"-\", \"-\"]\n",
+            "[[:gets, [], {chomp: true}], [:readline, [\"\\n\", 1], {}]]\n",
+            "false\n",
+            "[\"a\", \"\", \"b\", \"\"]\n",
+            "[[:each_line, [\"\\n\", 1], {chomp: true}]]\n",
+            "[\"a\", \"\", \"b\", \"\"]\n",
+            "[]\n",
+            "[[:readlines, [\"\\n\", 1], {chomp: true}], [:readlines, [], {}]]\n",
+            "\"a\\n\"\n",
+            "\"end of file reached\"\n",
+            ":readline\n",
+            ":gets\n",
+            ":readlines\n",
+            "[\"one\", \"two\\n\", \"three\\n\"]\n",
+            "[\"one.two\", \"three\"]\n",
+        )
+    );
+}

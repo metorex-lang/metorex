@@ -1177,7 +1177,7 @@ class Addrinfo
 
   # The bytes an address stands for, which every question below reads.
   def address_bytes
-    Socket.__address__("bytes", @address, 0).each_char.map { |held| held.ord }
+    Socket.__address__("bytes", @address, 0).bytes
   end
 
   private :address_bytes
@@ -3650,7 +3650,7 @@ class Socket
   # What an address stands for: the name it resolves to, the other names it
   # goes by, its family, and the address itself.
   def self.gethostbyaddr(address, family = nil)
-    bytes = address.to_s.each_char.map { |held| held.ord }
+    bytes = address.to_s.bytes
     numbered = family.nil? ? (bytes.length == 4 ? Socket::AF_INET : Socket::AF_INET6) : Socket.family_numbered(Socket.named_part(family))
     # An address of four bytes belongs to one family and one of sixteen to
     # the other, so a family that does not match is refused.
