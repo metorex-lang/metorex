@@ -81,6 +81,42 @@ impl VirtualMachine {
                             _position,
                         ));
                     }
+                    // A fiber that is not blocking waits through its
+                    // scheduler while the queue is full.
+                    if items_arr.borrow().len() >= most
+                        && let Some(scheduler) = self.current_scheduler()
+                    {
+                        let timeout = wait_for.map_or(Object::Nil, Object::Float);
+                        while items_arr.borrow().len() >= most
+                            && !matches!(
+                                inst.borrow().get_var("__queue_closed").view(),
+                                Some(View::Bool(true))
+                            )
+                        {
+                            self.scheduler_block(
+                                scheduler.clone(),
+                                receiver,
+                                timeout.clone(),
+                                _position,
+                            )?;
+                            if wait_for.is_some() {
+                                break;
+                            }
+                        }
+                        if matches!(
+                            inst.borrow().get_var("__queue_closed").view(),
+                            Some(View::Bool(true))
+                        ) {
+                            return Err(crate::vm::errors::simple_exception(
+                                "ClosedQueueError",
+                                "queue closed",
+                                _position,
+                            ));
+                        }
+                        if items_arr.borrow().len() >= most {
+                            return Ok(Some(Object::Nil));
+                        }
+                    }
                     let deadline = wait_for.map(|seconds| {
                         std::time::Instant::now()
                             + std::time::Duration::from_secs_f64(seconds.max(0.0))
@@ -218,27 +254,37 @@ impl VirtualMachine {
                     && let Some(scheduler) = self.current_scheduler()
                 {
                     let timeout = limit.map_or(Object::Nil, Object::Float);
+                    let waiting = queue_waiting_count(&inst) + 1;
+                    inst.borrow_mut()
+                        .set_var("__queue_waiting".to_string(), Object::Int(waiting));
+                    let mut waited = Ok(());
                     while items_arr.borrow().is_empty()
                         && !matches!(
                             inst.borrow().get_var("__queue_closed").view(),
                             Some(View::Bool(true))
                         )
                     {
-                        self.scheduler_block(
-                            scheduler.clone(),
-                            receiver,
-                            timeout.clone(),
-                            _position,
-                        )?;
-                        if limit.is_some() {
+                        waited = self
+                            .scheduler_block(
+                                scheduler.clone(),
+                                receiver,
+                                timeout.clone(),
+                                _position,
+                            )
+                            .map(|_| ());
+                        if waited.is_err() || limit.is_some() {
                             break;
                         }
                     }
-                    let taken = if items_arr.borrow().is_empty() {
-                        Object::Nil
-                    } else {
-                        items_arr.borrow_mut().remove(0)
-                    };
+                    let waiting = (queue_waiting_count(&inst) - 1).max(0);
+                    inst.borrow_mut()
+                        .set_var("__queue_waiting".to_string(), Object::Int(waiting));
+                    waited?;
+                    if items_arr.borrow().is_empty() {
+                        return Ok(Some(Object::Nil));
+                    }
+                    let taken = items_arr.borrow_mut().remove(0);
+                    self.scheduler_unblock(receiver, _position)?;
                     return Ok(Some(taken));
                 }
                 // Taking from an empty queue waits for something to be put
@@ -295,12 +341,12 @@ impl VirtualMachine {
                         .set_var("__queue_waiting".to_string(), Object::Int(waiting));
                 }
                 waited?;
-                let val = if items_arr.borrow().is_empty() {
-                    Object::Nil
-                } else {
-                    items_arr.borrow_mut().remove(0)
-                };
-                Ok(Some(val))
+                if items_arr.borrow().is_empty() {
+                    return Ok(Some(Object::Nil));
+                }
+                let taken = items_arr.borrow_mut().remove(0);
+                self.scheduler_unblock(receiver, _position)?;
+                Ok(Some(taken))
             }
             // What the queue holds, in order, for code that walks what an
             // object refers to.

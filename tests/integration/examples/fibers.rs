@@ -134,3 +134,27 @@ fn test_fibers_scheduler_unblock_on_thread_death_execution() {
     let output = run_example("fibers/scheduler_unblock_on_thread_death.rb");
     assert_eq!(output, concat!("1\n", "true\n", ":locked\n"));
 }
+
+#[test]
+fn test_fibers_scheduler_queues_execution() {
+    let output = run_example("fibers/scheduler_queues.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "1\n",
+            "42\n",
+            "1\n",
+            "2\n",
+            "ClosedQueueError\n",
+            "true\n",
+            "[:block, Thread::Queue, nil]\n",
+            "[:unblock, Thread::Queue]\n",
+            "[:block, Thread::SizedQueue, nil]\n",
+            "[:unblock, Thread::SizedQueue]\n",
+            "[:block, Thread::SizedQueue, nil]\n",
+            "[:unblock, Thread::SizedQueue]\n",
+            "[:block, Thread, 10.0]\n",
+            "[:unblock, Thread]\n",
+        )
+    );
+}

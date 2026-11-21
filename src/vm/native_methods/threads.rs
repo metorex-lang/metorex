@@ -109,11 +109,14 @@ impl VirtualMachine {
                 // A fiber that is not blocking waits through its scheduler,
                 // which holds it until the thread ends or the limit passes.
                 if let Some(scheduler) = self.current_scheduler() {
-                    let timeout = arguments.first().cloned().unwrap_or(Object::Nil);
+                    let timeout =
+                        limit.map_or(Object::Nil, |left| Object::Float(left.as_secs_f64()));
+                    let waiter = self.running_thread();
                     while inst.borrow().get_var("__thread_value").is_none() {
-                        self.scheduler_block(
+                        self.scheduler_block_as(
                             scheduler.clone(),
                             receiver,
+                            waiter.clone(),
                             timeout.clone(),
                             position,
                         )?;

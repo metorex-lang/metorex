@@ -304,7 +304,7 @@ pub struct VirtualMachine {
     pub(crate) thread_schedulers: HashMap<usize, Object>,
     /// The fibers schedulers hold until a Mutex, Queue or Thread lets them
     /// go, by that object's address, each with the scheduler holding it.
-    pub(crate) scheduler_waiting: HashMap<usize, Vec<(Object, Object)>>,
+    pub(crate) scheduler_waiting: HashMap<usize, Vec<(Object, Object, Object)>>,
     /// How deep the machine is inside a body-less method stub standing in for
     /// a native one. A method bound explicitly reaches its native body even
     /// on an object whose class answers nothing of Kernel's.

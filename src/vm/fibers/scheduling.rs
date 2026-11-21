@@ -85,11 +85,25 @@ impl VirtualMachine {
         timeout: Object,
         position: Position,
     ) -> Result<Object, MetorexError> {
+        self.scheduler_block_as(scheduler, blocker, blocker.clone(), timeout, position)
+    }
+
+    /// Hand the running fiber to `scheduler` to hold until `blocker` lets it
+    /// go, with `named` as the blocker the scheduler is told let it go. A
+    /// thread joined that way names the thread that waited on it.
+    pub(crate) fn scheduler_block_as(
+        &mut self,
+        scheduler: Object,
+        blocker: &Object,
+        named: Object,
+        timeout: Object,
+        position: Position,
+    ) -> Result<Object, MetorexError> {
         let fiber = self.fiber_current();
         self.scheduler_waiting
             .entry(moved_address(blocker).unwrap_or(0))
             .or_default()
-            .push((fiber, scheduler.clone()));
+            .push((fiber, scheduler.clone(), named));
         self.send_to_object(scheduler, "block", vec![blocker.clone(), timeout], position)
     }
 
@@ -101,7 +115,7 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<(), MetorexError> {
         let key = moved_address(blocker).unwrap_or(0);
-        let Some((fiber, scheduler)) = self
+        let Some((fiber, scheduler, named)) = self
             .scheduler_waiting
             .get_mut(&key)
             .filter(|waiting| !waiting.is_empty())
@@ -109,7 +123,7 @@ impl VirtualMachine {
         else {
             return Ok(());
         };
-        self.send_to_object(scheduler, "unblock", vec![blocker.clone(), fiber], position)?;
+        self.send_to_object(scheduler, "unblock", vec![named, fiber], position)?;
         Ok(())
     }
 
@@ -122,8 +136,8 @@ impl VirtualMachine {
     ) -> Result<(), MetorexError> {
         let key = moved_address(blocker).unwrap_or(0);
         let waiting = self.scheduler_waiting.remove(&key).unwrap_or_default();
-        for (fiber, scheduler) in waiting {
-            self.send_to_object(scheduler, "unblock", vec![blocker.clone(), fiber], position)?;
+        for (fiber, scheduler, named) in waiting {
+            self.send_to_object(scheduler, "unblock", vec![named, fiber], position)?;
         }
         Ok(())
     }
