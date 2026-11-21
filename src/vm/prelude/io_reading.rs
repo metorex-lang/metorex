@@ -68,12 +68,35 @@ pub(super) const SOURCE: &str = r##"
     # The streams the program started with are written through the
     # interpreter's own writer, so what a program prints keeps the order it
     # printed it in whichever route it took.
-    return IO.__stream__("write", __stream_handle__, held, waiting) if @standard.nil?
+    if @standard.nil?
+      scheduler = Fiber.current_scheduler
+      if waiting != WRITE_ONCE && scheduler.respond_to?(:io_wait)
+        return __scheduled_write__(scheduler, held.b, waiting)
+      end
+      return IO.__stream__("write", __stream_handle__, held, waiting)
+    end
     IO.__write_standard__ @standard, held
     held.bytesize
   end
 
   private :__write_texts__
+
+  # Bytes written in a fiber that is not blocking, which hands each wait for
+  # room on the descriptor to its scheduler.
+  def __scheduled_write__(scheduler, bytes, waiting)
+    written = 0
+    loop do
+      begin
+        written += IO.__stream__("write", __stream_handle__, bytes.byteslice(written..), WRITE_ONCE)
+      rescue Errno::EAGAIN
+        scheduler.io_wait self, IO::WRITABLE, nil
+        raise IOError, "closed stream" if closed?
+        next
+      end
+      return written if waiting == WRITE_WHEN_ROOM || written >= bytes.bytesize
+    end
+  end
+  private :__scheduled_write__
 
   # Text carried into the encoding the stream was told to write in. A stream
   # told none, or told to write bytes, writes the text as it stands.

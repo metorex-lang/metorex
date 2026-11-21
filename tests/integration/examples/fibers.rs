@@ -219,3 +219,19 @@ fn test_fibers_scheduler_sockets_execution() {
         )
     );
 }
+
+#[test]
+fn test_fibers_scheduler_writes_execution() {
+    let output = run_example("fibers/scheduler_writes.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[true, true]\n",
+            "true\n",
+            "[2, 2]\n",
+            "\"abcd\"\n",
+            "[:io_wait, IO, 4, nil]\n",
+            "[:io_wait, IO, 4, nil]\n",
+        )
+    );
+}
