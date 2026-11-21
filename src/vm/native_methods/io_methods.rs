@@ -157,16 +157,6 @@ fn raw_wait_status(status: &std::process::ExitStatus) -> libc::c_int {
 }
 
 impl VirtualMachine {
-    /// Wait for a child process, answering its id and the Process::Status it
-    /// ended with. A requested id of -1 waits for any child.
-    pub(crate) fn wait_for_child(
-        &mut self,
-        requested: i32,
-        position: Position,
-    ) -> Result<(i32, Object), MetorexError> {
-        self.wait_for_child_with(requested, 0, position)
-    }
-
     /// Wait for a child, with the flags Ruby's `waitpid` takes. `WNOHANG`
     /// answers a pid of zero rather than waiting for one still running.
     pub(crate) fn wait_for_child_with(
@@ -212,6 +202,31 @@ impl VirtualMachine {
             ],
             position,
         )?;
+        let status_class = self.memoized_class(
+            "__Process_Status_class",
+            "Process::Status",
+            &["exited?", "=="],
+        );
+        let wanted = match self.globals().get("Process::Status").view() {
+            Some(View::Class(found)) => found.clone(),
+            _ => status_class,
+        };
+        let is_status = self
+            .send_to_object(
+                status.clone(),
+                "is_a?",
+                vec![Object::Class(wanted)],
+                position,
+            )?
+            .is_truthy();
+        if !is_status {
+            return Err(crate::vm::errors::method_argument_type_error(
+                "process_wait",
+                "Process::Status",
+                &status,
+                position,
+            ));
+        }
         let pid = match self
             .send_to_object(status.clone(), "pid", Vec::new(), position)?
             .view()
@@ -219,8 +234,35 @@ impl VirtualMachine {
             View::Int(pid) => pid as i32,
             _ => 0,
         };
-        self.globals_mut().set(LAST_STATUS_GLOBAL, status.clone());
+        if pid != -1 {
+            self.globals_mut().set(LAST_STATUS_GLOBAL, status.clone());
+        }
         Ok((pid, status))
+    }
+
+    /// The raw wait status of the child `pid`, waited for through the
+    /// scheduler when one answers `process_wait`.
+    pub(crate) fn wait_raw_status(
+        &mut self,
+        pid: libc::pid_t,
+        position: Position,
+    ) -> Result<libc::c_int, MetorexError> {
+        let through_scheduler = self
+            .current_scheduler()
+            .is_some_and(|held| self.responds_to(&held, "process_wait"));
+        if !through_scheduler {
+            let mut held: libc::c_int = 0;
+            self.waitpid_handing_turns(pid, &mut held, 0, position)?;
+            return Ok(held);
+        }
+        let (_, status) = self.wait_for_child_through_scheduler(pid, 0, position)?;
+        match self
+            .send_to_object(status, "to_i", Vec::new(), position)?
+            .view()
+        {
+            View::Int(raw) => Ok(raw as libc::c_int),
+            _ => Ok(0),
+        }
     }
 
     /// Wait for a child without recording `$?`, answering None when there is

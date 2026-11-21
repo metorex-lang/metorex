@@ -158,3 +158,64 @@ fn test_fibers_scheduler_queues_execution() {
         )
     );
 }
+
+#[test]
+fn test_fibers_scheduler_io_and_process_execution() {
+    let output = run_example("fibers/scheduler_io_and_process.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"Hello World!\"\n",
+            "[\"Hello\", \" World!\"]\n",
+            "true\n",
+            "true\n",
+            "[1, 3]\n",
+            "[:io_read, 12, 0, 0]\n",
+            "[:io_read, 1024, 0, 0]\n",
+            "[:io_read, 5, 0, 0]\n",
+            "[:io_read, 7, 0, 0]\n",
+            "[:io_read, 1024, 0, 0]\n",
+            "[:io_wait, IO, 4, 1]\n",
+            "[:io_wait, IO, 1, nil]\n",
+            "[:process_wait, -1, 0]\n",
+            "[:process_wait, -1, 0]\n",
+            "\"wrong argument type nil (expected Process::Status)\"\n",
+            "3\n",
+            "\"abc\"\n",
+            "3\n",
+            "0\n",
+            "\"Mask overlaps source buffer!\"\n",
+            "4\n",
+            "\"can't convert Object to Integer (Object#to_int gives String)\"\n",
+        )
+    );
+}
+
+#[test]
+fn test_fibers_scheduler_sockets_execution() {
+    let output = run_example("fibers/scheduler_sockets.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"ping\"\n",
+            "\"Resource temporarily unavailable - accept(2)\"\n",
+            "\"closed stream\"\n",
+            "[true, false]\n",
+            "TCPSocket\n",
+            "\"pong\"\n",
+            "[\"127.0.0.1\"]\n",
+            "Socket::ResolutionError\n",
+            "[:io_wait, TCPServer, 1, nil]\n",
+            "[:io_wait, TCPServer, 1, nil]\n",
+            "[:io_wait, TCPServer, 1, nil]\n",
+            "[:fiber_interrupt, IOError, \"stream closed in another thread\"]\n",
+            "[:io_wait, TCPSocket, 5, 2]\n",
+            "[:address_resolve, \"example.invalid\"]\n",
+            "[:address_resolve, \"localhost\"]\n",
+            "\"user specified timeout for 192.0.2.1:80\"\n",
+            ":done\n",
+            "[true, true]\n",
+            "[\"stopped\", [true, true]]\n",
+        )
+    );
+}

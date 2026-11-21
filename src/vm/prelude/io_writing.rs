@@ -160,7 +160,12 @@ pub(super) const SOURCE: &str = r##"
       named = held.nil? ? "nil" : held.class.to_s
       raise TypeError, "no implicit conversion of #{named} into Integer"
     end
-    held.to_int
+    converted = held.to_int
+    unless converted.is_a? Integer
+      raise TypeError,
+            "can't convert #{held.class} to Integer (#{held.class}#to_int gives #{converted.class})"
+    end
+    converted
   end
   private :__as_integer__
 
@@ -671,6 +676,12 @@ pub(super) const SOURCE: &str = r##"
 
   def __wait_events__(events, timeout, answer_stream)
     raise IOError, "closed stream" if closed?
+    scheduler = Fiber.current_scheduler
+    unless scheduler.nil?
+      ready = scheduler.io_wait(self, events, timeout)
+      return nil unless ready
+      return answer_stream ? self : ready
+    end
     ready = __ready_events__(events, timeout)
     return nil if ready == 0
     answer_stream ? self : ready

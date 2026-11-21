@@ -454,7 +454,8 @@ impl VirtualMachine {
                     ));
                 }
                 let mut results = Vec::new();
-                while let Ok((pid, status)) = self.wait_for_child(-1, position) {
+                while let Ok((pid, status)) = self.wait_for_child_through_scheduler(-1, 0, position)
+                {
                     if pid <= 0 {
                         break;
                     }

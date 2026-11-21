@@ -122,6 +122,21 @@ class BasicSocket < IO
   end
   attr_reader :handle
 
+  # A pair of sockets handed to a block, both closed once it is done. A
+  # StandardError from closing one leaves the other still to close.
+  def self.__yield_pair__(pair)
+    return pair unless block_given?
+    begin
+      yield(*pair)
+    ensure
+      pair.each do |socket|
+        socket.close
+      rescue StandardError
+        nil
+      end
+    end
+  end
+
   def initialize(handle)
     @handle = handle
     @closed = false
@@ -148,10 +163,51 @@ class BasicSocket < IO
   # another object made over it with `for_fd` to go on using.
   def close
     return nil if @closed
+    __interrupt_scheduled_waiters__
     Socket.__net__ "close", @handle, "", 0 if autoclose?
     @closed = true
     nil
   end
+
+  # Fibers a scheduler parked in #io_wait on this socket are told it closed,
+  # and the closing fiber blocks until each has stopped waiting.
+  def __interrupt_scheduled_waiters__
+    waiters = @__scheduled_waiters__
+    return if waiters.nil? || waiters.empty?
+    scheduler = Fiber.current_scheduler
+    return unless scheduler.respond_to?(:fiber_interrupt)
+    @__closing_fiber__ = Fiber.current
+    waiters.dup.each do |fiber|
+      scheduler.fiber_interrupt fiber, IOError.new("stream closed in another thread")
+    end
+    scheduler.block(self, nil) until waiters.empty?
+  end
+  private :__interrupt_scheduled_waiters__
+
+  # The next connection on a listener. A non-blocking fiber whose scheduler
+  # answers #io_wait takes one already waiting, and otherwise waits through
+  # the scheduler and tries again.
+  def __accept_handle__(action)
+    scheduler = Fiber.current_scheduler
+    return Socket.__net__(action, @handle, "", 0) unless scheduler.respond_to?(:io_wait)
+    loop do
+      handle = Socket.__net__ "#{action}_now", @handle, "", 0
+      return handle unless handle.nil?
+      waiters = (@__scheduled_waiters__ ||= [])
+      waiters << Fiber.current
+      begin
+        ready = scheduler.io_wait(self, IO::READABLE, nil)
+      ensure
+        waiters.delete Fiber.current
+        closer = @__closing_fiber__
+        scheduler.unblock(self, closer) if closer && waiters.empty?
+      end
+      raise IOError, "closed stream" if closed? || @__closing_fiber__
+      raise Errno::EAGAIN, "accept(2)" if ready.nil?
+      raise IO::TimeoutError, "Timed out waiting for IO to become readable!" if ready == false
+    end
+  end
+  private :__accept_handle__
 
   # Where this end sits, as the tuple Ruby reports.
   # Where this end sits, as the four-part array Ruby answers. A reverse
@@ -1016,10 +1072,29 @@ class Addrinfo
       else port.respond_to?(:to_int) ? port.to_int : port.to_str
       end
     kind = socktype.nil? || socktype == 0 ? 0 : Socket.socktype_numbered(Socket.named_part(socktype))
-    request = [node.to_s, numbered, kind, protocol.to_i, flags.to_i, node.nil? ? 0 : 1].join("\0")
+    scheduler = Fiber.current_scheduler
+    if !node.nil? && (flags & Socket::AI_NUMERICHOST).zero? &&
+       Socket.__address__("family", node, 0).nil? && scheduler.respond_to?(:address_resolve)
+      return __resolve_through_scheduler__(scheduler, node, [numbered, kind, protocol.to_i, flags], service)
+    end
+    request = [node.to_s, numbered, kind, protocol.to_i, flags, node.nil? ? 0 : 1].join("\0")
     found = Socket.__net__ "addrinfo_list", 0, request, service
     raise Socket::ResolutionError.new("getaddrinfo: #{found[2]}", found[1]) unless found[0]
     found[1]
+  end
+
+  # The entries for the addresses a Fiber scheduler's #address_resolve gives
+  # for a host name, keeping only those that read as numeric addresses.
+  def self.__resolve_through_scheduler__(scheduler, node, hints, service)
+    numbered, kind, protocol, flags = hints
+    entries = Array(scheduler.address_resolve(node)).flat_map do |address|
+      request = [address.to_s, numbered, kind, protocol, flags | Socket::AI_NUMERICHOST, 1].join("\0")
+      found = Socket.__net__ "addrinfo_list", 0, request, service
+      found[0] ? found[1] : []
+    end
+    return entries unless entries.empty?
+    raise Socket::ResolutionError.new("getaddrinfo: nodename nor servname provided, or not known",
+                                      Socket::EAI_NONAME)
   end
 
   # The name an Addrinfo found by a lookup shows when inspected: the host
@@ -1559,8 +1634,28 @@ class TCPSocket < IPSocket
       warn "warning: TCPSocket::new() does not take block; use TCPSocket::open() instead"
     end
     Socket.refuse_open_timeout_with_others open_timeout, connect_timeout, resolv_timeout
-    super TCPSocket.connected(host, Socket.port_number(port), connect_timeout, open_timeout)
+    scheduler = Fiber.current_scheduler
+    unless scheduler.respond_to?(:io_wait)
+      return super(TCPSocket.connected(host, Socket.port_number(port), connect_timeout, open_timeout))
+    end
+    address = host.nil? || host.to_s.empty? ? "127.0.0.1" : Socket.resolved(host).first
+    family = Socket.__address__("family", address, 0) == 6 ? "6" : "4"
+    super Socket.__net__("tcp_open", 0, family, 0)
+    __connect_through_scheduler__ scheduler, address, Socket.port_number(port), connect_timeout
   end
+
+  # A connection a non-blocking fiber starts, waiting through its scheduler's
+  # #io_wait while the connection is under way.
+  def __connect_through_scheduler__(scheduler, address, port, connect_timeout)
+    return if Socket.__net__("connect_now", @handle, address, port) != 1
+    ready = scheduler.io_wait(self, IO::READABLE | IO::WRITABLE, connect_timeout)
+    raise IO::TimeoutError, "Connect timed out!" unless ready
+    Socket.__net__ "connect_now", @handle, address, port
+  rescue Exception
+    close
+    raise
+  end
+  private :__connect_through_scheduler__
 
   # A connection to the first address the host answers on. A host written as
   # nothing names this machine, which may answer on either family, so each
@@ -1573,14 +1668,14 @@ class TCPSocket < IPSocket
             end
     refused = nil
     handle = nil
-    started = Process.clock_gettime Process::CLOCK_MONOTONIC
+    limit = open_timeout || connect_timeout
     named.each do |address|
       break unless handle.nil?
       begin
-        if open_timeout.nil?
+        if limit.nil?
           handle = Socket.__net__ "connect", 0, address, port
         else
-          handle = Socket.__net__ "connect_within", 0, address, port, open_timeout
+          handle = Socket.__net__ "connect_within", 0, address, port, limit
           if handle.nil?
             raise IO::TimeoutError, "user specified timeout for #{host}:#{port}"
           end
@@ -1590,12 +1685,6 @@ class TCPSocket < IPSocket
       end
     end
     return handle unless handle.nil?
-    # A connection given a limit on how long it may take reports running out
-    # of time as its own kind of error rather than as a refusal.
-    unless connect_timeout.nil?
-      spent = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
-      raise IO::TimeoutError, "Connect timeout expired" if spent >= connect_timeout
-    end
     raise refused
   end
 
@@ -1862,7 +1951,7 @@ class TCPServer < BasicSocket
   # Take the next connection made to this socket.
   def accept
     raise IOError, "closed stream" if closed?
-    TCPSocket.new Socket.__net__("accept", @handle, "", 0)
+    TCPSocket.new __accept_handle__("accept")
   end
 
   def accept_nonblock(exception: true)
@@ -1915,7 +2004,7 @@ class TCPServer < BasicSocket
   # `sysaccept` gives the number the operating system holds the connection
   # under rather than a socket object.
   def sysaccept
-    TCPSocket.new(Socket.__net__("accept", @handle, "", 0)).fileno
+    TCPSocket.new(__accept_handle__("accept")).fileno
   end
 end
 
@@ -1975,8 +2064,9 @@ class UNIXSocket < BasicSocket
   end
 
   # Two ends already joined to each other, neither of which carries a name.
-  def self.pair(_socktype = nil, _protocol = 0)
-    Socket.__net__("unix_pair", 0, "", 0).map { |handle| UNIXSocket.new(handle).__unname__ }
+  def self.pair(_socktype = nil, _protocol = 0, &block)
+    made = Socket.__net__("unix_pair", 0, "", 0).map { |handle| UNIXSocket.new(handle).__unname__ }
+    BasicSocket.__yield_pair__ made, &block
   end
 
   class << self
@@ -2180,7 +2270,7 @@ class UNIXServer < UNIXSocket
 
   def accept
     raise IOError, "closed stream" if closed?
-    UNIXSocket.new Socket.__net__("unix_accept", @handle, "", 0)
+    UNIXSocket.new __accept_handle__("unix_accept")
   end
 
   # One try at taking a connection already waiting. With nothing waiting the
@@ -2955,7 +3045,7 @@ class Socket
     if @handle.nil? || (!@bound.nil? && !@listening)
       raise Errno::EINVAL, "accept(2)"
     end
-    handle = Socket.__net__ accept_action, @handle, "", 0
+    handle = __accept_handle__ accept_action
     taken = Socket.new @socket_family, @socket_type
     taken.__send__ :__take_handle__, handle
     [taken, accepted_address(handle)]
@@ -3011,7 +3101,7 @@ class Socket
   def sysaccept
     raise IOError, "closed stream" if closed?
     __refuse_unless_listening__
-    handle = Socket.__net__ accept_action, @handle, "", 0
+    handle = __accept_handle__ accept_action
     taken = Socket.new @socket_family, @socket_type
     taken.__send__ :__take_handle__, handle
     [taken.fileno, accepted_address(handle)]
@@ -3255,7 +3345,11 @@ class Socket
 
   # Two sockets already joined to each other. A pair in the UNIX family is
   # made by `socketpair`, so neither end carries a name of its own.
-  def self.pair(family = nil, socktype = nil, protocol = 0)
+  def self.pair(family = nil, socktype = nil, protocol = 0, &block)
+    BasicSocket.__yield_pair__ __pair__(family, socktype), &block
+  end
+
+  def self.__pair__(family, socktype)
     numbered = family.nil? ? Socket::AF_INET : Socket.family_numbered(Socket.named_part(family))
     Socket.socktype_numbered Socket.named_part(socktype) unless socktype.nil?
     if numbered == Socket::AF_UNIX
@@ -3273,6 +3367,7 @@ class Socket
     Socket.__net__ "close", listener, "", 0
     [first, second]
   end
+  private_class_method :__pair__
 
   class << self
     alias_method :socketpair, :pair

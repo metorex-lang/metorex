@@ -324,6 +324,29 @@ class IO
       io.write get_string(offset, length)
     end
 
+    # Read from a stream into the buffer from `offset` on, at least `length`
+    # bytes unless the stream ends first, answering how many came in. A
+    # length of zero takes what one read hands over.
+    def read(io, length = nil, offset = 0)
+      ensure_valid
+      raise AccessError, "Buffer is not writable!" if readonly?
+      offset = IO::Buffer.whole_number offset
+      room = @size - offset
+      length = length.nil? ? room : IO::Buffer.whole_number(length)
+      taken = 0
+      loop do
+        piece = begin
+          io.readpartial(room - taken)
+        rescue EOFError
+          break
+        end
+        set_string piece, offset + taken
+        taken += piece.bytesize
+        break if taken >= length || taken >= room
+      end
+      taken
+    end
+
     def set_string(text, at = 0, length = nil, source_offset = 0)
       ensure_valid
       raise AccessError, "Buffer is not writable!" if readonly?
@@ -520,6 +543,14 @@ class IO
       named.empty? ? "NULL" : named.join("|")
     end
 
+    def overlaps?(other)
+      mask_text = other.instance_variable_get(:@text)
+      return false unless mask_text.equal?(@text)
+      mask_start = other.instance_variable_get(:@offset)
+      mask_end = mask_start + other.size
+      @offset < mask_end && mask_start < @offset + @size
+    end
+
     def combined(mask, how, in_place)
       ensure_valid
       values = byte_view
@@ -532,6 +563,9 @@ class IO
         end
         over = mask.send :byte_view
         raise MaskError, "Zero-length mask given!" if over.empty?
+        if in_place && overlaps?(mask)
+          raise MaskError, "Mask overlaps source buffer!"
+        end
         values.each_with_index.map do |value, at|
           other = over[at % over.length]
           if how == :and
@@ -554,7 +588,7 @@ class IO
 
     private :adopt, :adopt_string, :follow_file, :nullify, :holds_text?,
             :end_offset, :byte_view, :ensure_valid, :set_bytes, :borrowing?,
-            :write_through, :flag_names, :combined
+            :write_through, :flag_names, :combined, :overlaps?
   end
 end
 "##;

@@ -658,8 +658,7 @@ impl VirtualMachine {
             Err(_) => return Ok(Object::Nil),
         };
         let pid = child.id() as libc::pid_t;
-        let mut held: libc::c_int = 0;
-        self.waitpid_handing_turns(pid, &mut held, 0, position)?;
+        let held = self.wait_raw_status(pid, position)?;
         use std::os::unix::process::ExitStatusExt as _;
         let status = std::process::ExitStatus::from_raw(held);
         self.record_last_status(&status, Some(i64::from(pid)));
@@ -692,8 +691,7 @@ impl VirtualMachine {
         if child < 0 {
             return Ok((std::process::ExitStatus::from_raw(127 << 8), 0));
         }
-        let mut held: libc::c_int = 0;
-        self.waitpid_handing_turns(child, &mut held, 0, position)?;
+        let held = self.wait_raw_status(child, position)?;
         Ok((std::process::ExitStatus::from_raw(held), i64::from(child)))
     }
 

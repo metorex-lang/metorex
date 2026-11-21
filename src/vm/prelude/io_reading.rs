@@ -255,12 +255,37 @@ pub(super) const SOURCE: &str = r##"
   # something to read to its scheduler.
   def __stream_read__(count)
     scheduler = Fiber.current_scheduler
+    return __scheduled_read__(scheduler, count) if scheduler.respond_to?(:io_read)
     unless scheduler.nil? || IO.__stream__("ready?", __stream_handle__, "", 0)
       scheduler.io_wait self, IO::READABLE, nil
     end
     IO.__stream__ "read", __stream_handle__, "", count
   end
   private :__stream_read__
+
+  # A read handed to the scheduler's `io_read` through an IO::Buffer as
+  # long as the count asked for, or, for a count of 0, as long as what is
+  # left of a file, with 1024 bytes standing in when that is unknown or none.
+  def __scheduled_read__(scheduler, count)
+    size = count
+    if size == 0
+      left = __left_in_file__
+      size = left > 0 ? left : 1024
+    end
+    buffer = IO::Buffer.new(size)
+    taken = scheduler.io_read(self, buffer, 0, 0)
+    return "".b unless taken.is_a?(Integer) && taken > 0
+    buffer.get_string(0, taken)
+  end
+  private :__scheduled_read__
+
+  def __left_in_file__
+    status = stat
+    status.file? ? status.size - pos : 0
+  rescue StandardError
+    0
+  end
+  private :__left_in_file__
 
   # Take a byte-order mark off the front of the stream, where the mode asked
   # for one and the stream opens with one.
