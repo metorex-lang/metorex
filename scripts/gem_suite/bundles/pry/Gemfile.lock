@@ -30,7 +30,7 @@ GEM
     pp (0.6.3)
       prettyprint
     prettyprint (0.2.0)
-    prism (1.8.1)
+    prism (1.8.2)
     psych (5.3.1)
       date
       stringio
@@ -69,7 +69,7 @@ DEPENDENCIES
   method_source!
   pp (= 0.6.3)
   prettyprint (= 0.2.0)
-  prism (= 1.8.1)
+  prism (= 1.8.2)
   pry!
   psych (= 5.3.1)
   rdoc (= 7.0.4)
@@ -88,7 +88,7 @@ CHECKSUMS
   method_source (1.1.0)
   pp (0.6.3) sha256=2951d514450b93ccfeb1df7d021cae0da16e0a7f95ee1e2273719669d0ab9df6
   prettyprint (0.2.0) sha256=2bc9e15581a94742064a3cc8b0fb9d45aae3d03a1baa6ef80922627a0766f193
-  prism (1.8.1) sha256=b260c1844ee0c7ead9c938f7fd63b95888c87cc054dfb64043204eccff8116ac
+  prism (1.8.2) sha256=de088096c9a0e1f298edf2b2a84740ed54d56b5d60b88536f40831599d1116ef
   pry (0.16.1)
   psych (5.3.1) sha256=eb7a57cef10c9d70173ff74e739d843ac3b2c019a003de48447b2963d81b1974
   rdoc (7.0.4) sha256=2b1c90011d6c6eab4c2fe5aa769d32285219047b2a97f489dc76242e8dff4f56
@@ -102,4 +102,4 @@ CHECKSUMS
   tsort (0.2.0) sha256=9650a793f6859a43b6641671278f79cfead60ac714148aabe4e3f0060480089f
 
 BUNDLED WITH
-  4.0.23
+  4.0.20

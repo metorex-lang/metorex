@@ -2,7 +2,7 @@ GEM
   remote: https://rubygems.org/
   specs:
     drb (2.2.3)
-    json (2.18.0)
+    json (2.18.3)
     minitest (6.1.0)
       drb (~> 2.0)
       prism (>= 1.5, < 3)
@@ -14,15 +14,15 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  json (= 2.18.0)
+  json (= 2.18.3)
   minitest (~> 6.0)
 
 CHECKSUMS
-  drb (2.2.3)
-  json (2.18.0)
-  minitest (6.1.0)
-  prism (2.1.0)
-  prism (2.1.0-arm64-darwin)
+  drb (2.2.3) sha256=0b00d6fdb50995fe4a45dea13663493c841112e4068656854646f418fda13373
+  json (2.18.3) sha256=927f21e6c49a5ed5bcc9fbe142fefb3a685a0f69520e0cb9601454e41d737033
+  minitest (6.1.0) sha256=ff373595aa8888631e8a5463986a76b3845346ae6d7fa46e139c1633d418076e
+  prism (2.1.0) sha256=1c0a7c6dea0e93183390fb123f007564dbe663198e2f86ad87204151147601f3
+  prism (2.1.0-arm64-darwin) sha256=2d0c2e3e011cfd89c041940907d3ff3def379d7b0f2ba158d1d42238e8ad8afc
 
 BUNDLED WITH
-  4.0.23
+  4.0.20

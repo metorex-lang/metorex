@@ -3,7 +3,7 @@ GEM
   specs:
     ast (2.4.3)
     docile (1.1.5)
-    json (2.18.0)
+    json (2.18.3)
     minitest (5.27.0)
     parser (3.3.13.0)
       ast (~> 2.4.1)
@@ -20,7 +20,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  json (= 2.18.0)
+  json (= 2.18.3)
   minitest (~> 5.10)
   parser (= 3.3.13.0)
   racc (= 1.8.1)
@@ -29,7 +29,7 @@ DEPENDENCIES
 CHECKSUMS
   ast (2.4.3) sha256=954615157c1d6a382bc27d690d973195e79db7f55e9765ac7c481c60bdb4d383
   docile (1.1.5) sha256=5d3ee40b3a6567fe460601f3f4a3e199a98de37434ebfa242d751d0c79181255
-  json (2.18.0) sha256=b10506aee4183f5cf49e0efc48073d7b75843ce3782c68dbeb763351c08fd505
+  json (2.18.3) sha256=927f21e6c49a5ed5bcc9fbe142fefb3a685a0f69520e0cb9601454e41d737033
   minitest (5.27.0) sha256=2d3b17f8a36fe7801c1adcffdbc38233b938eb0b4966e97a6739055a45fa77d5
   parser (3.3.13.0) sha256=e02f9b63c2fe05b0c68f692ba4df89b3cb113b663964f75d988fbebfd6c3deca
   racc (1.8.1) sha256=4a7f6929691dbec8b5209a0b373bc2614882b55fc5d2e447a21aaa691303d62f
@@ -37,4 +37,4 @@ CHECKSUMS
   simplecov-html (0.10.2) sha256=f65306e2695913c007ddc8d31d6318f37ae074f2ee1cea1647b3bf4c94ca30d2
 
 BUNDLED WITH
-  4.0.23
+  4.0.20

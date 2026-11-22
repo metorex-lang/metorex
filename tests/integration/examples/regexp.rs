@@ -517,3 +517,18 @@ fn regexp_quote_escapes_a_broken_string_byte_by_byte_and_keeps_its_encoding() {
         )
     );
 }
+
+#[test]
+fn regexp_quote_of_a_string_subclass_keeps_the_encoding_it_holds() {
+    let output = run_example("regexp/quote_of_a_string_subclass.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"ᗧ\\\\.\"\n",
+            "#<Encoding:UTF-8>\n",
+            "String\n",
+            "#<Encoding:US-ASCII>\n",
+            "1\n",
+        )
+    );
+}

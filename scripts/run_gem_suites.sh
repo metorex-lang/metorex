@@ -309,6 +309,7 @@ for row in "${SUITES[@]}"; do
       done
     done)
   fi
+  [ -n "$files" ] || continue
   if one_at_a_time "$gem"; then
     printf '%s\t%s\t%s\t%s\n' "$gem" "$(echo $files)" "$arguments" "$prepare" >> "$QUEUE"
   else

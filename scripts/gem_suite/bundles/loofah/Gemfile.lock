@@ -1,7 +1,7 @@
 GEM
   remote: https://rubygems.org/
   specs:
-    json (2.18.0)
+    json (2.18.3)
     minitest (5.27.0)
     racc (1.8.1)
 
@@ -10,14 +10,14 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  json (= 2.18.0)
+  json (= 2.18.3)
   minitest (~> 5.14)
   racc (= 1.8.1)
 
 CHECKSUMS
-  json (2.18.0)
-  minitest (5.27.0)
-  racc (1.8.1)
+  json (2.18.3) sha256=927f21e6c49a5ed5bcc9fbe142fefb3a685a0f69520e0cb9601454e41d737033
+  minitest (5.27.0) sha256=2d3b17f8a36fe7801c1adcffdbc38233b938eb0b4966e97a6739055a45fa77d5
+  racc (1.8.1) sha256=4a7f6929691dbec8b5209a0b373bc2614882b55fc5d2e447a21aaa691303d62f
 
 BUNDLED WITH
-  4.0.23
+  4.0.20

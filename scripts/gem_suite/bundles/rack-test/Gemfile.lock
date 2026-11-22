@@ -17,7 +17,7 @@ GEM
       prism (~> 1.5)
     minitest-global_expectations (1.0.2)
       minitest (> 5)
-    prism (1.8.1)
+    prism (1.8.2)
 
 PLATFORMS
   arm64-darwin-27
@@ -27,7 +27,7 @@ DEPENDENCIES
   drb (= 2.2.3)
   minitest (= 6.0.0)
   minitest-global_expectations
-  prism (= 1.8.1)
+  prism (= 1.8.2)
   rack!
   rack-test!
 
@@ -35,9 +35,9 @@ CHECKSUMS
   drb (2.2.3) sha256=0b00d6fdb50995fe4a45dea13663493c841112e4068656854646f418fda13373
   minitest (6.0.0) sha256=4ca597fc1d735ea18d2b4b98c5fb1d5a6da4a6f35ddf32bd5fa3eded33a453be
   minitest-global_expectations (1.0.2) sha256=b0fda8574322d099d91196c74245ed07a257dbe61e4b6962ec1a71d0cee957e3
-  prism (1.8.1) sha256=b260c1844ee0c7ead9c938f7fd63b95888c87cc054dfb64043204eccff8116ac
+  prism (1.8.2) sha256=de088096c9a0e1f298edf2b2a84740ed54d56b5d60b88536f40831599d1116ef
   rack (3.2.8)
   rack-test (2.3.0)
 
 BUNDLED WITH
-  4.0.23
+  4.0.20

@@ -302,7 +302,14 @@ module Gem
       Gem.load_bundler_extensions(spec.version) if spec.full_require_paths.include?(require_path)
     end
 
-    load spec.bin_file(exec_name)
+    bin_file = spec.bin_file(exec_name)
+    # Bundler ships inside Metorex with no executable on disk.
+    if spec.name == "bundler" && !File.exist?(bin_file)
+      require "bundler/version"
+      return require "bundler/metorex/bundle" if spec.version.to_s == Bundler::VERSION
+    end
+
+    load bin_file
   end
 
   ##

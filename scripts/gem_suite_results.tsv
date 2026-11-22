@@ -519,7 +519,7 @@ json/test/json/json_ext_parser_test.rb	4	0	0	4	0	0
 json/test/json/json_fixtures_test.rb	32	0	0	32	0	0
 json/test/json/json_generator_test.rb	62	0	0	62	0	0
 json/test/json/json_generic_object_test.rb	5	0	0	5	0	0
-json/test/json/json_parser_test.rb	51	0	0	51	0	0
+json/test/json/json_parser_test.rb	53	0	0	53	0	0
 json/test/json/json_ryu_fallback_test.rb	8	0	0	8	0	0
 json/test/json/json_string_matching_test.rb	1	0	0	1	0	0
 json/test/json/ractor_test.rb	3	0	0	3	0	0
@@ -897,7 +897,7 @@ nio4r/spec/nio/acceptables_spec.rb	1	0	0	1	0	0
 nio4r/spec/nio/bytebuffer_spec.rb	42	0	0	42	0	0
 nio4r/spec/nio/monitor_spec.rb	17	0	0	17	0	0
 nio4r/spec/nio/selectables/pipe_spec.rb	5	0	0	5	0	0
-nio4r/spec/nio/selectables/ssl_socket_spec.rb	10	0	0	10	0	0
+nio4r/spec/nio/selectables/ssl_socket_spec.rb	10	0	1	10	0	0
 nio4r/spec/nio/selectables/tcp_socket_spec.rb	8	0	0	8	0	0
 nio4r/spec/nio/selectables/udp_socket_spec.rb	4	0	1	4	0	1
 nio4r/spec/nio/selector_spec.rb	25	0	0	25	0	0
@@ -1104,7 +1104,7 @@ pry/spec/pryrc_spec.rb	8	0	0	8	0	0
 pry/spec/ring_spec.rb	12	0	0	12	0	0
 pry/spec/run_command_spec.rb	2	0	0	2	0	0
 pry/spec/sticky_locals_spec.rb	17	0	0	17	0	0
-pry/spec/syntax_checking_spec.rb	25	0	0	25	0	0
+pry/spec/syntax_checking_spec.rb	25	1	0	25	0	0
 pry/spec/system_command_handler_spec.rb	2	0	0	2	0	0
 pry/spec/unrescued_exceptions_spec.rb	2	0	0	2	0	0
 pry/spec/warning_spec.rb	1	0	0	1	0	0
@@ -1130,7 +1130,7 @@ puma/test/test_fiber_storage_application.rb	1	0	0	1	0	0
 puma/test/test_helper.rb	1	0	0	1	0	0
 puma/test/test_http10.rb	1	0	0	1	0	0
 puma/test/test_http11.rb	14	0	1	14	0	1
-puma/test/test_integration_cluster.rb	56	0	0	56	0	0
+puma/test/test_integration_cluster.rb	56	0	0	56	1	0
 puma/test/test_integration_pumactl.rb	12	0	0	12	1	0
 puma/test/test_integration_single.rb	21	0	0	21	1	0
 puma/test/test_integration_ssl.rb	8	0	0	8	0	0
@@ -1149,11 +1149,11 @@ puma/test/test_plugin_systemd.rb	6	0	6	6	0	6
 puma/test/test_plugin_systemd_jruby.rb	1	0	1	1	0	1
 puma/test/test_preserve_bundler_env.rb	3	0	0	3	0	0
 puma/test/test_puma_localhost_authority.rb	2	0	0	2	0	0
-puma/test/test_puma_server.rb	159	0	0	159	1	0
+puma/test/test_puma_server.rb	159	0	0	159	0	0
 puma/test/test_puma_server_current.rb	1	0	0	1	0	0
 puma/test/test_puma_server_hijack.rb	6	0	0	6	0	0
 puma/test/test_puma_server_shutdown_debug.rb	4	0	0	4	0	0
-puma/test/test_puma_server_ssl.rb	28	0	1	28	0	1
+puma/test/test_puma_server_ssl.rb	28	1	0	28	0	0
 puma/test/test_puma_server_ssl_key_update.rb	12	0	0	12	0	0
 puma/test/test_pumactl.rb	20	0	1	20	0	1
 puma/test/test_rack_handler.rb	21	0	0	21	0	0
@@ -1170,7 +1170,7 @@ puma/test/test_unix_socket.rb	2	0	1	2	0	1
 puma/test/test_url_map.rb	1	0	0	1	0	0
 puma/test/test_web_concurrency_auto.rb	2	0	0	2	0	0
 puma/test/test_web_server.rb	10	0	0	10	0	0
-puma/test/test_worker_gem_independence.rb	6	0	0	6	5	0
+puma/test/test_worker_gem_independence.rb	6	0	0	6	0	0
 racc/test/test_chk_y.rb	2	0	0	2	0	0
 racc/test/test_grammar.rb	7	0	0	7	0	0
 racc/test/test_grammar_file_parser.rb	1	0	0	1	0	0

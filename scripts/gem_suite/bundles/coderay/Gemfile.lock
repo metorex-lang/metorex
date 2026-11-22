@@ -8,7 +8,7 @@ GEM
   specs:
     date (3.5.1)
     diff-lcs (1.6.2)
-    json (2.18.0)
+    json (2.18.3)
     power_assert (3.0.1)
     psych (5.3.1)
       date
@@ -39,7 +39,7 @@ PLATFORMS
 DEPENDENCIES
   coderay!
   date (= 3.5.1)
-  json (= 2.18.0)
+  json (= 2.18.3)
   power_assert (= 3.0.1)
   psych (= 5.3.1)
   rspec
@@ -52,7 +52,7 @@ CHECKSUMS
   coderay (1.1.3.rc1)
   date (3.5.1) sha256=750d06384d7b9c15d562c76291407d89e368dda4d4fff957eb94962d325a0dc0
   diff-lcs (1.6.2) sha256=9ae0d2cba7d4df3075fe8cd8602a8604993efc0dfa934cff568969efb1909962
-  json (2.18.0) sha256=b10506aee4183f5cf49e0efc48073d7b75843ce3782c68dbeb763351c08fd505
+  json (2.18.3) sha256=927f21e6c49a5ed5bcc9fbe142fefb3a685a0f69520e0cb9601454e41d737033
   power_assert (3.0.1) sha256=8ce9876716cc74e863fcd4cdcdc52d792bd983598d1af3447083a3a9a4d34103
   psych (5.3.1) sha256=eb7a57cef10c9d70173ff74e739d843ac3b2c019a003de48447b2963d81b1974
   rspec (3.13.2) sha256=206284a08ad798e61f86d7ca3e376718d52c0bc944626b2349266f239f820587
@@ -66,4 +66,4 @@ CHECKSUMS
   test-unit (3.7.8) sha256=689d1ca53f4d46f678b4e5d68d8e4294f87fc5e8b9238cc4de7c5727e8d65943
 
 BUNDLED WITH
-  4.0.23
+  4.0.20

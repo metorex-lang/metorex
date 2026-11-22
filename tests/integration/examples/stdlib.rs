@@ -2720,3 +2720,15 @@ fn marshal_refuses_a_module_named_inside_an_anonymous_one() {
         )
     );
 }
+
+#[test]
+fn ripper_sexp_loads_with_warnings_on_and_prints_none() {
+    let output = run_example("stdlib/ripper_sexp_loads_without_warnings.rb");
+    assert_eq!(output, "true\n\"\"\n");
+}
+
+#[test]
+fn a_bundle_binstub_runs_the_bundler_metorex_ships() {
+    let output = run_example("bundler/binstub_runs_the_bundler_ruby_ships.rb");
+    assert_eq!(output, "4.0.20\n");
+}

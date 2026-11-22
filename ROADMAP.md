@@ -135,7 +135,7 @@ Metorex's peak memory is above 1.5× CRuby's on 46 of the 50 rows of the README'
   - Acceptance: `metorex -v` reports 4.0.10, every generated file names 4.0.10 in its header, the changed spec files of the 4.0.10 tarball pass, and `cargo test` passes
 - [x] The `ruby/spec` submodule carries the specs 4.0.10 added, and the `json` gem suite runs at v2.18.3
   - Acceptance: `scripts/run_ruby_spec.sh` passes and `scripts/run_gem_suites.sh json` matches MRI 4.0.10's counts
-- [ ] The gem suite lockfiles lock json 2.18.3 and prism 1.8.2, and `scripts/gem_suite_results.tsv` holds MRI 4.0.10's counts
+- [x] The gem suite lockfiles lock json 2.18.3 and prism 1.8.2, and `scripts/gem_suite_results.tsv` holds MRI 4.0.10's counts
   - Acceptance: `CHECK=1 scripts/run_gem_suites.sh` passes
 
 ## RSpec parity

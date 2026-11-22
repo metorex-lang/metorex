@@ -23,7 +23,7 @@ GEM
       rexml
     diff-lcs (1.6.2)
     hashdiff (1.2.1)
-    json (2.18.0)
+    json (2.18.3)
     logger (1.7.0)
     net-http (0.9.1)
       uri (>= 0.11.1)
@@ -60,7 +60,7 @@ DEPENDENCIES
   bigdecimal (= 4.0.1)
   faraday!
   faraday-net_http!
-  json (= 2.18.0)
+  json (= 2.18.3)
   logger (= 1.7.0)
   net-http (= 0.9.1)
   net-protocol (= 0.2.2)
@@ -79,7 +79,7 @@ CHECKSUMS
   faraday (2.15.1)
   faraday-net_http (3.5.0)
   hashdiff (1.2.1) sha256=9c079dbc513dfc8833ab59c0c2d8f230fa28499cc5efb4b8dd276cf931457cd1
-  json (2.18.0) sha256=b10506aee4183f5cf49e0efc48073d7b75843ce3782c68dbeb763351c08fd505
+  json (2.18.3) sha256=927f21e6c49a5ed5bcc9fbe142fefb3a685a0f69520e0cb9601454e41d737033
   logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
   net-http (0.9.1) sha256=25ba0b67c63e89df626ed8fac771d0ad24ad151a858af2cc8e6a716ca4336996
   net-protocol (0.2.2) sha256=aa73e0cba6a125369de9837b8d8ef82a61849360eba0521900e2c3713aa162a8
@@ -96,4 +96,4 @@ CHECKSUMS
   webmock (3.34.0) sha256=72eed29dc8c00148d592acaedaaa6b869e2e397de57dfc8602b84aa834f46b33
 
 BUNDLED WITH
-  4.0.23
+  4.0.20

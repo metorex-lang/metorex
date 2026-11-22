@@ -21,12 +21,15 @@ impl VirtualMachine {
             && matches!(method_name, "escape" | "quote")
             && arguments.len() == 1
         {
+            // An instance of a String subclass is quoted as the String it holds.
+            let subject = crate::vm::native_methods::string_subclass_value(&arguments[0])
+                .unwrap_or_else(|| arguments[0].clone());
             // A string broken in its own encoding is escaped byte by byte,
             // since every character the escaping touches is a single ASCII
             // byte, and keeps the encoding it came in.
-            if let View::String(held) = arguments[0].view()
+            if let View::String(held) = subject.view()
                 && !self
-                    .send_to_object(arguments[0].clone(), "valid_encoding?", vec![], position)?
+                    .send_to_object(subject.clone(), "valid_encoding?", vec![], position)?
                     .is_truthy()
             {
                 let escaped = quoted_bytes_for_pattern(&held.bytes());
@@ -35,7 +38,7 @@ impl VirtualMachine {
                 ))));
             }
             let source = self.coerce_name_argument(&arguments[0], position)?;
-            let named = match arguments[0].view() {
+            let named = match subject.view() {
                 View::String(held) => held.encoding_name(),
                 _ => "US-ASCII",
             };
@@ -62,7 +65,7 @@ impl VirtualMachine {
                 )?;
                 return Ok(Answered(encoded));
             }
-            if matches!(arguments[0].view(), View::String(held) if held.holds_bytes()) {
+            if matches!(subject.view(), View::String(held) if held.holds_bytes()) {
                 made.mark_bytes();
             }
             return Ok(Answered(Object::String(Rc::new(made))));
