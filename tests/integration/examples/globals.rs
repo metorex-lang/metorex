@@ -241,3 +241,22 @@ fn test_globals_argf_generic_stdin_execution() {
         )
     );
 }
+
+#[test]
+fn test_globals_env_byte_names_execution() {
+    let output = run_example("globals/env_byte_names.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"bar\"\n",
+            "nil\n",
+            "\"binary\"\n",
+            "nil\n",
+            "\"latin1\"\n",
+            "[[69, 78, 86, 95, 66, 89, 84, 69, 95, 78, 65, 77, 69, 83, 95, 220, 66, 69, 82]]\n",
+            "[]\n",
+            "\"no implicit conversion of Object into String\"\n",
+            "\"1\"\n",
+        )
+    );
+}

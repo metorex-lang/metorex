@@ -82,6 +82,16 @@ impl VirtualMachine {
                         }
                     }
                 }
+                // A name is matched by its bytes, so a name in another
+                // encoding is looked up as the slot those bytes spell.
+                name if ENVIRONMENT_NAME_ARGUMENT.contains(&name)
+                    && arguments.len() == 1
+                    && matches!(arguments[0].view(), View::String(text)
+                        if text.reads_bytes() && !text.is_ascii()) =>
+                {
+                    let named = Object::string(self.environment_name(&arguments[0], position)?);
+                    return self.call_hash_method(receiver, method_name, &[named], position);
+                }
                 // What the environment is looked up by names a String, so
                 // anything that reads as one is asked for its text. A name
                 // that reads as nothing is refused, while a value that reads
@@ -110,7 +120,7 @@ impl VirtualMachine {
                 // A variable is named and valued in text, and a name that
                 // holds an `=` or nothing at all names no variable.
                 "[]=" | "store" if arguments.len() == 2 => {
-                    let key = self.environment_text(&arguments[0], position)?;
+                    let key = self.environment_name(&arguments[0], position)?;
                     // Setting a name to nil takes it away, and a name the
                     // environment could never hold simply has nothing to take.
                     if matches!(arguments[1].view(), View::Nil) {
@@ -139,7 +149,7 @@ impl VirtualMachine {
                     let mut made: crate::object::HashEntries = Default::default();
                     let mut keyed: Vec<(String, Object)> = Vec::new();
                     for argument in arguments {
-                        let key = self.environment_text(argument, position)?;
+                        let key = self.environment_name(argument, position)?;
                         let Some(value) = dict_rc.borrow().get(key.as_str()).cloned() else {
                             continue;
                         };
@@ -175,7 +185,7 @@ impl VirtualMachine {
                             retagged(value, &named),
                         ])));
                     }
-                    let key = self.environment_text(&arguments[0], position)?;
+                    let key = self.environment_name(&arguments[0], position)?;
                     let held = dict_rc.borrow().get(key.as_str()).cloned();
                     return Ok(Some(match held {
                         // A value read out of the environment is frozen, so
@@ -202,28 +212,37 @@ impl VirtualMachine {
                         ));
                     };
                     let pairs = self.hash_pairs(given);
-                    // `replace` reads every name and value before it changes
-                    // anything, where `merge!` changes as it goes.
+                    // `replace` sets each name it is given in turn, then takes
+                    // away every name it was not given.
                     if method_name == "replace" {
-                        let mut settled = Vec::new();
+                        let held: Vec<String> = self
+                            .hash_pairs(dict_rc)
+                            .into_iter()
+                            .filter_map(|(key, _)| match key.view() {
+                                View::String(name) => Some(environment_slot(&name.bytes())),
+                                _ => None,
+                            })
+                            .collect();
+                        let mut given = std::collections::HashSet::new();
                         for (key, value) in &pairs {
-                            let key = self.environment_text(key, position)?;
+                            let key = self.environment_name(key, position)?;
                             let value = self.environment_text(value, position)?;
                             self.refuse_bad_variable_name(&key, position)?;
-                            settled.push((key, value));
-                        }
-                        for key in self.hash_pairs(dict_rc).into_iter().map(|(key, _)| key) {
-                            self.record_environment_change(dict_rc, &key, &Object::Nil);
-                        }
-                        dict_rc.borrow_mut().clear();
-                        for (key, value) in settled {
+                            given.insert(key.clone());
                             self.store_variable(dict_rc, key, value);
+                        }
+                        for slot in held.into_iter().filter(|slot| !given.contains(slot)) {
+                            self.record_environment_change(
+                                dict_rc,
+                                &Object::string(slot),
+                                &Object::Nil,
+                            );
                         }
                         return Ok(Some(receiver.clone()));
                     }
                     let block = self.pending_block.take();
                     for (key, mut value) in pairs {
-                        let key = self.environment_text(&key, position)?;
+                        let key = self.environment_name(&key, position)?;
                         self.refuse_bad_variable_name(&key, position)?;
                         // A block settles a name both sides hold.
                         if let Some(View::Block(block)) = block.view()

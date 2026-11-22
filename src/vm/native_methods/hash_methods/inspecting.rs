@@ -84,6 +84,12 @@ pub(crate) fn retagged(value: Object, named: &Option<String>) -> Object {
         "US-ASCII" if !text.as_str().is_ascii() => "ASCII-8BIT".to_string(),
         other => other.to_string(),
     };
+    if text.holds_bytes() {
+        let bytes = text.bytes().to_vec();
+        return Object::String(std::rc::Rc::new(crate::object::StringValue::of_bytes(
+            bytes, named,
+        )));
+    }
     Object::String(std::rc::Rc::new(crate::object::StringValue::with_encoding(
         text.to_text(),
         named,

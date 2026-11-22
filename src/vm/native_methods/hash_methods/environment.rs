@@ -32,6 +32,19 @@ impl VirtualMachine {
         ))
     }
 
+    /// The slot a variable is kept under, read from the bytes its name is
+    /// spelled with, whatever encoding the name is tagged with.
+    pub(crate) fn environment_name(
+        &mut self,
+        value: &Object,
+        position: Position,
+    ) -> Result<String, MetorexError> {
+        if let View::String(text) = value.view() {
+            return Ok(environment_slot(&text.bytes()));
+        }
+        self.environment_text(value, position)
+    }
+
     /// The encoding the environment is read as: the one a program named, or
     /// the one the system is set to.
     pub(crate) fn environment_reading_encoding(&mut self) -> Option<String> {
@@ -71,14 +84,14 @@ impl VirtualMachine {
         key: String,
         value: String,
     ) {
-        let named = Object::string(key.clone());
+        let named = environment_key_object(&key);
         // What the environment holds is read back in the encoding the locale
         // names, so it is kept in that encoding from the moment it is set.
         let reading = self.environment_reading_encoding();
         let held = retagged(Object::string(value), &reading);
         // A name that reads back as some other kind of value is kept beside
         // the entry, so `ENV["1"]` stays a name rather than a number.
-        if !crate::vm::utils::is_primitive_key(&named) {
+        if key.starts_with(UNREADABLE_NAME_PREFIX) || !crate::vm::utils::is_primitive_key(&named) {
             let slot = "__MX_KEY_OBJECTS__".to_string();
             let mut objects = match dict_rc.borrow().get(slot.as_str()).view() {
                 Some(View::Dict(held)) => held.borrow().clone(),
@@ -124,16 +137,15 @@ impl VirtualMachine {
         let View::String(name) = key.view() else {
             return;
         };
-        let Ok(name) = std::ffi::CString::new(name.as_str().as_bytes().to_vec()) else {
+        let slot = environment_slot(&name.bytes());
+        let Ok(name) = std::ffi::CString::new(environment_bytes(&slot)) else {
             return;
         };
         // Ruby removes the entry outright when a name is set to nil, so the
         // name stops being one the environment holds at all.
         if matches!(value.view(), View::Nil) {
             let mut held = dict_rc.borrow_mut();
-            if let Some(key_text) = crate::vm::utils::object_to_dict_key(key) {
-                held.shift_remove(key_text.as_str());
-            }
+            held.shift_remove(slot.as_str());
         }
         unsafe {
             match value.view() {
@@ -169,5 +181,46 @@ pub(crate) const ENVIRONMENT_TEXT_ARGUMENT: &[&str] = &[
     "rassoc",
 ];
 
+/// The subset of those whose argument is a name.
+pub(crate) const ENVIRONMENT_NAME_ARGUMENT: &[&str] =
+    &["delete", "has_key?", "key?", "include?", "member?", "assoc"];
+
 /// The subset of those whose argument is a value rather than a name.
 pub(crate) const ENVIRONMENT_VALUE_ARGUMENT: &[&str] = &["has_value?", "value?", "rassoc"];
+
+/// What starts the slot of a variable whose name is not UTF-8. No variable
+/// name holds a NUL, so no readable name starts this way.
+const UNREADABLE_NAME_PREFIX: &str = "\u{0}bytes:";
+
+/// The slot a variable name spelled with `bytes` is kept under.
+pub(crate) fn environment_slot(bytes: &[u8]) -> String {
+    match std::str::from_utf8(bytes) {
+        Ok(text) => text.to_string(),
+        Err(_) => {
+            let spelled: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
+            format!("{UNREADABLE_NAME_PREFIX}{spelled}")
+        }
+    }
+}
+
+/// The bytes the variable kept under `slot` is named with.
+fn environment_bytes(slot: &str) -> Vec<u8> {
+    let Some(spelled) = slot.strip_prefix(UNREADABLE_NAME_PREFIX) else {
+        return slot.as_bytes().to_vec();
+    };
+    (0..spelled.len())
+        .step_by(2)
+        .filter_map(|start| u8::from_str_radix(&spelled[start..start + 2], 16).ok())
+        .collect()
+}
+
+/// The name ENV answers for the variable kept under `slot`.
+fn environment_key_object(slot: &str) -> Object {
+    if slot.starts_with(UNREADABLE_NAME_PREFIX) {
+        let bytes = environment_bytes(slot);
+        return Object::String(Rc::new(crate::object::StringValue::of_bytes(
+            bytes, "UTF-8",
+        )));
+    }
+    Object::string(slot)
+}
