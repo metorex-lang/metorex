@@ -254,6 +254,18 @@ impl VirtualMachine {
                 let left_items = left_items.borrow().clone();
                 let right_items = right_items.borrow().clone();
                 let mut remaining = Vec::new();
+                if left_items.len() > super::bitwise::SMALL_ARRAY_LENGTH
+                    && right_items.len() > super::bitwise::SMALL_ARRAY_LENGTH
+                {
+                    let table = self.element_table(&right_items, position)?;
+                    for item in &left_items {
+                        let slot = self.element_slot(&table, item, position)?;
+                        if !table.contains_key(&slot) {
+                            remaining.push(item.clone());
+                        }
+                    }
+                    return Ok(Object::array(remaining));
+                }
                 for item in &left_items {
                     if !self.contains_eql(&right_items, item, position)? {
                         remaining.push(item.clone());

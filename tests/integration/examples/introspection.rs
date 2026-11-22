@@ -1398,3 +1398,9 @@ fn defined_asks_an_overridden_respond_to_about_respond_to_missing() {
         )
     );
 }
+
+#[test]
+fn the_tracepoint_enabled_last_runs_first() {
+    let output = run_example("introspection/tracepoint_newest_runs_first.rb");
+    assert_eq!(output, "[:second, :first]\n");
+}

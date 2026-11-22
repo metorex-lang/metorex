@@ -368,3 +368,9 @@ fn equal_string_keys_share_one_frozen_copy_across_hashes() {
     let output = run_example("hashes/string_keys_shared_across_hashes.rb");
     assert_eq!(output, "true\ntrue\nfalse\nfalse\ntrue\n");
 }
+
+#[test]
+fn an_identity_hash_keeps_its_string_keys_and_copies_compare_equal() {
+    let output = run_example("hash_methods/identity_hash_copies_and_string_keys.rb");
+    assert_eq!(output, "true\ntrue\n2\ntrue\n1\ntrue\n");
+}

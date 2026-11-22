@@ -3,6 +3,10 @@
 use super::*;
 use crate::object::View;
 
+/// The longest arrays that set operations compare element by element. Past
+/// it they place the elements in a table by `#hash`, as Ruby does.
+pub(crate) const SMALL_ARRAY_LENGTH: usize = 16;
+
 impl VirtualMachine {
     /// The `&` operator, which is a conjunction on numbers and an
     /// intersection on collections.
@@ -22,6 +26,19 @@ impl VirtualMachine {
                 let right_items = right_items.borrow().clone();
                 let left_items = left_items.borrow().clone();
                 let mut intersection: Vec<Object> = Vec::new();
+                if left_items.is_empty() || right_items.is_empty() {
+                    return Ok(Object::array(intersection));
+                }
+                if left_items.len() > SMALL_ARRAY_LENGTH || right_items.len() > SMALL_ARRAY_LENGTH {
+                    let mut table = self.element_table(&right_items, position)?;
+                    for item in &left_items {
+                        let slot = self.element_slot(&table, item, position)?;
+                        if table.shift_remove(&slot).is_some() {
+                            intersection.push(item.clone());
+                        }
+                    }
+                    return Ok(Object::array(intersection));
+                }
                 for item in &left_items {
                     if self.contains_eql(&right_items, item, position)?
                         && !self.contains_eql(&intersection, item, position)?
@@ -65,7 +82,16 @@ impl VirtualMachine {
             // duplicates.
             (View::Array(left_items), View::Array(right_items)) => {
                 let mut all = left_items.borrow().clone();
+                let left_length = all.len();
                 all.extend(right_items.borrow().iter().cloned());
+                if all.len() > SMALL_ARRAY_LENGTH {
+                    let mut table = self.element_table(&all[..left_length], position)?;
+                    for item in &all[left_length..] {
+                        let slot = self.element_slot(&table, item, position)?;
+                        table.entry(slot).or_insert_with(|| item.clone());
+                    }
+                    return Ok(Object::array(table.into_values().collect()));
+                }
                 let mut union: Vec<Object> = Vec::new();
                 for item in &all {
                     if !self.contains_eql(&union, item, position)? {

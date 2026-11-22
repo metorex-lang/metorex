@@ -241,7 +241,7 @@ impl VirtualMachine {
         if !already_held {
             // A hash comparing by identity keeps the key it was handed, since
             // a copy would be a different object and never found again.
-            let stored = if rendered.starts_with("\u{1}i") {
+            let stored = if dict.contains_key(BY_IDENTITY_KEY) {
                 key.clone()
             } else {
                 self.shared_key_object(key)

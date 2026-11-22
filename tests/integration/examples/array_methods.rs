@@ -349,3 +349,23 @@ fn an_array_index_by_a_float_out_of_range_names_the_float_as_c_writes_it() {
         )
     );
 }
+
+#[test]
+fn set_operations_call_hash_once_past_sixteen_elements() {
+    let output = run_example("array_methods/set_operations_hash_past_sixteen_elements.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "& at 16: 0\n",
+            "& at 17: #hash called\n",
+            "| at 16: 16\n",
+            "| at 17: #hash called\n",
+            "- at 16: 17\n",
+            "- at 17: #hash called\n",
+            "& empty: 0\n",
+            "[1, 3, 20]\n",
+            "[20, 21, 21.0]\n",
+            "[1, 2, 3, 4]\n",
+        )
+    );
+}

@@ -2706,3 +2706,17 @@ fn an_ssl_socket_write_nonblock_raises_once_the_socket_is_full() {
     let output = run_example("stdlib/openssl_write_nonblock_fills_the_socket.rb");
     assert_eq!(output, "true\ntrue\nnil\n:wait_writable\n");
 }
+
+#[test]
+fn marshal_refuses_a_module_named_inside_an_anonymous_one() {
+    let output = run_example("stdlib/marshal_dump_of_a_module_in_an_anonymous_module.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "can't dump anonymous module #<Module:0x>::Nested\n",
+            "can't dump anonymous class #<Class:0x>::Inner\n",
+            "\"\\x04\\bm\\x18DumpedModules::Kept\"\n",
+            "true\n",
+        )
+    );
+}

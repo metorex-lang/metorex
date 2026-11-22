@@ -24,6 +24,35 @@ impl VirtualMachine {
         Ok(false)
     }
 
+    /// The slot `element` takes in a table of elements, placed by `#hash`
+    /// and told apart by `#eql?` as a Hash key is.
+    pub(crate) fn element_slot(
+        &mut self,
+        table: &crate::object::HashEntries,
+        element: &Object,
+        position: Position,
+    ) -> Result<crate::object::Slot, MetorexError> {
+        if self.key_hashes_for_itself(element) {
+            return self.hashed_slot(element, position, |candidate| table.get(candidate).cloned());
+        }
+        self.dict_slot_in(&Default::default(), element, false, position)
+    }
+
+    /// A table of `elements` keyed by their slots, keeping the first of any
+    /// that are `eql?` to each other.
+    pub(crate) fn element_table(
+        &mut self,
+        elements: &[Object],
+        position: Position,
+    ) -> Result<crate::object::HashEntries, MetorexError> {
+        let mut table = crate::object::HashEntries::default();
+        for element in elements {
+            let slot = self.element_slot(&table, element, position)?;
+            table.entry(slot).or_insert_with(|| element.clone());
+        }
+        Ok(table)
+    }
+
     /// Evaluate `Module#<`, `#<=`, `#>`, and `#>=`. These report ancestry:
     /// true when the relationship holds, false when the opposite relationship
     /// holds, and nil when the two are unrelated. A non class/module argument

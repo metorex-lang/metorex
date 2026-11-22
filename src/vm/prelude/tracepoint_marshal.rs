@@ -413,7 +413,7 @@ module Marshal
   # than whatever an overridden `name` answers.
   def self.__class_path__(held)
     named = Module.instance_method(:name).bind_call(held)
-    raise TypeError, "can't dump anonymous #{held.is_a?(Class) ? "class" : "module"} #{held}" if named.nil?
+    raise TypeError, "can't dump anonymous #{held.is_a?(Class) ? "class" : "module"} #{held}" if named.nil? || named.start_with?("#<")
     named
   end
 
@@ -559,7 +559,7 @@ module Marshal
       extended = singleton.ancestors.drop(1).take_while { |held| !held.is_a?(Class) }
       extended.each do |held|
         named = Module.instance_method(:name).bind_call(held)
-        raise TypeError, "can't dump anonymous class #{held}" if named.nil?
+        raise TypeError, "can't dump anonymous class #{held}" if named.nil? || named.start_with?("#<")
         text "e"
         symbol named
       end

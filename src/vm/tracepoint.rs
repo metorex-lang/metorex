@@ -217,6 +217,7 @@ impl VirtualMachine {
                     None | Some(View::Nil)
                 )
             });
+        listening.reverse();
         listening.extend(targeted.into_iter().rev());
         let name = Object::symbol(event.to_string());
         for tracepoint in listening {
