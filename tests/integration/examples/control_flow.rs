@@ -683,3 +683,15 @@ fn test_return_from_blocks_handed_on_to_a_native_iterator_leaves_the_method() {
         concat!(":first\n", ":second\n", "nil\n", ":second\n",)
     );
 }
+
+#[test]
+fn a_hash_pattern_reads_a_hash_subclass_through_its_own_key_and_index_methods() {
+    let output = run_example("control_flow/deconstruct_keys_answers_a_hash_subclass.rb");
+    assert_eq!(output, "[:b]\n[:a, :c]\n[:a, 3]\n[:a]\n[true, 1]\n");
+}
+
+#[test]
+fn an_assignment_followed_by_a_pattern_test_assigns_the_value_and_tests_it() {
+    let output = run_example("control_flow/assignment_tested_against_a_pattern.rb");
+    assert_eq!(output, "5\n[[1, 2], 1]\n[{name: \"x\"}, \"x\"]\nfalse\n");
+}

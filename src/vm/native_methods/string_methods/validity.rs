@@ -166,12 +166,13 @@ pub(crate) fn euc_jp_reads(bytes: &[u8]) -> bool {
     true
 }
 
-/// Whether an encoding spells the ASCII letters one byte to a letter.
+/// Whether an encoding spells the ASCII letters one byte to a letter. A
+/// dummy encoding such as ISO-2022-JP is not read as doing so.
 pub(crate) fn encoding_is_ascii_compatible(named: &str) -> bool {
     !matches!(
         named,
         "UTF-16" | "UTF-16BE" | "UTF-16LE" | "UTF-32" | "UTF-32BE" | "UTF-32LE"
-    )
+    ) && !crate::vm::native_methods::class_methods::is_dummy_encoding(named)
 }
 
 /// The ArgumentError Ruby raises for a string whose bytes spell nothing in

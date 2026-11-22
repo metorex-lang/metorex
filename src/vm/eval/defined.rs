@@ -391,13 +391,21 @@ impl VirtualMachine {
             ) => return Ok(None),
             Err(other) => return Err(other),
         };
-        Ok(self.answers_publicly(&value, method).then_some("method"))
+        let position = receiver.position();
+        Ok(self
+            .answers_publicly(&value, method, position)?
+            .then_some("method"))
     }
 
     /// Whether `value` answers `method` to a caller outside it: a public
     /// method, a protected one when `self` is of the class holding it, or
     /// one `respond_to_missing?` says it answers.
-    fn answers_publicly(&mut self, value: &Object, method: &str) -> bool {
+    fn answers_publicly(
+        &mut self,
+        value: &Object,
+        method: &str,
+        position: crate::lexer::Position,
+    ) -> Result<bool, MetorexError> {
         if let Some((owner, found)) = self.lookup_method(value, method) {
             // A class or module is asked the way a call to it is, which keeps
             // the public copy `module_function` makes apart from the private
@@ -408,33 +416,87 @@ impl VirtualMachine {
                 owner.is_method_private(method)
             };
             if found.is_undefined || refused {
-                return false;
+                return Ok(false);
             }
             if owner.is_method_protected(method) {
                 let caller = self.environment().get("self").unwrap_or(Object::Nil);
-                return self.builtins().class_of(&caller).has_ancestor(&owner)
+                return Ok(self.builtins().class_of(&caller).has_ancestor(&owner)
                     || matches!(caller.view(), View::Instance(instance)
-                        if instance.borrow().class.has_ancestor(&owner));
+                        if instance.borrow().class.has_ancestor(&owner)));
             }
-            return true;
+            return Ok(true);
         }
         if self.responds_to(value, method) {
-            return true;
+            return Ok(true);
         }
-        let position = crate::lexer::Position::new(0, 0, 0);
+        // A `respond_to?` of the program's own is asked first whether the
+        // object answers `respond_to_missing?` at all.
+        if let Some((owner, overridden)) = self.lookup_method(value, "respond_to?")
+            && !overridden.is_undefined
+            && !self.asks_respond_to_missing(value, &owner, &overridden, position)?
+        {
+            return Ok(false);
+        }
         if self.lookup_method(value, "respond_to_missing?").is_some() {
             let asked = vec![Object::symbol(method.to_string()), Object::Bool(false)];
-            return self
+            return Ok(self
                 .send_to_object(value.clone(), "respond_to_missing?", asked, position)
-                .is_ok_and(|answer| answer.is_truthy());
+                .is_ok_and(|answer| answer.is_truthy()));
         }
-        self.send_to_object(
-            value.clone(),
-            "respond_to?",
-            vec![Object::symbol(method.to_string())],
-            position,
-        )
-        .is_ok_and(|answer| answer.is_truthy())
+        Ok(self
+            .send_to_object(
+                value.clone(),
+                "respond_to?",
+                vec![Object::symbol(method.to_string())],
+                position,
+            )
+            .is_ok_and(|answer| answer.is_truthy()))
+    }
+
+    /// What a `respond_to?` of the program's own answers for
+    /// `respond_to_missing?`. One written with a single parameter is asked
+    /// with the name alone, and a run with deprecation warnings on says so.
+    fn asks_respond_to_missing(
+        &mut self,
+        value: &Object,
+        owner: &Rc<crate::class::Class>,
+        overridden: &Rc<crate::object::Method>,
+        position: crate::lexer::Position,
+    ) -> Result<bool, MetorexError> {
+        let one_parameter =
+            crate::vm::native_methods::method_object_methods::method_arity(overridden) == 1;
+        let asked = Object::symbol("respond_to_missing?".to_string());
+        if !one_parameter {
+            let answer = self.send_to_object(
+                value.clone(),
+                "respond_to?",
+                vec![asked, Object::Bool(true)],
+                position,
+            )?;
+            return Ok(answer.is_truthy());
+        }
+        if self.warning_category_enabled("deprecated") {
+            let receiver = if owner.is_singleton_class() {
+                format!("{}.", self.get_string_representation(value, position)?)
+            } else {
+                format!("{}#", owner.name())
+            };
+            let text = format!(
+                "{}{receiver}respond_to?(:respond_to_missing?) uses the deprecated method signature, which takes one parameter\n",
+                self.warning_prefix(0, position)
+            );
+            self.warn_in_category(text, "deprecated", position)?;
+            if let Some(location) = &overridden.source_location {
+                let file = location.filename.clone().unwrap_or_default();
+                let text = format!(
+                    "{file}:{}: warning: respond_to? is defined here\n",
+                    location.line
+                );
+                self.warn_in_category(text, "deprecated", position)?;
+            }
+        }
+        let answer = self.send_to_object(value.clone(), "respond_to?", vec![asked], position)?;
+        Ok(answer.is_truthy())
     }
 }
 

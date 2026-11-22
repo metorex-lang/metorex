@@ -135,3 +135,9 @@ fn test_struct_each_stops_on_break_and_return() {
         "false\n[false]\ntrue\n:stopped\n:is_truncated\n10\n"
     );
 }
+
+#[test]
+fn structs_that_are_eql_through_a_loop_hash_the_same() {
+    let output = run_example("struct/hash_of_a_recursive_struct.rb");
+    assert_eq!(output, "true\ntrue\nfalse\ntrue\nfalse\n1\n");
+}

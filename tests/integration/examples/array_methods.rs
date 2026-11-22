@@ -336,3 +336,16 @@ fn array_literal_spreads_a_hash_with_a_double_splat() {
         )
     );
 }
+
+#[test]
+fn an_array_index_by_a_float_out_of_range_names_the_float_as_c_writes_it() {
+    let output = run_example("array_methods/index_by_a_float_out_of_range.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"float 1e+30 out of range of integer\"\n",
+            "\"float Inf out of range of integer\"\n",
+            "\"float -1.5e+20 out of range of integer\"\n",
+        )
+    );
+}

@@ -240,10 +240,9 @@ impl VirtualMachine {
                         held
                     }
                 };
-                // A thread variable set to nil is gone rather than held as
-                // nil, so the thread stops naming it among its variables.
-                if method_name == "thread_variable_set" && matches!(arguments[1].view(), View::Nil)
-                {
+                // A thread variable or fiber local set to nil is gone rather
+                // than held as nil, so the thread stops naming it.
+                if matches!(arguments[1].view(), View::Nil) {
                     dict.borrow_mut().shift_remove(key_str.as_str());
                 } else {
                     dict.borrow_mut()

@@ -1330,8 +1330,12 @@ impl VirtualMachine {
                     self.warn_through_warning_module(message, position)?;
                 }
                 // The record separator is held as a frozen plain String of
-                // its own unless it was handed one.
+                // its own unless it was handed one, and one equal to the
+                // default is the default itself.
                 match text.view() {
+                    View::String(held) if name == "/" && *held.as_str() == *"\n" => {
+                        Ok(crate::vm::init::default_record_separator())
+                    }
                     View::String(held)
                         if name == "/"
                             && !(held.is_frozen() && matches!(value.view(), View::String(_))) =>

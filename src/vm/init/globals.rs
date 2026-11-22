@@ -51,7 +51,7 @@ pub(crate) fn register_special_globals(globals: &mut GlobalRegistry) {
     // $; $, $/ $\ — string separator globals
     globals.set_variable(";", Object::Nil);
     globals.set_variable(",", Object::Nil);
-    globals.set_variable("/", Object::string("\n".to_string()));
+    globals.set_variable("/", default_record_separator());
     globals.set_variable("\\", Object::Nil);
 
     // $! $@ $~ $& — exception/regex globals
@@ -382,4 +382,24 @@ pub(crate) fn seed_environment_with_globals(
         }
         environment.define(name.clone(), value.clone());
     }
+}
+
+thread_local! {
+    static DEFAULT_RECORD_SEPARATOR: std::cell::OnceCell<Object> =
+        const { std::cell::OnceCell::new() };
+}
+
+/// The frozen "\n" `$/` starts as, which an assignment of an equal String
+/// puts back in place of the String it was handed.
+pub(crate) fn default_record_separator() -> Object {
+    DEFAULT_RECORD_SEPARATOR.with(|held| {
+        held.get_or_init(|| {
+            let separator = Object::string("\n".to_string());
+            if let crate::object::View::String(text) = separator.view() {
+                text.freeze();
+            }
+            separator
+        })
+        .clone()
+    })
 }

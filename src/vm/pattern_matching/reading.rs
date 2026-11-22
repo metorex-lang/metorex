@@ -180,6 +180,28 @@ impl VirtualMachine {
             ),
         };
         let held = self.send_pattern_method(value, "deconstruct_keys", vec![named], position)?;
+        // A Hash subclass is asked for each key the pattern names through its
+        // own `key?` and `[]`, which it may answer differently from the
+        // entries it holds.
+        if let Some(View::Dict(backing)) =
+            crate::vm::native_methods::hash_subclass_value(&held).view()
+        {
+            let mut entries = backing.borrow().clone();
+            for key in wanted {
+                let named = Object::symbol(key.clone());
+                let Some(slot) = crate::vm::utils::object_to_dict_key(&named) else {
+                    continue;
+                };
+                entries.shift_remove(&slot);
+                let answered =
+                    self.send_to_object(held.clone(), "key?", vec![named.clone()], position)?;
+                if answered.is_truthy() {
+                    let found = self.send_to_object(held.clone(), "[]", vec![named], position)?;
+                    entries.insert(slot, found);
+                }
+            }
+            return Ok(Some(entries));
+        }
         match held.view() {
             View::Dict(entries) => Ok(Some(entries.borrow().clone())),
             _ => Err(crate::vm::errors::simple_exception(

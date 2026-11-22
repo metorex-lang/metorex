@@ -11,6 +11,8 @@ static VALUE short_of(VALUE self, VALUE value) { return INT2FIX(NUM2SHORT(value)
 static VALUE character(VALUE self, VALUE value) { return CHR2FIX(NUM2CHR(value)); }
 static VALUE single_bit(VALUE self, VALUE value) { return INT2FIX(rb_absint_singlebit_p(value)); }
 static VALUE long_long_size(VALUE self) { return INT2FIX(sizeof(LONG_LONG)); }
+static VALUE unsigned_long(VALUE self, VALUE value) { return ULONG2NUM(NUM2ULONG(value)); }
+static VALUE appended(VALUE self, VALUE string, VALUE added) { return rb_str_append(string, added); }
 
 void Init_c_coercion(void) {
   VALUE cls = rb_define_class("CCoercion", rb_cObject);
@@ -25,4 +27,6 @@ void Init_c_coercion(void) {
   rb_define_method(cls, "character", character, 1);
   rb_define_method(cls, "single_bit", single_bit, 1);
   rb_define_method(cls, "long_long_size", long_long_size, 0);
+  rb_define_method(cls, "unsigned_long", unsigned_long, 1);
+  rb_define_method(cls, "appended", appended, 2);
 }

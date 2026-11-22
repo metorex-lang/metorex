@@ -15,7 +15,28 @@ impl Parser<'_> {
         self.paren_less_arg_depth = enclosing_arg_depth;
         self.assignment_rhs_depth = enclosing_assignment_depth;
         // `value => pattern` and `value in pattern` stand where a statement
-        // does, so the test is read once the value has been.
+        // does, so the test is read once the value has been. After an
+        // assignment the value tested is the assignment itself.
+        let parsed = match parsed {
+            Ok(Statement::Assignment {
+                target,
+                value,
+                position,
+            }) if self.refuse_pattern_test == 0
+                && matches!(self.peek().kind, TokenKind::In | TokenKind::FatArrow) =>
+            {
+                Ok(Statement::Expression {
+                    expression: Expression::BinaryOp {
+                        op: crate::ast::BinaryOp::Assign,
+                        left: target,
+                        right: value,
+                        position,
+                    },
+                    position,
+                })
+            }
+            other => other,
+        };
         let Ok(Statement::Expression {
             expression,
             position,

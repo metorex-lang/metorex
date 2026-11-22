@@ -777,3 +777,9 @@ fn a_gem_with_extensions_and_no_compiled_library_in_lib_lists_lib_first() {
     let output = run_example("require/gem_with_extensions_lists_lib_first.rb");
     assert_eq!(output, "2\ntrue\ntrue\n");
 }
+
+#[test]
+fn a_file_run_by_load_runs_again_when_it_requires_itself() {
+    let output = run_example("loading/load_of_a_file_that_requires_itself/main.rb");
+    assert_eq!(output, "false\ntrue\ntrue\n[:ran, :ran]\n1\n");
+}

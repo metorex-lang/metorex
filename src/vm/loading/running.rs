@@ -207,10 +207,14 @@ impl VirtualMachine {
         self.set_current_file(canonical_path.clone());
 
         // Mark this path as actively executing so autoload can tell
-        // "file is mid-load" apart from "file already loaded".
+        // "file is mid-load" apart from "file already loaded". A `load` is
+        // no require in progress, so a require of the same file from its body
+        // runs the file again.
         let loading_on = self.running_thread();
         let loading_named = canonical_path.to_string_lossy().into_owned();
-        self.begin_loading(loading_named.clone(), loading_on.clone());
+        if record {
+            self.begin_loading(loading_named.clone(), loading_on.clone());
+        }
 
         // A loaded file's statements run at top level, whatever method the
         // load was called from, so `Module.nesting` inside it follows the
@@ -296,7 +300,9 @@ impl VirtualMachine {
             }
         }
         self.current_source_file = previous_source_file;
-        self.finish_loading(&loading_named, &loading_on);
+        if record {
+            self.finish_loading(&loading_named, &loading_on);
+        }
         self.current_file = previous_file;
         self.current_source_encoding = previous_source_encoding;
         // A file that fails part-way through was never loaded, so the

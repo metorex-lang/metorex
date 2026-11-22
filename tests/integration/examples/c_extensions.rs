@@ -67,7 +67,7 @@ const C_CALLS_OUTPUT: &str = concat!(
     "true\n",
     "[42, -7, 3, 5]\n",
     "TypeError: no implicit conversion from nil to integer\n",
-    "RangeError: float inf out of range of integer\n",
+    "RangeError: float Inf out of range of integer\n",
     "RangeError: bignum too big to convert into 'long'\n",
     "TypeError: no implicit conversion of String into Integer\n",
     "[4611686018427387903, 2305843009213693952]\n",
@@ -856,6 +856,10 @@ const C_COERCION_OUTPUT: &str = concat!(
     "TypeError: no implicit conversion of String into Integer\n",
     "[0, 1, 1, 0, 1, 0]\n",
     "8\n",
+    "[4, 9223372036854775808]\n",
+    "RangeError: float 1.844674407e+19 out of range of integer\n",
+    "RangeError: float -Inf out of range of integer\n",
+    "#<Encoding:ISO-2022-JP (dummy)>\n",
 );
 
 #[test]

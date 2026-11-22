@@ -15,16 +15,26 @@ fn range_error(message: String) -> ! {
     ))
 }
 
-/// The whole number a VALUE stands for, a Float cut toward zero.
-fn integer_from(value: Value) -> BigInt {
+/// A C `long` is read from a Float below 2**63.
+const LONG_MAX_PLUS_ONE: f64 = 9_223_372_036_854_775_808.0;
+/// A C `unsigned long` is read from a Float below 2**64.
+const ULONG_MAX_PLUS_ONE: f64 = 18_446_744_073_709_551_616.0;
+
+/// The whole number a VALUE stands for, a Float cut toward zero. A Float
+/// from `upper` up, or from below `LONG_MIN`, fits no C integer.
+fn integer_from(value: Value, upper: f64) -> BigInt {
     match to_object(value).view() {
         View::Nil => raise(crate::vm::errors::simple_exception(
             "TypeError",
             "no implicit conversion from nil to integer",
             super::called_from(),
         )),
-        View::Float(number) if number.is_finite() => BigInt::from(number.trunc() as i128),
-        View::Float(number) => range_error(format!("float {} out of range of integer", number)),
+        View::Float(number) if (-LONG_MAX_PLUS_ONE..upper).contains(&number) => {
+            BigInt::from(number.trunc() as i128)
+        }
+        View::Float(number) => {
+            range_error(crate::vm::errors::float_out_of_range_of_integer(number))
+        }
         other => or_raise(
             interpreter().coerce_integer_argument(&other.to_object(), super::called_from()),
         ),
@@ -37,7 +47,7 @@ pub(super) fn long_from(value: Value) -> i64 {
     if value & 1 == 1 {
         return (value as i64) >> 1;
     }
-    let number = integer_from(value);
+    let number = integer_from(value, LONG_MAX_PLUS_ONE);
     i64::try_from(&number)
         .unwrap_or_else(|_| range_error("bignum too big to convert into 'long'".to_string()))
 }
@@ -45,7 +55,7 @@ pub(super) fn long_from(value: Value) -> i64 {
 /// The number as a C `unsigned long`, where a negative one that fits a
 /// `long` wraps around as C's conversion does.
 fn unsigned_long_from(value: Value) -> u64 {
-    let number = integer_from(value);
+    let number = integer_from(value, ULONG_MAX_PLUS_ONE);
     match (u64::try_from(&number), i64::try_from(&number)) {
         (Ok(unsigned), _) => unsigned,
         (_, Ok(signed)) => signed as u64,

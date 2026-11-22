@@ -63,4 +63,9 @@ report { coercion.character("") }
 p([coercion.single_bit(0), coercion.single_bit(8), coercion.single_bit(-8), coercion.single_bit(6), coercion.single_bit(2**70), coercion.single_bit(2**70 + 1)])
 p(coercion.long_long_size)
 
+p([coercion.unsigned_long(4.2), coercion.unsigned_long(2.0**63)])
+report { coercion.unsigned_long(2.0**64) }
+report { coercion.unsigned_long(-Float::INFINITY) }
+p(coercion.appended(+"", "パスタ".encode(Encoding::ISO_2022_JP)).encoding)
+
 FileUtils.rm_rf(directory)

@@ -808,7 +808,7 @@ pub(crate) fn method_parameter_list(method_obj: &crate::object::Method) -> Objec
 
 /// Ruby's arity: the count of required parameters, made negative when a call
 /// may pass more or fewer than that.
-fn method_arity(method_obj: &crate::object::Method) -> i64 {
+pub(crate) fn method_arity(method_obj: &crate::object::Method) -> i64 {
     if let Some(arity) = native_arity(method_obj) {
         return i64::from(arity);
     }

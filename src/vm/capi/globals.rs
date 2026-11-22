@@ -2,7 +2,6 @@
 //! from C getter and setter functions, and reading and writing any global
 //! by name.
 
-use super::calls::call;
 use super::exports::text;
 use super::values::{Value, to_object, to_value};
 use super::{Caller, called_from, enter, interpreter, or_raise};
@@ -228,18 +227,8 @@ pub extern "C-unwind" fn rb_lastline_set(line: Value) {
     or_raise(interpreter().write_global_variable("_", to_object(line), called_from()));
 }
 
-thread_local! {
-    static DEFAULT_SEPARATOR: std::cell::OnceCell<Object> = const { std::cell::OnceCell::new() };
-}
-
 /// `rb_default_rs`: the record separator Ruby starts with, a frozen "\n".
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_metorex_default_rs() -> Value {
-    DEFAULT_SEPARATOR.with(|held| {
-        to_value(held.get_or_init(|| {
-            let separator = Object::string("\n");
-            call(separator.clone(), "freeze", Vec::new());
-            separator
-        }))
-    })
+    to_value(&crate::vm::init::default_record_separator())
 }

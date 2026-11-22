@@ -1375,3 +1375,26 @@ fn test_introspection_method_parameters_by_place_execution() {
         )
     );
 }
+
+#[test]
+fn defined_asks_an_overridden_respond_to_about_respond_to_missing() {
+    let output = run_example("introspection/defined_asks_respond_to_about_respond_to_missing.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[:respond_to?, :respond_to_missing?, true]\n",
+            "nil\n",
+            "[:respond_to?, :respond_to_missing?, true]\n",
+            "[:missing, :an_undefined_method, false]\n",
+            "\"method\"\n",
+            "[:missing, :yes, false]\n",
+            "\"method\"\n",
+            "[:missing, :no, false]\n",
+            "nil\n",
+            "nil\n",
+            "nil\n",
+            "line 46: warning: RespondToOneParameter#respond_to?(:respond_to_missing?) uses the deprecated method signature, which takes one parameter\n",
+            "line 26: warning: respond_to? is defined here\n",
+        )
+    );
+}

@@ -293,15 +293,21 @@ impl VirtualMachine {
                 )?)))
             }
             "hash" => {
-                // The class's hash, with each member's mixed in. A struct
-                // reached again while it is being hashed adds nothing more.
+                // The class's hash, with each member's mixed in. When any
+                // struct is reached again while the members are hashed, the
+                // outermost struct answers its class's hash alone, so two
+                // structs that are `eql?` through the loop hash the same.
                 let address = crate::vm::object_ids::reference_address(receiver).unwrap_or(0);
-                let mut digest = self.hash_digest(&Object::Class(Rc::clone(class_rc)), position)?;
+                let class_digest =
+                    self.hash_digest(&Object::Class(Rc::clone(class_rc)), position)?;
                 if STRUCTS_BEING_HASHED.with(|held| held.borrow().contains(&address)) {
-                    return Ok(Some(Object::Int(digest)));
+                    STRUCT_HASH_LOOPED.set(true);
+                    return Ok(Some(Object::Int(class_digest)));
                 }
+                let outermost = STRUCTS_BEING_HASHED.with(|held| held.borrow().is_empty());
                 STRUCTS_BEING_HASHED.with(|held| held.borrow_mut().push(address));
                 let mixed: Result<i64, MetorexError> = (|| {
+                    let mut digest = class_digest;
                     for value in member_values(receiver, members) {
                         let hashed = self.send_to_object(value, "hash", vec![], position)?;
                         if let View::Int(number) = hashed.view() {
@@ -313,6 +319,10 @@ impl VirtualMachine {
                 STRUCTS_BEING_HASHED.with(|held| {
                     held.borrow_mut().pop();
                 });
+                if outermost && STRUCT_HASH_LOOPED.replace(false) {
+                    mixed?;
+                    return Ok(Some(Object::Int(class_digest)));
+                }
                 Ok(Some(Object::Int(mixed?)))
             }
             "inspect" | "to_s" => {
@@ -622,6 +632,9 @@ thread_local! {
     /// The structs whose `hash` is being worked out now.
     static STRUCTS_BEING_HASHED: std::cell::RefCell<Vec<usize>> =
         const { std::cell::RefCell::new(Vec::new()) };
+    /// Whether a struct was reached again while the outermost one was being
+    /// hashed.
+    static STRUCT_HASH_LOOPED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// The structs whose `inspect` is being rendered now.
     static STRUCTS_BEING_INSPECTED: std::cell::RefCell<Vec<usize>> =
         const { std::cell::RefCell::new(Vec::new()) };

@@ -513,3 +513,9 @@ fn a_thread_a_child_was_forked_from_waits_until_woken() {
     let output = run_example("threads/forked_thread_waits_until_woken.rb");
     assert_eq!(output, "\"woken\\n\"\n\"ready\\n\"\n\"trapped\\n\"\ntrue\n");
 }
+
+#[test]
+fn a_fiber_local_set_to_nil_is_removed() {
+    let output = run_example("threads/fiber_local_set_to_nil.rb");
+    assert_eq!(output, "true\nnil\nfalse\n[]\nfalse\n");
+}

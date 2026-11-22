@@ -500,3 +500,20 @@ fn shift_jis_patterns_match_shift_jis_text_and_escape_in_its_encoding() {
         )
     );
 }
+
+#[test]
+fn regexp_quote_escapes_a_broken_string_byte_by_byte_and_keeps_its_encoding() {
+    let output = run_example("regexp/quote_of_a_broken_string.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[[97, 92, 46, 133, 98, 92, 46], #<Encoding:US-ASCII>, false]\n",
+            "[[97, 92, 46, 128], #<Encoding:UTF-8>, false]\n",
+            "[[255], #<Encoding:UTF-8>, false]\n",
+            "[[255], #<Encoding:US-ASCII>, false]\n",
+            "[[97, 92, 32, 98, 130, 160], #<Encoding:Shift_JIS>, true]\n",
+            "[[130, 92, 46], #<Encoding:EUC-JP>, false]\n",
+            "[[97, 92, 46, 255], #<Encoding:BINARY (ASCII-8BIT)>, true]\n",
+        )
+    );
+}

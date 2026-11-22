@@ -687,3 +687,30 @@ pub(super) fn unimplemented_statement_error(statement: &Statement) -> MetorexErr
         statement
     ))
 }
+
+/// A Float written as C's `%-.10g` writes it, which is how MRI names one it
+/// cannot read as an integer.
+fn c_general_float(number: f64) -> String {
+    let mut written = [0u8; 64];
+    let length = unsafe {
+        libc::snprintf(
+            written.as_mut_ptr().cast(),
+            written.len(),
+            c"%-.10g".as_ptr(),
+            number,
+        )
+    };
+    let length = usize::try_from(length).unwrap_or(0).min(written.len() - 1);
+    match &written[..length] {
+        b"nan" | b"-nan" => "NaN".to_string(),
+        b"inf" => "Inf".to_string(),
+        b"-inf" => "-Inf".to_string(),
+        shown => String::from_utf8_lossy(shown).into_owned(),
+    }
+}
+
+/// The message MRI raises a RangeError with for a Float that does not fit
+/// a C integer.
+pub(crate) fn float_out_of_range_of_integer(number: f64) -> String {
+    format!("float {} out of range of integer", c_general_float(number))
+}

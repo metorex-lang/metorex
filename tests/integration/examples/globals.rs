@@ -260,3 +260,12 @@ fn test_globals_env_byte_names_execution() {
         )
     );
 }
+
+#[test]
+fn a_record_separator_equal_to_the_default_is_the_default_itself() {
+    let output = run_example("globals/record_separator_equal_to_the_default.rb");
+    assert_eq!(
+        output,
+        "true\n[false, true, true]\n[true, true]\ntrue\ntrue\n"
+    );
+}

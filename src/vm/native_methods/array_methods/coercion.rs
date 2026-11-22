@@ -22,7 +22,7 @@ impl VirtualMachine {
             View::Float(index)
                 if !(-9.223_372_036_854_776e18..9.223_372_036_854_776e18).contains(&index) =>
             {
-                let message = format!("float {} out of range of integer", index);
+                let message = crate::vm::errors::float_out_of_range_of_integer(index);
                 return Err(crate::vm::errors::simple_exception(
                     "RangeError",
                     &message,

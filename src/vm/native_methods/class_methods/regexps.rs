@@ -21,6 +21,19 @@ impl VirtualMachine {
             && matches!(method_name, "escape" | "quote")
             && arguments.len() == 1
         {
+            // A string broken in its own encoding is escaped byte by byte,
+            // since every character the escaping touches is a single ASCII
+            // byte, and keeps the encoding it came in.
+            if let View::String(held) = arguments[0].view()
+                && !self
+                    .send_to_object(arguments[0].clone(), "valid_encoding?", vec![], position)?
+                    .is_truthy()
+            {
+                let escaped = quoted_bytes_for_pattern(&held.bytes());
+                return Ok(Answered(Object::String(Rc::new(
+                    crate::object::StringValue::of_bytes(escaped, held.encoding_name()),
+                ))));
+            }
             let source = self.coerce_name_argument(&arguments[0], position)?;
             let named = match arguments[0].view() {
                 View::String(held) => held.encoding_name(),

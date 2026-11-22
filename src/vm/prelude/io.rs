@@ -183,7 +183,7 @@ class IO
   end
 
   def self.readlines(name, separator = $/, limit = nil, chomp: false, **options)
-    held = File.new File.path(name), options[:mode].nil? ? "r" : options[:mode]
+    held = File.new File.path(name), **{ mode: "r" }.merge(options)
     begin
       held.readlines separator, limit, chomp: chomp
     ensure
@@ -199,7 +199,7 @@ class IO
         IO.foreach(name, separator, limit, chomp: chomp, **options) { |line| yielder << line }
       end
     end
-    held = File.new File.path(name), options[:mode].nil? ? "r" : options[:mode]
+    held = File.new File.path(name), **{ mode: "r" }.merge(options)
     # Reading every line of a file leaves no last line read behind.
     $_ = nil
     begin

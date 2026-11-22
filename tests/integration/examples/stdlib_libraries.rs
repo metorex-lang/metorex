@@ -3024,3 +3024,38 @@ fn test_stdlib_libraries_string_io_byte_limits_execution() {
         )
     );
 }
+
+#[test]
+fn io_foreach_and_readlines_open_the_file_with_the_keywords_they_are_given() {
+    let output = run_example("io/foreach_and_readlines_open_keywords.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "#<Encoding:BINARY (ASCII-8BIT)>\n",
+            "#<Encoding:BINARY (ASCII-8BIT)>\n",
+            "#<Encoding:BINARY (ASCII-8BIT)>\n",
+            "[\"first\", \"second\"]\n",
+            "[#<Encoding:BINARY (ASCII-8BIT)>]\n",
+        )
+    );
+}
+
+#[test]
+fn process_exec_refuses_a_umask_out_of_the_range_of_a_file_mode() {
+    let output = run_example("processes/exec_umask_out_of_range.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[RangeError, \"float NaN out of range of integer\"]\n",
+            "[RangeError, \"float Inf out of range of integer\"]\n",
+            "[RangeError, \"float 1e+30 out of range of integer\"]\n",
+            "[RangeError, \"integer 65536 too big to convert to 'unsigned short'\"]\n",
+            "[RangeError, \"integer -65535 too small to convert to 'unsigned short'\"]\n",
+            "[RangeError, \"integer 18446744073709551615 too big to convert to 'unsigned short'\"]\n",
+            "[RangeError, \"bignum too big to convert into 'unsigned long'\"]\n",
+            "[RangeError, \"bignum out of range of unsigned long\"]\n",
+            "[TypeError, \"no implicit conversion of nil into Integer\"]\n",
+            "true\n",
+        )
+    );
+}

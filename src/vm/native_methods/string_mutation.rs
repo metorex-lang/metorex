@@ -759,15 +759,11 @@ fn appended_encoding(
     if other.byte_len() == 0 || target.encoding_name() == other.encoding_name() {
         return Some(None);
     }
-    let reads_alongside_ascii = |named: &str| {
-        !matches!(
-            named,
-            "UTF-16LE" | "UTF-16BE" | "UTF-16" | "UTF-32LE" | "UTF-32BE" | "UTF-32"
-        )
-    };
+    let reads_alongside_ascii =
+        crate::vm::native_methods::string_methods::encoding_is_ascii_compatible;
     // An empty string keeps its encoding when ASCII is appended and it reads
     // ASCII, and takes the appended text's otherwise. Text in a wide UTF
-    // form is never ASCII, whatever characters it holds.
+    // form or a dummy encoding is never ASCII, whatever bytes it holds.
     if target.byte_len() == 0 {
         if reads_alongside_ascii(target.encoding_name())
             && reads_alongside_ascii(other.encoding_name())

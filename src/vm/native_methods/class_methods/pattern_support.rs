@@ -8,21 +8,55 @@ use super::*;
 pub(crate) fn quoted_for_pattern(source: &str) -> String {
     let mut written = String::with_capacity(source.len());
     for character in source.chars() {
-        match character {
-            '[' | ']' | '{' | '}' | '(' | ')' | '|' | '-' | '*' | '.' | '\\' | '?' | '+' | '^'
-            | '$' | '#' | ' ' => {
-                written.push('\\');
-                written.push(character);
-            }
-            '\n' => written.push_str("\\n"),
-            '\r' => written.push_str("\\r"),
-            '\t' => written.push_str("\\t"),
-            '\u{b}' => written.push_str("\\v"),
-            '\u{c}' => written.push_str("\\f"),
-            other => written.push(other),
+        match pattern_escape(character) {
+            Some(escape) => written.push_str(escape),
+            None => written.push(character),
         }
     }
     written
+}
+
+/// The bytes of a string with every regex metacharacter escaped, for a
+/// string whose characters cannot be read in its own encoding.
+pub(crate) fn quoted_bytes_for_pattern(source: &[u8]) -> Vec<u8> {
+    let mut written = Vec::with_capacity(source.len());
+    for &byte in source {
+        match pattern_escape(char::from(byte)).filter(|_| byte.is_ascii()) {
+            Some(escape) => written.extend_from_slice(escape.as_bytes()),
+            None => written.push(byte),
+        }
+    }
+    written
+}
+
+/// What a character is written as in a pattern that matches it literally,
+/// when that is not the character itself.
+fn pattern_escape(character: char) -> Option<&'static str> {
+    Some(match character {
+        '[' => "\\[",
+        ']' => "\\]",
+        '{' => "\\{",
+        '}' => "\\}",
+        '(' => "\\(",
+        ')' => "\\)",
+        '|' => "\\|",
+        '-' => "\\-",
+        '*' => "\\*",
+        '.' => "\\.",
+        '\\' => "\\\\",
+        '?' => "\\?",
+        '+' => "\\+",
+        '^' => "\\^",
+        '$' => "\\$",
+        '#' => "\\#",
+        ' ' => "\\ ",
+        '\n' => "\\n",
+        '\r' => "\\r",
+        '\t' => "\\t",
+        '\u{b}' => "\\v",
+        '\u{c}' => "\\f",
+        _ => return None,
+    })
 }
 
 /// Whether a pattern's source names anything outside ASCII, counting the

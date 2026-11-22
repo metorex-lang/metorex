@@ -979,3 +979,19 @@ fn test_strings_broken_utf8_characters_execution() {
         )
     );
 }
+
+#[test]
+fn appending_text_in_a_dummy_encoding_to_an_empty_string_takes_its_encoding() {
+    let output = run_example("strings/append_text_in_a_dummy_encoding.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[#<Encoding:ISO-2022-JP (dummy)>, 12]\n",
+            "[#<Encoding:ISO-2022-JP (dummy)>, 12]\n",
+            "[#<Encoding:UTF-16LE>, 4]\n",
+            "[#<Encoding:ISO-8859-1>, 2]\n",
+            "[#<Encoding:UTF-8>, 2]\n",
+            "Encoding::CompatibilityError\n",
+        )
+    );
+}

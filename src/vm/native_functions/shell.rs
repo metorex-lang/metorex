@@ -427,6 +427,53 @@ impl VirtualMachine {
         }
     }
 
+    /// A file mode mask, read as MRI reads a C `mode_t`: an `unsigned long`
+    /// first, then refused when it does not fit an `unsigned short`, with a
+    /// negative one from `SHRT_MIN` up wrapping around.
+    fn file_mode_mask(&mut self, given: &Object, position: Position) -> Result<u32, MetorexError> {
+        let range_error =
+            |message: String| crate::vm::errors::simple_exception("RangeError", &message, position);
+        let number = match given.view() {
+            View::Float(number)
+                if (-9.223_372_036_854_776e18..9.223_372_036_854_776e18).contains(&number) =>
+            {
+                num_bigint::BigInt::from(number.trunc() as i64)
+            }
+            View::Float(number) => {
+                return Err(range_error(
+                    crate::vm::errors::float_out_of_range_of_integer(number),
+                ));
+            }
+            _ => match given.as_big_integer() {
+                Some(number) => number,
+                None => num_bigint::BigInt::from(self.implicit_integer(given, position)?),
+            },
+        };
+        if let Ok(signed) = i64::try_from(&number)
+            && signed < 0
+        {
+            if signed < i64::from(i16::MIN) {
+                return Err(range_error(format!(
+                    "integer {signed} too small to convert to 'unsigned short'"
+                )));
+            }
+            return Ok(u32::from(signed as u16));
+        }
+        let Ok(unsigned) = u64::try_from(&number) else {
+            return Err(range_error(if number.sign() == num_bigint::Sign::Minus {
+                "bignum out of range of unsigned long".to_string()
+            } else {
+                "bignum too big to convert into 'unsigned long'".to_string()
+            }));
+        };
+        if unsigned > u64::from(u16::MAX) {
+            return Err(range_error(format!(
+                "integer {unsigned} too big to convert to 'unsigned short'"
+            )));
+        }
+        Ok(unsigned as u32)
+    }
+
     /// An Integer, or what an object answering `to_int` hands back for one.
     fn implicit_integer(
         &mut self,
@@ -463,7 +510,7 @@ impl VirtualMachine {
 
     /// The TypeError a value that is not of the kind wanted raises.
     fn conversion_error(&mut self, given: &Object, kind: &str, position: Position) -> MetorexError {
-        let class = self.builtins().class_of(given).name().to_string();
+        let class = crate::vm::errors::conversion_subject(given);
         crate::vm::errors::simple_exception(
             "TypeError",
             &format!("no implicit conversion of {class} into {kind}"),
@@ -976,7 +1023,7 @@ impl VirtualMachine {
                         continue;
                     }
                     "umask" => {
-                        settings.umask = Some(self.implicit_integer(value, position)? as u32);
+                        settings.umask = Some(self.file_mode_mask(value, position)?);
                         continue;
                     }
                     "pgroup" => {
