@@ -86,7 +86,7 @@ fn every_field_defaults_the_way_a_bare_datetime_does() {
 }
 
 #[test]
-fn a_second_may_carry_a_fraction_where_an_hour_and_a_minute_may_not() {
+fn only_the_last_clock_field_given_may_carry_a_fraction() {
     assert_eq!(
         shown("require 'date'\nDateTime.new(2011, 2, 3, 4, 5, 6.25).sec_fraction"),
         "(1/4)"
@@ -95,8 +95,13 @@ fn a_second_may_carry_a_fraction_where_an_hour_and_a_minute_may_not() {
         shown("require 'date'\nDateTime.new(2011, 2, 3, 4, 5, Rational(11, 2)).sec"),
         "5"
     );
-    assert!(run_err("require 'date'\nDateTime.new(2011, 2, 3, 4.5)").contains("invalid date"));
-    assert!(run_err("require 'date'\nDateTime.new(2011, 2, 3, 4, 5.5)").contains("invalid date"));
+    assert_eq!(
+        shown("require 'date'\nDateTime.new(2011, 2, 3, 4.5).min"),
+        "30"
+    );
+    assert!(
+        run_err("require 'date'\nDateTime.new(2011, 2, 3, 4, 5.5, 0)").contains("invalid fraction")
+    );
 }
 
 #[test]
@@ -172,9 +177,9 @@ fn an_offset_may_be_written_as_text_or_as_a_fraction_of_a_day() {
         shown("require 'date'\nDateTime.new(2011, 1, 1, 0, 0, 0, Rational(1, 4)).offset"),
         "(1/4)"
     );
-    assert!(
-        run_err("require 'date'\nDateTime.new(2011, 1, 1, 0, 0, 0, 'nowhere')")
-            .contains("invalid date")
+    assert_eq!(
+        shown("require 'date'\nDateTime.new(2011, 1, 1, 0, 0, 0, 'nowhere').offset"),
+        "(0/1)"
     );
 }
 

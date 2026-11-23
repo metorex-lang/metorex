@@ -1244,7 +1244,7 @@ rails/activesupport/test/cache/stores/file_store_test.rb	164	0	0	164	0	0
 rails/activesupport/test/cache/stores/mem_cache_store_test.rb	337	0	337	337	0	337
 rails/activesupport/test/cache/stores/memory_store_test.rb	148	0	0	148	0	0
 rails/activesupport/test/cache/stores/null_store_test.rb	12	0	0	12	0	0
-rails/activesupport/test/cache/stores/redis_cache_store_test.rb	681	0	0	681	5	0
+rails/activesupport/test/cache/stores/redis_cache_store_test.rb	681	0	0	681	6	0
 rails/activesupport/test/callback_inheritance_test.rb	11	0	0	11	0	0
 rails/activesupport/test/callbacks_test.rb	54	0	0	54	0	0
 rails/activesupport/test/clean_logger_test.rb	3	0	0	3	0	0
@@ -1264,8 +1264,8 @@ rails/activesupport/test/core_ext/bigdecimal_test.rb	1	0	0	1	0	0
 rails/activesupport/test/core_ext/class/attribute_test.rb	20	0	0	20	1	0
 rails/activesupport/test/core_ext/class_test.rb	6	0	0	6	2	0
 rails/activesupport/test/core_ext/date_and_time_compatibility_test.rb	8	0	0	8	0	0
-rails/activesupport/test/core_ext/date_ext_test.rb	104	0	0	104	7	0
-rails/activesupport/test/core_ext/date_time_ext_test.rb	119	0	0	119	5	0
+rails/activesupport/test/core_ext/date_ext_test.rb	104	0	0	104	0	0
+rails/activesupport/test/core_ext/date_time_ext_test.rb	119	0	0	119	0	0
 rails/activesupport/test/core_ext/digest/uuid_test.rb	5	0	0	5	0	0
 rails/activesupport/test/core_ext/duration_test.rb	80	0	0	80	3	0
 rails/activesupport/test/core_ext/enumerable_test.rb	34	0	0	-	-	-
@@ -1305,10 +1305,10 @@ rails/activesupport/test/core_ext/pathname/existence_test.rb	1	0	0	1	0	0
 rails/activesupport/test/core_ext/range_ext_test.rb	53	0	0	53	2	0
 rails/activesupport/test/core_ext/regexp_ext_test.rb	1	0	0	1	0	0
 rails/activesupport/test/core_ext/secure_random_test.rb	6	0	0	6	0	0
-rails/activesupport/test/core_ext/string_ext_test.rb	151	0	0	151	3	0
+rails/activesupport/test/core_ext/string_ext_test.rb	151	0	0	151	0	0
 rails/activesupport/test/core_ext/symbol_ext_test.rb	1	0	0	1	0	0
 rails/activesupport/test/core_ext/time_ext_test.rb	170	0	0	170	0	0
-rails/activesupport/test/core_ext/time_with_zone_test.rb	174	0	0	174	3	0
+rails/activesupport/test/core_ext/time_with_zone_test.rb	174	0	0	174	0	0
 rails/activesupport/test/current_attributes_test.rb	25	0	0	25	0	0
 rails/activesupport/test/deep_mergeable_test.rb	10	0	0	-	-	-
 rails/activesupport/test/dependencies_test.rb	10	0	0	10	0	0
@@ -1346,9 +1346,9 @@ rails/activesupport/test/message_pack/cache_serializer_test.rb	30	0	0	30	0	0
 rails/activesupport/test/message_pack/serializer_test.rb	26	0	0	26	0	0
 rails/activesupport/test/message_verifier_test.rb	13	0	0	13	0	0
 rails/activesupport/test/message_verifiers_test.rb	24	0	0	24	0	0
-rails/activesupport/test/messages/message_encryptor_metadata_test.rb	10	0	0	10	9	0
+rails/activesupport/test/messages/message_encryptor_metadata_test.rb	10	0	0	10	0	0
 rails/activesupport/test/messages/message_encryptor_rotator_test.rb	16	0	0	16	0	0
-rails/activesupport/test/messages/message_verifier_metadata_test.rb	16	0	0	16	12	0
+rails/activesupport/test/messages/message_verifier_metadata_test.rb	16	0	0	16	0	0
 rails/activesupport/test/messages/message_verifier_rotator_test.rb	14	0	0	14	0	0
 rails/activesupport/test/messages/rotation_configuration_test.rb	2	0	0	2	0	0
 rails/activesupport/test/messages/serializer_with_fallback_test.rb	9	0	0	9	0	0
@@ -1385,7 +1385,7 @@ rails/activesupport/test/testing/method_call_assertions_test.rb	24	0	0	24	0	0
 rails/activesupport/test/testing/notification_assertions_test.rb	4	0	0	4	0	0
 rails/activesupport/test/testing/test_without_assertions_test.rb	1	0	0	1	0	0
 rails/activesupport/test/time_travel_test.rb	28	0	0	28	0	0
-rails/activesupport/test/time_zone_test.rb	566	0	0	566	8	0
+rails/activesupport/test/time_zone_test.rb	566	0	0	566	0	0
 rails/activesupport/test/transliterate_test.rb	19	0	0	19	0	0
 rails/activesupport/test/xml_mini/jdom_engine_test.rb	0	0	0	0	0	0
 rails/activesupport/test/xml_mini/libxml_engine_test.rb	0	0	0	0	0	0
@@ -1394,7 +1394,7 @@ rails/activesupport/test/xml_mini/nokogiri_engine_test.rb	20	0	0	20	0	0
 rails/activesupport/test/xml_mini/nokogirisax_engine_test.rb	20	0	0	20	0	0
 rails/activesupport/test/xml_mini/rexml_engine_test.rb	22	0	0	22	0	0
 rails/activesupport/test/xml_mini/xml_mini_engine_test.rb	0	0	0	0	0	0
-rails/activesupport/test/xml_mini_test.rb	47	0	0	47	1	0
+rails/activesupport/test/xml_mini_test.rb	47	0	0	47	0	0
 rainbow/spec/integration/instance_spec.rb	4	0	0	4	0	0
 rainbow/spec/integration/rainbow_spec.rb	25	1	0	25	1	0
 rainbow/spec/integration/refinement_spec.rb	3	0	0	3	0	0

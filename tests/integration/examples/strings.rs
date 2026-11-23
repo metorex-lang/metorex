@@ -1004,3 +1004,12 @@ fn sub_bang_answers_the_string_when_the_match_puts_back_what_it_found() {
         "\"wives\"\n\"wives\"\n\"wolves\"\n\"cats\"\n\"wives\"\nnil\n"
     );
 }
+
+#[test]
+fn test_strings_bytesplice_string_like_execution() {
+    let output = run_example("strings/bytesplice_string_like.rb");
+    assert_eq!(
+        output,
+        "\"<b>hello\"\n\"xyhello\"\n\"hello!\"\nMarkedString\n\"no implicit conversion of Integer into String\"\n"
+    );
+}

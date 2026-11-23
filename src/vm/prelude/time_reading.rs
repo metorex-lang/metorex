@@ -49,6 +49,7 @@ pub(super) const SOURCE: &str = r##"
       @utc = false
       @offset = __zone_offset__ offset
       @zone_object = offset
+      @zone_dst = Time.zone_dst?(offset, Time.from_exact(to_r, true, nil))
       @calendar = nil
       return self
     end
@@ -71,6 +72,7 @@ pub(super) const SOURCE: &str = r##"
     if Time.zone_object? offset
       made = Time.from_exact(to_r, false, __zone_offset__(offset))
       made.instance_variable_set(:@zone_object, offset)
+      made.instance_variable_set(:@zone_dst, Time.zone_dst?(offset, Time.from_exact(to_r, true, nil)))
       return made
     end
     Time.from_exact(to_r, false, offset.nil? ? nil : Time.offset_seconds(offset))
@@ -145,10 +147,6 @@ pub(super) const SOURCE: &str = r##"
     return -1 if answered > 0
     return 1 if answered < 0
     0
-  end
-
-  def ==(other)
-    other.is_a?(Time) && to_r == other.to_r
   end
 
   def eql?(other)

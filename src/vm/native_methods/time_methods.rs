@@ -150,12 +150,8 @@ fn assembled(fields: [i64; 6], utc: bool, daylight: i64) -> i64 {
         // The flag picks between the two readings of an hour the clock
         // passes twice, and is not heard for any other hour. Without one
         // the later reading is taken.
-        if let Some((standard, summer)) = repeated_readings(&parts) {
-            return match daylight {
-                1 if summer.1 == 1 => summer.0,
-                0 if standard.1 == 0 => standard.0,
-                _ => standard.0.max(summer.0),
-            };
+        if let Some((earlier, later)) = repeated_readings(&parts) {
+            return if daylight == 1 { earlier } else { later };
         }
         let made = libc::mktime(&mut parts) as i64;
         if made != -1 {
@@ -171,20 +167,21 @@ fn assembled(fields: [i64; 6], utc: bool, daylight: i64) -> i64 {
     }
 }
 
-/// The two readings of local calendar `parts` the wall clock shows twice,
-/// read with the daylight-saving flag off and on, each with the flag the
-/// zone gives it, or None when the clock shows the parts once.
-unsafe fn repeated_readings(parts: &libc::tm) -> Option<((i64, libc::c_int), (i64, libc::c_int))> {
-    let shows_parts = |flag: libc::c_int| -> Option<(i64, libc::c_int)> {
-        let mut tried = *parts;
-        tried.tm_isdst = flag;
-        let made = unsafe { libc::mktime(&mut tried) };
-        if made == -1 {
-            return None;
-        }
+/// The earliest and latest instants the wall clock shows local calendar
+/// `parts` at, or None when it shows them once. A zone moves its clock by
+/// whole half hours, at most three hours at a time, so the instants are
+/// found among those that many half hours either side of one `mktime` gives.
+unsafe fn repeated_readings(parts: &libc::tm) -> Option<(i64, i64)> {
+    let mut tried = *parts;
+    let made = unsafe { libc::mktime(&mut tried) };
+    if made == -1 {
+        return None;
+    }
+    let shows_parts = |instant: i64| -> bool {
+        let stamp = instant as libc::time_t;
         let mut read = empty_tm();
-        unsafe { libc::localtime_r(&made, &mut read) };
-        let same = (
+        unsafe { libc::localtime_r(&stamp, &mut read) };
+        (
             read.tm_year,
             read.tm_mon,
             read.tm_mday,
@@ -196,12 +193,15 @@ unsafe fn repeated_readings(parts: &libc::tm) -> Option<((i64, libc::c_int), (i6
             parts.tm_mday,
             parts.tm_hour,
             parts.tm_min,
-        );
-        same.then_some((made as i64, read.tm_isdst))
+        )
     };
-    let standard = shows_parts(0)?;
-    let summer = shows_parts(1)?;
-    (standard.0 != summer.0).then_some((standard, summer))
+    let readings: Vec<i64> = (-6..=6)
+        .map(|half_hours| made as i64 + half_hours * 1800)
+        .filter(|&instant| shows_parts(instant))
+        .collect();
+    let earlier = *readings.iter().min()?;
+    let later = *readings.iter().max()?;
+    (earlier != later).then_some((earlier, later))
 }
 
 impl VirtualMachine {

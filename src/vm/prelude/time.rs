@@ -37,7 +37,8 @@ class Time
     zone = zone_named(self, zone)
     if zone.respond_to?(:local_to_utc)
       reading = calendar_seconds(fields, true)
-      answered = zone.local_to_utc(from_exact(reading, true, nil))
+      wall_clock = from_exact(reading, true, nil)
+      answered = zone.local_to_utc(wall_clock)
       # A Time stands at the instant it names. Anything else names only the
       # whole seconds it reads as, so its own zone and offset are left out.
       counted = if answered.is_a?(Time)
@@ -51,6 +52,7 @@ class Time
       raise ArgumentError, "utc_offset out of range" if offset.abs >= 86400
       made = from_exact(counted, false, offset)
       made.instance_variable_set(:@zone_object, zone)
+      made.instance_variable_set(:@zone_dst, zone_dst?(zone, wall_clock))
       return made
     end
     return from_exact(calendar_seconds(fields, true), true, nil) if names_utc?(zone)
@@ -147,25 +149,33 @@ class Time
     end
     raise TypeError, "no implicit conversion from nil to integer" if args[0].nil?
     year = time_part(args[0], "year")
-    month = month_number(args[1])
-    day = args[2].nil? ? 1 : time_part(args[2], "day")
-    hour = args[3].nil? ? 0 : time_part(args[3], "hour")
-    minute = args[4].nil? ? 0 : time_part(args[4], "min")
+    month = within_bits(month_number(args[1]), 4)
+    day = args[2].nil? ? 1 : within_bits(time_part(args[2], "day"), 5)
+    hour = args[3].nil? ? 0 : within_bits(time_part(args[3], "hour"), 5)
+    minute = args[4].nil? ? 0 : within_bits(time_part(args[4], "min"), 6)
     second = args[5].nil? ? 0 : time_second(args[5])
+    within_bits(second.floor, 6)
     named_micro = args.size > 6 && args[6].is_a?(Numeric)
     micro = named_micro ? args[6] : 0
     raise ArgumentError, "mon out of range" unless (1..12).cover?(month)
     raise ArgumentError, "mday out of range" unless (1..31).cover?(day)
     raise ArgumentError, "hour out of range" unless (0..24).cover?(hour)
-    raise ArgumentError, "min out of range" unless (0..59).cover?(minute)
-    raise ArgumentError, "argument out of range" if second < 0 || micro < 0
-    raise ArgumentError, "sec out of range" if second >= 61
+    raise ArgumentError, "min out of range" unless (0..(hour == 24 ? 0 : 59)).cover?(minute)
+    raise ArgumentError, "argument out of range" if micro < 0
+    raise ArgumentError, "sec out of range" if second >= (hour == 24 ? 1 : 61)
     raise ArgumentError, "subsecx out of range" if micro >= MICROSECONDS_IN_SECOND
     whole = Time.__assemble__(year, month, day, hour, minute, second.to_i, utc, daylight)
     # A count of microseconds given outright stands for the whole fraction,
     # so a fraction carried by the seconds is left out.
     fraction = named_micro ? 0 : second.to_r - second.to_i
     whole.to_r + fraction + micro.to_r / MICROSECONDS_IN_SECOND
+  end
+
+  # A calendar field as Ruby first reads it, into an unsigned field `bits`
+  # wide, before its range is checked.
+  def self.within_bits(value, bits)
+    raise ArgumentError, "argument out of range" if value < 0 || value >= (1 << bits)
+    value
   end
 
   # One whole part of a calendar time. A numeral spelled out reads as base
@@ -434,13 +444,21 @@ class Time
   end
 
   def isdst
+    return @zone_dst == true unless @zone_object.nil?
     @offset.nil? && !@utc && calendar[8]
   end
 
   # Its own answer, rather than a call to `isdst`, so a subclass that names
   # one after the other reaches this one through `super`.
   def dst?
+    return @zone_dst == true unless @zone_object.nil?
     @offset.nil? && !@utc && calendar[8]
+  end
+
+  # Whether a zone object says daylight saving is in effect at `time`, which
+  # a zone without a `dst?` never says.
+  def self.zone_dst?(zone, time)
+    zone.respond_to?(:dst?) && zone.dst?(time) ? true : false
   end
 
   def utc_offset

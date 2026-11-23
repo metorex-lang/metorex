@@ -84,7 +84,7 @@ const TIMES_FROM_PARTS_OUTPUT: &str = concat!(
     "2000-01-01 20:15:01 UTC\n",
     "1\n",
     "2\n",
-    "mon out of range\n",
+    "argument out of range\n",
 );
 
 #[test]
@@ -477,5 +477,119 @@ fn dates_read_short_offsets_and_the_iso8601_rfc3339_and_xml_schema_forms() {
             "{}\n",
             "{mday: 31, year: 1999, mon: 12, hour: 19, min: 0, sec: 0, sec_fraction: (1/2), zone: \"+05\", offset: 18000}\n",
         )
+    );
+}
+
+#[test]
+fn test_dates_time_equality_through_comparable_execution() {
+    let output = run_example("dates/time_equality_through_comparable.rb");
+    assert_eq!(output, "true\ntrue\ntrue\ntrue\nfalse\nComparable\n");
+}
+
+#[test]
+fn test_dates_date_private_clock_execution() {
+    let output = run_example("dates/date_private_clock.rb");
+    assert_eq!(
+        output,
+        "[:hour, :min, :minute, :sec, :second]\n0\n0\n0\n\"private method 'hour' called for an instance of Date\"\n3\ntrue\n"
+    );
+}
+
+#[test]
+fn test_dates_frozen_date_readers_execution() {
+    let output = run_example("dates/frozen_date_readers.rb");
+    assert_eq!(
+        output,
+        "true\n[2004, 2, 29]\n\"2004-02-29\"\n\"2004-02-29 10:20:30\"\n"
+    );
+}
+
+#[test]
+fn test_dates_dates_against_numbers_execution() {
+    let output = run_example("dates/dates_against_numbers.rb");
+    assert_eq!(
+        output,
+        "0\n0\n-1\n1\n0\n(19524701/8)\n(324697/8)\n(4881175/2)\n(40587/1)\n"
+    );
+}
+
+#[test]
+fn test_dates_float_seconds_execution() {
+    let output = run_example("dates/float_seconds.rb");
+    assert_eq!(
+        output,
+        "(7/10)\n(123456789/1000000000)\n(0/1)\n(0/1)\n(0/1)\n15\n(999983907/1000000000)\ntrue\n#<DateTime: 2001-02-03T04:30:00+00:00 ((2451944j,16200s,0n),+0s,2299161j)>\n[Date::Error, \"invalid fraction\"]\n#<DateTime: 2001-02-03T04:05:30+00:00 ((2451944j,14730s,0n),+0s,2299161j)>\n[Date::Error, \"invalid fraction\"]\n#<DateTime: 2001-02-03T04:05:06+00:00 ((2451944j,14706s,500000000n),+0s,2299161j)>\n[Date::Error, \"invalid date\"]\n[Date::Error, \"invalid date\"]\n#<DateTime: 2001-02-04T00:00:00+00:00 ((2451945j,0s,0n),+0s,2299161j)>\n[TypeError, \"invalid minute (not numeric)\"]\n#<DateTime: 2001-02-03T12:00:00+00:00 ((2451944j,43200s,0n),+0s,2299161j)>\n[Date::Error, \"invalid fraction\"]\n[ArgumentError, \"wrong number of arguments (given 9, expected 0..8)\"]\n#<DateTime: 2001-02-03T12:00:00+00:00 ((2451944j,43200s,0n),+0s,2299161j)>\n#<DateTime: 2001-02-03T06:00:00+00:00 ((2451944j,21600s,0n),+0s,2299161j)>\n#<DateTime: 2001-02-03T04:30:00+00:00 ((2451944j,16200s,0n),+0s,2299161j)>\n"
+    );
+}
+
+#[test]
+fn test_dates_strptime_fields_execution() {
+    let output = run_example("dates/strptime_fields.rb");
+    assert_eq!(
+        output,
+        "{year: 2004}\n{year: 2004}\n{year: 1904}\n{wnum0: 12}\n{hour: 15}\n{hour: 15}\n{year: 2001, mon: 2, mday: 3, leftover: \"x\"}\n{sec_fraction: (123/1000)}\n{sec_fraction: (-1/2)}\n{wday: 1}\n{zone: \"+09:00\", offset: 32400}\n{zone: \"Eastern Daylight Time\", offset: -14400}\n{zone: \"foo\", offset: nil}\n{zone: \"+5.5\", offset: 19800}\n{zone: \"UTC+0530\", offset: 19800}\n{mday: 5}\n{year: 2001, wnum1: 5, cwday: 6}\nnil\nnil\n{year: 2001}\nnil\nnil\nnil\n{year: 2001, mon: 2}\n{wday: 2, mon: 2, mday: 3, hour: 4, min: 5, sec: 6, year: 2001}\n{year: 2001, mon: 2, mday: 3, hour: 4, min: 5, sec: 6, zone: \"+07:00\", offset: 25200}\n"
+    );
+}
+
+#[test]
+fn test_dates_dates_from_read_fields_execution() {
+    let output = run_example("dates/dates_from_read_fields.rb");
+    assert_eq!(
+        output,
+        "#<Date: 2001-02-03 ((2451944j,0s,0n),+0s,2299161j)>\n#<Date: 2001-02-03 ((2451944j,0s,0n),+0s,2299161j)>\n#<Date: 2001-02-03 ((2451944j,0s,0n),+0s,2299161j)>\n#<Date: 2001-02-03 ((2451944j,0s,0n),+0s,2299161j)>\n#<Date: 2001-02-03 ((2451944j,0s,0n),+0s,2299161j)>\n#<Date: 2001-02-03 ((2451944j,0s,0n),+0s,2299161j)>\n#<Date: 2001-02-03 ((2451944j,0s,0n),+0s,2299161j)>\n#<Date: 2016-08-04 ((2457605j,0s,0n),+0s,2299161j)>\n#<DateTime: 2001-02-03T04:05:06+07:00 ((2451943j,75906s,0n),+25200s,2299161j)>\n#<DateTime: 2001-02-03T16:05:06+00:00 ((2451944j,57906s,0n),+0s,2299161j)>\n#<DateTime: 2001-02-03T04:05:06+07:00 ((2451943j,75906s,0n),+25200s,2299161j)>\n#<DateTime: 2001-02-03T04:05:06+07:00 ((2451943j,75906s,0n),+25200s,2299161j)>\n#<DateTime: 1969-12-31T23:59:59+00:00 ((2440587j,86399s,0n),+0s,2299161j)>\n#<DateTime: 1969-12-31T23:59:59+00:00 ((2440587j,86399s,0n),+0s,2299161j)>\n#<DateTime: 2001-02-03T16:00:00+07:00 ((2451944j,32400s,0n),+25200s,2299161j)>\n#<DateTime: 2016-08-04T06:28:00+05:30 ((2457605j,3480s,0n),+19800s,2299161j)>\n#<DateTime: 2001-02-03T23:59:59+00:00 ((2451944j,86399s,0n),+0s,2299161j)>\n#<DateTime: 2001-02-04T00:00:00+00:00 ((2451945j,0s,0n),+0s,2299161j)>\n#<Date: 2001-02-03 ((2451944j,0s,0n),+0s,2299161j)>\n#<Date: 2001-02-03 ((2451944j,0s,0n),+0s,2299161j)>\n#<DateTime: 2001-02-03T04:05:06+07:00 ((2451943j,75906s,0n),+25200s,2299161j)>\n#<DateTime: 2001-02-03T16:05:06+00:00 ((2451944j,57906s,0n),+0s,2299161j)>\n#<Date: 2001-02-03 ((2451944j,0s,0n),+0s,2299161j)>\n#<DateTime: 2001-02-03T04:05:06+01:00 ((2451944j,11106s,500000000n),+3600s,2299161j)>\n#<DateTime: 2001-02-03T04:05:06+07:00 ((2451943j,75906s,0n),+25200s,2299161j)>\n#<DateTime: 2001-02-03T04:05:06+00:00 ((2451944j,14706s,0n),+0s,2299161j)>\n\"invalid date\"\n\"invalid date\"\n"
+    );
+}
+
+#[test]
+fn test_dates_parse_and_strptime_hashes_execution() {
+    let output = run_example("dates/parse_and_strptime_hashes.rb");
+    assert_eq!(
+        output,
+        "{wday: 1, zone: \"GMT-0700\", hour: 0, min: 0, sec: 0, year: 2012, mon: 5, mday: 28, offset: -25200}\n{mon: 90, mday: 0}\n{year: 1999, mon: 12, mday: 31, hour: 12, min: 0, sec: 0, zone: \"-08\", offset: -28800}\n{year: 1999, mon: 12, mday: 31, hour: 12, min: 0, sec: 0, zone: \"-08:00\", offset: -28800}\n{year: 1999, mon: 12, mday: 31, hour: 12, min: 0, sec: 0, zone: \"-08:00:00\", offset: -28800}\n{seconds: (1470272280/1)}\n{seconds: 1470272280, sec_fraction: (123456789/1000000000)}\n"
+    );
+}
+
+#[test]
+fn test_dates_zone_pattern_match_execution() {
+    let output = run_example("dates/zone_pattern_match.rb");
+    assert_eq!(
+        output,
+        "\"GMT-0700\"\n\"Eastern Standard Time\"\n\"EST dst\"\n\"-08:00:00\"\nnil\n"
+    );
+}
+
+#[test]
+fn test_dates_parse_fields_execution() {
+    let output = run_example("dates/parse_fields.rb");
+    assert_eq!(
+        output,
+        "{wday: 1, zone: \"GMT-0700\", hour: 0, min: 0, sec: 0, year: 2012, mon: 5, mday: 28, offset: -25200}\n{mon: 90, mday: 0}\n{year: 2001, mon: 2, mday: 3}\n{zone: \"+07:00\", hour: 4, min: 5, sec: 6, year: 2001, mon: 2, mday: 3, offset: 25200}\n{year: 2001, mon: 2, mday: 3, hour: 4, min: 5, sec: 6, zone: \"+0700\", offset: 25200}\n{hour: 16, min: 5, sec: 6, year: 2001, mon: 2, mday: 3}\n{wday: 6, zone: \"+0700\", hour: 4, min: 5, sec: 6, year: 2001, mon: 2, mday: 3, offset: 25200}\n{year: 2001, mon: 2, mday: 3}\n{year: -2000, mon: 2, mday: 3}\n{year: 2001, mon: 2, mday: 3}\n{year: 2019, mon: 5, mday: 1}\n{year: 2001, mon: 2, mday: 3}\n{year: 2001, mon: 2, mday: 3}\n{year: 2001, mon: 3, mday: 2}\n{year: 2001, mon: 2, mday: 3}\n{year: 2001, mon: 2, mday: 3}\n{year: 2001}\n{cwyear: 2001, cweek: 5, cwday: 6}\n{cwday: 6}\n{mon: 2, mday: 3}\n{mon: 2, mday: 3}\n{year: 2001, yday: 34}\n{yday: 34}\n{hour: 10, min: 20, sec: 30, sec_fraction: (1/2)}\n{hour: 10, min: 20, sec: 30}\n{hour: 13}\n{hour: 10, min: 0}\n{zone: \"EST dst\", hour: 10, min: 0, offset: -14400}\n{year: 2001, mon: 2, mday: 3, zone: \"EST\", offset: -18000}\n{year: 2001, mon: 2, mday: 3, hour: 4, min: 5, zone: \"9\", offset: 32400}\n{mday: 12}\n{hour: 10, min: 0, mday: 12}\n{wday: 6}\n{}\n{}\n{zone: \"-05\", hour: 19, min: 0, sec: 0, year: 1999, mon: 12, mday: 31, offset: -18000}\n{wday: 4, hour: 14, min: 33, sec: 20, year: 2001, mon: 11, mday: 29}\n{mon: 20, mday: 1}\n{hour: 4, min: 5, sec: 6, sec_fraction: (123456789/1000000000), year: 2001, mon: 2, mday: 3}\n{year: 2010, mon: 1, mday: 15}\n{year: 2040, mon: 1, mday: 1}\n{mon: 1, mday: 2}\n{year: 1999, mon: 1, mday: 1}\n{year: 99, mon: 1, mday: 1}\n\"string length (129) exceeds the limit 128\"\n{}\n"
+    );
+}
+
+#[test]
+fn test_dates_time_argument_ranges_execution() {
+    let output = run_example("dates/time_argument_ranges.rb");
+    assert_eq!(
+        output,
+        "[[2026, 90, 0], \"argument out of range\"]\n[[2026, 13, 1], \"mon out of range\"]\n[[2026, 0, 1], \"mon out of range\"]\n[[2026, 12, 0], \"mday out of range\"]\n[[2026, 12, 32], \"argument out of range\"]\n[[2026, 16, 1], \"argument out of range\"]\n[[2026, 15, 1], \"mon out of range\"]\n[[2026, 1, 1, 25], \"hour out of range\"]\n[[2026, 1, 1, 24, 1], \"min out of range\"]\n[[2026, 1, 1, 1, 60], \"min out of range\"]\n[[2026, 1, 1, 1, 1, 61], \"sec out of range\"]\n2026-01-01 01:02:00 +0000\n2026-03-02 00:00:00 +0000\n[[2026, -1, 1], \"argument out of range\"]\n[[2026, 1, -1], \"argument out of range\"]\n[[2026, 90, 0], \"argument out of range\"]\n[[2026, 13, 1], \"mon out of range\"]\n[[2026, 1, 32], \"argument out of range\"]\n"
+    );
+}
+
+#[test]
+fn test_dates_zone_object_dst_execution() {
+    let output = run_example("dates/zone_object_dst.rb");
+    assert_eq!(
+        output,
+        "[\"2000-01-01T01:00:00-05:00\", -18000, \"SST\", false, true]\n[\"2000-06-01T01:00:00-04:00\", -14400, \"SDT\", true, true]\n[\"2000-06-01T01:00:00-04:00\", -14400, \"SDT\", true, true]\n[\"2000-05-31T20:00:00-04:00\", -14400, \"SDT\", true, true]\n"
+    );
+}
+
+#[test]
+fn test_dates_repeated_wall_clock_execution() {
+    let output = run_example("dates/repeated_wall_clock.rb");
+    assert_eq!(
+        output,
+        "2014-10-25 22:00:00 UTC\n2014-10-25 21:00:00 UTC\n2014-10-25 22:00:00 UTC\n2000-10-29 06:30:00 UTC\n2000-10-29 05:30:00 UTC\n2000-10-29 06:30:00 UTC\n2000-04-02 07:30:00 UTC\n2000-03-25 15:15:00 UTC\n2000-03-25 14:45:00 UTC\n"
     );
 }

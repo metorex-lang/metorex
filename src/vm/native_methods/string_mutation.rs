@@ -616,6 +616,19 @@ impl VirtualMachine {
                 ));
             }
         };
+        // A String subclass splices in the text it holds, and another object
+        // the text its `to_str` gives.
+        let held = match replacement.view() {
+            View::String(_) => replacement.clone(),
+            _ => match crate::vm::native_methods::subclass_backing(replacement) {
+                Some(backing) => backing,
+                None if self.answers_to(replacement, "to_str", position)? => {
+                    self.send_to_object(replacement.clone(), "to_str", vec![], position)?
+                }
+                None => replacement.clone(),
+            },
+        };
+        let replacement = &held;
         let View::String(source) = replacement.view() else {
             let message = format!(
                 "no implicit conversion of {} into String",
