@@ -120,6 +120,7 @@ impl VirtualMachine {
         }
         let deadline = std::time::Instant::now() + length;
         loop {
+            self.note_wake_deadline(deadline);
             self.wait_for_other_threads(position);
             self.raise_if_thread_killed(position)?;
             self.deliver_pending_signals(position)?;

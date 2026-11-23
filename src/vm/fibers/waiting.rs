@@ -338,7 +338,9 @@ impl VirtualMachine {
         // statement, so the round pauses rather than starting the next at
         // once.
         if !stepped || self.statements_run == statements_before {
-            std::thread::sleep(std::time::Duration::from_millis(1));
+            self.pause_while_idle();
+        } else {
+            self.note_busy_round();
         }
     }
 
@@ -450,6 +452,9 @@ impl VirtualMachine {
                     // The thread is waiting on something, so everything else
                     // waiting gets a turn before it is tried again. A thread
                     // waiting here is itself asleep while it waits.
+                    if let Some(deadline) = deadline {
+                        self.note_wake_deadline(deadline);
+                    }
                     self.wait_for_other_threads(position);
                     self.raise_if_thread_killed(position)?;
                 }

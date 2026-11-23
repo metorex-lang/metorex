@@ -382,6 +382,9 @@ impl VirtualMachine {
             instance
                 .borrow_mut()
                 .set_var("__thread_waiting".to_string(), Object::Bool(true));
+            if let Some(deadline) = deadline {
+                self.note_wake_deadline(deadline);
+            }
             if let Err(stopped) = self.fiber_suspend(Object::Nil, position) {
                 outcome = Err(stopped);
                 break;

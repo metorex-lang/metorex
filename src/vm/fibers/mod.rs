@@ -8,6 +8,7 @@ pub(crate) use crate::vm::VirtualMachine;
 pub(crate) use corosensei::stack::DefaultStack;
 pub(crate) use corosensei::{Coroutine, CoroutineResult, Yielder};
 
+mod idle;
 mod running;
 mod scheduling;
 mod state;

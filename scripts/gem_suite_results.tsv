@@ -605,7 +605,7 @@ mail/spec/mail/fields/content_disposition_field_spec.rb	16	0	0	16	0	0
 mail/spec/mail/fields/content_id_field_spec.rb	12	0	0	12	0	0
 mail/spec/mail/fields/content_location_field_spec.rb	5	0	0	5	0	0
 mail/spec/mail/fields/content_transfer_encoding_field_spec.rb	12	0	0	12	0	0
-mail/spec/mail/fields/content_type_field_spec.rb	88	2	0	88	2	0
+mail/spec/mail/fields/content_type_field_spec.rb	88	2	0	88	0	0
 mail/spec/mail/fields/date_field_spec.rb	9	0	0	9	0	0
 mail/spec/mail/fields/envelope_spec.rb	3	0	0	3	0	0
 mail/spec/mail/fields/from_field_spec.rb	12	0	0	12	0	0
@@ -1130,9 +1130,9 @@ puma/test/test_fiber_storage_application.rb	1	0	0	1	0	0
 puma/test/test_helper.rb	1	0	0	1	0	0
 puma/test/test_http10.rb	1	0	0	1	0	0
 puma/test/test_http11.rb	14	0	1	14	0	1
-puma/test/test_integration_cluster.rb	56	0	0	56	1	0
-puma/test/test_integration_pumactl.rb	12	0	0	12	1	0
-puma/test/test_integration_single.rb	21	0	0	21	1	0
+puma/test/test_integration_cluster.rb	56	0	0	56	0	0
+puma/test/test_integration_pumactl.rb	12	0	0	12	0	0
+puma/test/test_integration_single.rb	21	0	0	21	0	0
 puma/test/test_integration_ssl.rb	8	0	0	8	0	0
 puma/test/test_integration_ssl_session.rb	8	0	0	8	0	0
 puma/test/test_iobuffer.rb	4	0	0	4	0	0
@@ -1153,7 +1153,7 @@ puma/test/test_puma_server.rb	159	0	0	159	0	0
 puma/test/test_puma_server_current.rb	1	0	0	1	0	0
 puma/test/test_puma_server_hijack.rb	6	0	0	6	0	0
 puma/test/test_puma_server_shutdown_debug.rb	4	0	0	4	0	0
-puma/test/test_puma_server_ssl.rb	28	1	0	28	0	0
+puma/test/test_puma_server_ssl.rb	28	1	0	28	1	0
 puma/test/test_puma_server_ssl_key_update.rb	12	0	0	12	0	0
 puma/test/test_pumactl.rb	20	0	1	20	0	1
 puma/test/test_rack_handler.rb	21	0	0	21	0	0

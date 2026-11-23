@@ -125,6 +125,10 @@ impl VirtualMachine {
                     if !waiting || std::time::Instant::now() >= deadline {
                         return Err(timed_out(position));
                     }
+                    if let Some(descriptor) = self.socket_descriptor(handle) {
+                        self.note_waited_descriptor(descriptor, false);
+                    }
+                    self.note_wake_deadline(deadline);
                     self.wait_for_other_threads(position);
                     self.raise_if_thread_killed(position)?;
                     // A turn handed to a thread that could still send

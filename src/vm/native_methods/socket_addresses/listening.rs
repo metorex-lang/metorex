@@ -253,12 +253,16 @@ impl VirtualMachine {
                     // turn, and the wait is given more time for
                     // having handed one over, up to a ceiling that a
                     // wait nothing can ever end still reaches.
+                    if let Some(descriptor) = self.socket_descriptor(handle) {
+                        self.note_waited_descriptor(descriptor, false);
+                    }
                     if self.waiting_on_another_process(position)? {
                         continue;
                     }
                     if std::time::Instant::now() >= deadline {
                         return Err(timed_out(position));
                     }
+                    self.note_wake_deadline(deadline);
                     self.wait_for_other_threads(position);
                     self.raise_if_thread_killed(position)?;
                     if self.other_threads_are_waiting() {

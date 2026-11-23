@@ -2732,3 +2732,23 @@ fn a_bundle_binstub_runs_the_bundler_metorex_ships() {
     let output = run_example("bundler/binstub_runs_the_bundler_ruby_ships.rb");
     assert_eq!(output, "4.0.20\n");
 }
+
+#[test]
+fn an_ssl_context_refuses_ssl3_as_its_oldest_or_newest_version() {
+    let output = run_example("stdlib/openssl_context_refuses_ssl3.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "min_version= SSL3: SSL_CTX_set_min_proto_version\n",
+            "min_version= TLS1: accepted\n",
+            "min_version= TLS1_1: accepted\n",
+            "min_version= TLS1_2: accepted\n",
+            "max_version= SSL3: SSL_CTX_set_max_proto_version\n",
+            "max_version= TLS1: accepted\n",
+            "max_version= TLS1_1: accepted\n",
+            "max_version= TLS1_2: accepted\n",
+            "by name: SSL_CTX_set_max_proto_version\n",
+            "ssl_version: OpenSSL::SSL::SSLError: SSL_CTX_set_max_proto_version\n",
+        )
+    );
+}

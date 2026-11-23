@@ -306,6 +306,7 @@ impl VirtualMachine {
                 return Ok(read);
             }
             if self.other_threads_are_waiting() {
+                self.note_waited_descriptor(number, false);
                 self.wait_for_other_threads(position);
                 self.raise_if_thread_killed(position)?;
                 if self.open_streams.number_of(handle).is_none() {
@@ -616,6 +617,7 @@ impl VirtualMachine {
                     let trouble = std::io::Error::last_os_error();
                     if trouble.raw_os_error() == Some(libc::EAGAIN) && count != 0 {
                         if self.other_threads_are_waiting() {
+                            self.note_waited_descriptor(number, true);
                             self.wait_for_other_threads(position);
                             self.raise_if_thread_killed(position)?;
                             if self.open_streams.number_of(handle).is_none() {
@@ -656,6 +658,7 @@ impl VirtualMachine {
                         && !descriptor_is_nonblocking(number)
                         && !descriptor_is_ready(number)
                     {
+                        self.note_waited_descriptor(number, false);
                         self.wait_for_other_threads(position);
                         self.raise_if_thread_killed(position)?;
                         if self.open_streams.number_of(handle).is_none() {
@@ -690,6 +693,7 @@ impl VirtualMachine {
                         return Err(stream_error(&problem, "read", position));
                     }
                     if self.other_threads_are_waiting() {
+                        self.note_waited_descriptor(number, false);
                         self.wait_for_other_threads(position);
                         self.raise_if_thread_killed(position)?;
                         if self.open_streams.number_of(handle).is_none() {
@@ -951,6 +955,7 @@ impl VirtualMachine {
                             // for, and waiting is where every other thread
                             // gets its turn.
                             if self.other_threads_are_waiting() {
+                                self.note_waited_descriptor(number, false);
                                 self.wait_for_other_threads(position);
                                 self.raise_if_thread_killed(position)?;
                                 if self.open_streams.number_of(handle).is_none() {

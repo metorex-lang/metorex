@@ -183,13 +183,13 @@ The 100 most downloaded gems on rubygems.org (`rubygems.org/stats`, read on 2026
 - [x] Templates, loading, and concurrency: tilt, erubi, zeitwerk, sprockets, concurrent-ruby, and thread_safe
 - [x] Cloud clients: the aws-sdk-ruby repository's aws-sdk-core, aws-sigv4, aws-partitions, aws-eventstream, aws-sdk-s3, and aws-sdk-kms, with jmespath, googleauth, and signet
 - [ ] redis, against a `redis-server` the suite starts on a port of its own, run in the Jenkins branch's pod as a second container beside the build
-- [ ] Native extensions: nokogiri, ffi, nio4r, puma, websocket-driver, msgpack, unf_ext, and rb-fsevent build against Metorex's C API, and their suites and those of the pure Ruby gems that need them (loofah, crass, unf) pass
+- [x] Native extensions: nokogiri, ffi, nio4r, puma, websocket-driver, msgpack, unf_ext, and rb-fsevent build against Metorex's C API, and their suites and those of the pure Ruby gems that need them (loofah, crass, unf) pass
   - [x] websocket-driver
   - [x] msgpack
   - [x] unf_ext and unf
   - [x] rb-fsevent
   - [x] nio4r
-  - [ ] puma
+  - [x] puma
   - [x] ffi
   - [x] nokogiri, with crass and loofah
 - [ ] Rails: the rails repository's activesupport, activemodel, activerecord on SQLite, actionpack, actionview, actionmailer, activejob, actioncable, activestorage, railties, and rails, with globalid, rails-dom-testing, rails-html-sanitizer, and sprockets-rails

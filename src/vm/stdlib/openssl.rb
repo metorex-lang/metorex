@@ -3296,16 +3296,24 @@ module OpenSSL
 
       # A version is an Integer, nil for no limit, or the name of one, such
       # as :TLS1_2, which reads OpenSSL::SSL::TLS1_2_VERSION.
+      # OpenSSL takes a limit of none or a TLS version, and refuses SSL 3,
+      # which it no longer speaks, naming the call that refused it.
       def min_version=(version)
-        @min_version = __protocol_version__(version)
+        @min_version = __protocol_version__(version, "SSL_CTX_set_min_proto_version")
       end
 
       def max_version=(version)
-        @max_version = __protocol_version__(version)
+        @max_version = __protocol_version__(version, "SSL_CTX_set_max_proto_version")
       end
 
-      def __protocol_version__(version)
-        case version
+      SPOKEN_VERSIONS = [
+        0, OpenSSL::SSL::TLS1_VERSION, OpenSSL::SSL::TLS1_1_VERSION,
+        OpenSSL::SSL::TLS1_2_VERSION, OpenSSL::SSL::TLS1_3_VERSION
+      ].freeze
+      private_constant :SPOKEN_VERSIONS
+
+      def __protocol_version__(version, setter)
+        number = case version
         when nil, Integer then version
         when Symbol, String
           name = "#{version}_VERSION"
@@ -3315,6 +3323,8 @@ module OpenSSL
           OpenSSL::SSL.const_get(name, false)
         else raise TypeError, "no implicit conversion of #{version.class} into String"
         end
+        raise OpenSSL::SSL::SSLError, setter unless SPOKEN_VERSIONS.include?(number.to_i)
+        number
       end
       private :__protocol_version__
 

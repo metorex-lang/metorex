@@ -1244,3 +1244,27 @@ fn a_forked_child_knows_its_own_process_id() {
     let output = run_example("io/forked_child_knows_its_own_process_id.rb");
     assert_eq!(output, "[true, true]\n0\ntrue\ntrue\n");
 }
+
+#[test]
+fn io_select_answers_when_another_thread_writes_to_the_pipe() {
+    let output = run_example("io/select_wakes_when_another_thread_writes.rb");
+    assert_eq!(output, "true\n\"x\"\nnil\n");
+}
+
+#[test]
+fn io_select_runs_a_signal_handler_and_keeps_waiting() {
+    let output = run_example("io/select_runs_a_signal_handler_while_it_waits.rb");
+    assert_eq!(output, "[:usr1]\n1\n\"done\"\n");
+}
+
+#[test]
+fn io_select_on_a_descriptor_that_is_not_open_raises_ebadf() {
+    let output = run_example("io/select_on_a_closed_descriptor.rb");
+    assert_eq!(output, "Errno::EBADF\n\"Bad file descriptor\"\n");
+}
+
+#[test]
+fn io_select_with_an_infinite_timeout_sleeps_until_the_thread_is_killed() {
+    let output = run_example("io/select_with_an_infinite_timeout_sleeps.rb");
+    assert_eq!(output, "\"sleep\"\nfalse\n");
+}

@@ -30,6 +30,14 @@ pub(crate) const TOP_LEVEL_FRAME: u64 = 0;
 /// name.
 pub(crate) type MethodDefinitionKey = (Option<(String, usize, usize)>, String);
 
+/// The `$LOAD_PATH` entries, the working directory when one of them is
+/// relative, and the directories they name with every symlink followed.
+pub(crate) type CanonicalLoadPath = (
+    Vec<String>,
+    Option<std::path::PathBuf>,
+    Vec<std::path::PathBuf>,
+);
+
 /// Entries kept by method frame. Frames run nested, so the one asked for
 /// is almost always the last one entered, which is where a search starts.
 pub(crate) struct FrameEntries<V> {
@@ -377,6 +385,17 @@ pub struct VirtualMachine {
     /// How many statements have run, which a round of turns in which every
     /// thread waits leaves unchanged.
     pub(crate) statements_run: u64,
+    /// How many rounds of turns in a row ran no statement, which sets how
+    /// long the pause after the next such round lasts.
+    pub(crate) idle_rounds: u32,
+    /// The descriptors the threads waiting this round named, which end the
+    /// pause after it once one is ready.
+    pub(crate) idle_descriptors: Vec<libc::pollfd>,
+    /// The earliest time a wait named this round runs out.
+    pub(crate) idle_deadline: Option<std::time::Instant>,
+    /// What `canonical_load_path` last answered, with the `$LOAD_PATH`
+    /// entries and the working directory it was answered for.
+    pub(crate) canonical_load_path: Option<CanonicalLoadPath>,
     /// What a thread that asked for its exceptions to take the program down
     /// died of, waiting to be raised where the program next waits.
     pub(crate) thread_abort: Option<Object>,
@@ -866,6 +885,10 @@ impl VirtualMachine {
             locks_this_turn: 0,
             turn_started: std::time::Instant::now(),
             statements_run: 0,
+            idle_rounds: 0,
+            idle_descriptors: Vec::new(),
+            idle_deadline: None,
+            canonical_load_path: None,
             thread_abort: None,
             taken_mutexes: Vec::new(),
             source_line_shift: 0,

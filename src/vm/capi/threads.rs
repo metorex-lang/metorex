@@ -240,8 +240,13 @@ fn wait_until(
         keeping_call_state(|| {
             let machine = interpreter();
             if on_main {
-                if !machine.step_pending_threads(position) {
-                    std::thread::sleep(std::time::Duration::from_millis(1));
+                let statements_before = machine.statements_run;
+                if !machine.step_pending_threads(position)
+                    || machine.statements_run == statements_before
+                {
+                    machine.pause_while_idle();
+                } else {
+                    machine.note_busy_round();
                 }
             } else {
                 let _ = machine.fiber_suspend(Object::Nil, position);

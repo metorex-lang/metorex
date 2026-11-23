@@ -22,13 +22,7 @@ impl VirtualMachine {
         let bases: Vec<std::path::PathBuf> = if named_outright {
             vec![std::path::PathBuf::new()]
         } else {
-            self.load_path_directories()
-                .into_iter()
-                .map(|directory| {
-                    let base = std::path::PathBuf::from(directory);
-                    base.canonicalize().unwrap_or(base)
-                })
-                .collect()
+            self.canonical_load_path()
         };
         let mut candidates = require_candidates(&named);
         if std::path::Path::new(&named).extension().is_none() {
@@ -114,8 +108,9 @@ impl VirtualMachine {
             .map(str::to_string)
             .unwrap_or(require_name);
 
-        // Search $LOAD_PATH for the file
-        let search_dirs = self.load_path_directories();
+        // Search $LOAD_PATH for the file. A directory on the load path is
+        // named by the directory it points at.
+        let search_dirs = self.canonical_load_path();
 
         // A library metorex provides itself is already loaded, so a
         // require of it answers false rather than looking for a file.
@@ -158,9 +153,7 @@ impl VirtualMachine {
         // still one the search would reach.
         if !named_outright {
             let listed = require_candidates(&require_name);
-            for dir in &search_dirs {
-                let base = std::path::PathBuf::from(dir);
-                let base = base.canonicalize().unwrap_or(base);
+            for base in &search_dirs {
                 for candidate in &listed {
                     let named = base.join(candidate);
                     if self.feature_is_listed(&named.to_string_lossy()) {
@@ -186,11 +179,8 @@ impl VirtualMachine {
         // an earlier directory, and either over a directory of the name.
         if !named_outright && found_path.is_none() {
             'search: for candidate in require_candidates(&require_name) {
-                for dir in &search_dirs {
-                    // A directory on the load path is named by the file it
-                    // points at, while the name asked for is left as written.
-                    let base = std::path::PathBuf::from(dir);
-                    let base = base.canonicalize().unwrap_or(base);
+                for base in &search_dirs {
+                    // The name asked for is left as written.
                     let path = base.join(&candidate);
                     if path.is_file() {
                         found_path = Some(path);

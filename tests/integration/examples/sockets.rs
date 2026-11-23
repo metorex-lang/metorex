@@ -340,10 +340,7 @@ fn a_tcp_server_taken_up_from_a_unix_listener_answers_its_path() {
 fn a_tls_client_held_below_tls_1_2_refuses_to_connect() {
     let output = run_example("sockets/tls_client_held_below_tls_1_2.rb");
     let refusal = "\"SSL_connect returned=1 errno=0 state=error: no protocols available\", \"\\x15\\x03\\x03\\x00\\x02\\x02F\"]\n";
-    assert_eq!(
-        output,
-        format!("[:SSL3, {refusal}[:TLS1, {refusal}[:TLS1_1, {refusal}")
-    );
+    assert_eq!(output, format!("[:TLS1, {refusal}[:TLS1_1, {refusal}"));
 }
 
 #[test]

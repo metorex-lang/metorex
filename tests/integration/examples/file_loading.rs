@@ -783,3 +783,17 @@ fn a_file_run_by_load_runs_again_when_it_requires_itself() {
     let output = run_example("loading/load_of_a_file_that_requires_itself/main.rb");
     assert_eq!(output, "false\ntrue\ntrue\n[:ran, :ran]\n1\n");
 }
+
+#[test]
+fn a_load_path_symlink_is_read_where_it_pointed_until_the_load_path_changes() {
+    let output = run_example("require/load_path_symlink_pointed_elsewhere.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "loaded from first\n",
+            "cannot load such file -- lib_in_second\n",
+            "loaded from second\n",
+            "[\"first\", \"second\"]\n",
+        )
+    );
+}

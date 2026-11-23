@@ -7,8 +7,6 @@ class IO
   # The name of the stream that keeps nothing it is given and reads back as
   # empty, which every system carries under this name.
   NULL = "/dev/null"
-  SELECT_PAUSE_LIMIT = 0.02
-  private_constant :SELECT_PAUSE_LIMIT
 
   # Which of the streams handed in have something to read, or room to write,
   # right now. Nothing is ready answers nil, which is what a caller waits on.
@@ -30,9 +28,6 @@ class IO
       raise ArgumentError, "time interval must not be negative" if waited < 0
       deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + waited
     end
-    # The pause between checks starts short and doubles, so a stream that
-    # becomes ready at once is seen at once and a long wait checks less often.
-    pause = 0.001
     loop do
       ready_readers = (readers || []).select { |held| IO.__ready__ held, false }
       ready_writers = (writers || []).select { |held| IO.__ready__ held, true }
@@ -41,17 +36,29 @@ class IO
         # or written says so by raising where it is used.
         return [ready_readers, ready_writers, []]
       end
+      remaining = nil
       unless deadline.nil?
-        return nil if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+        remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        return nil if remaining <= 0
       end
-      # Nothing is ready yet. Sleeping hands control over, which is what lets
+      # Nothing is ready yet. The wait hands control over, which is what lets
       # another thread write to one of these streams or close it, and another
       # process may write meanwhile too.
-      unless deadline.nil?
-        pause = [pause, deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)].min
+      IO.__wait_descriptors__ __descriptors__(readers), __descriptors__(writers), remaining
+    end
+  end
+
+  # The descriptors of the streams in `given` that hold one open.
+  def self.__descriptors__(given)
+    (given || []).filter_map do |held|
+      stream = held.respond_to?(:to_io) ? held.to_io : held
+      if defined?(BasicSocket) && stream.is_a?(BasicSocket)
+        Socket.__net__("fileno", stream.handle, "", 0) unless stream.closed?
+      elsif stream.is_a?(IO) && !stream.__stream_handle__.nil?
+        IO.__stream__ "fileno", stream.__stream_handle__, "", 0
       end
-      sleep pause if pause > 0
-      pause = [pause * 2, SELECT_PAUSE_LIMIT].min
+    rescue IOError
+      nil
     end
   end
 

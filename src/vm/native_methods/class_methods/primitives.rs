@@ -102,6 +102,36 @@ impl VirtualMachine {
         if class_rc.name() == "IO" && method_name == "__stream__" {
             return self.stream_action(arguments, position).map(Answered);
         }
+        // `IO.__wait_descriptors__(reading, writing, seconds)` waits until a
+        // descriptor in either list is ready or the seconds pass, where nil
+        // seconds waits without limit.
+        if class_rc.name() == "IO" && method_name == "__wait_descriptors__" {
+            let descriptors = |given: Option<&Object>| -> Vec<std::os::fd::RawFd> {
+                match given.view() {
+                    Some(View::Array(held)) => held
+                        .borrow()
+                        .iter()
+                        .filter_map(|entry| match entry.view() {
+                            View::Int(number) => Some(number as std::os::fd::RawFd),
+                            _ => None,
+                        })
+                        .collect(),
+                    _ => Vec::new(),
+                }
+            };
+            let reading = descriptors(arguments.first());
+            let writing = descriptors(arguments.get(1));
+            // A limit too long for a Duration to hold is no limit at all.
+            let limit = match arguments.get(2) {
+                Some(seconds) if !matches!(seconds.view(), View::Nil) => {
+                    let seconds = self.float_value_of(seconds, position)?.max(0.0);
+                    std::time::Duration::try_from_secs_f64(seconds).ok()
+                }
+                _ => None,
+            };
+            self.wait_for_descriptors(&reading, &writing, limit, position)?;
+            return Ok(Answered(Object::Nil));
+        }
         // `IO.__write_standard__(name, text)` writes through the
         // interpreter's own writer, which is what keeps a program's output in
         // the order it wrote it whichever route each piece took.

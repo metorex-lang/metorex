@@ -125,7 +125,7 @@ impl VirtualMachine {
         self.refuse_unless_connected(handle, position)?;
         let wanted = if port > 0 { port as usize } else { 65536 };
         let mut buffer = vec![0u8; wanted];
-        let read = self.read_waiting(position, |vm| {
+        let read = self.read_waiting(handle, position, |vm| {
             let stream =
                 vm.open_sockets.streams.get_mut(&handle).ok_or_else(|| {
                     refused(position, "read from a closed connection".to_string())
@@ -153,7 +153,7 @@ impl VirtualMachine {
         let mut buffer = vec![0u8; wanted];
         // Told not to wait, the receive is tried once.
         let waits = flags & libc::MSG_DONTWAIT == 0;
-        let read = self.read_waiting_unless(waits, position, |vm| {
+        let read = self.read_waiting_unless(handle, waits, position, |vm| {
             let descriptor = vm
                 .socket_descriptor(handle)
                 .ok_or_else(|| refused(position, "read from a closed connection".to_string()))?;
@@ -204,12 +204,13 @@ impl VirtualMachine {
     /// nothing has arrived, and otherwise until something does.
     pub(crate) fn read_waiting_unless(
         &mut self,
+        handle: u64,
         waits: bool,
         position: Position,
         mut attempt: impl FnMut(&mut Self) -> Result<std::io::Result<usize>, MetorexError>,
     ) -> Result<usize, MetorexError> {
         if waits {
-            return self.read_waiting(position, attempt);
+            return self.read_waiting(handle, position, attempt);
         }
         match attempt(self)? {
             Ok(held) => Ok(held),
@@ -237,15 +238,17 @@ impl VirtualMachine {
         }
         self.deliver_pending_signals(position)?;
         self.raise_expired_timeout(position)?;
-        std::thread::sleep(std::time::Duration::from_millis(1));
+        self.pause_while_idle();
         Ok(true)
     }
 
-    /// Read through `attempt` until something arrives. Nothing having
-    /// arrived yet is not the end of the matter, so whatever else the
-    /// program has to run gets a turn and the read is tried again.
+    /// Read through `attempt` from the socket `handle` names until
+    /// something arrives. Nothing having arrived yet is not the end of the
+    /// matter, so whatever else the program has to run gets a turn and the
+    /// read is tried again.
     pub(crate) fn read_waiting(
         &mut self,
+        handle: u64,
         position: Position,
         mut attempt: impl FnMut(&mut Self) -> Result<std::io::Result<usize>, MetorexError>,
     ) -> Result<usize, MetorexError> {
@@ -264,12 +267,16 @@ impl VirtualMachine {
                     // turn, and the wait is given more time for
                     // having handed one over, up to a ceiling that a
                     // wait nothing can ever end still reaches.
+                    if let Some(descriptor) = self.socket_descriptor(handle) {
+                        self.note_waited_descriptor(descriptor, false);
+                    }
                     if self.waiting_on_another_process(position)? {
                         continue;
                     }
                     if std::time::Instant::now() >= deadline {
                         return Err(timed_out(position));
                     }
+                    self.note_wake_deadline(deadline);
                     self.wait_for_other_threads(position);
                     self.raise_if_thread_killed(position)?;
                     // A `Timeout.timeout` limit that passes while the read

@@ -137,6 +137,8 @@ impl VirtualMachine {
                 if std::time::Instant::now() >= deadline {
                     return Err(failed(std::io::Error::from_raw_os_error(libc::ETIMEDOUT)));
                 }
+                self.note_waited_descriptor(descriptor, true);
+                self.note_wake_deadline(deadline);
                 self.wait_for_other_threads(position);
                 self.raise_if_thread_killed(position)?;
                 if self.other_threads_are_waiting() {

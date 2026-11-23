@@ -16,6 +16,39 @@ impl VirtualMachine {
         self.current_file = Some(path);
     }
 
+    /// The directories `$LOAD_PATH` names, each with every symlink on the
+    /// way followed, or as it stands when there is no such directory. The
+    /// answer is kept while `$LOAD_PATH` holds the same entries and, when
+    /// one of them is relative, the working directory stays the same, so a
+    /// symlink pointed elsewhere meanwhile is still read where it pointed,
+    /// as MRI reads it.
+    pub(crate) fn canonical_load_path(&mut self) -> Vec<std::path::PathBuf> {
+        let entries = self.load_path_directories();
+        let working = if entries
+            .iter()
+            .any(|entry| !std::path::Path::new(entry).is_absolute())
+        {
+            std::env::current_dir().ok()
+        } else {
+            None
+        };
+        if let Some((kept_entries, kept_working, directories)) = &self.canonical_load_path
+            && *kept_entries == entries
+            && *kept_working == working
+        {
+            return directories.clone();
+        }
+        let directories: Vec<std::path::PathBuf> = entries
+            .iter()
+            .map(|entry| {
+                let named = std::path::PathBuf::from(entry);
+                named.canonicalize().unwrap_or(named)
+            })
+            .collect();
+        self.canonical_load_path = Some((entries, working, directories.clone()));
+        directories
+    }
+
     /// The directories `$LOAD_PATH` names. An entry that is not a String is
     /// asked for its `to_path`, the way Ruby reads one.
     pub(crate) fn load_path_directories(&mut self) -> Vec<String> {
