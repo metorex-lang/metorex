@@ -19,6 +19,15 @@ impl VirtualMachine {
         }
         let new_name = new_name.to_string();
         let old_name = old_name.to_string();
+        // A singleton class without a method of its own by the name names
+        // the class method its class wrote with `def self.name`, as Time
+        // writes `new`, ahead of the one Class answers natively.
+        if class_rc.find_own_method(&old_name).is_none()
+            && let Some(method) = class_rc.find_attached_class_method(&old_name)
+        {
+            class_rc.define_method(&new_name, method);
+            return Ok(());
+        }
         // A core class that answers the name natively comes ahead of the
         // modules it includes, so `Hash#to_h` is what a Hash subclass names
         // rather than the `to_h` Enumerable is written with.

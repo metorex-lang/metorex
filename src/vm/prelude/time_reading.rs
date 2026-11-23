@@ -107,8 +107,11 @@ pub(super) const SOURCE: &str = r##"
 
   # A time at another point, reading in the same zone this one does.
   def shifted(total)
+    # A zone of its own is asked for the offset at the new moment, which
+    # differs from this one's across a change of daylight saving time.
+    return Time.from_exact(total, true, nil).getlocal(@zone_object) unless @zone_object.nil?
+
     made = Time.from_exact(total, @utc, @offset)
-    made.instance_variable_set(:@zone_object, @zone_object) unless @zone_object.nil?
     # A time read in the zone the program was running in keeps that zone's
     # name, which a later change to the zone does not reach.
     if @offset.nil? && !@utc

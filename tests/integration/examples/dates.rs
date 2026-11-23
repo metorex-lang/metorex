@@ -319,3 +319,163 @@ fn basic_iso_dates_and_times_are_read_by_their_digit_counts() {
          2015-08-30 12:36:00 UTC\n"
     );
 }
+
+#[test]
+fn an_alias_of_time_new_on_the_singleton_class_takes_its_arguments() {
+    let output = run_example("dates/aliased_time_constructors.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "2004-11-24 01:04:44 +0000\n",
+            "2004\n",
+            "567000\n",
+            "1970-01-01 00:00:00 UTC\n",
+            "#<Date: 2004-11-24 ((2453334j,0s,0n),+0s,2299161j)>\n",
+            "#<DateTime: 2004-11-24T01:04:44+00:00 ((2453334j,3884s,0n),+0s,2299161j)>\n",
+        )
+    );
+}
+
+#[test]
+fn datetime_writes_the_fraction_digits_asked_for_and_dates_their_japanese_era() {
+    let output = run_example("dates/datetime_xmlschema_digits.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"2005-02-21T10:11:12-05:00\"\n",
+            "\"2005-02-21T10:11:12.345-05:00\"\n",
+            "\"2005-02-21T10:11:12.345678-05:00\"\n",
+            "\"H17.02.21T10:11:12.34-05:00\"\n",
+            "\"2005-02-21T10:11:12.3-05:00\"\n",
+            "\"2005-02-21T00:00:00+00:00\"\n",
+            "\"1872-12-31\"\n",
+            "\"M06.01.01\"\n",
+            "\"M45.07.29\"\n",
+            "\"T01.07.30\"\n",
+            "\"T15.12.24\"\n",
+            "\"S01.12.25\"\n",
+            "\"S64.01.07\"\n",
+            "\"H01.01.08\"\n",
+            "\"H31.04.30\"\n",
+            "\"R01.05.01\"\n",
+            "\"R06.03.09\"\n",
+        )
+    );
+}
+
+#[test]
+fn time_new_without_a_date_reads_the_clock_rather_than_a_stubbed_now() {
+    let output = run_example("dates/time_new_without_a_date_ignores_a_stubbed_now.rb");
+    assert_eq!(output, "Time\ntrue\n\"stubbed\"\nTime\n");
+}
+
+#[test]
+fn datetime_takes_its_arithmetic_from_date_so_a_date_alias_reaches_it() {
+    let output = run_example("dates/datetime_arithmetic_comes_from_date.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[Date, Date, Date, Date, Date, Comparable, Date, Date, Date, Date, Date]\n",
+            "#<DateTime: 2004-11-24T03:28:44-05:00 ((2453334j,30524s,0n),-18000s,2299161j)>\n",
+            "#<DateTime: 2004-11-25T01:04:44-05:00 ((2453335j,21884s,0n),-18000s,2299161j)>\n",
+            "#<DateTime: 2004-11-24T00:04:44-05:00 ((2453334j,18284s,0n),-18000s,2299161j)>\n",
+            "(1/24)\n",
+            "#<Date: 2004-11-24 ((2453334j,8640s,0n),+0s,2299161j)>\n",
+            "(4/1)\n",
+        )
+    );
+}
+
+#[test]
+fn time_local_hears_the_daylight_flag_only_for_an_hour_the_clock_repeats() {
+    let output = run_example("dates/time_local_ten_arguments.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "2005-04-22 10:10:10 -0500\n",
+            "2005-02-22 10:10:10 -0600\n",
+            "2005-10-30 01:30:00 -0500\n",
+            "2005-10-30 01:30:00 -0600\n",
+            "2005-04-03 03:30:00 -0500\n",
+            "2005-06-01 12:00:00 -0500\n",
+            "2005-04-22 10:10:10 -0500\n",
+        )
+    );
+}
+
+#[test]
+fn a_local_time_the_clock_shows_twice_reads_as_the_later() {
+    let output = run_example("dates/time_local_in_the_repeated_hour.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "2005-10-30 01:00:00 -0500\n",
+            "2005-10-30 01:30:00 -0500\n",
+            "2005-10-30 01:00:00 -0400\n",
+            "2005-10-30 01:00:00 -0500\n",
+            "2005-10-30 02:00:00 -0500\n",
+            "2005-04-03 03:30:00 -0400\n",
+            "2005-03-27 02:30:00 +0930\n",
+            "2005-03-27 02:00:00 +0930\n",
+        )
+    );
+}
+
+#[test]
+fn a_time_with_a_zone_object_reads_its_offset_again_after_arithmetic() {
+    let output = run_example("dates/time_with_a_zone_object_across_dst.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[2005-10-30 01:00:00 -0400, -14400, EasternZone]\n",
+            "[2005-10-30 01:00:00 -0500, -18000]\n",
+            "[2005-10-30 01:00:00 -0500, -18000]\n",
+            "-14400\n",
+            "-18000\n",
+            "-14400\n",
+        )
+    );
+}
+
+#[test]
+fn dates_read_short_offsets_and_the_iso8601_rfc3339_and_xml_schema_forms() {
+    let output = run_example("dates/offsets_and_rfc3339_fields.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "(0/1)\n",
+            "(-5/24)\n",
+            "(3/8)\n",
+            "(11/48)\n",
+            "(11/48)\n",
+            "(0/1)\n",
+            "(0/1)\n",
+            "(0/1)\n",
+            "(-5/24)\n",
+            "{year: 1999, mon: 12, mday: 31, hour: 19, min: 0, sec: 0, zone: \"-05:00\", offset: -18000, sec_fraction: (1/8)}\n",
+            "{year: 1999, mon: 12, mday: 31, hour: 19, min: 0, sec: 0, zone: \"Z\", offset: 0}\n",
+            "{year: 1999, mon: 12, mday: 31, hour: 19, min: 0, sec: 0, zone: \"+01:00\", offset: 3600}\n",
+            "{}\n",
+            "{year: 1999, mon: 12, mday: 31, hour: 19, min: 0, sec: 0, sec_fraction: (1/2), zone: \"+05:00\", offset: 18000}\n",
+            "{hour: 19, min: 0, sec: 0, sec_fraction: (1/4), zone: \"Z\", offset: 0}\n",
+            "{mon: 12, mday: 31}\n",
+            "{mday: 31, zone: \"+01:00\", offset: 3600}\n",
+            "{year: 1999, mon: 12}\n",
+            "{}\n",
+            "{mday: 31, year: 1999, mon: 12, hour: 19, min: 0, sec: 0, sec_fraction: (1/8), zone: \"-05:00\", offset: -18000}\n",
+            "#<DateTime: 1999-12-31T19:00:00+05:00 ((2451544j,50400s,0n),+18000s,2299161j)>\n",
+            "#<DateTime: 1999-12-31T19:00:00+05:00 ((2451544j,50400s,500000000n),+18000s,2299161j)>\n",
+            "{mday: 31, year: 1999, mon: 12}\n",
+            "{mday: 31, year: 1999, mon: 12}\n",
+            "{mday: 31, year: 1999, mon: 12, hour: 19, min: 0}\n",
+            "{}\n",
+            "{mday: 31, year: 1999, mon: 12, hour: 19, min: 0, sec: 0, zone: \"+0500\", offset: 18000}\n",
+            "{yday: 365, year: 1999}\n",
+            "{cweek: 52, cwday: 5, cwyear: 1999}\n",
+            "{mday: 31, mon: 12}\n",
+            "{hour: 19, min: 0, sec: 0}\n",
+            "{}\n",
+            "{mday: 31, year: 1999, mon: 12, hour: 19, min: 0, sec: 0, sec_fraction: (1/2), zone: \"+05\", offset: 18000}\n",
+        )
+    );
+}

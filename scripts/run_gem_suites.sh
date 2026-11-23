@@ -158,6 +158,7 @@ SUITES=(
   "googleauth|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
   "googleauth|test/**/*_test.rb|-I lib -I test -r bundler/setup"
   "signet|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
+  "rails/activesupport|test/**/*_test.rb|-w -I lib -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
   "redis|test/redis/*_test.rb test/distributed/*_test.rb test/modules/*_test.rb|-I lib -I test -r bundler/setup"
   "racc|test/test_*.rb|--enable-frozen-string-literal -I lib -I test/lib -I $HELPERS -r helper|$REPO_ROOT/scripts/gem_suite/racc_parser_text.rb"
 )

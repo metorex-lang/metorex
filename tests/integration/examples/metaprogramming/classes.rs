@@ -270,3 +270,40 @@ fn test_class_exec_reads_its_captures_over_a_caller_local_of_the_same_name() {
     let output = run_example("metaprogramming/class_exec_block_named_like_a_caller_local.rb");
     assert_eq!(output, "[:ran, Object]\n:argument\n:caller_local\n");
 }
+
+#[test]
+fn a_module_keeps_its_place_when_an_ancestor_includes_it_later() {
+    let output = run_example("metaprogramming/include_into_a_module_a_class_already_includes.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[Derived, Shared, Earlier, Mixed, Base, Shared]\n",
+            "\"Shared\"\n",
+            "Shared\n",
+            "[Array, Shared, Enumerable]\n",
+            "\"Shared\"\n",
+        )
+    );
+}
+
+#[test]
+fn a_class_method_set_aside_on_the_singleton_class_comes_back_in_place() {
+    let output = run_example("metaprogramming/stub_a_class_method_through_its_singleton_class.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"stubbed\"\n",
+            "String\n",
+            "String\n",
+            "false\n",
+            "\"stubbed\"\n",
+            "Time\n",
+            "Time\n",
+            "false\n",
+            "\"real CET\"\n",
+            "\"inner\"\n",
+            "\"outer\"\n",
+            "Time\n",
+        )
+    );
+}

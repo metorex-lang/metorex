@@ -141,12 +141,22 @@ fn assembled(fields: [i64; 6], utc: bool, daylight: i64) -> i64 {
     parts.tm_hour = hour as libc::c_int;
     parts.tm_min = minute as libc::c_int;
     parts.tm_sec = second as libc::c_int;
-    parts.tm_isdst = daylight as libc::c_int;
+    parts.tm_isdst = -1;
     if utc {
         return days_from_civil(year, month, day) * 86400 + hour * 3600 + minute * 60 + second;
     }
     unsafe {
         tzset();
+        // The flag picks between the two readings of an hour the clock
+        // passes twice, and is not heard for any other hour. Without one
+        // the later reading is taken.
+        if let Some((standard, summer)) = repeated_readings(&parts) {
+            return match daylight {
+                1 if summer.1 == 1 => summer.0,
+                0 if standard.1 == 0 => standard.0,
+                _ => standard.0.max(summer.0),
+            };
+        }
         let made = libc::mktime(&mut parts) as i64;
         if made != -1 {
             return made;
@@ -159,6 +169,39 @@ fn assembled(fields: [i64; 6], utc: bool, daylight: i64) -> i64 {
         libc::localtime_r(&stamp, &mut local);
         plain - local.tm_gmtoff
     }
+}
+
+/// The two readings of local calendar `parts` the wall clock shows twice,
+/// read with the daylight-saving flag off and on, each with the flag the
+/// zone gives it, or None when the clock shows the parts once.
+unsafe fn repeated_readings(parts: &libc::tm) -> Option<((i64, libc::c_int), (i64, libc::c_int))> {
+    let shows_parts = |flag: libc::c_int| -> Option<(i64, libc::c_int)> {
+        let mut tried = *parts;
+        tried.tm_isdst = flag;
+        let made = unsafe { libc::mktime(&mut tried) };
+        if made == -1 {
+            return None;
+        }
+        let mut read = empty_tm();
+        unsafe { libc::localtime_r(&made, &mut read) };
+        let same = (
+            read.tm_year,
+            read.tm_mon,
+            read.tm_mday,
+            read.tm_hour,
+            read.tm_min,
+        ) == (
+            parts.tm_year,
+            parts.tm_mon,
+            parts.tm_mday,
+            parts.tm_hour,
+            parts.tm_min,
+        );
+        same.then_some((made as i64, read.tm_isdst))
+    };
+    let standard = shows_parts(0)?;
+    let summer = shows_parts(1)?;
+    (standard.0 != summer.0).then_some((standard, summer))
 }
 
 impl VirtualMachine {

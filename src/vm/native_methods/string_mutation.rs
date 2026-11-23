@@ -350,7 +350,6 @@ impl VirtualMachine {
             // encoding the answer settled on comes back with the text.
             "sub!" | "gsub!" => {
                 let plain = method_name.trim_end_matches('!');
-                let before = target.to_text();
                 // The string is held still while the block decides what to
                 // put in place of each match.
                 target.set_borrowed(true);
@@ -362,10 +361,18 @@ impl VirtualMachine {
                     // matches rather than a string.
                     return Ok(Some(answered.unwrap_or(Object::Nil)));
                 };
-                let after = made.to_text();
-                if after == before && made.encoding_name() == target.encoding_name() {
+                // A match that puts back what it found still changes the
+                // string as far as the answer goes.
+                let matched = !matches!(
+                    self.globals()
+                        .get(crate::vm::native_methods::regexp_methods::LAST_MATCH)
+                        .view(),
+                    None | Some(View::Nil)
+                );
+                if !matched {
                     return Ok(Some(Object::Nil));
                 }
+                let after = made.to_text();
                 target.set_encoding(made.encoding_name());
                 if made.holds_bytes() {
                     target.mark_bytes();

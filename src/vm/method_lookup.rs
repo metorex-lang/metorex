@@ -1924,7 +1924,7 @@ pub(crate) fn extended_method(
     let mixins = singleton.mixins.borrow();
     mixins
         .iter()
-        .find_map(|module| module.find_method_with_owner(method_name))
+        .find_map(|(module, _)| module.find_method_with_owner(method_name))
 }
 
 pub(crate) fn module_level_method(class_rc: &Rc<Class>, method_name: &str) -> Option<Rc<Method>> {

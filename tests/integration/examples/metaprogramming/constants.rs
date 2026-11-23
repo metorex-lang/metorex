@@ -390,3 +390,29 @@ fn deprecated_constants_warn_through_subclasses_bare_names_and_the_top_level() {
         )
     );
 }
+
+#[test]
+fn const_get_names_the_segment_it_could_not_resolve() {
+    let output = run_example("constants/const_get_error_names.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"\", \"\", \"wrong constant name \"]\n",
+            "[\"::\", \"::\", \"wrong constant name ::\"]\n",
+            "[\"UnknownClass\", \"UnknownClass\", \"uninitialized constant UnknownClass\"]\n",
+            "[\"UnknownClass::Ace\", \"UnknownClass\", \"uninitialized constant UnknownClass\"]\n",
+            "[\"An invalid string\", \"An invalid string\", \"wrong constant name An invalid string\"]\n",
+            "[\"InvalidClass\\n\", \"InvalidClass\\n\", \"wrong constant name InvalidClass\\n\"]\n",
+            "[\"blargle\", \"blargle\", \"wrong constant name blargle\"]\n",
+            "[\"Ace::gas\", \"Ace\", \"uninitialized constant Ace\"]\n",
+            "[\"Object::Nope\", :Nope, \"uninitialized constant Nope\"]\n",
+            "[\"::Nope\", :Nope, \"uninitialized constant Nope\"]\n",
+            "[:Nope, :Nope, \"uninitialized constant Nope\"]\n",
+            "[\"Object::gas\", \"gas\", \"wrong constant name gas\"]\n",
+            "[\"Comparable::Nope\", :Nope, \"uninitialized constant Comparable::Nope\"]\n",
+            "[\"Object::\", \"Object::\", \"wrong constant name Object::\"]\n",
+            "[\"Object::::Comparable\", \"Object::::Comparable\", \"wrong constant name Object::::Comparable\"]\n",
+            "[\"Comparable::Missing::gas\", \"Missing\", \"uninitialized constant Comparable::Missing\"]\n",
+        )
+    );
+}

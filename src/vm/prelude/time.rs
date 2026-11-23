@@ -7,6 +7,12 @@ class Time
   MONTH_NAMES = %w[jan feb mar apr may jun jul aug sep oct nov dec]
 
   def self.now(**options)
+    __current_time__(options)
+  end
+
+  # The time it is, which `new` with no date answers without going through
+  # `now`, so a program's own `now` does not stand in for it.
+  def self.__current_time__(options)
     counted = Time.__now__
     made = from_parts(counted[0], counted[1], false, nil)
     zone = options[:in]
@@ -16,7 +22,7 @@ class Time
   end
 
   def self.new(*args, **options)
-    return now(**options) if args.empty?
+    return __current_time__(options) if args.empty?
     if args.size == 1 && (args[0].is_a?(String) || args[0].respond_to?(:to_str))
       return from_written(args[0], options)
     end

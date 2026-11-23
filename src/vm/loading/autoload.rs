@@ -699,7 +699,7 @@ fn autoload_owner(
     if class_rc.get_autoload(name).is_some() {
         return Some(Rc::clone(class_rc));
     }
-    let mixins: Vec<Rc<crate::class::Class>> = class_rc.mixins.borrow().iter().cloned().collect();
+    let mixins: Vec<Rc<crate::class::Class>> = class_rc.mixin_chain();
     for mixin in &mixins {
         if let Some(owner) = autoload_owner(mixin, name) {
             return Some(owner);

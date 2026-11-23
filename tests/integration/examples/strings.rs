@@ -995,3 +995,12 @@ fn appending_text_in_a_dummy_encoding_to_an_empty_string_takes_its_encoding() {
         )
     );
 }
+
+#[test]
+fn sub_bang_answers_the_string_when_the_match_puts_back_what_it_found() {
+    let output = run_example("strings/sub_bang_rules_in_order.rb");
+    assert_eq!(
+        output,
+        "\"wives\"\n\"wives\"\n\"wolves\"\n\"cats\"\n\"wives\"\nnil\n"
+    );
+}

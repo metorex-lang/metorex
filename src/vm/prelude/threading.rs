@@ -151,11 +151,23 @@ class Thread
   # Hand each place the running code was called from to the block, innermost
   # first, the way `caller_locations` reads them.
   def self.each_caller_location(*args, **keywords)
-    unless args.empty? && keywords.empty?
-      raise ArgumentError, "wrong number of arguments (given #{args.size}, expected 0)"
+    unless args.size <= 2 && keywords.empty?
+      raise ArgumentError, "wrong number of arguments (given #{args.size}, expected 0..2)"
     end
     raise LocalJumpError, "no block given" unless block_given?
-    caller_locations(2).each { |place| yield place }
+    # This method's own frame is one more to step past.
+    start, length = args
+    places =
+      if start.is_a?(Range)
+        last = start.end
+        last += 1 if last && last >= 0
+        caller_locations(Range.new(start.begin + 1, last, start.exclude_end?))
+      elsif length
+        caller_locations((start || 1) + 1, length)
+      else
+        caller_locations((start || 1) + 1)
+      end
+    places&.each { |place| yield place }
     nil
   end
 

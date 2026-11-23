@@ -203,7 +203,7 @@ impl Class {
         if let Some(p) = self.get_autoload(name) {
             return Some(p);
         }
-        for mixin in self.mixins.borrow().iter() {
+        for (mixin, _) in self.mixins.borrow().iter() {
             if let Some(p) = mixin.lookup_autoload(name) {
                 return Some(p);
             }

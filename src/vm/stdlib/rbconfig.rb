@@ -92,7 +92,9 @@ module RbConfig
   end
   CONFIG["bindir"] = File.dirname(__interpreter_path__())
   CONFIG["prefix"] = prefix
-  CONFIG["rubylibprefix"] = "#{prefix}/lib/metorex"
+  CONFIG["exec_prefix"] = prefix
+  CONFIG["libdir"] = "#{prefix}/lib"
+  CONFIG["rubylibprefix"] = "#{CONFIG["libdir"]}/metorex"
   CONFIG["rubylibdir"] = "#{CONFIG["rubylibprefix"]}/#{CONFIG["ruby_version"]}"
   CONFIG["sitelibdir"] = "#{prefix}/lib/metorex/#{RUBY_VERSION}"
   CONFIG["sitearchdir"] = "#{CONFIG["sitelibdir"]}/#{RUBY_PLATFORM}"

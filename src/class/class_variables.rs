@@ -97,7 +97,7 @@ impl Class {
                 names.push(name);
             }
         }
-        for mixin in self.mixins.borrow().iter() {
+        for (mixin, _) in self.mixins.borrow().iter() {
             mixin.collect_class_variable_names(names, seen);
         }
         if let Some(superclass) = self.superclass.as_ref() {
@@ -113,7 +113,7 @@ impl Class {
         if let Some(value) = self.class_variables.borrow().get(name) {
             return Some(value.clone());
         }
-        for mixin in self.mixins.borrow().iter() {
+        for (mixin, _) in self.mixins.borrow().iter() {
             if let Some(value) = mixin.lookup_class_var(name) {
                 return Some(value);
             }

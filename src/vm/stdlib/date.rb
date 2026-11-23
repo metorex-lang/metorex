@@ -118,41 +118,173 @@ class Date
     made
   end
 
-  def self._iso8601(text)
-    return {} if text.nil?
+  # The forms ISO 8601 writes a date, a time, or both in: extended, with
+  # separators, and basic, without them.
+  ISO8601_EXTENDED_DATETIME = /\A\s*(?:([-+]?\d{2,}|-)-(\d{2})?(?:-(\d{2}))?|([-+]?\d{2,})?-(\d{3})|(\d{4}|\d{2})?-w(\d{2})-(\d)|-w-(\d))(?:t(\d{2}):(\d{2})(?::(\d{2})(?:[,.](\d+))?)?(z|[-+]\d{2}(?::?\d{2})?)?)?\s*\z/i
+  ISO8601_BASIC_DATETIME = /\A\s*(?:([-+]?(?:\d{4}|\d{2})|--)(\d{2}|-)(\d{2})|([-+]?(?:\d{4}|\d{2}))(\d{3})|-(\d{3})|(\d{4}|\d{2})w(\d{2})(\d)|-w(\d{2})(\d)|-w-(\d))(?:t?(\d{2})(\d{2})(?:(\d{2})(?:[,.](\d+))?)?(z|[-+]\d{2}(?:\d{2})?)?)?\s*\z/i
+  ISO8601_EXTENDED_TIME = /\A\s*(\d{2}):(\d{2})(?::(\d{2})(?:[,.](\d+))?(z|[-+]\d{2}(:?\d{2})?)?)?\s*\z/i
+  ISO8601_BASIC_TIME = /\A\s*(\d{2})(\d{2})(?:(\d{2})(?:[,.](\d+))?(z|[-+]\d{2}(\d{2})?)?)?\s*\z/i
+  RFC3339_DATETIME = /\A\s*(-?\d{4})-(\d{2})-(\d{2})(?:t|\s)(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(z|[-+]\d{2}:\d{2})\s*\z/i
+  XMLSCHEMA_DATETIME = /\A\s*(-?\d{4,})(?:-(\d{2})(?:-(\d{2}))?)?(?:t(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?)?(z|[-+]\d{2}:\d{2})?\s*\z/i
+  XMLSCHEMA_TIME = /\A\s*(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(z|[-+]\d{2}:\d{2})?\s*\z/i
+  XMLSCHEMA_TRUNCATED = /\A\s*(?:--(\d{2})(?:-(\d{2}))?|---(\d{2}))(z|[-+]\d{2}:\d{2})?\s*\z/i
+
+  # The text a reader of written dates is handed, which must be a String.
+  def self.written_text(text)
     unless text.is_a?(String)
       raise TypeError, "no implicit conversion of #{text.class} into String"
     end
-    text = text.to_s
-    if text =~ /\A(-?\d{4,})-(\d{2})-(\d{2})([Tt ].*)?\z/
-      return { year: $1.to_i, mon: $2.to_i, mday: $3.to_i }
+    text.to_s
+  end
+
+  # A year written with fewer than four digits stands in this century or the
+  # last, as ISO 8601's two-digit years do.
+  def self.written_year(digits)
+    year = digits.to_i
+    digits.length < 4 ? complete_year(year, true) : year
+  end
+
+  def self.sec_fraction_of(digits)
+    Rational(digits.to_i, 10**digits.length)
+  end
+
+  def self.add_zone(found, written)
+    return found if written.nil?
+
+    found[:zone] = written
+    found[:offset] = (DateTime.read_offset(zone_text(written)) * 86400).to_i
+    found
+  end
+
+  # The time of day and zone that follow a date, from the place in the match
+  # the hour sits.
+  def self.add_clock(found, match, at)
+    return found if match[at].nil?
+
+    found[:hour] = match[at].to_i
+    found[:min] = match[at + 1].to_i
+    found[:sec] = match[at + 2].to_i unless match[at + 2].nil?
+    found[:sec_fraction] = sec_fraction_of(match[at + 3]) unless match[at + 3].nil?
+    add_zone(found, match[at + 4])
+  end
+
+  def self._iso8601(text, limit: 128)
+    return {} if text.nil?
+    text = written_text(text)
+    if (match = ISO8601_EXTENDED_DATETIME.match(text))
+      found = {}
+      if match[1]
+        found[:mday] = match[3].to_i if match[3]
+        found[:year] = written_year(match[1]) unless match[1] == "-"
+        if match[2].nil?
+          return {} unless match[1] == "-"
+        else
+          found[:mon] = match[2].to_i
+        end
+      elsif match[5]
+        found[:yday] = match[5].to_i
+        found[:year] = written_year(match[4]) if match[4]
+      elsif match[8]
+        found[:cweek] = match[7].to_i
+        found[:cwday] = match[8].to_i
+        found[:cwyear] = written_year(match[6]) if match[6]
+      elsif match[9]
+        found[:cwday] = match[9].to_i
+      end
+      return add_clock(found, match, 10)
     end
-    if text =~ /\A(-?\d{4,})(\d{2})(\d{2})([Tt ].*)?\z/
-      return { year: $1.to_i, mon: $2.to_i, mday: $3.to_i }
+    if (match = ISO8601_BASIC_DATETIME.match(text))
+      found = {}
+      if match[3]
+        found[:mday] = match[3].to_i
+        found[:year] = written_year(match[1]) unless match[1] == "--"
+        if match[2] == "-"
+          return {} unless match[1] == "--"
+        else
+          found[:mon] = match[2].to_i
+        end
+      elsif match[5]
+        found[:yday] = match[5].to_i
+        found[:year] = written_year(match[4])
+      elsif match[6]
+        found[:yday] = match[6].to_i
+      elsif match[9]
+        found[:cweek] = match[8].to_i
+        found[:cwday] = match[9].to_i
+        found[:cwyear] = written_year(match[7])
+      elsif match[11]
+        found[:cweek] = match[10].to_i
+        found[:cwday] = match[11].to_i
+      elsif match[12]
+        found[:cwday] = match[12].to_i
+      end
+      return add_clock(found, match, 13)
+    end
+    [ISO8601_EXTENDED_TIME, ISO8601_BASIC_TIME].each do |pattern|
+      match = pattern.match(text)
+      return add_clock({}, match, 1) if match
     end
     {}
   end
 
-  def self._rfc3339(text)
+  def self._rfc3339(text, limit: 128)
     return {} if text.nil?
-    unless text.is_a?(String)
-      raise TypeError, "no implicit conversion of #{text.class} into String"
+    match = RFC3339_DATETIME.match(written_text(text))
+    return {} unless match
+
+    found = { year: match[1].to_i, mon: match[2].to_i, mday: match[3].to_i,
+              hour: match[4].to_i, min: match[5].to_i, sec: match[6].to_i }
+    add_zone(found, match[8])
+    found[:sec_fraction] = sec_fraction_of(match[7]) if match[7]
+    found
+  end
+
+  def self._xmlschema(text, limit: 128)
+    return {} if text.nil?
+    text = written_text(text)
+    if (match = XMLSCHEMA_DATETIME.match(text))
+      found = { year: match[1].to_i }
+      found[:mon] = match[2].to_i if match[2]
+      found[:mday] = match[3].to_i if match[3]
+      found[:hour] = match[4].to_i if match[4]
+      found[:min] = match[5].to_i if match[5]
+      found[:sec] = match[6].to_i if match[6]
+      found[:sec_fraction] = sec_fraction_of(match[7]) if match[7]
+      return add_zone(found, match[8])
     end
-    text = text.to_s
-    return {} unless text =~ /\A(-?\d{4,})-(\d{2})-(\d{2})[Tt ]/
-    { year: $1.to_i, mon: $2.to_i, mday: $3.to_i }
+    if (match = XMLSCHEMA_TIME.match(text))
+      found = { hour: match[1].to_i, min: match[2].to_i, sec: match[3].to_i }
+      found[:sec_fraction] = sec_fraction_of(match[4]) if match[4]
+      return add_zone(found, match[5])
+    end
+    if (match = XMLSCHEMA_TRUNCATED.match(text))
+      found = {}
+      found[:mon] = match[1].to_i if match[1]
+      found[:mday] = match[2].to_i if match[2]
+      found[:mday] = match[3].to_i if match[3]
+      return add_zone(found, match[4])
+    end
+    {}
   end
 
-  def self.iso8601(text = "-4712-01-01", start = ITALY)
-    fields = _iso8601(text)
-    raise Date::Error, "invalid date" if fields.empty?
-    Date.civil(fields[:year], fields[:mon], fields[:mday], start)
+  def self.iso8601(text = "-4712-01-01", start = ITALY, limit: 128)
+    read_date_fields(text, start) { |held| _iso8601(held) }
   end
 
-  def self.rfc3339(text = "-4712-01-01T00:00:00+00:00", start = ITALY)
-    fields = _rfc3339(text)
-    raise Date::Error, "invalid date" if fields.empty?
-    Date.civil(fields[:year], fields[:mon], fields[:mday], start)
+  def self.rfc3339(text = "-4712-01-01T00:00:00+00:00", start = ITALY, limit: 128)
+    read_date_fields(text, start) { |held| _rfc3339(held) }
+  end
+
+  def self.xmlschema(text = "-4712-01-01", start = ITALY, limit: 128)
+    read_date_fields(text, start) { |held| _xmlschema(held) }
+  end
+
+  # The date the fields a reader found in `text` name.
+  def self.read_date_fields(text, start)
+    raise Date::Error, "invalid date" if text.nil?
+    fields = yield(text)
+    raise Date::Error, "invalid date" if fields.nil? || fields.empty?
+    assemble_strptime(fields, start)
   end
 
   # A date written as text, read back into the fields it names. Returns an
@@ -942,7 +1074,7 @@ class Date
   end
 
   def day_fraction
-    Rational(0, 1)
+    @fraction || Rational(0, 1)
   end
 
   # The clock a date carries. A plain Date stands for midnight with no offset
@@ -1058,17 +1190,48 @@ class Date
   end
   private :rebuild
 
+  # This date moved to day `jd`, `fraction` of the way into it. A Date
+  # holds a fraction only when arithmetic gave it one.
+  def moved_to(jd, fraction)
+    made = rebuild(jd)
+    made.instance_variable_set(:@fraction, fraction) unless fraction.zero?
+    made
+  end
+  private :moved_to
+
   def +(count)
     raise TypeError, "expected numeric" unless count.is_a?(Numeric)
-    self.rebuild(@jd + count.to_i)
+    shifted(count)
   end
 
   def -(other)
-    return @jd - other.absolute_day if other.is_a?(DateTime)
-    return Rational(@jd - other.jd, 1) if other.is_a?(Date)
+    return absolute_day - other.absolute_day if other.is_a?(Date)
     raise TypeError, "expected numeric" unless other.is_a?(Numeric)
-    self.rebuild(@jd - other.to_i)
+    shifted(-other)
   end
+
+  # This date `count` days on, kept whole when the count is.
+  def shifted(count)
+    return moved_to(@jd + count, day_fraction) if count.is_a?(Integer)
+
+    moved = @jd + day_fraction + count.to_r
+    landing = moved.floor
+    moved_to(landing, moved - landing)
+  end
+  private :shifted
+
+  # The point in time this date names, counted in days from the same place
+  # whatever offset it is written against.
+  def absolute_day
+    @jd + day_fraction - offset_fraction
+  end
+  protected :absolute_day
+
+  # The offset from UTC as a fraction of a day, which is none for a Date.
+  def offset_fraction
+    Rational(0, 1)
+  end
+  private :offset_fraction
 
   def >>(months)
     raise TypeError, "expected numeric" unless months.is_a?(Integer)
@@ -1187,14 +1350,16 @@ class Date
   # ── Comparing and rendering ──────────────────────────────────────────────
 
   def <=>(other)
-    return @jd <=> other.jd if other.is_a?(Date)
-    return @jd <=> other if other.is_a?(Numeric)
+    return absolute_day <=> other.absolute_day if other.is_a?(Date)
+    return numeric_position <=> other if other.is_a?(Numeric)
     nil
   end
 
-  def ==(other)
-    other.is_a?(Date) && @jd == other.jd
+  # What a number is compared with: the day for a Date.
+  def numeric_position
+    @jd
   end
+  private :numeric_position
 
   def ===(other)
     return @jd == other.jd if other.is_a?(Date)
@@ -1203,11 +1368,11 @@ class Date
   end
 
   def eql?(other)
-    other.is_a?(Date) && @jd == other.jd
+    other.is_a?(Date) && absolute_day == other.absolute_day
   end
 
   def hash
-    @jd.hash
+    absolute_day.hash
   end
 
   def to_s
@@ -1215,7 +1380,7 @@ class Date
   end
 
   def inspect
-    "#<#{self.class}: #{to_s} #{inspected_parts(@jd, 0, 0)}>"
+    "#<#{self.class}: #{to_s} #{inspected_parts(@jd, day_fraction, 0)}>"
   end
 
   # The moment as Ruby's own inspect spells it: the Julian day and the
@@ -1248,6 +1413,21 @@ class Date
 
   def rfc3339
     "#{to_s}T00:00:00+00:00"
+  end
+
+  # The Japanese eras by the day each began, with the letter it is written
+  # with and the year before its first.
+  JAPANESE_ERAS = [
+    [2_458_605, "R", 2018], [2_447_535, "H", 1988], [2_424_875, "S", 1925],
+    [2_419_614, "T", 1911], [2_405_160, "M", 1867]
+  ].freeze
+  private_constant :JAPANESE_ERAS
+
+  def jisx0301
+    era = JAPANESE_ERAS.find { |began, _, _| jd >= began }
+    return iso8601 unless era
+
+    format("%s%02d.%02d.%02d", era[1], year - era[2], month, day)
   end
 
   def asctime
@@ -1571,7 +1751,9 @@ class DateTime < Date
     raise Date::Error, "invalid date" unless offset.is_a?(String)
     text = offset.to_s
     return Rational(0, 1) if ["Z", "z", "UTC", "GMT", "UT"].include?(text)
-    unless text =~ /\A([+-])(\d{2}):?(\d{2})?:?(\d{2})?\z/
+    hours = Date::NAMED_ZONE_HOURS[text.downcase]
+    return Rational(hours, 24) unless hours.nil?
+    unless text =~ /\A([+-])(\d{1,2})(?::?(\d{2})(?::?(\d{2}))?)?\z/
       raise Date::Error, "invalid date"
     end
     seconds = $2.to_i * 3600 + $3.to_i * 60 + $4.to_i
@@ -1597,16 +1779,16 @@ class DateTime < Date
     from_date(assemble_strptime(fields, start)).with_fields(fields)
   end
 
-  def self.iso8601(text = "-4712-01-01T00:00:00+00:00", start = ITALY)
+  def self.iso8601(text = "-4712-01-01T00:00:00+00:00", start = ITALY, limit: 128)
     read_written(text, start) { |held| Date._iso8601(held) }
   end
 
-  def self.rfc3339(text = "-4712-01-01T00:00:00+00:00", start = ITALY)
+  def self.rfc3339(text = "-4712-01-01T00:00:00+00:00", start = ITALY, limit: 128)
     read_written(text, start) { |held| Date._rfc3339(held) }
   end
 
-  def self.xmlschema(text = "-4712-01-01T00:00:00+00:00", start = ITALY)
-    iso8601(text, start)
+  def self.xmlschema(text = "-4712-01-01T00:00:00+00:00", start = ITALY, limit: 128)
+    read_written(text, start) { |held| Date._xmlschema(held) }
   end
 
   def self.jisx0301(text = "-4712-01-01T00:00:00+00:00", start = ITALY)
@@ -1631,8 +1813,7 @@ class DateTime < Date
     raise Date::Error, "invalid date" if text.nil?
     fields = yield(text)
     raise Date::Error, "invalid date" if fields.nil? || fields.empty?
-    clock = _parse(text)
-    from_date(Date.civil(fields[:year], fields[:mon], fields[:mday], start)).with_fields(clock)
+    from_date(assemble_strptime(fields, start)).with_fields(fields)
   end
 
   # ── What a datetime stands for ───────────────────────────────────────────
@@ -1719,47 +1900,20 @@ class DateTime < Date
 
   # ── Moving about ─────────────────────────────────────────────────────────
 
-  def +(count)
-    raise TypeError, "expected numeric" unless count.is_a?(Numeric)
-    moved = @jd + @fraction + count.to_r
-    landing = moved.floor
-    self.class.from_parts(landing, moved - landing, @offset, @start)
+  def moved_to(jd, fraction)
+    self.class.from_parts(jd, fraction, @offset, @start)
   end
+  private :moved_to
 
-  def -(other)
-    # Two datetimes are the time between the instants they name, whatever
-    # offsets they are written against.
-    return absolute_day - (other.is_a?(DateTime) ? other.absolute_day : other.jd) if other.is_a?(Date)
-    raise TypeError, "expected numeric" unless other.is_a?(Numeric)
-    self + (-other.to_r)
+  def offset_fraction
+    @offset
   end
+  private :offset_fraction
 
-  # The point in time this datetime names, counted in days from the same
-  # place whatever offset it is written against.
-  def absolute_day
-    @jd + @fraction - @offset
+  def numeric_position
+    absolute_day
   end
-
-  def <=>(other)
-    return self.absolute_day <=> other.absolute_day if other.is_a?(DateTime)
-    return self.absolute_day <=> (other.jd + other.day_fraction) if other.is_a?(Date)
-    return self.absolute_day <=> other if other.is_a?(Numeric)
-    nil
-  end
-
-  def ==(other)
-    return false unless other.is_a?(Date)
-    self.absolute_day == (other.is_a?(DateTime) ? other.absolute_day :
-                          other.jd + other.day_fraction)
-  end
-
-  def eql?(other)
-    self == other
-  end
-
-  def hash
-    self.absolute_day.hash
-  end
+  private :numeric_position
 
   # ── Writing text ─────────────────────────────────────────────────────────
 
@@ -1775,21 +1929,29 @@ class DateTime < Date
     "#<#{self.class}: #{to_s} #{inspected_parts(@jd, @fraction, @offset)}>"
   end
 
-  def iso8601
-    self.to_s
+  def iso8601(digits = 0)
+    strftime("%FT%T#{written_fraction(digits)}%:z")
   end
 
-  def xmlschema
-    self.to_s
+  def xmlschema(digits = 0)
+    iso8601(digits)
   end
 
-  def rfc3339
-    self.to_s
+  def rfc3339(digits = 0)
+    iso8601(digits)
   end
 
-  def jisx0301
-    self.to_s
+  def jisx0301(digits = 0)
+    "#{super()}#{strftime("T%T#{written_fraction(digits)}%:z")}"
   end
+
+  # The fraction of a second as `digits` digits after a point, or nothing
+  # for none.
+  def written_fraction(digits)
+    digits = Integer(digits)
+    digits.positive? ? ".%#{digits}N" : ""
+  end
+  private :written_fraction
 
   def httpdate
     self.new_offset(0).strftime("%a, %d %b %Y %H:%M:%S GMT")

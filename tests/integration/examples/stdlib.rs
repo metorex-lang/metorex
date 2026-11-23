@@ -1887,7 +1887,7 @@ fn yaml_dump_writes_each_value_in_the_style_psych_chooses() {
 #[test]
 fn rbconfig_names_the_library_directories_under_the_prefix() {
     let output = run_example("stdlib/rbconfig_library_directories.rb");
-    assert_eq!(output, "true\ntrue\ntrue\n");
+    assert_eq!(output, "true\ntrue\ntrue\ntrue\ntrue\n");
 }
 
 #[test]
@@ -2749,6 +2749,24 @@ fn an_ssl_context_refuses_ssl3_as_its_oldest_or_newest_version() {
             "max_version= TLS1_2: accepted\n",
             "by name: SSL_CTX_set_max_proto_version\n",
             "ssl_version: OpenSSL::SSL::SSLError: SSL_CTX_set_max_proto_version\n",
+        )
+    );
+}
+
+#[test]
+fn super_from_a_module_included_into_object_reaches_the_json_generator() {
+    let output = run_example("stdlib/json_to_json_super_from_an_included_module.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "ToJsonThroughSuper\n",
+            "JSON::Ext::Generator::GeneratorMethods::Object\n",
+            "JSON::Ext::Generator::GeneratorMethods::Integer\n",
+            "\"[\\\"sym\\\",\\\"1..2\\\",\\\"(?-mix:x)\\\",1,\\\"s\\\",{\\\"k\\\":\\\"v\\\"}]\"\n",
+            "\"custom\"\n",
+            "\"custom\"\n",
+            "\"\\\"1970-01-01 00:00:00 UTC\\\"\"\n",
+            "\"[\\\"1..2\\\",\\\"IV\\\"]\"\n",
         )
     );
 }

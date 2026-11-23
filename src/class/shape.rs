@@ -19,8 +19,17 @@ pub(crate) struct MethodCache {
 }
 
 /// The modules mixed into a class in lookup order, with the method state they
-/// were worked out under.
-pub(crate) type LinearMixins = (u64, Rc<[Rc<Class>]>);
+/// were worked out under, and again with the number of the include that
+/// brought each in.
+pub(crate) type LinearMixins = (u64, Rc<LinearMixinLists>);
+
+/// The two forms of a class's worked-out mixins, behind one pointer so the
+/// cache stays the size of one.
+#[derive(Debug)]
+pub(crate) struct LinearMixinLists {
+    pub(crate) modules: Rc<[Rc<Class>]>,
+    pub(crate) timed: Rc<[(Rc<Class>, u64)]>,
+}
 
 /// Runtime class definition with method table and inheritance.
 pub struct Class {
@@ -39,8 +48,9 @@ pub struct Class {
     /// Insertion-ordered so `Module#class_variables` reports definition order.
     pub(crate) class_variables:
         RefCell<crate::fast_hash::NameIndexMap<String, crate::object::Object>>,
-    /// Included modules, in reverse inclusion order (last included = first searched).
-    pub(crate) mixins: RefCell<Vec<Rc<Class>>>,
+    /// Included modules, in reverse inclusion order (last included = first
+    /// searched), each with the number `include_sequence` gave its include.
+    pub(crate) mixins: RefCell<Vec<(Rc<Class>, u64)>>,
     /// Lazily-allocated singleton class attached to *this class object* — the
     /// thing `class << SomeClass; end` opens. Holds class-level (def self.x)
     /// methods once we start tracking them as a real class.

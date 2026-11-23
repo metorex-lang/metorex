@@ -229,13 +229,17 @@ impl VirtualMachine {
                     };
                 }
                 let segments: Vec<&str> = rest.split("::").collect();
-                for seg in &segments {
-                    if !is_valid_constant_name(seg) {
-                        return Err(wrong_name(seg));
-                    }
+                if segments.iter().any(|seg| seg.is_empty()) {
+                    return Err(wrong_name(&const_path));
                 }
                 let mut value = Object::Nil;
                 for (i, seg) in segments.iter().enumerate() {
+                    // Each segment is checked as the walk reaches it, so a
+                    // missing module ahead of a misspelled name is the one
+                    // reported.
+                    if !is_valid_constant_name(seg) {
+                        return Err(wrong_name(seg));
+                    }
                     self.settle_pending_autoload(&current, seg);
                     let entry = self.const_entry_on(&current, seg, inherit, i == 0);
                     let resolved = match entry {
@@ -252,7 +256,15 @@ impl VirtualMachine {
                     let resolved = match resolved {
                         Some(v) => v,
                         None => {
-                            let missing = self.dispatch_const_missing(&current, seg, position)?;
+                            let missing = self
+                                .dispatch_const_missing(&current, seg, position)
+                                .map_err(|error| {
+                                    if was_symbol || crate::symbol_registry::contains(seg) {
+                                        error
+                                    } else {
+                                        name_error_named_by_string(error, seg)
+                                    }
+                                })?;
                             if i + 1 == segments.len() {
                                 return Ok(Answered(missing));
                             }
@@ -446,4 +458,21 @@ impl VirtualMachine {
         self.trigger_const_added_hook(Object::Class(Rc::clone(class_rc)), const_name, position)?;
         Ok(())
     }
+}
+
+/// A NameError for a constant spelled in a String that no Symbol has
+/// spelled, whose `name` is that String, as Ruby looks the name up without
+/// interning it.
+fn name_error_named_by_string(error: MetorexError, name: &str) -> MetorexError {
+    if let MetorexError::UncaughtException { exception, .. } = &error
+        && let View::Exception(details) = exception.view()
+    {
+        let mut details = details.borrow_mut();
+        if details.exception_type == "NameError" && details.name.as_deref() == Some(name) {
+            details
+                .instance_vars
+                .insert(crate::vm::NAME_ERROR_NAME_KEY.into(), Object::string(name));
+        }
+    }
+    error
 }

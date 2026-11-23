@@ -8,6 +8,17 @@ thread_local! {
     /// singleton's attachment moves on, so a lookup cached under an earlier
     /// one is not trusted.
     static METHOD_STATE: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// A number each `include` moves on, which orders the includes made
+    /// anywhere in the program.
+    static INCLUDE_SEQUENCE: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// The next number in the order includes are made in.
+fn include_sequence() -> u64 {
+    INCLUDE_SEQUENCE.with(|sequence| {
+        sequence.set(sequence.get() + 1);
+        sequence.get()
+    })
 }
 
 /// Mark every cached method lookup out of date.
@@ -121,7 +132,9 @@ impl Class {
     /// is searched first (Ruby's MRO).
     pub fn add_mixin(&self, module: Rc<Class>) {
         module_joined(&module);
-        self.mixins.borrow_mut().insert(0, module);
+        self.mixins
+            .borrow_mut()
+            .insert(0, (module, include_sequence()));
     }
 
     /// Whether any module is mixed into this class or module.
@@ -131,7 +144,11 @@ impl Class {
 
     /// Snapshot of the mixin chain (most-recently-included first).
     pub fn mixin_chain(&self) -> Vec<Rc<Class>> {
-        self.mixins.borrow().clone()
+        self.mixins
+            .borrow()
+            .iter()
+            .map(|(module, _)| Rc::clone(module))
+            .collect()
     }
 
     /// Add a prepended module, ahead of the class's own method table.
@@ -204,69 +221,110 @@ impl Class {
     /// where that one brings it, since including a module skips each module
     /// the chain already holds.
     pub fn linear_mixins(&self) -> Rc<[Rc<Class>]> {
-        let state = method_state();
-        if let Some((worked_under, chain)) = self.linear_mixins_cache.borrow().as_ref()
-            && *worked_under == state
-        {
-            return Rc::clone(chain);
-        }
-        let chain: Rc<[Rc<Class>]> = self.work_out_linear_mixins().into();
-        *self.linear_mixins_cache.borrow_mut() = Some((state, Rc::clone(&chain)));
-        chain
+        Rc::clone(&self.linear_mixins_worked_out().modules)
     }
 
-    fn work_out_linear_mixins(&self) -> Vec<Rc<Class>> {
-        let expansions: Vec<Vec<Rc<Class>>> = self
-            .mixin_chain()
+    /// `linear_mixins`, each with the number of the include that brought it
+    /// into this class or module's chain.
+    fn linear_mixins_timed(&self) -> Rc<[(Rc<Class>, u64)]> {
+        Rc::clone(&self.linear_mixins_worked_out().timed)
+    }
+
+    fn linear_mixins_worked_out(&self) -> Rc<crate::class::shape::LinearMixinLists> {
+        let state = method_state();
+        if let Some((worked_under, lists)) = self.linear_mixins_cache.borrow().as_ref()
+            && *worked_under == state
+        {
+            return Rc::clone(lists);
+        }
+        let timed: Rc<[(Rc<Class>, u64)]> = self.work_out_linear_mixins().into();
+        let modules: Rc<[Rc<Class>]> = timed
             .iter()
-            .map(|module| module.module_chain())
+            .map(|(module, _)| Rc::clone(module))
+            .collect::<Vec<_>>()
+            .into();
+        let lists = Rc::new(crate::class::shape::LinearMixinLists { modules, timed });
+        *self.linear_mixins_cache.borrow_mut() = Some((state, Rc::clone(&lists)));
+        lists
+    }
+
+    /// A module arrives through another no earlier than that one was
+    /// included here.
+    fn work_out_linear_mixins(&self) -> Vec<(Rc<Class>, u64)> {
+        let included_modules = self.mixins.borrow().clone();
+        let expansions: Vec<Vec<(Rc<Class>, u64)>> = included_modules
+            .iter()
+            .map(|(module, included)| {
+                let included = *included;
+                module
+                    .module_chain_timed()
+                    .into_iter()
+                    .map(|(held, arrived)| (held, arrived.max(included)))
+                    .collect()
+            })
             .collect();
-        // The last expansion each module appears in, which is the include
-        // that brought it in first.
-        let mut last_seen: std::collections::HashMap<*const Class, usize> =
+        // Each module sits in the expansion of the include that brought it
+        // in first, since including a module skips one the chain holds.
+        let mut first_arrival: std::collections::HashMap<*const Class, (u64, usize)> =
             std::collections::HashMap::new();
         for (at, expansion) in expansions.iter().enumerate() {
-            for module in expansion {
-                last_seen.insert(Rc::as_ptr(module), at);
+            for (module, arrived) in expansion {
+                let entry = first_arrival
+                    .entry(Rc::as_ptr(module))
+                    .or_insert((*arrived, at));
+                if (*arrived, at) < *entry {
+                    *entry = (*arrived, at);
+                }
             }
         }
-        // A module a superclass already has stays where the superclass has
-        // it, as Ruby's `include` skips a module the ancestors hold.
-        let mut placed: std::collections::HashSet<*const Class> = std::collections::HashSet::new();
+        // A module a superclass held before this class included it stays
+        // where the superclass has it. One the superclass included later is
+        // in both places.
+        let mut held_above: std::collections::HashMap<*const Class, u64> =
+            std::collections::HashMap::new();
         if !self.is_module() {
             let mut above = self.superclass();
             while let Some(ancestor) = above {
-                for module in ancestor
-                    .linear_mixins()
-                    .iter()
-                    .chain(ancestor.transitive_prepends().iter())
-                {
-                    placed.insert(Rc::as_ptr(module));
+                for (module, arrived) in ancestor.linear_mixins_timed().iter() {
+                    let entry = held_above.entry(Rc::as_ptr(module)).or_insert(*arrived);
+                    *entry = (*entry).min(*arrived);
+                }
+                for module in ancestor.transitive_prepends() {
+                    held_above.insert(Rc::as_ptr(&module), 0);
                 }
                 above = ancestor.superclass();
             }
         }
-        let mut chain: Vec<Rc<Class>> = Vec::new();
+        let mut chain: Vec<(Rc<Class>, u64)> = Vec::new();
         for (at, expansion) in expansions.iter().enumerate() {
-            for module in expansion {
+            for (module, _) in expansion {
                 let held = Rc::as_ptr(module);
-                if last_seen[&held] > at || !placed.insert(held) {
+                let (arrived, first_at) = first_arrival[&held];
+                if first_at != at
+                    || held_above.get(&held).is_some_and(|above| *above < arrived)
+                    || chain.iter().any(|(placed, _)| Rc::ptr_eq(placed, module))
+                {
                     continue;
                 }
-                chain.push(Rc::clone(module));
+                chain.push((Rc::clone(module), arrived));
             }
         }
         chain
     }
 
-    /// A module's own ancestry: what is prepended to it, itself, and what it
-    /// includes.
-    fn module_chain(self: &Rc<Class>) -> Vec<Rc<Class>> {
-        let mut chain = self.transitive_prepends();
-        chain.push(Rc::clone(self));
-        for module in self.linear_mixins().iter() {
-            if !chain.iter().any(|held| Rc::ptr_eq(held, module)) {
-                chain.push(Rc::clone(module));
+    /// A module's own ancestry, each with the number of the include that
+    /// brought it in: what is prepended to it and itself, which are there
+    /// from the start, and what it includes.
+    fn module_chain_timed(self: &Rc<Class>) -> Vec<(Rc<Class>, u64)> {
+        let mut chain: Vec<(Rc<Class>, u64)> = self
+            .transitive_prepends()
+            .into_iter()
+            .map(|module| (module, 0))
+            .collect();
+        chain.push((Rc::clone(self), 0));
+        for (module, arrived) in self.linear_mixins_timed().iter() {
+            if !chain.iter().any(|(held, _)| Rc::ptr_eq(held, module)) {
+                chain.push((Rc::clone(module), *arrived));
             }
         }
         chain
@@ -426,7 +484,7 @@ impl Class {
                 return true;
             }
         }
-        for mixin in self.mixins.borrow().iter() {
+        for (mixin, _) in self.mixins.borrow().iter() {
             if mixin.has_ancestor(other) {
                 return true;
             }
@@ -511,7 +569,7 @@ impl Class {
         if self.is_method_protected(name) {
             return true;
         }
-        for mixin in self.mixins.borrow().iter() {
+        for (mixin, _) in self.mixins.borrow().iter() {
             if mixin.has_public_override(name) {
                 return false;
             }
@@ -534,7 +592,7 @@ impl Class {
         if self.is_method_private(name) {
             return true;
         }
-        for mixin in self.mixins.borrow().iter() {
+        for (mixin, _) in self.mixins.borrow().iter() {
             if mixin.has_public_override(name) {
                 return false;
             }

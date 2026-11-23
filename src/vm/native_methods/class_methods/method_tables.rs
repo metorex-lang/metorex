@@ -443,23 +443,27 @@ pub(crate) fn push_class_ancestors(
     chain: &mut Vec<Object>,
     seen: &mut Vec<*const Class>,
 ) {
-    let ptr = Rc::as_ptr(class);
-    if !seen.contains(&ptr) {
-        seen.push(ptr);
-        push_prepend_ancestors(class, chain);
-        chain.push(Object::Class(Rc::clone(class)));
-    }
-    push_mixins(class, chain, seen);
-    let mut current = class.superclass();
-    while let Some(parent) = current {
-        let pptr = Rc::as_ptr(&parent);
-        if !seen.contains(&pptr) {
-            seen.push(pptr);
-            push_prepend_ancestors(&parent, chain);
-            chain.push(Object::Class(Rc::clone(&parent)));
+    // A class's mixins already leave out a module a superclass held before
+    // the class included it, so a module listed again for a superclass is
+    // one Ruby lists in both places. Only what came before this walk, such
+    // as a singleton class's own modules, is left out.
+    let held_before = seen.len();
+    let mut current = Some(Rc::clone(class));
+    while let Some(owner) = current {
+        let ptr = Rc::as_ptr(&owner);
+        if !seen.contains(&ptr) {
+            seen.push(ptr);
+            push_prepend_ancestors(&owner, chain);
+            chain.push(Object::Class(Rc::clone(&owner)));
         }
-        push_mixins(&parent, chain, seen);
-        current = parent.superclass();
+        for module in owner.linear_mixins().iter() {
+            let module_ptr = Rc::as_ptr(module);
+            if !seen[..held_before].contains(&module_ptr) {
+                seen.push(module_ptr);
+                chain.push(Object::Module(Rc::clone(module)));
+            }
+        }
+        current = owner.superclass();
     }
 }
 

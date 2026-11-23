@@ -519,3 +519,19 @@ fn a_fiber_local_set_to_nil_is_removed() {
     let output = run_example("threads/fiber_local_set_to_nil.rb");
     assert_eq!(output, "true\nnil\nfalse\n[]\nfalse\n");
 }
+
+#[test]
+fn each_caller_location_skips_and_limits_frames_as_caller_locations_does() {
+    let output = run_example("threads/each_caller_location_skips_frames.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"Object#middle\", \"Object#outer\", \"<main>\"]\n",
+            "[\"Object#middle\", \"Object#outer\", \"<main>\"]\n",
+            "[\"Object#outer\", \"<main>\"]\n",
+            "[\"Object#innermost\", \"Object#middle\"]\n",
+            "[\"Object#middle\", \"Object#outer\"]\n",
+            "[]\n",
+        )
+    );
+}

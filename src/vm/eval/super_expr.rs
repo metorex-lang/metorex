@@ -367,7 +367,7 @@ impl VirtualMachine {
         // A singleton method's `super` reaches the class's own copy, so the
         // receiver's singleton class comes ahead of its class in the chain.
         let mut chain = Vec::new();
-        let class_ancestors = walk_ancestors(instance_class);
+        let class_ancestors = self.super_ancestors(instance_class);
         let singleton = instance_borrowed.singleton_class();
         if let Some(singleton) = &singleton {
             // The modules prepended to the singleton class stand ahead of it,
@@ -1005,7 +1005,7 @@ impl VirtualMachine {
         if let Some(singleton) = self.existing_singleton_class(&receiver) {
             chain.push(singleton);
         }
-        for ancestor in walk_ancestors(&receiver_class) {
+        for ancestor in self.super_ancestors(&receiver_class) {
             if !chain.iter().any(|c| Rc::ptr_eq(c, &ancestor)) {
                 chain.push(ancestor);
             }
@@ -1025,7 +1025,7 @@ impl VirtualMachine {
         {
             for ancestor in chain.iter().skip(index + 1) {
                 if let Some(method) = ancestor.find_own_method(method_name)
-                    && !method.body.is_empty()
+                    && (!method.body.is_empty() || method.provenance.c_function.is_some())
                 {
                     return self.invoke_method(
                         Rc::clone(ancestor),
@@ -1234,6 +1234,27 @@ pub(crate) fn walk_ancestors(class: &Rc<Class>) -> Vec<Rc<Class>> {
 }
 
 impl VirtualMachine {
+    /// The ancestors `super` walks for a class. A builtin class descends
+    /// from the interpreter's own record of Object, while what a program
+    /// includes into Object lands on the Object in globals, so the chain
+    /// goes on from that one.
+    fn super_ancestors(&self, class: &Rc<Class>) -> Vec<Rc<Class>> {
+        let mut ancestors = walk_ancestors(class);
+        if let Some(View::Class(global_object)) = self.globals().get("Object").view()
+            && let Some(at) = ancestors
+                .iter()
+                .position(|c| c.name() == "Object" && !Rc::ptr_eq(c, global_object))
+        {
+            ancestors.truncate(at);
+            for ancestor in walk_ancestors(global_object) {
+                if !ancestors.iter().any(|c| Rc::ptr_eq(c, &ancestor)) {
+                    ancestors.push(ancestor);
+                }
+            }
+        }
+        ancestors
+    }
+
     /// Whether `super` written in the running method would reach a method,
     /// which is what `defined?(super)` reports. A method an ancestor undefined
     /// is not reached.
