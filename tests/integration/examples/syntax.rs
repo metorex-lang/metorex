@@ -844,3 +844,30 @@ fn test_assignments_inside_modifier_conditions_and_value_lists() {
         )
     );
 }
+
+#[test]
+fn test_syntax_yield_without_parens_execution() {
+    let output = run_example("syntax/yield_without_parens.rb");
+    assert_eq!(
+        output,
+        "[1, 3]\n[1, {two: 3}]\n[4, 5]\n[6, 7, true]\n{\"a\" => 1}\n"
+    );
+}
+
+#[test]
+fn test_syntax_quoted_labels_without_parens_execution() {
+    let output = run_example("syntax/quoted_labels_without_parens.rb");
+    assert_eq!(
+        output,
+        "[:karma, {\"namespaced/email\": true}]\n[:karma, {\"namespaced/email\": true}]\n[:karma, {\"a b\": 1, c: 2}]\n[{x: 1, b: 2, \"c\" => 3, \"d e\": 4}]\n"
+    );
+}
+
+#[test]
+fn test_syntax_keyword_named_methods_on_one_line_execution() {
+    let output = run_example("syntax/keyword_named_methods_on_one_line.rb");
+    assert_eq!(
+        output,
+        "false\n\"Rex\"\n\"Rex\"\ntrue\n:begun\n[\"circle\", 9]\n"
+    );
+}

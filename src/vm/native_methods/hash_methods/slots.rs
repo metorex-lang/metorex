@@ -235,7 +235,10 @@ impl VirtualMachine {
         value: Object,
         position: Position,
     ) -> Result<(), MetorexError> {
-        let rendered = self.dict_slot_for(dict_rc, key, position)?;
+        // A key already held is written where it is held, which for a hash
+        // rebuilt by a method such as `transform_values` is its rendering.
+        let (placed, held_at) = self.hash_locate_key(dict_rc, key, position)?;
+        let rendered: crate::object::Slot = held_at.unwrap_or(placed).into();
         let mut dict = dict_rc.borrow_mut();
         let already_held = dict.contains_key(rendered.as_str());
         if !already_held {

@@ -698,7 +698,14 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Option<Result<Object, MetorexError>> {
-        if !matches!(receiver.view(), View::Instance(_)) {
+        // A module made by a subclass of Module answers what that subclass
+        // undefined no more than an instance does.
+        let made_by_a_subclass =
+            matches!(receiver.view(), View::Module(module) if module.instance_of().is_some());
+        if !matches!(receiver.view(), View::Instance(_))
+            && reopened_class_name(receiver).is_none()
+            && !made_by_a_subclass
+        {
             return None;
         }
         let (_, method) = self.lookup_method(receiver, method_name)?;
@@ -738,13 +745,27 @@ impl VirtualMachine {
         }
         let mut handler_arguments = vec![Object::symbol(method_name.to_string())];
         handler_arguments.extend(arguments.iter().cloned());
-        Some(self.invoke_method(
+        // A name an `undef` removed was refused for nothing but that, and
+        // reads as undefined.
+        let refused_for_visibility = self
+            .lookup_method(receiver, method_name)
+            .is_none_or(|(_, method)| !method.is_undefined);
+        if refused_for_visibility {
+            let word = self.visibility_word(receiver, method_name);
+            self.refused_names_missing
+                .push((method_name.to_string(), self.call_stack.len(), word));
+        }
+        let answered = self.invoke_method(
             owner,
             handler,
             receiver.clone(),
             handler_arguments,
             position,
-        ))
+        );
+        if refused_for_visibility {
+            self.refused_names_missing.pop();
+        }
+        Some(answered)
     }
 
     /// Look up a method on the receiver and return its class and method definition.
@@ -1146,7 +1167,12 @@ impl VirtualMachine {
             }
         }
         let mut cursor = match caller.view() {
-            View::Class(class_rc) | View::Module(class_rc) => Some(Rc::clone(class_rc)),
+            // A module a Module subclass made is an instance of that subclass.
+            View::Class(class_rc) | View::Module(class_rc) => Some(
+                class_rc
+                    .instance_of()
+                    .unwrap_or_else(|| Rc::clone(class_rc)),
+            ),
             View::Instance(instance) => Some(Rc::clone(&instance.borrow().class)),
             _ => Some(self.builtins().class_of(&caller)),
         };
@@ -1184,7 +1210,16 @@ impl VirtualMachine {
                     // marks the name without redefining the method. A
                     // natively-implemented name such as `new` is marked the
                     // same way with no method map entry to find.
-                    if sc.has_public_override(name) || sc.is_method_restricted(name) {
+                    // A class that defines the method again decides its
+                    // visibility, whatever a superclass marked.
+                    let defines_it_here = sc.find_own_method(name).is_some()
+                        || crate::fast_hash::with_joined("__class__", name, |class_level| {
+                            current.find_own_method(class_level).is_some()
+                        });
+                    if defines_it_here
+                        || sc.has_public_override(name)
+                        || sc.is_method_restricted(name)
+                    {
                         return Some(sc);
                     }
                     if let Some((owner, _)) = sc.find_method_with_owner(name) {
@@ -1663,10 +1698,17 @@ impl VirtualMachine {
         // chain reaches Class and Module before Object. A name Module
         // answers natively counts as one of its own.
         for global_name in ["Class", "Module"] {
-            if let Some(View::Class(global_class)) = self.globals().get(global_name).view()
-                && let Some(method) = global_class.find_own_method(method_name)
-            {
-                return Some((global_class.clone(), method));
+            if let Some(View::Class(global_class)) = self.globals().get(global_name).view() {
+                // A module prepended to Class or Module answers ahead of
+                // what they define, natively or not.
+                for prepended in global_class.transitive_prepends() {
+                    if let Some(method) = prepended.find_own_method(method_name) {
+                        return Some((prepended, method));
+                    }
+                }
+                if let Some(method) = global_class.find_own_method(method_name) {
+                    return Some((global_class.clone(), method));
+                }
             }
         }
         if crate::vm::native_methods::is_native_module_method(method_name)
@@ -1783,7 +1825,7 @@ impl VirtualMachine {
                 if let Some(named) = reopened_class_name(receiver)
                     && let Some(View::Class(reopened)) = self.globals().get(named).view()
                     && let Some(method) = reopened.find_method(method_name)
-                    && answers_for_itself(&method, method_name)
+                    && (method.is_undefined || answers_for_itself(&method, method_name))
                     && !self.object_method_hides_native(receiver, method_name, &method)
                 {
                     return Some((reopened.clone(), method));
@@ -1899,10 +1941,17 @@ fn class_level_method_named(
     }
     let mut cursor = class_rc.superclass();
     while let Some(current) = cursor {
-        if let Some(singleton) = current.singleton_class_slot().clone()
-            && let Some(method) = singleton.find_own_method(method_name)
-        {
-            return Some((singleton, method));
+        if let Some(singleton) = current.singleton_class_slot().clone() {
+            // A module prepended to a superclass's singleton class answers
+            // ahead of what that superclass defines for itself.
+            for prepended in singleton.transitive_prepends() {
+                if let Some(method) = prepended.find_own_method(method_name) {
+                    return Some((prepended, method));
+                }
+            }
+            if let Some(method) = singleton.find_own_method(method_name) {
+                return Some((singleton, method));
+            }
         }
         if let Some(method) = own_class_level_method(&current) {
             return Some((Rc::clone(class_rc), method));
@@ -1921,10 +1970,13 @@ pub(crate) fn extended_method(
     method_name: &str,
 ) -> Option<(Rc<Class>, Rc<Method>)> {
     let singleton = class_rc.singleton_class_slot().clone()?;
-    let mixins = singleton.mixins.borrow();
-    mixins
-        .iter()
-        .find_map(|(module, _)| module.find_method_with_owner(method_name))
+    // In ancestor order, where a module a later one brings in again keeps
+    // its earlier place.
+    singleton.linear_mixins().iter().find_map(|module| {
+        module
+            .find_own_method(method_name)
+            .map(|method| (Rc::clone(module), method))
+    })
 }
 
 pub(crate) fn module_level_method(class_rc: &Rc<Class>, method_name: &str) -> Option<Rc<Method>> {

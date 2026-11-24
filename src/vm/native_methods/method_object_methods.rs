@@ -91,6 +91,21 @@ impl VirtualMachine {
                             return Ok(Some(answer));
                         }
                     }
+                    // A module's method written in Ruby runs its own body on
+                    // a core class's subclass, rather than the native method
+                    // of the same name the core class answers with.
+                    if !method_obj.body.is_empty()
+                        && method_obj
+                            .owner_class
+                            .as_ref()
+                            .is_some_and(|owner| owner.is_module())
+                        && super::subclasses::subclass_backing(&target).is_some()
+                    {
+                        let bound = method_obj.bind(target.clone());
+                        return self
+                            .execute_method_body(&bound, target, arguments[1..].to_vec())
+                            .map(Some);
+                    }
                     let bound = method_obj.bind(target.clone());
                     let owner = match &bound.owner_class {
                         Some(owner) => Rc::clone(owner),
@@ -1186,6 +1201,39 @@ impl VirtualMachine {
             above.owner = Some(current.ruby_name().to_string());
             return Object::Method(Rc::new(above));
         }
-        Object::Nil
+        // Past every method the program wrote, a method Kernel or
+        // BasicObject answers natively is the one above, for a class that
+        // descends from Object.
+        let reaches_object = chain.iter().any(|ancestor| {
+            matches!(ancestor.view(), View::Class(current) if current.name() == "Object")
+        });
+        let Some(object_class) = self.globals().get("Object") else {
+            return Object::Nil;
+        };
+        if !reaches_object || !past_owner {
+            return Object::Nil;
+        }
+        let Ok(native) = self.send_to_object(
+            object_class,
+            "instance_method",
+            vec![Object::symbol(lookup)],
+            crate::lexer::Position::default(),
+        ) else {
+            return Object::Nil;
+        };
+        let View::Method(native) = native.view() else {
+            return Object::Nil;
+        };
+        let native_owner = native.owner_class.clone();
+        if native_owner
+            .as_ref()
+            .is_none_or(|native_owner| Rc::ptr_eq(native_owner, &owner))
+            || !native.body.is_empty()
+        {
+            return Object::Nil;
+        }
+        let mut above = (**native).clone();
+        above.receiver = method_obj.receiver.clone();
+        Object::Method(Rc::new(above))
     }
 }

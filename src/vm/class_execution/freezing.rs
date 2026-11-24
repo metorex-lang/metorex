@@ -62,6 +62,15 @@ impl VirtualMachine {
         receiver: &Object,
         position: Position,
     ) -> MetorexError {
+        // The backing hash of a Hash subclass instance is reported as the
+        // instance.
+        let holder = match (receiver.view(), &self.hash_subclass_holder) {
+            (View::Dict(backing), Some((held, instance))) if Rc::ptr_eq(backing, held) => {
+                Some(instance.clone())
+            }
+            _ => None,
+        };
+        let receiver = holder.as_ref().unwrap_or(receiver);
         let class_name = match self.send_to_object(receiver.clone(), "class", Vec::new(), position)
         {
             Ok(class) => class.to_string(),

@@ -1609,6 +1609,43 @@ class Date
     @start
   end
 
+  # Marshal writes a date as MRI's C library does: the day and the time of
+  # day in UTC, the nanoseconds past that second, the offset in seconds,
+  # and the calendar reform day as a Float.
+  def marshal_dump
+    absolute = absolute_day
+    utc_jd = absolute.floor
+    seconds = (absolute - utc_jd) * 86400
+    whole = seconds.floor
+    nanoseconds = (seconds - whole) * 1_000_000_000
+    nanoseconds = nanoseconds.to_i if nanoseconds.denominator == 1
+    reform = if @start.is_a?(Infinity)
+      @start.direction * Float::INFINITY
+    else
+      @start.to_f
+    end
+    [0, utc_jd, whole, nanoseconds, (offset_fraction * 86400).to_i, reform]
+  end
+
+  def marshal_load(dumped)
+    raise TypeError, "expected an array" unless dumped.is_a?(Array)
+    raise TypeError, "invalid size" unless dumped.size == 6
+    _nth, utc_jd, seconds, nanoseconds, offset_seconds, reform = dumped
+    offset = Rational(offset_seconds, 86400)
+    local = utc_jd + Rational(seconds, 86400) + Rational(nanoseconds, 86400 * 1_000_000_000) + offset
+    @jd = local.floor
+    if is_a?(DateTime)
+      @fraction = local - @jd
+      @offset = offset
+    end
+    @start = if reform.infinite?
+      reform.positive? ? JULIAN : GREGORIAN
+    else
+      reform.to_i
+    end
+    self
+  end
+
   def julian?
     !Date.gregorian_from?(@jd, @start)
   end
@@ -1884,10 +1921,10 @@ class Date
   private :offset_fraction
 
   def >>(months)
-    raise TypeError, "expected numeric" unless months.is_a?(Integer)
+    raise TypeError, "expected numeric" unless months.is_a?(Numeric)
     total = self.year * 12 + (self.month - 1) + months
-    landing_year = total / 12
-    landing_month = total % 12 + 1
+    landing_year = total.div(12)
+    landing_month = (total % 12).to_i + 1
     landing_day = self.day
     limit = Date.days_in_month(landing_year, landing_month, @start)
     landing_day = limit if landing_day > limit

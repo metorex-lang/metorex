@@ -114,4 +114,20 @@ impl VirtualMachine {
         self.seed_random(&words);
         Ok(previous)
     }
+
+    /// Seed the default generator from the system's random source, as a
+    /// process does when it starts.
+    pub(crate) fn reseed_from_the_system(&mut self) {
+        use std::io::Read as _;
+        let mut bytes = [0u8; 16];
+        let read = std::fs::File::open("/dev/urandom")
+            .and_then(|mut source| source.read_exact(&mut bytes))
+            .is_ok();
+        if !read {
+            bytes[..8].copy_from_slice(&crate::vm::core::seed_from_clock().to_le_bytes());
+        }
+        let words = num_bigint::BigInt::from_bytes_le(num_bigint::Sign::Plus, &bytes);
+        self.random_seed = Object::integer(words.clone());
+        self.seed_random(&words);
+    }
 }

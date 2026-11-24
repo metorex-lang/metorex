@@ -633,6 +633,12 @@ impl VirtualMachine {
                     return Ok(Some(Object::Bool(false)));
                 };
                 self.prepare_match_subject(pattern, flags, &arguments[0], position)?;
+                let pattern_encoding = self.pattern_encoding_name(pattern, flags);
+                let (pattern, text) = match super::string_methods::wide_encoding(&pattern_encoding)
+                {
+                    Some(shape) => (Rc::new(read_wide(pattern, shape)), read_wide(&text, shape)),
+                    None => (Rc::clone(pattern), text),
+                };
                 let start = match arguments.get(1).view() {
                     Some(View::Int(offset)) => resolve_offset(&text, offset),
                     _ => Some(0),
@@ -641,7 +647,7 @@ impl VirtualMachine {
                     return Ok(Some(Object::Bool(false)));
                 };
                 let byte_start: usize = text.chars().take(start).map(char::len_utf8).sum();
-                let matched = compile(pattern, flags)
+                let matched = compile(&pattern, flags)
                     .map(|compiled| compiled.is_match(&text[byte_start..]))
                     .unwrap_or(false);
                 Ok(Some(Object::Bool(matched)))
@@ -845,6 +851,13 @@ pub(crate) fn read_subject(text: &str, encoding: &str) -> crate::regexp::ReadSub
         }
         None => crate::regexp::ReadSubject::of(text),
     }
+}
+
+/// The characters a wide encoding spells in text held one byte to a
+/// character.
+fn read_wide(text: &str, shape: super::string_methods::WideShape) -> String {
+    let bytes: Vec<u8> = text.chars().map(|held| held as u32 as u8).collect();
+    super::string_methods::wide_text(&bytes, shape)
 }
 
 fn multibyte_reading(text: &str, encoding: &str) -> Option<(String, Vec<usize>)> {

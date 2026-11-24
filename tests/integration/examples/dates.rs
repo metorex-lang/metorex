@@ -593,3 +593,30 @@ fn test_dates_repeated_wall_clock_execution() {
         "2014-10-25 22:00:00 UTC\n2014-10-25 21:00:00 UTC\n2014-10-25 22:00:00 UTC\n2000-10-29 06:30:00 UTC\n2000-10-29 05:30:00 UTC\n2000-10-29 06:30:00 UTC\n2000-04-02 07:30:00 UTC\n2000-03-25 15:15:00 UTC\n2000-03-25 14:45:00 UTC\n"
     );
 }
+
+#[test]
+fn test_dates_months_shift_by_any_numeric_execution() {
+    let output = run_example("dates/months_shift_by_any_numeric.rb");
+    assert_eq!(
+        output,
+        "[1, #<Date: 2001-03-03 ((2451972j,0s,0n),+0s,2299161j)>, #<Date: 2001-01-03 ((2451913j,0s,0n),+0s,2299161j)>]\n[1.0, #<Date: 2001-03-03 ((2451972j,0s,0n),+0s,2299161j)>, #<Date: 2001-01-03 ((2451913j,0s,0n),+0s,2299161j)>]\n[(1/1), #<Date: 2001-03-03 ((2451972j,0s,0n),+0s,2299161j)>, #<Date: 2001-01-03 ((2451913j,0s,0n),+0s,2299161j)>]\n[(3/2), #<Date: 2001-03-03 ((2451972j,0s,0n),+0s,2299161j)>, #<Date: 2000-12-03 ((2451882j,0s,0n),+0s,2299161j)>]\n[1.5, #<Date: 2001-03-03 ((2451972j,0s,0n),+0s,2299161j)>, #<Date: 2000-12-03 ((2451882j,0s,0n),+0s,2299161j)>]\n[-1.0, #<Date: 2001-01-03 ((2451913j,0s,0n),+0s,2299161j)>, #<Date: 2001-03-03 ((2451972j,0s,0n),+0s,2299161j)>]\n[13.0, #<Date: 2002-03-03 ((2452337j,0s,0n),+0s,2299161j)>, #<Date: 2000-01-03 ((2451547j,0s,0n),+0s,2299161j)>]\n[0.0, #<Date: 2001-02-03 ((2451944j,0s,0n),+0s,2299161j)>, #<Date: 2001-02-03 ((2451944j,0s,0n),+0s,2299161j)>]\nfalse\ntrue\n"
+    );
+}
+
+#[test]
+fn test_dates_time_plus_exact_numbers_execution() {
+    let output = run_example("dates/time_plus_exact_numbers.rb");
+    assert_eq!(
+        output,
+        "1970-01-01 00:01:39 UTC\n1970-01-01 00:01:35 UTC\n1970-01-01 00:01:40.5 UTC\n(1/2)\n\"can't convert String into an exact number\"\n\"can't convert NilClass into an exact number\"\n\"can't convert Object into an exact number\"\n\"can't convert Object into an exact number\"\n"
+    );
+}
+
+#[test]
+fn test_dates_date_marshal_round_trip_execution() {
+    let output = run_example("dates/date_marshal_round_trip.rb");
+    assert_eq!(
+        output,
+        "[0, 2458851, 0, 0, 0, 2299161.0]\n[0, 2458851, 3845, 250000000, 7200, 2299161.0]\n[0, 2458851, 0, 0, 0, -Infinity]\n\"\\x04\\bU:\\tDate[\\vi\\x00i\\x03\\xE3\\x84%i\\x00i\\x00i\\x00f\\f2299161\"\n#<Date: 2020-01-02 ((2458851j,0s,0n),+0s,2299161j)>\n#<DateTime: 2020-01-02T03:04:05+02:00 ((2458851j,3845s,250000000n),+7200s,2299161j)>\n#<Date: 2020-01-02 ((2458851j,0s,0n),+0s,2299161j)>\nfalse\n"
+    );
+}

@@ -70,3 +70,12 @@ fn a_method_sequence_opens_with_the_code_of_its_parameter_defaults() {
         "0000 newhash to: 0, shape: 0                (   2)\n"
     );
 }
+
+#[test]
+fn test_ruby_vm_block_code_locations_execution() {
+    let output = run_example("ruby_vm/block_code_locations.rb");
+    assert_eq!(
+        output,
+        "[1, 13, 1, 22]\n[2, 14, 4, 3]\n[5, 11, 5, 20]\n[6, 16, 8, 1]\n"
+    );
+}

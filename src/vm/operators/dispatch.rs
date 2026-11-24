@@ -44,6 +44,23 @@ impl VirtualMachine {
             return result;
         }
 
+        // An object of the program's own that defines no method for the
+        // operator but writes `method_missing` is handed the call there.
+        if let Some(name) = crate::vm::eval::binary_op_method_name(op)
+            && !matches!(name, "==" | "!=" | "===" | "<=>" | "=~" | "!~")
+            && matches!(left.view(), View::Instance(_))
+            && crate::vm::native_methods::subclasses::subclass_backing(&left).is_none()
+            && crate::vm::native_methods::complex_parts(&left).is_none()
+            && crate::vm::native_methods::rational_parts(&left).is_none()
+            && !self.responds_to(&left, name)
+            && let Some((owner, handler)) = self.lookup_method(&left, "method_missing")
+            && !handler.is_undefined
+            && crate::vm::method_execution::written_by_the_program(&handler)
+        {
+            let arguments = vec![Object::symbol(name.to_string()), right];
+            return self.invoke_method(owner, handler, left, arguments, position);
+        }
+
         // An object a C extension made answers the operator from the method
         // the extension defined, as a BigDecimal inside a Complex or at the
         // end of a Range does.

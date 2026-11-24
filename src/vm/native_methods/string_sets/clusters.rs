@@ -3,26 +3,11 @@
 
 use super::*;
 
-/// The character that joins what stands on either side of it into one
-/// cluster, which is how a flag and a rainbow spell one emoji.
-pub(crate) const ZERO_WIDTH_JOINER: char = '\u{200d}';
-
-/// The clusters a string breaks into: one leading character, then every
-/// combining mark that attaches to it, and whatever a zero width joiner
-/// pulls along after it.
+/// The extended grapheme clusters a string breaks into, by the rules of
+/// Unicode's text segmentation.
 pub(crate) fn grapheme_clusters(text: &str) -> Vec<String> {
-    let mut clusters: Vec<String> = Vec::new();
-    let mut joining = false;
-    for character in text.chars() {
-        let attaches = joining || is_combining_mark(character) || character == ZERO_WIDTH_JOINER;
-        joining = character == ZERO_WIDTH_JOINER;
-        if attaches && let Some(last) = clusters.last_mut() {
-            last.push(character);
-            continue;
-        }
-        clusters.push(character.to_string());
-    }
-    clusters
+    use unicode_segmentation::UnicodeSegmentation;
+    text.graphemes(true).map(str::to_string).collect()
 }
 
 /// The clusters a string breaks into, each tagged with the string's own
@@ -61,25 +46,4 @@ pub(crate) fn encoded_grapheme_clusters(string_value: &crate::object::StringValu
             )))
         })
         .collect()
-}
-
-/// Whether a character attaches to the one before it rather than standing on
-/// its own, which is what keeps a cluster together.
-pub(crate) fn is_combining_mark(character: char) -> bool {
-    matches!(character as u32,
-        0x0300..=0x036F
-        | 0x0483..=0x0489
-        | 0x0591..=0x05BD
-        | 0x0610..=0x061A
-        | 0x064B..=0x065F
-        | 0x0670
-        | 0x06D6..=0x06DC
-        | 0x0900..=0x0903
-        | 0x093A..=0x094F
-        | 0x0951..=0x0957
-        | 0x1AB0..=0x1AFF
-        | 0x1DC0..=0x1DFF
-        | 0x20D0..=0x20F0
-        | 0xFE00..=0xFE0F
-        | 0xFE20..=0xFE2F)
 }

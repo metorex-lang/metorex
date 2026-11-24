@@ -728,6 +728,14 @@ module Zlib
       stamp = held[4, 4].bytes
       seconds = stamp[0] + (stamp[1] << 8) + (stamp[2] << 16) + (stamp[3] << 24)
       @mtime = Time.at seconds
+      extra = held.getbyte(8)
+      @level = if extra & 0x02 != 0
+        Zlib::BEST_COMPRESSION
+      elsif extra & 0x04 != 0
+        Zlib::BEST_SPEED
+      else
+        Zlib::DEFAULT_COMPRESSION
+      end
       flags = held[3].ord
       return if flags & 0x08 == 0
       finish_at = held.index "\0", 10
@@ -828,7 +836,7 @@ module Zlib
     # What has been written so far goes out to the IO as a piece the reader
     # can inflate on its own.
     def flush(_kind = nil)
-      @io.write header_text + Zlib.__stream__("deflate_piece", @pending, 0, @written)
+      @io.write header_text + Zlib.__stream__("deflate_piece", @pending, 0, @written, @level.to_i)
       @written << @pending
       @pending = "".b
       self
@@ -857,7 +865,7 @@ module Zlib
     def finish
       return @io if @closed
       @closed = true
-      last = header_text + Zlib.__stream__("deflate_last_piece", @pending, 0, @written)
+      last = header_text + Zlib.__stream__("deflate_last_piece", @pending, 0, @written, @level.to_i)
       @written << @pending
       @pending = "".b
       @io.write last + [Zlib.crc32(@written), @written.bytesize & 0xffffffff].pack("VV")
@@ -874,11 +882,22 @@ module Zlib
       stamp = @mtime.nil? ? 0 : @mtime.to_i
       stamp = Time.now.to_i if stamp.zero? && !@mtime_given
       flags = @orig_name.nil? ? 0 : 0x08
-      header = [0x1f, 0x8b, 0x08, flags].pack("C4") + [stamp].pack("V") + [0, 0x03].pack("C2")
+      header = [0x1f, 0x8b, 0x08, flags].pack("C4") + [stamp].pack("V") + [extra_flags, 0x03].pack("C2")
       header << @orig_name.b << "\0".b unless @orig_name.nil?
       header
     end
 
     private :header_text
+
+    # The header's extra flags, which mark the fastest and the smallest
+    # compression levels.
+    def extra_flags
+      case @level
+      when Zlib::BEST_SPEED then 0x04
+      when Zlib::BEST_COMPRESSION then 0x02
+      else 0
+      end
+    end
+    private :extra_flags
   end
 end

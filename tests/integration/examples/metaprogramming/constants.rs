@@ -416,3 +416,27 @@ fn const_get_names_the_segment_it_could_not_resolve() {
         )
     );
 }
+
+#[test]
+fn test_constants_const_missing_from_extensions_and_rescue_execution() {
+    let output = run_example("constants/const_missing_from_extensions_and_rescue.rb");
+    assert_eq!(
+        output,
+        "ArgumentError\n:rescued\nArgumentError\n\"uninitialized constant #<Module:0x>::Other\"\n\"uninitialized constant #<Module:0x>::Other\"\n\"uninitialized constant #<Module:0x>::Other\"\n"
+    );
+}
+
+#[test]
+fn test_constants_module_keyword_ignores_inherited_constants_execution() {
+    let output = run_example("constants/module_keyword_ignores_inherited_constants.rb");
+    assert_eq!(
+        output,
+        "Module\n[:invert_transaction]\nfalse\nClass\n[:V5_1, :V5_2, :V6_0]\n"
+    );
+}
+
+#[test]
+fn test_constants_singleton_def_in_a_method_reads_lexical_constants_execution() {
+    let output = run_example("constants/singleton_def_in_a_method_reads_lexical_constants.rb");
+    assert_eq!(output, "[:title, :string]\n:string\n");
+}

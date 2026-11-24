@@ -413,8 +413,32 @@ class RubyVM
       return [@outline[2], 0, @outline[3], 0] if @outline
       return [@first_lineno, 0, @first_lineno, 0] if @node.nil?
 
-      [@node.first_lineno, @node.first_column, @node.last_lineno, @node.last_column]
+      line, column = block_opening || [@node.first_lineno, @node.first_column]
+      [line, column, @node.last_lineno, @node.last_column]
     end
+
+    # Where a block's own text starts, which is its `{` or `do`, or the
+    # parameters after a lambda's `->`, rather than the call it is given to.
+    def block_opening
+      return nil unless @type == :block && @source.is_a?(String)
+
+      line, column = case @node.type
+                     when :ITER then [@node.children[0].last_lineno, @node.children[0].last_column]
+                     when :LAMBDA then [@node.first_lineno, @node.first_column + 2]
+                     else return nil
+                     end
+      lines = @source.lines
+      while line <= lines.size
+        rest = lines[line - 1].byteslice(column..).to_s
+        skipped = rest.bytesize - rest.lstrip.bytesize
+        return [line, column + skipped] unless rest.strip.empty?
+
+        line += 1
+        column = 0
+      end
+      nil
+    end
+    private :block_opening
 
     # The instructions as `to_a` lists them: the line an instruction is on
     # where it changes, `:RUBY_EVENT_LINE` where a statement that is a line

@@ -369,3 +369,9 @@ fn set_operations_call_hash_once_past_sixteen_elements() {
         )
     );
 }
+
+#[test]
+fn test_array_methods_delete_returns_the_removed_element_execution() {
+    let output = run_example("array_methods/delete_returns_the_removed_element.rb");
+    assert_eq!(output, "\"in memory\"\n[\"other\"]\nnil\n:not_found\n");
+}

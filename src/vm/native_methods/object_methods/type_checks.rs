@@ -120,6 +120,17 @@ impl VirtualMachine {
                 if self.builtins().is_instance_of(receiver, target_class) {
                     return Ok(Some(Object::Bool(true)));
                 }
+                // nil, true and false are kinds of what the program mixed
+                // into NilClass, TrueClass and FalseClass.
+                if let Some(name) = crate::builtin_classes::value_class_name(receiver)
+                    && let Some(View::Class(value_class)) = self.globals().get(name).view()
+                    && (self.builtins().is_subclass_of(value_class, target_class)
+                        || crate::vm::eval::super_expr::walk_ancestors(value_class)
+                            .iter()
+                            .any(|ancestor| std::rc::Rc::ptr_eq(ancestor, target_class)))
+                {
+                    return Ok(Some(Object::Bool(true)));
+                }
                 // A value such as an Array or a String keeps the modules it
                 // was extended with on a singleton class held apart from it.
                 let extended = self

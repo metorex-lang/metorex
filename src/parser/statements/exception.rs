@@ -278,6 +278,12 @@ impl Parser<'_> {
             let TokenKind::Ident(part) = &self.peek_ahead(offset).kind else {
                 return None;
             };
+            // Only a constant names a class here. A local or a method
+            // call ahead of `::`, as `held::Error`, is read as an
+            // expression where the clause is reached.
+            if !part.starts_with(|first: char| first.is_uppercase()) {
+                return None;
+            }
             full_name.push_str(part);
             offset += 1;
             if !matches!(self.peek_ahead(offset).kind, TokenKind::ColonColon) {

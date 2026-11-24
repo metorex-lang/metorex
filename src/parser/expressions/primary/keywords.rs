@@ -278,13 +278,7 @@ impl Parser<'_> {
             && !self.ternary_separator_after_bare_yield()
             && !self.is_at_end()
         {
-            // yield expr, expr — paren-less arguments
-            let mut args = vec![self.parse_expression_with_assignment()?];
-            while self.match_token(&[TokenKind::Comma]) {
-                self.skip_whitespace();
-                args.push(self.parse_expression_with_assignment()?);
-            }
-            args
+            self.parse_arguments_without_parens()?
         } else {
             Vec::new()
         };

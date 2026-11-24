@@ -374,3 +374,42 @@ fn an_identity_hash_keeps_its_string_keys_and_copies_compare_equal() {
     let output = run_example("hash_methods/identity_hash_copies_and_string_keys.rb");
     assert_eq!(output, "true\ntrue\n2\ntrue\n1\ntrue\n");
 }
+
+#[test]
+fn test_hashes_hash_subclass_with_its_own_each_execution() {
+    let output = run_example("hashes/hash_subclass_with_its_own_each.rb");
+    assert_eq!(
+        output,
+        "[[:z, 9], [:y, 8]]\n2\n[[:y, 8], [:z, 9]]\n[:y, 8]\n[:z, 9, :y, 8]\n[]\n{}\n"
+    );
+}
+
+#[test]
+fn test_hashes_enumerable_bound_to_a_hash_subclass_execution() {
+    let output = run_example("hashes/enumerable_bound_to_a_hash_subclass.rb");
+    assert_eq!(
+        output,
+        "[[:a, 1]]\n[[:z, 9]]\n[[:z, 9]]\n[[:z, 9]]\n[]\n[[:z, 9]]\n"
+    );
+}
+
+#[test]
+fn test_hashes_hash_equality_with_a_to_hash_object_execution() {
+    let output = run_example("hashes/hash_equality_with_a_to_hash_object.rb");
+    assert_eq!(output, "true\ntrue\nfalse\nfalse\n");
+}
+
+#[test]
+fn test_hashes_class_keys_written_after_transform_values_execution() {
+    let output = run_example("hashes/class_keys_written_after_transform_values.rb");
+    assert_eq!(output, "1\n[[EventObjectGroup, 2]]\n1\n1\n");
+}
+
+#[test]
+fn test_hashes_frozen_hash_subclass_through_an_alias_execution() {
+    let output = run_example("hashes/frozen_hash_subclass_through_an_alias.rb");
+    assert_eq!(
+        output,
+        "true\n[FrozenError, \"can't modify frozen IndifferentHash\"]\n[FrozenError, \"can't modify frozen IndifferentHash\"]\n[FrozenError, \"can't modify frozen IndifferentHash\"]\n{\"proposed\" => 0}\n"
+    );
+}

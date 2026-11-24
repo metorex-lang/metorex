@@ -154,18 +154,19 @@ class HMAC
       named = digest.respond_to?(:name) ? digest.name : digest.to_s
       held = OpenSSL::Digest.new named
       block = held.block_length
-      shortened = key.to_s
-      shortened = OpenSSL::Digest.new(named).digest(shortened) if shortened.length > block
-      shortened = shortened + ("\x00" * (block - shortened.length))
+      # The key and the message are read as bytes, whatever their encoding.
+      shortened = key.to_s.b
+      shortened = OpenSSL::Digest.new(named).digest(shortened).b if shortened.bytesize > block
+      shortened = shortened + ("\x00".b * (block - shortened.bytesize))
       inner = OpenSSL::HMAC.masked shortened, 0x36
       outer = OpenSSL::HMAC.masked shortened, 0x5c
-      once = OpenSSL::Digest.new(named).digest(inner + data.to_s)
-      OpenSSL::Digest.new(named).digest(outer + once)
+      once = OpenSSL::Digest.new(named).digest(inner + data.to_s.b)
+      OpenSSL::Digest.new(named).digest(outer + once.b)
     end
 
     # The key with every byte of it masked by the same value.
     def self.masked(key, mask)
-      key.bytes.map { |held| (held ^ mask).chr }.join
+      key.bytes.map { |held| held ^ mask }.pack("C*")
     end
   end
 

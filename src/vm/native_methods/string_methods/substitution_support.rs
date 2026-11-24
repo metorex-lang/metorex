@@ -146,9 +146,8 @@ impl VirtualMachine {
                 crate::vm::native_methods::regexp_methods::LAST_MATCH,
                 Object::Nil,
             );
-            return Ok(Object::String(Rc::new(
-                crate::object::StringValue::with_encoding(subject, string_value.encoding_name()),
-            )));
+            // Nothing replaced leaves a copy holding the same bytes.
+            return Ok(Object::String(Rc::new(string_value.copy_of())));
         }
         let tail = subject[cursor.min(subject.len())..].to_string();
         answer.add_held(

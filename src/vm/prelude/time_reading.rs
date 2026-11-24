@@ -129,11 +129,18 @@ pub(super) const SOURCE: &str = r##"
   def exact_seconds(other)
     raise TypeError, "can't convert NilClass into an exact number" if other.nil?
     raise TypeError, "can't convert String into an exact number" if other.is_a?(String)
-    return other.to_r if other.is_a?(Numeric)
-    unless other.respond_to?(:to_r)
-      raise TypeError, "can't convert #{other.class} into an exact number"
+    return other if other.is_a?(Integer) || other.is_a?(Rational)
+    return other.to_r if other.is_a?(Float)
+    if other.respond_to?(:to_r, true)
+      exact = other.to_r
+      if other.respond_to?(:to_int, true) && (exact.is_a?(Integer) || exact.is_a?(Rational))
+        return exact
+      end
+    elsif other.respond_to?(:to_int, true)
+      whole = other.to_int
+      return whole if whole.is_a?(Integer)
     end
-    other.to_r
+    raise TypeError, "can't convert #{other.class} into an exact number"
   end
   private :exact_seconds
 

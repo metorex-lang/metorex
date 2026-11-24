@@ -235,9 +235,11 @@ impl VirtualMachine {
             && method.provenance.captured_vars.is_none()
             && method.source_location.is_none()
         {
-            self.bound_stub_depth += 1;
+            // Only the call made here is answered for the stub. Whatever that
+            // call runs in turn reads the flag cleared.
+            self.answering_for_a_stub = true;
             let answered = self.call_object_method(receiver, method_name, &arguments, position);
-            self.bound_stub_depth -= 1;
+            self.answering_for_a_stub = false;
             if let Some(result) = answered? {
                 return Ok(Ok(result));
             }
@@ -792,8 +794,24 @@ impl VirtualMachine {
                         .iter()
                         .any(|prepended| Rc::ptr_eq(prepended, owner))
             });
+        // A method the program writes in Class or Module, or in a module
+        // prepended to either, runs in place of the one every class answers
+        // natively.
+        let stands_on_class_or_module = matches!(receiver.view(), View::Class(_) | View::Module(_))
+            && written_by_the_program(method)
+            && method.owner_class.as_ref().is_some_and(|owner| {
+                ["Class", "Module"].iter().any(|named| {
+                    matches!(self.globals().get(named).view(), Some(View::Class(core))
+                        if Rc::ptr_eq(owner, core)
+                            || core
+                                .transitive_prepends()
+                                .iter()
+                                .any(|prepended| Rc::ptr_eq(prepended, owner)))
+                })
+            });
         let overrides_builtin = (!method.body.is_empty() || written_by_the_program(method))
             && (stands_on_a_core_class
+                || stands_on_class_or_module
                 || (backs_a_core_value(receiver) && written_by_the_program(method))
                 || stands_in_an_extended_module
                 || stands_for_a_class_method
@@ -928,7 +946,20 @@ impl VirtualMachine {
             .source_file
             .as_deref()
             .is_none_or(|file| file == "<internal:prelude>");
-        if core_library || home == self.last_match_frame() {
+        if core_library {
+            return run(self);
+        }
+        self.in_home_frame(home, run)
+    }
+
+    /// Runs `run` with the `$~` and `$_` of the method frame `home` in
+    /// force, keeping what it leaves there for that frame.
+    pub(crate) fn in_home_frame<T>(
+        &mut self,
+        home: Option<u64>,
+        run: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        if home == self.last_match_frame() {
             return run(self);
         }
         let Some(at) = self

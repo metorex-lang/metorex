@@ -1,9 +1,18 @@
 # Random values in the shapes a program usually wants them: hex digits, raw
 # bytes, base64 text, and numbers within a range.
 
-# The draw itself, written outside the module so `rand` names the one the
-# language gives rather than the module's own.
-SECURE_RANDOM_DRAW = lambda { |limit| limit.nil? ? rand : rand(limit) }
+# The draw itself, from a generator seeded from the system's random source
+# in each process, so a forked child draws numbers of its own.
+SECURE_RANDOM_SOURCE = {}
+SECURE_RANDOM_DRAW = lambda do |limit|
+  unless SECURE_RANDOM_SOURCE[:pid] == Process.pid
+    low, high = Random.urandom(16).unpack("Q<Q<")
+    SECURE_RANDOM_SOURCE[:generator] = Random.new(low | (high << 64))
+    SECURE_RANDOM_SOURCE[:pid] = Process.pid
+  end
+  generator = SECURE_RANDOM_SOURCE[:generator]
+  limit.nil? ? generator.rand : generator.rand(limit)
+end
 
 module SecureRandom
   DEFAULT_LENGTH = 16

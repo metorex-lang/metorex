@@ -23,7 +23,9 @@ module Enumerable
   end
 
   def entries(*args)
-    to_a(*args)
+    collected = []
+    each(*args) { |*values| collected.push(packed(values)) }
+    collected
   end
 
   def each_entry(*args)

@@ -1013,3 +1013,30 @@ fn test_strings_bytesplice_string_like_execution() {
         "\"<b>hello\"\n\"xyhello\"\n\"hello!\"\nMarkedString\n\"no implicit conversion of Integer into String\"\n"
     );
 }
+
+#[test]
+fn test_strings_string_subclass_to_s_returning_itself_execution() {
+    let output = run_example("strings/string_subclass_to_s_returning_itself.rb");
+    assert_eq!(
+        output,
+        "\"foo <br/> bar\"\n\"foo <br/> bar\"\n\"a<br/>b\"\n\"<br/>\"\n"
+    );
+}
+
+#[test]
+fn test_strings_searching_text_with_invalid_bytes_execution() {
+    let output = run_example("strings/searching_text_with_invalid_bytes.rb");
+    assert_eq!(
+        output,
+        "false\ntrue\n1\ntrue\nfalse\ntrue\ntrue\nfalse\nfalse\nfalse\nfalse\nfalse\nfalse\nfalse\nfalse\nnil\n"
+    );
+}
+
+#[test]
+fn test_strings_indic_grapheme_clusters_execution() {
+    let output = run_example("strings/indic_grapheme_clusters.rb");
+    assert_eq!(
+        output,
+        "[1, [3]]\n[1, [4]]\n[1, [4]]\n[1, [4]]\n[2, [2, 1]]\n[1, [2]]\n1\n"
+    );
+}

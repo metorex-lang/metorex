@@ -76,7 +76,8 @@ impl VirtualMachine {
                     let removed = removed
                         || (crate::vm::native_methods::is_native_kernel_method(&name)
                             || name == "method_missing"
-                            || core_class_defines(class_rc, &name))
+                            || core_class_defines(class_rc, &name)
+                            || self.struct_class_answers(class_rc, &name))
                             && {
                                 let sentinel = Method::undefined(name.clone());
                                 class_rc.define_method(&name, Rc::new(sentinel));
@@ -314,6 +315,20 @@ fn answers_natively_as_class_method(class_rc: &Rc<Class>, name: &str) -> bool {
 
 /// Whether `class` is a core class or module whose own instance methods,
 /// which the interpreter answers natively, include `name`.
+impl VirtualMachine {
+    /// Whether `singleton` is the singleton class of a class Struct.new
+    /// made, which answers `name` as a method of its own.
+    fn struct_class_answers(&self, singleton: &Rc<crate::class::Class>, name: &str) -> bool {
+        matches!(name, "new" | "[]" | "members" | "keyword_init?" | "inspect")
+            && self.attached_class_of(singleton).is_some_and(|attached| {
+                crate::vm::native_methods::struct_methods::struct_members(&attached).is_some()
+                    && attached
+                        .superclass()
+                        .is_some_and(|parent| parent.name() == "Struct")
+            })
+    }
+}
+
 fn core_class_defines(class: &Rc<crate::class::Class>, name: &str) -> bool {
     core_method_rows(class).any(|row| {
         row.public

@@ -178,6 +178,9 @@ pub extern "C-unwind" fn rb_thread_call_without_gvl(
     let answer = Arc::new(AtomicUsize::new(0));
     let (address, argument) = (function as usize, data as usize);
     let call_number = NEXT_CALL_WITHOUT_GVL.fetch_add(1, Ordering::SeqCst);
+    // The interpreter's thread is woken when the function returns, so it
+    // waits no longer than the function runs.
+    let waiter = std::thread::current();
     let worker = {
         let finished = Arc::clone(&finished);
         let answer = Arc::clone(&answer);
@@ -189,6 +192,7 @@ pub extern "C-unwind" fn rb_thread_call_without_gvl(
                 unsafe { std::mem::transmute(address as *const ()) };
             answer.store(function(argument as *mut c_void) as usize, Ordering::SeqCst);
             finished.store(true, Ordering::SeqCst);
+            waiter.unpark();
         })
     };
     let worker_thread = worker.as_pthread_t();

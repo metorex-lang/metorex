@@ -244,6 +244,7 @@ impl VirtualMachine {
                             .collect(),
                         receiver,
                     );
+                    *binding.home_frame.borrow_mut() = Some(block.home_frame);
                     // It stands where the block was written.
                     if let (Some(file), Some(line)) = (&block.source_file, block.opened_at) {
                         *binding.source.borrow_mut() = Some((file.to_string(), line));
@@ -263,8 +264,14 @@ impl VirtualMachine {
             {
                 return Ok(Some(result));
             }
-            if let Some(result) =
-                self.call_class_methods(module_rc, method_name, arguments, position)?
+            // What only a class answers, a module does not.
+            let class_only = matches!(
+                method_name,
+                "new" | "allocate" | "superclass" | "subclasses"
+            );
+            if !class_only
+                && let Some(result) =
+                    self.call_class_methods(module_rc, method_name, arguments, position)?
             {
                 return Ok(Some(result));
             }
@@ -377,6 +384,14 @@ impl VirtualMachine {
             if let Some(result) =
                 self.call_array_method(&elements, method_name, arguments, position)?
             {
+                // A method that changes the elements in place answers the
+                // instance it changed, as `map!` does.
+                if let (View::Array(answered), View::Array(backing)) =
+                    (result.view(), elements.view())
+                    && Rc::ptr_eq(answered, backing)
+                {
+                    return Ok(Some(receiver.clone()));
+                }
                 // A copy of a subclass instance is one of the same class,
                 // which is what `clone` and `dup` answer in Ruby.
                 if matches!(method_name, "clone" | "dup")
@@ -421,14 +436,26 @@ impl VirtualMachine {
             // A subclass that writes its own `each` is what Enumerable is
             // written over, so the walking methods go through that body
             // rather than through the native table.
+            // Hash writes `to_a`, `select`, `filter`, and `reject` itself,
+            // over the pairs it holds.
             if let View::Instance(instance) = receiver.view()
                 && enumerable_walks_through_each(method_name)
+                && !matches!(method_name, "to_a" | "select" | "filter" | "reject")
                 && instance
                     .borrow()
                     .class
                     .find_own_method("each")
                     .is_some_and(|held| !held.body.is_empty())
             {
+                if method_name == "entries"
+                    && let Some(View::Module(enumerable) | View::Class(enumerable)) =
+                        self.globals().get("Enumerable").view()
+                    && let Some(method) = enumerable.find_own_method(method_name)
+                {
+                    return self
+                        .execute_method_body(&method, receiver.clone(), arguments.to_vec())
+                        .map(Some);
+                }
                 return Ok(None);
             }
             // A subclass that writes its own `default` decides what a missing
@@ -457,7 +484,17 @@ impl VirtualMachine {
                 _ => None,
             };
             let outer = std::mem::replace(&mut self.hash_subclass_holder, holder);
+            // A frozen instance refuses the writes its backing hash would
+            // take, so the backing reads as frozen while it answers.
+            let frozen_for_the_call =
+                self.object_is_frozen(receiver) && !self.object_is_frozen(&entries);
+            if frozen_for_the_call {
+                self.freeze_object(&entries);
+            }
             let answered = self.call_hash_method(&entries, method_name, arguments, position);
+            if frozen_for_the_call {
+                self.thaw_object(&entries);
+            }
             self.hash_subclass_holder = outer;
             if let Some(result) = answered? {
                 // A method that answers the hash itself answers the instance.

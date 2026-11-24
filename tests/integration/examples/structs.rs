@@ -141,3 +141,9 @@ fn structs_that_are_eql_through_a_loop_hash_the_same() {
     let output = run_example("struct/hash_of_a_recursive_struct.rb");
     assert_eq!(output, "true\ntrue\nfalse\ntrue\nfalse\n1\n");
 }
+
+#[test]
+fn test_struct_redefined_struct_class_methods_execution() {
+    let output = run_example("struct/redefined_struct_class_methods.rb");
+    assert_eq!(output, "[:own, 1]\n2\n");
+}

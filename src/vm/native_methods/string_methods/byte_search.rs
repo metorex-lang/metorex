@@ -109,6 +109,23 @@ impl VirtualMachine {
                 from_end,
             )
             .map(|at| at as i64)
+        } else if super::searching::broken_utf8_reading(&needle).is_some() {
+            // Text that spells no characters is never found.
+            None
+        } else if let Some(read) = super::searching::broken_utf8_reading(string_value) {
+            // Each byte that spells no character counts as one.
+            let letters: Vec<char> = read.chars().collect();
+            let wanted: Vec<char> = needle.as_str().chars().collect();
+            let fits = |at: usize| letters[at..].starts_with(&wanted);
+            let start = (offset as usize).min(letters.len());
+            if from_end {
+                (0..=start.min(letters.len().saturating_sub(wanted.len())))
+                    .rev()
+                    .find(|at| fits(*at))
+            } else {
+                (start..=letters.len().saturating_sub(wanted.len())).find(|at| fits(*at))
+            }
+            .map(|at| at as i64)
         } else {
             let text = string_value.as_str();
             let opening = places.byte_at(offset as usize, &text);

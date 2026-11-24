@@ -17,7 +17,11 @@ impl VirtualMachine {
             // Module#extend: mix the given module's instance methods into the
             // receiver's singleton class, so `klass.some_module_method` works.
             "extend" => {
-                let target = Object::Class(Rc::clone(class_rc));
+                let target = if class_rc.is_module() {
+                    Object::Module(Rc::clone(class_rc))
+                } else {
+                    Object::Class(Rc::clone(class_rc))
+                };
                 self.extend_with_modules(&target, arguments, position)?;
                 return Ok(Answered(target));
             }

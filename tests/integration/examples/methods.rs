@@ -1268,3 +1268,180 @@ fn io_select_with_an_infinite_timeout_sleeps_until_the_thread_is_killed() {
     let output = run_example("io/select_with_an_infinite_timeout_sleeps.rb");
     assert_eq!(output, "\"sleep\"\nfalse\n");
 }
+
+#[test]
+fn test_methods_super_from_module_methods_execution() {
+    let output = run_example("methods/super_from_module_methods.rb");
+    assert_eq!(output, "[:module, :object]\n[:module, :object]\n");
+}
+
+#[test]
+fn test_methods_filtered_class_subclasses_execution() {
+    let output = run_example("methods/filtered_class_subclasses.rb");
+    assert_eq!(output, "true\ntrue\nfalse\n1\n");
+}
+
+#[test]
+fn test_methods_prepended_class_methods_execution() {
+    let output = run_example("methods/prepended_class_methods.rb");
+    assert_eq!(output, "[:mine, []]\n\"named\"\n[Mine, Class, Module]\n");
+}
+
+#[test]
+fn test_methods_prepend_on_parent_singleton_execution() {
+    let output = run_example("methods/prepend_on_parent_singleton.rb");
+    assert_eq!(
+        output,
+        "[:counted, :plain]\n[:counted, :plain]\n[Class, :Counting, Class]\n"
+    );
+}
+
+#[test]
+fn test_methods_super_from_prepended_range_execution() {
+    let output = run_example("methods/super_from_prepended_range.rb");
+    assert_eq!(output, "true\ntrue\ntrue\ntrue\ntrue\n");
+}
+
+#[test]
+fn test_methods_extend_answers_the_module_execution() {
+    let output = run_example("methods/extend_answers_the_module.rb");
+    assert_eq!(
+        output,
+        "Module\nModule\nModule\nModule\nModule\n[:included, :class, :prepended]\n"
+    );
+}
+
+#[test]
+fn test_methods_super_from_prepend_features_execution() {
+    let output = run_example("methods/super_from_prepend_features.rb");
+    assert_eq!(output, "[:included, :class, :prepended]\n[1, 2, 0]\n");
+}
+
+#[test]
+fn test_methods_undef_on_immediate_classes_execution() {
+    let output = run_example("methods/undef_on_immediate_classes.rb");
+    assert_eq!(
+        output,
+        "false\n\"undefined method 'with_marker' for nil\"\nfalse\ntrue\n"
+    );
+}
+
+#[test]
+fn test_methods_array_subclass_bang_methods_and_public_aliases_execution() {
+    let output = run_example("methods/array_subclass_bang_methods_and_public_aliases.rb");
+    assert_eq!(
+        output,
+        "Listing\nListing\nListing\nListing\nListing\n[4, 5, 6]\n{b: 2}\ntrue\n"
+    );
+}
+
+#[test]
+fn test_methods_modules_do_not_answer_new_execution() {
+    let output = run_example("methods/modules_do_not_answer_new.rb");
+    assert_eq!(
+        output,
+        "forwarding new\n[0, 0]\n\"undefined method 'new' for module #<Module:0x>\"\n\"undefined method 'new' for module Named\"\n"
+    );
+}
+
+#[test]
+fn test_methods_module_subclass_proxy_execution() {
+    let output = run_example("methods/module_subclass_proxy.rb");
+    assert_eq!(
+        output,
+        "forwarding ==\ntrue\nconst_missing BAR\n\"foo bar\"\nextended\ntrue\n:rescued\n"
+    );
+}
+
+#[test]
+fn test_methods_module_subclass_proxy_equality_execution() {
+    let output = run_example("methods/module_subclass_proxy_equality.rb");
+    assert_eq!(
+        output,
+        "forwarding ==\ntrue\ntrue\nforwarding ==\ntrue\nforwarding ==\ntrue\n"
+    );
+}
+
+#[test]
+fn test_methods_operators_reach_method_missing_execution() {
+    let output = run_example("methods/operators_reach_method_missing.rb");
+    assert_eq!(
+        output,
+        "\"abcd\"\n\"ab\"\n\"ab\"\n\"abx\"\n\"abab\"\nfalse\n"
+    );
+}
+
+#[test]
+fn test_methods_basic_object_forwarders_execution() {
+    let output = run_example("methods/basic_object_forwarders.rb");
+    assert_eq!(
+        output,
+        "true\ntrue\ntrue\ntrue\ntrue\n[true, true]\n[true, true]\n"
+    );
+}
+
+#[test]
+fn test_methods_comparable_operators_beside_method_missing_execution() {
+    let output = run_example("methods/comparable_operators_beside_method_missing.rb");
+    assert_eq!(output, "[true, true, true, false]\ntrue\n13\n-12\n");
+}
+
+#[test]
+fn test_methods_attribute_accessors_from_a_private_section_execution() {
+    let output = run_example("methods/attribute_accessors_from_a_private_section.rb");
+    assert_eq!(
+        output,
+        "[:title_confirmation=]\n\"ok\"\ntrue\nfalse\ntrue\n\"unknown attribute 'height' for Record.\"\n[:\"namespaced/email\", :if]\nfalse\ntrue\n:fallback\n"
+    );
+}
+
+#[test]
+fn test_methods_module_subclass_equality_in_included_modules_execution() {
+    let output = run_example("methods/module_subclass_equality_in_included_modules.rb");
+    assert_eq!(output, "1\ntrue\ntrue\n0\n");
+}
+
+#[test]
+fn test_methods_subclass_redefines_a_private_class_method_execution() {
+    let output = run_example("methods/subclass_redefines_a_private_class_method.rb");
+    assert_eq!(
+        output,
+        "\"collection Post, then parent Post\"\n\"collection Tag, then parent Tag\"\n\"private method 'define_callbacks' called for class Association\"\n\"private method 'define_extensions' called for class HasMany\"\n"
+    );
+}
+
+#[test]
+fn test_methods_inherited_through_a_module_extended_twice_execution() {
+    let output = run_example("methods/inherited_through_a_module_extended_twice.rb");
+    assert_eq!(
+        output,
+        "[#<Class:Base>, Translation, Schema, Naming]\nSchema\n[true, true]\n[true, true]\n"
+    );
+}
+
+#[test]
+fn test_methods_method_missing_super_names_a_private_method_execution() {
+    let output = run_example("methods/method_missing_super_names_a_private_method.rb");
+    assert_eq!(
+        output,
+        "\"private method 'title' called for an instance of Topic\"\n\"protected method 'summary' called for an instance of Topic\"\n\"undefined method 'missing' for an instance of Topic\"\n\"hidden\"\n:value\n\"undefined method 'subject' for an instance of Topic\"\n"
+    );
+}
+
+#[test]
+fn test_methods_instance_method_owners_of_equality_execution() {
+    let output = run_example("methods/instance_method_owners_of_equality.rb");
+    assert_eq!(
+        output,
+        "[Node, Node, Node, Node]\nKernel\n[Quoted, Node, Node, Node]\nKernel\nnil\n"
+    );
+}
+
+#[test]
+fn test_rescue_return_with_a_rescue_modifier_execution() {
+    let output = run_example("rescue/return_with_a_rescue_modifier.rb");
+    assert_eq!(
+        output,
+        "\"Nested::Child\"\n\"Nested::Parent\"\n\"ok\"\n:rescued\n"
+    );
+}

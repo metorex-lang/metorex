@@ -193,9 +193,9 @@ The 100 most downloaded gems on rubygems.org (`rubygems.org/stats`, read on 2026
   - [x] ffi
   - [x] nokogiri, with crass and loofah
 - [ ] Rails: the rails repository's activesupport, activemodel, activerecord on SQLite, actionpack, actionview, actionmailer, activejob, actioncable, activestorage, railties, and rails, with globalid, rails-dom-testing, rails-html-sanitizer, and sprockets-rails
-  - [ ] activesupport
-  - [ ] activemodel
-  - [ ] activerecord on SQLite
+  - [x] activesupport
+  - [x] activemodel
+  - [x] activerecord on SQLite
   - [ ] actionpack, with rails-dom-testing and rails-html-sanitizer
   - [ ] actionview
   - [ ] actionmailer

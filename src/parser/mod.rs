@@ -177,7 +177,8 @@ pub struct Parser<'source> {
     pub(crate) statement_rescue_depth: usize,
 
     /// Nonzero while the condition of a modifier `if`, `unless`, `while`, or
-    /// `until` is read.
+    /// `until` is read, or the value of a `return`, `break` or `next`, where
+    /// a `rescue` modifier belongs to the statement.
     pub(crate) modifier_condition_depth: usize,
 
     /// The token after the last argument list written without parentheses.

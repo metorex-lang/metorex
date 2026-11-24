@@ -113,3 +113,9 @@ fn test_sets_identity_operands_no_parens_execution() {
     let output = run_example("sets/identity_operands_no_parens.rb");
     assert_eq!(output, IDENTITY_OPERANDS_OUTPUT);
 }
+
+#[test]
+fn test_sets_string_subclass_members_execution() {
+    let output = run_example("sets/string_subclass_members.rb");
+    assert_eq!(output, "true\n1\ntrue\ntrue\ntrue\nSqlLiteral\n");
+}

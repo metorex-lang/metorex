@@ -724,3 +724,12 @@ fn file_and_dir_answer_no_exists_predicate() {
         )
     );
 }
+
+#[test]
+fn test_filesystem_directory_entries_errors_execution() {
+    let output = run_example("filesystem/directory_entries_errors.rb");
+    assert_eq!(
+        output,
+        "[:enotdir, Errno::ENOTDIR]\ntrue\n\"foo.rb\"\n[1, 2]\n[Errno::ENOENT, \"No such file or directory @ dir_initialize - /nonexistent-dir-for-metorex\"]\n[Errno::ENOTDIR, \"Not a directory @ dir_initialize - FILE\"]\n"
+    );
+}

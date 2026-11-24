@@ -59,6 +59,23 @@ impl VirtualMachine {
         value: Object,
         position: Position,
     ) -> Result<Object, MetorexError> {
+        // An object of the program's own that writes `method_missing` is
+        // handed an operator it defines no method for.
+        let named = match op {
+            UnaryOp::Plus => Some("+@"),
+            UnaryOp::Minus => Some("-@"),
+            UnaryOp::Not => None,
+        };
+        if let Some(named) = named
+            && matches!(value.view(), View::Instance(_))
+            && !self.responds_to(&value, named)
+            && let Some((owner, handler)) = self.lookup_method(&value, "method_missing")
+            && !handler.is_undefined
+            && crate::vm::method_execution::written_by_the_program(&handler)
+        {
+            let arguments = vec![Object::symbol(named.to_string())];
+            return self.invoke_method(owner, handler, value, arguments, position);
+        }
         match op {
             UnaryOp::Plus => match value.view() {
                 // Numeric `+x` is a no-op identity.

@@ -232,7 +232,7 @@ impl Object {
             // their bodies carry settle. A copy of one is equal to it: it was
             // written in the same place and closes over the same cells.
             (View::Block(a), View::Block(b)) => {
-                Rc::ptr_eq(a, b) || (**a == **b && closes_over_the_same(a, b))
+                Rc::ptr_eq(a, b) || (a.same_origin(b) && **a == **b && closes_over_the_same(a, b))
             }
             (View::Binding(a), View::Binding(b)) => Rc::ptr_eq(a, b),
             // Ruby compares two exceptions by class, message, and backtrace,

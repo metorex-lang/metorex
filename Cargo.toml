@@ -21,6 +21,7 @@ num-bigint = "0.5.1"
 corosensei = "0.3.4"
 serde = { version = "1", features = ["derive", "rc"] }
 rmp-serde = "1.3"
+unicode-segmentation = "1.12"
 
 [build-dependencies]
 num-bigint = "0.5.1"

@@ -371,16 +371,22 @@ impl VirtualMachine {
                     }
                 };
                 let encoding = string_value.encoding_name();
-                let cut = |piece: String, encoding: String| {
+                // A string held as bytes is cut into pieces held as bytes.
+                let holds_bytes = string_value.holds_bytes();
+                let made = move |piece: String, encoding: String| {
+                    if holds_bytes {
+                        let held = crate::object::StringValue::binary(
+                            crate::object::string_value::bytes_of_characters(&piece),
+                        );
+                        held.retag(encoding);
+                        return Object::String(std::rc::Rc::new(held));
+                    }
                     Object::String(std::rc::Rc::new(crate::object::StringValue::with_encoding(
                         piece, encoding,
                     )))
                 };
-                let tagged = |piece: String| {
-                    Object::String(std::rc::Rc::new(crate::object::StringValue::with_encoding(
-                        piece, encoding,
-                    )))
-                };
+                let cut = |piece: String, encoding: String| made(piece, encoding);
+                let tagged = |piece: String| made(piece, encoding.to_string());
                 let parts = match found {
                     Some((start, end)) => vec![
                         tagged(text[..start].to_string()),

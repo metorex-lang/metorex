@@ -737,6 +737,9 @@ impl VirtualMachine {
                 }
                 for arg in arguments {
                     match arg.view() {
+                        View::Module(t) | View::Class(t) if method_name == "prepend_features" => {
+                            self.default_prepend_features(t, module_rc, position)?;
+                        }
                         View::Module(t) | View::Class(t) => {
                             self.default_append_features(t, module_rc, position)?;
                         }

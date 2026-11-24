@@ -98,10 +98,15 @@ impl VirtualMachine {
                 position,
             ));
         }
+        // The error names what the system refused for, as a file where a
+        // directory was wanted is ENOTDIR.
         let reading = std::fs::read_dir(path).map_err(|problem| {
+            let number = problem.raw_os_error().unwrap_or(libc::ENOENT);
+            let class = crate::vm::init::errno_class_name(number).unwrap_or("Errno::ENOENT");
+            let described = crate::vm::init::errno_description(number);
             crate::vm::errors::simple_exception(
-                "Errno::ENOENT",
-                &format!("No such file or directory @ dir_initialize - {path}: {problem}"),
+                class,
+                &format!("{described} @ dir_initialize - {path}"),
                 position,
             )
         })?;

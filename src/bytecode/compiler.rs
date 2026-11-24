@@ -1648,6 +1648,8 @@ impl Compiler {
             })
             .transpose()?;
         let mut done = Vec::new();
+        // A local an earlier arm assigns is a local in each arm after it.
+        let mut written_before: Vec<&[Statement]> = Vec::new();
         for (index, case) in cases.iter().enumerate() {
             if let Some(table) = table
                 && index == dispatched
@@ -1690,6 +1692,8 @@ impl Compiler {
                     }
                 }
             }
+            self.unhoist_assigned_in(&written_before, case.position)?;
+            written_before.push(&case.body);
             self.statements_in(&case.body, to, false, Some(position.line as usize))?;
             done.push(self.emit(Instruction::Jump { target: 0 }, case.position));
             self.jump_here(next_arm)?;
@@ -1884,6 +1888,30 @@ impl Compiler {
         Ok(())
     }
 
+    /// Unhoist each of the locals `names`.
+    fn unhoist_names(&mut self, names: &[String], position: Position) -> Result<(), &'static str> {
+        for name in names {
+            let slot = wide(Some(self.unit.local(name)))?;
+            self.emit(Instruction::Unhoist { slot }, position);
+        }
+        Ok(())
+    }
+
+    /// Unhoist each local the statements of `branches` assign.
+    fn unhoist_assigned_in(
+        &mut self,
+        branches: &[&[Statement]],
+        position: Position,
+    ) -> Result<(), &'static str> {
+        for branch in branches {
+            for name in crate::ast::collect_assigned_locals(branch) {
+                let slot = wide(Some(self.unit.local(&name)))?;
+                self.emit(Instruction::Unhoist { slot }, position);
+            }
+        }
+        Ok(())
+    }
+
     /// Compile `if`, with its `elsif`s and `else`, or `unless` when
     /// `negated`, leaving the value of the branch taken in register `to`, or
     /// nil when none was.
@@ -1912,8 +1940,13 @@ impl Compiler {
         self.emit(Instruction::CoverBranch { arm: 0 }, position);
         self.statements_in(then_branch, to, false, condition_line)?;
         done.push(self.emit(Instruction::Jump { target: 0 }, position));
+        // A local an earlier branch assigns is a local in each branch
+        // written after it, taken or not, so a block there closes over it.
+        let mut written_before: Vec<&[Statement]> = vec![then_branch];
         for (index, elsif) in elsif_branches.iter().enumerate() {
             self.jump_here(not_taken)?;
+            self.unhoist_assigned_in(&written_before, elsif.position)?;
+            written_before.push(&elsif.body);
             // Ruby counts an `elsif` line each time its condition is tested.
             self.emit(Instruction::CoverLine, elsif.position);
             self.condition(&elsif.condition, to)?;
@@ -1932,7 +1965,10 @@ impl Compiler {
             self.emit(Instruction::CoverBranch { arm }, position);
         }
         match else_branch {
-            Some(else_branch) => self.statements_in(else_branch, to, false, condition_line)?,
+            Some(else_branch) => {
+                self.unhoist_assigned_in(&written_before, position)?;
+                self.statements_in(else_branch, to, false, condition_line)?
+            }
             None => {
                 self.emit(Instruction::LoadNil { to: test }, position);
             }
@@ -2171,6 +2207,8 @@ impl Compiler {
         let matched = self.temporary()?;
         self.expression(subject, held)?;
         let mut done = Vec::new();
+        // A local an earlier arm assigns is a local in each arm after it.
+        let mut written_before: Vec<String> = Vec::new();
         for (index, case) in cases.iter().enumerate() {
             let arm = wide(Some(
                 self.unit.case_arm(CaseArm {
@@ -2197,6 +2235,8 @@ impl Compiler {
                 },
                 case.position,
             );
+            self.unhoist_names(&written_before, case.position)?;
+            written_before.extend(crate::ast::collect_assigned_locals_in(&case.body));
             self.pending.scopes += 1;
             self.expression(&case.body, to)?;
             self.pending.scopes -= 1;
@@ -2211,6 +2251,7 @@ impl Compiler {
                 if !matches!(else_case, Expression::BeginRescue { .. }) {
                     self.emit(Instruction::CoverLine, else_case.position());
                 }
+                self.unhoist_names(&written_before, else_case.position())?;
                 self.expression(else_case, to)?;
             }
             None => {
@@ -3217,8 +3258,7 @@ impl Compiler {
                 );
             }
             Expression::Yield { arguments, .. } => {
-                // The block is looked for before the arguments are evaluated,
-                // so a method called without one raises before they are.
+                // The arguments are evaluated before a missing block raises.
                 let base = self.temporary()?;
                 self.emit(Instruction::FindBlock { to: base as u8 }, position);
                 let site = self.call_arguments("yield", arguments, None)?;

@@ -65,9 +65,12 @@ impl VirtualMachine {
         subject: &Object,
     ) -> Result<bool, MetorexError> {
         let mut bindings: HashMap<String, Object> = HashMap::new();
-        if !self.match_pattern(&arm.pattern, subject, &mut bindings, arm.case_position)?
-            || !self.evaluate_guard_with_bindings(arm.guard.as_ref(), &bindings)?
-        {
+        // A `when` raises nothing that names why it did not match, so no
+        // reason is worded and nothing inspects the subject to word one.
+        self.unworded_pattern_failures += 1;
+        let matched = self.match_pattern(&arm.pattern, subject, &mut bindings, arm.case_position);
+        self.unworded_pattern_failures -= 1;
+        if !matched? || !self.evaluate_guard_with_bindings(arm.guard.as_ref(), &bindings)? {
             return Ok(false);
         }
         self.coverage_branch(arm.case_position, arm.index);
@@ -101,9 +104,12 @@ impl VirtualMachine {
         subject: &Object,
     ) -> Result<bool, MetorexError> {
         let mut bindings: HashMap<String, Object> = HashMap::new();
-        if !self.match_pattern(&arm.pattern, subject, &mut bindings, arm.position)?
-            || !self.evaluate_guard_with_bindings(arm.guard.as_ref(), &bindings)?
-        {
+        // A `when` raises nothing that names why it did not match, so no
+        // reason is worded and nothing inspects the subject to word one.
+        self.unworded_pattern_failures += 1;
+        let matched = self.match_pattern(&arm.pattern, subject, &mut bindings, arm.position);
+        self.unworded_pattern_failures -= 1;
+        if !matched? || !self.evaluate_guard_with_bindings(arm.guard.as_ref(), &bindings)? {
             return Ok(false);
         }
         self.coverage_branch(arm.case_position, arm.index);

@@ -140,22 +140,24 @@ impl VirtualMachine {
                 };
                 let elements = array_rc.borrow().clone();
                 let mut kept = Vec::new();
-                let mut found = false;
+                // The answer is the last element removed, which need only
+                // equal the argument.
+                let mut removed = None;
                 for element in elements {
                     if self.elements_equal(&element, &arguments[0], position)? {
-                        found = true;
+                        removed = Some(element);
                         continue;
                     }
                     kept.push(element);
                 }
                 // A frozen array refuses the removal, but only when there is
                 // one to make.
-                if found {
+                if let Some(removed) = removed {
                     if self.object_is_frozen(receiver) {
                         return Err(self.frozen_modification_error(receiver, position));
                     }
                     *array_rc.borrow_mut() = kept;
-                    return Ok(Some(arguments[0].clone()));
+                    return Ok(Some(removed));
                 }
                 match block {
                     Some(block) => self

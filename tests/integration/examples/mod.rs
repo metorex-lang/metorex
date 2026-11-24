@@ -3,6 +3,7 @@ mod advanced;
 mod algorithms;
 mod array_methods;
 mod basics;
+mod blocks;
 mod builtins;
 mod c_extensions;
 mod callables;

@@ -374,8 +374,17 @@ impl VirtualMachine {
                 if unimplemented {
                     return Ok(Some(Object::Bool(false)));
                 }
+                // A protected method is left out wherever the question is
+                // asked from, even inside the object.
+                let protected =
+                    self.visibility_owner(receiver, &method_query)
+                        .is_some_and(|owner| {
+                            !owner.has_public_override(&method_query)
+                                && owner.is_method_protected(&method_query)
+                        });
                 if self.responds_to(receiver, &method_query)
-                    && (include_private || !self.method_is_restricted(receiver, &method_query))
+                    && (include_private
+                        || !(protected || self.method_is_restricted(receiver, &method_query)))
                 {
                     return Ok(Some(Object::Bool(true)));
                 }

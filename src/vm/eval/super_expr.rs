@@ -70,7 +70,20 @@ impl VirtualMachine {
         if let Some(entry) = handed_on {
             self.bare_names_missing.push(entry);
         }
+        // So is a name a call was refused for.
+        let refused_on = self
+            .refused_names_missing
+            .last()
+            .filter(|(_, depth, _)| self.call_stack.len() == *depth + 1)
+            .map(|(refused, _, word)| (refused.clone(), self.call_stack.len(), *word));
+        let carried_refusal = refused_on.is_some();
+        if let Some(entry) = refused_on {
+            self.refused_names_missing.push(entry);
+        }
         let answered = self.super_from_running_method(arguments, super_block, position);
+        if carried_refusal {
+            self.refused_names_missing.pop();
+        }
         if carried {
             self.bare_names_missing.pop();
         }
@@ -261,6 +274,35 @@ impl VirtualMachine {
                 }
                 holder = class.superclass();
             }
+            // A method Module or Class itself defines, running for a module
+            // or class, goes on through the ancestors of the receiver's class.
+            if !past_every_module && let Some(owner) = &running_owner {
+                let receiver_class = if matches!(self_object.view(), View::Class(_)) {
+                    "Class"
+                } else {
+                    "Module"
+                };
+                if let Some(View::Class(class_of_receiver)) =
+                    self.globals().get(receiver_class).view()
+                {
+                    let chain = walk_ancestors(class_of_receiver);
+                    if let Some(at) = chain.iter().position(|held| Rc::ptr_eq(held, owner))
+                        && let Some((next, method)) = chain.iter().skip(at + 1).find_map(|held| {
+                            held.find_own_method(&method_name)
+                                .filter(|method| !method.is_undefined)
+                                .map(|method| (Rc::clone(held), method))
+                        })
+                    {
+                        return self.invoke_method(
+                            next,
+                            method,
+                            self_object.clone(),
+                            evaluated_args,
+                            position,
+                        );
+                    }
+                }
+            }
             let class_method_key = format!("__class__{}", method_name);
             // The search starts above the class whose own class method is
             // running, so each override in a chain reaches the next one up
@@ -431,6 +473,13 @@ impl VirtualMachine {
         // In Ruby, `super` looks up the next method in the chain — that may
         // live on the defining class's superclass, OR on a mixin that the
         // defining class brings in, OR on a class/module further up.
+        // A Hash, Array, or String subclass's instance answers what its core
+        // class writes natively, from that class's place in the chain.
+        let backed = crate::vm::native_methods::subclasses::subclass_backing(&Object::Instance(
+            Rc::clone(&instance),
+        ))
+        .is_some();
+        let mut native_at: Option<Rc<Class>> = None;
         let next_in_chain: Option<(Rc<Class>, Rc<crate::object::Method>)> = {
             let mut found = None;
             // How much of the chain the defining class stands above, which
@@ -460,10 +509,36 @@ impl VirtualMachine {
                         found = Some((Rc::clone(anc), method));
                         break;
                     }
+                    if backed && matches!(anc.name(), "Hash" | "Array" | "String") {
+                        native_at = Some(Rc::clone(anc));
+                        break;
+                    }
                 }
             }
             found
         };
+        if let Some(core) = native_at {
+            let evaluated_args = self.super_arguments(arguments, &super_block, position)?;
+            drop(instance_borrowed);
+            let receiver = Object::Instance(Rc::clone(&instance));
+            if let Some(result) =
+                self.call_native_method(&core, &receiver, &method_name, &evaluated_args, position)?
+            {
+                return Ok(result);
+            }
+            if let Some((owner, method)) = walk_ancestors(&core)
+                .iter()
+                .skip(1)
+                .find_map(|held| {
+                    held.find_own_method(&method_name)
+                        .map(|m| (Rc::clone(held), m))
+                })
+                .filter(|(_, method)| !method.is_undefined)
+            {
+                return self.invoke_method(owner, method, receiver, evaluated_args, position);
+            }
+            return self.super_past_every_ancestor(&method_name, evaluated_args, position);
+        }
         if let Some((owner, method)) = next_in_chain {
             let evaluated_args = self.super_arguments(arguments, &super_block, position)?;
             drop(instance_borrowed);
@@ -580,7 +655,11 @@ impl VirtualMachine {
                     evaluated_args.first().view()
                 {
                     let target = Rc::clone(target);
-                    self.default_append_features(&target, self_class, position)?;
+                    if method_name == "prepend_features" {
+                        self.default_prepend_features(&target, self_class, position)?;
+                    } else {
+                        self.default_append_features(&target, self_class, position)?;
+                    }
                     return Ok(Some(Object::Module(Rc::clone(self_class))));
                 }
             }
@@ -806,7 +885,17 @@ impl VirtualMachine {
                 return Err(error);
             }
             let wording = self.receiver_wording_for(&self_val, position);
-            let message = format!("undefined method '{}' for {}", missing, wording);
+            let refused_as = self
+                .refused_names_missing
+                .last()
+                .filter(|(refused, depth, _)| {
+                    *refused == missing && self.call_stack.len() == *depth
+                })
+                .map(|(_, _, word)| *word);
+            let message = match refused_as {
+                Some(word) => format!("{word} method '{missing}' called for {wording}"),
+                None => format!("undefined method '{}' for {}", missing, wording),
+            };
             let error = MetorexError::UncaughtException {
                 exception: crate::vm::errors::no_method_error(
                     &message,
@@ -1024,6 +1113,25 @@ impl VirtualMachine {
             && let Some(index) = chain.iter().position(|c| Rc::ptr_eq(c, defining_class))
         {
             for ancestor in chain.iter().skip(index + 1) {
+                // The value's own class answers natively ahead of the
+                // modules it includes, as Range#include? stands ahead of
+                // Enumerable's.
+                if Rc::ptr_eq(ancestor, &receiver_class)
+                    && ancestor.find_own_method(method_name).is_none_or(|own| {
+                        own.body.is_empty() && own.provenance.c_function.is_none()
+                    })
+                {
+                    let native_class = self.builtins().class_of(&receiver);
+                    if let Some(result) = self.call_native_method(
+                        &native_class,
+                        &receiver,
+                        method_name,
+                        &evaluated_args,
+                        position,
+                    )? {
+                        return Ok(result);
+                    }
+                }
                 if let Some(method) = ancestor.find_own_method(method_name)
                     && (!method.body.is_empty() || method.provenance.c_function.is_some())
                 {

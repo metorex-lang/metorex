@@ -130,7 +130,10 @@ impl VirtualMachine {
         wrote_bytes: &mut bool,
         position: Position,
     ) -> Result<(String, String), MetorexError> {
-        match self.send_to_object(value, asked, vec![], position)?.view() {
+        let written = self.send_to_object(value, asked, vec![], position)?;
+        // A String subclass's instance stands for the text it holds.
+        let written = crate::vm::native_methods::string_subclass_value(&written).unwrap_or(written);
+        match written.view() {
             View::String(text) => {
                 if text.holds_bytes() {
                     *wrote_bytes = true;

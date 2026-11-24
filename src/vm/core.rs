@@ -280,6 +280,11 @@ pub struct VirtualMachine {
     /// `method_missing` raises NameError for one of these, as MRI does for a
     /// name written without a receiver or arguments.
     pub(crate) bare_names_missing: Vec<(String, usize)>,
+    /// The names a call refused for their visibility handed to
+    /// `method_missing`, with the depth of the call stack each was handed
+    /// over at and the visibility that refused it, which a `super` from that
+    /// `method_missing` names in its NoMethodError.
+    pub(crate) refused_names_missing: Vec<(String, usize, &'static str)>,
     /// The file names `eval` was handed for the code it ran, which name
     /// code that has no file of its own to read back.
     pub(crate) eval_named_files: std::collections::HashSet<String>,
@@ -313,10 +318,11 @@ pub struct VirtualMachine {
     /// The fibers schedulers hold until a Mutex, Queue or Thread lets them
     /// go, by that object's address, each with the scheduler holding it.
     pub(crate) scheduler_waiting: HashMap<usize, Vec<(Object, Object, Object)>>,
-    /// How deep the machine is inside a body-less method stub standing in for
-    /// a native one. A method bound explicitly reaches its native body even
-    /// on an object whose class answers nothing of Kernel's.
-    pub(crate) bound_stub_depth: usize,
+    /// Whether the methods every object has are about to answer for a
+    /// body-less method stub standing in for a native one. A method bound
+    /// explicitly reaches its native body even on an object whose class
+    /// answers nothing of Kernel's. Only that one call reads it.
+    pub(crate) answering_for_a_stub: bool,
     /// Whether the native method about to be reached is called through an
     /// alias of it, which reaches it even where the program has since
     /// written a method of the same name. The dispatcher it reaches takes
@@ -528,6 +534,8 @@ pub struct VirtualMachine {
     /// `in` clause names in the error it raises. The first failure recorded
     /// is the innermost one, which is the one Ruby reports.
     pub(crate) pattern_failure: Option<crate::vm::pattern_matching::PatternFailure>,
+    /// How many `when` arms are matching, which word no failure.
+    pub(crate) unworded_pattern_failures: usize,
     /// The receiver a Kernel function was written with, which `Kernel.eval`
     /// and `obj.send(:eval, ...)` run the code against in place of the self
     /// in force where the call was made.
@@ -857,6 +865,7 @@ impl VirtualMachine {
             open_streams: Default::default(),
             current_source_file: None,
             bare_names_missing: Vec::new(),
+            refused_names_missing: Vec::new(),
             eval_named_files: Default::default(),
             current_source_encoding: None,
             file_encodings: Default::default(),
@@ -867,7 +876,7 @@ impl VirtualMachine {
             moved_objects: (Vec::new(), std::collections::HashSet::new()),
             thread_schedulers: HashMap::new(),
             scheduler_waiting: HashMap::new(),
-            bound_stub_depth: 0,
+            answering_for_a_stub: false,
             through_native_alias: false,
             clone_copies_singleton: false,
             hash_subclass_holder: None,
@@ -926,6 +935,7 @@ impl VirtualMachine {
             main_script_scope: None,
             deconstructed_values: Vec::new(),
             pattern_failure: None,
+            unworded_pattern_failures: 0,
             kernel_function_receiver: None,
             lambda_body_depth: 0,
             tracing_allocations: false,
@@ -1275,6 +1285,11 @@ impl VirtualMachine {
     /// block was written in, without the class it runs on.
     pub(crate) fn def_nesting(&self) -> crate::object::Nesting {
         let nesting = if self.applying_constant_home().is_none() {
+            // Code running in a method or a block was written in the
+            // modules it carries, as `Module.nesting` reports.
+            if let Some(written_in) = self.method_nesting_stack.last() {
+                return Rc::clone(written_in);
+            }
             self.snapshot_lexical_nesting()
         } else {
             match self.method_nesting_stack.last() {

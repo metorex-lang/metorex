@@ -402,3 +402,18 @@ fn lambda_takes_a_symbols_proc() {
         "true\n\"A\"\n[:a]\n\"the lambda method requires a literal block\"\n"
     );
 }
+
+#[test]
+fn test_callables_proc_equality_execution() {
+    let output = run_example("callables/proc_equality.rb");
+    assert_eq!(
+        output,
+        "false\nfalse\nfalse\n2\n1\ntrue\ntrue\ntrue\nfalse\nfalse\n"
+    );
+}
+
+#[test]
+fn test_callables_last_match_through_a_binding_execution() {
+    let output = run_example("callables/last_match_through_a_binding.rb");
+    assert_eq!(output, "nil\n\"c\"\n\"yx\"\n");
+}

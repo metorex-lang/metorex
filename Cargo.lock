@@ -316,6 +316,7 @@ dependencies = [
  "rustyline",
  "serde",
  "thiserror",
+ "unicode-segmentation",
 ]
 
 [[package]]

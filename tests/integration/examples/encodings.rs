@@ -1193,3 +1193,25 @@ fn encodings_are_found_matched_by_case_equality_and_adopted_by_an_appended_strin
         )
     );
 }
+
+#[test]
+fn test_encodings_wide_regexp_match_execution() {
+    let output = run_example("encodings/wide_regexp_match.rb");
+    let mut expected = String::new();
+    for name in ["UTF-16BE", "UTF-16LE", "UTF-32BE", "UTF-32LE"] {
+        expected.push_str(&format!(
+            "\"incompatible encoding regexp match (US-ASCII regexp with {name} string)\"\n[#<Encoding:{name}>, true, false, true]\n"
+        ));
+    }
+    expected.push_str("[true, false]\n");
+    assert_eq!(output, expected);
+}
+
+#[test]
+fn test_encodings_euc_jp_substitution_and_partition_execution() {
+    let output = run_example("encodings/euc_jp_substitution_and_partition.rb");
+    assert_eq!(
+        output,
+        "\"\\x{A4A2}\\x{A4A4} a$b\"\n\"\\x{A4A2}\\x{A4A4} A$b\"\n\"\\x{A4A2}\\x{A4A4} A$b\"\n\"\\x{A4A2}\\x{A4A4}_a$b\"\n[\"\\x{A4A2}\\x{A4A4}\", \" \", \"a$b\"]\n[\"\\x{A4A2}\\x{A4A4}\", \"a$b\"]\n\"\\x{A4A2}\"\n[164, 162, 164, 164, 32, 97, 36, 98, 33]\n"
+    );
+}

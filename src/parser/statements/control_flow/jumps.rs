@@ -114,8 +114,12 @@ impl Parser<'_> {
     /// more loosely than the jump, so one written after the value has nothing
     /// on its left to read, which Ruby refuses.
     pub(crate) fn parse_jump_value(&mut self) -> Result<Expression, MetorexError> {
+        // A `rescue` after the value guards the whole jump, as
+        // `return find(name) rescue NameError` does.
         self.assignment_rhs_depth += 1;
+        self.modifier_condition_depth += 1;
         let parsed = self.parse_expression();
+        self.modifier_condition_depth -= 1;
         self.assignment_rhs_depth -= 1;
         let mut value = parsed?;
         // The value can be an assignment, to a variable or through a

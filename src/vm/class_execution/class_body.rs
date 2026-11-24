@@ -61,6 +61,7 @@ impl VirtualMachine {
         self.call_stack_push(frame);
         let body_result = self.apply_class_body_statements(class, body, position);
         self.call_stack_pop();
+        class.set_current_visibility("public");
         body_result
     }
 

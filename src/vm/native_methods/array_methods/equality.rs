@@ -129,6 +129,7 @@ impl VirtualMachine {
         }
         if matches!(element.view(), View::Instance(_) | View::Regex(..))
             || matches!(candidate.view(), View::Instance(_) | View::Regex(..))
+            || made_by_a_module_subclass(element)
         {
             let answer = self.evaluate_binary_operation(
                 &crate::ast::BinaryOp::Equal,
@@ -206,4 +207,10 @@ pub(crate) fn identical(left: &Object, right: &Object) -> bool {
         (View::Float(one), View::Float(other)) => one.to_bits() == other.to_bits(),
         _ => false,
     }
+}
+
+/// Whether `value` is a module or class a Module or Class subclass made,
+/// whose class may define its own `==`.
+fn made_by_a_module_subclass(value: &Object) -> bool {
+    matches!(value.view(), View::Class(class_rc) | View::Module(class_rc) if class_rc.instance_of().is_some())
 }

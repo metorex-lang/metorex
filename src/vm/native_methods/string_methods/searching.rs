@@ -34,7 +34,13 @@ impl VirtualMachine {
                 // spells, which is how a wrapper around a String is searched
                 // for.
                 let wanted = self.string_argument(method_name, &arguments[0], position)?;
-                let held = string_value.as_str().contains(wanted.as_str());
+                // Text that spells no characters is never found, as Ruby
+                // never finds it.
+                let held = match (broken_utf8_reading(string_value), arguments[0].view()) {
+                    (_, View::String(other)) if broken_utf8_reading(other).is_some() => false,
+                    (Some(read), _) => read.contains(wanted.as_str()),
+                    (None, _) => string_value.as_str().contains(wanted.as_str()),
+                };
                 Ok(Some(Object::Bool(held)))
             }
             "start_with?" | "end_with?" => {
@@ -82,8 +88,8 @@ impl VirtualMachine {
                                     // Text that matches whole characters can
                                     // only start and end on a character's
                                     // edge, so only its length is compared.
-                                    let held = string_value.as_str();
-                                    let wanted = s.as_str();
+                                    let held = searched_text(string_value);
+                                    let wanted = searched_text(s);
                                     if method_name == "start_with?" {
                                         held.starts_with(&*wanted)
                                     } else {
@@ -165,4 +171,45 @@ impl VirtualMachine {
             _ => Ok(None),
         }
     }
+}
+
+/// The characters a UTF-8 string holding bytes that spell no character
+/// reads as when searched: each such byte stands alone as a character no
+/// valid text holds. None for a string that is not such a one.
+pub(crate) fn broken_utf8_reading(string_value: &crate::object::StringValue) -> Option<String> {
+    if string_value.encoding_name() != "UTF-8" || !string_value.reads_bytes() {
+        return None;
+    }
+    let bytes = binary_bytes(string_value);
+    let mut read = String::with_capacity(bytes.len());
+    let mut rest: &[u8] = &bytes;
+    while !rest.is_empty() {
+        match std::str::from_utf8(rest) {
+            Ok(text) => {
+                read.push_str(text);
+                break;
+            }
+            Err(error) => {
+                let good = error.valid_up_to();
+                read.push_str(std::str::from_utf8(&rest[..good]).unwrap_or_default());
+                let bad = error.error_len().unwrap_or(rest.len() - good).max(1);
+                for byte in &rest[good..good + bad] {
+                    read.push(stand_in_for_byte(*byte));
+                }
+                rest = &rest[good + bad..];
+            }
+        }
+    }
+    Some(read)
+}
+
+/// The character a byte that spells no character stands as, from a range
+/// of private-use characters set aside for the purpose.
+fn stand_in_for_byte(byte: u8) -> char {
+    char::from_u32(0x10_FF00 + u32::from(byte)).unwrap_or(char::REPLACEMENT_CHARACTER)
+}
+
+/// The text a string is searched as.
+pub(crate) fn searched_text(string_value: &crate::object::StringValue) -> String {
+    broken_utf8_reading(string_value).unwrap_or_else(|| string_value.as_str().to_string())
 }

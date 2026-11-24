@@ -167,6 +167,14 @@ impl std::ops::DerefMut for BlockStatement {
 /// Two blocks are the same when they were written the same way. The captured
 /// variables are left out: a block can close over itself, so comparing them
 /// would not terminate.
+impl BlockStatement {
+    /// Whether two blocks were made from one evaluation of a block literal,
+    /// as a copy of a block is.
+    pub fn same_origin(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.origin, &other.origin) && Rc::ptr_eq(&self.flags, &other.flags)
+    }
+}
+
 impl PartialEq for BlockStatement {
     fn eq(&self, other: &Self) -> bool {
         self.parameters == other.parameters

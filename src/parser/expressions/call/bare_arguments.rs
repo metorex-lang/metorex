@@ -166,6 +166,7 @@ impl Parser<'_> {
                     | TokenKind::LParen
                     | TokenKind::Ampersand
             )
+            && !self.quoted_label_ahead()
         {
             return false;
         }
@@ -397,11 +398,12 @@ impl Parser<'_> {
         &mut self,
     ) -> Result<Vec<Expression>, MetorexError> {
         let mut arguments = Vec::new();
-        let mut keyword_pairs: Vec<(String, Expression)> = Vec::new();
         // Where each `**held` sat among the keyword arguments, so the two can
         // be put back in the order they were written.
         let mut splat_slots: Vec<(usize, usize)> = Vec::new();
-        let mut rocket_pairs: Vec<(Expression, Expression)> = Vec::new();
+        // Every `name: value`, `"name": value` and `key => value` pair, in
+        // the order they were written.
+        let mut pairs: Vec<(Expression, Expression)> = Vec::new();
         let position = self.peek().position;
 
         self.skip_whitespace();
@@ -422,7 +424,13 @@ impl Parser<'_> {
             let named_at = self.advance().position;
             self.advance(); // consume ':'
             let value = self.shorthand_keyword_value(&name, named_at)?;
-            keyword_pairs.push((name, value));
+            pairs.push((
+                Expression::Symbol {
+                    value: name,
+                    position: named_at,
+                },
+                value,
+            ));
         } else if self.match_token(&[TokenKind::Star]) {
             let position = self.previous().position;
             let expr = self.parse_expression_with_assignment()?;
@@ -433,7 +441,7 @@ impl Parser<'_> {
         } else if self.match_token(&[TokenKind::StarStar]) {
             let position = self.previous().position;
             let expr = self.parse_expression_with_assignment()?;
-            splat_slots.push((arguments.len(), keyword_pairs.len() + rocket_pairs.len()));
+            splat_slots.push((arguments.len(), pairs.len()));
             arguments.push(Expression::KeywordSplat {
                 expression: Box::new(expr),
                 position,
@@ -449,13 +457,17 @@ impl Parser<'_> {
             // An argument may assign, which answers what it assigned:
             // `puts text[0] = "y"` passes "y".
             let first = self.parse_expression_with_assignment()?;
+            if let Some(key) = self.quoted_label_after(&first)? {
+                let value = self.parse_expression_with_assignment()?;
+                pairs.push((key, value));
+            } else
             // A `key => value` pair gathers into a Hash the same way a
             // `name: value` one does, which is what `held.update "a" => 1`
             // passes.
             if self.match_token(&[TokenKind::FatArrow]) {
                 self.skip_whitespace();
                 let value = self.parse_expression_with_assignment()?;
-                rocket_pairs.push((first, value));
+                pairs.push((first, value));
             } else {
                 arguments.push(first);
 
@@ -503,7 +515,13 @@ impl Parser<'_> {
                 let named_at = self.advance().position;
                 self.advance(); // consume ':'
                 let value = self.shorthand_keyword_value(&name, named_at)?;
-                keyword_pairs.push((name, value));
+                pairs.push((
+                    Expression::Symbol {
+                        value: name,
+                        position: named_at,
+                    },
+                    value,
+                ));
             } else if self.match_token(&[TokenKind::Star]) {
                 let position = self.previous().position;
                 let expr = self.parse_expression_with_assignment()?;
@@ -524,7 +542,7 @@ impl Parser<'_> {
                     } else {
                         self.parse_expression_with_assignment()?
                     };
-                splat_slots.push((arguments.len(), keyword_pairs.len() + rocket_pairs.len()));
+                splat_slots.push((arguments.len(), pairs.len()));
                 arguments.push(Expression::KeywordSplat {
                     expression: Box::new(expr),
                     position,
@@ -538,10 +556,13 @@ impl Parser<'_> {
                 });
             } else {
                 let held = self.parse_expression_with_assignment()?;
-                if self.match_token(&[TokenKind::FatArrow]) {
+                if let Some(key) = self.quoted_label_after(&held)? {
+                    let value = self.parse_expression_with_assignment()?;
+                    pairs.push((key, value));
+                } else if self.match_token(&[TokenKind::FatArrow]) {
                     self.skip_whitespace();
                     let value = self.parse_expression_with_assignment()?;
-                    rocket_pairs.push((held, value));
+                    pairs.push((held, value));
                 } else {
                     arguments.push(held);
                 }
@@ -551,20 +572,8 @@ impl Parser<'_> {
         }
 
         // If there were keyword args, append them as a marked kwargs Dict.
-        if !keyword_pairs.is_empty() || !rocket_pairs.is_empty() {
-            let mut entries: Vec<(Expression, Expression)> = keyword_pairs
-                .into_iter()
-                .map(|(k, v)| {
-                    (
-                        Expression::Symbol {
-                            value: k.to_string(),
-                            position,
-                        },
-                        v,
-                    )
-                })
-                .collect();
-            entries.extend(rocket_pairs);
+        if !pairs.is_empty() {
+            let mut entries = pairs;
             fold_keyword_splats(&mut arguments, &mut entries, &splat_slots, position);
             entries.push((
                 Expression::StringLiteral {
@@ -610,6 +619,35 @@ impl Parser<'_> {
 }
 
 impl Parser<'_> {
+    /// Whether the next tokens are a quoted string glued to a colon, the
+    /// label of `call "name": value`.
+    fn quoted_label_ahead(&self) -> bool {
+        matches!(
+            self.peek().kind,
+            TokenKind::String(_)
+                | TokenKind::FrozenString(_)
+                | TokenKind::MutableString(_)
+                | TokenKind::InterpolatedString(_)
+        ) && !self.peek_ahead(1).had_leading_space
+    }
+
+    /// The symbol key when `expression` is a quoted string glued to a colon,
+    /// the label `"name": value`, with the colon consumed.
+    fn quoted_label_after(
+        &mut self,
+        expression: &Expression,
+    ) -> Result<Option<Expression>, MetorexError> {
+        if !crate::parser::expressions::primary::groups::is_quoted_string(expression)
+            || !self.check(&[TokenKind::Colon])
+            || self.peek().had_leading_space
+        {
+            return Ok(None);
+        }
+        self.advance();
+        self.skip_whitespace();
+        self.quoted_label_key(expression.clone()).map(Some)
+    }
+
     /// The value of a `name:` argument written without parentheses: what
     /// follows it, or the local or method `name` when nothing does, which is
     /// the shorthand `call bar:, val:`.

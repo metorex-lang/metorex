@@ -778,6 +778,14 @@ impl VirtualMachine {
                         }
                     }
                 }
+            } else if class
+                .find_method("initialize")
+                .is_some_and(|initialize| !initialize.is_undefined && !initialize.body.is_empty())
+            {
+                // A subclass writing its own `initialize` decides what the
+                // arguments mean, and the message is whatever it hands to
+                // `super`, which is nothing until it does.
+                String::new()
             } else if ((2..=3).contains(&arguments.len()) && descends_from(&class, "NameError"))
                 || (arguments.len() == 4 && descends_from(&class, "NoMethodError"))
             {
@@ -791,14 +799,6 @@ impl VirtualMachine {
                     View::String(text) => text.as_str().to_string(),
                     _ => self.coerce_name_argument(&arguments[0], position)?,
                 }
-            } else if class
-                .find_method("initialize")
-                .is_some_and(|initialize| !initialize.is_undefined && !initialize.body.is_empty())
-            {
-                // A subclass writing its own `initialize` decides what the
-                // arguments mean, and the message is whatever it hands to
-                // `super`, which is nothing until it does.
-                String::new()
             } else {
                 return Err(MetorexError::runtime_error(
                     format!(

@@ -546,7 +546,12 @@ impl VirtualMachine {
         // A `return` written in the code returns from the scope the
         // eval was written in rather than ending the eval, so it
         // carries on out rather than being answered here.
-        let result = self.run_eval_statements(&statements);
+        // Code run through a binding reads and sets the `$~` of the frame
+        // the binding was made in.
+        let result = match carried_home {
+            Some(home) => self.in_home_frame(home, |vm| vm.run_eval_statements(&statements)),
+            None => self.run_eval_statements(&statements),
+        };
         // An error the code raised natively is traced here, while the file
         // it was written in is still the one the eval named.
         if let Err(error) = &result {
@@ -650,7 +655,7 @@ impl VirtualMachine {
                 if error.message().contains("Failed to read file") {
                     let message = format!("cannot load such file -- {}", path_str);
                     return MetorexError::UncaughtException {
-                        exception: Object::exception("LoadError", message.clone()),
+                        exception: crate::vm::errors::load_error(message.clone(), &path_str),
                         location: crate::vm::utils::position_to_location(position),
                         message,
                     };
@@ -665,7 +670,7 @@ impl VirtualMachine {
         } else if anchored {
             let message = format!("cannot load such file -- {}", path_str);
             Err(MetorexError::UncaughtException {
-                exception: Object::exception("LoadError", message.clone()),
+                exception: crate::vm::errors::load_error(message.clone(), &path_str),
                 location: crate::vm::utils::position_to_location(position),
                 message,
             })
@@ -692,7 +697,7 @@ impl VirtualMachine {
                 None => {
                     let message = format!("cannot load such file -- {}", path_str);
                     Err(MetorexError::UncaughtException {
-                        exception: Object::exception("LoadError", message.clone()),
+                        exception: crate::vm::errors::load_error(message.clone(), &path_str),
                         location: crate::vm::utils::position_to_location(position),
                         message,
                     })

@@ -614,9 +614,10 @@ impl VirtualMachine {
         // Fall back to native-method dispatch on `self` so identifiers that
         // map to native-only methods (e.g. `constants`, `const_get`) work
         // bare, the same way `self.constants` does.
+        // What the native method raises is the call's error.
         let class_for_native = self.builtins().class_of(&receiver);
-        if let Ok(Some(result)) =
-            self.call_native_method(&class_for_native, &receiver, name, &[], position)
+        if let Some(result) =
+            self.call_native_method(&class_for_native, &receiver, name, &[], position)?
         {
             return Ok(result);
         }

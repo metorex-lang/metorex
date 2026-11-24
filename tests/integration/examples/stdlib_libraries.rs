@@ -3059,3 +3059,27 @@ fn process_exec_refuses_a_umask_out_of_the_range_of_a_file_mode() {
         )
     );
 }
+
+#[test]
+fn test_stdlib_subclass_super_load_path_and_gzip_level_execution() {
+    let output = run_example("stdlib/subclass_super_load_path_and_gzip_level.rb");
+    assert_eq!(
+        output,
+        "\"#<Opts {}>\"\n\"#<Opts {a: 1}>\"\nfalse\ntrue\n\"nor/this/one.rb\"\n[1, 4, 1]\n[9, 2, 9]\n[-1, 0, -1]\n[5, 0, -1]\n"
+    );
+}
+
+#[test]
+fn test_stdlib_string_subclass_format_and_binding_last_match_execution() {
+    let output = run_example("stdlib/string_subclass_format_and_binding_last_match.rb");
+    assert_eq!(
+        output,
+        "\"foo <br/> bar\"\n\"foo <br/> bar\"\n\"<br/>   |\"\n\"123abc\"\nfalse\nfalse\nfalse\n2\n1\n"
+    );
+}
+
+#[test]
+fn test_stdlib_random_values_differ_after_fork_execution() {
+    let output = run_example("stdlib/random_values_differ_after_fork.rb");
+    assert_eq!(output, "[2, 2, 2, 2]\n32\ntrue\ntrue\ntrue\n36\ntrue\n");
+}

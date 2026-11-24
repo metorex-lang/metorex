@@ -33,6 +33,9 @@ impl VirtualMachine {
 
     /// How a value reads in a message, which is what `inspect` answers.
     pub(crate) fn written_out(&mut self, value: &Object, position: Position) -> String {
+        if self.unworded_pattern_failures > 0 {
+            return String::new();
+        }
         self.get_inspect_representation(value, position)
             .unwrap_or_else(|_| format!("{value}"))
     }

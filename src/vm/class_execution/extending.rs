@@ -83,6 +83,22 @@ impl VirtualMachine {
                 vec![receiver.clone()],
                 position,
             )?;
+            return Ok(());
+        }
+        // A module made by a subclass of Module hears the hook the subclass
+        // writes.
+        if let Some(made_from) = module_rc.instance_of()
+            && let Some(method) = made_from.find_method("extended")
+            && !method.is_undefined
+            && !method.body.is_empty()
+        {
+            self.invoke_method(
+                made_from,
+                method,
+                Object::Module(Rc::clone(module_rc)),
+                vec![receiver.clone()],
+                position,
+            )?;
         }
         Ok(())
     }

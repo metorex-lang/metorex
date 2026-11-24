@@ -532,3 +532,15 @@ fn regexp_quote_of_a_string_subclass_keeps_the_encoding_it_holds() {
         )
     );
 }
+
+#[test]
+fn a_scan_block_reads_the_prematch_and_postmatch_of_each_match() {
+    let output = run_example("regexp/scan_block_reads_the_prematch.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"Nested::NestedUser::Child\", \"Nested::Child\"]\n",
+            "[[\"a\", \"-\", \"b-c\"], [\"a-b\", \"-\", \"c\"]]\n",
+        )
+    );
+}

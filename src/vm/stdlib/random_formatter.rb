@@ -17,6 +17,10 @@ class Random
       (0...size).map { |at| chars[held[at].ord % chars.length].to_s }.join
     end
 
+    def random_bytes size = nil
+      bytes(size.nil? ? 16 : size)
+    end
+
     def hex size = nil
       bytes(size.nil? ? 16 : size).unpack1 "H*"
     end

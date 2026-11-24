@@ -589,15 +589,17 @@ impl Class {
         if self.has_public_override(name) {
             return false;
         }
-        if self.is_method_private(name) {
-            return true;
+        // The first class or module that defines the method decides, so a
+        // public `select` hides Kernel's private one.
+        if self.is_method_private(name) || self.methods.borrow().contains_key(name) {
+            return self.is_method_private(name);
         }
         for (mixin, _) in self.mixins.borrow().iter() {
             if mixin.has_public_override(name) {
                 return false;
             }
-            if mixin.is_method_private(name) {
-                return true;
+            if mixin.is_method_private(name) || mixin.methods.borrow().contains_key(name) {
+                return mixin.is_method_private(name);
             }
         }
         if let Some(sc) = &self.superclass {

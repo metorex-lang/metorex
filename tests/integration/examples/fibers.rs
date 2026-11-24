@@ -235,3 +235,12 @@ fn test_fibers_scheduler_writes_execution() {
         )
     );
 }
+
+#[test]
+fn test_fibers_fiber_subclass_calls_its_own_methods_execution() {
+    let output = run_example("fibers/fiber_subclass_calls_its_own_methods.rb");
+    assert_eq!(
+        output,
+        "[1, 2]\nfalse\n[TimeoutError, \"no connection\"]\nfalse\n"
+    );
+}

@@ -777,6 +777,16 @@ impl VirtualMachine {
         object: &Object,
         position: Position,
     ) -> Result<Option<ObjectHash>, MetorexError> {
+        // A String subclass member is placed by its text, as Ruby hashes
+        // every String, and keeps its own class as the element.
+        if let Some(text) = crate::vm::native_methods::subclasses::string_subclass_value(object)
+            && matches!(text.view(), View::String(_))
+        {
+            return Ok(ObjectHash::from_object(&text).map(|placed| ObjectHash {
+                hash_value: placed.hash_value,
+                value: object.clone(),
+            }));
+        }
         // A class or module that writes its own `hash` is placed by it, as
         // an object of a class is.
         let hashes_itself = match object.view() {

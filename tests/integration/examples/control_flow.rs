@@ -695,3 +695,9 @@ fn an_assignment_followed_by_a_pattern_test_assigns_the_value_and_tests_it() {
     let output = run_example("control_flow/assignment_tested_against_a_pattern.rb");
     assert_eq!(output, "5\n[[1, 2], 1]\n[{name: \"x\"}, \"x\"]\nfalse\n");
 }
+
+#[test]
+fn test_control_flow_when_class_does_not_inspect_the_subject_execution() {
+    let output = run_example("control_flow/when_class_does_not_inspect_the_subject.rb");
+    assert_eq!(output, ":kept\n:wrapped\n:wrapped\nfalse\n");
+}

@@ -58,8 +58,9 @@ impl VirtualMachine {
         // at Object, answers only the handful of methods BasicObject defines.
         // Everything Kernel and Object add arrives through Object, which such
         // a class never inherits from.
+        let through_a_stub = std::mem::take(&mut self.answering_for_a_stub);
         if !basic_object_answers(method_name)
-            && self.bound_stub_depth == 0
+            && !through_a_stub
             && self.rooted_at_basic_object(receiver)
             && !class_defines(receiver, method_name)
         {

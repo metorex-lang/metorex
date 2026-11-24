@@ -67,6 +67,12 @@ impl VirtualMachine {
         if let Some(deadline) = self.idle_deadline.take().into_iter().chain(limits).min() {
             pause = pause.min(deadline.saturating_duration_since(now));
         }
+        // With nothing to watch, the pause is a park, which a function run
+        // without the interpreter ends early by waking this thread.
+        if self.idle_descriptors.is_empty() {
+            std::thread::park_timeout(pause);
+            return;
+        }
         let mut watched = std::mem::take(&mut self.idle_descriptors);
         let milliseconds = pause.as_micros().div_ceil(1000) as libc::c_int;
         // SAFETY: `watched` holds as many entries as the count given, and

@@ -56,6 +56,9 @@ impl VirtualMachine {
                 let actual_name = match receiver.view() {
                     View::Class(_) => "Class".to_string(),
                     View::Module(_) => "Module".to_string(),
+                    View::Nil => "NilClass".to_string(),
+                    View::Bool(true) => "TrueClass".to_string(),
+                    View::Bool(false) => "FalseClass".to_string(),
                     _ => self.builtins().class_of(receiver).name().to_string(),
                 };
                 Ok(Some(Object::Bool(actual_name == target_class.name())))

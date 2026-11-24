@@ -123,14 +123,15 @@ s.name
 }
 
 #[test]
-fn class_attr_reader_via_send_no_args_errors() {
-    let err = run_err(
-        r#"
+fn class_attr_reader_via_send_with_no_names_defines_nothing() {
+    let result = run(r#"
 class Eattr; end
-Eattr.send(:attr_reader)
-"#,
+Eattr.send(:attr_reader).inspect
+"#);
+    assert_eq!(
+        result.map(|value| value.to_string()),
+        Some("[]".to_string())
     );
-    assert!(err.contains("argument"));
 }
 
 // ── method_defined?/public_method_defined?/private_method_defined? on Class ─

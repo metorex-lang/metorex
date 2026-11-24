@@ -36,7 +36,14 @@ impl VirtualMachine {
             matches!((left.view(), right.view()), (View::Dict(_), View::Dict(_)))
                 || (matches!(left.view(), View::Dict(_))
                     && matches!(right.view(), View::Instance(_))
-                    && self.responds_to(&right, "to_hash"));
+                    && self
+                        .send_to_object(
+                            right.clone(),
+                            "respond_to?",
+                            vec![Object::symbol("to_hash".to_string())],
+                            position,
+                        )?
+                        .is_truthy());
         if compares_as_hashes
             && let Some(answer) =
                 self.call_hash_method(&left, "==", std::slice::from_ref(&right), position)?
@@ -332,9 +339,24 @@ impl VirtualMachine {
         }
         // Anything else that spells itself as text answers for the
         // pair, which is how a wrapper around a String compares.
+        // An object of the program's own is asked through its own
+        // `respond_to?`, which it may have written.
+        let spells_text = |vm: &mut Self, right: &Object| -> Result<bool, MetorexError> {
+            if matches!(right.view(), View::Instance(_) | View::Module(_)) {
+                return Ok(vm
+                    .send_to_object(
+                        right.clone(),
+                        "respond_to?",
+                        vec![Object::symbol("to_str".to_string())],
+                        position,
+                    )?
+                    .is_truthy());
+            }
+            Ok(vm.responds_to(right, "to_str"))
+        };
         if matches!(left.view(), View::String(_))
             && crate::vm::native_methods::string_subclass_value(&right).is_none()
-            && self.responds_to(&right, "to_str")
+            && spells_text(self, &right)?
         {
             let answer = self.send_to_object(right.clone(), "==", vec![left.clone()], position)?;
             return Ok(Object::Bool(answer.is_truthy()));

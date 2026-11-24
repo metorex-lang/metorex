@@ -2770,3 +2770,33 @@ fn super_from_a_module_included_into_object_reaches_the_json_generator() {
         )
     );
 }
+
+#[test]
+fn test_stdlib_random_formatter_random_bytes_execution() {
+    let output = run_example("stdlib/random_formatter_random_bytes.rb");
+    assert_eq!(output, "16\n\"\\x01\\x01\\x01\\x01\"\n\"0101\"\n");
+}
+
+#[test]
+fn test_stdlib_delegate_class_before_an_object_is_set_execution() {
+    let output = run_example("stdlib/delegate_class_before_an_object_is_set.rb");
+    assert_eq!(output, "true\n:fallback\n\"not delegated\"\n");
+}
+
+#[test]
+fn test_stdlib_hmac_of_text_with_multibyte_characters_execution() {
+    let output = run_example("stdlib/hmac_of_text_with_multibyte_characters.rb");
+    assert_eq!(
+        output,
+        "\"642d19b3067b4773212f02c0415ca99d033c824bdde53d6c4146d5420a746c6b\"\n\"f588cd2bc1f7bf2fabd8488dfabf2b51554bb3e4\"\n32\n"
+    );
+}
+
+#[test]
+fn test_stdlib_delegator_marshal_format_execution() {
+    let output = run_example("stdlib/delegator_marshal_format.rb");
+    assert_eq!(
+        output,
+        "[:__v2__, [:@coder], [:yaml], [1, 2]]\n49\n[:yaml, 2, Serialized]\n\"TEXT\"\n"
+    );
+}

@@ -19,9 +19,6 @@ impl VirtualMachine {
             // apply the receiver's current visibility, and return the array
             // of newly-defined method names as symbols (Ruby 3.0+).
             "attr_reader" | "attr_writer" | "attr_accessor" | "attr" => {
-                if arguments.is_empty() {
-                    return Err(method_argument_error(method_name, 1, 0, position));
-                }
                 // `attr name, true|false` is the deprecated 2-arg boolean form:
                 // the second arg controls writer creation, and only the first
                 // arg is a name. Ruby warns under `$VERBOSE = true`.

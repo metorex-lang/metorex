@@ -1309,15 +1309,19 @@ impl VirtualMachine {
                     position,
                 }));
             }
+            // A missing block is reported once the arguments are evaluated,
+            // by CallBlock.
             Instruction::FindBlock { to } => {
-                registers[register(to)] = self.block_to_yield(position)?;
+                registers[register(to)] = self.block_to_yield(position).unwrap_or(Object::Nil);
             }
             Instruction::CallBlock { base, site } => {
                 let site = &unit.call_sites[index(site)];
                 let base = register(base);
                 let (arguments, _) = call_inputs(site, base, registers, state);
                 let View::Block(block) = registers[base].view() else {
-                    unreachable!("FindBlock puts a block in the register");
+                    return Err(self
+                        .block_to_yield(position)
+                        .expect_err("FindBlock found no block"));
                 };
                 let block = Rc::clone(block);
                 crate::vm::program::enter_nesting(position)?;

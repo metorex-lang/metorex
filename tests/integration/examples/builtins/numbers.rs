@@ -401,3 +401,9 @@ fn negative_integer_powers_are_rational() {
         )
     );
 }
+
+#[test]
+fn test_numbers_eql_reads_the_true_class_execution() {
+    let output = run_example("numbers/eql_reads_the_true_class.rb");
+    assert_eq!(output, "false\nfalse\nfalse\nfalse\nfalse\ntrue\n");
+}

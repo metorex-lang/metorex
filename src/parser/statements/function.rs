@@ -307,6 +307,16 @@ impl Parser<'_> {
             }
             _ => return Err(self.error_at_previous("Expected function name")),
         };
+        // A keyword names a writer the way an identifier does, `def alias=(v)`.
+        let name = if name.chars().all(|c| c.is_alphanumeric() || c == '_')
+            && !name.is_empty()
+            && self.writer_equal_follows(&name)
+        {
+            self.advance(); // consume =
+            format!("{name}=")
+        } else {
+            name
+        };
 
         // Parse parameters (optional parentheses). Parens for params must come
         // immediately after the method name — do NOT skip newlines here, or

@@ -618,7 +618,7 @@ impl VirtualMachine {
                 };
                 let last = &*action.as_str() == "deflate_last_piece";
                 Ok(super::pack_format::bytes_to_string(
-                    &super::zlib_deflate::deflate_piece(&bytes, &previous, last),
+                    &super::zlib_deflate::deflate_piece(&bytes, &previous, last, level),
                 ))
             }
             // How much of the stream zlib has handed on after reading what

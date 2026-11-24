@@ -655,3 +655,9 @@ fn set_inspect_renders_members_and_names_subclasses() {
         )
     );
 }
+
+#[test]
+fn test_builtins_instance_of_after_mixing_into_core_classes_execution() {
+    let output = run_example("builtins/instance_of_after_mixing_into_core_classes.rb");
+    assert_eq!(output, "true\ntrue\ntrue\ntrue\ntrue\ntrue\n");
+}

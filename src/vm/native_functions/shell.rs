@@ -812,6 +812,9 @@ impl VirtualMachine {
         // `$$` names the child's own process in the child.
         self.globals_mut()
             .set_variable("$", Object::Int(std::process::id() as i64));
+        // The child draws numbers of its own rather than the ones the parent
+        // and its other children go on to draw.
+        self.reseed_from_the_system();
         // Only the thread that called `fork` survives into the child, so
         // every other one is marked finished there. The one that called it
         // keeps running there, and is still one to wait on.

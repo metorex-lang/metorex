@@ -11,7 +11,9 @@ impl VirtualMachine {
     ) -> Result<Object, MetorexError> {
         module.set_current_visibility("public");
         let opened_at = body.first().map(Statement::position).unwrap_or_default();
-        self.run_compiled_body(module, body, opened_at, true)
+        let answer = self.run_compiled_body(module, body, opened_at, true);
+        module.set_current_visibility("public");
+        answer
     }
 
     /// Run one statement of a module body, the way a module body runs it,

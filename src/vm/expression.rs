@@ -55,6 +55,8 @@ impl VirtualMachine {
             }
         }
         let written = self.send_to_object(value.clone(), "to_s", Vec::new(), position)?;
+        // A String subclass's instance stands for the text it holds.
+        let written = crate::vm::native_methods::string_subclass_value(&written).unwrap_or(written);
         Ok(match written.view() {
             View::String(text) => text.as_str().to_string(),
             // A `to_s` answering something other than a String leaves the

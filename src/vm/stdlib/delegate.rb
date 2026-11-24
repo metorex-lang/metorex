@@ -157,28 +157,22 @@ class Delegator < BasicObject
     super
   end
 
+  # The delegator's own instance variables and their values, then the
+  # object behind it, as MRI's delegate library writes them.
   def marshal_dump
-    [:__v2__, instance_variables_to_dump, __getobj__]
+    names = instance_variables.reject { |name| name.start_with?("@delegate_") }
+    [:__v2__, names, names.map { |name| instance_variable_get(name) }, __getobj__]
   end
 
-  def marshal_load(held)
-    _version, variables, object = held
-    variables.each { |name, value| instance_variable_set name, value }
-    __setobj__ object
-  end
-
-  # The delegator's own state, leaving out the slot the object behind it
-  # lives in, which is dumped alongside rather than inside it.
-  def instance_variables_to_dump
-    kept = {}
-    instance_variables.each do |name|
-      next if name == :@delegate_sd_obj
-      kept[name] = instance_variable_get(name)
+  def marshal_load(data)
+    version, names, values, object = data
+    if version == :__v2__
+      names.each_with_index { |name, index| instance_variable_set(name, values[index]) }
+      __setobj__(object)
+    else
+      __setobj__(data)
     end
-    kept
   end
-
-  private :instance_variables_to_dump
 
   # The names a delegating class carries in its own right, which is what
   # `DelegateClass` asks for when it builds one.
@@ -209,9 +203,10 @@ end
 def DelegateClass(superclass, &block)
   built = Class.new(Delegator)
   built.class_eval do
-    define_method :__getobj__ do
+    def __getobj__
       unless defined? @delegate_dc_obj
-        ::Kernel.raise ArgumentError, "not delegated"
+        return yield if block_given?
+        ::Kernel.raise ::ArgumentError, "not delegated"
       end
       @delegate_dc_obj
     end

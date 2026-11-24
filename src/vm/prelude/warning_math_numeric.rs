@@ -306,7 +306,7 @@ class Numeric
   end
 
   def eql?(other)
-    return false unless other.instance_of? self.class
+    return false unless ::Kernel.instance_method(:class).bind_call(other) == self.class
     (self == other) ? true : false
   end
 

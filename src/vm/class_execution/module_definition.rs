@@ -101,7 +101,9 @@ impl VirtualMachine {
                     None
                 }
             });
-            let resolved = if direct.is_some() {
+            // Only an autoload the enclosing module registered itself is
+            // loaded, since the keyword never reads an inherited constant.
+            let resolved = if direct.is_some() || parent.get_autoload(name).is_none() {
                 direct
             } else {
                 self.try_autoload_constant(parent, name)?

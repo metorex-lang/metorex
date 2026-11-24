@@ -204,10 +204,15 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         if let Some((holder, method)) = user_const_missing(module_rc) {
+            let receiver = if module_rc.is_module() {
+                Object::Module(Rc::clone(module_rc))
+            } else {
+                Object::Class(Rc::clone(module_rc))
+            };
             return self.invoke_method(
                 holder,
                 method,
-                Object::Class(Rc::clone(module_rc)),
+                receiver,
                 vec![Object::symbol(name.to_string())],
                 position,
             );
@@ -224,6 +229,12 @@ impl VirtualMachine {
         position: Position,
     ) -> Result<Object, MetorexError> {
         let owner = self.module_name_for_message(module_rc, position)?;
+        // A module with no name is written the way it inspects.
+        let owner = if owner.is_empty() && module_rc.ruby_name().is_empty() {
+            module_rc.inspect_name()
+        } else {
+            owner
+        };
         let qualified = if owner.is_empty() || owner == "Object" {
             name.to_string()
         } else {
@@ -262,6 +273,18 @@ fn user_const_missing(module_rc: &Rc<Class>) -> Option<(Rc<Class>, Rc<crate::obj
             return (!method.is_undefined).then_some((singleton, method));
         }
         cursor = current.superclass();
+    }
+    // A module made by a subclass of Module answers the one that subclass
+    // writes for its instances.
+    let mut made_from = module_rc.instance_of();
+    while let Some(current) = made_from {
+        if current.name() == "Module" {
+            break;
+        }
+        if let Some(method) = current.find_own_method("const_missing") {
+            return (!method.is_undefined).then_some((current, method));
+        }
+        made_from = current.superclass();
     }
     None
 }
