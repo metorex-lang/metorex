@@ -199,7 +199,7 @@ The 100 most downloaded gems on rubygems.org (`rubygems.org/stats`, read on 2026
   - [x] actionpack, with rails-dom-testing and rails-html-sanitizer
   - [x] actionview
   - [x] actionmailer
-  - [ ] activejob, with globalid
+  - [x] activejob, with globalid
   - [ ] actioncable
   - [ ] activestorage
   - [ ] railties and rails, with sprockets-rails

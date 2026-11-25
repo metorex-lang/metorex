@@ -1305,6 +1305,30 @@ fn test_c_extensions_c_flags_no_parens_execution() {
     assert_eq!(output, C_FLAGS_OUTPUT);
 }
 
+#[test]
+fn test_c_extensions_c_proc_defaults_execution() {
+    let output = run_example("c_extensions/c_proc_defaults.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[8192, 16384, 2147483648]\n",
+            "\"abab\"\n",
+            "{ab: \"abab\"}\n",
+            "Proc\n",
+            "true\n",
+            "[5, nil]\n",
+            "false\n",
+            "true\n",
+            "nil\n",
+            "Proc\n",
+            "[true, false, true]\n",
+            "\"done\"\n",
+            "\"recursive\"\n",
+            "\"done\"\n",
+        )
+    );
+}
+
 /// The expected output of both `c_extensions/c_debug` variants.
 const C_DEBUG_OUTPUT: &str = concat!(
     "[CDebug, CDebug, nil, nil, nil, \"CDebug#frames\", 0]\n",

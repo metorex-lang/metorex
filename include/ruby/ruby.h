@@ -392,11 +392,49 @@ struct RBasic *rb_metorex_rbasic(VALUE object);
 #define RUBY_FL_SHAREABLE ((VALUE)1 << 8)
 #define RUBY_FL_FREEZE ((VALUE)1 << 11)
 #define RUBY_FL_USHIFT 12
-#define RUBY_FL_USER0 ((VALUE)1 << RUBY_FL_USHIFT)
+#define RUBY_FL_USER0 ((VALUE)1 << (RUBY_FL_USHIFT + 0))
+#define RUBY_FL_USER1 ((VALUE)1 << (RUBY_FL_USHIFT + 1))
+#define RUBY_FL_USER2 ((VALUE)1 << (RUBY_FL_USHIFT + 2))
+#define RUBY_FL_USER3 ((VALUE)1 << (RUBY_FL_USHIFT + 3))
+#define RUBY_FL_USER4 ((VALUE)1 << (RUBY_FL_USHIFT + 4))
+#define RUBY_FL_USER5 ((VALUE)1 << (RUBY_FL_USHIFT + 5))
+#define RUBY_FL_USER6 ((VALUE)1 << (RUBY_FL_USHIFT + 6))
+#define RUBY_FL_USER7 ((VALUE)1 << (RUBY_FL_USHIFT + 7))
+#define RUBY_FL_USER8 ((VALUE)1 << (RUBY_FL_USHIFT + 8))
+#define RUBY_FL_USER9 ((VALUE)1 << (RUBY_FL_USHIFT + 9))
+#define RUBY_FL_USER10 ((VALUE)1 << (RUBY_FL_USHIFT + 10))
+#define RUBY_FL_USER11 ((VALUE)1 << (RUBY_FL_USHIFT + 11))
+#define RUBY_FL_USER12 ((VALUE)1 << (RUBY_FL_USHIFT + 12))
+#define RUBY_FL_USER13 ((VALUE)1 << (RUBY_FL_USHIFT + 13))
+#define RUBY_FL_USER14 ((VALUE)1 << (RUBY_FL_USHIFT + 14))
+#define RUBY_FL_USER15 ((VALUE)1 << (RUBY_FL_USHIFT + 15))
+#define RUBY_FL_USER16 ((VALUE)1 << (RUBY_FL_USHIFT + 16))
+#define RUBY_FL_USER17 ((VALUE)1 << (RUBY_FL_USHIFT + 17))
+#define RUBY_FL_USER18 ((VALUE)1 << (RUBY_FL_USHIFT + 18))
+#define RUBY_FL_USER19 ((VALUE)1 << (RUBY_FL_USHIFT + 19))
 #define FL_SHAREABLE RUBY_FL_SHAREABLE
 #define FL_FREEZE RUBY_FL_FREEZE
 #define FL_USHIFT RUBY_FL_USHIFT
 #define FL_USER0 RUBY_FL_USER0
+#define FL_USER1 RUBY_FL_USER1
+#define FL_USER2 RUBY_FL_USER2
+#define FL_USER3 RUBY_FL_USER3
+#define FL_USER4 RUBY_FL_USER4
+#define FL_USER5 RUBY_FL_USER5
+#define FL_USER6 RUBY_FL_USER6
+#define FL_USER7 RUBY_FL_USER7
+#define FL_USER8 RUBY_FL_USER8
+#define FL_USER9 RUBY_FL_USER9
+#define FL_USER10 RUBY_FL_USER10
+#define FL_USER11 RUBY_FL_USER11
+#define FL_USER12 RUBY_FL_USER12
+#define FL_USER13 RUBY_FL_USER13
+#define FL_USER14 RUBY_FL_USER14
+#define FL_USER15 RUBY_FL_USER15
+#define FL_USER16 RUBY_FL_USER16
+#define FL_USER17 RUBY_FL_USER17
+#define FL_USER18 RUBY_FL_USER18
+#define FL_USER19 RUBY_FL_USER19
 #define RB_FL_TEST(v, f) (RB_SPECIAL_CONST_P(v) ? (VALUE)0 : (RBASIC(v)->flags & (VALUE)(f)))
 #define RB_FL_SET(v, f) (RB_SPECIAL_CONST_P(v) ? (void)0 : (void)(RBASIC(v)->flags |= (VALUE)(f)))
 #define RB_FL_UNSET(v, f) (RB_SPECIAL_CONST_P(v) ? (void)0 : (void)(RBASIC(v)->flags &= ~(VALUE)(f)))
@@ -746,6 +784,7 @@ NORETURN(void rb_throw_obj(VALUE tag, VALUE value));
 VALUE rb_eval_string(const char *source);
 VALUE rb_eval_string_protect(const char *source, int *state);
 VALUE rb_exec_recursive(VALUE (*function)(VALUE, VALUE, int), VALUE object, VALUE data);
+VALUE rb_exec_recursive_paired(VALUE (*function)(VALUE, VALUE, int), VALUE object, VALUE paired, VALUE data);
 void rb_set_end_proc(void (*function)(VALUE), VALUE data);
 VALUE rb_f_sprintf(int count, const VALUE *values);
 VALUE rb_str_format(int count, const VALUE *values, VALUE format);
@@ -938,6 +977,7 @@ int rb_absint_singlebit_p(VALUE value);
 
 VALUE rb_proc_new(rb_block_call_func_t function, VALUE data);
 int rb_proc_arity(VALUE procedure);
+VALUE rb_proc_lambda_p(VALUE procedure);
 VALUE rb_obj_is_proc(VALUE value);
 VALUE rb_proc_call(VALUE procedure, VALUE values);
 VALUE rb_proc_call_kw(VALUE procedure, VALUE values, int keywords);
@@ -1141,6 +1181,7 @@ size_t rb_hash_size_num(VALUE hash);
 st_table *rb_hash_tbl(VALUE hash, const char *file, int line);
 #define RHASH_TBL(h) rb_hash_tbl(h, __FILE__, __LINE__)
 VALUE rb_hash_set_ifnone(VALUE hash, VALUE default_value);
+#define RHASH_SET_IFNONE(h, ifnone) rb_hash_set_ifnone((VALUE)(h), (ifnone))
 void rb_hash_bulk_insert(long count, const VALUE *pairs, VALUE hash);
 void rb_hash_foreach(VALUE hash, int (*function)(VALUE key, VALUE value, VALUE argument), VALUE argument);
 st_index_t rb_hash_start(st_index_t hash);

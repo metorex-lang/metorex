@@ -731,28 +731,12 @@ impl VirtualMachine {
             // `FrozenError.new(message, receiver: obj)` records the object the
             // modification was attempted on, and `KeyError.new(receiver:, key:)`
             // records the lookup that missed.
-            let mut named_receiver = None;
-            let mut named_key = None;
             let mut named_name = None;
             let mut named_args = None;
             let mut named_private_call = None;
             let mut message_object = None;
             let mut arguments = arguments;
-            if let Some(View::Dict(entries)) = arguments.last().view() {
-                let entries = entries.borrow();
-                named_receiver = entries.get(":receiver").cloned();
-                named_key = entries.get(":key").cloned();
-                let recognized = named_receiver.is_some() as usize + named_key.is_some() as usize;
-                let named = entries
-                    .keys()
-                    .filter(|key| key.as_str() != crate::vm::param_binding::KWARGS_MARKER)
-                    .count();
-                let consumed = recognized > 0 && recognized == named;
-                drop(entries);
-                if consumed {
-                    arguments.pop();
-                }
-            }
+            let (named_receiver, named_key) = take_exception_keywords(&mut arguments);
             let message = if arguments.is_empty() {
                 String::new()
             } else if arguments.len() == 1 {
@@ -1161,6 +1145,30 @@ fn reaches_core_base(class: &Rc<Class>) -> bool {
         cursor = current.superclass();
     }
     false
+}
+
+/// Takes the `receiver:` and `key:` keywords an exception is built with off
+/// the end of `arguments`, when they are the only keywords given.
+pub(crate) fn take_exception_keywords(
+    arguments: &mut Vec<Object>,
+) -> (Option<Object>, Option<Object>) {
+    let Some(View::Dict(entries)) = arguments.last().view() else {
+        return (None, None);
+    };
+    let entries = entries.borrow();
+    let receiver = entries.get(":receiver").cloned();
+    let key = entries.get(":key").cloned();
+    let recognized = receiver.is_some() as usize + key.is_some() as usize;
+    let named = entries
+        .keys()
+        .filter(|held| held.as_str() != crate::vm::param_binding::KWARGS_MARKER)
+        .count();
+    drop(entries);
+    if recognized == 0 || recognized != named {
+        return (None, None);
+    }
+    arguments.pop();
+    (receiver, key)
 }
 
 pub(crate) fn descends_from(class: &Rc<Class>, name: &str) -> bool {

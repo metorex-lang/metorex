@@ -25,8 +25,9 @@ const BROKEN_OUT: i32 = 2;
 thread_local! {
     /// What the last `rb_protect` caught, which `rb_jump_tag` raises again.
     static CAUGHT: RefCell<Option<MetorexError>> = const { RefCell::new(None) };
-    /// The function and object of each `rb_exec_recursive` running now.
-    static RECURSING: RefCell<Vec<(usize, Value)>> = const { RefCell::new(Vec::new()) };
+    /// The function, object and paired object of each `rb_exec_recursive`
+    /// running now. The paired object is nil for a call that names none.
+    static RECURSING: RefCell<Vec<(usize, Value, Value)>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Runs `run`, answering the error it raised through C instead of letting
@@ -277,7 +278,29 @@ pub extern "C-unwind" fn rb_exec_recursive(
     object: Value,
     data: Value,
 ) -> Value {
-    let key = (function as usize, object);
+    exec_recursive(function, object, QNIL, data)
+}
+
+/// Calls `function` as `rb_exec_recursive` does, where a call further out
+/// counts as the same only when it was for `paired` as well, as comparing
+/// two objects is.
+#[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_exec_recursive_paired(
+    function: extern "C-unwind" fn(Value, Value, i32) -> Value,
+    object: Value,
+    paired: Value,
+    data: Value,
+) -> Value {
+    exec_recursive(function, object, paired, data)
+}
+
+fn exec_recursive(
+    function: extern "C-unwind" fn(Value, Value, i32) -> Value,
+    object: Value,
+    paired: Value,
+    data: Value,
+) -> Value {
+    let key = (function as usize, object, paired);
     if RECURSING.with(|held| held.borrow().contains(&key)) {
         return function(object, data, 1);
     }

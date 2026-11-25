@@ -256,3 +256,6 @@
 [submodule "gems/rails-html-sanitizer"]
 	path = gems/rails-html-sanitizer
 	url = https://github.com/rails/rails-html-sanitizer
+[submodule "gems/globalid"]
+	path = gems/globalid
+	url = https://github.com/rails/globalid

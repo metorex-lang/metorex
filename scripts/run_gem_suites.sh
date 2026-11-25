@@ -165,6 +165,8 @@ SUITES=(
   "rails/actionpack|test/**/*_test.rb|-w -I lib -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
   "rails/actionview|test/*_test.rb test/actionpack/**/*_test.rb test/activerecord/*_test.rb test/template/**/*_test.rb|-w -I lib -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
   "rails/actionmailer|test/*_test.rb|-w -I lib -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
+  "rails/activejob|test/cases/adapter_test.rb test/cases/argument_serialization_test.rb test/cases/callbacks_test.rb test/cases/continuation_test.rb test/cases/enqueue_after_transaction_commit_test.rb test/cases/exceptions_test.rb test/cases/instrumentation_test.rb test/cases/job_serialization_test.rb test/cases/logging_test.rb test/cases/queue_adapter_test.rb test/cases/queue_naming_test.rb test/cases/queue_priority_test.rb test/cases/queuing_test.rb test/cases/rescue_test.rb test/cases/serializers_test.rb test/cases/structured_event_subscriber_test.rb test/cases/test_case_test.rb test/cases/test_helper_test.rb test/cases/timezones_test.rb test/cases/translation_test.rb|-w -I lib -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
+  "globalid|test/cases/*_test.rb|-w -I lib -I test -r cgi/escape -r bundler/setup -r helper"
   "rails-dom-testing|test/*_test.rb|-w -I lib -I test -r bundler/setup"
   "rails-html-sanitizer|test/*_test.rb|-w -I lib -I test -r bundler/setup"
   "redis|test/redis/*_test.rb test/distributed/*_test.rb test/modules/*_test.rb|-I lib -I test -r bundler/setup"

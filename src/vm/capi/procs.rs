@@ -26,6 +26,15 @@ pub extern "C-unwind" fn rb_proc_arity(procedure: Value) -> i32 {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C-unwind" fn rb_proc_lambda_p(procedure: Value) -> Value {
+    if call(to_object(procedure), "lambda?", Vec::new()).is_truthy() {
+        QTRUE
+    } else {
+        QFALSE
+    }
+}
+
+#[unsafe(no_mangle)]
 pub extern "C-unwind" fn rb_obj_is_proc(value: Value) -> Value {
     let object = to_object(value);
     let is_proc = matches!(object.view(), View::Block(_))

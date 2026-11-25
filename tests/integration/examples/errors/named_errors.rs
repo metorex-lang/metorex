@@ -419,3 +419,23 @@ fn method_missing_chains_keep_bare_names() {
         "[NameError, \"undefined local variable or method 'acount' for an instance of Group\"]\n"
     );
 }
+
+#[test]
+fn test_name_error_subclass_initialize_passes_the_name_to_super() {
+    let output = run_example("errors/name_error/subclass_super.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "no record named `Invoice`\n",
+            "\"Invoice\"\n",
+            "no method total\n",
+            ":total\n",
+            "[1, 2]\n",
+            "missing limit\n",
+            ":limit\n",
+            "{}\n",
+            "no record named `Order`\n",
+            "\"Order\"\n",
+        )
+    );
+}

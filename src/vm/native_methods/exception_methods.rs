@@ -174,17 +174,62 @@ impl VirtualMachine {
             }
             // `initialize` called again on an exception, as
             // `Exception.instance_method(:initialize).bind_call(error, text)`
-            // does, sets its message anew, to nothing when handed none.
+            // does, or reached through `super` from a subclass's own, sets
+            // its message anew, to nothing when handed none. A NameError
+            // takes the name looked up after the message, a NoMethodError its
+            // arguments and whether the call was private after that, and
+            // the `receiver:` and `key:` keywords are kept as `new` keeps
+            // them.
             "initialize" => {
-                if arguments.len() > 1 {
+                let mut given = arguments.to_vec();
+                let (named_receiver, named_key) =
+                    crate::vm::method_invocation::take_exception_keywords(&mut given);
+                let class = exception.borrow().class.clone();
+                let descends = |name: &str| {
+                    class
+                        .as_ref()
+                        .is_some_and(|held| crate::vm::method_invocation::descends_from(held, name))
+                };
+                let most = if descends("NoMethodError") {
+                    4
+                } else if descends("NameError") {
+                    2
+                } else {
+                    1
+                };
+                if given.len() > most {
                     return Err(crate::vm::errors::argument_count_error(
-                        crate::vm::errors::Arity::Range(0, 1),
-                        arguments.len(),
+                        crate::vm::errors::Arity::Range(0, most),
+                        given.len(),
                         position,
                     ));
                 }
-                let given = arguments.first().cloned().unwrap_or(Object::Nil);
-                self.exception_initialize(receiver, &[given], position)
+                {
+                    let mut details = exception.borrow_mut();
+                    let fields = [
+                        crate::vm::NAME_ERROR_NAME_KEY,
+                        crate::vm::NO_METHOD_ARGS_KEY,
+                        crate::vm::PRIVATE_CALL_KEY,
+                    ];
+                    for (key, value) in fields.iter().zip(given.iter().skip(1)) {
+                        let value = if *key == crate::vm::PRIVATE_CALL_KEY {
+                            Object::Bool(value.is_truthy())
+                        } else {
+                            value.clone()
+                        };
+                        details.instance_vars.insert((*key).into(), value);
+                    }
+                    if let Some(value) = named_receiver {
+                        details.receiver = Some(Box::new(value));
+                    }
+                    if let Some(value) = named_key {
+                        details
+                            .instance_vars
+                            .insert(crate::vm::KEY_ERROR_KEY.into(), value);
+                    }
+                }
+                let message = given.first().cloned().unwrap_or(Object::Nil);
+                self.exception_initialize(receiver, &[message], position)
                     .map(Some)
             }
             // Ruby's `#message` is `to_s`, which answers the class name when
