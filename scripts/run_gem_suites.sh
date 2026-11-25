@@ -164,6 +164,7 @@ SUITES=(
   "rails/activerecord|test/cases/arel/**/*_test.rb|-w -I lib -I test -r bundler/setup -r active_model|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
   "rails/actionpack|test/**/*_test.rb|-w -I lib -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
   "rails/actionview|test/*_test.rb test/actionpack/**/*_test.rb test/activerecord/*_test.rb test/template/**/*_test.rb|-w -I lib -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
+  "rails/actionmailer|test/*_test.rb|-w -I lib -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
   "rails-dom-testing|test/*_test.rb|-w -I lib -I test -r bundler/setup"
   "rails-html-sanitizer|test/*_test.rb|-w -I lib -I test -r bundler/setup"
   "redis|test/redis/*_test.rb test/distributed/*_test.rb test/modules/*_test.rb|-I lib -I test -r bundler/setup"

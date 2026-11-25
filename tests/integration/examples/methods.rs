@@ -986,6 +986,15 @@ fn public_send_reaches_a_module_function_on_its_module() {
 }
 
 #[test]
+fn public_send_of_a_private_method_reaches_method_missing() {
+    let output = run_example("methods/public_send_of_a_private_method_reaches_method_missing.rb");
+    assert_eq!(
+        output,
+        "test answered by method_missing with [1]\nputs answered by method_missing with [\"hello\"]\n3 items\nprivate method 'secret' called for an instance of Plain\n"
+    );
+}
+
+#[test]
 fn a_string_io_in_utf16_reads_lines_and_positions_in_bytes() {
     let output = run_example("io/string_io_utf16_lines.rb");
     assert_eq!(

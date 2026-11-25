@@ -364,19 +364,12 @@ impl VirtualMachine {
                 &self_class,
                 &self_object,
                 &method_name,
-                evaluated_args,
+                evaluated_args.clone(),
                 position,
             )? {
                 return Ok(result);
             }
-            return Err(MetorexError::runtime_error(
-                format!(
-                    "super: no superclass method '{}' for {}",
-                    method_name,
-                    self_class.ruby_name()
-                ),
-                position_to_location(position),
-            ));
+            return self.super_finds_nothing(&self_object, &method_name, evaluated_args, position);
         }
 
         // Get the current self (must be an instance)
@@ -964,11 +957,15 @@ impl VirtualMachine {
             handed.extend(evaluated_args);
             return self.invoke_method(owner, missing, self_val.clone(), handed, position);
         }
-        let message = format!(
-            "super: no superclass method '{}' for an instance of {}",
-            method_name,
-            self.builtins().class_of(self_val).name()
-        );
+        let receiver = match self_val.view() {
+            View::Class(class) => format!("class {}", class.ruby_name()),
+            View::Module(module) => format!("module {}", module.ruby_name()),
+            _ => format!(
+                "an instance of {}",
+                self.builtins().class_of(self_val).name()
+            ),
+        };
+        let message = format!("super: no superclass method '{method_name}' for {receiver}");
         Err(MetorexError::UncaughtException {
             exception: crate::vm::errors::no_method_error(
                 &message,

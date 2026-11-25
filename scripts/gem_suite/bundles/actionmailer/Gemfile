@@ -1,0 +1,39 @@
+# The gems actionmailer's tests load, at the versions the rails repository's
+# own Gemfile allows: actionpack, actionview, activejob and activesupport
+# and what they load, mail with the net gems it sends through, and globalid
+# for the jobs that carry records.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "actionmailer", path: "../../../../gems/rails/actionmailer"
+gem "actionpack", path: "../../../../gems/rails/actionpack"
+gem "actionview", path: "../../../../gems/rails/actionview"
+gem "activejob", path: "../../../../gems/rails/activejob"
+gem "activemodel", path: "../../../../gems/rails/activemodel"
+gem "activesupport", path: "../../../../gems/rails/activesupport"
+gem "railties", path: "../../../../gems/rails/railties"
+gem "rails-dom-testing", path: "../../../../gems/rails-dom-testing"
+gem "rails-html-sanitizer", path: "../../../../gems/rails-html-sanitizer"
+gem "loofah", path: "../../../../gems/loofah"
+gem "crass", path: "../../../../gems/crass"
+gem "mail", path: "../../../../gems/mail"
+gem "mini_mime", path: "../../../../gems/mini_mime"
+gem "i18n", path: "../../../../gems/i18n"
+gem "tzinfo", path: "../../../../gems/tzinfo"
+gem "concurrent-ruby", path: "../../../../gems/concurrent-ruby"
+gem "rack", path: "../../../../gems/rack"
+gem "rack-test", path: "../../../../gems/rack-test"
+gem "builder", path: "../../../../gems/builder"
+gem "erubi", path: "../../../../gems/erubi"
+gem "zeitwerk", path: "../../../../gems/zeitwerk"
+gem "thor", path: "../../../../gems/thor"
+gem "globalid", ">= 0.3.6"
+gem "rack-session", ">= 1.0.1"
+gem "useragent", "~> 0.16"
+gem "connection_pool", "< 3"
+gem "minitest-mock"
+gem "nokogiri", ">= 1.8.1", "!= 1.11.0"
+gem "rake", ">= 13"
+
+shipped "minitest", "base64", "bigdecimal", "drb", "json", "logger", "uri", "rexml", "date", "psych", "stringio", "erb", "prism", "timeout", "tsort", "irb", "net-imap", "net-pop", "net-smtp", "net-protocol"

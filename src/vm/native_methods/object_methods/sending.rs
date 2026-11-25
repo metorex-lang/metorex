@@ -85,6 +85,12 @@ impl VirtualMachine {
                         Some((owner, _)) => owner,
                         None => self.builtins().class_of(receiver),
                     };
+                    // A module function's public copy is found on the module
+                    // itself, where the private one of an ancestor such as
+                    // Kernel is not.
+                    let found_on_the_receiver = holder.is_singleton_class()
+                        || matches!(receiver.view(), View::Class(own) | View::Module(own)
+                            if std::rc::Rc::ptr_eq(own, &holder));
                     // A singleton class that neither defines nor marks the
                     // name leaves it to the class the object was made from.
                     let holder = match holder.superclass() {
@@ -102,10 +108,14 @@ impl VirtualMachine {
                     // which `module_function` leaves public.
                     let module_copy_is_public =
                         matches!(receiver.view(), View::Class(_) | View::Module(_))
+                            && found_on_the_receiver
                             && !self.method_is_restricted(receiver, &method);
                     let hidden = if module_copy_is_public {
                         None
-                    } else if holder.is_method_private(&method) {
+                    } else if holder.is_method_private(&method)
+                        || (matches!(receiver.view(), View::Class(_) | View::Module(_))
+                            && self.method_is_restricted(receiver, &method))
+                    {
                         Some("private")
                     } else if holder.is_method_protected(&method) {
                         Some("protected")
@@ -113,6 +123,23 @@ impl VirtualMachine {
                         None
                     };
                     if let Some(named) = hidden {
+                        // A call that cannot reach the method goes to the
+                        // receiver's method_missing, as one written with a
+                        // receiver does.
+                        if let Some((owner, missing)) =
+                            self.lookup_method(receiver, "method_missing")
+                            && !missing.is_undefined
+                        {
+                            let mut handed = vec![Object::symbol(method.clone())];
+                            handed.extend(rest_args);
+                            return Ok(Some(self.invoke_method(
+                                owner,
+                                missing,
+                                receiver.clone(),
+                                handed,
+                                position,
+                            )?));
+                        }
                         let wording = self.receiver_wording_for(receiver, position);
                         let message = format!("{named} method '{method}' called for {wording}");
                         let exception = Object::exception("NoMethodError", message.clone());
@@ -198,8 +225,14 @@ impl VirtualMachine {
                     && method_name != "public_send"
                     && crate::vm::native_methods::is_kernel_private_function(&method)
                 {
+                    // `format` is registered under the name of the function
+                    // it shares with `sprintf`.
+                    let function = match self.globals().get(&method).view() {
+                        Some(View::NativeFunction(registered)) => registered.to_string(),
+                        _ => method.clone(),
+                    };
                     return self
-                        .call_native_function(&method, rest_args, position)
+                        .call_native_function(&function, rest_args, position)
                         .map(Some);
                 }
                 // A class that answers what it was not asked for decides what

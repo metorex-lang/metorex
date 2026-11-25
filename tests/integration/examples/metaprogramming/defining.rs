@@ -72,6 +72,22 @@ Base caught: whatever
 }
 
 #[test]
+fn test_super_without_a_method_reaches_method_missing() {
+    let expected = r#"welcome via method_missing [1, 2]
+hello reached method_missing
+NoMethodError
+super: no superclass method 'greet' for an instance of Plain
+:greet
+super: no superclass method 'build' for class Report
+Report
+"#;
+    let output = run_example(
+        "metaprogramming/method_missing/super_without_a_method_reaches_method_missing.rb",
+    );
+    assert_eq!(output, expected);
+}
+
+#[test]
 fn test_metaprogramming_define_method_from_callable_execution() {
     let expected = concat!(
         "[1, 2]\n",
