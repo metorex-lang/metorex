@@ -353,6 +353,10 @@ impl VirtualMachine {
         held: Object,
         position: Position,
     ) -> Result<(String, String, bool), MetorexError> {
+        // An instance of a String subclass is a String already, so its own
+        // characters stand, whatever its `to_s` answers.
+        let held =
+            crate::vm::native_methods::subclasses::string_subclass_value(&held).unwrap_or(held);
         match held.view() {
             View::String(text) => Ok((
                 text.as_str().to_string(),

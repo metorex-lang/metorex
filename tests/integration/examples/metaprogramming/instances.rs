@@ -140,3 +140,19 @@ fn undef_in_a_block_a_method_runs_with_class_exec_undefines_on_that_class() {
     let output = run_example("instance_exec/undef_in_a_block_a_method_class_execs.rb");
     assert_eq!(output, ":custom\n:plain\n[:include_in]\n");
 }
+
+#[test]
+fn instance_exec_hands_a_proc_argument_to_its_block() {
+    let output = run_example("instance_exec/proc_arguments_stay_arguments.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[Object, Proc]\n",
+            "[Integer, Proc]\n",
+            "[Proc, Integer]\n",
+            "[Integer, Proc]\n",
+            "[Integer, Proc]\n",
+            "[Integer, Proc]\n",
+        )
+    );
+}

@@ -334,6 +334,24 @@ impl VirtualMachine {
         written: WrittenReceiver,
         position: Position,
     ) -> Result<Object, MetorexError> {
+        // `held&.name(args)` calls `name` as `held.name(args)` would, so a
+        // private method is refused just the same.
+        if method_name == crate::parser::SAFE_CALL
+            && !matches!(receiver.view(), View::Nil)
+            && let Some(View::Symbol(named)) = arguments.first().map(Object::view)
+        {
+            // The call site holds the marker and the name as its arguments,
+            // so the method found for the name is not one it may keep.
+            self.recording_call_cache.take();
+            let named = named.as_str().to_string();
+            return self.call_evaluated_method(
+                receiver,
+                &named,
+                arguments[1..].to_vec(),
+                written,
+                position,
+            );
+        }
         let mut recording = self.recording_call_cache.take();
         CALLER_CONSULTED.set(false);
         // Refinement dispatch: if an active refinement covers this receiver's
@@ -457,20 +475,11 @@ impl VirtualMachine {
                     // be called. A marking further up the chain belongs to
                     // another definition of the same name.
                     is_private = false;
-                } else if let Some(extended) = class
-                    .is_singleton_class()
-                    .then(|| {
-                        class
-                            .linear_mixins()
-                            .iter()
-                            .find(|module| module.find_own_method(method_name).is_some())
-                            .cloned()
-                    })
-                    .flatten()
-                {
-                    // A module the object was extended with supplies the
-                    // method, so its marking is the one in force.
-                    is_private = self.refuses_explicit_receiver(&extended, method_name);
+                } else if let Some(mixed_in) = class.own_mixin_defining(method_name) {
+                    // A module the class includes, or the object was extended
+                    // with, supplies the method, so its marking is the one in
+                    // force.
+                    is_private = self.refuses_explicit_receiver(&mixed_in, method_name);
                 } else if !is_private || class.is_singleton_class() {
                     // A singleton class marks nothing of its own here, so the
                     // class it was made from, which may have made the name
@@ -481,8 +490,17 @@ impl VirtualMachine {
                             is_private = false;
                             break;
                         }
-                        if sc.find_method(method_name).is_some() {
+                        if sc.find_own_method(method_name).is_some()
+                            || sc.is_method_restricted(method_name)
+                        {
                             is_private = self.refuses_explicit_receiver(&sc, method_name);
+                            break;
+                        }
+                        if let Some(mixed_in) = sc.own_mixin_defining(method_name) {
+                            is_private = self.refuses_explicit_receiver(&mixed_in, method_name);
+                            break;
+                        }
+                        if sc.find_method(method_name).is_none() {
                             break;
                         }
                         current = sc.superclass();
@@ -1221,6 +1239,11 @@ impl VirtualMachine {
                         || sc.is_method_restricted(name)
                     {
                         return Some(sc);
+                    }
+                    // A module the class extends comes ahead of the
+                    // superclass's singleton, so its marking decides.
+                    if let Some(module) = sc.own_mixin_defining(name) {
+                        return Some(module);
                     }
                     if let Some((owner, _)) = sc.find_method_with_owner(name) {
                         defining_singleton.get_or_insert(owner);

@@ -250,3 +250,9 @@
 [submodule "gems/loofah"]
 	path = gems/loofah
 	url = https://github.com/flavorjones/loofah
+[submodule "gems/rails-dom-testing"]
+	path = gems/rails-dom-testing
+	url = https://github.com/rails/rails-dom-testing
+[submodule "gems/rails-html-sanitizer"]
+	path = gems/rails-html-sanitizer
+	url = https://github.com/rails/rails-html-sanitizer

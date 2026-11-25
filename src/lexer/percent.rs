@@ -171,11 +171,6 @@ impl<'a> Lexer<'a> {
             } else if ch == '\\' {
                 self.advance();
                 escaped = true;
-            } else if ch == '/' {
-                // Ruby writes a pattern back the way `/.../` spells it, where
-                // a slash stands escaped however the literal was written.
-                pattern.push_str("\\/");
-                self.advance();
             } else {
                 pattern.push(ch);
                 self.advance();

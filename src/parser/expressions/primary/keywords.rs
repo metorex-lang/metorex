@@ -228,7 +228,7 @@ impl Parser<'_> {
         // A yield hands values to the block the enclosing method was called
         // with, so there has to be an enclosing method. Written anywhere
         // else there is no block for it to reach.
-        if self.def_body_depth == 0 {
+        if !self.yield_reaches_a_method() {
             return Err(MetorexError::syntax_error(
                 "Invalid yield".to_string(),
                 crate::error::SourceLocation::from(position),

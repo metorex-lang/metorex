@@ -1,0 +1,18 @@
+# The gems rails-dom-testing's tests load: activesupport and what it loads,
+# nokogiri, and minitest below 6, whose autorun loads the mocks the tests
+# stub with.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "rails-dom-testing", path: "../../../../gems/rails-dom-testing"
+gem "activesupport", path: "../../../../gems/rails/activesupport"
+gem "i18n", path: "../../../../gems/i18n"
+gem "tzinfo", path: "../../../../gems/tzinfo"
+gem "concurrent-ruby", path: "../../../../gems/concurrent-ruby"
+gem "connection_pool", "< 3"
+gem "nokogiri", ">= 1.6"
+gem "minitest", "< 6"
+gem "rake", ">= 13"
+
+shipped "base64", "bigdecimal", "drb", "json", "logger", "uri", "rexml", "date", "psych", "stringio", "erb", "prism"

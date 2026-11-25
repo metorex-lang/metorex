@@ -739,3 +739,9 @@ fn the_name_error_kernel_method_raises_names_the_receivers_class() {
         )
     );
 }
+
+#[test]
+fn error_highlight_reads_a_file_again_once_it_changes() {
+    let output = run_example("errors/error_highlight_reads_an_edited_file_again.rb");
+    assert_eq!(output, "[2, 6, 11]\n[2, 6, 11]\n[3, 8, 23]\n");
+}

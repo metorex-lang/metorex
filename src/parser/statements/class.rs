@@ -168,6 +168,7 @@ impl Parser<'_> {
         // Parse class body - set flag to indicate we're inside a class
         let was_in_class = self.in_class_body;
         self.in_class_body = true;
+        self.class_body_def_depths.push(self.def_body_depth);
         // A loop or block around the definition is not one its body can
         // jump out of.
         let enclosing_jump_targets = std::mem::take(&mut self.jump_target_depth);
@@ -180,6 +181,7 @@ impl Parser<'_> {
 
         // Restore the previous state
         self.in_class_body = was_in_class;
+        self.class_body_def_depths.pop();
         self.jump_target_depth = enclosing_jump_targets;
         let refused = self.refuse_unlooped_jumps_after(redo_scope_start);
         let body = body?;
@@ -239,7 +241,10 @@ impl Parser<'_> {
         // A class body takes `rescue` and `ensure` clauses of its own, the
         // way a method body does.
         self.skip_whitespace();
-        let body = self.parse_block_body_with_optional_rescue_ensure(self.peek().position)?;
+        self.class_body_def_depths.push(self.def_body_depth);
+        let body = self.parse_block_body_with_optional_rescue_ensure(self.peek().position);
+        self.class_body_def_depths.pop();
+        let body = body?;
         self.note_closing_line(start_pos);
         self.expect(TokenKind::End, "Expected 'end' after 'class << ...' body")?;
 
@@ -329,6 +334,7 @@ impl Parser<'_> {
 
         let was_in_class = self.in_class_body;
         self.in_class_body = true;
+        self.class_body_def_depths.push(self.def_body_depth);
         // A loop or block around the definition is not one its body can
         // jump out of.
         let enclosing_jump_targets = std::mem::take(&mut self.jump_target_depth);
@@ -340,6 +346,7 @@ impl Parser<'_> {
         let body = self.parse_block_body_with_optional_rescue_ensure(self.peek().position);
 
         self.in_class_body = was_in_class;
+        self.class_body_def_depths.pop();
         self.jump_target_depth = enclosing_jump_targets;
         let refused = self.refuse_unlooped_jumps_after(redo_scope_start);
         let body = body?;

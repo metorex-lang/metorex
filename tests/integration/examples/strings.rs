@@ -1040,3 +1040,26 @@ fn test_strings_indic_grapheme_clusters_execution() {
         "[1, [3]]\n[1, [4]]\n[1, [4]]\n[1, [4]]\n[2, [2, 1]]\n[1, [2]]\n1\n"
     );
 }
+
+#[test]
+fn a_digit_after_hash_dollar_dash_leaves_the_text_uninterpolated() {
+    let output = run_example("strings/short_interpolation_of_dash_globals.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"argh+!\\#$-123_|&^`~.jpg\"\n",
+            "\"a\\#$-0x\"\n",
+            "\"asetb\"\n",
+            "\"a\\#$-\"\n",
+            "\"ax\"\n",
+            "\"a\\#@1\"\n",
+            "\"a\\#@@1x\"\n",
+        )
+    );
+}
+
+#[test]
+fn a_substitution_block_returning_a_string_subclass_writes_its_characters() {
+    let output = run_example("strings/gsub_block_returning_a_string_subclass.rb");
+    assert_eq!(output, "\"b-b\"\n\"c-c\"\n\"d-a\"\n\"e-e\"\n");
+}

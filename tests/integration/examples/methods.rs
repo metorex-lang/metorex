@@ -1445,3 +1445,22 @@ fn test_rescue_return_with_a_rescue_modifier_execution() {
         "\"Nested::Child\"\n\"Nested::Parent\"\n\"ok\"\n:rescued\n"
     );
 }
+
+#[test]
+fn a_safe_navigation_call_refuses_a_private_method_as_a_dotted_call_does() {
+    let output = run_example("methods/safe_navigation_respects_visibility.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "missing warn: safe\n",
+            "missing warn: bare\n",
+            "10\n",
+            ":hidden\n",
+            "1\n",
+            "2\n",
+            "private method 'secret' called for an instance of Account\n",
+            "nil\n",
+            "[1, 2, nil, 3]\n",
+        )
+    );
+}

@@ -1091,14 +1091,27 @@ module ErrorHighlight
     return nil
   end
 
-  # The tree of the program file at `path`, with its lines kept. A program
-  # given with `-e` or on standard input has no file, and no tree.
+  # How many files' trees are kept, so the frames of one backtrace that
+  # share files parse each of them once.
+  TREES_KEPT = 8
+  private_constant :TREES_KEPT
+
+  # The tree of the program file at `path`, with its lines kept, while the
+  # file is unchanged. A program given with `-e` or on standard input has no
+  # file, and no tree.
   def self.tree_of(path)
     return nil unless File.file?(path)
 
-    source = File.read(path)
-
-    [RubyVM::AbstractSyntaxTree.parse(source, keep_script_lines: true), source]
+    @trees ||= {}
+    stat = File.stat(path)
+    key = [File.expand_path(path), stat.mtime, stat.size]
+    kept = @trees.delete(key)
+    unless kept
+      source = File.read(path)
+      kept = [RubyVM::AbstractSyntaxTree.parse(source, keep_script_lines: true), source]
+      @trees.delete(@trees.keys.first) if @trees.size >= TREES_KEPT
+    end
+    @trees[key] = kept
   end
   private_class_method :tree_of
 

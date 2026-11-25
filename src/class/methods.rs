@@ -466,6 +466,21 @@ impl Class {
             .and_then(|superclass| superclass.find_method_with_owner(name))
     }
 
+    /// The module prepended to or mixed into this class itself, not a
+    /// superclass, whose own table holds `name`.
+    pub fn own_mixin_defining(self: &Rc<Class>, name: &str) -> Option<Rc<Class>> {
+        let prepends = self.rare().prepends.borrow().clone();
+        let mixins = if self.has_mixins() {
+            self.linear_mixins().to_vec()
+        } else {
+            Vec::new()
+        };
+        prepends
+            .into_iter()
+            .chain(mixins)
+            .find(|module| module.find_own_method(name).is_some())
+    }
+
     /// True when this class object is a singleton class (created by
     /// `class << obj` or `obj.singleton_class`).
     pub fn is_singleton_class(&self) -> bool {

@@ -544,3 +544,27 @@ fn a_scan_block_reads_the_prematch_and_postmatch_of_each_match() {
         )
     );
 }
+
+#[test]
+fn a_slash_stays_bare_in_a_regexp_source_and_is_escaped_in_its_to_s() {
+    let output = run_example("regexp/interpolated_regexp_equality.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"\\\\A/((?-mix:.+))(?:/([^/.?]+))?\\\\Z\"\n",
+            "\"\\\\A/((?-mix:.+))(?:/([^/.?]+))?\\\\Z\"\n",
+            "[0, 0]\n",
+            "[#<Encoding:US-ASCII>, #<Encoding:US-ASCII>]\n",
+            "[false, false]\n",
+            "true\n",
+            "true\n",
+            "\"(?-mix:a\\\\/b)\"\n",
+            "\"(?-mix:a\\\\/b)\"\n",
+            "\"/a\\\\/b/\"\n",
+            "true\n",
+            "false\n",
+            "\"[/]\"\n",
+            "\"a/(?-mix:.+)\"\n",
+        )
+    );
+}

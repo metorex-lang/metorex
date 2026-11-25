@@ -84,7 +84,11 @@ impl<'a> Lexer<'a> {
             if escaped {
                 // A backslash ending a line joins it to the next, and stands
                 // for nothing in the pattern.
-                if ch != '\n' {
+                // An escaped slash is the delimiter written into the
+                // pattern, which keeps the slash alone.
+                if ch == '/' {
+                    pattern.push(ch);
+                } else if ch != '\n' {
                     pattern.push('\\');
                     pattern.push(ch);
                 }

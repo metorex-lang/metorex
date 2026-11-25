@@ -192,20 +192,15 @@ impl VirtualMachine {
         arguments: &[Object],
         position: Position,
     ) -> Result<Option<Object>, MetorexError> {
-        let block = self.pending_block.take().or_else(|| {
-            if !arguments.is_empty()
-                && let View::Block(_) = arguments[0].view()
-            {
-                Some(arguments[0].clone())
-            } else {
-                None
-            }
-        });
-        let positional: Vec<Object> = arguments
-            .iter()
-            .filter(|argument| !matches!(argument.view(), View::Block(_)))
-            .cloned()
-            .collect();
+        let passed_block = self.pending_block.take();
+        let block_in_arguments = passed_block.is_none()
+            && arguments
+                .first()
+                .is_some_and(|first| matches!(first.view(), View::Block(_)));
+        let block = passed_block.or_else(|| block_in_arguments.then(|| arguments[0].clone()));
+        // A Proc handed as an argument stays an argument, which the block
+        // receives as it would any other value.
+        let positional: Vec<Object> = arguments[usize::from(block_in_arguments)..].to_vec();
         if let Some(View::Block(body)) = block.view() {
             // Ruby refuses a singleton method on an immediate, and a
             // `def` in the body would be exactly that.

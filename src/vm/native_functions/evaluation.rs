@@ -161,6 +161,12 @@ impl VirtualMachine {
         let mut parser = crate::parser::Parser::new(tokens)
             .inside_eval()
             .with_outer_locals(outer_locals);
+        if self
+            .current_method_frame
+            .is_some_and(|frame| frame != crate::vm::core::TOP_LEVEL_FRAME)
+        {
+            parser = parser.evaluated_in_method();
+        }
         let parsed = parser.parse();
         let source_warnings = parser.warnings().to_vec();
         let default_warnings = parser.default_warnings().to_vec();
@@ -210,6 +216,29 @@ impl VirtualMachine {
                 if let Some(error) =
                     self.prism_syntax_report(&code, &named, named_lineno, &parser, position)?
                 {
+                    return Err(error);
+                }
+                // MRI's compiler refuses a `yield` that reaches no method,
+                // after prism has read the code, so the error names only the
+                // code's own place and carries no locations.
+                if let Some(first) = errors.first()
+                    && first.message() == "Invalid yield"
+                {
+                    let at = first
+                        .location()
+                        .map_or(0, |held| held.line.max(1).saturating_sub(lineno))
+                        as i64
+                        + named_lineno;
+                    let error = crate::vm::errors::syntax_error(
+                        format!("{named}:{at}: Invalid yield"),
+                        Some(&named),
+                        position,
+                    );
+                    if let MetorexError::UncaughtException { exception, .. } = &error
+                        && let View::Exception(details) = exception.view()
+                    {
+                        details.borrow_mut().backtrace = Some(vec![named.clone()]);
+                    }
                     return Err(error);
                 }
                 return Err({

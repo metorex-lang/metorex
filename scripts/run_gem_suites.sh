@@ -162,6 +162,9 @@ SUITES=(
   "rails/activemodel|test/cases/**/*_test.rb|-w -I lib -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
   "rails/activerecord|test/cases/*_test.rb test/cases/assertions/**/*_test.rb test/cases/associations/**/*_test.rb test/cases/attribute_methods/**/*_test.rb test/cases/coders/**/*_test.rb test/cases/connection_adapters/**/*_test.rb test/cases/database_configurations/**/*_test.rb test/cases/fixture_set/**/*_test.rb test/cases/migration/**/*_test.rb test/cases/persistence/**/*_test.rb test/cases/relation/**/*_test.rb test/cases/scoping/**/*_test.rb test/cases/tasks/**/*_test.rb test/cases/type/**/*_test.rb test/cases/type_caster/**/*_test.rb test/cases/validations/**/*_test.rb test/cases/encryption/*_test.rb test/cases/encryption/cipher/*_test.rb test/cases/adapters/sqlite3/**/*_test.rb|-w -I lib -I test -I ../railties/lib -r $REPO_ROOT/scripts/gem_suite/activerecord_on_sqlite3.rb -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
   "rails/activerecord|test/cases/arel/**/*_test.rb|-w -I lib -I test -r bundler/setup -r active_model|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
+  "rails/actionpack|test/**/*_test.rb|-w -I lib -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
+  "rails-dom-testing|test/*_test.rb|-w -I lib -I test -r bundler/setup"
+  "rails-html-sanitizer|test/*_test.rb|-w -I lib -I test -r bundler/setup"
   "redis|test/redis/*_test.rb test/distributed/*_test.rb test/modules/*_test.rb|-I lib -I test -r bundler/setup"
   "racc|test/test_*.rb|--enable-frozen-string-literal -I lib -I test/lib -I $HELPERS -r helper|$REPO_ROOT/scripts/gem_suite/racc_parser_text.rb"
 )

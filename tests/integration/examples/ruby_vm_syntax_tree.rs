@@ -1169,3 +1169,9 @@ fn an_in_clause_with_a_guard_and_no_body_builds_its_syntax_tree() {
         ":CASE3\n:IN\n[:CONST, :LASGN, :IN]\n:IN\n[:IF, :BEGIN, :FCALL]\n:IF\n[RubyVM::AbstractSyntaxTree::Node, RubyVM::AbstractSyntaxTree::Node, NilClass]\n"
     );
 }
+
+#[test]
+fn a_node_id_for_a_location_in_evaluated_code_answers_without_raising() {
+    let output = run_example("ruby_vm/node_id_for_an_eval_location.rb");
+    assert_eq!(output, "\"(template)\"\n:answered\n");
+}

@@ -490,7 +490,13 @@ pub(super) fn short_variable_length(rest: &[char]) -> usize {
                     .count()
             }
             Some(mark) if "~*$?!@/\\;,.=:<>\"&`'+".contains(*mark) => 2,
-            Some('-') if rest.get(2).is_some_and(continues_a_name) => 3,
+            Some('-')
+                if rest
+                    .get(2)
+                    .is_some_and(|letter| !letter.is_ascii() || starts_a_name(letter)) =>
+            {
+                3
+            }
             _ => name_from(1),
         },
         _ => 0,

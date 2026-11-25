@@ -9,7 +9,7 @@ fn regex_with_escaped_slash() {
     let tokens = Lexer::new(r"/path\/to/").tokenize();
     assert_eq!(
         tokens[0].kind,
-        TokenKind::Regex(Box::new(("path\\/to".to_string(), "".to_string())))
+        TokenKind::Regex(Box::new(("path/to".to_string(), "".to_string())))
     );
 }
 

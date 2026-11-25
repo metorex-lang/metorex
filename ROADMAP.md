@@ -196,7 +196,7 @@ The 100 most downloaded gems on rubygems.org (`rubygems.org/stats`, read on 2026
   - [x] activesupport
   - [x] activemodel
   - [x] activerecord on SQLite
-  - [ ] actionpack, with rails-dom-testing and rails-html-sanitizer
+  - [x] actionpack, with rails-dom-testing and rails-html-sanitizer
   - [ ] actionview
   - [ ] actionmailer
   - [ ] activejob, with globalid

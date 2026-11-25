@@ -338,3 +338,19 @@ fn test_class_eval_strings_read_constants_through_the_receiver_then_the_caller()
         )
     );
 }
+
+#[test]
+fn a_yield_reaching_no_method_raises_the_compilers_syntax_error() {
+    let output = run_example("eval/invalid_yield_is_a_compile_error.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"named.rb:12: Invalid yield\", \"named.rb\", [\"named.rb\"], nil]\n",
+            "[\"named.rb:10: Invalid yield\", \"named.rb\", [\"named.rb\"], nil]\n",
+            "[\"named.rb:10: Invalid yield\", \"named.rb\", [\"named.rb\"], nil]\n",
+            "\"no block given (yield)\"\n",
+            "5\n",
+            "[\"top.rb:1: Invalid yield\", [\"top.rb\"]]\n",
+        )
+    );
+}

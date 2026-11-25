@@ -996,7 +996,7 @@ fn to_source_string(pattern: &str, flags: &str) -> String {
         Some(held) => held,
         None => (pattern.to_string(), String::new(), String::new()),
     };
-    let pattern = pattern.as_str();
+    let pattern = escape_bare_slashes(&pattern);
     let mut on = String::new();
     for flag in ['m', 'i', 'x'] {
         if group_off.contains(flag) {
@@ -1017,6 +1017,21 @@ fn to_source_string(pattern: &str, flags: &str) -> String {
     } else {
         format!("(?{}-{}:{})", on, off, pattern)
     }
+}
+
+/// The pattern with a backslash before each slash it holds unescaped, as
+/// Ruby writes a source into `to_s`.
+fn escape_bare_slashes(pattern: &str) -> String {
+    let mut written = String::with_capacity(pattern.len());
+    let mut escaped = false;
+    for held in pattern.chars() {
+        if held == '/' && !escaped {
+            written.push('\\');
+        }
+        escaped = held == '\\' && !escaped;
+        written.push(held);
+    }
+    written
 }
 
 /// Whether a pattern names nothing but ASCII. A `\\u` escape counts for the

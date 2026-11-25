@@ -307,3 +307,32 @@ fn a_class_method_set_aside_on_the_singleton_class_comes_back_in_place() {
         )
     );
 }
+
+#[test]
+fn a_public_class_method_from_an_extended_module_hides_a_private_one_above_it() {
+    let output = run_example("metaprogramming/public_inherited_from_an_extended_module.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "inherited PostsController\n",
+            "inherited PostsController\n",
+            "false\n",
+            "true\n",
+            "Wrapping\n",
+        )
+    );
+}
+
+#[test]
+fn a_public_method_from_an_included_module_hides_a_private_one_in_the_superclass() {
+    let output =
+        run_example("metaprogramming/public_method_from_an_included_module_over_a_private_one.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"checked private req\"\n",
+            "true\n",
+            "private method 'load_session' called for an instance of Persisted\n",
+        )
+    );
+}

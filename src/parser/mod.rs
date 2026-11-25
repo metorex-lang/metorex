@@ -98,6 +98,13 @@ pub struct Parser<'source> {
     /// How deep the walk is inside a `def` body, where an `END` block is
     /// registered once for every call rather than once for the program.
     pub(crate) def_body_depth: usize,
+    /// The `def` depth each class, module, or singleton class body around
+    /// the walk opened at, innermost last. A `yield` reaches a method only
+    /// from a `def` opened inside the innermost of them.
+    pub(crate) class_body_def_depths: Vec<usize>,
+    /// Whether the code is given to `eval` from inside a method, whose block
+    /// a `yield` at its top level reaches.
+    pub(crate) evaluated_in_method: bool,
     /// Whether the bodies of the methods read are kept encoded until first
     /// called. Their bytes last the whole run.
     pub(crate) hold_method_bodies: bool,
@@ -458,6 +465,21 @@ impl<'source> Parser<'source> {
         self
     }
 
+    /// A parser for code `eval` runs inside a method, where a `yield` at
+    /// its top level reaches that method's block.
+    pub fn evaluated_in_method(mut self) -> Self {
+        self.evaluated_in_method = true;
+        self
+    }
+
+    /// Whether a `yield` written here reaches a method's block.
+    pub(crate) fn yield_reaches_a_method(&self) -> bool {
+        match self.class_body_def_depths.last() {
+            Some(opened_at) => self.def_body_depth > *opened_at,
+            None => self.def_body_depth > 0 || self.evaluated_in_method,
+        }
+    }
+
     /// A parser for code that runs where `names` are locals, such as code
     /// given to `eval`, which reads each of them as a local.
     /// The locals of the code around this one that it was given.
@@ -488,6 +510,8 @@ impl<'source> Parser<'source> {
         // A `yield`, a `return` or a `break` written in the `#{}` reaches the
         // method and block the string is written in.
         nested.def_body_depth = self.def_body_depth;
+        nested.class_body_def_depths = self.class_body_def_depths.clone();
+        nested.evaluated_in_method = self.evaluated_in_method;
         nested.block_body_depth = self.block_body_depth;
         nested.jump_target_depth = self.jump_target_depth;
         nested
@@ -528,6 +552,8 @@ impl<'source> Parser<'source> {
             assignment_rhs_depth: 0,
             dict_literal_depth: 0,
             def_body_depth: 0,
+            class_body_def_depths: Vec::new(),
+            evaluated_in_method: false,
             hold_method_bodies: false,
             block_body_depth: 0,
             refuse_pattern_test: 0,

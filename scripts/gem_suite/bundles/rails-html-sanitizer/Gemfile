@@ -1,0 +1,11 @@
+# The gems rails-html-sanitizer's tests load: loofah and crass from their
+# checkouts, nokogiri, and minitest below 6, as the repository's own Gemfile
+# names, since its tests stub with the minitest 5 mocks.
+source "https://rubygems.org"
+
+gem "rails-html-sanitizer", path: "../../../../gems/rails-html-sanitizer"
+gem "loofah", path: "../../../../gems/loofah"
+gem "crass", path: "../../../../gems/crass"
+gem "nokogiri", ">= 1.15.7"
+gem "rake", ">= 13"
+gem "minitest", "< 6"
