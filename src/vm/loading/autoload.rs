@@ -294,6 +294,34 @@ impl VirtualMachine {
         }
     }
 
+    /// Wait while another thread is part-way through an autoload of `name`
+    /// that has already defined it, half built, on the module the autoload
+    /// belongs to. A constant read that finds that module's `name` reads
+    /// what the load defines once it has finished.
+    pub(crate) fn settle_autoloads_named(&mut self, name: &str) {
+        if self.autoload_loading.is_empty() {
+            return;
+        }
+        let here = self
+            .thread_current_stack
+            .last()
+            .cloned()
+            .unwrap_or(Object::Nil);
+        let loading_elsewhere: Vec<Rc<crate::class::Class>> = self
+            .autoload_loading
+            .iter()
+            .filter(|(cls, n, thread)| {
+                n == name
+                    && !on_the_same_thread(thread, &here)
+                    && self.autoloaded_value(cls, name).is_some()
+            })
+            .map(|(cls, _, _)| Rc::clone(cls))
+            .collect();
+        for owner in loading_elsewhere {
+            self.wait_for_the_autoload(&owner, name);
+        }
+    }
+
     /// Hand control over until the thread loading `name` has finished, so
     /// what the load defines is there to read. A load that never finishes,
     /// because the thread running it was killed, gives up after a while

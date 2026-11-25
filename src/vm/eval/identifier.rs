@@ -151,6 +151,7 @@ impl VirtualMachine {
         if self.in_a_non_main_ractor() || name == "TOPLEVEL_BINDING" {
             return self.read_identifier(name, position);
         }
+        self.settle_autoloads_named(name);
         if let Some(value) = cache.find(
             |scope| self.in_constant_scope(scope),
             || match self.environment().get(name) {

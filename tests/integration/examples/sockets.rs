@@ -381,3 +381,25 @@ fn a_tls_client_resumes_a_session_from_session_new_cb_over_tls_1_2_and_1_3() {
         )
     );
 }
+
+#[test]
+fn test_sockets_getc_waits_for_a_byte() {
+    let output = run_example("sockets/getc_waits_for_a_byte.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "true\n",
+            "[\"a\", \"b\"]\n",
+            "\"c\"\n",
+            "100\n",
+            "\"\\xFF\"\n",
+            "101\n",
+            "nil\n",
+            "nil\n",
+            "EOFError: end of file reached\n",
+            "EOFError: end of file reached\n",
+            "[\"x\", 121]\n",
+            "nil\n",
+        )
+    );
+}

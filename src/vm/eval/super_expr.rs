@@ -987,15 +987,33 @@ impl VirtualMachine {
     ) -> Result<Vec<Object>, MetorexError> {
         // Inside a block the arguments are those of the method the block was
         // written in, whichever method is running the block.
-        let at = match (self.call_stack.last(), self.lexical_home_frame.flatten()) {
-            (Some(top), Some(home)) if top.block_depth() > 0 => self
+        let in_block = self
+            .call_stack
+            .last()
+            .is_some_and(|top| top.block_depth() > 0);
+        let at = match (in_block, self.lexical_home_frame.flatten()) {
+            (true, Some(home)) => self
                 .method_running_frames
                 .iter()
                 .rposition(|frame| *frame == Some(home)),
             _ => None,
-        }
-        .or_else(|| self.method_running_stack.len().checked_sub(1));
-        let Some(method) = at.and_then(|at| self.method_running_stack.get(at)).cloned() else {
+        };
+        // A block run after the method it was written in returned finds that
+        // method by the name its frame carries. Its parameters are locals
+        // the block closed over.
+        let outlived = if in_block && at.is_none() {
+            self.method_a_block_was_written_in()
+        } else {
+            None
+        };
+        let at = if outlived.is_some() {
+            None
+        } else {
+            at.or_else(|| self.method_running_stack.len().checked_sub(1))
+        };
+        let Some(method) =
+            outlived.or_else(|| at.and_then(|at| self.method_running_stack.get(at)).cloned())
+        else {
             return Ok(self.method_arg_stack.last().cloned().unwrap_or_default());
         };
         let given = at
@@ -1082,6 +1100,28 @@ impl VirtualMachine {
             handed.push(Object::Dict(Rc::new(std::cell::RefCell::new(keywords))));
         }
         Ok(handed)
+    }
+
+    /// The method the running block was written in, found by the
+    /// `Class#method` name its frame carries among the ancestors of self.
+    fn method_a_block_was_written_in(&self) -> Option<Rc<crate::object::Method>> {
+        let written_in = self.call_stack.last()?.written_in()?.to_string();
+        let (class_name, method_name) = written_in.rsplit_once('#')?;
+        let receiver = self.environment().get("self")?;
+        let mut chain: Vec<Rc<Class>> = self
+            .existing_singleton_class(&receiver)
+            .into_iter()
+            .collect();
+        let receiver_class = match receiver.view() {
+            View::Instance(instance) => Rc::clone(&instance.borrow().class),
+            _ => self.builtins().class_of(&receiver),
+        };
+        chain.extend(walk_ancestors(&receiver_class));
+        chain
+            .iter()
+            .find(|held| held.name() == class_name)
+            .and_then(|held| held.find_own_method(method_name))
+            .filter(|method| !method.is_undefined)
     }
 
     fn eval_super_on_builtin(

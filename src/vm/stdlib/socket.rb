@@ -494,6 +494,26 @@ class BasicSocket < IO
     nil
   end
 
+  # One character, waiting until one arrives, or nil once the other end has
+  # finished. A socket is in binary mode, so a character is one byte.
+  def getc
+    readpartial 1
+  rescue EOFError
+    nil
+  end
+
+  def getbyte
+    getc&.getbyte 0
+  end
+
+  def readchar
+    readpartial 1
+  end
+
+  def readbyte
+    readchar.getbyte 0
+  end
+
   # Whether the side that reads, or the side that writes, has been closed on
   # its own.
   def read_closed?

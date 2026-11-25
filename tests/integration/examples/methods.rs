@@ -1473,3 +1473,17 @@ fn a_safe_navigation_call_refuses_a_private_method_as_a_dotted_call_does() {
         )
     );
 }
+
+#[test]
+fn zsuper_with_anonymous_rest_in_a_later_block() {
+    let output = run_example("methods/zsuper_with_anonymous_rest_in_a_later_block.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[]\n",
+            "subscribed\n",
+            "[[\"news\", :reader]]\n",
+            "[[\"sports\", :viewer]]\n",
+        )
+    );
+}

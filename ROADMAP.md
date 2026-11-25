@@ -200,7 +200,7 @@ The 100 most downloaded gems on rubygems.org (`rubygems.org/stats`, read on 2026
   - [x] actionview
   - [x] actionmailer
   - [x] activejob, with globalid
-  - [ ] actioncable
+  - [x] actioncable
   - [ ] activestorage
   - [ ] railties and rails, with sprockets-rails
 - [ ] The ruby-bench benchmarks that need gems run under `benchmarks/compare.rb`

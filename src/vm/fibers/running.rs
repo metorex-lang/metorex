@@ -741,6 +741,7 @@ impl VirtualMachine {
                 method_arg_stack: self.method_arg_stack.clone(),
                 method_running_frames: self.method_running_frames.clone(),
                 catch_tags: Vec::new(),
+                nesting: 0,
             }
         });
         FiberContext {
@@ -790,6 +791,7 @@ impl VirtualMachine {
                 taken.method_running_frames,
             ),
             catch_tags: std::mem::replace(&mut self.catch_tags, taken.catch_tags),
+            nesting: crate::vm::program::replace_nesting(taken.nesting),
         }
     }
 

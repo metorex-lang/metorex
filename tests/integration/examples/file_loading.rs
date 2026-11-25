@@ -677,6 +677,12 @@ fn test_loading_autoload_registered_on_a_superclass_execution() {
 }
 
 #[test]
+fn test_loading_autoload_waits_for_another_thread_loading_execution() {
+    let output = run_example("loading/autoload_waits_for_another_thread_loading.rb");
+    assert_eq!(output, "[:framed, :framed, :framed]\nnil\n");
+}
+
+#[test]
 fn test_loading_late_frozen_string_literal_comment_execution() {
     let output = run_example("loading/late_frozen_string_literal_comment.rb");
     assert_eq!(

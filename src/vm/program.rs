@@ -535,6 +535,13 @@ pub(crate) fn leave_nesting() {
     NESTING.with(|depth| depth.set(depth.get() - 1));
 }
 
+/// Put `depth` in place as how deeply the running program is nested,
+/// answering the depth it replaces. Each fiber runs on a stack of its own,
+/// so a switch between fibers puts the depth of the one switched to in place.
+pub(crate) fn replace_nesting(depth: usize) -> usize {
+    NESTING.with(|held| held.replace(depth))
+}
+
 /// A call's arguments as they are evaluated, one at a time.
 #[derive(Default)]
 pub(crate) struct ArgumentList {

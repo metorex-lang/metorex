@@ -246,6 +246,7 @@ impl VirtualMachine {
         name: &str,
         position: Position,
     ) -> Result<Object, MetorexError> {
+        self.settle_autoloads_named(name);
         let value = self.read_scoped_constant(ns_value.clone(), name, &position)?;
         if self.in_a_non_main_ractor() {
             let owner = match ns_value.view() {

@@ -389,3 +389,15 @@ fn test_advanced_native_thread_ids_no_parens_execution() {
     let output = run_example("advanced/native_thread_ids_no_parens.rb");
     assert_eq!(output, NATIVE_THREAD_IDS);
 }
+
+#[test]
+fn test_advanced_initialize_after_super_in_many_threads_execution() {
+    let output = run_example("advanced/initialize_after_super_in_many_threads.rb");
+    assert_eq!(output, "4000\n0\nnil\n");
+}
+
+#[test]
+fn test_advanced_many_threads_each_waiting_deep_in_calls_execution() {
+    let output = run_example("advanced/many_threads_each_waiting_deep_in_calls.rb");
+    assert_eq!(output, "true\nSystemStackError\n");
+}

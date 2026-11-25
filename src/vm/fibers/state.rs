@@ -86,6 +86,9 @@ pub(crate) struct FiberContext {
     /// The tags of the `catch` blocks this fiber is inside, which a `throw`
     /// on it reaches and a `throw` on another fiber does not.
     pub(crate) catch_tags: Vec<crate::object::Object>,
+    /// How deeply the code this fiber is running is nested, which counts
+    /// toward SystemStackError on this fiber alone.
+    pub(crate) nesting: usize,
 }
 
 /// One fiber the program made, and the coroutine it runs on.
