@@ -299,6 +299,10 @@ pub(crate) fn register_native_functions(globals: &mut GlobalRegistry) {
         Object::NativeFunction("__allocate_instance__".to_string()),
     );
     globals.set(
+        "__evaluated_source__",
+        Object::NativeFunction("__evaluated_source__".to_string()),
+    );
+    globals.set(
         "__block_position__",
         Object::NativeFunction("__block_position__".to_string()),
     );

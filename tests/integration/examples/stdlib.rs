@@ -2800,3 +2800,12 @@ fn test_stdlib_delegator_marshal_format_execution() {
         "[:__v2__, [:@coder], [:yaml], [1, 2]]\n49\n[:yaml, 2, Serialized]\n\"TEXT\"\n"
     );
 }
+
+#[test]
+fn test_stdlib_cgi_escape_aliases_execution() {
+    let output = run_example("stdlib/cgi_escape_aliases.rb");
+    assert_eq!(
+        output,
+        "Class\ntrue\n\"<b> & \\\"\"\n\"&lt;a href=&#39;x&#39;&gt;\"\n\"&amp;\"\n\"a%20b%2Fc\"\n\"a b\"\n\"<br>&lt;a&gt;\"\n\"&lt;br&gt;<a>\"\n\"&lt;p&gt;\"\n"
+    );
+}

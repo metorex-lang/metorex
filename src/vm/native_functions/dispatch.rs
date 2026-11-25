@@ -155,6 +155,18 @@ impl VirtualMachine {
                 )?;
                 Ok(Object::Nil)
             }
+            // The code evaluated lately under a file name, with the line it
+            // was counted from, or nil when none was.
+            "__evaluated_source__" => Ok(match arguments.first().view() {
+                Some(View::String(named)) => match self.evaluated_sources.get(&*named.as_str()) {
+                    Some((code, first_line)) => Object::array(vec![
+                        Object::string(code.to_string()),
+                        Object::Int(*first_line),
+                    ]),
+                    None => Object::Nil,
+                },
+                _ => Object::Nil,
+            }),
             // Where a block literal opens, as its line and its column counted
             // in characters from 0, or nil for a block with no Ruby source.
             "__block_position__" => Ok(match arguments.first().view() {

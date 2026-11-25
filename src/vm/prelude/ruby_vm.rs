@@ -173,12 +173,13 @@ class RubyVM
     end
 
     def self.node_id_for_backtrace_location(location)
-      # Code compiled from a string keeps no file to read the tree back
-      # from, so its locations name no node.
-      return nil unless location.path && File.file?(location.path)
+      # Code compiled from a string is read back from the code an eval kept
+      # under its file name. Without one, its locations name no node.
+      evaluated = __evaluated_source__(location.path)
+      return nil unless evaluated || (location.path && File.file?(location.path))
 
       __load_abstract_syntax_tree__
-      __of__(location)&.node_id
+      __of__(location, evaluated: evaluated)&.node_id
     end
   end
 

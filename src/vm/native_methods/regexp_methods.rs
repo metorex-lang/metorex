@@ -70,6 +70,7 @@ pub(crate) fn read_pattern(pattern: &str, flags: &str) -> Result<crate::regexp::
         folded: flags.contains('i'),
         dot_reads_newline: flags.contains('m'),
         extended: flags.contains('x'),
+        bytes: flags.contains('n'),
         ..crate::regexp::Flags::default()
     };
     crate::regexp::Pattern::compile(pattern, written).map_err(|trouble| trouble.0)
@@ -89,6 +90,7 @@ pub(crate) fn compile(pattern: &str, flags: &str) -> Option<Rc<crate::regexp::Pa
         folded: flags.contains('i'),
         dot_reads_newline: flags.contains('m'),
         extended: flags.contains('x'),
+        bytes: flags.contains('n'),
         ..crate::regexp::Flags::default()
     };
     let made = Rc::new(crate::regexp::Pattern::compile(pattern, written).ok()?);

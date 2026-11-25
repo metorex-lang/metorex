@@ -198,6 +198,11 @@ class Ripper
         k_defined? k_yield k_super k_not k_redo k_retry k_BEGIN k_END k_return k_break k_next
       ] + LITERAL_KEYWORDS).freeze
 
+      # What opens an argument written straight after a method's name, as
+      # in `render'form'` or `render@form`, which no operator after a name
+      # can start.
+      ADJACENT_ARGUMENT_START = %i[string_beg xstring_beg symbeg ivar gvar cvar].freeze
+
       STATEMENT_ENDS = [
         :eof, :k_end, :"}", :")", :"]", :k_else, :k_elsif, :k_when, :k_in, :k_rescue, :k_ensure,
         :k_then, :string_dend
@@ -224,6 +229,7 @@ class Ripper
         @jump_errors = []
         @reported_errors = []
         @taken = []
+        @built = []
       end
 
       # The tree of events for the whole program, not dispatched, with the
@@ -240,6 +246,7 @@ class Ripper
         emit(tree)
       rescue SyntaxFailure => failure
         failure = reworded(failure)
+        emit_finished_pieces
         if failure.scanned && !SCANNED_PARSE_ERRORS.include?(failure.message)
           @bridge.compile_error(failure.message)
         else
@@ -361,9 +368,35 @@ class Ripper
         take while term?
       end
 
-      def ev(name, *args) = Ev.new(name, args, false, @taken.size - 1)
+      def ev(name, *args) = built(Ev.new(name, args, false, @taken.size - 1))
 
-      def terminal(name, *args) = Ev.new(name, args, true, @taken.size - 1)
+      def terminal(name, *args) = built(Ev.new(name, args, true, @taken.size - 1))
+
+      def built(node)
+        @built << node
+        node
+      end
+
+      # MRI's parser reports each rule as it reduces it, so the pieces of a
+      # program read before a syntax error are reported before the error is.
+      # Each piece finished then that no other finished piece holds is
+      # reported, in the order it was read.
+      def emit_finished_pieces
+        held = {}.compare_by_identity
+        mark = lambda do |node|
+          case node
+          when Ev
+            node.args.each do |arg|
+              held[arg] = true if arg.is_a?(Ev)
+              mark.call(arg)
+            end
+          when Array
+            node.each { |item| mark.call(item) }
+          end
+        end
+        @built.each { |node| mark.call(node) }
+        @built.each { |node| emit(node) unless held[node] }
+      end
 
       # Dispatch
 
@@ -1299,7 +1332,7 @@ class Ripper
       end
 
       def command_follows?(command)
-        command && peek.space_before && argument_start?
+        command && (peek.space_before ? argument_start? : ADJACENT_ARGUMENT_START.include?(peek_type))
       end
 
       def block_follows?

@@ -379,30 +379,44 @@ impl VirtualMachine {
             _ => 1,
         };
         let lineno = named_line.max(0) as usize;
+        self.note_evaluated_source(&filename, &code, named_line);
 
         let tokens = crate::vm::native_functions::evaluation::eval_tokens(
             crate::lexer::Lexer::with_start_line(&code, lineno.max(1))
                 .with_source_encoding(Some(source_encoding.clone())),
             named_line,
         );
-        let statements = crate::parser::Parser::new(tokens)
+        let mut parser = crate::parser::Parser::new(tokens)
             .inside_eval()
-            .with_outer_locals(self.visible_local_names())
-            .parse()
-            .map_err(|errors| {
-                MetorexError::runtime_error(
-                    format!(
-                        "{}: parse error: {}",
-                        filename,
-                        errors
-                            .iter()
-                            .map(|e| e.to_string())
-                            .collect::<Vec<_>>()
-                            .join("; ")
-                    ),
-                    position_to_location(position),
-                )
-            })?;
+            .with_outer_locals(self.visible_local_names());
+        let statements = match parser.parse() {
+            Ok(statements) => statements,
+            // A SyntaxError names the file and line the code was evaluated
+            // as, worded as prism words it where prism refuses the code too.
+            Err(errors) => {
+                if let Some(error) =
+                    self.prism_syntax_report(&code, &filename, named_line, &parser, position)?
+                {
+                    return Err(error);
+                }
+                let reported = errors
+                    .iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                let at = errors
+                    .first()
+                    .and_then(|held| held.location())
+                    .map_or(0, |held| held.line.max(1).saturating_sub(lineno.max(1)))
+                    as i64
+                    + named_line;
+                return Err(crate::vm::errors::syntax_error(
+                    format!("{filename}:{at}: {reported}"),
+                    Some(&filename),
+                    position,
+                ));
+            }
+        };
 
         // Evaluate the parsed body with `self` bound to the receiver and the
         // receiver pushed as the current definee, so `def` lands on it and

@@ -196,16 +196,28 @@ impl VirtualMachine {
             // singleton ancestors below, past the modules extended before it.
             // One a superclass wrote, running for this class, goes on past
             // that superclass rather than into what this class extended.
-            let running_its_own_class_method =
+            // A subclass running a superclass's `def self.name` reaches what
+            // that superclass extended the same way.
+            let writes_running_class_method = |class: &Rc<crate::class::Class>| {
                 self.method_running_stack.last().is_some_and(|running| {
-                    crate::vm::method_lookup::module_own_method(&self_class, &method_name)
+                    crate::vm::method_lookup::module_own_method(class, &method_name)
                         .is_some_and(|own| Rc::ptr_eq(&own, running))
-                        && self_class
+                        && class
                             .find_own_method(&format!("__class__{}", method_name))
                             .is_some_and(|own| Rc::ptr_eq(&own, running))
-                });
+                })
+            };
+            let mut class_method_writer = Some(Rc::clone(&self_class));
+            while let Some(class) = class_method_writer.clone() {
+                if writes_running_class_method(&class) {
+                    break;
+                }
+                class_method_writer = class.superclass();
+            }
+            let running_its_own_class_method = class_method_writer.is_some();
+            let class_method_writer = class_method_writer.unwrap_or_else(|| Rc::clone(&self_class));
             if running_its_own_class_method
-                && let Some(View::Method(extended)) = self_class
+                && let Some(View::Method(extended)) = class_method_writer
                     .get_class_var(&format!("__ext__{}", method_name))
                     .view()
                 && !self
@@ -214,7 +226,7 @@ impl VirtualMachine {
                     .is_some_and(|running| Rc::ptr_eq(running, extended))
             {
                 return self.invoke_method(
-                    Rc::clone(&self_class),
+                    Rc::clone(&class_method_writer),
                     extended.clone(),
                     self_object,
                     evaluated_args,
@@ -225,7 +237,7 @@ impl VirtualMachine {
             // named sits among the singleton class's ancestors, past the
             // singleton class that holds the running method.
             if running_its_own_class_method
-                && let Some(singleton) = self_class.singleton_class_slot().clone()
+                && let Some(singleton) = class_method_writer.singleton_class_slot().clone()
                 && let Some((next, method)) =
                     walk_ancestors(&singleton).iter().skip(1).find_map(|held| {
                         held.find_own_method(&method_name)

@@ -3083,3 +3083,12 @@ fn test_stdlib_random_values_differ_after_fork_execution() {
     let output = run_example("stdlib/random_values_differ_after_fork.rb");
     assert_eq!(output, "[2, 2, 2, 2]\n32\ntrue\ntrue\ntrue\n36\ntrue\n");
 }
+
+#[test]
+fn test_stdlib_libraries_ripper_commands_before_a_syntax_error_execution() {
+    let output = run_example("stdlib_libraries/ripper_commands_before_a_syntax_error.rb");
+    assert_eq!(
+        output,
+        "[[\"render\", [\"messages/message\"]]]\n[[\"render\", [\"messages/layout\"]], [:error, \"syntax error, unexpected end-of-input, expecting 'end' or dummy end\"]]\n[[\"render\", [\"messages/form\"]]]\n[[\"render\", [\"@section\"]]]\n"
+    );
+}

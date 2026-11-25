@@ -16,6 +16,10 @@ pub struct Flags {
     /// Whether the backslash escapes cover every character their name fits
     /// rather than ASCII alone, which `(?u)` asks for.
     pub unicode_escapes: bool,
+    /// Whether the pattern reads its subject as bytes, which `n` asks for, so
+    /// a run of byte escapes names those bytes rather than the character
+    /// they spell in UTF-8.
+    pub bytes: bool,
 }
 
 impl Flags {

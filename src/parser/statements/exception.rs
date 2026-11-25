@@ -399,8 +399,11 @@ impl Parser<'_> {
             });
         } else {
             // `raise @found = Found.new(name)` raises what it assigns.
-            let expr = self.parse_expression()?;
-            let expr = self.fold_assignment(expr)?;
+            // A `rescue` after the argument rescues the raise itself.
+            self.paren_less_arg_depth += 1;
+            let expr = self.parse_expression();
+            self.paren_less_arg_depth -= 1;
+            let expr = self.fold_assignment(expr?)?;
             // Check for `raise ExceptionClass, message` form
             if self.match_token(&[TokenKind::Comma]) {
                 self.skip_whitespace();

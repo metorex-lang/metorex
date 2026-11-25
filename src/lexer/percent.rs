@@ -257,7 +257,11 @@ impl<'a> Lexer<'a> {
             };
             // Under the `frozen_string_literal` comment a `%Q` literal is
             // frozen, as a double-quoted one is.
-            let kind = match (holds_bytes, self.binary_source, self.frozen_literals) {
+            let kind = match (
+                holds_bytes,
+                self.escapes_read_as_bytes(&text),
+                self.frozen_literals,
+            ) {
                 (true, true, true) => TokenKind::FrozenBinaryString(text),
                 (true, true, false) => TokenKind::BinaryString(text),
                 (true, false, true) => TokenKind::FrozenByteString(text),
@@ -571,7 +575,7 @@ impl super::Lexer<'_> {
             self.push_back('\\');
             break;
         }
-        match super::strings::binary_run(self.binary_source, &bytes) {
+        match super::strings::binary_run(self.escaped_run_stays_bytes(&bytes), &bytes) {
             Ok(text) => {
                 content.push_str(&text);
                 false

@@ -269,6 +269,8 @@ impl Parser<'_> {
             TokenKind::LessEqual,
             TokenKind::GreaterEqual,
             TokenKind::Spaceship,
+            TokenKind::Shovel,
+            TokenKind::RightShift,
             TokenKind::LogicalAnd,
             TokenKind::LogicalOr,
             TokenKind::Question,

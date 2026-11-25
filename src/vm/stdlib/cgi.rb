@@ -2,27 +2,135 @@
 # as themselves, and a page reads five of them as markup, so both need what
 # is written into them spelled out.
 
-module CGI
-  # `escape` writes a form value: every byte but those of the unreserved
-  # characters is written in hex, and a space is written as a plus. What it
-  # writes is in the encoding of the text it was given.
-  def self.escape(text)
-    held = CGI.coerced(text)
-    written = CGI.escaped_bytes(held, RESERVED_OR_SPACE).tr(" ", "+")
-    written.force_encoding(held.encoding)
-  end
+class CGI
+  # The escaping methods, which CGI answers itself and lends to what
+  # includes it.
+  module Escape
+    # `escape` writes a form value: every byte but those of the unreserved
+    # characters is written in hex, and a space is written as a plus. What it
+    # writes is in the encoding of the text it was given.
+    def escape(text)
+      held = CGI.coerced(text)
+      written = CGI.escaped_bytes(held, RESERVED_OR_SPACE).tr(" ", "+")
+      written.force_encoding(held.encoding)
+    end
 
-  # `unescape` reads a form value, where a plus stands for a space.
-  def self.unescape(text, encoding = nil)
-    CGI.unescapeURIComponent(CGI.coerced(text).tr("+", " "), encoding)
-  end
+    # `unescape` reads a form value, where a plus stands for a space.
+    def unescape(text, encoding = nil)
+      CGI.unescapeURIComponent(CGI.coerced(text).tr("+", " "), encoding)
+    end
 
-  # `escapeURIComponent` writes a piece of a URL, where a space is written in
-  # hex like anything else and the tilde stands for itself.
-  def self.escapeURIComponent(text)
-    held = CGI.coerced(text)
-    CGI.escaped_bytes(held, RESERVED).force_encoding(held.encoding)
+    # `escapeURIComponent` writes a piece of a URL, where a space is written in
+    # hex like anything else and the tilde stands for itself.
+    def escapeURIComponent(text)
+      held = CGI.coerced(text)
+      CGI.escaped_bytes(held, RESERVED).force_encoding(held.encoding)
+    end
+
+    def unescapeURIComponent(text, encoding = nil)
+      held = CGI.coerced(text)
+      wanted = encoding.nil? ? CGI.class_variable_get(:@@accept_charset) : encoding
+      target = wanted.is_a?(Encoding) ? wanted : Encoding.find(wanted.to_s)
+      written = CGI.read_percent_bytes(held)
+      tagged = written.dup.force_encoding(target)
+      return tagged if tagged.valid_encoding?
+      # Bytes that spell nothing in the encoding asked for keep the encoding
+      # the text they came from was tagged with.
+      written.dup.force_encoding(held.encoding)
+    end
+
+    # The five characters HTML reads as markup, written out as entities. The
+    # text is read one byte at a time, so bytes that spell no character in the
+    # encoding it is tagged with are carried through as they stand.
+    def escapeHTML(text)
+      held = CGI.coerced text
+      written = []
+      held.bytes.each do |byte|
+        case byte
+        when 38 then written.concat "&amp;".bytes
+        when 60 then written.concat "&lt;".bytes
+        when 62 then written.concat "&gt;".bytes
+        when 34 then written.concat "&quot;".bytes
+        when 39 then written.concat "&#39;".bytes
+        else written.push byte
+        end
+      end
+      made = written.pack "C*"
+      made.force_encoding held.encoding
+    end
+
+    # The same five read back, along with a character named by its number.
+    def unescapeHTML(text, _encoding = nil)
+      held = CGI.coerced text
+      return held unless held.include? "&"
+      answer = ""
+      at = 0
+      while at < held.length
+        piece = held[at]
+        if piece != "&"
+          answer = answer + piece
+          at = at + 1
+          next
+        end
+        finish = held.index ";", at
+        named = finish.nil? ? nil : held[at + 1, finish - at - 1]
+        read = CGI.named_character named
+        if read.nil?
+          answer = answer + piece
+          at = at + 1
+        else
+          answer = answer + read
+          at = finish + 1
+        end
+      end
+      answer
+    end
+
+    # `escapeElement` escapes only the tags of the elements it is given, so the
+    # rest of the markup is left standing.
+    def escapeElement(text, *elements)
+      named = elements.flatten.map { |held| held.to_s.downcase }
+      CGI.walk_tags(CGI.coerced(text)) do |tag, name|
+        named.include?(name) ? CGI.escapeHTML(tag) : tag
+      end
+    end
+
+    def unescapeElement(text, *elements)
+      named = elements.flatten.map { |held| held.to_s.downcase }
+      held = CGI.coerced text
+      answer = ""
+      at = 0
+      while at < held.length
+        if held[at, 4] == "&lt;"
+          finish = held.index "&gt;", at
+          if finish.nil?
+            answer = answer + held[at]
+            at = at + 1
+            next
+          end
+          piece = held[at, finish - at + 4]
+          read = CGI.unescapeHTML piece
+          name = CGI.tag_name read
+          answer = answer + (named.include?(name) ? read : piece)
+          at = finish + 4
+        else
+          answer = answer + held[at]
+          at = at + 1
+        end
+      end
+      answer
+    end
+
+    alias escape_uri_component escapeURIComponent
+    alias unescape_uri_component unescapeURIComponent
+    alias escape_html escapeHTML
+    alias h escapeHTML
+    alias unescape_html unescapeHTML
+    alias escape_element escapeElement
+    alias unescape_element unescapeElement
   end
+  include Escape
+  extend Escape
 
   # The bytes the URI syntax does not leave alone, with and without the
   # space a form value writes as a plus.
@@ -38,18 +146,6 @@ module CGI
 
   # The encoding a decoded string is tagged with when the call names none.
   @@accept_charset = "UTF-8"
-
-  def self.unescapeURIComponent(text, encoding = nil)
-    held = CGI.coerced(text)
-    wanted = encoding.nil? ? CGI.class_variable_get(:@@accept_charset) : encoding
-    target = wanted.is_a?(Encoding) ? wanted : Encoding.find(wanted.to_s)
-    written = CGI.read_percent_bytes(held)
-    tagged = written.dup.force_encoding(target)
-    return tagged if tagged.valid_encoding?
-    # Bytes that spell nothing in the encoding asked for keep the encoding
-    # the text they came from was tagged with.
-    written.dup.force_encoding(held.encoding)
-  end
 
   # Read every `%NN` back into the byte it names, a byte at a time, so a run
   # that spells no character is carried through as it stands.
@@ -73,54 +169,6 @@ module CGI
 
   def self.hex_digit?(byte)
     (48..57).include?(byte) || (65..70).include?(byte) || (97..102).include?(byte)
-  end
-
-  # The five characters a page reads as markup.
-  # The five characters HTML reads as markup, written out as entities. The
-  # text is read one byte at a time, so bytes that spell no character in the
-  # encoding it is tagged with are carried through as they stand.
-  def self.escapeHTML(text)
-    held = CGI.coerced text
-    written = []
-    held.bytes.each do |byte|
-      case byte
-      when 38 then written.concat "&amp;".bytes
-      when 60 then written.concat "&lt;".bytes
-      when 62 then written.concat "&gt;".bytes
-      when 34 then written.concat "&quot;".bytes
-      when 39 then written.concat "&#39;".bytes
-      else written.push byte
-      end
-    end
-    made = written.pack "C*"
-    made.force_encoding held.encoding
-  end
-
-  # The same five read back, along with a character named by its number.
-  def self.unescapeHTML(text, _encoding = nil)
-    held = CGI.coerced text
-    return held unless held.include? "&"
-    answer = ""
-    at = 0
-    while at < held.length
-      piece = held[at]
-      if piece != "&"
-        answer = answer + piece
-        at = at + 1
-        next
-      end
-      finish = held.index ";", at
-      named = finish.nil? ? nil : held[at + 1, finish - at - 1]
-      read = CGI.named_character named
-      if read.nil?
-        answer = answer + piece
-        at = at + 1
-      else
-        answer = answer + read
-        at = finish + 1
-      end
-    end
-    answer
   end
 
   # What one `&...;` stands for, or nil when it names nothing.
@@ -147,41 +195,6 @@ module CGI
     end
     return nil unless digits =~ /\A[0-9]+\z/
     digits.to_i.chr
-  end
-
-  # `escapeElement` escapes only the tags of the elements it is given, so the
-  # rest of the markup is left standing.
-  def self.escapeElement(text, *elements)
-    named = elements.flatten.map { |held| held.to_s.downcase }
-    CGI.walk_tags(CGI.coerced(text)) do |tag, name|
-      named.include?(name) ? CGI.escapeHTML(tag) : tag
-    end
-  end
-
-  def self.unescapeElement(text, *elements)
-    named = elements.flatten.map { |held| held.to_s.downcase }
-    held = CGI.coerced text
-    answer = ""
-    at = 0
-    while at < held.length
-      if held[at, 4] == "&lt;"
-        finish = held.index "&gt;", at
-        if finish.nil?
-          answer = answer + held[at]
-          at = at + 1
-          next
-        end
-        piece = held[at, finish - at + 4]
-        read = CGI.unescapeHTML piece
-        name = CGI.tag_name read
-        answer = answer + (named.include?(name) ? read : piece)
-        at = finish + 4
-      else
-        answer = answer + held[at]
-        at = at + 1
-      end
-    end
-    answer
   end
 
   # Walk the tags in a piece of markup, handing each to the block along with

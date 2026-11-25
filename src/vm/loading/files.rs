@@ -5,6 +5,7 @@ use crate::object::{OptionView, View};
 
 /// How many recently entered files `entered_file` keeps.
 const ENTERED_FILES_KEPT: usize = 16;
+const EVALUATED_SOURCES_KEPT: usize = 256;
 
 impl VirtualMachine {
     /// The path `__FILE__` reports for the file running now: the spelling the
@@ -41,6 +42,19 @@ impl VirtualMachine {
     /// Record the encoding source evaluated under the name `file` is written
     /// in, which the String literals of the methods it defines take when
     /// they run later.
+    /// Keep the code evaluated under `file`, counted from `first_line`. A
+    /// program can evaluate code under any number of names, so the record
+    /// starts over once it holds `EVALUATED_SOURCES_KEPT` of them.
+    pub(crate) fn note_evaluated_source(&mut self, file: &str, code: &str, first_line: i64) {
+        if self.evaluated_sources.len() >= EVALUATED_SOURCES_KEPT
+            && !self.evaluated_sources.contains_key(file)
+        {
+            self.evaluated_sources.clear();
+        }
+        self.evaluated_sources
+            .insert(file.to_string(), (Rc::from(code), first_line));
+    }
+
     pub(crate) fn note_evaluated_file_encoding(&mut self, file: &str, encoding: &str) {
         let changed = if encoding == "UTF-8" {
             self.file_encodings.remove(file).is_some()

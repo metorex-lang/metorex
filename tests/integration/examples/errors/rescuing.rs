@@ -247,3 +247,12 @@ fn a_rescue_reaches_a_class_through_const_missing() {
         "Current::ParseError\n[:caught, \"boom\"]\n[:argument, \"other\"]\n"
     );
 }
+
+#[test]
+fn test_errors_raise_with_rescue_modifier_execution() {
+    let output = run_example("errors/raise_with_rescue_modifier.rb");
+    assert_eq!(
+        output,
+        "#<TemplateFailure: top>\n#<TemplateFailure: wrapped>\n\"from method\"\n"
+    );
+}

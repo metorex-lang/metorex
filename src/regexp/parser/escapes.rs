@@ -127,6 +127,7 @@ impl Parser {
                     let point = u32::from_str_radix(&digits, 8).unwrap_or(0);
                     let held = char::from_u32(point)
                         .ok_or_else(|| Trouble("invalid octal escape".to_string()))?;
+                    let held = self.joined_with_following_bytes(held);
                     return Ok(self.letter_node(held));
                 }
                 Ok(Node::concat(
@@ -284,9 +285,15 @@ impl Parser {
                     }
                 }
                 let point = u32::from_str_radix(&digits, 8).unwrap_or(0);
-                char::from_u32(point).ok_or_else(|| Trouble("invalid octal escape".to_string()))
+                let held = char::from_u32(point)
+                    .ok_or_else(|| Trouble("invalid octal escape".to_string()))?;
+                Ok(self.joined_with_following_bytes(held))
             }
-            'x' => self.read_hex_escape(),
+            'x' if self.peek() == Some('{') => self.read_hex_escape(),
+            'x' => {
+                let held = self.read_hex_escape()?;
+                Ok(self.joined_with_following_bytes(held))
+            }
             'u' => self.read_unicode_escape(),
             'c' => self.read_control_escape(),
             'C' => {
@@ -309,6 +316,63 @@ impl Parser {
             }
             held => Ok(held),
         }
+    }
+
+    /// The character a run of byte escapes spells in UTF-8, when `lead` is
+    /// the first byte of one and the escapes after it finish it. A pattern
+    /// reading bytes, or a run that spells nothing, leaves `lead` alone.
+    fn joined_with_following_bytes(&mut self, lead: char) -> char {
+        let width = match lead as u32 {
+            0xC2..=0xDF => 2,
+            0xE0..=0xEF => 3,
+            0xF0..=0xF4 => 4,
+            _ => return lead,
+        };
+        if self.flags.bytes {
+            return lead;
+        }
+        let started = self.at;
+        let mut bytes = vec![lead as u8];
+        while bytes.len() < width {
+            match self.read_byte_escape() {
+                Some(byte) => bytes.push(byte),
+                None => {
+                    self.at = started;
+                    return lead;
+                }
+            }
+        }
+        match std::str::from_utf8(&bytes)
+            .ok()
+            .and_then(|text| text.chars().next())
+        {
+            Some(spelled) => spelled,
+            None => {
+                self.at = started;
+                lead
+            }
+        }
+    }
+
+    /// One `\xHH` or octal escape naming a byte past 0x7f, read from the
+    /// cursor, or None with the cursor wherever reading stopped.
+    fn read_byte_escape(&mut self) -> Option<u8> {
+        if !self.eat('\\') {
+            return None;
+        }
+        let (radix, longest) = if self.eat('x') { (16, 2) } else { (8, 3) };
+        let mut digits = String::new();
+        while digits.len() < longest {
+            match self.peek() {
+                Some(held) if held.is_digit(radix) => {
+                    digits.push(held);
+                    self.at += 1;
+                }
+                _ => break,
+            }
+        }
+        let byte = u8::try_from(u32::from_str_radix(&digits, radix).ok()?).ok()?;
+        (byte >= 0x80).then_some(byte)
     }
 
     pub(crate) fn read_hex_escape(&mut self) -> Read<char> {

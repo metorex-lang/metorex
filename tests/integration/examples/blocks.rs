@@ -17,3 +17,9 @@ fn test_blocks_block_writes_a_local_from_a_branch_not_taken_execution() {
         "[1, :loaded]\n[3, :queried]\nnil\n[2, 3]\n[4, 4]\n"
     );
 }
+
+#[test]
+fn test_blocks_yield_then_shift_operator_execution() {
+    let output = run_example("blocks/yield_then_shift_operator.rb");
+    assert_eq!(output, "\"<form>body</form>\"\n5\n");
+}

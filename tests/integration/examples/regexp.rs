@@ -568,3 +568,12 @@ fn a_slash_stays_bare_in_a_regexp_source_and_is_escaped_in_its_to_s() {
         )
     );
 }
+
+#[test]
+fn test_regexp_byte_escape_runs_spell_characters_execution() {
+    let output = run_example("regexp/byte_escape_runs_spell_characters.rb");
+    assert_eq!(
+        output,
+        "true\ntrue\ntrue\n\"x &#x2028; y\"\ntrue\n2\ntrue\n"
+    );
+}

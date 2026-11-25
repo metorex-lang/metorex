@@ -1215,3 +1215,12 @@ fn test_encodings_euc_jp_substitution_and_partition_execution() {
         "\"\\x{A4A2}\\x{A4A4} a$b\"\n\"\\x{A4A2}\\x{A4A4} A$b\"\n\"\\x{A4A2}\\x{A4A4} A$b\"\n\"\\x{A4A2}\\x{A4A4}_a$b\"\n[\"\\x{A4A2}\\x{A4A4}\", \" \", \"a$b\"]\n[\"\\x{A4A2}\\x{A4A4}\", \"a$b\"]\n\"\\x{A4A2}\"\n[164, 162, 164, 164, 32, 97, 36, 98, 33]\n"
     );
 }
+
+#[test]
+fn test_encodings_us_ascii_source_byte_escapes_execution() {
+    let output = run_example("encodings/us_ascii_source_byte_escapes.rb");
+    assert_eq!(
+        output,
+        "#<Encoding:BINARY (ASCII-8BIT)>\n#<Encoding:US-ASCII>\n#<Encoding:US-ASCII>\n#<Encoding:BINARY (ASCII-8BIT)>\n#<Encoding:UTF-8>\n#<Encoding:BINARY (ASCII-8BIT)>\n[99, 97, 102, 195, 169]\ntrue\n"
+    );
+}

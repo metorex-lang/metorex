@@ -2858,34 +2858,47 @@ class RubyVM
       key = [File.expand_path(path), stat.mtime, stat.size, keep_script_lines, keep_tokens]
       kept = @parsed_files.delete(key)
       unless kept
-        source = File.read(path)
-        root = __parse__(source, keep_script_lines: keep_script_lines, keep_tokens: keep_tokens)
-        nodes = []
-        walk = lambda do |value|
-          case value
-          when Node
-            nodes << value
-            value.children.each { |child| walk.call(child) }
-          when Array then value.each { |item| walk.call(item) }
-          end
-        end
-        walk.call(root)
-        kept = [source, nodes]
+        kept = __parsed_source__(File.read(path), keep_script_lines, keep_tokens)
         @parsed_files.delete(@parsed_files.keys.first) if @parsed_files.size >= PARSED_FILES_KEPT
       end
       @parsed_files[key] = kept
     end
 
-    def self.__of__(body, keep_script_lines: false, keep_tokens: false)
+    # The source and every node of its tree.
+    def self.__parsed_source__(source, keep_script_lines, keep_tokens)
+      root = __parse__(source, keep_script_lines: keep_script_lines, keep_tokens: keep_tokens)
+      nodes = []
+      walk = lambda do |value|
+        case value
+        when Node
+          nodes << value
+          value.children.each { |child| walk.call(child) }
+        when Array then value.each { |item| walk.call(item) }
+        end
+      end
+      walk.call(root)
+      [source, nodes]
+    end
+
+    # `evaluated` is the code a location's eval ran and the line it was
+    # counted from, which the location is read against in place of a file.
+    def self.__of__(body, keep_script_lines: false, keep_tokens: false, evaluated: nil)
       case body
       when Proc, Method, UnboundMethod then path, line = body.source_location
       when Thread::Backtrace::Location then path, line = body.path, body.lineno
       else raise TypeError, "wrong argument type #{body.class} (expected method)"
       end
       return nil if path.nil?
-      raise ArgumentError, "cannot get AST for method defined in eval" unless File.file?(path)
 
-      source, nodes = __parsed_file__(path, keep_script_lines, keep_tokens)
+      if evaluated
+        code, first_line = evaluated
+        line = line - first_line + 1
+        source, nodes = __parsed_source__(code, keep_script_lines, keep_tokens)
+      else
+        raise ArgumentError, "cannot get AST for method defined in eval" unless File.file?(path)
+
+        source, nodes = __parsed_file__(path, keep_script_lines, keep_tokens)
+      end
       case body
       when Proc
         # A block knows the column it opened at, which tells it from others

@@ -354,3 +354,18 @@ fn a_yield_reaching_no_method_raises_the_compilers_syntax_error() {
         )
     );
 }
+
+#[test]
+fn test_class_eval_syntax_error_names_its_file() {
+    let output = run_example("eval/class_eval_syntax_error_names_its_file.rb");
+    assert_eq!(
+        output,
+        "/views/test/syntax_error.html.erb:2: syntax errors found\n  0 |   @name = 1;@output_buffer.append=( foo( );\n  1 | @output_buffer\n> 2 | end\n    | ^ expected a matching `)`\n    | ^~~ unexpected 'end', assuming it is closing the parent method definition\n\"/views/test/syntax_error.html.erb\"\n"
+    );
+}
+
+#[test]
+fn test_node_id_for_a_location_in_evaluated_code() {
+    let output = run_example("eval/node_id_for_a_location_in_evaluated_code.rb");
+    assert_eq!(output, "[\"views/show.html.erb\", 1]\ntrue\n");
+}

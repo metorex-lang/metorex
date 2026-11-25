@@ -69,6 +69,8 @@ pub struct Lexer<'a> {
     /// run of numeric escapes then names those bytes one by one instead of
     /// spelling a character between them.
     pub(super) binary_source: bool,
+    /// Whether the source says it is written in US-ASCII.
+    pub(super) ascii_source: bool,
     /// Whether the source asked for its string literals to be frozen.
     pub(super) frozen_literals: bool,
     /// Whether the source asked outright for its string literals to stay
@@ -137,6 +139,19 @@ impl<'a> Lexer<'a> {
         self.frozen_literals = setting == StringLiteralSetting::Frozen;
         self.mutable_literals = setting == StringLiteralSetting::Mutable;
         self
+    }
+
+    /// Whether a literal whose escapes name the bytes of `text` holds those
+    /// bytes as BINARY: in a source written in bytes, and in a US-ASCII
+    /// source, which holds no byte past 0x7f, once one of them is past it.
+    pub(super) fn escapes_read_as_bytes(&self, text: &str) -> bool {
+        self.binary_source || (self.ascii_source && !text.is_ascii())
+    }
+
+    /// Whether a run of numeric escapes naming `bytes` stays bytes rather
+    /// than spelling a character, for the same sources.
+    pub(super) fn escaped_run_stays_bytes(&self, bytes: &[u8]) -> bool {
+        self.binary_source || (self.ascii_source && !bytes.is_ascii())
     }
 
     fn stamp_string_literal_setting(&self, kind: &mut TokenKind) {
@@ -208,6 +223,7 @@ impl<'a> Lexer<'a> {
             restore_offset: None,
             prelude: false,
             binary_source,
+            ascii_source: names_ascii_encoding(source),
             frozen_literals,
             mutable_literals,
             source_encoding: named_source_encoding(source).unwrap_or_else(default_source_encoding),
@@ -603,6 +619,15 @@ pub fn named_source_encoding(source: &str) -> Option<String> {
         .take_while(|held| held.is_alphanumeric() || *held == '-' || *held == '_' || *held == '.')
         .collect();
     (!spelled.is_empty()).then_some(spelled)
+}
+
+fn names_ascii_encoding(source: &str) -> bool {
+    named_source_encoding(source).is_some_and(|named| {
+        matches!(
+            named.as_str(),
+            "us-ascii" | "ascii" | "ansi_x3.4-1968" | "646"
+        )
+    })
 }
 
 fn names_binary_encoding(source: &str) -> bool {

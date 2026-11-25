@@ -296,6 +296,10 @@ pub struct VirtualMachine {
     /// spelling the file was named by. A method's body is written in the file
     /// it was defined in, whatever file is calling it.
     pub(crate) file_encodings: crate::fast_hash::NameMap<String, String>,
+    /// The code an `eval` or `class_eval` ran lately under each file name it
+    /// was given, with the line it was counted from, which is what a
+    /// backtrace location in that code is read back against.
+    pub(crate) evaluated_sources: crate::fast_hash::NameMap<String, (Rc<str>, i64)>,
     /// The files code was entered in lately, each shared, with the encoding
     /// `file_encodings` names for it.
     pub(crate) entered_files: Vec<(Rc<str>, Option<String>)>,
@@ -869,6 +873,7 @@ impl VirtualMachine {
             eval_named_files: Default::default(),
             current_source_encoding: None,
             file_encodings: Default::default(),
+            evaluated_sources: Default::default(),
             entered_files: Vec::new(),
             reported_files: std::collections::HashMap::new(),
             timeout_limits: Vec::new(),

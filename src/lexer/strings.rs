@@ -128,7 +128,7 @@ impl<'a> Lexer<'a> {
                         // The source asked for its literals to be frozen, and
                         // one written in escapes still stands for its bytes,
                         // in bytes where the source is written in them.
-                        if holds_bytes && self.binary_source {
+                        if holds_bytes && self.escapes_read_as_bytes(&current_text) {
                             return Ok(TokenKind::FrozenBinaryString(current_text));
                         }
                         if holds_bytes {
@@ -143,7 +143,7 @@ impl<'a> Lexer<'a> {
                         // A source written in bytes spells its literals in
                         // bytes; anywhere else the characters stand for the
                         // bytes the escapes named, in the source's encoding.
-                        if self.binary_source {
+                        if self.escapes_read_as_bytes(&current_text) {
                             return Ok(TokenKind::BinaryString(current_text));
                         }
                         return Ok(TokenKind::ByteString(current_text));
@@ -227,7 +227,7 @@ impl<'a> Lexer<'a> {
                                     break;
                                 }
                             }
-                            match binary_run(self.binary_source, &bytes) {
+                            match binary_run(self.escaped_run_stays_bytes(&bytes), &bytes) {
                                 Ok(text) => current_text.push_str(&text),
                                 Err(_) => {
                                     holds_bytes = true;
@@ -289,7 +289,7 @@ impl<'a> Lexer<'a> {
                                     break;
                                 }
                             }
-                            match binary_run(self.binary_source, &bytes) {
+                            match binary_run(self.escaped_run_stays_bytes(&bytes), &bytes) {
                                 Ok(text) => current_text.push_str(&text),
                                 Err(_) => {
                                     holds_bytes = true;

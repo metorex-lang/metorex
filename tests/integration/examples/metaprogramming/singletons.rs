@@ -115,3 +115,10 @@ fn def_self_and_class_shovel_self_replace_each_other() {
     let output = run_example("metaprogramming/redefine_singleton_method_both_ways.rb");
     assert_eq!(output, "from def self\n10\nfrom singleton class body\n");
 }
+
+#[test]
+fn test_class_method_super_from_subclass_reaches_extended_module_execution() {
+    let output =
+        run_example("metaprogramming/class_method_super_from_subclass_reaches_extended_module.rb");
+    assert_eq!(output, "[:module, [:topics]]\n[\"base\", \"me3\"]\n");
+}

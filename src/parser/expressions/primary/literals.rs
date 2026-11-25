@@ -220,6 +220,7 @@ impl Parser<'_> {
                 folded: flags.contains('i'),
                 dot_reads_newline: flags.contains('m'),
                 extended: flags.contains('x'),
+                bytes: flags.contains('n'),
                 ..crate::regexp::Flags::default()
             };
             if let Err(trouble) = crate::regexp::Pattern::compile(&pattern, written) {

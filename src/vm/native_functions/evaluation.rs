@@ -143,6 +143,9 @@ impl VirtualMachine {
             _ => 1,
         };
         let lineno = named_lineno.max(0) as usize;
+        if let Some(named) = &filename {
+            self.note_evaluated_source(named, &code, named_lineno);
+        }
         let tokens = eval_tokens(
             crate::lexer::Lexer::with_start_line(&code, lineno.max(1)).with_source_encoding(Some(
                 crate::lexer::named_source_encoding(&code).unwrap_or_else(|| code_encoding.clone()),
@@ -746,7 +749,7 @@ impl VirtualMachine {
 impl VirtualMachine {
     /// The error MRI raises for code `eval` refuses, worded and laid out by
     /// the prelude over prism, or None when prism accepts the code.
-    fn prism_syntax_report(
+    pub(crate) fn prism_syntax_report(
         &mut self,
         code: &str,
         named: &str,
