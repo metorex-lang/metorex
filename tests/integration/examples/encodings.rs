@@ -1224,3 +1224,13 @@ fn test_encodings_us_ascii_source_byte_escapes_execution() {
         "#<Encoding:BINARY (ASCII-8BIT)>\n#<Encoding:US-ASCII>\n#<Encoding:US-ASCII>\n#<Encoding:BINARY (ASCII-8BIT)>\n#<Encoding:UTF-8>\n#<Encoding:BINARY (ASCII-8BIT)>\n[99, 97, 102, 195, 169]\ntrue\n"
     );
 }
+
+#[test]
+fn split_and_file_join_refuse_text_in_an_encoding_without_ascii() {
+    let output = run_example("encodings/text_in_an_encoding_without_ascii.rb");
+    assert_eq!(
+        output,
+        "incompatible character encodings: UTF-16LE and UTF-8\n[\"a\", \"c\"]\n\
+         path name must be ASCII-compatible (UTF-16LE): \"ab\"\n"
+    );
+}

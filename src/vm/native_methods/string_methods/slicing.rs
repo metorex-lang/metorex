@@ -86,6 +86,13 @@ impl VirtualMachine {
                                 position,
                             ));
                         }
+                        if !super::strings_comparable(string_value, held) {
+                            return Err(super::clashing_encodings_error(
+                                string_value,
+                                held,
+                                position,
+                            ));
+                        }
                         separator_of(&held.as_str())
                     }
                     Some(other) => {

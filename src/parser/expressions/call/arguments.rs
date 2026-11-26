@@ -114,7 +114,7 @@ impl Parser<'_> {
                 // Splat argument: *expr — expand array into individual args.
                 // A bare `*` forwards the anonymous splat `def foo(*)` bound.
                 let position = self.previous().position;
-                let expr = if self.check(&[TokenKind::Comma, TokenKind::RParen]) {
+                let expr = if self.bare_anonymous_argument_ends() {
                     if self.block_declares_anonymous(|declared| declared.rest) {
                         return Err(self.error_at_previous(
                             "anonymous rest parameter is also used within block",
@@ -135,7 +135,7 @@ impl Parser<'_> {
                 // Double-splat: **expr — a Hash passed as keyword arguments.
                 // A bare `**` forwards what `def foo(**)` bound.
                 let position = self.previous().position;
-                let expr = if self.check(&[TokenKind::Comma, TokenKind::RParen]) {
+                let expr = if self.bare_anonymous_argument_ends() {
                     if self.block_declares_anonymous(|declared| declared.keyword_rest) {
                         return Err(self.error_at_previous(
                             "anonymous keyword rest parameter is also used within block",
@@ -159,7 +159,7 @@ impl Parser<'_> {
                 // pending block otherwise. A bare `&` forwards the anonymous
                 // block parameter the enclosing `def foo(&)` bound.
                 let position = self.previous().position;
-                let expr = if self.check(&[TokenKind::Comma, TokenKind::RParen]) {
+                let expr = if self.bare_anonymous_argument_ends() {
                     if self.block_declares_anonymous(|declared| declared.block) {
                         return Err(self.error_at_previous(
                             "anonymous block parameter is also used within block",
@@ -252,6 +252,20 @@ impl Parser<'_> {
         self.expect(TokenKind::RParen, "Expected ')' after arguments")?;
 
         Ok(arguments)
+    }
+
+    /// Whether a bare `*`, `**` or `&` ends at the cursor, before a comma or
+    /// the closing parenthesis, which may stand on a later line.
+    fn bare_anonymous_argument_ends(&self) -> bool {
+        let mut offset = 0;
+        while matches!(self.peek_ahead(offset).kind, TokenKind::Newline) {
+            offset += 1;
+        }
+        match self.peek_ahead(offset).kind {
+            TokenKind::RParen => true,
+            TokenKind::Comma => offset == 0,
+            _ => false,
+        }
     }
 
     /// Check if the next token can start an argument in a parentheses-less call

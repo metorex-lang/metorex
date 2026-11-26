@@ -336,6 +336,15 @@ fn test_functions_anonymous_parameter_forwarding_no_parens_execution() {
     assert_eq!(output, ANONYMOUS_PARAMETER_FORWARDING_OUTPUT);
 }
 
+#[test]
+fn bare_anonymous_arguments_forward_when_the_closing_paren_is_on_a_later_line() {
+    let output = run_example("functions/bare_anonymous_arguments_before_a_closing_line.rb");
+    assert_eq!(
+        output,
+        "[[1, 2], {unit: \"kg\"}, :weighed]\n[[\"crate\"], {}, :counted]\n"
+    );
+}
+
 /// The expected output of both `functions/keywords_from_a_hash` variants, which differ only in whether the
 /// calls are written with parentheses.
 const KEYWORDS_FROM_A_HASH_OUTPUT: &str = concat!(

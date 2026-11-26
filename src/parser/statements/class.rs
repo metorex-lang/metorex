@@ -94,8 +94,9 @@ impl Parser<'_> {
         let superclass = if self.match_token(&[TokenKind::Less]) {
             self.skip_whitespace();
             // A superclass written as a call rather than a name, such as
-            // `class Point < Struct.new(:x)`, is kept as an expression and
-            // evaluated when the class is defined.
+            // `class Point < Struct.new(:x)` or `class M < Migration[5.2]`,
+            // is kept as an expression and evaluated when the class is
+            // defined.
             // A leading `::` only says the name starts at the top level, so
             // look past it when deciding which of the two forms follows.
             let named_from_root = matches!(self.peek().kind, TokenKind::ColonColon);
@@ -110,7 +111,7 @@ impl Parser<'_> {
             let call_form = matches!(self.peek_ahead(name_at).kind, TokenKind::Ident(_))
                 && matches!(
                     self.peek_ahead(name_end).kind,
-                    TokenKind::Dot | TokenKind::LParen
+                    TokenKind::Dot | TokenKind::LParen | TokenKind::LBracket
                 );
             // A superclass that is not written as a name at all, such as
             // `class Held < ""`, is an expression too. Whether it answers a

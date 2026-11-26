@@ -377,3 +377,17 @@ fn a_basic_object_subclass_does_not_answer_methods_added_to_object() {
         "[:missing, :added_to_object]\n:module_answered\n[:missing, :added_to_object]\n"
     );
 }
+
+#[test]
+fn a_superclass_written_as_an_index_call_on_a_qualified_name_is_what_the_call_answers() {
+    let output = run_example("oop/superclass_from_an_index_call.rb");
+    assert_eq!(
+        output,
+        "Schema::Legacy inherits from Schema::Migration, told by Schema::Migration\n\
+         CreateUsers inherits from Schema::Legacy, told by Schema::Legacy\n\
+         Schema::Legacy\n\
+         CreateGroups inherits from Schema::Migration, told by Schema::Migration\n\
+         Schema::Migration\n\
+         \"groups\"\n"
+    );
+}

@@ -5,6 +5,7 @@
 use std::path::{Path, PathBuf};
 
 /// What a glob is allowed to match.
+#[derive(Clone, Copy)]
 pub(crate) struct Options {
     /// Whether a name opening with a dot is matched by a pattern that does
     /// not open with one.
@@ -238,6 +239,25 @@ fn names_in(directory: &Path) -> Vec<String> {
     held
 }
 
+/// Whether the volume holding a directory treats names that differ only in
+/// case as one name, as macOS volumes do unless formatted case-sensitive.
+/// Ruby matches a glob there without regard to case and answers the names
+/// as the directory holds them.
+#[cfg(target_os = "macos")]
+fn volume_folds_case(directory: &Path) -> bool {
+    use std::os::unix::ffi::OsStrExt;
+    let Ok(named) = std::ffi::CString::new(directory.as_os_str().as_bytes()) else {
+        return false;
+    };
+    // SAFETY: `named` is a NUL-terminated string that outlives the call.
+    unsafe { libc::pathconf(named.as_ptr(), libc::_PC_CASE_SENSITIVE) == 0 }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn volume_folds_case(_directory: &Path) -> bool {
+    false
+}
+
 /// Whether a path names a directory, following a link to one.
 fn is_directory(path: &Path) -> bool {
     std::fs::metadata(path)
@@ -300,11 +320,20 @@ impl Walk<'_> {
             return;
         }
         let segment = if segment == "**" { "*" } else { segment };
+        let folded = Options {
+            casefold: true,
+            ..*self.options
+        };
+        let matching = if !self.options.casefold && volume_folds_case(directory) {
+            &folded
+        } else {
+            self.options
+        };
         for name in names_with_self(directory, segment, self.options, place) {
             if !dot_allowed(&name, segment, self.options) {
                 continue;
             }
-            if !segment_matches(&name, segment, self.options) {
+            if !segment_matches(&name, segment, matching) {
                 continue;
             }
             let path = directory.join(&name);

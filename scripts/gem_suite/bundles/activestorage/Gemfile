@@ -1,0 +1,65 @@
+# The gems activestorage's tests load, at the versions the rails
+# repository's lockfile names: every framework, since the dummy
+# application requires rails/all, with what each loads, sqlite3 for the
+# database, image_processing with mini_magick and ruby-vips for the
+# variants, propshaft for the dummy application's config.assets, and
+# webmock. sqlite3, ffi, nio4r and websocket-driver come
+# from rubygems.org, so Metorex builds their extensions when they are
+# first loaded. google-cloud-storage is for the GCS signature tests,
+# which run without a configuration. The other cloud service tests
+# define no tests without test/service/configurations.yml.
+source "https://rubygems.org"
+
+eval_gemfile "../ruby_shipped.rb"
+
+gem "activestorage", path: "../../../../gems/rails/activestorage"
+gem "actioncable", path: "../../../../gems/rails/actioncable"
+gem "actionmailbox", path: "../../../../gems/rails/actionmailbox"
+gem "actionmailer", path: "../../../../gems/rails/actionmailer"
+gem "actionpack", path: "../../../../gems/rails/actionpack"
+gem "actiontext", path: "../../../../gems/rails/actiontext"
+gem "actionview", path: "../../../../gems/rails/actionview"
+gem "activejob", path: "../../../../gems/rails/activejob"
+gem "activemodel", path: "../../../../gems/rails/activemodel"
+gem "activerecord", path: "../../../../gems/rails/activerecord"
+gem "activesupport", path: "../../../../gems/rails/activesupport"
+gem "railties", path: "../../../../gems/rails/railties"
+gem "globalid", path: "../../../../gems/globalid"
+gem "rails-dom-testing", path: "../../../../gems/rails-dom-testing"
+gem "rails-html-sanitizer", path: "../../../../gems/rails-html-sanitizer"
+gem "loofah", path: "../../../../gems/loofah"
+gem "crass", path: "../../../../gems/crass"
+gem "mail", path: "../../../../gems/mail"
+gem "mini_mime", path: "../../../../gems/mini_mime"
+gem "i18n", path: "../../../../gems/i18n"
+gem "tzinfo", path: "../../../../gems/tzinfo"
+gem "concurrent-ruby", path: "../../../../gems/concurrent-ruby"
+gem "rack", path: "../../../../gems/rack"
+gem "rack-test", path: "../../../../gems/rack-test"
+gem "builder", path: "../../../../gems/builder"
+gem "erubi", path: "../../../../gems/erubi"
+gem "zeitwerk", path: "../../../../gems/zeitwerk"
+gem "thor", path: "../../../../gems/thor"
+gem "addressable", path: "../../../../gems/addressable"
+gem "public_suffix", path: "../../../../gems/public_suffix"
+gem "propshaft", "1.3.2"
+gem "marcel", "1.1.1"
+gem "image_processing", "1.14.0"
+gem "mini_magick", "5.3.1"
+gem "ruby-vips", "2.3.0"
+gem "webmock", "3.26.2", require: false
+gem "google-cloud-storage", "1.60.0", require: false
+gem "sqlite3", "2.9.4"
+gem "nio4r", "~> 2.0"
+gem "websocket-driver", "0.8.0"
+gem "websocket-extensions", "0.1.5"
+gem "action_text-trix", "~> 2.1.15"
+gem "rackup", ">= 1.0.0"
+gem "rack-session", ">= 1.0.1"
+gem "useragent", "~> 0.16"
+gem "connection_pool", "< 3"
+gem "minitest-mock"
+gem "nokogiri", ">= 1.8.5"
+gem "rake", ">= 13"
+
+shipped "minitest", "base64", "bigdecimal", "drb", "json", "logger", "uri", "rexml", "date", "psych", "stringio", "erb", "prism", "timeout", "tsort", "irb", "net-imap", "net-pop", "net-smtp", "net-protocol"

@@ -267,6 +267,10 @@ class File
     else
       raise TypeError, "no implicit conversion of #{part.class} into String"
     end
+    unless spelled.encoding.ascii_compatible?
+      raise Encoding::CompatibilityError,
+            "path name must be ASCII-compatible (#{spelled.encoding}): #{spelled.inspect}"
+    end
     if spelled.include? "\0"
       raise ArgumentError, "string contains null byte"
     end

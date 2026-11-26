@@ -733,3 +733,13 @@ fn test_filesystem_directory_entries_errors_execution() {
         "[:enotdir, Errno::ENOTDIR]\ntrue\n\"foo.rb\"\n[1, 2]\n[Errno::ENOENT, \"No such file or directory @ dir_initialize - /nonexistent-dir-for-metorex\"]\n[Errno::ENOTDIR, \"Not a directory @ dir_initialize - FILE\"]\n"
     );
 }
+
+#[test]
+fn a_glob_through_a_directory_named_in_another_case_follows_the_volume() {
+    let output = run_example("filesystem/glob_through_a_directory_named_in_another_case.rb");
+    assert_eq!(
+        output,
+        "AB/inner/*: true\nAB/inner/fil?: true\nA?/inner/*: true\nAB/inner/file: true\n\
+         ab/INNER/FILE: true\n[\"/ab/inner/file\"]\n"
+    );
+}

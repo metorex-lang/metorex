@@ -189,8 +189,8 @@ module Gem
     end
 
     # Run each extconf.rb under metorex in a directory of metorex's own, so
-    # the installed gem is left as it is, then make, keeping the output in
-    # gem_make.out beside the libraries built.
+    # the installed gem is left as it is, then make, or rake for a Rakefile,
+    # keeping the output in gem_make.out beside the libraries built.
     def build_extensions_for_metorex
       require "fileutils"
       target = extension_dir
@@ -223,15 +223,19 @@ module Gem
       log = File.join(target, "gem_make.out")
       source = source_for_metorex_builds(target)
       built = File.open(log, "w") do |output|
-        extensions.all? do |extconf|
-          build = File.join(target, "build", File.dirname(extconf))
+        extensions.all? do |extension|
+          build = File.join(target, "build", File.dirname(extension))
           FileUtils.mkdir_p(build)
           environment = environment_for_extension_builds
-          made = Dir.chdir(build) do
-            system(environment, Gem.ruby, File.join(source, extconf), out: output, err: output) &&
-              system(environment, "make", out: output, err: output)
+          if /rakefile/i.match?(File.basename(extension))
+            build_rakefile_extension(extension, source, build, target, environment, output)
+          else
+            made = Dir.chdir(build) do
+              system(environment, Gem.ruby, File.join(source, extension), out: output, err: output) &&
+                system(environment, "make", out: output, err: output)
+            end
+            made && install_libraries_built_for_metorex(build, target)
           end
-          made && install_libraries_built_for_metorex(build, target)
         end
       end
       if built
@@ -254,6 +258,34 @@ module Gem
       source = File.join(target, "source")
       Gem::Package.new(cache_file).extract_files(source) unless File.directory?(source)
       source
+    end
+
+    # Run rake on a copy of the Rakefile's directory, with RUBYARCHDIR and
+    # RUBYLIBDIR naming the gem's extension directory, as RubyGems runs it.
+    # A Rakefile that leaves its libraries where it built them, as
+    # digest-crc's does, has them copied to the same place under the
+    # extension directory as they have under the require path holding them.
+    # A Rakefile that succeeds and builds nothing leaves the gem to its Ruby
+    # code, as it does under MRI.
+    def build_rakefile_extension(extension, source, build, target, environment, output)
+      FileUtils.cp_r(File.join(source, File.dirname(extension), "."), build)
+      arguments = ["-f", File.basename(extension), "RUBYARCHDIR=#{target}", "RUBYLIBDIR=#{target}"]
+      ran = Dir.chdir(build) do
+        system(environment, Gem.ruby, "-rrake", "-e", "Rake.application.run(ARGV)", "--", *arguments,
+          out: output, err: output)
+      end
+      return false unless ran
+
+      holder = raw_require_paths.find { |path| File.dirname(extension).start_with?("#{path}/") }
+      prefix = holder ? File.dirname(extension).delete_prefix("#{holder}/") : ""
+      Dir.glob("**/*.#{RbConfig::CONFIG["DLEXT"]}", base: build).each do |library|
+        next if library.include?(".dSYM/")
+
+        destination = File.join(target, prefix, library)
+        FileUtils.mkdir_p(File.dirname(destination))
+        FileUtils.cp(File.join(build, library), destination)
+      end
+      true
     end
 
     # Copy the libraries a build made to where the extension's name puts
