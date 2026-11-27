@@ -131,20 +131,6 @@ impl VirtualMachine {
         }
         let previous_source_encoding =
             std::mem::replace(&mut self.current_source_encoding, named_encoding);
-        // A `frozen_string_literal` comment written after code names nothing,
-        // and a verbose run says so.
-        if matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true)))
-            && let Some(line) = crate::lexer::frozen_string_literal_after_a_token(&source)
-        {
-            self.emit_warning_to_stderr(
-                &format!(
-                    "{}:{line}: warning: 'frozen_string_literal' is ignored after any tokens",
-                    named_path.display()
-                ),
-                crate::lexer::Position::new(0, 0, 0),
-            );
-        }
-
         // A file that does not parse, or that MRI's parser refuses although
         // this one reads it, raises the SyntaxError MRI raises, laid out by
         // prism under the name the file was found by.
@@ -198,6 +184,7 @@ impl VirtualMachine {
         let (statements, warnings) = parsed?;
 
         self.report_parse_warnings(&named_path.display().to_string(), &warnings);
+        self.report_verbose_parse_warnings(&named_path.display().to_string(), &source, false);
 
         // A file read while measurement is on is counted from here on, which
         // is why the file that turns measurement on is never in the report.

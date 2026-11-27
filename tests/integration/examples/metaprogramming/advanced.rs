@@ -178,3 +178,27 @@ fn test_metaprogramming_class_eval_block_reads_its_own_locals_execution() {
     let output = run_example("metaprogramming/class_eval_block_reads_its_own_locals.rb");
     assert_eq!(output, "[true, \"2026-12\"]\n:made_here\n:made_here\n1\n");
 }
+
+#[test]
+fn methods_added_to_a_singleton_class_announce_themselves_through_singleton_method_added() {
+    let output = run_example("metaprogramming/singleton_class_define_method_hooks.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "method_added singleton_method_added\n",
+            "singleton_method_added run\n",
+            "singleton_method_added run_before\n",
+            "singleton_method_added finish\n",
+            "singleton_method_added run_again\n",
+            ":stubbed\n",
+            ":done\n",
+            ":stubbed\n",
+        )
+    );
+}
+
+#[test]
+fn a_module_prepended_to_a_core_singleton_class_runs_first_and_reaches_the_native_method() {
+    let output = run_example("metaprogramming/prepend_to_a_core_singleton_class_calls_super.rb");
+    assert_eq!(output, "\"counted Array\"\n\"checked true\"\n");
+}

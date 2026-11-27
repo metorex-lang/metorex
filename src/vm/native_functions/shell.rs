@@ -809,6 +809,7 @@ impl VirtualMachine {
         if child > 0 {
             return Ok(Object::Int(child as i64));
         }
+        self.forked_child = true;
         // `$$` names the child's own process in the child.
         self.globals_mut()
             .set_variable("$", Object::Int(std::process::id() as i64));

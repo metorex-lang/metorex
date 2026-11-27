@@ -7,6 +7,19 @@ use crate::vm::core::VirtualMachine;
 use crate::vm::utils::position_to_location;
 use std::rc::Rc;
 
+/// The working directory the process started in. `__dir__` resolves a file
+/// named by a relative path against it once a `Dir.chdir` has moved away,
+/// as Ruby fixes a file's real path when it loads it.
+static STARTING_DIRECTORY: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+/// Hold the working directory the process started in, the first time a
+/// virtual machine is made.
+pub(crate) fn note_starting_directory() {
+    if let Ok(directory) = std::env::current_dir() {
+        let _ = STARTING_DIRECTORY.set(directory);
+    }
+}
+
 impl VirtualMachine {
     /// A new String of a literal's text.
     pub(crate) fn evaluate_string_literal(&mut self, value: &str, position: Position) -> Object {
@@ -189,7 +202,12 @@ impl VirtualMachine {
         let file = file.as_path();
         // A relative path expands against the working directory, so
         // running `metorex script.rb` still names the real directory.
-        let directory = match std::fs::canonicalize(file) {
+        let resolved =
+            std::fs::canonicalize(file).or_else(|trouble| match STARTING_DIRECTORY.get() {
+                Some(started) if file.is_relative() => std::fs::canonicalize(started.join(file)),
+                _ => Err(trouble),
+            });
+        let directory = match resolved {
             Ok(resolved) => match resolved.parent() {
                 Some(parent) => parent.display().to_string(),
                 None => ".".to_string(),

@@ -1234,3 +1234,25 @@ fn split_and_file_join_refuse_text_in_an_encoding_without_ascii() {
          path name must be ASCII-compatible (UTF-16LE): \"ab\"\n"
     );
 }
+
+#[test]
+fn reading_with_an_internal_encoding_matching_the_external_one_converts_nothing() {
+    let output = run_example("encodings/read_with_internal_encoding_given.rb");
+    assert_eq!(output, "#<Encoding:UTF-8>\ntrue\n#<Encoding:UTF-8>\n");
+}
+
+#[test]
+fn a_string_subclass_appended_to_an_empty_binary_string_gives_it_its_encoding() {
+    let output = run_example("encodings/appending_a_string_subclass_to_a_binary_string.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "#<Encoding:UTF-8>\n",
+            "\"café ✓\"\n",
+            "#<Encoding:BINARY (ASCII-8BIT)>\n",
+            "#<Encoding:UTF-8>\n",
+            "#<Encoding:UTF-8>\n",
+            "#<Encoding:UTF-8>\n",
+        )
+    );
+}

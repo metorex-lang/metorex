@@ -1329,7 +1329,10 @@ class RubyVM
         body = statements(event.args[1])
         rest = branch(event.args[2])
         last = rest || body
-        start = opener_before(first_index(event.args[0]), ["when"])
+        # An empty String or Symbol holds no token of its own, so the
+        # `when` is looked for from the clause's body instead.
+        anchor = token_range(event.args[0]) || token_range(event.args[1])
+        start = opener_before(anchor ? anchor.first : event.last, ["when"])
         node(:WHEN, [values, body, rest], from_token(start, last))
       end
 

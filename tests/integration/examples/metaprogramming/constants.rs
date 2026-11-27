@@ -440,3 +440,18 @@ fn test_constants_singleton_def_in_a_method_reads_lexical_constants_execution() 
     let output = run_example("constants/singleton_def_in_a_method_reads_lexical_constants.rb");
     assert_eq!(output, "[:title, :string]\n:string\n");
 }
+
+#[test]
+fn a_class_body_finds_the_enclosing_modules_constant_before_a_superclass_autoload() {
+    let output = run_example("constants/lexical_scope_before_superclass_constant.rb");
+    assert_eq!(
+        output,
+        "[Shop::Command, Shop::Actions, Launcher]\n:from_the_enclosing_module\nfalse\nShop::Actions\n"
+    );
+}
+
+#[test]
+fn code_evaluated_in_a_block_binding_finds_the_constants_of_the_blocks_modules() {
+    let output = run_example("constants/eval_in_a_block_binding_reads_the_blocks_modules.rb");
+    assert_eq!(output, "[3, 3]\n");
+}

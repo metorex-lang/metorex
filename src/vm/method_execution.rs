@@ -735,6 +735,11 @@ impl VirtualMachine {
                     || (written_by_the_program(method)
                         && crate::vm::method_lookup::extended_method(held, method_name)
                             .is_some_and(|(_, extended)| Rc::ptr_eq(&extended, method)))
+                    // One a module prepended to the singleton class gives it
+                    // stands ahead of the native one.
+                    || (written_by_the_program(method)
+                        && crate::vm::method_lookup::singleton_prepended_method(held, method_name)
+                            .is_some_and(|(_, prepended)| Rc::ptr_eq(&prepended, method)))
                     // One a superclass's singleton class holds stands for the
                     // subclass too.
                     || (written_by_the_program(method)

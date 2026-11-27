@@ -29,7 +29,12 @@ impl VirtualMachine {
         }
         if let Some(enclosing) = self.def_scope_stack.last().cloned() {
             self.install_alias(&enclosing, new_name, old_name, position)?;
-            self.invoke_class_hook(&enclosing, "method_added", new_name, position)?;
+            let hook = if enclosing.is_singleton_class() {
+                "singleton_method_added"
+            } else {
+                "method_added"
+            };
+            self.invoke_class_hook(&enclosing, hook, new_name, position)?;
             return Ok(ControlFlow::Next);
         }
         if let Some(View::Class(object_class)) = self.globals().get("Object").view()

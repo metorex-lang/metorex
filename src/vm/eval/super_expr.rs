@@ -369,6 +369,22 @@ impl VirtualMachine {
             )? {
                 return Ok(result);
             }
+            // A module prepended to the class's singleton class stands ahead
+            // of the class's native methods, and its `super` reaches them.
+            if crate::vm::method_lookup::singleton_prepended_method(&self_class, &method_name)
+                .is_some()
+            {
+                let native_class = self.builtins().class_of(&self_object);
+                if let Some(result) = self.call_native_method(
+                    &native_class,
+                    &self_object,
+                    &method_name,
+                    &evaluated_args,
+                    position,
+                )? {
+                    return Ok(result);
+                }
+            }
             return self.super_finds_nothing(&self_object, &method_name, evaluated_args, position);
         }
 

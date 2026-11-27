@@ -18,9 +18,10 @@
 # examples than it did. With LOG_DIR set, what each file printed is copied
 # there, named after the file. FILE_TIMEOUT is the longest one file may run,
 # 300 seconds unless set, and SANDBOX_FILE_TIMEOUT the longest one of
-# simplecov's sandbox spec files or RuboCop's command line spec files may,
-# 900 unless set, and STRESS_FILE_TIMEOUT the longest thread_safe's
-# torture spec may, 1800 unless set. FILES, a space-separated list of test
+# simplecov's sandbox spec files, RuboCop's command line spec files or
+# railties' test files may, 900 unless set, and STRESS_FILE_TIMEOUT the
+# longest thread_safe's torture spec or railties' configuration and test
+# runner tests may, 1800 unless set. FILES, a space-separated list of test
 # files as the table's patterns name them, runs only those.
 #
 # A gem with a directory under scripts/gem_suite/bundles runs with
@@ -158,17 +159,19 @@ SUITES=(
   "googleauth|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
   "googleauth|test/**/*_test.rb|-I lib -I test -r bundler/setup"
   "signet|spec/**/*_spec.rb|-I lib -I spec -r bundler/setup $RSPEC"
-  "rails/activesupport|test/**/*_test.rb|-w -I lib -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
-  "rails/activemodel|test/cases/**/*_test.rb|-w -I lib -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
-  "rails/activerecord|test/cases/*_test.rb test/cases/assertions/**/*_test.rb test/cases/associations/**/*_test.rb test/cases/attribute_methods/**/*_test.rb test/cases/coders/**/*_test.rb test/cases/connection_adapters/**/*_test.rb test/cases/database_configurations/**/*_test.rb test/cases/fixture_set/**/*_test.rb test/cases/migration/**/*_test.rb test/cases/persistence/**/*_test.rb test/cases/relation/**/*_test.rb test/cases/scoping/**/*_test.rb test/cases/tasks/**/*_test.rb test/cases/type/**/*_test.rb test/cases/type_caster/**/*_test.rb test/cases/validations/**/*_test.rb test/cases/encryption/*_test.rb test/cases/encryption/cipher/*_test.rb test/cases/adapters/sqlite3/**/*_test.rb|-w -I lib -I test -I ../railties/lib -r $REPO_ROOT/scripts/gem_suite/activerecord_on_sqlite3.rb -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
-  "rails/activerecord|test/cases/arel/**/*_test.rb|-w -I lib -I test -r bundler/setup -r active_model|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
-  "rails/actionpack|test/**/*_test.rb|-w -I lib -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
-  "rails/actionview|test/*_test.rb test/actionpack/**/*_test.rb test/activerecord/*_test.rb test/template/**/*_test.rb|-w -I lib -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
-  "rails/actionmailer|test/*_test.rb|-w -I lib -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
-  "rails/activejob|test/cases/adapter_test.rb test/cases/argument_serialization_test.rb test/cases/callbacks_test.rb test/cases/continuation_test.rb test/cases/enqueue_after_transaction_commit_test.rb test/cases/exceptions_test.rb test/cases/instrumentation_test.rb test/cases/job_serialization_test.rb test/cases/logging_test.rb test/cases/queue_adapter_test.rb test/cases/queue_naming_test.rb test/cases/queue_priority_test.rb test/cases/queuing_test.rb test/cases/rescue_test.rb test/cases/serializers_test.rb test/cases/structured_event_subscriber_test.rb test/cases/test_case_test.rb test/cases/test_helper_test.rb test/cases/timezones_test.rb test/cases/translation_test.rb|-w -I lib -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
+  "rails/activesupport|test/**/*_test.rb|-w -I lib -r $REPO_ROOT/scripts/gem_suite/one_test_at_a_time.rb -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
+  "rails/activemodel|test/cases/**/*_test.rb|-w -I lib -r $REPO_ROOT/scripts/gem_suite/one_test_at_a_time.rb -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
+  "rails/activerecord|test/cases/*_test.rb test/cases/assertions/**/*_test.rb test/cases/associations/**/*_test.rb test/cases/attribute_methods/**/*_test.rb test/cases/coders/**/*_test.rb test/cases/connection_adapters/**/*_test.rb test/cases/database_configurations/**/*_test.rb test/cases/fixture_set/**/*_test.rb test/cases/migration/**/*_test.rb test/cases/persistence/**/*_test.rb test/cases/relation/**/*_test.rb test/cases/scoping/**/*_test.rb test/cases/tasks/**/*_test.rb test/cases/type/**/*_test.rb test/cases/type_caster/**/*_test.rb test/cases/validations/**/*_test.rb test/cases/encryption/*_test.rb test/cases/encryption/cipher/*_test.rb test/cases/adapters/sqlite3/**/*_test.rb|-w -I lib -r $REPO_ROOT/scripts/gem_suite/one_test_at_a_time.rb -I test -I ../railties/lib -r $REPO_ROOT/scripts/gem_suite/activerecord_on_sqlite3.rb -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
+  "rails/activerecord|test/cases/arel/**/*_test.rb|-w -I lib -r $REPO_ROOT/scripts/gem_suite/one_test_at_a_time.rb -I test -r bundler/setup -r active_model|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
+  "rails/actionpack|test/**/*_test.rb|-w -I lib -r $REPO_ROOT/scripts/gem_suite/one_test_at_a_time.rb -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
+  "rails/actionview|test/*_test.rb test/actionpack/**/*_test.rb test/activerecord/*_test.rb test/template/**/*_test.rb|-w -I lib -r $REPO_ROOT/scripts/gem_suite/one_test_at_a_time.rb -r $REPO_ROOT/scripts/gem_suite/one_parallel_worker.rb -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
+  "rails/actionmailer|test/*_test.rb|-w -I lib -r $REPO_ROOT/scripts/gem_suite/one_test_at_a_time.rb -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
+  "rails/activejob|test/cases/adapter_test.rb test/cases/argument_serialization_test.rb test/cases/callbacks_test.rb test/cases/continuation_test.rb test/cases/enqueue_after_transaction_commit_test.rb test/cases/exceptions_test.rb test/cases/instrumentation_test.rb test/cases/job_serialization_test.rb test/cases/logging_test.rb test/cases/queue_adapter_test.rb test/cases/queue_naming_test.rb test/cases/queue_priority_test.rb test/cases/queuing_test.rb test/cases/rescue_test.rb test/cases/serializers_test.rb test/cases/structured_event_subscriber_test.rb test/cases/test_case_test.rb test/cases/test_helper_test.rb test/cases/timezones_test.rb test/cases/translation_test.rb|-w -I lib -r $REPO_ROOT/scripts/gem_suite/one_test_at_a_time.rb -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
   "globalid|test/cases/*_test.rb|-w -I lib -I test -r cgi/escape -r bundler/setup -r helper"
-  "rails/actioncable|test/channel/base_test.rb test/channel/broadcasting_test.rb test/channel/naming_test.rb test/channel/periodic_timers_test.rb test/channel/rejection_test.rb test/channel/stream_test.rb test/channel/test_case_test.rb test/client_test.rb test/connection/authorization_test.rb test/connection/base_test.rb test/connection/callbacks_test.rb test/connection/client_socket_test.rb test/connection/cross_site_forgery_test.rb test/connection/identifier_test.rb test/connection/multiple_identifiers_test.rb test/connection/stream_test.rb test/connection/string_identifier_test.rb test/connection/subscriptions_test.rb test/connection/test_case_test.rb test/server/base_test.rb test/server/broadcasting_test.rb test/server/health_check_test.rb test/subscription_adapter/async_test.rb test/subscription_adapter/base_test.rb test/subscription_adapter/inline_test.rb test/subscription_adapter/redis_test.rb test/subscription_adapter/subscriber_map_test.rb test/subscription_adapter/test_adapter_test.rb test/test_helper_test.rb test/worker_test.rb|-w -I lib -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
-  "rails/activestorage|test/analyzer/audio_analyzer_test.rb test/analyzer/image_analyzer/image_magick_test.rb test/analyzer/image_analyzer/vips_test.rb test/analyzer/video_analyzer_test.rb test/controllers/blobs/proxy_controller_test.rb test/controllers/blobs/redirect_controller_test.rb test/controllers/direct_uploads_controller_test.rb test/controllers/disk_controller_test.rb test/controllers/representations/proxy_controller_test.rb test/controllers/representations/redirect_controller_test.rb test/engine_test.rb test/fixture_set_test.rb test/image_magick_test.rb test/jobs/analyze_job_test.rb test/jobs/preview_image_job_test.rb test/jobs/purge_job_test.rb test/jobs/transform_job_test.rb test/migrations_test.rb test/models/attached/many_test.rb test/models/attached/one_test.rb test/models/attachment_test.rb test/models/blob_test.rb test/models/filename_test.rb test/models/presence_validation_test.rb test/models/preview_test.rb test/models/reflection_test.rb test/models/representation_test.rb test/models/strict_loading_test.rb test/models/variant_test.rb test/models/variant_with_record_test.rb test/previewer/mupdf_previewer_test.rb test/previewer/poppler_pdf_previewer_test.rb test/previewer/video_previewer_test.rb test/service/configurator_test.rb test/service/disk_public_service_test.rb test/service/disk_service_test.rb test/service/gcs_public_service_test.rb test/service/gcs_service_test.rb test/service/mirror_service_test.rb test/service/registry_test.rb test/service/s3_public_service_test.rb test/service/s3_service_test.rb test/service_test.rb test/structured_event_subscriber_test.rb test/template/audio_tag_test.rb test/template/image_tag_test.rb test/template/video_tag_test.rb test/urls/rails_storage_proxy_url_test.rb test/urls/rails_storage_redirect_url_test.rb|-w -I lib -I app/controllers -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
+  "rails/actioncable|test/channel/base_test.rb test/channel/broadcasting_test.rb test/channel/naming_test.rb test/channel/periodic_timers_test.rb test/channel/rejection_test.rb test/channel/stream_test.rb test/channel/test_case_test.rb test/client_test.rb test/connection/authorization_test.rb test/connection/base_test.rb test/connection/callbacks_test.rb test/connection/client_socket_test.rb test/connection/cross_site_forgery_test.rb test/connection/identifier_test.rb test/connection/multiple_identifiers_test.rb test/connection/stream_test.rb test/connection/string_identifier_test.rb test/connection/subscriptions_test.rb test/connection/test_case_test.rb test/server/base_test.rb test/server/broadcasting_test.rb test/server/health_check_test.rb test/subscription_adapter/async_test.rb test/subscription_adapter/base_test.rb test/subscription_adapter/inline_test.rb test/subscription_adapter/redis_test.rb test/subscription_adapter/subscriber_map_test.rb test/subscription_adapter/test_adapter_test.rb test/test_helper_test.rb test/worker_test.rb|-w -I lib -r $REPO_ROOT/scripts/gem_suite/one_test_at_a_time.rb -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
+  "rails/activestorage|test/analyzer/audio_analyzer_test.rb test/analyzer/image_analyzer/image_magick_test.rb test/analyzer/image_analyzer/vips_test.rb test/analyzer/video_analyzer_test.rb test/controllers/blobs/proxy_controller_test.rb test/controllers/blobs/redirect_controller_test.rb test/controllers/direct_uploads_controller_test.rb test/controllers/disk_controller_test.rb test/controllers/representations/proxy_controller_test.rb test/controllers/representations/redirect_controller_test.rb test/engine_test.rb test/fixture_set_test.rb test/image_magick_test.rb test/jobs/analyze_job_test.rb test/jobs/preview_image_job_test.rb test/jobs/purge_job_test.rb test/jobs/transform_job_test.rb test/migrations_test.rb test/models/attached/many_test.rb test/models/attached/one_test.rb test/models/attachment_test.rb test/models/blob_test.rb test/models/filename_test.rb test/models/presence_validation_test.rb test/models/preview_test.rb test/models/reflection_test.rb test/models/representation_test.rb test/models/strict_loading_test.rb test/models/variant_test.rb test/models/variant_with_record_test.rb test/previewer/mupdf_previewer_test.rb test/previewer/poppler_pdf_previewer_test.rb test/previewer/video_previewer_test.rb test/service/configurator_test.rb test/service/disk_public_service_test.rb test/service/disk_service_test.rb test/service/gcs_public_service_test.rb test/service/gcs_service_test.rb test/service/mirror_service_test.rb test/service/registry_test.rb test/service/s3_public_service_test.rb test/service/s3_service_test.rb test/service_test.rb test/structured_event_subscriber_test.rb test/template/audio_tag_test.rb test/template/image_tag_test.rb test/template/video_tag_test.rb test/urls/rails_storage_proxy_url_test.rb test/urls/rails_storage_redirect_url_test.rb|-w -I lib -r $REPO_ROOT/scripts/gem_suite/one_test_at_a_time.rb -I app/controllers -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
+  "rails/railties|test/**/*_test.rb|-w -I lib -I test -r $REPO_ROOT/scripts/gem_suite/one_test_at_a_time.rb -r $REPO_ROOT/scripts/gem_suite/gem_path_from_bundle.rb -r bundler/setup -r isolation/abstract_unit|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
+  "sprockets-rails|test/test_*.rb|-w -I lib -I test -r $REPO_ROOT/scripts/gem_suite/one_test_at_a_time.rb -r bundler/setup"
   "rails-dom-testing|test/*_test.rb|-w -I lib -I test -r bundler/setup"
   "rails-html-sanitizer|test/*_test.rb|-w -I lib -I test -r bundler/setup"
   "redis|test/redis/*_test.rb test/distributed/*_test.rb test/modules/*_test.rb|-I lib -I test -r bundler/setup"
@@ -198,18 +201,34 @@ EXTENSIONS=(
 # databases of the one server every file shares.
 ONE_AT_A_TIME=(excon mini_portile2 redis)
 
+# The test files that run by themselves once every other file has finished,
+# since a test in them gives a process it starts a fixed time to answer, and
+# that time runs out while other files keep the machine busy: railties'
+# console tests wait 30 seconds for a console's first prompt.
+RUN_ALONE=(rails/railties/test/application/console_test.rb)
+
 # The longest one of simplecov's sandbox spec files may run, each of which
-# boots a Rails application and runs its tests once per example, or one of
+# boots a Rails application and runs its tests once per example, one of
 # RuboCop's command line spec files, each of which runs RuboCop over a
-# project once per example.
+# project once per example, or one of railties' test files, each of which
+# generates and boots Rails applications.
 SANDBOX_FILE_TIMEOUT="${SANDBOX_FILE_TIMEOUT:-900}"
 # The longest thread_safe's torture spec may run, which takes a cache through
 # millions of operations from 40 threads and runs for about 40 seconds under
-# MRI and 15 minutes under Metorex.
+# MRI and 15 minutes under Metorex, or railties' configuration and test
+# runner tests, which boot an application for each of their tests one after
+# another and run for two to three minutes under MRI.
 STRESS_FILE_TIMEOUT="${STRESS_FILE_TIMEOUT:-1800}"
 one_at_a_time() {
   local held
   for held in "${ONE_AT_A_TIME[@]}"; do
+    [ "$held" = "$1" ] && return 0
+  done
+  return 1
+}
+runs_alone() {
+  local held
+  for held in "${RUN_ALONE[@]}"; do
     [ "$held" = "$1" ] && return 0
   done
   return 1
@@ -257,10 +276,13 @@ if wanted redis && [ -z "${REDIS_SOCKET_PATH:-}" ]; then
   fi
 fi
 # A test that starts `ruby` by name, as thor's do, starts Metorex in a
-# Metorex run, through a link named `ruby` ahead of the others on PATH.
+# Metorex run, through a link named `ruby` ahead of the others on PATH. It
+# names the link `metorex` beside it, which is how thor tells that `ruby` in
+# Metorex's bin directory runs Metorex.
 if [ "$ENGINE" = "metorex" ]; then
   mkdir -p "$WORK_DIR/bin"
-  ln -s "$(cd "$(dirname "$METOREX")" && pwd -P)/$(basename "$METOREX")" "$WORK_DIR/bin/ruby"
+  ln -s "$(cd "$(dirname "$METOREX")" && pwd -P)/$(basename "$METOREX")" "$WORK_DIR/bin/metorex"
+  ln -s metorex "$WORK_DIR/bin/ruby"
   # A test that runs `bundle`, as simplecov's sandboxes do, runs the
   # Bundler Metorex carries, as `bundle` runs MRI's in an MRI run.
   cat > "$WORK_DIR/bin/bundle" <<'BUNDLE'
@@ -298,6 +320,7 @@ for row in "${EXTENSIONS[@]}"; do
   done
 done
 QUEUE="$WORK_DIR/queue.tsv"
+ALONE_QUEUE="$WORK_DIR/alone_queue.tsv"
 : > "$QUEUE"
 for row in "${SUITES[@]}"; do
   IFS='|' read -r gem patterns arguments prepare <<< "$row"
@@ -327,7 +350,11 @@ for row in "${SUITES[@]}"; do
     printf '%s\t%s\t%s\t%s\n' "$gem" "$(echo $files)" "$arguments" "$prepare" >> "$QUEUE"
   else
     for file in $files; do
-      printf '%s\t%s\t%s\t%s\n' "$gem" "$file" "$arguments" "$prepare" >> "$QUEUE"
+      if runs_alone "$gem/$file"; then
+        printf '%s\t%s\t%s\t%s\n' "$gem" "$file" "$arguments" "$prepare" >> "$ALONE_QUEUE"
+      else
+        printf '%s\t%s\t%s\t%s\n' "$gem" "$file" "$arguments" "$prepare" >> "$QUEUE"
+      fi
     done
   fi
 done
@@ -343,10 +370,16 @@ run_one() {
   (cd "$REPO_ROOT/gems/$gem" && tar --exclude .git -cf - .) | (cd "$run_dir" && tar -xf -)
   local limit="$FILE_TIMEOUT"
   case "$name" in
-    simplecov/spec/sandbox/* | rubocop/spec/rubocop/cli/* | rubocop/spec/rubocop/cli_spec.rb | rubocop/spec/rubocop/server/*) limit="$SANDBOX_FILE_TIMEOUT" ;;
-    thread_safe/spec/thread_safe/cache_loops_spec.rb) limit="$STRESS_FILE_TIMEOUT" ;;
+    thread_safe/spec/thread_safe/cache_loops_spec.rb | rails/railties/test/application/configuration_test.rb | rails/railties/test/application/test_runner_test.rb) limit="$STRESS_FILE_TIMEOUT" ;;
+    simplecov/spec/sandbox/* | rubocop/spec/rubocop/cli/* | rubocop/spec/rubocop/cli_spec.rb | rubocop/spec/rubocop/server/* | rails/railties/test/*) limit="$SANDBOX_FILE_TIMEOUT" ;;
   esac
   local command=("$ENGINE_COMMAND")
+  # railties' generators write the shebang of an application's scripts from
+  # the interpreter's bin directory, which names `ruby` for MRI. Metorex
+  # started through the link in the work directory has a `ruby` there too.
+  if [ "$ENGINE" = "metorex" ] && [ "$gem" = "rails/railties" ]; then
+    command=("$WORK_DIR/bin/metorex")
+  fi
   if [ -d "$WORK_DIR/extensions/$gem" ]; then
     arguments="-I $WORK_DIR/extensions/$gem $arguments"
     # A test that starts Ruby itself, as puma's start servers, finds them too.
@@ -405,6 +438,12 @@ export SIMPLECOV_DISABLE=1
 # A test that omits itself under CI would count differently there than in
 # the recorded runs.
 unset CI
+# On macOS, a forked child that loads a library using the Objective-C
+# runtime aborts, as railties' isolated tests do when they load libvips,
+# unless this is set before the process starts.
+if [ "$(uname)" = Darwin ]; then
+  export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+fi
 # Minitest runs a file's tests in an order drawn from this seed, so both
 # engines run them in the same order and a test that depends on another
 # counts the same under each.
@@ -416,6 +455,11 @@ while IFS=$'\t' read -r gem file arguments prepare; do
   # passes NO_PREPARE in its place.
   printf '%s\0%s\0%s\0%s\0' "$gem" "$file" "$arguments" "${prepare:-$NO_PREPARE}"
 done < "$QUEUE" | xargs -0 -n 4 -P "$JOBS" bash -c 'run_files "$@"' _ > "$RESULTS"
+if [ -f "$ALONE_QUEUE" ]; then
+  while IFS=$'\t' read -r gem file arguments prepare; do
+    run_files "$gem" "$file" "$arguments" "${prepare:-$NO_PREPARE}" >> "$RESULTS" < /dev/null
+  done < "$ALONE_QUEUE"
+fi
 if [ -n "${LOG_DIR:-}" ]; then
   mkdir -p "$LOG_DIR"
   cp "$WORK_DIR"/logs/*.txt "$LOG_DIR/"

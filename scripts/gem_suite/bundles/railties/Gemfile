@@ -1,0 +1,107 @@
+# The gems railties' tests load, at the versions the rails repository's
+# lockfile names: the rails gem and every framework, since the application
+# the isolated tests build requires rails/all, with what each loads,
+# propshaft and importmap-rails, which that application requires, and
+# minitest-retry for the isolation helper. sprockets-rails and sprockets
+# come from rubygems.org, as the lockfile takes them, since Bundler
+# evaluates a checkout's gemspec, and sprockets-rails' defines
+# Sprockets::Rails, which importmap-rails reads as the railtie having
+# loaded. The rest are what the generated applications and their tests
+# load: capybara and selenium-webdriver for system tests, the solid
+# adapters, dalli for the production cache store, bootsnap, bcrypt,
+# jbuilder, web-console, listen, rack-cache, puma, webrick, and the gems a
+# generated application's Gemfile names, kamal, thruster, debug,
+# bundler-audit, brakeman and rubocop-rails-omakase. Those with
+# C extensions come from rubygems.org, so Metorex builds them when they
+# are first loaded. The tests that need PostgreSQL fail without pg.
+#
+# The suite runs with the frameworks from the copy of the rails repository
+# GEM_SUITE_CHECKOUT names the railties directory of, since tests compare
+# the paths the frameworks load from with the copy's.
+source "https://rubygems.org"
+
+repository = ENV["REPO_ROOT"] || "../../../.."
+rails = ENV["GEM_SUITE_CHECKOUT"] ? File.dirname(ENV["GEM_SUITE_CHECKOUT"]) : "#{repository}/gems/rails"
+
+eval_gemfile "#{repository}/scripts/gem_suite/bundles/ruby_shipped.rb"
+
+gem "activestorage", path: "#{rails}/activestorage"
+gem "actioncable", path: "#{rails}/actioncable"
+gem "actionmailbox", path: "#{rails}/actionmailbox"
+gem "actionmailer", path: "#{rails}/actionmailer"
+gem "actionpack", path: "#{rails}/actionpack"
+gem "actiontext", path: "#{rails}/actiontext"
+gem "actionview", path: "#{rails}/actionview"
+gem "activejob", path: "#{rails}/activejob"
+gem "activemodel", path: "#{rails}/activemodel"
+gem "activerecord", path: "#{rails}/activerecord"
+gem "activesupport", path: "#{rails}/activesupport"
+gem "rails", path: rails
+gem "railties", path: "#{rails}/railties"
+gem "globalid", path: "#{repository}/gems/globalid"
+gem "rails-dom-testing", path: "#{repository}/gems/rails-dom-testing"
+gem "rails-html-sanitizer", path: "#{repository}/gems/rails-html-sanitizer"
+gem "loofah", path: "#{repository}/gems/loofah"
+gem "crass", path: "#{repository}/gems/crass"
+gem "mail", path: "#{repository}/gems/mail"
+gem "mini_mime", path: "#{repository}/gems/mini_mime"
+gem "i18n", path: "#{repository}/gems/i18n"
+gem "tzinfo", path: "#{repository}/gems/tzinfo"
+gem "concurrent-ruby", path: "#{repository}/gems/concurrent-ruby"
+gem "rack", path: "#{repository}/gems/rack"
+gem "rack-test", path: "#{repository}/gems/rack-test"
+gem "builder", path: "#{repository}/gems/builder"
+gem "erubi", path: "#{repository}/gems/erubi"
+gem "zeitwerk", path: "#{repository}/gems/zeitwerk"
+gem "thor", path: "#{repository}/gems/thor"
+gem "addressable", path: "#{repository}/gems/addressable"
+gem "public_suffix", path: "#{repository}/gems/public_suffix"
+gem "propshaft", "1.3.2"
+gem "sprockets-rails", "3.5.2", require: false
+gem "sprockets", "4.2.2", require: false
+gem "dalli", "4.3.3", require: false
+gem "importmap-rails", "2.2.3"
+gem "minitest-retry", "0.3.1"
+gem "capybara", "3.40.0"
+gem "selenium-webdriver", "4.44.0"
+gem "rack-cache", "1.17.0"
+gem "stimulus-rails", "1.3.4"
+gem "turbo-rails", "2.0.23"
+gem "jsbundling-rails", "1.3.1"
+gem "cssbundling-rails", "1.4.3"
+gem "solid_cache", "1.0.10"
+gem "solid_queue", "1.4.0"
+gem "solid_cable", "3.0.12"
+gem "bcrypt", "3.1.22", require: false
+gem "bootsnap", "1.24.4", require: false
+gem "msgpack", "1.8.0", require: false
+gem "jbuilder", "2.15.0", require: false
+gem "web-console", "4.3.0", require: false
+gem "listen", "3.10.0", require: false
+gem "webrick", "1.9.2", require: false
+gem "puma", "8.0.1", require: false
+gem "kamal", "2.11.0", require: false
+gem "thruster", "0.1.21", require: false
+gem "debug", "1.11.1", require: false
+gem "bundler-audit", "0.9.3", require: false
+gem "brakeman", "8.0.4", require: false
+gem "rubocop-rails-omakase", "1.1.0", require: false
+gem "marcel", "1.1.1"
+gem "image_processing", "1.14.0"
+gem "mini_magick", "5.3.1"
+gem "ruby-vips", "2.3.0"
+gem "webmock", "3.26.2", require: false
+gem "sqlite3", "2.9.4"
+gem "nio4r", "~> 2.0"
+gem "websocket-driver", "0.8.0"
+gem "websocket-extensions", "0.1.5"
+gem "action_text-trix", "~> 2.1.15"
+gem "rackup", ">= 1.0.0"
+gem "rack-session", ">= 1.0.1"
+gem "useragent", "~> 0.16"
+gem "connection_pool", "< 3"
+gem "minitest-mock"
+gem "nokogiri", ">= 1.8.5"
+gem "rake", ">= 13"
+
+shipped "minitest", "base64", "bigdecimal", "drb", "json", "logger", "uri", "rexml", "date", "psych", "stringio", "erb", "prism", "timeout", "tsort", "irb", "net-imap", "net-pop", "net-smtp", "net-protocol", "rdoc"

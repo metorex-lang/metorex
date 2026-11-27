@@ -1903,11 +1903,13 @@ impl Compiler {
         branches: &[&[Statement]],
         position: Position,
     ) -> Result<(), &'static str> {
+        let mut names = indexmap::IndexSet::new();
         for branch in branches {
-            for name in crate::ast::collect_assigned_locals(branch) {
-                let slot = wide(Some(self.unit.local(&name)))?;
-                self.emit(Instruction::Unhoist { slot }, position);
-            }
+            names.extend(crate::ast::collect_assigned_locals(branch));
+        }
+        for name in names {
+            let slot = wide(Some(self.unit.local(&name)))?;
+            self.emit(Instruction::Unhoist { slot }, position);
         }
         Ok(())
     }

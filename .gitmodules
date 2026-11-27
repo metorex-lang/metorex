@@ -259,3 +259,6 @@
 [submodule "gems/globalid"]
 	path = gems/globalid
 	url = https://github.com/rails/globalid
+[submodule "gems/sprockets-rails"]
+	path = gems/sprockets-rails
+	url = https://github.com/rails/sprockets-rails

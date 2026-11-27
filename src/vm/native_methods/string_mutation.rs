@@ -112,6 +112,11 @@ impl VirtualMachine {
                 }
                 let mut added = String::new();
                 for argument in arguments {
+                    // An instance of a String subclass is appended as the
+                    // String it holds, encoding and all.
+                    let held =
+                        crate::vm::native_methods::subclasses::string_subclass_value(argument);
+                    let argument = held.as_ref().unwrap_or(argument);
                     match argument.view() {
                         // Text written in an encoding this one cannot be read
                         // alongside is refused, and text that goes with it
@@ -177,8 +182,13 @@ impl VirtualMachine {
             "replace" | "__native_replace__" => {
                 let text = self.one_string_argument(method_name, arguments, position)?;
                 // The replacement's encoding comes with its text, and so does
-                // whether that text is held as bytes.
-                let holds_bytes = match arguments.first().view() {
+                // whether that text is held as bytes. An instance of a String
+                // subclass brings those of the String it holds.
+                let source = arguments
+                    .first()
+                    .and_then(crate::vm::native_methods::subclasses::string_subclass_value)
+                    .or_else(|| arguments.first().cloned());
+                let holds_bytes = match source.view() {
                     Some(View::String(source)) => {
                         target.set_encoding(source.encoding_name());
                         source.holds_bytes()

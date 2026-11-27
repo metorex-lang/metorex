@@ -34,6 +34,12 @@ pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
+/// The source of a library metorex carries, named by the `<metorex>/` path
+/// its own files read under, so the command line can run it as a script.
+pub fn carried_script_source(path: &str) -> Option<&'static str> {
+    vm::stdlib::carried_feature(path).and_then(vm::stdlib::embedded_library)
+}
+
 /// The Ruby release metorex reports as its own, the MRI release it follows,
 /// which decides which of the spec suite's version guards open.
 pub const DEFAULT_RUBY_VERSION: &str = "4.0.10";

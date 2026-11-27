@@ -752,3 +752,53 @@ fn cli_a_binary_started_by_its_own_name_names_itself_metorex() {
     assert!(output.status.success());
     assert_eq!(String::from_utf8(output.stdout).unwrap(), "metorex\n");
 }
+
+#[test]
+fn cli_dir_of_a_script_named_by_a_relative_path_survives_a_chdir() {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let output = metorex_cmd()
+        .current_dir(format!("{manifest_dir}/tests/_examples"))
+        .arg("paths/dir_of_a_script_named_relatively.rb")
+        .output()
+        .expect("failed to execute");
+    assert_eq!(String::from_utf8(output.stdout).unwrap(), "true\ntrue\n");
+}
+
+/// What running `parse_warnings/<script>` with `flags` wrote to standard
+/// error, from that directory.
+fn parse_warnings_of(flags: &[&str], script: &str) -> String {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let output = metorex_cmd()
+        .current_dir(format!("{manifest_dir}/tests/_examples/parse_warnings"))
+        .args(flags)
+        .arg(script)
+        .output()
+        .expect("failed to execute");
+    String::from_utf8(output.stderr).unwrap()
+}
+
+const VERBOSE_PARSE_WARNINGS: &str = concat!(
+    "verbose_parse_warnings.rb:2: warning: assigned but unused variable - unused\n",
+    "verbose_parse_warnings.rb:9: warning: possibly useless use of == in void context\n",
+);
+
+#[test]
+fn cli_w_flag_writes_the_warnings_reading_the_main_script_gives_when_verbose() {
+    assert_eq!(
+        parse_warnings_of(&["-w"], "verbose_parse_warnings.rb"),
+        VERBOSE_PARSE_WARNINGS
+    );
+}
+
+#[test]
+fn cli_writes_no_verbose_parse_warnings_without_the_w_flag() {
+    assert_eq!(parse_warnings_of(&[], "verbose_parse_warnings.rb"), "");
+}
+
+#[test]
+fn a_file_required_while_verbose_is_true_writes_its_verbose_parse_warnings() {
+    let written = parse_warnings_of(&[], "requires_verbose_parse_warnings.rb");
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let directory = format!("{manifest_dir}/tests/_examples/parse_warnings/");
+    assert_eq!(written.replace(&directory, ""), VERBOSE_PARSE_WARNINGS);
+}

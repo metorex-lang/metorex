@@ -245,6 +245,9 @@ impl VirtualMachine {
                         receiver,
                     );
                     *binding.home_frame.borrow_mut() = Some(block.home_frame);
+                    // Code evaluated in it finds the constants of the
+                    // modules the block was written in.
+                    *binding.nesting.borrow_mut() = block.captured_nesting.to_vec();
                     // It stands where the block was written.
                     if let (Some(file), Some(line)) = (&block.source_file, block.opened_at) {
                         *binding.source.borrow_mut() = Some((file.to_string(), line));

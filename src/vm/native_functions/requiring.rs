@@ -424,11 +424,7 @@ impl VirtualMachine {
             Ok(path) => path,
             Err(_) => {
                 let feature = resolved_path.display().to_string();
-                let mut message = format!("cannot load such file -- {}", feature);
-                let suggestions = crate::file_loader::suggest_similar_files(&resolved_path);
-                if !suggestions.is_empty() {
-                    message.push_str(&format!(". Did you mean: {}?", suggestions.join(", ")));
-                }
+                let message = format!("cannot load such file -- {}", feature);
                 return Err(MetorexError::UncaughtException {
                     exception: crate::vm::errors::load_error(message.clone(), &feature),
                     location: crate::vm::utils::position_to_location(position),

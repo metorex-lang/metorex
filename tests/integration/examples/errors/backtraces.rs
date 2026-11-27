@@ -347,3 +347,17 @@ fn warn_uplevel_names_the_frame_that_many_calls_out() {
         )
     );
 }
+
+#[test]
+fn an_exception_class_that_writes_its_own_backtrace_is_reported_with_it() {
+    let output = run_example("errors/full_message_with_backtrace_overridden.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "\"HERE:in 'full_message': m (Quiet)\\n\"\n",
+            "\"x.rb:3:in 'step': m (Placed)\\n\\tfrom z.rb:1\\n\"\n",
+            "nil\n",
+            "[]\n",
+        )
+    );
+}

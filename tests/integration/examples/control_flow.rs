@@ -701,3 +701,9 @@ fn test_control_flow_when_class_does_not_inspect_the_subject_execution() {
     let output = run_example("control_flow/when_class_does_not_inspect_the_subject.rb");
     assert_eq!(output, ":kept\n:wrapped\n:wrapped\nfalse\n");
 }
+
+#[test]
+fn a_case_with_thousands_of_arms_assigning_the_same_locals_runs() {
+    let output = run_example("control_flow/case_with_many_arms_assigning_the_same_locals.rb");
+    assert_eq!(output, "[2999, 5998]\n[nil, nil]\n");
+}

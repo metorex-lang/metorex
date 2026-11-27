@@ -243,9 +243,7 @@ pub(crate) fn bind_block_params(
                         .position(|declared| declared == param)
                         .unwrap_or(usize::MAX);
                     match defaults.iter().find(|(at, _)| *at == index) {
-                        Some((_, default)) => {
-                            vm.evaluate_expression(default).unwrap_or(Object::Nil)
-                        }
+                        Some((_, default)) => vm.evaluate_expression(default)?,
                         // A keyword declared without a default has to be
                         // given, whether the block is a lambda or a proc.
                         None => {

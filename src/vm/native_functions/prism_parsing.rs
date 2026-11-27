@@ -419,3 +419,132 @@ impl VirtualMachine {
         }
     }
 }
+
+/// The bytes of prism's serialized parse result, read from the front.
+struct SerializedReading<'a> {
+    bytes: &'a [u8],
+    at: usize,
+}
+
+impl SerializedReading<'_> {
+    fn byte(&mut self) -> Option<u8> {
+        let held = *self.bytes.get(self.at)?;
+        self.at += 1;
+        Some(held)
+    }
+
+    fn skip(&mut self, count: usize) -> Option<()> {
+        (self.at + count <= self.bytes.len()).then(|| self.at += count)
+    }
+
+    fn varuint(&mut self) -> Option<usize> {
+        let mut value = 0usize;
+        let mut shift = 0;
+        loop {
+            let held = self.byte()?;
+            value |= usize::from(held & 0x7f) << shift;
+            if held < 0x80 {
+                return Some(value);
+            }
+            shift += 7;
+        }
+    }
+
+    fn varsint(&mut self) -> Option<i64> {
+        let value = self.varuint()? as i64;
+        Some((value >> 1) ^ -(value & 1))
+    }
+
+    fn location(&mut self) -> Option<usize> {
+        let start = self.varuint()?;
+        self.varuint()?;
+        Some(start)
+    }
+
+    fn embedded_string(&mut self) -> Option<String> {
+        let length = self.varuint()?;
+        let text = self.bytes.get(self.at..self.at + length)?;
+        self.at += length;
+        Some(String::from_utf8_lossy(text).into_owned())
+    }
+}
+
+/// The warnings prism gives at its verbose level for `source`, each with the
+/// line it is on, as MRI writes them when `$VERBOSE` is true. The serialized
+/// result holds them ahead of the tree, which is not read.
+pub fn prism_verbose_warnings(source: &str, main_script: bool) -> Vec<(usize, String)> {
+    let options = serialized_options(&PrismReading {
+        start_line: 1,
+        command_line: "",
+        main_script,
+        partial_script: false,
+        scopes: None,
+        whole_file: true,
+    });
+    let bytes = crate::file_loader::escaped_source_bytes(source)
+        .unwrap_or_else(|| source.as_bytes().to_vec());
+    // The buffer grows in the arena, so its bytes are copied out before the
+    // arena is unmapped.
+    let serialized = super::prism_arena::in_an_arena(|| {
+        let mut buffer = PrismBuffer::new();
+        // SAFETY: the buffer was initialized by `PrismBuffer::new`, and the
+        // source and options live for the call.
+        unsafe {
+            pm_serialize_parse(
+                buffer.pointer(),
+                bytes.as_ptr(),
+                bytes.len(),
+                options_pointer(&options),
+            )
+        };
+        buffer.bytes()
+    });
+    verbose_warnings_in(&serialized).unwrap_or_default()
+}
+
+/// The verbose warnings in a serialized parse result, or None for one that
+/// does not read as prism lays them out.
+fn verbose_warnings_in(serialized: &[u8]) -> Option<Vec<(usize, String)>> {
+    let mut reading = SerializedReading {
+        bytes: serialized,
+        at: 0,
+    };
+    // "PRISM", the version, and whether locations are left out.
+    reading.skip(9)?;
+    let encoding_length = reading.varuint()?;
+    reading.skip(encoding_length)?;
+    let start_line = reading.varsint()?;
+    let line_starts: Vec<usize> = (0..reading.varuint()?)
+        .map(|_| reading.varuint())
+        .collect::<Option<_>>()?;
+    for _ in 0..reading.varuint()? {
+        reading.varuint()?;
+        reading.location()?;
+    }
+    for _ in 0..reading.varuint()? {
+        reading.location()?;
+        reading.location()?;
+    }
+    if reading.byte()? != 0 {
+        reading.location()?;
+    }
+    for _ in 0..reading.varuint()? {
+        reading.varuint()?;
+        reading.embedded_string()?;
+        reading.location()?;
+        reading.byte()?;
+    }
+    let mut warnings = Vec::new();
+    for _ in 0..reading.varuint()? {
+        reading.varuint()?;
+        let message = reading.embedded_string()?;
+        let start = reading.location()?;
+        let verbose = reading.byte()? == 1;
+        if verbose {
+            let line_index = line_starts.partition_point(|line_start| *line_start <= start);
+            let line = start_line + line_index as i64 - 1;
+            warnings.push((line.max(1) as usize, message));
+        }
+    }
+    Some(warnings)
+}

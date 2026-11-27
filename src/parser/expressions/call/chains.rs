@@ -248,9 +248,13 @@ impl Parser<'_> {
                     if first_arg.is_some() {
                         self.skip_whitespace();
                     }
-                    // `held[&block]` hands `[]` a block, which makes the
-                    // subscript a call rather than a plain index.
-                    let carries_a_block = matches!(first_arg, Some(Expression::BlockArg { .. }));
+                    // `held[&block]` hands `[]` a block, and `held[**options]`
+                    // keywords, which makes the subscript a call rather than
+                    // a plain index.
+                    let carries_a_block = matches!(
+                        first_arg,
+                        Some(Expression::BlockArg { .. } | Expression::KeywordSplat { .. })
+                    );
                     if opens_hash
                         || carries_a_block
                         || self.check(&[TokenKind::FatArrow])
@@ -261,6 +265,15 @@ impl Parser<'_> {
                         // gather into one Hash, which is what
                         // `Array[1, 2, 3 => 4]` passes.
                         let mut pairs: Vec<(Expression, Expression)> = Vec::new();
+                        // Where each `**held` sat among the pairs.
+                        let mut splat_slots: Vec<(usize, usize)> = args
+                            .iter()
+                            .position(|argument| {
+                                matches!(argument, Expression::KeywordSplat { .. })
+                            })
+                            .map(|at| (at, 0))
+                            .into_iter()
+                            .collect();
                         if let Some(pair) = self.parse_bracket_hash_pair()? {
                             pairs.push(pair);
                         } else if self.match_token(&[TokenKind::FatArrow]) {
@@ -285,12 +298,22 @@ impl Parser<'_> {
                                 let value = self.parse_expression()?;
                                 pairs.push((argument, value));
                             } else {
+                                if matches!(argument, Expression::KeywordSplat { .. }) {
+                                    splat_slots.push((args.len(), pairs.len()));
+                                }
                                 args.push(argument);
                             }
                         }
-                        let carries_keywords = opens_hash || !pairs.is_empty();
+                        let carries_keywords =
+                            opens_hash || !pairs.is_empty() || !splat_slots.is_empty();
                         if !pairs.is_empty() {
                             let position = self.peek().position;
+                            super::support::fold_keyword_splats(
+                                &mut args,
+                                &mut pairs,
+                                &splat_slots,
+                                position,
+                            );
                             // Written without braces they are keywords, as a
                             // call's are, with the marker the runtime reads.
                             pairs.push((
@@ -504,6 +527,23 @@ impl Parser<'_> {
     /// One argument inside a subscript. A `&` hands `[]` a block, the way it
     /// does in any other argument list.
     pub(crate) fn parse_bracket_argument(&mut self) -> Result<Expression, MetorexError> {
+        if self.check(&[TokenKind::StarStar]) {
+            let position = self.peek().position;
+            self.advance();
+            self.skip_whitespace();
+            let expression = if self.check(&[TokenKind::Comma, TokenKind::RBracket]) {
+                Expression::Identifier {
+                    name: crate::parser::ANONYMOUS_KWREST.to_string(),
+                    position,
+                }
+            } else {
+                self.parse_expression()?
+            };
+            return Ok(Expression::KeywordSplat {
+                expression: Box::new(expression),
+                position,
+            });
+        }
         if !self.check(&[TokenKind::Ampersand]) {
             return self.parse_expression_with_assignment();
         }

@@ -1,0 +1,8 @@
+# Installs the released gems rails depends on into the shared bundle path.
+# railties' tests generate applications whose Gemfile takes rails from the
+# checkout, and Bundler resolves the rest of those applications' gems from
+# the installed gems, where the railties bundle has its dependencies only
+# as checkouts.
+source "https://rubygems.org"
+
+gem "rails", path: "../../../../gems/rails"

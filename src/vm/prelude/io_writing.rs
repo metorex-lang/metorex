@@ -9,11 +9,27 @@ pub(super) const SOURCE: &str = r##"
       return Encoding.find(named)
     end
     return nil if @__made_internal.nil?
+    # An internal encoding named as `-`, or as the external one, holds the
+    # stream to no conversion whatever the program's own internal one is.
+    return nil if __named_no_internal__
     outer = external_encoding
     return nil if outer.nil? || outer == Encoding::BINARY
     return nil if outer == @__made_internal
     @__made_internal
   end
+
+  # Whether the encodings the stream was given name an internal one that is
+  # no conversion at all.
+  def __named_no_internal__
+    written = @__file_encoding.nil? ? "" : @__file_encoding.to_s
+    written = @__file_mode.nil? ? "" : (@__file_mode.to_s.split(":", 2)[1] || "") if written.empty? && !@__encodings_reset
+    outer, inner = written.split(":", 2)
+    return false if inner.nil? || inner.empty?
+    outer = outer.to_s
+    outer = outer[4..-1] if outer.length > 4 && outer[0, 4].casecmp("BOM|").zero?
+    inner == "-" || inner.casecmp?(outer)
+  end
+  private :__named_no_internal__
 
   # The encodings the stream reads text as, named either as two arguments or
   # as one `"ext:int"` string.

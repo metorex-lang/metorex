@@ -646,6 +646,15 @@ pub struct VirtualMachine {
     /// one. That thread is the only one the child has, so it waits in place
     /// rather than handing the turn to threads that are not there.
     pub(crate) alone_after_fork: bool,
+    /// Whether this process is a child `fork` made. On macOS a forked child
+    /// may not wait on the libdispatch semaphore a thread park waits on.
+    pub(crate) forked_child: bool,
+    /// The main script as the command line named it, which `$0` may later
+    /// be changed away from.
+    pub(crate) script_as_given: Option<String>,
+    /// Whether the report being written is the one for an exception nothing
+    /// rescued, which names the script where the exception names no place.
+    pub(crate) reporting_uncaught: bool,
     /// The thread that called `fork` in a process forked from a thread other
     /// than the main one, which is the child's main thread.
     pub(crate) thread_that_forked: Option<Object>,
@@ -776,6 +785,7 @@ impl VirtualMachine {
     /// Construct a new virtual machine instance with all built-ins registered.
     pub fn new() -> Self {
         let _starting = crate::vm::memory_report::starting();
+        crate::vm::eval::literals::note_starting_directory();
         let mut environment = Environment::new();
         let builtins = BuiltinClasses::new();
 
@@ -989,6 +999,9 @@ impl VirtualMachine {
             signals_for_main_thread: Vec::new(),
             trap_handlers_running: 0,
             alone_after_fork: false,
+            forked_child: false,
+            script_as_given: None,
+            reporting_uncaught: false,
             thread_that_forked: None,
             traced_globals: HashMap::new(),
             seeded_global_names,
@@ -1647,11 +1660,6 @@ impl VirtualMachine {
     /// Inspect the current call stack (top is last element).
     pub fn call_stack(&self) -> &[CallFrame] {
         &self.call_stack
-    }
-
-    /// Get the name of the current method being executed (from the top of the call stack).
-    pub(crate) fn get_current_method_name(&self) -> Option<&str> {
-        self.call_stack.last().map(|frame| frame.name())
     }
 }
 

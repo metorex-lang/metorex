@@ -19,6 +19,23 @@ impl VirtualMachine {
         }
     }
 
+    /// Write the warnings MRI gives reading `source` only when `$VERBOSE` is
+    /// true, such as a local assigned and never read, as prism words them.
+    pub fn report_verbose_parse_warnings(&mut self, named: &str, source: &str, main_script: bool) {
+        if !matches!(self.globals().get("VERBOSE").view(), Some(View::Bool(true))) {
+            return;
+        }
+        let warnings =
+            crate::vm::native_functions::prism_parsing::prism_verbose_warnings(source, main_script);
+        for (line, warning) in warnings {
+            let at = Position {
+                line: line as u32,
+                ..Position::default()
+            };
+            self.emit_warning_to_stderr(&format!("{named}:{line}: warning: {warning}"), at);
+        }
+    }
+
     pub(crate) fn emit_warning_to_stderr(&mut self, msg: &str, position: Position) {
         // Re-running an already-required file to satisfy an autoload repeats
         // assignments Ruby would have run once, so the warnings they produce

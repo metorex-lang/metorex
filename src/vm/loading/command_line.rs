@@ -282,6 +282,7 @@ impl VirtualMachine {
         // `$0` names the program the way the command line spelled it, which
         // is what a script reports of itself.
         let named = Object::string(as_given.display().to_string());
+        self.script_as_given = Some(as_given.display().to_string());
         self.globals_mut().set_variable("0", named);
         // A method the script defines is written in the script's encoding
         // when it is called, whichever name it was defined under.

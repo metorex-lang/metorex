@@ -1175,3 +1175,9 @@ fn a_node_id_for_a_location_in_evaluated_code_answers_without_raising() {
     let output = run_example("ruby_vm/node_id_for_an_eval_location.rb");
     assert_eq!(output, "\"(template)\"\n:answered\n");
 }
+
+#[test]
+fn a_when_clause_matching_an_empty_string_builds_its_node() {
+    let output = run_example("ruby_vm/abstract_syntax_tree_when_with_an_empty_string.rb");
+    assert_eq!(output, ":CASE\n:WHEN\n[2, 0]\n:WHEN\n[3, 0]\n");
+}

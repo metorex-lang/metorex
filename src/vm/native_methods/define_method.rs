@@ -65,6 +65,11 @@ impl VirtualMachine {
                 if let Some(named) = &block.source_file {
                     written.filename = Some(named.to_string());
                 }
+                // A block handed on with `&` opened somewhere other than the
+                // `define_method` call.
+                if let Some(line) = block.opened_at {
+                    written.line = line;
+                }
                 made.source_location = Some(written);
                 // The method belongs to the class it was defined on, which is
                 // where `super` in its body starts from, whatever class the

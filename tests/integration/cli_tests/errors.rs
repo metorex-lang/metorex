@@ -260,6 +260,21 @@ fn cli_x_flag_with_a_directory_runs_from_that_directory() {
 }
 
 #[test]
+fn cli_runs_a_script_whose_first_line_names_metorex() {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let output = metorex_cmd()
+        .arg(format!(
+            "{manifest_dir}/tests/_examples/cli_flags/embedded/shebang_names_metorex.rb"
+        ))
+        .output()
+        .expect("failed to execute");
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        "ran under its own name\n"
+    );
+}
+
+#[test]
 fn cli_upper_e_flag_refuses_a_third_encoding() {
     let output = metorex_cmd()
         .args(["--encoding", "big5:ISO-8859-1:utf-32le", "-e", "p 1"])
@@ -441,4 +456,23 @@ fn cli_end_marker_opens_the_data_constant() {
 #[test]
 fn cli_end_marker_opens_the_data_constant_parens() {
     assert_eq!(end_data_output("end_data_parens.rb"), END_DATA_OUTPUT);
+}
+
+#[test]
+fn cli_an_uncaught_error_whose_backtrace_is_empty_is_reported_against_the_script() {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let output = metorex_cmd()
+        .current_dir(format!("{manifest_dir}/tests/_examples/errors"))
+        .arg("uncaught_error_with_backtrace_overridden.rb")
+        .output()
+        .expect("failed to execute");
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        concat!(
+            "uncaught_error_with_backtrace_overridden.rb: Could not load test file: test/models/accnt.rb. (QuietError)\n",
+            "\n",
+            "Did you mean?  test/models/account_test.rb\n",
+        )
+    );
 }

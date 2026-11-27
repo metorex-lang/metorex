@@ -681,6 +681,12 @@ impl ArgumentList {
                 vm.pending_block = Some(block_for_method(value.clone(), other_position));
                 vm.pending_block_from_ampersand = true;
             }
+            View::Dict(_) => {
+                let made =
+                    vm.send_to_object(value.clone(), "to_proc", Vec::new(), other_position)?;
+                vm.pending_block = Some(made);
+                vm.pending_block_from_ampersand = true;
+            }
             // An object of the program's own becomes a block
             // through `to_proc`, which is how a Yielder reaches
             // a method that takes one.

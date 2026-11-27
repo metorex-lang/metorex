@@ -1070,6 +1070,8 @@ module ErrorHighlight
         name = nil
       else
         point_type = :args if TypeError === exc || ArgumentError === exc
+        # An exception `raise` recorded no backtrace for names no place.
+        return nil unless exc.backtrace_locations
         hint = exc.__spot_hint__
         return nil unless hint
 

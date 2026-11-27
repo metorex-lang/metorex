@@ -192,7 +192,7 @@ The 100 most downloaded gems on rubygems.org (`rubygems.org/stats`, read on 2026
   - [x] puma
   - [x] ffi
   - [x] nokogiri, with crass and loofah
-- [ ] Rails: the rails repository's activesupport, activemodel, activerecord on SQLite, actionpack, actionview, actionmailer, activejob, actioncable, activestorage, railties, and rails, with globalid, rails-dom-testing, rails-html-sanitizer, and sprockets-rails
+- [x] Rails: the rails repository's activesupport, activemodel, activerecord on SQLite, actionpack, actionview, actionmailer, activejob, actioncable, activestorage, railties, and rails, with globalid, rails-dom-testing, rails-html-sanitizer, and sprockets-rails
   - [x] activesupport
   - [x] activemodel
   - [x] activerecord on SQLite
@@ -202,7 +202,7 @@ The 100 most downloaded gems on rubygems.org (`rubygems.org/stats`, read on 2026
   - [x] activejob, with globalid
   - [x] actioncable
   - [x] activestorage
-  - [ ] railties and rails, with sprockets-rails
+  - [x] railties and rails, with sprockets-rails
 - [ ] The ruby-bench benchmarks that need gems run under `benchmarks/compare.rb`
   - Acceptance: the table has a row for each, with output matching CRuby's
 

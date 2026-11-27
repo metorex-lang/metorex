@@ -244,7 +244,12 @@ impl VirtualMachine {
                 ) {
                     class_rc.set_method_private(new_name.clone());
                 }
-                self.invoke_class_hook(class_rc, "method_added", &new_name, position)?;
+                let hook = if class_rc.is_singleton_class() {
+                    "singleton_method_added"
+                } else {
+                    "method_added"
+                };
+                self.invoke_class_hook(class_rc, hook, &new_name, position)?;
                 return Ok(Answered(Object::symbol(new_name)));
             }
             "module_function" => {

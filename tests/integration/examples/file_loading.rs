@@ -126,19 +126,18 @@ fn test_require_error_shows_absolute_path() {
     );
 }
 
-// 9.3.11 — "Did you mean?" suggestions
-
 #[test]
-fn test_require_error_suggests_similar_file() {
+fn test_require_error_names_the_missing_file_with_no_suggestion() {
     let stderr = run_example_expect_error("require/typo_path.rb");
     assert!(
-        stderr.contains("Did you mean"),
-        "Error should contain 'Did you mean' suggestion, got: {}",
+        stderr.contains("cannot load such file -- ")
+            && stderr.contains("/tests/_examples/require/lib/helpr (LoadError)"),
+        "Error should name the missing file, got: {}",
         stderr
     );
     assert!(
-        stderr.contains("helper.rb"),
-        "Error should suggest helper.rb, got: {}",
+        !stderr.contains("Did you mean"),
+        "Error should suggest no other file, got: {}",
         stderr
     );
 }
@@ -807,5 +806,14 @@ fn a_load_path_symlink_is_read_where_it_pointed_until_the_load_path_changes() {
             "loaded from second\n",
             "[\"first\", \"second\"]\n",
         )
+    );
+}
+
+#[test]
+fn a_missing_require_relative_file_is_named_with_no_other_suggested() {
+    let output = run_example("require/require_relative_missing_file_message.rb");
+    assert_eq!(
+        output,
+        "cannot load such file -- DIR/require_relative_missing_file_messag\ntrue\n"
     );
 }

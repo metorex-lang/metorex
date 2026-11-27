@@ -3092,3 +3092,9 @@ fn test_stdlib_libraries_ripper_commands_before_a_syntax_error_execution() {
         "[[\"render\", [\"messages/message\"]]]\n[[\"render\", [\"messages/layout\"]], [:error, \"syntax error, unexpected end-of-input, expecting 'end' or dummy end\"]]\n[[\"render\", [\"messages/form\"]]]\n[[\"render\", [\"@section\"]]]\n"
     );
 }
+
+#[test]
+fn a_forked_child_waits_for_a_thread_of_its_own() {
+    let output = run_example("processes/forked_child_waits.rb");
+    assert_eq!(output, "child got woke\n0\n");
+}

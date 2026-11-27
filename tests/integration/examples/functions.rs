@@ -345,6 +345,30 @@ fn bare_anonymous_arguments_forward_when_the_closing_paren_is_on_a_later_line() 
     );
 }
 
+#[test]
+fn splats_inside_index_brackets_pass_positional_and_keyword_arguments() {
+    let output = run_example("functions/splats_inside_index_brackets.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "[\"crate\", [], {unit: \"kg\"}]\n",
+            "[\"crate\", [], {}]\n",
+            "[2, [3], {}]\n",
+            "[\"crate\", [2, 3], {unit: \"kg\"}]\n",
+            "[\"crate\", [2, 3], {scale: 2, unit: \"kg\"}]\n",
+        )
+    );
+}
+
+#[test]
+fn a_hash_passed_as_a_block_looks_up_each_element() {
+    let output = run_example("procs/hash_as_block.rb");
+    assert_eq!(
+        output,
+        "[:skip_test, :api]\n[[], nil, []]\ntrue\n[]\ntrue\n"
+    );
+}
+
 /// The expected output of both `functions/keywords_from_a_hash` variants, which differ only in whether the
 /// calls are written with parentheses.
 const KEYWORDS_FROM_A_HASH_OUTPUT: &str = concat!(

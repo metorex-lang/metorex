@@ -6,9 +6,10 @@ use super::*;
 /// `-x` option was written; a first line naming another interpreter asks for
 /// the same reading on its own.
 pub(crate) fn embedded_script(source: &str, asked: bool) -> Result<String, String> {
-    let names_ruby = |line: &str| line.starts_with("#!") && line.contains("ruby");
+    let names_this_interpreter = |line: &str| line.contains("ruby") || line.contains("metorex");
+    let names_ruby = |line: &str| line.starts_with("#!") && names_this_interpreter(line);
     let first = source.lines().next().unwrap_or_default();
-    let other_launcher = first.starts_with("#!") && !first.contains("ruby");
+    let other_launcher = first.starts_with("#!") && !names_this_interpreter(first);
     if !asked && !other_launcher {
         return Ok(source.to_string());
     }

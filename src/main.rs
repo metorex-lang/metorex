@@ -243,9 +243,12 @@ fn real_main_after_inline(cli: Cli) {
     let filename = found.as_ref().unwrap_or(named);
     let script_args: Vec<String> = cli.file[1..].to_vec();
 
+    let carried = metorex::carried_script_source(filename);
+
     // Convert filename to absolute path
     let absolute_path = match fs::canonicalize(filename) {
         Ok(path) => path,
+        Err(_) if carried.is_some() => std::path::PathBuf::from(filename),
         // Ruby names a script it cannot open as a LoadError, with what the
         // operating system said about it.
         Err(err) => {
@@ -262,7 +265,11 @@ fn real_main_after_inline(cli: Cli) {
     // Read the source file. Bytes that spell no character in the encoding
     // the file names are what Ruby reports as an invalid multibyte char,
     // naming the file and the first line.
-    let source = match fs::read(&absolute_path) {
+    let read = match carried {
+        Some(source) => Ok(source.as_bytes().to_vec()),
+        None => fs::read(&absolute_path),
+    };
+    let source = match read {
         Ok(bytes) => match metorex::file_loader::source_text(&bytes) {
             Some(content) => content,
             None => {
@@ -333,6 +340,7 @@ fn real_main_after_inline(cli: Cli) {
         process::exit(vm.run_at_exit_handlers(1, None));
     }
     vm.report_parse_warnings(filename, &warnings);
+    vm.report_verbose_parse_warnings(filename, &source, true);
     let program = parsed.unwrap_or_default();
 
     if cli.debug {

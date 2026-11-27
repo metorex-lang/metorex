@@ -47,16 +47,15 @@ impl VirtualMachine {
         keywords.insert("__MX_KWARGS__".into(), Object::Bool(true));
         keywords.insert(":highlight".into(), Object::Bool(false));
         let arguments = vec![Object::Dict(Rc::new(RefCell::new(keywords)))];
-        match self
-            .send_to_object(
-                exception.clone(),
-                "full_message",
-                arguments,
-                Position::default(),
-            )
-            .as_ref()
-            .map(Object::view)
-        {
+        self.reporting_uncaught = true;
+        let reported = self.send_to_object(
+            exception.clone(),
+            "full_message",
+            arguments,
+            Position::default(),
+        );
+        self.reporting_uncaught = false;
+        match reported.as_ref().map(Object::view) {
             Ok(View::String(text)) => Some(text.as_str().to_string()),
             _ => None,
         }
@@ -612,19 +611,48 @@ impl VirtualMachine {
                 } else {
                     stand_in
                 };
-                let trace = exception.borrow().backtrace.clone().unwrap_or_default();
+                // A `backtrace` the program writes for the exception's class
+                // stands for the one it was raised with.
+                let overridden = self
+                    .lookup_method(receiver, "backtrace")
+                    .filter(|(_, method)| {
+                        crate::vm::method_execution::written_by_the_program(method)
+                    });
+                let trace = match overridden {
+                    Some(_) => {
+                        match self
+                            .send_to_object(receiver.clone(), "backtrace", Vec::new(), position)?
+                            .view()
+                        {
+                            View::Array(entries) => entries
+                                .borrow()
+                                .iter()
+                                .filter_map(|entry| match entry.view() {
+                                    View::String(text) => Some(text.as_str().to_string()),
+                                    _ => None,
+                                })
+                                .collect(),
+                            _ => Vec::new(),
+                        }
+                    }
+                    None => exception.borrow().backtrace.clone().unwrap_or_default(),
+                };
                 // An exception carrying no backtrace is reported against the
-                // line that asked for the report.
+                // line that asked for the report, or, when nothing rescued
+                // it, against the script.
                 let origin = match trace.first() {
                     Some(entry) => entry.clone(),
+                    None if self.reporting_uncaught && self.script_as_given.is_some() => {
+                        self.script_as_given.clone().unwrap_or_default()
+                    }
                     None => format!(
-                        "{}:{}:in '{}'",
+                        "{}:{}:in 'full_message'",
                         self.current_source_file
                             .as_deref()
                             .map(str::to_string)
+                            .or_else(|| self.script_as_given.clone())
                             .unwrap_or_default(),
                         position.line,
-                        self.get_current_method_name().unwrap_or("<main>")
                     ),
                 };
                 let mut rest: Vec<String> = trace.iter().skip(1).cloned().collect();
@@ -790,6 +818,21 @@ impl VirtualMachine {
             // Like `#backtrace`, nil until the exception is raised, and the
             // same Array on every call afterwards.
             "backtrace_locations" => {
+                // A class whose own `backtrace` answers something is one
+                // `raise` records no backtrace for, so it has no locations.
+                if self
+                    .lookup_method(receiver, "backtrace")
+                    .is_some_and(|(_, method)| {
+                        crate::vm::method_execution::written_by_the_program(&method)
+                    })
+                    && !matches!(
+                        self.send_to_object(receiver.clone(), "backtrace", Vec::new(), position)?
+                            .view(),
+                        View::Nil
+                    )
+                {
+                    return Ok(Some(Object::Nil));
+                }
                 if let Some(cached) = exception.borrow().backtrace_locations_array.clone() {
                     return Ok(Some(cached));
                 }

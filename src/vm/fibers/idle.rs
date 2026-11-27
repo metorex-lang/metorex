@@ -69,6 +69,11 @@ impl VirtualMachine {
         }
         // With nothing to watch, the pause is a park, which a function run
         // without the interpreter ends early by waking this thread.
+        // No other thread is left in a forked child to wake it.
+        if self.idle_descriptors.is_empty() && self.forked_child {
+            std::thread::sleep(pause);
+            return;
+        }
         if self.idle_descriptors.is_empty() {
             std::thread::park_timeout(pause);
             return;

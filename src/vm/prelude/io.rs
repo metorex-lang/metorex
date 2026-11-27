@@ -398,11 +398,12 @@ class IO
   end
 
   # Two encodings as one `"ext:int"` string. An internal encoding matching
-  # the external one, or named `-`, is no internal encoding at all.
+  # the external one, or named `-`, is no internal encoding at all, and is
+  # kept as `-` so the program's own internal encoding is not taken instead.
   def self.__encoding_pair__(outer, inner, written)
     outer = outer.nil? ? "" : IO.__spelled_encoding__(outer)
     inner = inner.nil? ? "" : IO.__spelled_encoding__(inner)
-    inner = "" if inner == "-" || inner.downcase == outer.downcase
+    inner = "-" if !inner.empty? && !outer.empty? && (inner == "-" || inner.downcase == outer.downcase)
     inner.empty? ? outer : "#{outer}:#{inner}"
   end
 

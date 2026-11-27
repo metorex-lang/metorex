@@ -2809,3 +2809,9 @@ fn test_stdlib_cgi_escape_aliases_execution() {
         "Class\ntrue\n\"<b> & \\\"\"\n\"&lt;a href=&#39;x&#39;&gt;\"\n\"&amp;\"\n\"a%20b%2Fc\"\n\"a b\"\n\"<br>&lt;a&gt;\"\n\"&lt;br&gt;<a>\"\n\"&lt;p&gt;\"\n"
     );
 }
+
+#[test]
+fn the_bundle_executable_gem_bin_path_names_runs_the_bundler_metorex_carries() {
+    let output = run_example("bundler/bin_path_runs_the_bundler_metorex_carries.rb");
+    assert_eq!(output, "4.0.20\n");
+}

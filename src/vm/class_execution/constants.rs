@@ -164,13 +164,21 @@ impl VirtualMachine {
             if let Some(found) = scope.get_class_var(name) {
                 return Ok(Some(found));
             }
-            if scope.lookup_autoload(name).is_some()
+            if scope.get_autoload(name).is_some()
                 && let Some(loaded) = self.try_autoload_constant(&scope, name)?
             {
                 return Ok(Some(loaded));
             }
         }
         if let Some(found) = self.resolve_constant_in_scope(name) {
+            return Ok(Some(found));
+        }
+        // The ancestors of the innermost module come after every module
+        // around the code, and an autoload one of them registered loads now.
+        if let Some(innermost) = self.lexical_nesting().first().cloned()
+            && innermost.lookup_autoload(name).is_some()
+            && let Some(found) = self.try_autoload_constant(&innermost, name)?
+        {
             return Ok(Some(found));
         }
         if let Some(View::Class(object)) = self.globals().get("Object").view() {

@@ -23,3 +23,19 @@ fn test_blocks_yield_then_shift_operator_execution() {
     let output = run_example("blocks/yield_then_shift_operator.rb");
     assert_eq!(output, "\"<form>body</form>\"\n5\n");
 }
+
+#[test]
+fn a_block_keyword_default_that_raises_passes_the_error_on() {
+    let output = run_example("blocks/keyword_default_that_raises.rb");
+    assert_eq!(
+        output,
+        concat!(
+            "#<ArgumentError: missing>\n",
+            "#<ArgumentError: missing>\n",
+            "[1, 2]\n",
+            "#<ArgumentError: missing>\n",
+            "#<ArgumentError: missing>\n",
+            "#<ArgumentError: missing>\n",
+        )
+    );
+}

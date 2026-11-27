@@ -888,19 +888,25 @@ impl VirtualMachine {
         None
     }
 
-    /// Whether a scope open where the code was written has an autoload
-    /// registered for `name` and no constant of that name yet, with no scope
-    /// inside it holding the constant.
+    /// Whether a scope open where the code was written, or an ancestor of the
+    /// innermost one, has an autoload registered for `name` that a constant
+    /// read would load, with no constant of that name found before it.
     fn autoload_pending_in_lexical_scope(&self, name: &str) -> bool {
-        for scope in self.lexical_nesting() {
+        let nesting = self.lexical_nesting();
+        for scope in &nesting {
             if scope.get_class_var(name).is_some() {
                 return false;
             }
-            if scope.lookup_autoload(name).is_some() {
+            if scope.get_autoload(name).is_some() {
                 return true;
             }
         }
-        false
+        // An ancestor of the innermost scope autoloads the name only when
+        // no constant of that name comes before it.
+        nesting
+            .first()
+            .is_some_and(|innermost| innermost.lookup_autoload(name).is_some())
+            && self.constant_before_object(name).is_none()
     }
 
     /// The constant `name` names on Object, or in a module included there.

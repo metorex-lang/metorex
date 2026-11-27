@@ -232,7 +232,15 @@ module Gem
     requirements = Gem::Requirement.default if
       requirements.empty?
 
-    find_spec_for_exe(name, exec_name, requirements).bin_file exec_name
+    spec = find_spec_for_exe(name, exec_name, requirements)
+    bin_file = spec.bin_file exec_name
+    # Bundler ships inside Metorex with no executable on disk, and Metorex
+    # runs the one it carries by this name.
+    if spec.name == "bundler" && !File.exist?(bin_file)
+      require "bundler/version"
+      return "<metorex>/bundler/metorex/bundle.rb" if spec.version.to_s == Bundler::VERSION
+    end
+    bin_file
   end
 
   def self.find_and_activate_spec_for_exe(name, exec_name, requirements)

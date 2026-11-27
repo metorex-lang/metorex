@@ -1487,3 +1487,9 @@ fn zsuper_with_anonymous_rest_in_a_later_block() {
         )
     );
 }
+
+#[test]
+fn a_method_defined_from_a_block_handed_on_stands_where_the_block_opened() {
+    let output = run_example("methods/define_method_source_location_is_the_block_start.rb");
+    assert_eq!(output, "6\n12\n14\n");
+}
