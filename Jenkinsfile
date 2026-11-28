@@ -346,6 +346,14 @@ pipeline {
               'cloud clients': {
                 sh 'JOBS=1 scripts/run_gem_suites.sh aws-sdk-ruby/gems/aws-sdk-core aws-sdk-ruby/gems/aws-sigv4 aws-sdk-ruby/gems/aws-partitions aws-sdk-ruby/gems/aws-eventstream aws-sdk-ruby/gems/aws-sdk-s3 aws-sdk-ruby/gems/aws-sdk-kms jmespath googleauth signet'
               },
+              'rails': {
+                sh 'JOBS=1 scripts/run_gem_suites.sh rails/activesupport rails/activemodel rails/activerecord rails/actionpack rails/actionview rails/actionmailer rails/activejob globalid rails/actioncable rails/activestorage rails/railties sprockets-rails rails-dom-testing rails-html-sanitizer'
+              },
+              // Its specs share one generated Rails application under /tmp,
+              // so its files run one after another, apart from the others.
+              'shoulda-matchers': {
+                sh 'scripts/run_gem_suites.sh shoulda-matchers'
+              },
               // rb-fsevent watches files through macOS's FSEvents and is left
               // out on Linux.
               'native extensions': {

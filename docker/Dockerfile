@@ -22,21 +22,28 @@ ENV LANG=C.UTF-8
 # spec still writes. `libyaml-dev` is what Ruby loads YAML through.
 # `libffi-dev` is what ffi's extension calls C through, and `libxml2-dev`
 # and `libxslt1-dev` are the libraries nokogiri's extension links against.
+# activestorage's tests analyze and transform images, video, and PDFs with
+# `imagemagick`, `libvips-tools`, `ffmpeg`, and `poppler-utils`, and skip the
+# tests whose tool is missing.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
        binutils \
        build-essential \
        ca-certificates \
        curl \
+       ffmpeg \
        git \
+       imagemagick \
        libcrypt-dev \
        libffi-dev \
+       libvips-tools \
        libxml2-dev \
        libxslt1-dev \
        libyaml-dev \
        mold \
        netbase \
        pkg-config \
+       poppler-utils \
        procps \
        time \
        tzdata \
