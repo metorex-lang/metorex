@@ -646,7 +646,7 @@ Every file's counts match MRI's. net-imap's `test_stringprep_tables.rb` runs und
 
 ### Speed
 
-`ruby benchmarks/compare.rb`, run with a release build, times Metorex, with its JIT and with `METOREX_JIT=0`, beside CRuby with and without `--yjit` and prints this table. `--without-no-jit` leaves out the `METOREX_JIT=0` column, for a build from before the JIT. It covers startup, the scripts in `benchmarks/workloads` and `benchmarks/memory`, every benchmark in the [ruby-bench](https://github.com/ruby/ruby-bench) suite (the `benchmarks/ruby-bench` submodule) in its headline, other, and micro categories that needs no gems, and the Rex suite. Startup, workload, and Rex suite times are the fastest of three whole runs. A ruby-bench time is the mean of one iteration after the warmup ones, under ruby-bench's own harness: CRuby runs the harness's defaults, as ruby-bench's runner does, and Metorex runs one warmup iteration and two timed ones. Peak memory is the largest resident set size of the run.
+`ruby benchmarks/compare.rb`, run with a release build, times Metorex, with its JIT and with `METOREX_JIT=0`, beside CRuby with and without `--yjit` and prints this table. `--without-no-jit` leaves out the `METOREX_JIT=0` column, for a build from before the JIT. It covers startup, the scripts in `benchmarks/workloads` and `benchmarks/memory`, every benchmark in the [ruby-bench](https://github.com/ruby/ruby-bench) suite (the `benchmarks/ruby-bench` submodule) in its headline, other, and micro categories, and the Rex suite. `scripts/install_benchmark_gems.sh` installs the gems of the ruby-bench benchmarks that load a Gemfile, from each one's lockfile, under `target/benchmark_bundles`. A ruby-bench benchmark must print the same thing under every engine, apart from the lines the harness prints. Startup, workload, and Rex suite times are the fastest of three whole runs. A ruby-bench time is the mean of one iteration after the warmup ones, under ruby-bench's own harness: CRuby runs the harness's defaults, as ruby-bench's runner does, and Metorex runs one warmup iteration and two timed ones. Peak memory is the largest resident set size of the run.
 
 On arm64, Metorex 0.1.0 built with rustc 1.96.0, and ruby 4.0.7:
 
@@ -682,11 +682,13 @@ On arm64, Metorex 0.1.0 built with rustc 1.96.0, and ruby 4.0.7:
 | object-new | 34.5 ms | 15.2 ms | 911.1 ms | 965.0 ms | 26.4× | 59.9× | 0.94 | 20 MB | 21 MB | 21 MB | 21 MB |
 | object-new-initialize | 53.8 ms | 17.9 ms | 1.70 s | 2.04 s | 31.6× | 95.3× | 0.83 | 20 MB | 21 MB | 21 MB | 21 MB |
 | object-new-no-escape | 98.6 ms | 34.4 ms | 3.32 s | 4.31 s | 33.6× | 96.4× | 0.77 | 20 MB | 21 MB | 21 MB | 21 MB |
+| optcarrot | 2.23 s | 633.0 ms | 35.69 s | 40.38 s | 16.0× | 56.4× | 0.88 | 65 MB | 68 MB | 131 MB | 146 MB |
 | protoboeuf | 70.7 ms | 14.2 ms | 1.82 s | 2.31 s | 25.8× | 128.2× | 0.79 | 43 MB | 48 MB | 60 MB | 55 MB |
 | protoboeuf-encode | 61.3 ms | 15.1 ms | 20.14 s | 20.77 s | 328.5× | 1335.8× | 0.97 | 880 MB | 3361 MB | 117 MB | 113 MB |
 | respond_to | 94.2 ms | 6.8 ms | 3.27 s | 3.41 s | 34.7× | 479.0× | 0.96 | 20 MB | 21 MB | 21 MB | 20 MB |
 | ruby-json | 102.5 ms | 82.6 ms | 13.97 s | 14.14 s | 136.3× | 169.1× | 0.99 | 21 MB | 21 MB | 22 MB | 22 MB |
 | ruby-xor | 55.9 ms | 11.3 ms | 982.7 ms | 1.64 s | 17.6× | 86.8× | 0.60 | 21 MB | 22 MB | 21 MB | 21 MB |
+| rubykon | 392.2 ms | 191.7 ms | 6.97 s | 7.42 s | 17.8× | 36.3× | 0.94 | 28 MB | 31 MB | 51 MB | 52 MB |
 | send_bmethod | 93.5 ms | 4.3 ms | 4.25 s | 4.92 s | 45.4× | 983.1× | 0.86 | 20 MB | 21 MB | 21 MB | 21 MB |
 | send_cfunc_block | 117.0 ms | 39.8 ms | 2.95 s | 3.52 s | 25.2× | 74.0× | 0.84 | 20 MB | 21 MB | 21 MB | 21 MB |
 | send_rubyfunc_block | 59.7 ms | 11.5 ms | 2.17 s | 2.17 s | 36.4× | 189.5× | 1.00 | 20 MB | 21 MB | 21 MB | 21 MB |
@@ -702,6 +704,8 @@ On arm64, Metorex 0.1.0 built with rustc 1.96.0, and ruby 4.0.7:
 | sudoku | 272.6 ms | 64.3 ms | 2.95 s | 3.75 s | 10.8× | 46.0× | 0.79 | 20 MB | 21 MB | 21 MB | 21 MB |
 | throw | 8.9 ms | 6.8 ms | 274.5 ms | 300.5 ms | 30.9× | 40.1× | 0.91 | 20 MB | 21 MB | 21 MB | 21 MB |
 | rex_suite | 278.8 ms | 342.1 ms | 3.94 s | 3.95 s | 14.1× | 11.5× | 1.00 | 53 MB | 61 MB | 77 MB | 75 MB |
+
+The optcarrot and rubykon rows were timed later, with Metorex built with rustc 1.99.1, and ruby 4.0.10.
 
 #### The bytecode baseline
 

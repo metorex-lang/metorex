@@ -10,7 +10,8 @@
 # - the scripts in benchmarks/workloads and benchmarks/memory, whose output
 #   must match across engines
 # - every benchmark in benchmarks/ruby-bench (github.com/ruby/ruby-bench) in its
-#   headline, other, and micro categories that needs no gems
+#   headline, other, and micro categories, with the gems of those that load
+#   a Gemfile installed by scripts/install_benchmark_gems.sh
 # - the Rex suite in benchmarks/rex_suite, run with `metorex spec` and with
 #   MRI's `rspec`
 #
@@ -40,6 +41,11 @@ abort "no metorex binary at #{METOREX}" unless File.executable?(METOREX)
 ONLY = options["only"]&.split(",")
 
 RUBY_BENCH = File.join(__dir__, "ruby-bench")
+# Where scripts/install_benchmark_gems.sh installs the gems of the benchmarks
+# that load a Gemfile.
+BENCHMARK_BUNDLES = ENV.fetch("BENCHMARK_BUNDLES") do
+  File.join(ENV.fetch("CARGO_TARGET_DIR", File.expand_path("../target", __dir__)), "benchmark_bundles")
+end
 abort "benchmarks/ruby-bench is missing, run: git submodule update --init" unless
   File.exist?(File.join(RUBY_BENCH, "benchmarks.yml"))
 
@@ -110,8 +116,10 @@ def script_row(script)
 end
 
 # The ruby-bench benchmarks in the categories its runner runs by default,
-# each as its name, its file, and whether it needs gems. A benchmark is a file
-# of its own, a directory with a benchmark.rb, or one file of a directory
+# each as its name, its file, and whether it needs gems, which it does when it
+# loads its Gemfile with the harness's `use_gemfile`. optcarrot and rubykon
+# carry Gemfiles for their own development that they do not load. A benchmark
+# is a file of its own, a directory with a benchmark.rb, or one file of a directory
 # that holds several, named after the directory and the file.
 def ruby_bench_benchmarks
   YAML.load_file(File.join(RUBY_BENCH, "benchmarks.yml")).filter_map do |name, settings|
@@ -129,24 +137,49 @@ def ruby_bench_benchmarks
       directory = File.join(RUBY_BENCH, "benchmarks", parts.first(taken).join("-"))
       file = File.join(directory, "#{parts.drop(taken).join("-")}.rb")
     end
-    [name, file, File.exist?(File.join(directory, "Gemfile"))]
+    [name, file, File.read(file).include?("use_gemfile")]
   end.sort
 end
 
-def ruby_bench_row(name, benchmark)
+# The lines ruby-bench's harness prints, which differ from run to run and from
+# engine to engine: the engine's description first, then each iteration's
+# time and their average, and once the iterations end, the JIT's stats and the
+# memory the run took.
+ITERATION_LINE = /\A(itr: .*|\s*#\d+:\s+\d+ms.*|Average of last .*)\Z/
+RESULTS_LINE = /\A(YJIT stats:|ZJIT stats:|RSS: )/
+
+def benchmark_output(printed)
+  printed.lines.drop(1).take_while { |line| !line.match?(RESULTS_LINE) }.grep_v(ITERATION_LINE).join
+end
+
+# What a benchmark that loads its Gemfile runs with: the gems the installer
+# put under BENCHMARK_BUNDLES, and its lockfile left as it is.
+def bundle_environment(benchmark)
+  gemfile = File.join(File.dirname(benchmark), "Gemfile")
+  environment = { "BUNDLE_GEMFILE" => gemfile, "BUNDLE_PATH" => BENCHMARK_BUNDLES, "BUNDLE_FROZEN" => "true" }
+  _, status = Open3.capture2e(environment, "bundle", "check")
+  abort "the gems of #{gemfile} are missing, run: scripts/install_benchmark_gems.sh" unless status.success?
+  environment
+end
+
+def ruby_bench_row(name, benchmark, needs_gems)
+  bundle = needs_gems ? bundle_environment(benchmark) : {}
   seconds = {}
   peaks = {}
+  outputs = {}
   ENGINES.each do |engine, command|
     Dir.mktmpdir("metorex-compare") do |scratch|
       results = File.join(scratch, "results.json")
-      environment = HARNESS_SETTINGS[engine].merge(ENVIRONMENTS[engine], "RESULT_JSON_PATH" => results)
+      environment = HARNESS_SETTINGS[engine].merge(ENVIRONMENTS[engine], bundle, "RESULT_JSON_PATH" => results)
       harness = File.join(RUBY_BENCH, "harness")
-      timed(command + ["-I", harness, benchmark], directory: RUBY_BENCH, environment: environment)
+      _, _, printed = timed(command + ["-I", harness, benchmark], directory: RUBY_BENCH, environment: environment)
+      outputs[engine] = benchmark_output(printed)
       recorded = JSON.parse(File.read(results))
       seconds[engine] = recorded["bench"].sum / recorded["bench"].size
       peaks[engine] = recorded["maxrss"]
     end
   end
+  abort "#{name} printed different things under different engines:\n#{outputs.map { |engine, output| "#{engine}:\n#{output}" }.join}" unless outputs.values.uniq.size == 1
   Row.new(name, seconds, peaks)
 end
 
@@ -187,8 +220,8 @@ scripts.each do |script|
   warn "timed #{timed_text(rows.last)}"
 end
 ruby_bench_benchmarks.each do |name, benchmark, needs_gems|
-  next if needs_gems || !wanted?(name)
-  rows << ruby_bench_row(name, benchmark)
+  next unless wanted?(name)
+  rows << ruby_bench_row(name, benchmark, needs_gems)
   warn "timed #{timed_text(rows.last)}"
 end
 rows << rex_suite_row if wanted?("rex_suite")

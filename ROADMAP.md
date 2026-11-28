@@ -205,6 +205,11 @@ The 100 most downloaded gems on rubygems.org (`rubygems.org/stats`, read on 2026
   - [x] railties and rails, with sprockets-rails
 - [ ] The ruby-bench benchmarks that need gems run under `benchmarks/compare.rb`
   - Acceptance: the table has a row for each, with output matching CRuby's
+  - [x] optcarrot and rubykon, which carry Gemfiles for their own development and load none
+  - [ ] Each benchmark's lockfile installs under `target/` with a script, and `benchmarks/compare.rb` runs the benchmarks that load a Gemfile with those gems
+  - [ ] The pure Ruby gems: addressable's nine, chunky-png, erubi, hexapdf, lee, liquid-compile, liquid-il, liquid-render, mail, rack, grape, graphql, tinygql, rubyboy, rubocop, and ruby-lsp
+  - [ ] The gems with C extensions: psych-load, liquid-c, graphql-native, fluentd, sequel, and activerecord
+  - [ ] The Rails applications: erubi-rails, railsbench, lobsters, and shipit
 
 ## Core methods
 
