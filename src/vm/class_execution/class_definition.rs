@@ -238,7 +238,10 @@ impl VirtualMachine {
                 // Compose a Ruby-style qualified name. Named parents get a
                 // simple `Outer::Inner`; anonymous parents fall back to their
                 // inspect label so e.g. `parent::C` becomes `#<Class:0x..>::C`.
+                // A class opened under Object, as `class Object::Name` is,
+                // is a top-level one, whose name leaves Object out.
                 let full_name = match parent_scope.as_ref() {
+                    Some(p) if p.ruby_name() == "Object" => name.to_string(),
                     Some(p) => {
                         let p_name = p.ruby_name();
                         if p_name.is_empty() {

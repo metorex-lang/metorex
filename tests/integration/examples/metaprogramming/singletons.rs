@@ -122,3 +122,12 @@ fn test_class_method_super_from_subclass_reaches_extended_module_execution() {
         run_example("metaprogramming/class_method_super_from_subclass_reaches_extended_module.rb");
     assert_eq!(output, "[:module, [:topics]]\n[\"base\", \"me3\"]\n");
 }
+
+#[test]
+fn undef_in_instance_eval_on_a_class_undefines_a_method_of_the_class() {
+    let output = run_example("metaprogramming/undef_in_instance_eval_on_a_class.rb");
+    assert_eq!(
+        output,
+        "false\nfalse\nfalse\nfalse\n\"an active account\"\n"
+    );
+}

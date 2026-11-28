@@ -177,8 +177,18 @@ impl VirtualMachine {
                             position,
                         );
                     }
-                    // Module#initialize given no block does nothing more.
+                    // Module#initialize runs a block it is given as the
+                    // module's body, and given none does nothing more.
                     if method_name == "initialize" {
+                        if let Some(View::Block(body)) = super_block.view() {
+                            self.apply_block_as_class_body_with_self(
+                                &self_class,
+                                body,
+                                position,
+                                self_object.clone(),
+                            )?;
+                            self_class.set_current_visibility("public");
+                        }
                         return Ok(Object::Nil);
                     }
                     // BasicObject#method_missing raises NoMethodError.

@@ -587,9 +587,12 @@ pub(crate) fn embedded_library(name: &str) -> Option<&'static str> {
         })
 }
 
-/// The files other than its library a bundled gem metorex carries reads.
-pub(crate) fn gem_data() -> &'static [(&'static str, &'static str)] {
+/// The files other than its library a bundled gem metorex carries reads,
+/// and the templates Bundler writes files from.
+pub(crate) fn gem_data() -> impl Iterator<Item = &'static (&'static str, &'static str)> {
     gem_libraries::GEM_DATA
+        .iter()
+        .chain(bundler_libraries::BUNDLER_DATA)
 }
 
 /// The feature name of a library metorex carries, for the path its files

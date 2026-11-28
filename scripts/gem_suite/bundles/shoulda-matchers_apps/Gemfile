@@ -1,0 +1,8 @@
+# Installs the released rails gem and its frameworks into the shared bundle
+# path. shoulda-matchers' acceptance specs generate applications whose
+# Gemfile takes rails from rubygems.org, and Bundler resolves those
+# applications' gems from the installed gems, where the shoulda-matchers
+# bundle has the frameworks only as checkouts.
+source "https://rubygems.org"
+
+gem "rails", "8.1.4.1"

@@ -455,3 +455,23 @@ fn code_evaluated_in_a_block_binding_finds_the_constants_of_the_blocks_modules()
     let output = run_example("constants/eval_in_a_block_binding_reads_the_blocks_modules.rb");
     assert_eq!(output, "[3, 3]\n");
 }
+
+#[test]
+fn an_included_block_reads_its_own_modules_in_a_class_of_the_same_name() {
+    let output = run_example(
+        "constants/included_block_reads_its_own_modules_in_a_class_of_the_same_name.rb",
+    );
+    assert_eq!(output, "named by ActiveModel::Naming\n");
+}
+
+#[test]
+fn a_class_opened_under_object_is_named_without_it() {
+    let output = run_example("constants/class_opened_under_object_is_named_without_it.rb");
+    assert_eq!(output, "\"Person\"\n\"Helpers\"\n\"Visitor\"\ntrue\n");
+}
+
+#[test]
+fn rspec_is_undefined_until_it_is_required() {
+    let output = run_example("constants/rspec_is_undefined_until_required.rb");
+    assert_eq!(output, "nil\nnil\nnil\n");
+}

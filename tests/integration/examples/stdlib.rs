@@ -2815,3 +2815,17 @@ fn the_bundle_executable_gem_bin_path_names_runs_the_bundler_metorex_carries() {
     let output = run_example("bundler/bin_path_runs_the_bundler_metorex_carries.rb");
     assert_eq!(output, "4.0.20\n");
 }
+
+#[test]
+fn bundle_init_writes_a_gemfile_from_the_template_bundler_carries() {
+    let output = run_example("bundler/bundle_init_writes_the_gemfile_template.rb");
+    assert_eq!(
+        output,
+        "Writing new Gemfile to DIRECTORY/Gemfile\n\
+         # frozen_string_literal: true\n\
+         \n\
+         source \"https://rubygems.org\"\n\
+         \n\
+         # gem \"rails\"\n"
+    );
+}

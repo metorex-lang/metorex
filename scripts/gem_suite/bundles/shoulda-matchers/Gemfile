@@ -1,0 +1,100 @@
+# The gems shoulda-matchers' specs load, as its Rails 8.1 appraisal names
+# them: appraisal and warnings_logger for its helpers, rspec-rails,
+# rails-controller-testing, shoulda-context, bcrypt and sqlite3, with pry,
+# which its spec helper requires. The rails gem and every framework come from
+# the checkouts, since the application its unit specs generate requires
+# rails/all and runs with this Gemfile. Gems the appraisal adds for a
+# generated application's own use, such as capybara, puma and the solid
+# adapters, are left out.
+#
+# The gems Ruby 4.0.10 ships are named with the versions
+# scripts/gem_suite/bundles/ruby_shipped.rb gives, since Appraisal reads this
+# Gemfile with a DSL of its own, which has no eval_gemfile.
+#
+# The suite runs with this Gemfile copied into the copy of the checkout's
+# gemfiles directory, since its helpers refuse to run with a Gemfile that is
+# not an appraisal's.
+source "https://rubygems.org"
+
+repository = ENV["REPO_ROOT"] || "../../../.."
+
+gem "activestorage", path: "#{repository}/gems/rails/activestorage"
+gem "actioncable", path: "#{repository}/gems/rails/actioncable"
+gem "actionmailbox", path: "#{repository}/gems/rails/actionmailbox"
+gem "actionmailer", path: "#{repository}/gems/rails/actionmailer"
+gem "actionpack", path: "#{repository}/gems/rails/actionpack"
+gem "actiontext", path: "#{repository}/gems/rails/actiontext"
+gem "actionview", path: "#{repository}/gems/rails/actionview"
+gem "activejob", path: "#{repository}/gems/rails/activejob"
+gem "activemodel", path: "#{repository}/gems/rails/activemodel"
+gem "activerecord", path: "#{repository}/gems/rails/activerecord"
+gem "activesupport", path: "#{repository}/gems/rails/activesupport"
+gem "rails", path: "#{repository}/gems/rails"
+gem "railties", path: "#{repository}/gems/rails/railties"
+gem "globalid", path: "#{repository}/gems/globalid"
+gem "rails-dom-testing", path: "#{repository}/gems/rails-dom-testing"
+gem "rails-html-sanitizer", path: "#{repository}/gems/rails-html-sanitizer"
+gem "loofah", path: "#{repository}/gems/loofah"
+gem "crass", path: "#{repository}/gems/crass"
+gem "mail", path: "#{repository}/gems/mail"
+gem "mini_mime", path: "#{repository}/gems/mini_mime"
+gem "i18n", path: "#{repository}/gems/i18n"
+gem "tzinfo", path: "#{repository}/gems/tzinfo"
+gem "concurrent-ruby", path: "#{repository}/gems/concurrent-ruby"
+gem "rack", path: "#{repository}/gems/rack"
+gem "rack-test", path: "#{repository}/gems/rack-test"
+gem "builder", path: "#{repository}/gems/builder"
+gem "erubi", path: "#{repository}/gems/erubi"
+gem "zeitwerk", path: "#{repository}/gems/zeitwerk"
+gem "thor", path: "#{repository}/gems/thor"
+gem "pry", path: "#{repository}/gems/pry"
+gem "coderay", path: "#{repository}/gems/coderay"
+gem "method_source", path: "#{repository}/gems/method_source"
+gem "appraisal", "2.5.0"
+gem "warnings_logger", "0.1.1"
+gem "rake", "13.3.1"
+gem "rspec", "~> 3.9"
+gem "rspec-rails", "6.1.5"
+gem "rails-controller-testing", "1.0.5"
+gem "shoulda-context", "2.0.0"
+gem "bcrypt", "3.1.22"
+gem "sqlite3", "2.9.4"
+gem "propshaft", "1.3.2"
+gem "nokogiri", ">= 1.8.5"
+gem "nio4r", "~> 2.0"
+gem "websocket-driver", "0.8.0"
+gem "rackup", ">= 1.0.0"
+gem "rack-session", ">= 1.0.1"
+gem "connection_pool", "< 3"
+gem "marcel", "1.1.1"
+gem "action_text-trix", "~> 2.1.15"
+
+group :ruby_shipped do
+  gem "minitest", "6.0.0"
+  gem "base64", "0.3.0"
+  gem "bigdecimal", "4.0.1"
+  gem "drb", "2.2.3"
+  gem "json", "2.18.3"
+  gem "logger", "1.7.0"
+  gem "uri", "1.1.1"
+  gem "rexml", "3.4.4"
+  gem "date", "3.5.1"
+  gem "psych", "5.3.1"
+  gem "stringio", "3.2.0"
+  gem "erb", "6.0.7"
+  gem "prism", "1.8.2"
+  gem "timeout", "0.6.0"
+  gem "tsort", "0.2.0"
+  gem "irb", "1.16.0"
+  gem "reline", "0.6.3"
+  gem "io-console", "0.8.2"
+  gem "rdoc", "7.0.4"
+  gem "pp", "0.6.3"
+  gem "prettyprint", "0.2.0"
+  gem "readline", "0.0.4"
+  gem "mutex_m", "0.3.0"
+  gem "net-imap", "0.6.4.1"
+  gem "net-pop", "0.1.2"
+  gem "net-smtp", "0.5.1"
+  gem "net-protocol", "0.2.2"
+end

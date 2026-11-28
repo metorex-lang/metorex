@@ -36,7 +36,7 @@ module Bundler
           file << spec.to_gemfile
         end
       else
-        File.open(File.expand_path("../templates/Gemfile", __dir__), "r") do |template|
+        File.open(Bundler::CarriedTemplates.path("templates/Gemfile"), "r") do |template|
           File.open(gemfile, "wb") do |destination|
             IO.copy_stream(template, destination)
           end

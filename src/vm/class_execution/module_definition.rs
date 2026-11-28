@@ -76,6 +76,7 @@ impl VirtualMachine {
             .as_ref()
             .is_some_and(|p| !p.has_permanent_name());
         let full_name = match parent_scope.as_ref() {
+            Some(p) if p.ruby_name() == "Object" => name.to_string(),
             Some(p) => format!("{}::{}", p.inspect_name(), name),
             None => name.to_string(),
         };

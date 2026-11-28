@@ -9,6 +9,9 @@ use crate::object::Object;
 
 use crate::vm::core::VirtualMachine;
 
+/// The feature the prelude's `autoload :RSpec` names.
+const CARRIED_RSPEC_AUTOLOAD: &str = "rex/autoload";
+
 impl VirtualMachine {
     /// Evaluate `defined?(expr)`. Returns a frozen description string for
     /// defined expressions, or `nil` for undefined ones.
@@ -63,7 +66,7 @@ impl VirtualMachine {
                     Some(View::Class(object_class)) if object_class.is_private_constant(name));
                 let autoloaded = match self.globals().get("Object").view() {
                     Some(View::Class(object_class)) => {
-                        self.effective_autoload(object_class, name).is_some()
+                        self.autoload_defined_reports(object_class, name)
                     }
                     _ => false,
                 };
@@ -207,7 +210,16 @@ impl VirtualMachine {
         }
         scopes
             .iter()
-            .any(|enclosing| self.effective_autoload(enclosing, name).is_some())
+            .any(|enclosing| self.autoload_defined_reports(enclosing, name))
+    }
+
+    /// Whether `scope` registered an autoload for the name that `defined?`
+    /// reports. The one Metorex registers for `RSpec` at startup is left
+    /// out, so a program that checks for RSpec before requiring it finds
+    /// none, as it does in MRI, where RSpec is not loaded until required.
+    fn autoload_defined_reports(&mut self, scope: &Rc<crate::class::Class>, name: &str) -> bool {
+        self.effective_autoload(scope, name)
+            .is_some_and(|path| !(name == "RSpec" && path == CARRIED_RSPEC_AUTOLOAD))
     }
 
     /// Whether `self` answers `name`, private methods included, as a call
@@ -317,7 +329,7 @@ impl VirtualMachine {
             && (self.object_constant(name).is_some() || self.globals().constant(name).is_some());
         let held = top_level
             || scope.get_class_var(name).is_some()
-            || self.effective_autoload(scope, name).is_some()
+            || self.autoload_defined_reports(scope, name)
             || matches!(
                 self.const_entry_on(scope, name, true, false),
                 Some((_, Some(_)))

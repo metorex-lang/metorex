@@ -336,3 +336,12 @@ fn a_public_method_from_an_included_module_hides_a_private_one_in_the_superclass
         )
     );
 }
+
+#[test]
+fn an_instance_of_a_module_subclass_mixes_in_what_its_block_defines() {
+    let output = run_example("metaprogramming/include_an_instance_of_a_module_subclass.rb");
+    assert_eq!(
+        output,
+        "\"welcome\"\n\"WELCOME\"\nDelegator\ntrue\n\"HELLO\"\n"
+    );
+}

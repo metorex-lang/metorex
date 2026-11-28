@@ -124,7 +124,7 @@ module Bundler
       relative_gemfile_path = relative_gemfile_path
       ruby_command = Thor::Util.ruby_command
       ruby_command = ruby_command
-      template_path = File.expand_path("templates/Executable", __dir__)
+      template_path = Bundler::CarriedTemplates.path("templates/Executable")
       template = File.read(template_path)
 
       exists = []
@@ -169,7 +169,7 @@ module Bundler
       end
       standalone_path = Bundler.root.join(path).relative_path_from(bin_path)
       standalone_path = standalone_path
-      template = File.read(File.expand_path("templates/Executable.standalone", __dir__))
+      template = File.read(Bundler::CarriedTemplates.path("templates/Executable.standalone"))
       ruby_command = Thor::Util.ruby_command
       ruby_command = ruby_command
 

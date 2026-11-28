@@ -2,6 +2,11 @@
 
 use super::metorex_cmd;
 
+/// A gem directory that is never made. RubyGems reads the specifications
+/// installed in the gem directories at startup, in code the JIT compiles
+/// when there are enough of them, so the examples run with none.
+const NO_GEMS: &str = concat!(env!("CARGO_TARGET_TMPDIR"), "/jit_examples_have_no_gems");
+
 /// Run the example `script` under `environment`, and none of the JIT's
 /// settings this process was run with, answering what it printed and the
 /// report METOREX_COUNTERS wrote.
@@ -9,6 +14,8 @@ fn run_example(script: &str, environment: &[(&str, &str)]) -> (String, String) {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let output = metorex_cmd()
         .current_dir(manifest_dir)
+        .env("GEM_HOME", NO_GEMS)
+        .env("GEM_PATH", NO_GEMS)
         .env("METOREX_COUNTERS", "1")
         .env_remove("METOREX_JIT")
         .env_remove("METOREX_JIT_CALL_THRESHOLD")

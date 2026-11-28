@@ -107,7 +107,6 @@ impl VirtualMachine {
                 let prefix = format!("{gem}/");
                 Ok(Object::array(
                     crate::vm::stdlib::gem_data()
-                        .iter()
                         .filter_map(|(path, text)| {
                             let under = path.strip_prefix(&prefix)?;
                             Some(Object::array(vec![
@@ -312,13 +311,22 @@ impl VirtualMachine {
         arguments: Vec<Object>,
         position: Position,
     ) -> Result<Object, MetorexError> {
+        // A body stops being where `undef` acts once code it runs opens
+        // another scope, as `instance_eval` opens the receiver's singleton
+        // class.
         let in_a_body = self
             .body_contexts
             .last()
             .filter(|body| body.frame == self.current_method_frame)
+            .filter(|body| {
+                self.def_scope_stack
+                    .last()
+                    .is_none_or(|innermost| Rc::ptr_eq(innermost, &body.class))
+            })
             .map(|body| Rc::clone(&body.class));
-        let definee = in_a_body
-            .or_else(|| self.running_method_def_scope())
+        let definee = self
+            .running_method_def_scope()
+            .or(in_a_body)
             .or_else(|| self.def_scope_stack.last().cloned());
         let definee = match definee {
             Some(class) => class,

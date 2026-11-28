@@ -150,17 +150,7 @@ impl VirtualMachine {
         // a module further out is asked. A block's modules are the ones
         // around where it was written, as in an `included do` block a class
         // runs through `class_eval`.
-        // The class and module bodies running now come after those, as
-        // the scopes a body opened in a file an autoload loads does, so
-        // `class ArrayBuffer < Array` in temple's Generators loads that
-        // module's own Array ahead of the top-level one.
-        let mut scopes = self.lexical_nesting();
-        for open in self.def_scope_stack.iter().rev() {
-            if !scopes.iter().any(|held| Rc::ptr_eq(held, open)) {
-                scopes.push(Rc::clone(open));
-            }
-        }
-        for scope in scopes {
+        for scope in self.lexical_nesting() {
             if let Some(found) = scope.get_class_var(name) {
                 return Ok(Some(found));
             }

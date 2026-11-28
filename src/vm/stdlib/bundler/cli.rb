@@ -602,7 +602,7 @@ module Bundler
     end
 
     def self.source_root
-      File.expand_path("templates", __dir__)
+      Bundler::CarriedTemplates.path("templates")
     end
 
     desc "clean [OPTIONS]", "Cleans up unused gems in your bundler directory"

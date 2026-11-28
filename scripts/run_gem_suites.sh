@@ -171,6 +171,7 @@ SUITES=(
   "rails/actioncable|test/channel/base_test.rb test/channel/broadcasting_test.rb test/channel/naming_test.rb test/channel/periodic_timers_test.rb test/channel/rejection_test.rb test/channel/stream_test.rb test/channel/test_case_test.rb test/client_test.rb test/connection/authorization_test.rb test/connection/base_test.rb test/connection/callbacks_test.rb test/connection/client_socket_test.rb test/connection/cross_site_forgery_test.rb test/connection/identifier_test.rb test/connection/multiple_identifiers_test.rb test/connection/stream_test.rb test/connection/string_identifier_test.rb test/connection/subscriptions_test.rb test/connection/test_case_test.rb test/server/base_test.rb test/server/broadcasting_test.rb test/server/health_check_test.rb test/subscription_adapter/async_test.rb test/subscription_adapter/base_test.rb test/subscription_adapter/inline_test.rb test/subscription_adapter/redis_test.rb test/subscription_adapter/subscriber_map_test.rb test/subscription_adapter/test_adapter_test.rb test/test_helper_test.rb test/worker_test.rb|-w -I lib -r $REPO_ROOT/scripts/gem_suite/one_test_at_a_time.rb -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
   "rails/activestorage|test/analyzer/audio_analyzer_test.rb test/analyzer/image_analyzer/image_magick_test.rb test/analyzer/image_analyzer/vips_test.rb test/analyzer/video_analyzer_test.rb test/controllers/blobs/proxy_controller_test.rb test/controllers/blobs/redirect_controller_test.rb test/controllers/direct_uploads_controller_test.rb test/controllers/disk_controller_test.rb test/controllers/representations/proxy_controller_test.rb test/controllers/representations/redirect_controller_test.rb test/engine_test.rb test/fixture_set_test.rb test/image_magick_test.rb test/jobs/analyze_job_test.rb test/jobs/preview_image_job_test.rb test/jobs/purge_job_test.rb test/jobs/transform_job_test.rb test/migrations_test.rb test/models/attached/many_test.rb test/models/attached/one_test.rb test/models/attachment_test.rb test/models/blob_test.rb test/models/filename_test.rb test/models/presence_validation_test.rb test/models/preview_test.rb test/models/reflection_test.rb test/models/representation_test.rb test/models/strict_loading_test.rb test/models/variant_test.rb test/models/variant_with_record_test.rb test/previewer/mupdf_previewer_test.rb test/previewer/poppler_pdf_previewer_test.rb test/previewer/video_previewer_test.rb test/service/configurator_test.rb test/service/disk_public_service_test.rb test/service/disk_service_test.rb test/service/gcs_public_service_test.rb test/service/gcs_service_test.rb test/service/mirror_service_test.rb test/service/registry_test.rb test/service/s3_public_service_test.rb test/service/s3_service_test.rb test/service_test.rb test/structured_event_subscriber_test.rb test/template/audio_tag_test.rb test/template/image_tag_test.rb test/template/video_tag_test.rb test/urls/rails_storage_proxy_url_test.rb test/urls/rails_storage_redirect_url_test.rb|-w -I lib -r $REPO_ROOT/scripts/gem_suite/one_test_at_a_time.rb -I app/controllers -I test -I ../railties/lib -r bundler/setup|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
   "rails/railties|test/**/*_test.rb|-w -I lib -I test -r $REPO_ROOT/scripts/gem_suite/one_test_at_a_time.rb -r $REPO_ROOT/scripts/gem_suite/gem_path_from_bundle.rb -r bundler/setup -r isolation/abstract_unit|$REPO_ROOT/scripts/gem_suite/rails_siblings.rb"
+  "shoulda-matchers|spec/unit/**/*_spec.rb spec/acceptance/**/*_spec.rb|-w -I lib -I spec -r bundler/setup -r ./spec/report_warnings $RSPEC"
   "sprockets-rails|test/test_*.rb|-w -I lib -I test -r $REPO_ROOT/scripts/gem_suite/one_test_at_a_time.rb -r bundler/setup"
   "rails-dom-testing|test/*_test.rb|-w -I lib -I test -r bundler/setup"
   "rails-html-sanitizer|test/*_test.rb|-w -I lib -I test -r bundler/setup"
@@ -198,8 +199,15 @@ EXTENSIONS=(
 
 # The gems whose test files run one after another, since each of them
 # starts a server on the same fixed port, or, for redis, empties the
-# databases of the one server every file shares.
-ONE_AT_A_TIME=(excon mini_portile2 redis)
+# databases of the one server every file shares, or, for shoulda-matchers,
+# generates its Rails application in the same directory under /tmp.
+ONE_AT_A_TIME=(excon mini_portile2 redis shoulda-matchers)
+
+# The gems whose test helpers refuse to run unless the Gemfile is in the
+# checkout's gemfiles directory, where Appraisal writes one for each
+# version of Rails. Their Gemfile is copied there. The list is a string,
+# since the processes xargs starts are not passed arrays.
+APPRAISED="shoulda-matchers"
 
 # The test files that run by themselves once every other file has finished,
 # since a test in them gives a process it starts a fixed time to answer, and
@@ -222,6 +230,13 @@ STRESS_FILE_TIMEOUT="${STRESS_FILE_TIMEOUT:-1800}"
 one_at_a_time() {
   local held
   for held in "${ONE_AT_A_TIME[@]}"; do
+    [ "$held" = "$1" ] && return 0
+  done
+  return 1
+}
+appraised() {
+  local held
+  for held in $APPRAISED; do
     [ "$held" = "$1" ] && return 0
   done
   return 1
@@ -284,9 +299,18 @@ if [ "$ENGINE" = "metorex" ]; then
   ln -s "$(cd "$(dirname "$METOREX")" && pwd -P)/$(basename "$METOREX")" "$WORK_DIR/bin/metorex"
   ln -s metorex "$WORK_DIR/bin/ruby"
   # A test that runs `bundle`, as simplecov's sandboxes do, runs the
-  # Bundler Metorex carries, as `bundle` runs MRI's in an MRI run.
+  # Bundler Metorex carries, as `bundle` runs MRI's in an MRI run. A first
+  # argument of `_VERSION_`, as shoulda-matchers' acceptance specs pass,
+  # names the Bundler version to run, as in the `bundle` RubyGems writes.
   cat > "$WORK_DIR/bin/bundle" <<'BUNDLE'
 #!/bin/sh
+case "$1" in
+  _*_)
+    version="${1#_}"
+    export BUNDLER_VERSION="${version%_}"
+    shift
+    ;;
+esac
 exec "$(dirname "$0")/ruby" -e 'require "bundler"; require "bundler/friendly_errors"; Bundler.with_friendly_errors { require "bundler/cli"; Bundler::CLI.start(ARGV, debug: true) }' -- "$@"
 BUNDLE
   chmod +x "$WORK_DIR/bin/bundle"
@@ -398,6 +422,14 @@ run_one() {
         cp "$BUNDLE_GEMFILE" "$BUNDLE_GEMFILE.lock" "$run_dir/../bundle/"
         export BUNDLE_GEMFILE="$run_dir/../bundle/Gemfile" GEM_SUITE_CHECKOUT="$(pwd -P)"
       fi
+      # The helpers compare the Gemfile's directory with the checkout's
+      # path as the working directory gives it, with links resolved.
+      if appraised "$gem"; then
+        mkdir -p gemfiles
+        cp "$BUNDLE_GEMFILE" gemfiles/suite.gemfile
+        cp "$BUNDLE_GEMFILE.lock" gemfiles/suite.gemfile.lock
+        export BUNDLE_GEMFILE="$(pwd -P)/gemfiles/suite.gemfile"
+      fi
     fi
     if [ "$prepare" != "$NO_PREPARE" ]; then
       "${command[@]}" "$prepare" > "$log" 2>&1 < /dev/null
@@ -429,10 +461,10 @@ run_files() {
     run_one "$gem" "$file" "$arguments" "$prepare"
   done
 }
-export -f run_one run_files
+export -f run_one run_files appraised
 NO_PREPARE=none
 export -f bundle_path_of
-export ENGINE_COMMAND MRI WORK_DIR REPO_ROOT BUNDLES GEM_BUNDLES METOREX FILE_TIMEOUT SANDBOX_FILE_TIMEOUT STRESS_FILE_TIMEOUT ENGINE NO_PREPARE
+export APPRAISED ENGINE_COMMAND MRI WORK_DIR REPO_ROOT BUNDLES GEM_BUNDLES METOREX FILE_TIMEOUT SANDBOX_FILE_TIMEOUT STRESS_FILE_TIMEOUT ENGINE NO_PREPARE
 # net-imap's helper measures coverage with SimpleCov unless told not to.
 export SIMPLECOV_DISABLE=1
 # A test that omits itself under CI would count differently there than in
